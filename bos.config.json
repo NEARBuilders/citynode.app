@@ -1,6 +1,6 @@
 {
-  "account": "dev.everything.near",
-  "domain": "everything.dev",
+  "account": "project.everything.near",
+  "domain": "everythingproject.org",
   "repository": "https://github.com/nearbuilders/everything-dev",
   "plugins": {
     "template": {
@@ -31,7 +31,7 @@
       "productionIntegrity": "sha384-zsBp8j9rD4thsb6uS48/3OYNvqiN9tVD//QJJAqri+VQDnWnYG4xs8DtZvTxeVRX"
     }
   },
-  "testnet": "dev.allthethings.testnet",
+  "testnet": "project.allthethings.testnet",
   "shared": {
     "ui": {}
   }
