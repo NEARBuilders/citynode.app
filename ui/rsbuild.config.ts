@@ -87,6 +87,10 @@ function createClientConfig() {
       entry: {
         index: "./src/hydrate.tsx",
       },
+      define: {
+        "import.meta.env.APP_NAME": JSON.stringify(bosConfig.domain),
+        "import.meta.env.APP_ACCOUNT": JSON.stringify(bosConfig.account),
+      },
     },
     resolve: {
       alias: {

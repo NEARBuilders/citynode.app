@@ -49,7 +49,8 @@ bos dev --ssr                # Explicit local SSR
 **Production mode:**
 
 ```bash
-bos start --no-interactive   # All remotes, production URLs
+bos start --no-interactive              # All remotes, production URLs
+bos start --env staging --no-interactive # Staging environment (staging domain)
 ```
 
 ## Deploy → Publish → Sync
@@ -76,7 +77,7 @@ bos sync --account your.near --gateway your-gateway.com
 | `bos create project <name>` | Scaffold new project (interactive or with args) |
 | `bos sync` | Sync from every.near/everything.dev |
 | `bos dev` | Development (auto-detects missing packages) |
-| `bos start --no-interactive` | Production mode |
+| `bos start --no-interactive` | Production mode (`--env staging` for staging) |
 | `bos build` | Build existing packages (skips missing) |
 | `bos publish` | Publish config to the temporary FastKV registry |
 | `bos info` | Show current configuration |
@@ -147,6 +148,7 @@ All runtime configuration lives in `bos.config.json`. See [types.md](docs/types.
 Key fields:
 - `account` - NEAR account (mainnet)
 - `testnet` - NEAR account (testnet)
+- `staging` - Staging domain configuration
 - `template` - Default template for scaffolding
 - `app.host`, `app.ui`, `app.api` - Module configuration
 

@@ -3,13 +3,14 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/projects/new")({
   head: () => ({
     meta: [
-      { title: "New Project | everything.dev" },
+      { title: `New Project | ${APP_NAME}` },
       {
         name: "description",
         content: "Create a new project to organize your NEAR apps.",

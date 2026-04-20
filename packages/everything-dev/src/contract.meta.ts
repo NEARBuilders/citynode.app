@@ -20,6 +20,9 @@ export const cliCommandMeta = {
     summary: "Start the production host",
     interactive: false,
     longRunning: true,
+    fields: {
+      env: { description: "Environment: production or staging" },
+    },
   },
   build: {
     commandPath: ["build"],

@@ -22,6 +22,7 @@ export const StartOptionsSchema = z.object({
   interactive: z.boolean().optional(),
   account: z.string().optional(),
   domain: z.string().optional(),
+  env: z.enum(["production", "staging"]).default("production"),
 });
 
 export const StartResultSchema = z.object({

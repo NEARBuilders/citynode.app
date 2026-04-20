@@ -76,12 +76,13 @@ function getSharedUiDeps(bosConfig: BosConfig): Record<string, SharedDepConfig> 
 export async function syncAndGenerateSharedUi(opts: {
   configDir: string;
   hostMode: "local" | "remote";
+  bosConfig?: BosConfig;
 }): Promise<SharedSyncResult> {
   const bosConfigPath = join(opts.configDir, "bos.config.json");
   const packageJsonPath = join(opts.configDir, "package.json");
   const generatedPath = join(opts.configDir, ".bos", "generated", "shared-ui.json");
 
-  const bosConfig: BosConfig = JSON.parse(readFileSync(bosConfigPath, "utf-8"));
+  const bosConfig: BosConfig = opts.bosConfig ?? JSON.parse(readFileSync(bosConfigPath, "utf-8"));
   let pkgJson: any = {};
   try {
     pkgJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));

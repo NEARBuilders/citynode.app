@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, Input, UnderConstruction } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
 type ApiClient = import("@/app").ApiClient;
@@ -10,7 +11,7 @@ type ApiClient = import("@/app").ApiClient;
 export const Route = createFileRoute("/_layout/_authenticated/keys/")({
   head: () => ({
     meta: [
-      { title: "KV Store | everything.dev" },
+      { title: `KV Store | ${APP_NAME}` },
       { name: "description", content: "Key-value store for testing." },
     ],
   }),

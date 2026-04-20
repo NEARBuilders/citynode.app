@@ -1,4 +1,8 @@
-export const PLUGIN_VERSION = "2.0.0";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../../package.json") as { version: string };
+export const PLUGIN_VERSION = pkg.version;
 
 export const SHARE_CONFIG = {
   singleton: true,

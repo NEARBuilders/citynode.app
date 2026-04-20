@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import {
   getActiveOrganization,
   isPersonalOrganization,
@@ -17,7 +18,7 @@ import { useApiClient } from "@/lib/use-api-client";
 export const Route = createFileRoute("/_layout/_authenticated/home")({
   head: () => ({
     meta: [
-      { title: "Workspace | everything.dev" },
+      { title: `Workspace | ${APP_NAME}` },
       { name: "description", content: "Your workspace center." },
     ],
   }),

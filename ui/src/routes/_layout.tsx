@@ -7,6 +7,7 @@ import builtOnRev from "@/assets/built_on_rev.png";
 import { Splash } from "@/components/splash";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useClientValue } from "@/hooks/use-client";
+import { APP_NAME } from "@/lib/branding";
 import { ThemeToggle } from "../components/theme-toggle";
 import { UserNav } from "../components/user-nav";
 import { sessionQueryOptions } from "../lib/session";
@@ -25,7 +26,7 @@ const authenticatedSidebarItems = [
   { icon: Code, label: "api", href: "/api" },
 ];
 
-const HAS_AUTHENTICATED_KEY = "everything.dev.has-authenticated";
+const HAS_AUTHENTICATED_KEY = `${APP_NAME}.has-authenticated`;
 
 function Layout() {
   const pathname = useClientValue(() => window.location.pathname, "/");
@@ -69,21 +70,21 @@ function Layout() {
               <TooltipTrigger asChild>
                 <Link
                   to="/"
-                  aria-label="everything.dev home"
+                  aria-label={`${APP_NAME} home`}
                   className="mb-3 flex items-center justify-center w-10 h-10 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] bg-card shadow-sm transition-shadow duration-200 hover:shadow-md"
                 >
                   <svg
                     viewBox="0 0 24 24"
                     fill="currentColor"
                     className="w-5 h-5 text-foreground"
-                    aria-label="everything.dev logo"
+                    aria-label={`${APP_NAME} logo`}
                   >
-                    <title>everything.dev</title>
+                    <title>{APP_NAME}</title>
                     <circle cx="12" cy="12" r="10" />
                   </svg>
                 </Link>
               </TooltipTrigger>
-              <TooltipContent side="right">everything.dev</TooltipContent>
+              <TooltipContent side="right">{APP_NAME}</TooltipContent>
             </Tooltip>
 
             {authenticatedSidebarItems.map((item) => {
@@ -130,7 +131,7 @@ function Layout() {
               {isAuthenticated ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono min-w-0">
                   <Link
-                    aria-label="everything.dev home"
+                    aria-label={`${APP_NAME} home`}
                     className="sm:hidden flex items-center justify-center w-8 h-8 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] bg-card shadow-sm transition-shadow duration-200 hover:shadow-md"
                     to="/"
                   >
@@ -138,14 +139,14 @@ function Layout() {
                       viewBox="0 0 24 24"
                       fill="currentColor"
                       className="w-4 h-4 text-foreground"
-                      aria-label="everything.dev logo"
+                      aria-label={`${APP_NAME} logo`}
                     >
-                      <title>everything.dev</title>
+                      <title>{APP_NAME}</title>
                       <circle cx="12" cy="12" r="10" />
                     </svg>
                   </Link>
                   <div className="hidden sm:flex items-center gap-2">
-                    <span>everything.dev</span>
+                    <span>{APP_NAME}</span>
                     <span>/</span>
                     <span className="truncate">
                       {pathname === "/" ? "home" : pathname.slice(1).split("/").join(" / ")}
@@ -154,7 +155,7 @@ function Layout() {
                 </div>
               ) : (
                 <Link to="/login" className="text-sm font-medium tracking-tight">
-                  everything.dev
+                  {APP_NAME}
                 </Link>
               )}
 

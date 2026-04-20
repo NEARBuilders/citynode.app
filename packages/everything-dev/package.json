@@ -2,90 +2,194 @@
   "name": "everything-dev",
   "version": "1.1.0",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
     },
     "./types": {
-      "types": "./src/types.ts",
-      "import": "./src/types.ts"
+      "development": {
+        "types": "./src/types.ts",
+        "import": "./src/types.ts"
+      },
+      "types": "./dist/types.d.mts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.cjs"
     },
     "./config": {
-      "types": "./src/config.ts",
-      "import": "./src/config.ts"
+      "development": {
+        "types": "./src/config.ts",
+        "import": "./src/config.ts"
+      },
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
     },
     "./fastkv": {
-      "types": "./src/fastkv.ts",
-      "import": "./src/fastkv.ts"
+      "development": {
+        "types": "./src/fastkv.ts",
+        "import": "./src/fastkv.ts"
+      },
+      "types": "./dist/fastkv.d.mts",
+      "import": "./dist/fastkv.mjs",
+      "require": "./dist/fastkv.cjs"
     },
     "./contract.meta": {
-      "types": "./src/contract.meta.ts",
-      "import": "./src/contract.meta.ts"
+      "development": {
+        "types": "./src/contract.meta.ts",
+        "import": "./src/contract.meta.ts"
+      },
+      "types": "./dist/contract.meta.d.mts",
+      "import": "./dist/contract.meta.mjs",
+      "require": "./dist/contract.meta.cjs"
     },
     "./shared": {
-      "types": "./src/shared.ts",
-      "import": "./src/shared.ts"
+      "development": {
+        "types": "./src/shared.ts",
+        "import": "./src/shared.ts"
+      },
+      "types": "./dist/shared.d.mts",
+      "import": "./dist/shared.mjs",
+      "require": "./dist/shared.cjs"
     },
     "./mf": {
-      "types": "./src/mf.ts",
-      "import": "./src/mf.ts"
+      "development": {
+        "types": "./src/mf.ts",
+        "import": "./src/mf.ts"
+      },
+      "types": "./dist/mf.d.mts",
+      "import": "./dist/mf.mjs",
+      "require": "./dist/mf.cjs"
     },
     "./integrity": {
-      "types": "./src/integrity.ts",
-      "import": "./src/integrity.ts"
+      "development": {
+        "types": "./src/integrity.ts",
+        "import": "./src/integrity.ts"
+      },
+      "types": "./dist/integrity.d.mts",
+      "import": "./dist/integrity.mjs",
+      "require": "./dist/integrity.cjs"
     },
     "./plugin": {
-      "types": "./src/plugin.ts",
-      "import": "./src/plugin.ts"
+      "development": {
+        "types": "./src/plugin.ts",
+        "import": "./src/plugin.ts"
+      },
+      "types": "./dist/plugin.d.mts",
+      "import": "./dist/plugin.mjs",
+      "require": "./dist/plugin.cjs"
     },
     "./sdk": {
-      "types": "./src/sdk.ts",
-      "import": "./src/sdk.ts"
+      "development": {
+        "types": "./src/sdk.ts",
+        "import": "./src/sdk.ts"
+      },
+      "types": "./dist/sdk.d.mts",
+      "import": "./dist/sdk.mjs",
+      "require": "./dist/sdk.cjs"
     },
     "./api": {
-      "types": "./src/api.ts",
-      "import": "./src/api.ts"
+      "development": {
+        "types": "./src/api.ts",
+        "import": "./src/api.ts"
+      },
+      "types": "./dist/api.d.mts",
+      "import": "./dist/api.mjs",
+      "require": "./dist/api.cjs"
     },
     "./host": {
-      "types": "./src/host.ts",
-      "import": "./src/host.ts"
+      "development": {
+        "types": "./src/host.ts",
+        "import": "./src/host.ts"
+      },
+      "types": "./dist/host.d.mts",
+      "import": "./dist/host.mjs",
+      "require": "./dist/host.cjs"
     },
     "./orchestrator": {
-      "types": "./src/orchestrator.ts",
-      "import": "./src/orchestrator.ts"
+      "development": {
+        "types": "./src/orchestrator.ts",
+        "import": "./src/orchestrator.ts"
+      },
+      "types": "./dist/orchestrator.d.mts",
+      "import": "./dist/orchestrator.mjs",
+      "require": "./dist/orchestrator.cjs"
     },
     "./cli": {
-      "types": "./src/cli.ts",
-      "import": "./src/cli.ts"
+      "development": {
+        "types": "./src/cli.ts",
+        "import": "./src/cli.ts"
+      },
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs",
+      "require": "./dist/cli.cjs"
     },
     "./ui": {
-      "types": "./src/ui/index.ts",
-      "import": "./src/ui/index.ts"
+      "development": {
+        "types": "./src/ui/index.ts",
+        "import": "./src/ui/index.ts"
+      },
+      "types": "./dist/ui/index.d.mts",
+      "import": "./dist/ui/index.mjs",
+      "require": "./dist/ui/index.cjs"
     },
     "./ui/types": {
-      "types": "./src/ui/types.ts",
-      "import": "./src/ui/types.ts"
+      "development": {
+        "types": "./src/ui/types.ts",
+        "import": "./src/ui/types.ts"
+      },
+      "types": "./dist/ui/types.d.mts",
+      "import": "./dist/ui/types.mjs",
+      "require": "./dist/ui/types.cjs"
     },
     "./ui/runtime": {
-      "types": "./src/ui/runtime.ts",
-      "import": "./src/ui/runtime.ts"
+      "development": {
+        "types": "./src/ui/runtime.ts",
+        "import": "./src/ui/runtime.ts"
+      },
+      "types": "./dist/ui/runtime.d.mts",
+      "import": "./dist/ui/runtime.mjs",
+      "require": "./dist/ui/runtime.cjs"
     },
     "./ui/head": {
-      "types": "./src/ui/head.ts",
-      "import": "./src/ui/head.ts"
+      "development": {
+        "types": "./src/ui/head.ts",
+        "import": "./src/ui/head.ts"
+      },
+      "types": "./dist/ui/head.d.mts",
+      "import": "./dist/ui/head.mjs",
+      "require": "./dist/ui/head.cjs"
     },
     "./ui/metadata": {
-      "types": "./src/ui/metadata.ts",
-      "import": "./src/ui/metadata.ts"
+      "development": {
+        "types": "./src/ui/metadata.ts",
+        "import": "./src/ui/metadata.ts"
+      },
+      "types": "./dist/ui/metadata.d.mts",
+      "import": "./dist/ui/metadata.mjs",
+      "require": "./dist/ui/metadata.cjs"
     },
     "./ui/router": {
-      "types": "./src/ui/router.ts",
-      "import": "./src/ui/router.ts"
+      "development": {
+        "types": "./src/ui/router.ts",
+        "import": "./src/ui/router.ts"
+      },
+      "types": "./dist/ui/router.d.mts",
+      "import": "./dist/ui/router.mjs",
+      "require": "./dist/ui/router.cjs"
     },
     "./package.json": "./package.json"
   },
   "files": [
+    "dist",
     "src",
     "cli.js"
   ],
@@ -94,7 +198,7 @@
     "bos": "./cli.js"
   },
   "scripts": {
-    "build": "echo 'Source exports - no build needed'",
+    "build": "tsdown",
     "dev": "echo 'Source exports - no build needed'",
     "typecheck": "tsc --noEmit"
   },

@@ -167,6 +167,7 @@ All runtime configuration lives in `bos.config.json`:
 {
   "account": "dev.everything.near",
   "domain": "everything.dev",
+  "staging": { "domain": "staging.dev.yourapp.dev" },
   "repository": "https://github.com/nearbuilders/everything-dev",
   "testnet": "dev.allthethings.testnet",
   "plugins": {
@@ -204,12 +205,18 @@ The temporary publish registry currently points at `dev.everything.near`, and `b
 Use the repo `Dockerfile` for the service, and treat the GHCR image as the deployable artifact.
 
 - Image source: `ghcr.io/<lowercased github.repository>:latest`
-- Config updates: `bos.config.json` publish workflow; restart/redeploy is provider-specific
-- Code updates: GHCR build workflow
+- Staging: `ghcr.io/<lowercased github.repository>:staging`
+- Preview: `ghcr.io/<lowercased github.repository>:pr-<number>`
+
+All configuration derives from `bos.config.json` (baked into the image). Only secrets need to be set as environment variables.
 
 Required runtime vars:
-- `BOS_ACCOUNT=dev.everything.near`
-- `GATEWAY_DOMAIN=everything.dev`
+- `APP_ENV` - `production` or `staging` (derives domain from `bos.config.json`)
+- `BETTER_AUTH_SECRET` - Session encryption key
+- `BETTER_AUTH_URL` - Auth callback URL (defaults to host URL from config)
+- `HOST_DATABASE_URL` - Database connection string
+- `HOST_DATABASE_AUTH_TOKEN` - Database auth token
+- `CORS_ORIGIN` - Comma-separated allowed origins (defaults to host + UI URLs from config)
 
 See [.agent/skills/bos/docs/types.md](.agent/skills/bos/docs/types.md) for the complete schema.
 

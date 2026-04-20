@@ -2,6 +2,9 @@
   "account": "dev.everything.near",
   "domain": "everything.dev",
   "repository": "https://github.com/nearbuilders/everything-dev",
+  "staging": {
+    "domain": "staging.dev.everything.dev"
+  },
   "plugins": {
     "template": {
       "development": "local:plugins/_template",

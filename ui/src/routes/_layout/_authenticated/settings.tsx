@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import {
   addPasskey,
   changePassword,
@@ -18,7 +19,7 @@ import {
 export const Route = createFileRoute("/_layout/_authenticated/settings")({
   head: () => ({
     meta: [
-      { title: "Settings | everything.dev" },
+      { title: `Settings | ${APP_NAME}` },
       {
         name: "description",
         content: "Manage your account and authentication methods.",

@@ -477,7 +477,7 @@ export const createStartServer = (onReady?: () => void) =>
             <head>
               <meta charset="utf-8" />
               <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-              <title>everything.dev</title>
+              <title>${config.domain || "App"}</title>
               <link rel="icon" type="image/x-icon" href="${clientUrl}/favicon.ico" />
               <link rel="icon" type="image/svg+xml" href="${clientUrl}/icon.svg" />
               <link rel="manifest" href="${clientUrl}/manifest.json" />

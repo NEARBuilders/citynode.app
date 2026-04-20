@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/apps/$accountId/")({
   head: ({ params }) => ({
     meta: [
-      { title: `${params.accountId} | Published Apps | everything.dev` },
+      { title: `${params.accountId} | Published Apps | ${APP_NAME}` },
       {
         name: "description",
         content: `Published BOS runtimes for ${params.accountId}.`,

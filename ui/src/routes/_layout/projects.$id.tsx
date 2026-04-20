@@ -3,12 +3,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/projects/$id")({
   head: ({ params }) => ({
     meta: [
-      { title: `${params.id} | Project | everything.dev` },
+      { title: `${params.id} | Project | ${APP_NAME}` },
       {
         name: "description",
         content: `Project details and linked apps.`,

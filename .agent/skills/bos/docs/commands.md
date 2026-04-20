@@ -24,11 +24,16 @@ bos dev --no-interactive     # Streaming logs (no TUI)
 Run with production modules (all remotes from production URLs).
 
 ```bash
-bos start                           # Default port 3000
+bos start                           # Default port 3000, production mode
 bos start -p 8080                   # Custom port
 bos start --no-interactive          # Streaming logs
+bos start --env staging --no-interactive  # Staging environment (uses staging domain from bos.config.json)
 bos start --account foo.near --domain gateway.foo.com  # Load config from the FastKV registry
 ```
+
+**`--env` flag:**
+- `production` (default) - Uses production URLs from `bos.config.json`
+- `staging` - Uses `staging.domain` from `bos.config.json`, sets `GATEWAY_DOMAIN` env var
 
 ### `bos serve`
 
@@ -252,7 +257,9 @@ docker build -t everything-dev .
 docker run -p 3000:3000 everything-dev
 ```
 
-The container uses `bun run start` and fetches config from the FastKV registry.
+The container uses `bun run start` and reads configuration from `bos.config.json`. 
+
+Set `APP_ENV=staging` to use the staging domain from config. Required secrets: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `HOST_DATABASE_URL`, `HOST_DATABASE_AUTH_TOKEN`, `CORS_ORIGIN`.
 
 ### `bos docker stop`
 

@@ -1,21 +1,33 @@
-name: Docker Build
+name: Staging Deploy
 
 on:
-  workflow_call:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
+concurrency:
+  group: staging
+  cancel-in-progress: true
 
 jobs:
-  build-and-push:
+  deploy:
+    name: Deploy Staging
     runs-on: ubuntu-latest
-    environment: production
-
+    environment: staging
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Read staging domain from config
+        id: config
+        run: |
+          echo "domain=$(jq -r '.staging.domain // .domain' bos.config.json)" >> $GITHUB_OUTPUT
+          echo "account=$(jq -r '.account' bos.config.json)" >> $GITHUB_OUTPUT
 
       - name: Lowercase repository name
         run: echo "REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
@@ -36,11 +48,10 @@ jobs:
         with:
           images: ghcr.io/${{ env.REPO }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
+            type=raw,value=staging
             type=sha
 
-      - name: Build and push Docker image
+      - name: Build and push staging image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -51,12 +62,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deployment summary
+      - name: Staging deployment summary
         run: |
-          echo "## Docker Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Staging Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`ghcr.io/${{ env.REPO }}:${{ steps.meta.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`ghcr.io/${{ env.REPO }}:staging\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Platforms:** linux/amd64" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** staging" >> $GITHUB_STEP_SUMMARY
+          echo "**Account:** \`${{ steps.config.outputs.account }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Domain:** \`${{ steps.config.outputs.domain }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Rollback:** Use Railway dashboard or GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
+          echo "Railway will auto-deploy from the :staging tag." >> $GITHUB_STEP_SUMMARY

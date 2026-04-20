@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Badge, Button, Card, CardContent, Input, UnderConstruction } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
 type SearchParams = {
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/_layout/apps/")({
   },
   head: () => ({
     meta: [
-      { title: "Published Apps | everything.dev" },
+      { title: `Published Apps | ${APP_NAME}` },
       {
         name: "description",
         content: "Browse bos-startable apps discovered from published bos.config.json records.",

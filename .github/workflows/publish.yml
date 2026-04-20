@@ -19,19 +19,20 @@ permissions:
 
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
+    if: github.event_name == 'workflow_dispatch' || !contains(github.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     env:
       BOS_INSTALL_NEAR_CLI: "true"
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.4"
+          cache: true
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

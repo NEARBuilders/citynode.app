@@ -87,11 +87,17 @@ export const ClientRuntimeInfoSchema = z.object({
 });
 export type ClientRuntimeInfo = z.infer<typeof ClientRuntimeInfoSchema>;
 
+export const BosStagingSchema = z.object({
+  domain: z.string(),
+});
+export type BosStaging = z.infer<typeof BosStagingSchema>;
+
 export const BosConfigSchema = z.object({
   account: z.string(),
   extends: z.string().optional(),
   domain: z.string().optional(),
   testnet: z.string().optional(),
+  staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
   shared: z.record(z.string(), z.record(z.string(), SharedConfigSchema)).optional(),
   plugins: z.record(z.string(), BosPluginRefSchema).optional(),

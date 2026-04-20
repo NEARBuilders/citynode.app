@@ -2,16 +2,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { buildRuntimeHref, getActiveRuntime } from "@/app";
 import { Button } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { Route as RootRoute } from "../__root";
 
 export const Route = createFileRoute("/_layout/")({
   head: () => ({
     meta: [
-      { title: "everything.dev | Runtime composition on NEAR" },
+      { title: `${APP_NAME} | Runtime composition on NEAR` },
       {
         name: "description",
-        content:
-          "everything.dev is an open runtime for apps on NEAR, composed from published config and loaded at runtime.",
+        content: `${APP_NAME} is an open runtime for apps on NEAR, composed from published config and loaded at runtime.`,
       },
     ],
   }),
@@ -58,7 +58,7 @@ function Landing() {
             textShadow: "rgba(0,0,0,0.08) 1px 1px 1px, rgba(0,0,0,0.06) 3px 3px 3px",
           }}
         >
-          everything.dev
+          {APP_NAME}
         </h1>
 
         <div className="mt-2 flex min-h-[1.75rem] items-center justify-center sm:min-h-[2rem]">

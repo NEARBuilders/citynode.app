@@ -13,6 +13,7 @@ everything-dev dev --host remote   # Typical: remote host, local UI + API
 **Production Preview:**
 ```bash
 everything-dev start --no-interactive   # All remotes, production URLs
+everything-dev start --env staging --no-interactive  # Staging environment
 ```
 
 **Publish:**
@@ -57,6 +58,22 @@ bos info      # Show configuration
 **Type errors:**
 - Run `bun typecheck` (checks both ui and api)
 - Ensure api/src/contract.ts is in sync with UI usage
+
+## Environments
+
+- **Production**: `bos start` or `APP_ENV=production bun run start`
+- **Staging**: `bos start --env staging` or `APP_ENV=staging bun run start`
+- **Preview**: Automatic per-PR deployments via GitHub Actions
+- All environments use the same Docker image; configuration comes from `bos.config.json` and env vars
+
+## Deploying
+
+- Railway deployment with GHCR images
+- Configured via `railway.json`
+- Staging deploys on merge to main
+- Preview deploys on PR open
+- Required Railway env vars: `APP_ENV`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `HOST_DATABASE_URL`, `HOST_DATABASE_AUTH_TOKEN`, `CORS_ORIGIN`
+- `BOS_ACCOUNT` and `GATEWAY_DOMAIN` are no longer required defaults — they come from `bos.config.json`
 
 ## Code Changes
 
@@ -190,7 +207,8 @@ bun run db:studio # Open Drizzle Studio
 - `.env` - Secrets (see `.env.example`)
 - `bos.config.json` - Runtime configuration (committed)
 
-**Key ports:**
+**Key env vars & ports:**
+- `APP_ENV` - `production` or `staging` (derives domain from `bos.config.json`)
 - 3000 - Host (when running full local)
 - 3002 - UI dev server
 - 3014 - API dev server

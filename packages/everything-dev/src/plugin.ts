@@ -384,6 +384,7 @@ async function buildWorkspaceTargets(opts: {
   const sharedSync = await syncAndGenerateSharedUi({
     configDir: opts.configDir,
     hostMode: "local",
+    bosConfig: opts.bosConfig ?? undefined,
   });
   if (sharedSync.catalogChanged) {
     await run("bun", ["install"], { cwd: opts.configDir });
@@ -634,6 +635,7 @@ export default createPlugin({
       const sharedSync = await syncAndGenerateSharedUi({
         configDir: deps.configDir,
         hostMode: appConfig.host,
+        bosConfig: deps.bosConfig ?? undefined,
       });
       if (sharedSync.catalogChanged) {
         await run("bun", ["install"], { cwd: deps.configDir });
@@ -713,6 +715,7 @@ export default createPlugin({
 
     start: builder.start.handler(async ({ input }: { input: StartOptions }) => {
       let remoteConfig: BosConfig | null = null;
+
       if (input.account && input.domain) {
         remoteConfig = await fetchPublishedConfig(input.account, input.domain);
         if (!remoteConfig) {
@@ -734,6 +737,7 @@ export default createPlugin({
       const port = input.port ?? getHostDevelopmentPort(config.app.host.development);
       const appConfig: AppConfig = { host: "remote", ui: "remote", api: "remote" };
       const env = await buildEnvVars(appConfig, config);
+      const isStaging = input.env === "staging";
       const runtimePlugins = remoteConfig
         ? await buildRuntimePluginsForConfig(config, deps.configDir, "production")
         : deps.runtimeConfig?.plugins;
@@ -751,13 +755,18 @@ export default createPlugin({
         apiBaseUrl: runtimeConfig.api.url,
       });
 
+      const stagingEnvVars: Record<string, string> = isStaging
+        ? { GATEWAY_DOMAIN: config.staging?.domain ?? config.domain ?? "" }
+        : {};
+
       const orchestrator: AppOrchestrator = {
         packages: ["host"],
         env: {
           NODE_ENV: "production",
           ...env,
+          ...stagingEnvVars,
         },
-        description: `Production Mode (${config.account})`,
+        description: `${isStaging ? "Staging" : "Production"} Mode (${config.account})`,
         appConfig,
         bosConfig: config,
         runtimeConfig,

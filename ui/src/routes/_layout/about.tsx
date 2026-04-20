@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { getActiveRuntime } from "@/app";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
+import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
+import { Route as RootRoute } from "../__root";
 
 export const Route = createFileRoute("/_layout/about")({
   head: () => ({
     meta: [
-      { title: "About | everything.dev" },
+      { title: `About | ${APP_NAME}` },
       {
         name: "description",
-        content:
-          "everything.dev is a runtime-composed site on NEAR where published config defines how host, UI, and API load together.",
+        content: `${APP_NAME} is a runtime-composed site on NEAR where published config defines how host, UI, and API load together.`,
       },
     ],
   }),
@@ -19,10 +21,14 @@ export const Route = createFileRoute("/_layout/about")({
 
 function About() {
   const apiClient = useApiClient();
+  const { runtimeConfig } = RootRoute.useLoaderData();
+  const activeRuntime = getActiveRuntime(runtimeConfig);
+  const registryAccountId = activeRuntime?.accountId ?? "every.near";
+  const registryGatewayId = activeRuntime?.gatewayId ?? "everything.dev";
   const configQuery = useQuery({
-    queryKey: ["registry-app", "every.near", "everything.dev"],
+    queryKey: ["registry-app", registryAccountId, registryGatewayId],
     queryFn: () =>
-      apiClient.getRegistryApp({ accountId: "every.near", gatewayId: "everything.dev" }),
+      apiClient.getRegistryApp({ accountId: registryAccountId, gatewayId: registryGatewayId }),
     staleTime: 5 * 60_000,
   });
 
@@ -43,8 +49,7 @@ function About() {
             Runtime composition, published in public
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-            <strong className="text-foreground">everything.dev</strong> is a runtime-composed site
-            on{" "}
+            <strong className="text-foreground">{APP_NAME}</strong> is a runtime-composed site on{" "}
             <a
               href="https://near.org"
               className="underline hover:text-foreground transition-colors"
@@ -125,7 +130,7 @@ function About() {
               <BoxLink
                 href="/README.md"
                 title="read the public overview"
-                body="human-readable context for what everything.dev is and how it is composed"
+                body={`human-readable context for what ${APP_NAME} is and how it is composed`}
               />
               <BoxLink
                 href="/skill.md"
@@ -144,8 +149,10 @@ function About() {
           </div>
           <p className="text-sm leading-relaxed text-muted-foreground max-w-3xl">
             This is the live resolved <code>bos.config.json</code> for{" "}
-            <code>every.near/everything.dev</code>, fetched from the FastKV-backed public registry
-            and merged with any inherited values.
+            <code>
+              {registryAccountId}/{registryGatewayId}
+            </code>
+            , fetched from the FastKV-backed public registry and merged with any inherited values.
           </p>
           <Card>
             <CardContent className="p-4 sm:p-6">
@@ -219,8 +226,8 @@ function About() {
       <section className="space-y-4 max-w-3xl">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">wider context</div>
         <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-          <strong className="text-foreground">everything.dev</strong> sits within a broader
-          ecosystem of internet forward ideas coming from{" "}
+          <strong className="text-foreground">{APP_NAME}</strong> sits within a broader ecosystem of
+          internet forward ideas coming from{" "}
           <a href="https://near.org" className="underline hover:text-foreground transition-colors">
             NEAR Protocol
           </a>

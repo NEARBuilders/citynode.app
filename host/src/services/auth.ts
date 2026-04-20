@@ -150,9 +150,7 @@ export const createAuth = Effect.gen(function* () {
       ...(config.ui?.url ? [config.ui.url] : []),
     ],
     secret: secret || "default-secret-change-in-production",
-    baseURL:
-      process.env.BETTER_AUTH_URL ||
-      (process.env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined),
+    baseURL: process.env.BETTER_AUTH_URL || config.hostUrl,
     socialProviders: {
       github: {
         clientId: process.env.GITHUB_CLIENT_ID!,
@@ -161,7 +159,7 @@ export const createAuth = Effect.gen(function* () {
     },
     plugins: getPlugins({
       account: config.account,
-      baseUrl: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+      baseUrl: process.env.BETTER_AUTH_URL || config.hostUrl,
       sendEmail,
       sendSMS,
     }),

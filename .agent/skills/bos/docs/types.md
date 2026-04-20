@@ -8,6 +8,7 @@ The `bos.config.json` file is the single source of truth for all runtime configu
 interface BosConfig {
   account: string;                    // NEAR mainnet account
   testnet?: string;                   // NEAR testnet account
+  staging?: { domain: string };       // Staging domain configuration
   nova?: NovaConfig;                  // Tenant's Nova SDK configuration
   template?: string;                  // Default template for scaffolding
   gateway: GatewayConfig;
@@ -82,6 +83,9 @@ interface SyncConfig {
 {
   "account": "every.near",
   "testnet": "every.testnet",
+  "staging": {
+    "domain": "staging.dev.everything.dev"
+  },
   "nova": {
     "account": "tenant.nova-sdk.near"
   },

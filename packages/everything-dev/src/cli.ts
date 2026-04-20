@@ -11,6 +11,7 @@ import { colors, frames, gradients, icons } from "./utils/theme";
 function printConfigView(result: {
   account: string;
   domain?: string;
+  staging?: { domain: string };
   app: {
     host: { name?: string; development: string; production?: string };
     ui: { name?: string; development?: string; production?: string; ssr?: string };
@@ -25,6 +26,9 @@ function printConfigView(result: {
 
   console.log(`  ${colors.dim("Account")}  ${colors.cyan(result.account)}`);
   console.log(`  ${colors.dim("Domain")}   ${colors.white(result.domain ?? "not configured")}`);
+  if (result.staging) {
+    console.log(`  ${colors.dim("Staging")}  ${colors.magenta(result.staging.domain)}`);
+  }
   console.log();
 }
 

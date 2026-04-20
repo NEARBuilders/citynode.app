@@ -47,7 +47,7 @@ export function buildRegistryConfigUrlForNetwork(
 export function getRegistryNamespaceForAccount(accountId: string): string {
   return accountId.endsWith(".testnet")
     ? process.env.REGISTRY_FASTKV_TESTNET_NAMESPACE || "dev.everything.near"
-    : process.env.REGISTRY_FASTKV_MAINNET_NAMESPACE || "dev.everything.near";
+    : process.env.REGISTRY_FASTKV_MAINNET_NAMESPACE || accountId;
 }
 
 export function getRegistryNamespaceForNetwork(network: NetworkId): string {
