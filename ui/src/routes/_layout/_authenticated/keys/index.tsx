@@ -25,17 +25,17 @@ function KeysList() {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
 
-  type KeysListResult = Awaited<ReturnType<ApiClient["listKeys"]>>;
-  type SetValueResult = Awaited<ReturnType<ApiClient["setValue"]>>;
+  type KeysListResult = Awaited<ReturnType<ApiClient["projects"]["listKeys"]>>;
+  type SetValueResult = Awaited<ReturnType<ApiClient["projects"]["setValue"]>>;
 
   const keysQuery = useQuery<KeysListResult>({
     queryKey: ["kv-keys"],
-    queryFn: () => apiClient.listKeys({ limit: 50 }),
+    queryFn: () => apiClient.projects.listKeys({ limit: 50 }),
   });
 
   const createMutation = useMutation<SetValueResult, Error, { key: string; value: string }>({
     mutationFn: ({ key, value }: { key: string; value: string }) =>
-      apiClient.setValue({ key, value }),
+      apiClient.projects.setValue({ key, value }),
     onSuccess: async (data) => {
       toast.success(`Key "${data.key}" ${data.created ? "created" : "updated"}`);
       await queryClient.invalidateQueries({ queryKey: ["kv-keys"] });
@@ -55,7 +55,9 @@ function KeysList() {
         value: `Sample value for key ${i + 1} - ${new Date().toISOString()}`,
       }));
 
-      await Promise.all(sampleKeys.map(({ key, value }) => apiClient.setValue({ key, value })));
+      await Promise.all(
+        sampleKeys.map(({ key, value }) => apiClient.projects.setValue({ key, value })),
+      );
       return sampleKeys.length;
     },
     onSuccess: async (count) => {

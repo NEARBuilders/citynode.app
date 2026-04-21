@@ -28,11 +28,11 @@ function ProjectDetailPage() {
 
   const projectQuery = useQuery({
     queryKey: ["project", id],
-    queryFn: () => apiClient.getProject({ id }),
+    queryFn: () => apiClient.projects.getProject({ id }),
   });
 
   const linkAppMutation = useMutation({
-    mutationFn: () => apiClient.linkAppToProject({ projectId: id, accountId, gatewayId }),
+    mutationFn: () => apiClient.projects.linkAppToProject({ projectId: id, accountId, gatewayId }),
     onSuccess: () => {
       toast.success("App linked to project");
       setAccountId("");
@@ -46,7 +46,7 @@ function ProjectDetailPage() {
 
   const unlinkAppMutation = useMutation({
     mutationFn: (app: { accountId: string; gatewayId: string }) =>
-      apiClient.unlinkAppFromProject({ projectId: id, ...app }),
+      apiClient.projects.unlinkAppFromProject({ projectId: id, ...app }),
     onSuccess: () => {
       toast.success("App unlinked from project");
       queryClient.invalidateQueries({ queryKey: ["project", id] });

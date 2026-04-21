@@ -1,0 +1,793 @@
+import { z } from "every-plugin/zod";
+export declare const contract: {
+    listKeys: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        limit: z.ZodOptional<z.ZodNumber>;
+        offset: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>, z.ZodObject<{
+        keys: z.ZodArray<z.ZodObject<{
+            key: z.ZodString;
+            updatedAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+        total: z.ZodNumber;
+        hasMore: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    getValue: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        key: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        key: z.ZodString;
+        value: z.ZodString;
+        updatedAt: z.ZodISODateTime;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    setValue: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        key: z.ZodString;
+        value: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        key: z.ZodString;
+        value: z.ZodString;
+        created: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    deleteKey: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        key: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        key: z.ZodString;
+        deleted: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    listProjects: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        organizationId: z.ZodOptional<z.ZodString>;
+        ownerId: z.ZodOptional<z.ZodString>;
+        visibility: z.ZodOptional<z.ZodEnum<{
+            private: "private";
+            unlisted: "unlisted";
+            public: "public";
+        }>>;
+        status: z.ZodOptional<z.ZodEnum<{
+            active: "active";
+            paused: "paused";
+            archived: "archived";
+        }>>;
+        limit: z.ZodOptional<z.ZodNumber>;
+        cursor: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>, z.ZodObject<{
+        data: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            ownerId: z.ZodString;
+            organizationId: z.ZodNullable<z.ZodString>;
+            slug: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodNullable<z.ZodString>;
+            status: z.ZodEnum<{
+                active: "active";
+                paused: "paused";
+                archived: "archived";
+            }>;
+            visibility: z.ZodEnum<{
+                private: "private";
+                unlisted: "unlisted";
+                public: "public";
+            }>;
+            createdAt: z.ZodISODateTime;
+            updatedAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+        meta: z.ZodObject<{
+            total: z.ZodNumber;
+            hasMore: z.ZodBoolean;
+            nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strip>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        BAD_REQUEST: {
+            readonly status: 400;
+            readonly data: z.ZodObject<{
+                invalidFields: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                validationErrors: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    field: z.ZodString;
+                    message: z.ZodString;
+                    code: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    getProject: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        id: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        data: z.ZodObject<{
+            id: z.ZodString;
+            ownerId: z.ZodString;
+            organizationId: z.ZodNullable<z.ZodString>;
+            slug: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodNullable<z.ZodString>;
+            status: z.ZodEnum<{
+                active: "active";
+                paused: "paused";
+                archived: "archived";
+            }>;
+            visibility: z.ZodEnum<{
+                private: "private";
+                unlisted: "unlisted";
+                public: "public";
+            }>;
+            createdAt: z.ZodISODateTime;
+            updatedAt: z.ZodISODateTime;
+            apps: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                projectId: z.ZodString;
+                accountId: z.ZodString;
+                gatewayId: z.ZodString;
+                position: z.ZodNumber;
+                createdByUserId: z.ZodString;
+                createdAt: z.ZodISODateTime;
+            }, z.core.$strip>>;
+        }, z.core.$strip>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    createProject: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        title: z.ZodString;
+        slug: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+        visibility: z.ZodOptional<z.ZodEnum<{
+            private: "private";
+            unlisted: "unlisted";
+            public: "public";
+        }>>;
+        organizationId: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>, z.ZodObject<{
+        id: z.ZodString;
+        ownerId: z.ZodString;
+        organizationId: z.ZodNullable<z.ZodString>;
+        slug: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        status: z.ZodEnum<{
+            active: "active";
+            paused: "paused";
+            archived: "archived";
+        }>;
+        visibility: z.ZodEnum<{
+            private: "private";
+            unlisted: "unlisted";
+            public: "public";
+        }>;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        BAD_REQUEST: {
+            readonly status: 400;
+            readonly data: z.ZodObject<{
+                invalidFields: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                validationErrors: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    field: z.ZodString;
+                    message: z.ZodString;
+                    code: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    updateProject: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        id: z.ZodString;
+        title: z.ZodOptional<z.ZodString>;
+        description: z.ZodOptional<z.ZodString>;
+        status: z.ZodOptional<z.ZodEnum<{
+            active: "active";
+            paused: "paused";
+            archived: "archived";
+        }>>;
+        visibility: z.ZodOptional<z.ZodEnum<{
+            private: "private";
+            unlisted: "unlisted";
+            public: "public";
+        }>>;
+    }, z.core.$strip>, z.ZodObject<{
+        id: z.ZodString;
+        ownerId: z.ZodString;
+        organizationId: z.ZodNullable<z.ZodString>;
+        slug: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        status: z.ZodEnum<{
+            active: "active";
+            paused: "paused";
+            archived: "archived";
+        }>;
+        visibility: z.ZodEnum<{
+            private: "private";
+            unlisted: "unlisted";
+            public: "public";
+        }>;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        BAD_REQUEST: {
+            readonly status: 400;
+            readonly data: z.ZodObject<{
+                invalidFields: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                validationErrors: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    field: z.ZodString;
+                    message: z.ZodString;
+                    code: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    deleteProject: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        id: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        deleted: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    listProjectApps: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        projectId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        data: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            projectId: z.ZodString;
+            accountId: z.ZodString;
+            gatewayId: z.ZodString;
+            position: z.ZodNumber;
+            createdByUserId: z.ZodString;
+            createdAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    linkAppToProject: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        projectId: z.ZodString;
+        accountId: z.ZodString;
+        gatewayId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        id: z.ZodString;
+        projectId: z.ZodString;
+        accountId: z.ZodString;
+        gatewayId: z.ZodString;
+        position: z.ZodNumber;
+        createdByUserId: z.ZodString;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    unlinkAppFromProject: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        projectId: z.ZodString;
+        accountId: z.ZodString;
+        gatewayId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        deleted: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    listProjectsForApp: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        accountId: z.ZodString;
+        gatewayId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        data: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            ownerId: z.ZodString;
+            organizationId: z.ZodNullable<z.ZodString>;
+            slug: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodNullable<z.ZodString>;
+            status: z.ZodEnum<{
+                active: "active";
+                paused: "paused";
+                archived: "archived";
+            }>;
+            visibility: z.ZodEnum<{
+                private: "private";
+                unlisted: "unlisted";
+                public: "public";
+            }>;
+            createdAt: z.ZodISODateTime;
+            updatedAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        BAD_REQUEST: {
+            readonly status: 400;
+            readonly data: z.ZodObject<{
+                invalidFields: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                validationErrors: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    field: z.ZodString;
+                    message: z.ZodString;
+                    code: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    listApiKeys: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        organizationId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        keys: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+            prefix: z.ZodString;
+            permissions: z.ZodArray<z.ZodString>;
+            lastUsed: z.ZodNullable<z.ZodISODateTime>;
+            createdAt: z.ZodISODateTime;
+            expiresAt: z.ZodNullable<z.ZodISODateTime>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    createApiKey: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        organizationId: z.ZodString;
+        name: z.ZodString;
+        permissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        expiresInDays: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>, z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        key: z.ZodString;
+        prefix: z.ZodString;
+        permissions: z.ZodArray<z.ZodString>;
+        createdAt: z.ZodISODateTime;
+        expiresAt: z.ZodNullable<z.ZodISODateTime>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        BAD_REQUEST: {
+            readonly status: 400;
+            readonly data: z.ZodObject<{
+                invalidFields: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                validationErrors: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    field: z.ZodString;
+                    message: z.ZodString;
+                    code: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    deleteApiKey: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        keyId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        deleted: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    listOrgMembers: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        organizationId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        members: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            userId: z.ZodString;
+            role: z.ZodEnum<{
+                owner: "owner";
+                admin: "admin";
+                member: "member";
+            }>;
+            name: z.ZodNullable<z.ZodString>;
+            email: z.ZodNullable<z.ZodString>;
+            createdAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    listOrgInvitations: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        organizationId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        invitations: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            email: z.ZodString;
+            role: z.ZodEnum<{
+                admin: "admin";
+                member: "member";
+            }>;
+            status: z.ZodEnum<{
+                pending: "pending";
+                accepted: "accepted";
+                rejected: "rejected";
+                expired: "expired";
+            }>;
+            expiresAt: z.ZodISODateTime;
+            createdAt: z.ZodISODateTime;
+        }, z.core.$strip>>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    cancelInvitation: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        invitationId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        cancelled: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+    resendInvitation: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        invitationId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        sent: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        UNAUTHORIZED: {
+            readonly status: 401;
+            readonly data: z.ZodObject<{
+                apiKeyProvided: z.ZodBoolean;
+                provider: z.ZodOptional<z.ZodString>;
+                authType: z.ZodOptional<z.ZodEnum<{
+                    apiKey: "apiKey";
+                    oauth: "oauth";
+                    token: "token";
+                }>>;
+            }, z.core.$strip>;
+        };
+        NOT_FOUND: {
+            readonly status: 404;
+            readonly data: z.ZodObject<{
+                resource: z.ZodOptional<z.ZodString>;
+                resourceId: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+        FORBIDDEN: {
+            readonly status: 403;
+            readonly data: z.ZodObject<{
+                requiredPermissions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                action: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>;
+        };
+    }>>, Record<never, never>>;
+};
+export type ContractType = typeof contract;

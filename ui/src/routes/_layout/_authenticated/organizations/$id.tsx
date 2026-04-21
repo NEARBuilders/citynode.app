@@ -14,10 +14,10 @@ import {
 import { useApiClient } from "@/lib/use-api-client";
 
 type ApiClient = import("@/app").ApiClient;
-type OrgApiKeysResult = Awaited<ReturnType<ApiClient["listApiKeys"]>>;
-type CreatedApiKey = Awaited<ReturnType<ApiClient["createApiKey"]>>;
-type OrgMembersResult = Awaited<ReturnType<ApiClient["listOrgMembers"]>>;
-type OrgInvitationsResult = Awaited<ReturnType<ApiClient["listOrgInvitations"]>>;
+type OrgApiKeysResult = Awaited<ReturnType<ApiClient["projects"]["listApiKeys"]>>;
+type CreatedApiKey = Awaited<ReturnType<ApiClient["projects"]["createApiKey"]>>;
+type OrgMembersResult = Awaited<ReturnType<ApiClient["projects"]["listOrgMembers"]>>;
+type OrgInvitationsResult = Awaited<ReturnType<ApiClient["projects"]["listOrgInvitations"]>>;
 
 const orgMembersQueryKey = (orgId: string) => ["org-members", orgId] as const;
 const orgInvitationsQueryKey = (orgId: string) => ["org-invitations", orgId] as const;
@@ -37,17 +37,17 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
       context.queryClient.ensureQueryData({
         queryKey: orgMembersQueryKey(params.id),
         queryFn: async (): Promise<OrgMembersResult> =>
-          context.apiClient.listOrgMembers({ organizationId: params.id }),
+          context.apiClient.projects.listOrgMembers({ organizationId: params.id }),
       }),
       context.queryClient.ensureQueryData({
         queryKey: orgInvitationsQueryKey(params.id),
         queryFn: async (): Promise<OrgInvitationsResult> =>
-          context.apiClient.listOrgInvitations({ organizationId: params.id }),
+          context.apiClient.projects.listOrgInvitations({ organizationId: params.id }),
       }),
       context.queryClient.ensureQueryData({
         queryKey: orgApiKeysQueryKey(params.id),
         queryFn: async (): Promise<OrgApiKeysResult> =>
-          context.apiClient.listApiKeys({ organizationId: params.id }),
+          context.apiClient.projects.listApiKeys({ organizationId: params.id }),
       }),
     ]);
   },
@@ -70,17 +70,17 @@ function OrganizationDetail() {
   const membersQuery = useQuery({
     queryKey: orgMembersQueryKey(orgId),
     queryFn: async (): Promise<OrgMembersResult> =>
-      apiClient.listOrgMembers({ organizationId: orgId }),
+      apiClient.projects.listOrgMembers({ organizationId: orgId }),
   });
   const invitationsQuery = useQuery({
     queryKey: orgInvitationsQueryKey(orgId),
     queryFn: async (): Promise<OrgInvitationsResult> =>
-      apiClient.listOrgInvitations({ organizationId: orgId }),
+      apiClient.projects.listOrgInvitations({ organizationId: orgId }),
   });
   const apiKeysQuery = useQuery({
     queryKey: orgApiKeysQueryKey(orgId),
     queryFn: async (): Promise<OrgApiKeysResult> =>
-      apiClient.listApiKeys({ organizationId: orgId }),
+      apiClient.projects.listApiKeys({ organizationId: orgId }),
   });
 
   const org = organizations.find((o: Organization) => o.id === orgId);
@@ -131,7 +131,7 @@ function OrganizationDetail() {
   });
 
   const cancelInvitationMutation = useMutation({
-    mutationFn: (invitationId: string) => apiClient.cancelInvitation({ invitationId }),
+    mutationFn: (invitationId: string) => apiClient.projects.cancelInvitation({ invitationId }),
     onSuccess: async () => {
       toast.success("Invitation cancelled");
       await queryClient.invalidateQueries({ queryKey: ["org-invitations", orgId] });
@@ -142,7 +142,7 @@ function OrganizationDetail() {
   });
 
   const createApiKeyMutation = useMutation({
-    mutationFn: () => apiClient.createApiKey({ organizationId: orgId, name: apiKeyName }),
+    mutationFn: () => apiClient.projects.createApiKey({ organizationId: orgId, name: apiKeyName }),
     onSuccess: async (data) => {
       setCreatedApiKey(data);
       queryClient.setQueryData<OrgApiKeysResult>(
@@ -185,7 +185,7 @@ function OrganizationDetail() {
   });
 
   const deleteApiKeyMutation = useMutation({
-    mutationFn: (keyId: string) => apiClient.deleteApiKey({ keyId }),
+    mutationFn: (keyId: string) => apiClient.projects.deleteApiKey({ keyId }),
     onMutate: async (keyId) => {
       await queryClient.cancelQueries({
         queryKey: orgApiKeysQueryKey(orgId),

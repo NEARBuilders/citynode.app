@@ -18,11 +18,12 @@ export const Route = createFileRoute("/_layout/apps/")({
     await Promise.allSettled([
       context.queryClient.ensureQueryData({
         queryKey: ["registry-apps", deps.q],
-        queryFn: () => context.apiClient.listRegistryApps({ q: deps.q || undefined, limit: 48 }),
+        queryFn: () =>
+          context.apiClient.registry.listRegistryApps({ q: deps.q || undefined, limit: 48 }),
       }),
       context.queryClient.ensureQueryData({
         queryKey: ["registry-status"],
-        queryFn: () => context.apiClient.getRegistryStatus(),
+        queryFn: () => context.apiClient.registry.getRegistryStatus(),
         staleTime: 60_000,
       }),
     ]);
@@ -46,12 +47,12 @@ function AppsIndex() {
 
   const appsQuery = useQuery({
     queryKey: ["registry-apps", search.q],
-    queryFn: () => apiClient.listRegistryApps({ q: search.q || undefined, limit: 48 }),
+    queryFn: () => apiClient.registry.listRegistryApps({ q: search.q || undefined, limit: 48 }),
   });
 
   const registryStatusQuery = useQuery({
     queryKey: ["registry-status"],
-    queryFn: () => apiClient.getRegistryStatus(),
+    queryFn: () => apiClient.registry.getRegistryStatus(),
     staleTime: 60_000,
   });
 

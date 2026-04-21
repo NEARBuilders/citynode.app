@@ -1,0 +1,77 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import DrizzleORMMigrations from "@proj-airi/unplugin-drizzle-orm-migrations/rspack";
+import {
+  EmitPluginManifest,
+  EveryPluginDevServer,
+  FixMfDataUriPlugin,
+} from "every-plugin/build/rspack";
+import { withZephyr } from "zephyr-rspack-plugin";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const shouldDeploy = process.env.DEPLOY === "true";
+
+function normalizePath(input) {
+  return input.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function resolveLocalTarget(value, configRoot) {
+  if (typeof value !== "string" || !value.startsWith("local:")) {
+    return null;
+  }
+
+  return normalizePath(path.resolve(configRoot, value.slice("local:".length)));
+}
+
+function updateBosConfig(url) {
+  try {
+    const configPath = path.resolve(__dirname, "../../bos.config.json");
+    const configRoot = path.dirname(configPath);
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const pluginDir = normalizePath(__dirname);
+
+    const match = Object.entries(config.plugins ?? {}).find(([, plugin]) => {
+      return resolveLocalTarget(plugin.development, configRoot) === pluginDir;
+    });
+
+    if (!match) {
+      console.warn(`   ⚠️  No matching plugin entry found for ${pluginDir}`);
+      return;
+    }
+
+    const [key] = match;
+    config.plugins[key].production = url;
+    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    console.log(`   ✅ Updated bos.config.json: plugins.${key}.production`);
+  } catch (err) {
+    console.error("   ❌ Failed to update bos.config.json:", err.message);
+  }
+}
+
+const baseConfig = {
+  externals: [/^@libsql\/.*/],
+  plugins: [
+    new EmitPluginManifest(),
+    new EveryPluginDevServer({ dts: false }),
+    new FixMfDataUriPlugin(),
+    DrizzleORMMigrations(),
+  ],
+  infrastructureLogging: {
+    level: "error",
+  },
+  stats: "errors-warnings",
+};
+
+export default shouldDeploy
+  ? withZephyr({
+      hooks: {
+        onDeployComplete: (info) => {
+          console.log("🚀 Projects Plugin Deployed:", info.url);
+          updateBosConfig(info.url);
+        },
+      },
+    })(baseConfig)
+  : baseConfig;

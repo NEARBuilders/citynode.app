@@ -5,7 +5,7 @@ import { Badge, Button, Card, CardContent } from "@/components";
 import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
-export type KvValueResult = Awaited<ReturnType<import("@/app").ApiClient["getValue"]>>;
+export type KvValueResult = Awaited<ReturnType<import("@/app").ApiClient["projects"]["getValue"]>>;
 
 function generateOgImageSvg(keyId: string): string {
   const escapedKey = keyId.length > 40 ? `${keyId.slice(0, 37)}...` : keyId;
@@ -19,7 +19,7 @@ function generateOgImageSvg(keyId: string): string {
 export const Route = createFileRoute("/_layout/_authenticated/keys/$key")({
   loader: async ({ context, params }) => {
     try {
-      const data = await context.apiClient.getValue({ key: params.key });
+      const data = await context.apiClient.projects.getValue({ key: params.key });
       return { data };
     } catch (error) {
       return { error: error as Error, data: null };
@@ -60,7 +60,7 @@ function KeyValue() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const deleteMutation = useMutation({
-    mutationFn: () => apiClient.deleteKey({ key }),
+    mutationFn: () => apiClient.projects.deleteKey({ key }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["kv-keys"] });
       router.navigate({ to: "/keys" });

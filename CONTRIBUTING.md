@@ -20,7 +20,20 @@ Visit http://localhost:3002 (UI) and http://localhost:3014 (API).
 
 - **UI Changes**: Edit `ui/src/` → hot reload automatically → deploy with `bun run build:ui`
 - **API Changes**: Edit `api/src/` → hot reload automatically → deploy with `bun run build:api`
+- **Plugin Changes**: Edit `plugins/*/src/` → hot reload automatically → deploy per plugin
 - **Host Changes**: Edit `host/src/` or `bos.config.json` → deploy with `bun run build:host`
+
+### Plugin Architecture
+
+Business logic lives in independent plugins under `plugins/`:
+
+- **`plugins/registry/`** — FastKV app discovery, metadata publish/relay (no database)
+- **`plugins/projects/`** — Projects CRUD, KV store, org management, API keys (SQLite via libsql)
+- **`plugins/_template/`** — Scaffold for new plugins
+
+Each plugin has its own `contract.ts`, `index.ts`, `rspack.config.js`, and `package.json`. Routes are namespaced in the UI: `apiClient.registry.*()` and `apiClient.projects.*()`.
+
+The `api/` package is a thin structural shell with only health/ping routes and shared auth middleware.
 
 ### Environment Configuration
 

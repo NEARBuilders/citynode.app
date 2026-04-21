@@ -109,15 +109,8 @@ interface DiscoveredConfig {
 }
 
 const DISCOVERY_PREFIX = "apps/";
-const DEFAULT_RELAY_ACCOUNT_ID =
-  process.env.REGISTRY_RELAY_ACCOUNT_ID || process.env.NEAR_ACCOUNT_ID || null;
-const DEFAULT_RELAY_PRIVATE_KEY =
-  process.env.REGISTRY_RELAY_PRIVATE_KEY || process.env.NEAR_PRIVATE_KEY || null;
-const DEFAULT_RELAY_NETWORK =
-  (process.env.REGISTRY_RELAY_NETWORK as NetworkId | undefined) ||
-  (DEFAULT_RELAY_ACCOUNT_ID ? getNetworkIdForAccount(DEFAULT_RELAY_ACCOUNT_ID) : "mainnet");
 
-export class RegistryService extends Context.Tag("api/RegistryService")<
+export class RegistryService extends Context.Tag("registry/RegistryService")<
   RegistryService,
   {
     listRegistryApps: (input: RegistryListInput) => Promise<{
@@ -428,8 +421,8 @@ function createRegistryMethods(config: RegistryConfig) {
         discoveryKey: `${DISCOVERY_PREFIX}*/bos.config.json`,
         metadataContractId: `${getRegistryNamespaceForNetwork("mainnet", config)} | ${getRegistryNamespaceForNetwork("testnet", config)}`,
         metadataFastKvUrl: getFastKvBaseUrlForNetwork("mainnet"),
-        relayEnabled: Boolean(DEFAULT_RELAY_ACCOUNT_ID && DEFAULT_RELAY_PRIVATE_KEY),
-        relayAccountId: DEFAULT_RELAY_ACCOUNT_ID,
+        relayEnabled: Boolean(config.relayAccountId && config.relayPrivateKey),
+        relayAccountId: config.relayAccountId ?? null,
         timestamp: new Date().toISOString(),
       };
     },
@@ -452,7 +445,7 @@ function createRegistryMethods(config: RegistryConfig) {
     },
 
     relayRegistryMetadataWrite: async (signedDelegateActionPayload: string) => {
-      if (!DEFAULT_RELAY_ACCOUNT_ID || !DEFAULT_RELAY_PRIVATE_KEY) {
+      if (!config.relayAccountId || !config.relayPrivateKey) {
         throw new Error("Registry relay is not configured on this server.");
       }
 
@@ -460,19 +453,19 @@ function createRegistryMethods(config: RegistryConfig) {
       const senderId = signedDelegate.signedDelegate.delegateAction.senderId;
 
       const near = new Near({
-        network: DEFAULT_RELAY_NETWORK,
-        defaultSignerId: DEFAULT_RELAY_ACCOUNT_ID,
-        privateKey: DEFAULT_RELAY_PRIVATE_KEY as never,
+        network: config.relayNetwork ?? "mainnet",
+        defaultSignerId: config.relayAccountId,
+        privateKey: config.relayPrivateKey as never,
       });
 
       const result = await near
-        .transaction(DEFAULT_RELAY_ACCOUNT_ID)
+        .transaction(config.relayAccountId)
         .signedDelegateAction(signedDelegate)
         .send({ waitUntil: "NONE" });
 
       return {
         transactionHash: result?.transaction?.hash ?? null,
-        relayerAccountId: DEFAULT_RELAY_ACCOUNT_ID,
+        relayerAccountId: config.relayAccountId,
         senderId,
       };
     },
@@ -482,52 +475,6 @@ function createRegistryMethods(config: RegistryConfig) {
       return signedDelegate.signedDelegate.delegateAction.senderId;
     },
   };
-}
-
-export async function listRegistryApps(input: RegistryListInput, config: RegistryConfig) {
-  return createRegistryMethods(config).listRegistryApps(input);
-}
-
-export async function getRegistryAppsByAccount(accountId: string, config: RegistryConfig) {
-  return createRegistryMethods(config).getRegistryAppsByAccount(accountId);
-}
-
-export async function getRegistryApp(
-  accountId: string,
-  gatewayId: string,
-  config: RegistryConfig,
-): Promise<RegistryAppDetail | null> {
-  return createRegistryMethods(config).getRegistryApp(accountId, gatewayId);
-}
-
-export async function getRegistryAppByHost(
-  hostUrl: string,
-  config: RegistryConfig,
-): Promise<RegistryAppDetail | null> {
-  return createRegistryMethods(config).getRegistryAppByHost(hostUrl);
-}
-
-export async function getRegistryStatus(config: RegistryConfig) {
-  return createRegistryMethods(config).getRegistryStatus();
-}
-
-export function prepareRegistryMetadataWrite(
-  input: RegistryMetadataDraftInput,
-  config: RegistryConfig,
-): PreparedRegistryMetadataWrite {
-  return createRegistryMethods(config).prepareRegistryMetadataWrite(input);
-}
-
-export async function relayRegistryMetadataWrite(
-  signedDelegateActionPayload: string,
-  config: RegistryConfig,
-): Promise<RegistryRelayResult> {
-  return createRegistryMethods(config).relayRegistryMetadataWrite(signedDelegateActionPayload);
-}
-
-export function getRegistryRelaySender(signedDelegateActionPayload: string) {
-  const signedDelegate = decodeSignedDelegateAction(signedDelegateActionPayload);
-  return signedDelegate.signedDelegate.delegateAction.senderId;
 }
 
 function buildRegistryManifest(input: RegistryMetadataDraftInput): RegistryMetadata {

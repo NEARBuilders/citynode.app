@@ -39,7 +39,7 @@ function generateProjectAppId(): string {
   return `pa_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-export class ProjectService extends Context.Tag("ProjectService")<
+export class ProjectService extends Context.Tag("projects/ProjectService")<
   ProjectService,
   {
     listProjects: (

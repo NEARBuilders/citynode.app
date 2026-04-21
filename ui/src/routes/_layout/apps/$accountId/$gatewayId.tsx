@@ -31,15 +31,15 @@ function AppDetailPage() {
   const apiClient = useApiClient();
   const detailQuery = useQuery({
     queryKey: ["registry-app", accountId, gatewayId],
-    queryFn: () => apiClient.getRegistryApp({ accountId, gatewayId }),
+    queryFn: () => apiClient.registry.getRegistryApp({ accountId, gatewayId }),
   });
   const projectsQuery = useQuery({
     queryKey: ["app-projects", accountId, gatewayId],
-    queryFn: () => apiClient.listProjectsForApp({ accountId, gatewayId }),
+    queryFn: () => apiClient.projects.listProjectsForApp({ accountId, gatewayId }),
   });
   const registryStatusQuery = useQuery({
     queryKey: ["registry-status"],
-    queryFn: () => apiClient.getRegistryStatus(),
+    queryFn: () => apiClient.registry.getRegistryStatus(),
     staleTime: 60_000,
   });
   const sessionQuery = useQuery(sessionQueryOptions());
@@ -104,7 +104,7 @@ function AppDetailPage() {
         throw new Error("Connect a NEAR wallet to publish registry metadata.");
       }
 
-      return apiClient.prepareRegistryMetadataWrite({
+      return apiClient.registry.prepareRegistryMetadataWrite({
         accountId,
         gatewayId,
         claimedBy: nearAccountId,
@@ -196,7 +196,7 @@ function AppDetailPage() {
         throw new Error("Sign a delegate payload first.");
       }
 
-      return apiClient.relayRegistryMetadataWrite({ payload: delegatePayload });
+      return apiClient.registry.relayRegistryMetadataWrite({ payload: delegatePayload });
     },
     onSuccess: async (result) => {
       toast.success("Delegate payload relayed", {

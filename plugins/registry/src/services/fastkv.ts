@@ -26,16 +26,29 @@ const DEFAULT_REGISTRY_NAMESPACE = "dev.everything.near";
 
 export interface RegistryConfig {
   namespace: string;
+  relayAccountId?: string;
+  relayPrivateKey?: string;
+  relayNetwork?: NetworkId;
 }
 
-export class RegistryConfigService extends Context.Tag("api/RegistryConfigService")<
+export class RegistryConfigService extends Context.Tag("registry/RegistryConfigService")<
   RegistryConfigService,
   RegistryConfig
 >() {
-  static Live = (namespace?: string) =>
+  static Live = (config: {
+    namespace?: string;
+    relayAccountId?: string;
+    relayPrivateKey?: string;
+    relayNetwork?: NetworkId;
+  }) =>
     Layer.succeed(RegistryConfigService, {
       namespace:
-        namespace ?? process.env.REGISTRY_FASTKV_MAINNET_NAMESPACE ?? DEFAULT_REGISTRY_NAMESPACE,
+        config.namespace ??
+        process.env.REGISTRY_FASTKV_MAINNET_NAMESPACE ??
+        DEFAULT_REGISTRY_NAMESPACE,
+      relayAccountId: config.relayAccountId,
+      relayPrivateKey: config.relayPrivateKey,
+      relayNetwork: config.relayNetwork,
     });
 }
 

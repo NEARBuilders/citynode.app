@@ -9,6 +9,15 @@
     "template": {
       "development": "local:plugins/_template",
       "production": "https://elliot-braem-2672-every-plugin-template-everythin-035e7be56-ze.zephyrcloud.app"
+    },
+    "registry": {
+      "development": "local:plugins/registry"
+    },
+    "projects": {
+      "development": "local:plugins/projects"
+    },
+    "opencode": {
+      "development": "local:plugins/opencode"
     }
   },
   "app": {

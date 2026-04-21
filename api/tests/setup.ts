@@ -1,26 +1,21 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/libsql/migrator";
 import { createPluginRuntime } from "every-plugin";
-import { createDatabase, type Database } from "@/db";
 import Plugin from "@/index";
 import pluginDevConfig from "../plugin.dev";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export const TEST_DB_URL = "file:./api-test.db";
-
 const TEST_CONFIG = {
   variables: pluginDevConfig.config.variables,
   secrets: {
-    API_DATABASE_URL: TEST_DB_URL,
+    API_DATABASE_URL: "file:./api-test.db",
     API_DATABASE_AUTH_TOKEN: undefined,
   },
 };
 
 let _runtime: ReturnType<typeof createPluginRuntime> | null = null;
-let _testDb: Database | null = null;
 
 export function getRuntime() {
   if (!_runtime) {
@@ -36,34 +31,17 @@ export function getRuntime() {
   return _runtime;
 }
 
-export function getTestDb() {
-  if (!_testDb) {
-    _testDb = createDatabase(TEST_DB_URL);
-  }
-  return _testDb;
-}
-
-export async function runMigrations() {
-  const db = getTestDb();
-  await migrate(db, {
-    migrationsFolder: join(__dirname, "../src/db/migrations"),
-  });
-}
-
-export async function getPluginClient(context?: { userId?: string; nearAccountId?: string }) {
+export async function getPluginClient(context?: { userId?: string }) {
   const runtime = getRuntime();
   const { createClient } = await runtime.usePlugin(pluginDevConfig.pluginId, TEST_CONFIG);
 
-  if (!context?.userId && !context?.nearAccountId) {
+  if (!context?.userId) {
     return createClient();
   }
 
-  const userId = context.userId ?? context.nearAccountId!;
-
   return createClient({
-    userId,
-    user: { id: userId },
-    nearAccountId: context.nearAccountId,
+    userId: context.userId,
+    user: { id: context.userId },
   });
 }
 
@@ -72,5 +50,4 @@ export async function teardown() {
     await _runtime.shutdown();
     _runtime = null;
   }
-  _testDb = null;
 }

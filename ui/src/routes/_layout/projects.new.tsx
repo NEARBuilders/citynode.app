@@ -29,11 +29,11 @@ function NewProjectPage() {
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("private");
 
-  type CreateProjectResult = Awaited<ReturnType<typeof apiClient.createProject>>;
+  type CreateProjectResult = Awaited<ReturnType<typeof apiClient.projects.createProject>>;
 
   const createProjectMutation = useMutation<CreateProjectResult, Error, void>({
     mutationFn: () =>
-      apiClient.createProject({
+      apiClient.projects.createProject({
         title: title.trim(),
         slug: slug
           .trim()

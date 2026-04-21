@@ -29,7 +29,7 @@ function Home() {
   const queryClient = useQueryClient();
   const apiClient = useApiClient();
 
-  type ProjectsResult = Awaited<ReturnType<typeof apiClient.listProjects>>;
+  type ProjectsResult = Awaited<ReturnType<typeof apiClient.projects.listProjects>>;
 
   const { data: session } = useQuery(sessionQueryOptions());
   const { data: organizations = [] } = useQuery(organizationsQueryOptions());
@@ -37,7 +37,7 @@ function Home() {
   const user = session?.user;
   const { data: projectsData } = useQuery<ProjectsResult>({
     queryKey: ["projects"],
-    queryFn: () => apiClient.listProjects({ ownerId: user?.id, limit: 5 }),
+    queryFn: () => apiClient.projects.listProjects({ ownerId: user?.id, limit: 5 }),
   });
 
   const activeOrgId = session?.session?.activeOrganizationId;

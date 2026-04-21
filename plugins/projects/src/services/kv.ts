@@ -4,7 +4,7 @@ import { ORPCError } from "every-plugin/orpc";
 import { DatabaseTag } from "../db/layer";
 import { kvStore } from "../db/schema";
 
-export class KvService extends Context.Tag("KvService")<
+export class KvService extends Context.Tag("projects/KvService")<
   KvService,
   {
     listKeys: (

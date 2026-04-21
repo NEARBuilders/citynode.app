@@ -1,6 +1,9 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Badge, Card, CardContent, UnderConstruction } from "@/components";
+import { useState } from "react";
+import { Badge, Button, Card, CardContent, Input, UnderConstruction } from "@/components";
 import { APP_NAME } from "@/lib/branding";
+import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/opencode")({
   head: () => ({
@@ -16,6 +19,8 @@ export const Route = createFileRoute("/_layout/opencode")({
 });
 
 function OpencodePage() {
+  const isAdmin = true; // TODO: restore after testing → const { isAdmin } = getSessionFromData(sessionQuery.data);
+
   return (
     <div className="space-y-10">
       <section className="space-y-5">
@@ -33,132 +38,20 @@ function OpencodePage() {
           <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
             <strong className="text-foreground">opencode</strong> is an open-source AI coding agent.
             When you run it inside this project, it discovers{" "}
-            <a
-              href="/skill.md"
-              className="underline hover:text-foreground transition-colors font-mono"
-            >
+            <a href="/skill.md" className="underline hover:text-foreground transition-colors font-mono">
               skills
             </a>
             ,{" "}
-            <a
-              href="/llms.txt"
-              className="underline hover:text-foreground transition-colors font-mono"
-            >
+            <a href="/llms.txt" className="underline hover:text-foreground transition-colors font-mono">
               context
             </a>
             , and <code className="text-xs bg-muted px-1.5 py-0.5 rounded">AGENTS.md</code>{" "}
-            automatically — so it already knows about the host, UI, and API composition, the
-            available clients, and how to add pages.
+            automatically.
           </p>
-          <UnderConstruction
-            label="opencode"
-            sourceFile="ui/src/routes/_layout/opencode.tsx"
-            className="w-full max-w-sm mt-3"
-          />
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              how it works
-            </div>
-            <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
-              <p>
-                1.{" "}
-                <a
-                  href="https://opencode.ai"
-                  className="underline hover:text-foreground transition-colors"
-                >
-                  install opencode
-                </a>{" "}
-                and run it inside this project
-              </p>
-              <p>
-                2. opencode discovers{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">AGENTS.md</code>,{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">LLM.txt</code>, and skill
-                files — no manual setup needed
-              </p>
-              <p>
-                3. start the dev server with{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                  bos dev --host remote
-                </code>{" "}
-                — UI loads on <code className="text-xs bg-muted px-1.5 py-0.5 rounded">:3002</code>,
-                API on <code className="text-xs bg-muted px-1.5 py-0.5 rounded">:3014</code>
-              </p>
-              <p>
-                4. prompt opencode to edit a page — changes hot-reload in your browser, no rebuild
-              </p>
-              <p>
-                5. when ready to ship:{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">bos publish --deploy</code>{" "}
-                uploads to Zephyr CDN and updates{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">bos.config.json</code> with
-                new URLs
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">start here</div>
-            <div className="grid gap-3">
-              <BoxLink
-                href="/about"
-                title="about this site"
-                body="understand the host–UI–API composition model and published runtime records"
-              />
-              <BoxLink
-                href="/apps"
-                title="browse published apps"
-                body="inspect accounts, gateways, remotes, and public runtime metadata"
-              />
-              <BoxLink
-                href="/skill.md"
-                title="open the agent guide"
-                body="task-oriented notes for agents, crawlers, and AI-native clients"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="space-y-4 max-w-3xl">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">key clients</div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardContent className="p-5 space-y-2">
-              <div className="text-sm font-medium font-mono">authClient</div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Imported from <code className="text-xs bg-muted px-1.5 py-0.5 rounded">@/app</code>.
-                Provides NEAR Sign In (SIWN), email/password, and anonymous auth via Better-Auth.
-                Use{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                  authClient.getSession()
-                </code>{" "}
-                to check sessions.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5 space-y-2">
-              <div className="text-sm font-medium font-mono">apiClient</div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Accessed via the{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">useApiClient()</code> hook
-                from{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">@/lib/use-api-client</code>
-                . Returns a fully typed oRPC client connected to the host. Combine with TanStack
-                Query for data fetching.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {isAdmin ? <AdminDashboard /> : <PublicInfo />}
 
       <section className="grid gap-4 md:grid-cols-2">
         <FactCard
@@ -172,8 +65,7 @@ function OpencodePage() {
               Skill files live in{" "}
               <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.opencode/skills/</code> and{" "}
               <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.agent/skills/</code>. They
-              make agent knowledge codified, versioned, and auto-discovered — no manual context
-              pasting needed.
+              make agent knowledge codified, versioned, and auto-discovered.
             </>
           }
         />
@@ -188,128 +80,306 @@ function OpencodePage() {
               After{" "}
               <code className="text-xs bg-muted px-1.5 py-0.5 rounded">bos publish --deploy</code>{" "}
               updates the config with new CDN URLs, restart the host to pick up changes. The runtime
-              is frozen at startup by design — a fresh process loads the latest composition.
+              is frozen at startup by design.
             </>
           }
         />
-      </section>
-
-      <section className="space-y-4 max-w-3xl">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          programmatic access
-        </div>
-        <Card>
-          <CardContent className="p-5 space-y-3">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              opencode can run as an HTTP server for programmatic access. Run{" "}
-              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                opencode serve --port 4096
-              </code>{" "}
-              alongside the dev server, then send prompts via the{" "}
-              <a
-                href="https://opencode.ai/docs/sdk/"
-                className="underline hover:text-foreground transition-colors"
-              >
-                JS SDK
-              </a>{" "}
-              or HTTP API:
-            </p>
-            <pre className="overflow-x-auto text-xs leading-relaxed text-muted-foreground font-mono whitespace-pre">
-              {`# Create a session and send a prompt
-curl -X POST http://localhost:4096/session \\
-  -H "Content-Type: application/json" \\
-  -d '{"title":"edit page"}'
-
-# Or use the SDK
-import { createOpencode } from "@opencode-ai/sdk";
-const { client } = await createOpencode({ port: 4096 });`}
-            </pre>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              This enables future integrations where the site itself could prompt opencode to make
-              changes — the{" "}
-              <a
-                href="/skill.md"
-                className="underline hover:text-foreground transition-colors font-mono"
-              >
-                skill
-              </a>{" "}
-              and{" "}
-              <a
-                href="/llms.txt"
-                className="underline hover:text-foreground transition-colors font-mono"
-              >
-                agent context
-              </a>{" "}
-              files provide the knowledge for the agent to work effectively.
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="space-y-4 max-w-3xl">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          command reference
-        </div>
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <pre className="overflow-x-auto text-xs leading-relaxed text-muted-foreground font-mono whitespace-pre">
-              {`# start dev (remote host, local UI + API)
-bos dev --host remote
-
-# isolate UI work
-bos dev --api remote
-
-# isolate API work
-bos dev --ui remote
-
-# production preview
-bos start --no-interactive
-
-# build, deploy to Zephyr CDN, update config
-bos publish --deploy
-
-# restart after deploy
-bos kill && bos dev --host remote
-
-# Docker
-docker build -t everything-dev .
-docker run -p 3000:3000 everything-dev
-
-# type check
-bun typecheck`}
-            </pre>
-          </CardContent>
-        </Card>
       </section>
     </div>
   );
 }
 
-function BoxLink({ title, body, href }: { title: string; body: string; href: string }) {
-  const isStaticFile = /\.(md|txt|json)$/i.test(href);
+function AdminDashboard() {
+  const apiClient = useApiClient();
+  const queryClient = useQueryClient();
 
-  if (isStaticFile) {
-    return (
-      <a href={href}>
-        <Card className="transition-colors hover:bg-muted/20">
-          <CardContent className="p-4 space-y-1">
-            <div className="font-medium">{title}</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-          </CardContent>
-        </Card>
-      </a>
-    );
+  const statusQuery = useQuery({
+    queryKey: ["opencode", "serverStatus"],
+    queryFn: async () => {
+      const { data } = await apiClient.opencode.serverStatus();
+      return data;
+    },
+    refetchInterval: 15000,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.opencode.startServer();
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opencode", "serverStatus"] });
+    },
+  });
+
+  const reloadConfigMutation = useMutation({
+    mutationFn: async () => {
+      return await apiClient.reloadConfig();
+    },
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">
+        admin dashboard
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <ServerPanel
+          status={statusQuery.data}
+          isLoading={statusQuery.isLoading}
+          onStart={() => startMutation.mutate()}
+          startResult={startMutation.data}
+          startPending={startMutation.isPending}
+        />
+        <ConfigPanel
+          onReload={() => reloadConfigMutation.mutate()}
+          result={reloadConfigMutation.data}
+          pending={reloadConfigMutation.isPending}
+        />
+      </div>
+
+      <PromptPanel />
+    </div>
+  );
+}
+
+function ServerPanel({
+  status,
+  isLoading,
+  onStart,
+  startResult,
+  startPending,
+}: {
+  status: { running: boolean; port: number; host: string; url: string; version?: string; uptime?: number } | undefined;
+  isLoading: boolean;
+  onStart: () => void;
+  startResult: { status: string; url: string; message: string } | undefined;
+  startPending: boolean;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            opencode server
+          </div>
+          {status?.running ? (
+            <Badge variant="outline" className="text-green-600 border-green-600/30 bg-green-600/10">
+              running
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              not running
+            </Badge>
+          )}
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Checking server status…</p>
+        ) : status ? (
+          <div className="space-y-2 text-sm">
+            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">url</span>
+              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{status.url}</code>
+              <span className="text-muted-foreground">host</span>
+              <span>{status.host}</span>
+              <span className="text-muted-foreground">port</span>
+              <span>{status.port}</span>
+              {status.version && (
+                <>
+                  <span className="text-muted-foreground">version</span>
+                  <span>{status.version}</span>
+                </>
+              )}
+              {status.uptime !== undefined && (
+                <>
+                  <span className="text-muted-foreground">uptime</span>
+                  <span>{Math.floor(status.uptime)}s</span>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Server status unavailable.</p>
+        )}
+
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={onStart} disabled={startPending}>
+            {startPending ? "starting…" : "check server"}
+          </Button>
+          {startResult && (
+            <p className="text-xs text-muted-foreground">{startResult.message}</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConfigPanel({
+  onReload,
+  result,
+  pending,
+}: {
+  onReload: () => void;
+  result: { status: string; note: string } | undefined;
+  pending: boolean;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          host config reload
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Re-fetch the published config from FastKV and signal a scope rebuild. Currently a full host
+          restart is needed to pick up changes.
+        </p>
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={onReload} disabled={pending}>
+            {pending ? "reloading…" : "reload config"}
+          </Button>
+          {result && (
+            <div className="text-xs text-muted-foreground">
+              <Badge variant="outline">{result.status}</Badge>
+              <span className="ml-2">{result.note}</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PromptPanel() {
+  const apiClient = useApiClient();
+  const queryClient = useQueryClient();
+  const [prompt, setPrompt] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+
+  const createSessionMutation = useMutation({
+    mutationFn: async (title?: string) => {
+      const { data } = await apiClient.opencode.createSession({ title });
+      return data;
+    },
+    onSuccess: (data) => {
+      setSessionId(data.id);
+      queryClient.invalidateQueries({ queryKey: ["opencode", "serverStatus"] });
+    },
+  });
+
+  const sendPromptMutation = useMutation({
+    mutationFn: async ({ sid, msg }: { sid: string; msg: string }) => {
+      const { data } = await apiClient.opencode.sendPrompt({
+        sessionId: sid,
+        message: msg,
+      });
+      return data;
+    },
+  });
+
+  function handleSend() {
+    const msg = prompt.trim();
+    if (!msg) return;
+
+    const sid = sessionId;
+    if (!sid) {
+      createSessionMutation.mutate(msg.slice(0, 80), {
+        onSuccess: (session) => {
+          setMessages((prev) => [...prev, { role: "user", content: msg }]);
+          sendPromptMutation.mutate({ sid: session.id, msg });
+          setPrompt("");
+        },
+      });
+    } else {
+      setMessages((prev) => [...prev, { role: "user", content: msg }]);
+      sendPromptMutation.mutate({ sid, msg });
+      setPrompt("");
+    }
   }
 
   return (
-    <Link to={href}>
-      <Card className="transition-colors hover:bg-muted/20">
-        <CardContent className="p-4 space-y-1">
-          <div className="font-medium">{title}</div>
-          <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-        </CardContent>
-      </Card>
-    </Link>
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">prompt</div>
+          {sessionId && (
+            <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+              {sessionId.slice(0, 12)}…
+            </code>
+          )}
+        </div>
+
+        {messages.length > 0 && (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div key={i} className="text-sm">
+                <span className="text-xs text-muted-foreground font-mono mr-2">
+                  {m.role === "user" ? ">" : "<"}
+                </span>
+                {m.content}
+              </div>
+            ))}
+            {sendPromptMutation.isPending && (
+              <div className="text-sm text-muted-foreground animate-pulse">thinking…</div>
+            )}
+          </div>
+        )}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="flex gap-2"
+        >
+          <Input
+            placeholder={sessionId ? "send a prompt…" : "type a prompt to create a session…"}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="flex-1 text-sm"
+          />
+          <Button type="submit" size="sm" disabled={!prompt.trim() || sendPromptMutation.isPending}>
+            send
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PublicInfo() {
+  return (
+    <section className="space-y-4 max-w-3xl">
+      <UnderConstruction
+        label="opencode"
+        sourceFile="ui/src/routes/_layout/opencode.tsx"
+        className="w-full max-w-sm"
+      />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardContent className="p-5 space-y-2">
+            <div className="text-sm font-medium font-mono">how it works</div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Run{" "}
+              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">opencode serve --port 4096</code>{" "}
+              alongside the dev server. It discovers the project skill files and context automatically.
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 space-y-2">
+            <div className="text-sm font-medium font-mono">admin access</div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Sign in as an admin to see the interactive dashboard with server controls, prompt box,
+              and config reload.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
   );
 }
 

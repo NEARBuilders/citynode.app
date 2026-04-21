@@ -90,9 +90,25 @@ bos info      # Show configuration
 - Follow existing patterns in neighboring files
 
 ### Adding API Endpoints
-1. Define in `api/src/contract.ts`
-2. Implement handler in `api/src/index.ts`
-3. Use in UI via `apiClient` from `@/app`
+1. For the thin API shell: Define in `api/src/contract.ts`, implement in `api/src/index.ts`
+2. For registry routes: Define in `plugins/registry/src/contract.ts`, implement in `plugins/registry/src/index.ts`
+3. For projects/KV/org routes: Define in `plugins/projects/src/contract.ts`, implement in `plugins/projects/src/index.ts`
+4. Use in UI via `apiClient.registry.*`, `apiClient.projects.*`, or `apiClient.ping` / `apiClient.authHealth`
+
+### Plugin Architecture
+
+Business logic is organized into independent plugins loaded via Module Federation:
+- **`api/`** — Thin structural shell: ping, authHealth, error routes, middleware definitions
+- **`plugins/registry/`** — FastKV app discovery, metadata publish/relay (no database)
+- **`plugins/projects/`** — Projects CRUD, KV store, org management, API keys (SQLite via libsql)
+
+Each plugin is self-contained with its own:
+- `contract.ts` — oRPC route definitions and Zod schemas
+- `index.ts` — `createPlugin` with variables, secrets, context, router
+- Middleware (`requireAuth`, `requireNearAccount`, `requireOrgRole`) duplicated per plugin
+- rspack config for independent deployment
+
+The UI accesses plugin routes via namespaced clients: `apiClient.registry.listRegistryApps()`, `apiClient.projects.listProjects()`, etc.
 
 ## Git Workflow
 
@@ -178,7 +194,16 @@ export const Route = createFileRoute('/_layout/_authenticated')({
 ```typescript
 import { apiClient } from '@/app';
 
-const { data } = await apiClient.getData({ id: '123' });
+// API shell routes
+const { data } = await apiClient.ping();
+const { data } = await apiClient.authHealth();
+
+// Registry plugin routes
+const { data } = await apiClient.registry.listRegistryApps({ limit: 24 });
+
+// Projects plugin routes
+const { data } = await apiClient.projects.listProjects({ ownerId: 'user.near' });
+const { data } = await apiClient.projects.listKeys({ limit: 50 });
 ```
 
 ## Troubleshooting

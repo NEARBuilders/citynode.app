@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5c5cd81b-7b8f-42c8-98f3-670ce63b6338",
+  "id": "db2a2619-9118-4c8b-a815-4ba7e178c51a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "key_value_store": {
@@ -106,7 +106,11 @@
       "indexes": {
         "project_app_unique": {
           "name": "project_app_unique",
-          "columns": ["project_id", "account_id", "gateway_id"],
+          "columns": [
+            "project_id",
+            "account_id",
+            "gateway_id"
+          ],
           "isUnique": true
         }
       },
@@ -115,8 +119,12 @@
           "name": "project_apps_project_id_projects_id_fk",
           "tableFrom": "project_apps",
           "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -204,7 +212,10 @@
       "indexes": {
         "projects_owner_slug_unique": {
           "name": "projects_owner_slug_unique",
-          "columns": ["owner_id", "slug"],
+          "columns": [
+            "owner_id",
+            "slug"
+          ],
           "isUnique": true
         }
       },
