@@ -38,6 +38,7 @@ Understand and interact with everything.dev as a runtime-composed site on NEAR.
 - `/`
 - `/about`
 - `/apps`
+- `/opencode`
 - `/README.md`
 - `/skill.md`
 - `/llms.txt`

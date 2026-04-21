@@ -28,7 +28,10 @@ function About() {
   const configQuery = useQuery({
     queryKey: ["registry-app", registryAccountId, registryGatewayId],
     queryFn: () =>
-      apiClient.getRegistryApp({ accountId: registryAccountId, gatewayId: registryGatewayId }),
+      apiClient.registry.getRegistryApp({
+        accountId: registryAccountId,
+        gatewayId: registryGatewayId,
+      }),
     staleTime: 5 * 60_000,
   });
 
@@ -136,6 +139,11 @@ function About() {
                 href="/skill.md"
                 title="open the agent guide"
                 body="task-oriented notes for agents, crawlers, and AI-native clients"
+              />
+              <BoxLink
+                href="/opencode"
+                title="build with opencode"
+                body="set up an AI dev loop — edit pages, see changes live, use authClient and apiClient"
               />
             </div>
           </CardContent>
