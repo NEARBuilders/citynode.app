@@ -2,12 +2,11 @@ import { createPlugin } from "every-plugin";
 import { Cause, Effect, Exit, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
+import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { KvService, KvServiceLive } from "./services/kv";
 import { ProjectService, ProjectServiceLive } from "./services/projects";
-
-type Auth = any;
 
 interface AuthContext {
   userId: string;
@@ -138,7 +137,7 @@ export default createPlugin({
     });
 
     const requireOrgRole = (requiredRole: "owner" | "admin" | "member") =>
-      builder.middleware(async ({ context, next }, input: any) => {
+      builder.middleware(async ({ context, next }, input: Record<string, unknown>) => {
         if (!context.user || !context.userId) {
           throw new ORPCError("UNAUTHORIZED", {
             message: "Authentication required",
@@ -155,7 +154,7 @@ export default createPlugin({
           });
         }
 
-        let member: any;
+        let member: Awaited<ReturnType<Auth["api"]["getActiveMember"]>>;
         try {
           const result = await context.auth!.api.getActiveMember({
             headers: context.reqHeaders!,
@@ -176,7 +175,7 @@ export default createPlugin({
           });
         }
 
-        const userRole = member.role as string;
+        const userRole = member?.role as string;
 
         const roleHierarchy: Record<string, number> = {
           owner: 100,
@@ -542,7 +541,7 @@ export default createPlugin({
         }
 
         return {
-          keys: (Array.isArray(result) ? result : result.keys || []).map((key: any) => ({
+          keys: (Array.isArray(result) ? result : result.apiKeys || []).map((key) => ({
             id: key.id,
             name: key.name || "Unnamed",
             prefix: key.prefix || "api_",
@@ -563,7 +562,7 @@ export default createPlugin({
                 name: input.name,
                 organizationId: input.organizationId,
                 expiresIn: input.expiresInDays ? input.expiresInDays * 24 * 60 * 60 : undefined,
-                permissions: input.permissions ? JSON.stringify(input.permissions) : undefined,
+                permissions: input.permissions ? { default: input.permissions } : undefined,
               },
               headers: context.reqHeaders!,
             });
@@ -598,7 +597,7 @@ export default createPlugin({
           try {
             await context.auth.api.deleteApiKey({
               body: {
-                id: input.keyId,
+                keyId: input.keyId,
               },
               headers: context.reqHeaders!,
             });
@@ -624,7 +623,7 @@ export default createPlugin({
           const members = Array.isArray(result) ? result : (result?.members ?? []);
 
           return {
-            members: members.map((m: any) => ({
+            members: members.map((m) => ({
               id: m.id,
               userId: m.userId,
               role: m.role as "owner" | "admin" | "member",
@@ -647,7 +646,7 @@ export default createPlugin({
           const invitations = Array.isArray(result) ? result : [];
 
           return {
-            invitations: invitations.map((inv: any) => ({
+            invitations: invitations.map((inv) => ({
               id: inv.id,
               email: inv.email,
               role: inv.role as "admin" | "member",

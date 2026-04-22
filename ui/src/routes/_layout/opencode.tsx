@@ -38,11 +38,17 @@ function OpencodePage() {
           <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
             <strong className="text-foreground">opencode</strong> is an open-source AI coding agent.
             When you run it inside this project, it discovers{" "}
-            <a href="/skill.md" className="underline hover:text-foreground transition-colors font-mono">
+            <a
+              href="/skill.md"
+              className="underline hover:text-foreground transition-colors font-mono"
+            >
               skills
             </a>
             ,{" "}
-            <a href="/llms.txt" className="underline hover:text-foreground transition-colors font-mono">
+            <a
+              href="/llms.txt"
+              className="underline hover:text-foreground transition-colors font-mono"
+            >
               context
             </a>
             , and <code className="text-xs bg-muted px-1.5 py-0.5 rounded">AGENTS.md</code>{" "}
@@ -63,8 +69,11 @@ function OpencodePage() {
               <div className="text-sm font-medium font-mono">how it works</div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Run{" "}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">opencode serve --port 4096</code>{" "}
-                alongside the dev server. It discovers the project skill files and context automatically.
+                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                  opencode serve --port 4096
+                </code>{" "}
+                alongside the dev server. It discovers the project skill files and context
+                automatically.
               </p>
             </CardContent>
           </Card>

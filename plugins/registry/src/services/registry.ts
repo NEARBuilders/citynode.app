@@ -125,7 +125,6 @@ export class RegistryService extends Context.Tag("registry/RegistryService")<
     getRegistryAppByHost: (hostUrl: string) => Promise<RegistryAppDetail | null>;
     getRegistryStatus: () => Promise<{
       discoveredApps: number;
-      discoveryKey: string;
       metadataContractId: string;
       metadataFastKvUrl: string;
       relayEnabled: boolean;
@@ -418,7 +417,6 @@ function createRegistryMethods(config: RegistryConfig) {
       const discovered = await discoverPublishedConfigs();
       return {
         discoveredApps: discovered.length,
-        discoveryKey: `${DISCOVERY_PREFIX}*/bos.config.json`,
         metadataContractId: `${getRegistryNamespaceForNetwork("mainnet", config)} | ${getRegistryNamespaceForNetwork("testnet", config)}`,
         metadataFastKvUrl: getFastKvBaseUrlForNetwork("mainnet"),
         relayEnabled: Boolean(config.relayAccountId && config.relayPrivateKey),

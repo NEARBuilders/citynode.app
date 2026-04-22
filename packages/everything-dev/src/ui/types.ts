@@ -2,20 +2,21 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { AnyRouteMatch, AnyRouter, RouterHistory } from "@tanstack/react-router";
 import type { ClientRuntimeConfig } from "../types";
 
-export interface RouterContext {
+export interface RouterContext<TSession = unknown> {
   queryClient: QueryClient;
   assetsUrl: string;
   runtimeConfig?: Partial<ClientRuntimeConfig>;
-  session?: unknown;
+  session?: TSession;
 }
 
-export interface RouterContextWithApi<TApiClient = unknown> extends RouterContext {
+export interface RouterContextWithApi<TApiClient = unknown, TSession = unknown>
+  extends RouterContext<TSession> {
   apiClient?: TApiClient;
 }
 
-export interface CreateRouterOptions<TApiClient = unknown> {
+export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {
   history?: RouterHistory;
-  context?: Partial<RouterContextWithApi<TApiClient>>;
+  context?: Partial<RouterContextWithApi<TApiClient, TSession>>;
   basepath?: string;
 }
 
@@ -29,14 +30,15 @@ export interface HeadData {
   scripts: HeadScript[];
 }
 
-export interface RenderOptions {
+export interface RenderOptions<TSession = unknown> {
   assetsUrl: string;
   runtimeConfig: Partial<ClientRuntimeConfig>;
   basepath?: string;
-  session?: unknown;
+  session?: TSession;
 }
 
-export interface RenderOptionsWithApi<TApiClient = unknown> extends RenderOptions {
+export interface RenderOptionsWithApi<TApiClient = unknown, TSession = unknown>
+  extends RenderOptions<TSession> {
   apiClient: TApiClient;
 }
 
@@ -46,17 +48,17 @@ export interface RenderResult {
   headers: Headers;
 }
 
-export interface RouterModule<TApiClient = unknown> {
-  createRouter: (opts?: CreateRouterOptions<TApiClient>) => {
+export interface RouterModule<TApiClient = unknown, TSession = unknown> {
+  createRouter: (opts?: CreateRouterOptions<TApiClient, TSession>) => {
     router: AnyRouter;
     queryClient: QueryClient;
   };
   getRouteHead: (
     pathname: string,
-    context?: Partial<RouterContextWithApi<TApiClient>>,
+    context?: Partial<RouterContextWithApi<TApiClient, TSession>>,
   ) => Promise<HeadData>;
   renderToStream: (
     request: Request,
-    options: RenderOptionsWithApi<TApiClient>,
+    options: RenderOptionsWithApi<TApiClient, TSession>,
   ) => Promise<RenderResult>;
 }

@@ -2,9 +2,9 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
+import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
-
-type Auth = any;
+import type { PluginsClient } from "./plugins-client.gen";
 
 export interface AuthContext {
   userId: string;
@@ -21,8 +21,10 @@ export interface AuthContext {
   auth: Auth;
 }
 
-export default createPlugin({
-  variables: z.object({}),
+export default createPlugin.withPlugins<PluginsClient>()({
+  variables: z.object({
+    demoMessage: z.string().optional(),
+  }),
 
   secrets: z.object({
     API_DATABASE_URL: z.string().default("file:./api.db"),
@@ -58,15 +60,17 @@ export default createPlugin({
 
   contract,
 
-  initialize: () =>
+  initialize: (config, plugins) =>
     Effect.sync(() => {
       console.log("[API] Services Initialized");
-      return {};
+      console.log("[API] Plugins available:", Object.keys(plugins).join(", ") || "none");
+      console.log("[API] demoMessage:", config.variables.demoMessage ?? "(not configured)");
+      return { plugins, demoMessage: config.variables.demoMessage ?? "not configured" };
     }),
 
   shutdown: () => Effect.log("[API] Shutdown"),
 
-  createRouter: (_services, builder) => {
+  createRouter: (services, builder) => {
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
@@ -127,6 +131,26 @@ export default createPlugin({
             timestamp: new Date().toISOString(),
           },
         });
+      }),
+
+      pluginDemo: builder.pluginDemo.handler(async () => {
+        const createRegistryClient = services.plugins.registry;
+        const registryStatus = createRegistryClient
+          ? await createRegistryClient().getRegistryStatus()
+          : {
+              discoveredApps: 0,
+              metadataContractId: "",
+              metadataFastKvUrl: "https://unavailable",
+              relayEnabled: false,
+              relayAccountId: null,
+              timestamp: new Date().toISOString(),
+            };
+
+        return {
+          apiVariable: services.demoMessage,
+          registryStatus,
+          availablePlugins: Object.keys(services.plugins),
+        };
       }),
     };
   },

@@ -157,6 +157,7 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
             variables: InferSchemaInput<T["configSchema"]["variables"]>;
             secrets: InferSchemaInput<T["configSchema"]["secrets"]>;
           },
+          plugins?: Record<string, unknown>,
         ) =>
           Effect.gen(function* () {
             const { plugin } = pluginInstance;
@@ -231,7 +232,7 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
 
             // Initialize plugin within the scope
             const context = yield* plugin
-              .initialize({ variables: _variables, secrets: hydratedConfig.secrets })
+              .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
               .pipe(
                 Effect.provideService(Scope.Scope, scope),
                 Effect.mapError((error) =>

@@ -1,1 +1,1 @@
-export type { ApiContract } from "../../.bos/generated/api-contract.gen.ts";
+export type { ApiContract } from "./api-contract.gen";

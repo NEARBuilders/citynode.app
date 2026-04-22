@@ -68,8 +68,9 @@ export class PluginRuntime<R = RegisteredPlugins> {
   async usePlugin<K extends keyof R & string>(
     pluginId: K,
     config: PluginConfigInput<R[K]>,
+    plugins?: Record<string, unknown>,
   ): Promise<UsePluginResult<K, R>> {
-    const cacheKey = this.generateCacheKey(pluginId, config);
+    const cacheKey = this.generateCacheKey(pluginId, { ...config, __plugins: plugins ?? {} });
 
     let cachedPlugin = this.pluginCache.get(cacheKey);
     if (!cachedPlugin) {
@@ -80,7 +81,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
         // Load → Instantiate → Initialize
         const ctor = yield* pluginService.loadPlugin(validatedId);
         const instance = yield* pluginService.instantiatePlugin(pluginId, ctor);
-        const initialized = yield* pluginService.initializePlugin(instance, config);
+        const initialized = yield* pluginService.initializePlugin(instance, config, plugins);
 
         return initialized;
       }).pipe(Effect.provide(this.runtime));
@@ -129,10 +130,11 @@ export class PluginRuntime<R = RegisteredPlugins> {
   async initializePlugin<T extends AnyPlugin>(
     instance: PluginInstance<T>,
     config: any,
+    plugins?: Record<string, unknown>,
   ): Promise<InitializedPlugin<T>> {
     const effect = Effect.gen(function* () {
       const pluginService = yield* PluginService;
-      return yield* pluginService.initializePlugin(instance, config);
+      return yield* pluginService.initializePlugin(instance, config, plugins);
     });
     return this.runPromise(effect);
   }

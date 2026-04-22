@@ -22,9 +22,7 @@ export const Route = createFileRoute("/_layout/_authenticated")({
     const { queryClient } = context;
 
     // Get session from cache or fetch
-    const session = await queryClient.ensureQueryData(
-      sessionQueryOptions(context.session as SessionData | undefined | null),
-    );
+    const session = await queryClient.ensureQueryData(sessionQueryOptions(context.session));
 
     const auth = getSessionFromData(session);
 

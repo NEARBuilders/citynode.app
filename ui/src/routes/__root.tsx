@@ -13,13 +13,13 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { getBaseStyles, getRuntimeBasePath } from "@/app";
 import { APP_DESCRIPTION, APP_NAME, METADATA_IMAGE_ALT } from "@/lib/branding";
-import { type SessionData, sessionQueryOptions } from "@/lib/session";
+import { sessionQueryOptions } from "@/lib/session";
 import type { RouterContext } from "@/types";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   beforeLoad: async ({ context }) => {
-    const session = context.session as SessionData | undefined | null;
+    const session = context.session;
 
     return {
       assetsUrl: context.assetsUrl || "",
@@ -29,7 +29,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   },
   loader: async ({ context }) => {
     const { queryClient } = context;
-    const session = context.session as SessionData | undefined | null;
+    const session = context.session;
 
     // Pre-populate session cache from SSR data
     if (session && queryClient) {

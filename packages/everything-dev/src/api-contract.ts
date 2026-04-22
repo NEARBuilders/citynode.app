@@ -27,7 +27,7 @@ export interface ApiPluginManifest {
 interface ContractSource {
   key: string;
   importName: string;
-  importPath: string;
+  sourceFilePath: string;
   generatedPath?: string;
 }
 
@@ -84,10 +84,7 @@ function localApiContractSource(configDir: string): ContractSource {
   return {
     key: "api",
     importName: "BaseApiContract",
-    importPath: toImportPath(
-      join(configDir, ".bos", "generated", "api-contract.gen.ts"),
-      sourcePath,
-    ),
+    sourceFilePath: sourcePath,
   };
 }
 
@@ -125,10 +122,7 @@ async function remoteContractSource(opts: {
   return {
     key: opts.name,
     importName: `${sanitizeIdentifier(opts.name)}Contract`,
-    importPath: toImportPath(
-      join(opts.configDir, ".bos", "generated", "api-contract.gen.ts"),
-      generatedPath,
-    ),
+    sourceFilePath: generatedPath,
     generatedPath,
   };
 }
@@ -150,10 +144,7 @@ async function resolveContractSource(opts: {
       return {
         key: opts.key,
         importName: "BaseApiContract",
-        importPath: toImportPath(
-          join(opts.configDir, ".bos", "generated", "api-contract.gen.ts"),
-          join(localPath, "src", "contract.ts"),
-        ),
+        sourceFilePath: join(localPath, "src", "contract.ts"),
       };
     }
 
@@ -166,10 +157,7 @@ async function resolveContractSource(opts: {
     return {
       key: opts.key,
       importName: `${sanitizeIdentifier(opts.key)}Contract`,
-      importPath: toImportPath(
-        join(opts.configDir, ".bos", "generated", "api-contract.gen.ts"),
-        join(opts.source.localPath, "src", "contract.ts"),
-      ),
+      sourceFilePath: join(opts.source.localPath, "src", "contract.ts"),
     };
   }
 
@@ -187,14 +175,6 @@ function writeAggregateContractFile(opts: {
   sources: ContractSource[];
   pluginKeys: string[];
 }) {
-  const bridgePath = join(opts.configDir, ".bos", "generated", "api-contract.gen.ts");
-  const lines: string[] = [];
-
-  for (const source of opts.sources) {
-    lines.push(`import type { ContractType as ${source.importName} } from "${source.importPath}";`);
-  }
-
-  lines.push("");
   const baseSource = opts.sources.find((source) => source.key === "api");
   const pluginSources = opts.pluginKeys
     .map((key) => opts.sources.find((entry) => entry.key === key))
@@ -204,21 +184,67 @@ function writeAggregateContractFile(opts: {
     throw new Error("API contract source is required to generate the aggregate contract");
   }
 
+  // --- Generate ui/src/api-contract.gen.ts ---
+  const uiContractPath = join(opts.configDir, "ui", "src", "api-contract.gen.ts");
+  const uiLines: string[] = [];
+
+  for (const source of opts.sources) {
+    const importPath = toImportPath(uiContractPath, source.sourceFilePath);
+    uiLines.push(`import type { ContractType as ${source.importName} } from "${importPath}";`);
+  }
+
+  uiLines.push("");
   if (pluginSources.length === 0) {
-    lines.push(`export type ApiContract = ${baseSource.importName};`);
+    uiLines.push(`export type ApiContract = ${baseSource.importName};`);
   } else {
-    lines.push(`export type ApiContract = ${baseSource.importName} & {`);
+    uiLines.push(`export type ApiContract = ${baseSource.importName} & {`);
     for (const source of pluginSources) {
       const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
         ? source.key
         : JSON.stringify(source.key);
-      lines.push(`  ${key}: ${source.importName};`);
+      uiLines.push(`  ${key}: ${source.importName};`);
     }
-    lines.push("};");
+    uiLines.push("};");
   }
-  mkdirSync(dirname(bridgePath), { recursive: true });
-  writeFileIfChanged(bridgePath, `${lines.join("\n")}\n`);
-  return bridgePath;
+  mkdirSync(dirname(uiContractPath), { recursive: true });
+  writeFileIfChanged(uiContractPath, `${uiLines.join("\n")}\n`);
+
+  // --- Generate api/src/plugins-client.gen.ts ---
+  const pluginsClientPath = join(opts.configDir, "api", "src", "plugins-client.gen.ts");
+  const pluginsClientLines: string[] = [];
+
+  for (const source of pluginSources) {
+    const importPath = toImportPath(pluginsClientPath, source.sourceFilePath);
+    pluginsClientLines.push(
+      `import type { ContractType as ${source.importName} } from "${importPath}";`,
+    );
+  }
+
+  pluginsClientLines.push(
+    'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
+  );
+  pluginsClientLines.push(
+    "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+  );
+  pluginsClientLines.push("");
+
+  if (pluginSources.length === 0) {
+    pluginsClientLines.push("export type PluginsClient = Record<string, never>;");
+  } else {
+    pluginsClientLines.push("export type PluginsClient = {");
+    for (const source of pluginSources) {
+      const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
+        ? source.key
+        : JSON.stringify(source.key);
+      pluginsClientLines.push(`  ${key}: ClientFactory<${source.importName}>;`);
+    }
+    pluginsClientLines.push("};");
+  }
+
+  mkdirSync(dirname(pluginsClientPath), { recursive: true });
+  writeFileIfChanged(pluginsClientPath, `${pluginsClientLines.join("\n")}\n`);
+
+  return uiContractPath;
 }
 
 export async function syncApiContractBridge(opts: {
@@ -275,7 +301,7 @@ export async function syncApiContractBridge(opts: {
   }
 
   return {
-    bridgePath: join(opts.configDir, ".bos", "generated", "api-contract.gen.ts"),
+    bridgePath: join(opts.configDir, "ui", "src", "api-contract.gen.ts"),
     generatedPath,
     manifest,
     source: opts.runtimeConfig.api.source,

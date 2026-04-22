@@ -88,6 +88,27 @@ async function main() {
       return;
     }
 
+    if (descriptor.key === "init") {
+      console.log();
+      console.log(colors.green(`${icons.ok} Project initialized`));
+      console.log(`  ${colors.dim("Extends:")} ${result.extends}`);
+      console.log(`  ${colors.dim("Destination:")} ${result.destination}`);
+      if (result.name) console.log(`  ${colors.dim("Account:")} ${result.name}`);
+      if (result.domain) console.log(`  ${colors.dim("Domain:")} ${result.domain}`);
+      console.log(`  ${colors.dim("Files copied:")} ${result.filesCopied}`);
+      console.log();
+      console.log(colors.dim("  Next steps:"));
+      console.log(colors.dim(`    cd ${result.destination}`));
+      if (result.status === "initialized" && !(input as any)?.noInstall) {
+        console.log(colors.dim("    bos dev --host remote"));
+      } else {
+        console.log(colors.dim("    bun install"));
+        console.log(colors.dim("    bos dev --host remote"));
+      }
+      console.log();
+      return;
+    }
+
     if (result?.status === "error") {
       console.error(`[CLI] ${result.error || "Unknown error"}`);
       process.exit(1);

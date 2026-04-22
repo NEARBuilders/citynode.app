@@ -183,7 +183,6 @@ export declare const contract: {
     }>>, Record<never, never>>;
     getRegistryStatus: import("@orpc/contract").ContractProcedure<import("@orpc/contract").Schema<unknown, unknown>, z.ZodObject<{
         discoveredApps: z.ZodNumber;
-        discoveryKey: z.ZodString;
         metadataContractId: z.ZodString;
         metadataFastKvUrl: z.ZodString;
         relayEnabled: z.ZodBoolean;

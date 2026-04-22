@@ -1,11 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { apiKey } from "@better-auth/api-key";
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { admin, anonymous, organization, phoneNumber } from "better-auth/plugins";
+import { siwn } from "better-near-auth";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import * as schema from "../db/schema/auth";
-import { getPlugins } from "./auth-plugins";
+import type { RuntimeConfig } from "./config";
 import { ConfigService } from "./config";
+import type { Database } from "./database";
 import { DatabaseService } from "./database";
 
 // Dev preview directory for email/SMS
@@ -87,16 +92,15 @@ async function sendSMS({ phoneNumber, code }: { phoneNumber: string; code: strin
 
 // Helper to create personal organization for a user
 async function createPersonalOrganization(
-  database: any,
+  database: Database,
   user: { id: string; name?: string; email?: string; isAnonymous?: boolean },
 ) {
   if (user.isAnonymous) {
     return null;
   }
 
-  // Check if user already has a personal organization
   const existingOrg = await database.query.organization.findFirst({
-    where: (org: any, { eq, and }: any) =>
+    where: (org, { eq, and }) =>
       and(eq(org.slug, user.id), eq(org.metadata, JSON.stringify({ isPersonal: true }))),
   });
 
@@ -131,14 +135,13 @@ async function createPersonalOrganization(
   return personalOrg;
 }
 
-export const createAuth = Effect.gen(function* () {
-  const config = yield* ConfigService;
-  const db = yield* DatabaseService;
-
+export function createAuthInstance(config: RuntimeConfig, db: Database) {
   const secret = process.env.BETTER_AUTH_SECRET;
   if (!secret && process.env.NODE_ENV === "production") {
     console.warn("[Security] BETTER_AUTH_SECRET is not set in production. Using insecure default.");
   }
+
+  const baseUrl = process.env.BETTER_AUTH_URL || config.hostUrl;
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -150,19 +153,39 @@ export const createAuth = Effect.gen(function* () {
       ...(config.ui?.url ? [config.ui.url] : []),
     ],
     secret: secret || "default-secret-change-in-production",
-    baseURL: process.env.BETTER_AUTH_URL || config.hostUrl,
+    baseURL: baseUrl,
     socialProviders: {
       github: {
         clientId: process.env.GITHUB_CLIENT_ID!,
         clientSecret: process.env.GITHUB_CLIENT_SECRET!,
       },
     },
-    plugins: getPlugins({
-      account: config.account,
-      baseUrl: process.env.BETTER_AUTH_URL || config.hostUrl,
-      sendEmail,
-      sendSMS,
-    }),
+    plugins: [
+      siwn({ recipient: config.account }),
+      admin({ defaultRole: "user", adminRoles: ["admin"] }),
+      anonymous({ emailDomainName: config.account }),
+      phoneNumber({
+        sendOTP: async ({ phoneNumber, code }) => {
+          await sendSMS({ phoneNumber, code });
+        },
+        signUpOnVerification: {
+          getTempEmail: (phoneNumber) => `${phoneNumber}@${config.account}`,
+          getTempName: (phoneNumber) => phoneNumber,
+        },
+      }),
+      passkey(),
+      organization({
+        async sendInvitationEmail(data) {
+          const inviteLink = `${baseUrl}/accept-invitation/${data.id}`;
+          await sendEmail({
+            to: data.email,
+            subject: `Invitation to join ${data.organization.name}`,
+            text: `You've been invited by ${data.inviter.user.name} (${data.inviter.user.email}) to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
+          });
+        },
+      }),
+      apiKey(),
+    ],
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
@@ -212,7 +235,7 @@ export const createAuth = Effect.gen(function* () {
     session: {
       cookieCache: {
         enabled: process.env.NODE_ENV === "production",
-        maxAge: 5 * 60, // 5 minutes cache - reduces DB hits
+        maxAge: 5 * 60,
       },
     },
     advanced: {
@@ -223,11 +246,16 @@ export const createAuth = Effect.gen(function* () {
       },
     },
   });
-});
+}
 
-// Use any for Auth type to avoid complex type inference issues with plugins
-// The actual auth instance has all plugin methods at runtime
-export type Auth = any;
+export type Auth = ReturnType<typeof createAuthInstance>;
+export type AuthSession = Auth["$Infer"]["Session"];
+
+export const createAuth = Effect.gen(function* () {
+  const config = yield* ConfigService;
+  const db = yield* DatabaseService;
+  return createAuthInstance(config, db);
+});
 
 export class AuthService extends Context.Tag("host/AuthService")<AuthService, Auth>() {
   static Default = Layer.effect(AuthService, createAuth);

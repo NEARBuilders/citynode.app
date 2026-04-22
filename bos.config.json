@@ -11,7 +11,10 @@
       "production": "https://elliot-braem-2672-every-plugin-template-everythin-035e7be56-ze.zephyrcloud.app"
     },
     "registry": {
-      "development": "local:plugins/registry"
+      "development": "local:plugins/registry",
+      "variables": {
+        "registryNamespace": "dev.everything.near"
+      }
     },
     "projects": {
       "development": "local:plugins/projects"
@@ -37,7 +40,9 @@
     "api": {
       "name": "api",
       "development": "local:api",
-      "variables": {},
+      "variables": {
+        "demoMessage": "Hello from bos.config.json"
+      },
       "secrets": [],
       "production": "https://elliot-braem-2671-api-everything-dev-nearbuilders-16aebe75c-ze.zephyrcloud.app",
       "productionIntegrity": "sha384-zsBp8j9rD4thsb6uS48/3OYNvqiN9tVD//QJJAqri+VQDnWnYG4xs8DtZvTxeVRX"

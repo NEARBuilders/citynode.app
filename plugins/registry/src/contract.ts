@@ -123,7 +123,6 @@ export const contract = oc.router({
   getRegistryStatus: oc.route({ method: "GET", path: "/v1/registry/status" }).output(
     z.object({
       discoveredApps: z.number().int().nonnegative(),
-      discoveryKey: z.string(),
       metadataContractId: z.string(),
       metadataFastKvUrl: z.string().url(),
       relayEnabled: z.boolean(),

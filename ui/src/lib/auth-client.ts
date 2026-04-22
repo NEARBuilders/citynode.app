@@ -3,11 +3,13 @@ import { passkeyClient } from "@better-auth/passkey/client";
 import {
   adminClient,
   anonymousClient,
+  inferAdditionalFields,
   organizationClient,
   phoneNumberClient,
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { siwnClient } from "better-near-auth/client";
+import type { createAuthInstance } from "host/src/services/auth";
 import { getAccount, getHostUrl, getNetworkId } from "@/app";
 
 function createAuthClient() {
@@ -15,6 +17,7 @@ function createAuthClient() {
     baseURL: getHostUrl(),
     fetchOptions: { credentials: "include" },
     plugins: [
+      inferAdditionalFields<typeof createAuthInstance>(),
       siwnClient({
         recipient: getAccount(),
         networkId: getNetworkId(),

@@ -106,11 +106,7 @@
       "indexes": {
         "project_app_unique": {
           "name": "project_app_unique",
-          "columns": [
-            "project_id",
-            "account_id",
-            "gateway_id"
-          ],
+          "columns": ["project_id", "account_id", "gateway_id"],
           "isUnique": true
         }
       },
@@ -119,12 +115,8 @@
           "name": "project_apps_project_id_projects_id_fk",
           "tableFrom": "project_apps",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -212,10 +204,7 @@
       "indexes": {
         "projects_owner_slug_unique": {
           "name": "projects_owner_slug_unique",
-          "columns": [
-            "owner_id",
-            "slug"
-          ],
+          "columns": ["owner_id", "slug"],
           "isUnique": true
         }
       },

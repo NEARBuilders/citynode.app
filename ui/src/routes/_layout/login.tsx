@@ -12,7 +12,6 @@ import { authClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UnderConstruction } from "@/components/under-construction";
-import type { SessionData } from "@/lib/session";
 import { organizationsQueryOptions, sessionQueryOptions } from "@/lib/session";
 
 type SearchParams = {
@@ -27,13 +26,9 @@ export const Route = createFileRoute("/_layout/login")({
   }),
   beforeLoad: ({ context, search }) => {
     const { queryClient } = context;
-    const initialSession = context.session as SessionData | undefined | null;
+    const initialSession = context.session;
     const session =
-      initialSession ??
-      (queryClient.getQueryData(sessionQueryOptions(initialSession).queryKey) as
-        | SessionData
-        | null
-        | undefined);
+      initialSession ?? queryClient.getQueryData(sessionQueryOptions(initialSession).queryKey);
 
     if (session?.user) {
       const redirectTo = search.redirect?.startsWith("/") ? search.redirect : "/home";
@@ -41,7 +36,7 @@ export const Route = createFileRoute("/_layout/login")({
     }
   },
   loader: ({ context }) => {
-    const initialSession = context.session as SessionData | undefined | null;
+    const initialSession = context.session;
 
     void context.queryClient.prefetchQuery(sessionQueryOptions(initialSession));
   },

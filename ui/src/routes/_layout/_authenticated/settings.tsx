@@ -102,7 +102,7 @@ function Settings() {
 function ProfileSection({
   user,
 }: {
-  user: { id: string; email?: string; name?: string; isAnonymous?: boolean };
+  user: { id: string; email?: string; name?: string; isAnonymous?: boolean | null };
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(user.name || "");
@@ -184,7 +184,7 @@ function AuthMethodsSection({
   passkeys,
   nearAccountId,
 }: {
-  user: { email?: string; isAnonymous?: boolean };
+  user: { email?: string; isAnonymous?: boolean | null };
   passkeys: Array<{ id: string; name?: string }>;
   nearAccountId: string | null;
 }) {
@@ -296,7 +296,7 @@ function AuthMethodsSection({
   );
 }
 
-function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boolean } }) {
+function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boolean | null } }) {
   const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");

@@ -21,8 +21,9 @@ Built with **every-plugin** framework (Rspack + Module Federation):
 │                   Host Integration                      │
 ├─────────────────────────────────────────────────────────┤
 │  bos.config.json → plugin URL + secrets                 │
-│  runtime.ts → createPluginRuntime().usePlugin()         │
-│  routers/index.ts → merge plugin.router into AppRouter  │
+│  Two-phase loading:                                     │
+│    Phase 1: Load registry, projects, etc.               │
+│    Phase 2: Load API with pluginsClient injected        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -30,8 +31,38 @@ Built with **every-plugin** framework (Rspack + Module Federation):
 
 - `contract.ts` - oRPC contract definition (routes, schemas)
 - `index.ts` - Plugin initialization + router handlers
+- `plugins-client.gen.ts` - Generated PluginsClient type (auto-generated, gitignored)
 - `services/` - Business logic with Effect-TS
 - `db/` - Database schema and migrations
+
+## Plugin Client (pluginsClient)
+
+The API receives typed client factories for all other plugins via `createPlugin.withPlugins<PluginsClient>()`:
+
+```typescript
+import type { PluginsClient } from "./plugins-client.gen";
+
+export default createPlugin.withPlugins<PluginsClient>()({
+  variables: z.object({ demoMessage: z.string().optional() }),
+  contract,
+  initialize: (config, plugins) =>
+    Effect.sync(() => ({ plugins, demoMessage: config.variables.demoMessage ?? "not configured" })),
+  createRouter: (services, builder) => ({
+    pluginDemo: builder.pluginDemo.handler(async () => {
+      const status = await services.plugins.registry().getRegistryStatus();
+      return { apiVariable: services.demoMessage, registryStatus: status, availablePlugins: Object.keys(services.plugins) };
+    }),
+  }),
+});
+```
+
+**How it works:**
+- The host loads all non-API plugins first (Phase 1)
+- Creates a `pluginsClient` map of their `createClient` factories
+- Loads the API plugin with that map injected as the second `initialize` parameter (Phase 2)
+- The API calls `services.plugins.{key}()` to execute plugin routers in-process — no HTTP roundtrip
+
+**Demo endpoint**: `GET /api/demo/plugins` demonstrates the full data flow — API variable from `bos.config.json`, registry plugin call via `pluginsClient`, and available plugin listing. No auth required.
 
 ## Development
 

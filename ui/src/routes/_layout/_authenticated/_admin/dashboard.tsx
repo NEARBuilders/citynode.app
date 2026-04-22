@@ -23,10 +23,7 @@ function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between pb-4 border-b border-border/50">
         <div className="flex items-center gap-2 text-xs font-mono">
-          <Link
-            to="/"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors">
             {APP_NAME}
           </Link>
           <span className="text-muted-foreground">/</span>
@@ -35,12 +32,11 @@ function AdminDashboard() {
         <div className="flex items-center gap-4 text-xs font-mono">
           {tabs.map((t) => (
             <button
+              type="button"
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`transition-colors ${
-                tab === t.key
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t.label}
@@ -125,6 +121,7 @@ function ServerSection() {
 
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={() => startMutation.mutate()}
           disabled={startMutation.isPending}
           className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
@@ -251,11 +248,12 @@ function ConfigSection() {
     <div className="space-y-4">
       <span className="text-sm font-mono">host config reload</span>
       <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">
-        Re-fetch the published config from FastKV and signal a scope rebuild.
-        Currently a full host restart is needed to pick up changes.
+        Re-fetch the published config from FastKV and signal a scope rebuild. Currently a full host
+        restart is needed to pick up changes.
       </p>
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={() => reloadConfigMutation.mutate()}
           disabled={reloadConfigMutation.isPending}
           className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"

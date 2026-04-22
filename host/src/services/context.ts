@@ -126,9 +126,7 @@ export async function createRequestContext(
   };
 
   if (user?.id) {
-    // Access activeOrganizationId from session with type safety
-    const sessionData = session?.session as { activeOrganizationId?: string } | undefined;
-    const activeOrgId = sessionData?.activeOrganizationId;
+    const activeOrgId = session?.session?.activeOrganizationId;
 
     if (activeOrgId) {
       // Load the organization

@@ -85,7 +85,8 @@
   },
   "dependencies": {
     "@better-auth/api-key": "^1.5.4",
-    "@better-auth/passkey": "^1.5.4"
+    "@better-auth/passkey": "^1.5.4",
+    "@orpc/contract": "^1.13.14"
   },
   "overrides": {
     "axios": "1.13.6"

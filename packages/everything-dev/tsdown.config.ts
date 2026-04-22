@@ -16,6 +16,7 @@ export default defineConfig({
     "src/host.ts",
     "src/orchestrator.ts",
     "src/cli.ts",
+    "src/cli/init.ts",
     "src/ui/index.ts",
     "src/ui/types.ts",
     "src/ui/runtime.ts",
@@ -46,6 +47,8 @@ export default defineConfig({
       "chalk",
       "gradient-string",
       "every-plugin",
+      "tar",
+      "glob",
     ],
   },
 });

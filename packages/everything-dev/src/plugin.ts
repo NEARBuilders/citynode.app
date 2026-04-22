@@ -1,8 +1,15 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
+import {
+  copyFilteredFiles,
+  personalizeConfig,
+  readTemplatekeep,
+  resolveSourceDir,
+  runBunInstall,
+} from "./cli/init";
 import {
   buildRuntimePluginsForConfig,
   getHostDevelopmentPort,
@@ -17,6 +24,7 @@ import {
   type BuildOptions,
   bosContract,
   type DevOptions,
+  type InitOptions,
   type KeyPublishOptions,
   type PluginAddOptions,
   type PluginListResult,
@@ -994,6 +1002,75 @@ export default createPlugin({
           contract,
           allowance: input.allowance,
           functionNames: PUBLISH_FUNCTION_NAMES,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    init: builder.init.handler(async ({ input }: { input: InitOptions }) => {
+      try {
+        const { sourceDir, cleanup } = await resolveSourceDir({
+          account: input.account,
+          gateway: input.gateway,
+          source: input.source,
+        });
+
+        try {
+          const patterns = await readTemplatekeep(sourceDir);
+          if (patterns.length === 0) {
+            return {
+              status: "error" as const,
+              destination: "",
+              parentAccount: input.account,
+              parentGateway: input.gateway,
+              name: input.name,
+              domain: input.domain,
+              extends: `bos://${input.account}/${input.gateway}`,
+              filesCopied: 0,
+              error: "No .templatekeep found in template source",
+            };
+          }
+
+          const destination = input.destination ?? input.gateway;
+
+          const filesCopied = await copyFilteredFiles(sourceDir, destination, patterns, {
+            withHost: input.withHost,
+          });
+
+          await personalizeConfig(destination, {
+            parentAccount: input.account,
+            parentGateway: input.gateway,
+            name: input.name,
+            domain: input.domain,
+          });
+
+          if (!input.noInstall && !input.noInteractive) {
+            await runBunInstall(destination);
+          }
+
+          return {
+            status: "initialized" as const,
+            destination: resolve(destination),
+            parentAccount: input.account,
+            parentGateway: input.gateway,
+            name: input.name,
+            domain: input.domain,
+            extends: `bos://${input.account}/${input.gateway}`,
+            filesCopied,
+          };
+        } finally {
+          await cleanup();
+        }
+      } catch (error) {
+        return {
+          status: "error" as const,
+          destination: input.destination ?? input.gateway,
+          parentAccount: input.account,
+          parentGateway: input.gateway,
+          name: input.name,
+          domain: input.domain,
+          extends: `bos://${input.account}/${input.gateway}`,
+          filesCopied: 0,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }

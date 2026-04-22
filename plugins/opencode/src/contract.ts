@@ -53,7 +53,8 @@ export const contract = oc.router({
       method: "GET",
       path: "/opencode/server/status",
       summary: "Check opencode server status",
-      description: "Returns whether the opencode server is reachable and its configuration. Requires admin role.",
+      description:
+        "Returns whether the opencode server is reachable and its configuration. Requires admin role.",
       tags: ["Opencode", "Server"],
     })
     .output(z.object({ data: ServerStatusSchema }))
@@ -64,7 +65,8 @@ export const contract = oc.router({
       method: "POST",
       path: "/opencode/server/start",
       summary: "Start opencode server",
-      description: "Attempts to start the opencode server if it is not already running. Requires admin role.",
+      description:
+        "Attempts to start the opencode server if it is not already running. Requires admin role.",
       tags: ["Opencode", "Server"],
     })
     .output(z.object({ data: StartServerResultSchema }))
@@ -91,7 +93,8 @@ export const contract = oc.router({
       method: "POST",
       path: "/opencode/session/{sessionId}/message",
       summary: "Send a prompt to an opencode session",
-      description: "Sends a message to the specified session on the opencode server. Requires admin role.",
+      description:
+        "Sends a message to the specified session on the opencode server. Requires admin role.",
       tags: ["Opencode", "Session"],
     })
     .input(
@@ -108,7 +111,8 @@ export const contract = oc.router({
       method: "GET",
       path: "/opencode/events",
       summary: "Stream opencode server events",
-      description: "Streams events from the opencode server including status changes, messages, and session updates. Requires admin role.",
+      description:
+        "Streams events from the opencode server including status changes, messages, and session updates. Requires admin role.",
       tags: ["Opencode", "Streaming"],
     })
     .input(

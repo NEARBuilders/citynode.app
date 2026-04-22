@@ -233,7 +233,11 @@ async function resolveConfigWithExtends(
 }
 
 function mergeConfigs(parent: BosConfigInput, child: BosConfigInput): BosConfigInput {
-  return mergeValues(parent, child) as BosConfigInput;
+  const result = mergeValues(parent, child) as BosConfigInput;
+  if (child.plugins !== undefined) {
+    result.plugins = child.plugins;
+  }
+  return result;
 }
 
 async function resolveRuntimePlugins(

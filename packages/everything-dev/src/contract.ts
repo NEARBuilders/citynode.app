@@ -133,6 +133,30 @@ export const KeyPublishResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const InitOptionsSchema = z.object({
+  account: z.string(),
+  gateway: z.string(),
+  destination: z.string().optional(),
+  name: z.string().optional(),
+  domain: z.string().optional(),
+  source: z.string().optional(),
+  withHost: z.boolean().default(false),
+  noInteractive: z.boolean().default(false),
+  noInstall: z.boolean().default(false),
+});
+
+export const InitResultSchema = z.object({
+  status: z.enum(["initialized", "error"]),
+  destination: z.string(),
+  parentAccount: z.string(),
+  parentGateway: z.string(),
+  name: z.string().optional(),
+  domain: z.string().optional(),
+  extends: z.string(),
+  filesCopied: z.number(),
+  error: z.string().optional(),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -165,6 +189,10 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/key/publish" })
     .input(KeyPublishOptionsSchema)
     .output(KeyPublishResultSchema),
+  init: oc
+    .route({ method: "POST", path: "/init" })
+    .input(InitOptionsSchema)
+    .output(InitResultSchema),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -181,3 +209,5 @@ export type PluginPublishResult = z.infer<typeof PluginPublishResultSchema>;
 export type PublishOptions = z.infer<typeof PublishOptionsSchema>;
 export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
+export type InitOptions = z.infer<typeof InitOptionsSchema>;
+export type InitResult = z.infer<typeof InitResultSchema>;

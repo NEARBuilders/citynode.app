@@ -123,27 +123,29 @@ const RemoteApp = await loadRemote(`${config.ui.name}/App`);
 
 **Technology:** Rspack + `every-plugin`
 
-The API is an **every-plugin** that exposes an oRPC router. See [every-plugin template guide](https://github.com/near-everything/every-plugin/blob/main/plugins/_template/LLM.txt) for plugin development patterns.
+The API is an **every-plugin** that exposes an oRPC router. It can compose across other plugins in-process via `createPlugin.withPlugins<PluginsClient>()`. See [every-plugin template guide](https://github.com/near-everything/every-plugin/blob/main/plugins/_template/LLM.txt) for plugin development patterns.
 
 **Structure:**
 ```
 api/
 ├── src/
-│   ├── contract.ts      # oRPC route definitions
-│   ├── index.ts         # createPlugin() implementation
-│   ├── schema.ts        # Zod schemas for validation
-│   ├── services/        # Business logic (Effect-based)
-│   └── db/              # Database schema (Drizzle)
-└── plugin.dev.ts        # Dev server config
+│   ├── contract.ts            # oRPC route definitions
+│   ├── index.ts               # createPlugin.withPlugins() implementation
+│   ├── plugins-client.gen.ts  # Generated PluginsClient type (auto-generated, gitignored)
+│   ├── schema.ts              # Zod schemas for validation
+│   ├── services/              # Business logic (Effect-based)
+│   └── db/                    # Database schema (Drizzle)
+└── plugin.dev.ts              # Dev server config
 ```
 
 **Plugin Definition:**
 ```typescript
 // api/src/index.ts
-export default createPlugin({
+import type { PluginsClient } from "./plugins-client.gen";
+
+export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
-    network: z.enum(['mainnet', 'testnet']),
-    contractId: z.string()
+    demoMessage: z.string().optional(),
   }),
   
   secrets: z.object({
@@ -153,53 +155,48 @@ export default createPlugin({
   
   contract,  // oRPC contract from contract.ts
   
-  initialize: (config) => Effect.gen(function* () {
+  initialize: (config, plugins) => Effect.gen(function* () {
     // Create services with config
     const db = createDb(config.secrets.API_DATABASE_URL);
     const service = new MyService(db);
     
-    return { service };
+    return { service, plugins, demoMessage: config.variables.demoMessage ?? "not configured" };
   }),
   
-  createRouter: (context, builder) => ({
-    getData: builder.getData.handler(async ({ input }) => {
-      return await Effect.runPromise(
-        context.service.getData(input)
-      );
+  createRouter: (services, builder) => ({
+    // Direct routes
+    ping: builder.ping.handler(async () => ({ status: "ok", timestamp: new Date().toISOString() })),
+    
+    // Composed route — calls registry plugin in-process
+    pluginDemo: builder.pluginDemo.handler(async () => {
+      const status = await services.plugins.registry().getRegistryStatus();
+      return { apiVariable: services.demoMessage, registryStatus: status, availablePlugins: Object.keys(services.plugins) };
     }),
   })
 });
 ```
 
-**How Host Loads API:**
+**How Host Loads API (two-phase):**
 ```typescript
-// host/src/runtime.ts
-const config = await loadBosConfig();  // Reads bos.config.json
+// Phase 1: Load all non-API plugins
+const pluginResults = await Promise.all(
+  pluginEntries.map(entry => runtime.usePlugin(entry.runtimeId, { variables, secrets }))
+);
 
-const runtime = createPluginRuntime({
-  registry: {
-    [config.api.name]: {
-      remote: config.api.url,      // From config!
-      variables: config.api.variables,
-      secrets: config.api.secrets
-    }
-  }
-});
+// Build pluginsClient map from Phase 1 results
+const pluginsClient = {};
+for (const result of pluginResults) {
+  pluginsClient[result.key] = result.createClient;  // Factory, not instance
+}
 
-const { client, router } = await runtime.usePlugin(config.api.name, {
-  variables: config.api.variables,
-  secrets: config.api.secrets
-});
-
-// Router is merged into main oRPC router
+// Phase 2: Load API plugin with injected pluginsClient
+const apiPlugin = await runtime.usePlugin(apiEntry.runtimeId, {
+  variables: apiEntry.config.variables,
+  secrets: collectSecrets(apiEntry),
+}, pluginsClient);
 ```
 
-**Build Config:** `api/rspack.config.cjs`
-- Uses `EveryPluginDevServer` for development
-- Uses `withZephyr` for CDN deployment
-- Auto-updates `bos.config.json` on deployment
-
-**Key Point:** Plugins are independently deployable with their own contract, services, and database schema.
+**Key Point:** The host is generic — no plugin-specific code. `pluginsClient` is a map of `createClient` factories typed by the generated `PluginsClient` type. The API calls `services.plugins.registry()` to execute plugin routers in-process.
 
 ## UI Styling Guidelines
 

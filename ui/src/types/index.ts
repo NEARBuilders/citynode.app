@@ -4,6 +4,7 @@ import type {
   RouterContextWithApi as BaseRouterContextWithApi,
 } from "everything-dev/ui/types";
 import type { ApiClient as BaseApiClient } from "@/lib/api-client";
+import type { SessionData } from "@/lib/session";
 
 export type {
   ClientRuntimeConfig,
@@ -20,15 +21,16 @@ export type {
 
 export type ApiClient = BaseApiClient;
 
-export interface RouterContext extends BaseRouterContextWithApi<ApiClient> {
+export interface RouterContext extends BaseRouterContextWithApi<ApiClient, SessionData> {
   apiClient: ApiClient;
 }
 
-export interface CreateRouterOptions extends Omit<BaseCreateRouterOptions<ApiClient>, "context"> {
+export interface CreateRouterOptions
+  extends Omit<BaseCreateRouterOptions<ApiClient, SessionData>, "context"> {
   context: RouterContext;
 }
 
-export interface RenderOptions extends Omit<BaseRenderOptions, "runtimeConfig"> {
-  runtimeConfig: BaseRenderOptions["runtimeConfig"];
+export interface RenderOptions extends Omit<BaseRenderOptions<SessionData>, "runtimeConfig"> {
+  runtimeConfig: BaseRenderOptions<SessionData>["runtimeConfig"];
   apiClient: ApiClient;
 }

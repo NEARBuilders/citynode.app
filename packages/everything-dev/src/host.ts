@@ -460,7 +460,7 @@ async function runHostServer(opts: {
     }
 
     try {
-      const apiClient = baseApiPlugin?.client;
+      const apiClient = baseApiPlugin?.createClient();
 
       const result = await routerModule.renderToStream(c.req.raw, {
         assetsUrl: runtimeConfig.ui.url,

@@ -1,39 +1,9 @@
 import { queryOptions, skipToken } from "@tanstack/react-query";
 import { authClient } from "./auth-client";
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface User {
-  id: string;
-  email?: string;
-  name?: string;
-  image?: string | null;
-  role?: string;
-  banned?: boolean;
-  isAnonymous?: boolean;
-  emailVerified?: boolean;
-  phoneNumber?: string;
-  phoneNumberVerified?: boolean;
-}
-
-export interface SessionInfo {
-  id: string;
-  userId: string;
-  expiresAt: Date;
-  token: string;
-  createdAt: Date;
-  updatedAt: Date;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  activeOrganizationId?: string;
-}
-
-export interface SessionData {
-  user: User;
-  session: SessionInfo;
-}
+export type SessionData = typeof authClient.$Infer.Session;
+export type User = SessionData["user"];
+export type SessionInfo = SessionData["session"];
 
 export interface Organization {
   id: string;
@@ -53,7 +23,7 @@ export const sessionQueryOptions = (initialSession?: SessionData | null) =>
     queryKey: ["session"],
     queryFn: async () => {
       const { data: session } = await authClient.getSession();
-      return session as SessionData | null;
+      return session ?? null;
     },
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,

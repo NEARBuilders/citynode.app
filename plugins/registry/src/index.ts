@@ -2,11 +2,10 @@ import { createPlugin } from "every-plugin";
 import { Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
+import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
 import { RegistryConfigService } from "./services/fastkv";
 import { RegistryService } from "./services/registry";
-
-type Auth = any;
 
 interface AuthContext {
   userId: string;

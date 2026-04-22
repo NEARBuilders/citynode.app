@@ -7,7 +7,7 @@ export interface LoadedPluginResult {
   key: string;
   name: string;
   router: any;
-  client: any;
+  createClient: (context?: unknown) => any;
   metadata: {
     remoteUrl: string;
     version?: string;
@@ -28,6 +28,7 @@ export async function loadApiPlugin(opts: {
   variables?: Record<string, string>;
   secrets?: Record<string, string>;
   integrity?: string;
+  plugins?: Record<string, unknown>;
 }): Promise<LoadedPluginResult> {
   const remoteEntryUrl = (() => {
     if (opts.entry.endsWith("/remoteEntry.js")) return opts.entry;
@@ -53,16 +54,20 @@ export async function loadApiPlugin(opts: {
   });
 
   // biome-ignore lint/correctness/useHookAtTopLevel: usePlugin is not a React hook
-  const plugin = await runtime.usePlugin(opts.runtimeId, {
-    variables: opts.variables ?? {},
-    secrets: opts.secrets ?? {},
-  });
+  const plugin = await runtime.usePlugin(
+    opts.runtimeId,
+    {
+      variables: opts.variables ?? {},
+      secrets: opts.secrets ?? {},
+    },
+    opts.plugins,
+  );
 
   return {
     key: opts.key,
     name: opts.name,
     router: plugin.router,
-    client: plugin.createClient(),
+    createClient: plugin.createClient as (context?: unknown) => any,
     metadata: {
       remoteUrl: remoteEntryUrl,
       version: plugin.metadata.version,
@@ -102,8 +107,12 @@ export async function loadApiPluginsFromRuntimeConfig(
     return { base: null, plugins: [], errors: [] };
   }
 
-  const loaded = await Promise.allSettled(
-    entries.map(async ([key, pluginConfig]) => {
+  // Phase 1: Load non-API plugins first
+  const pluginEntries = entries.filter(([key]) => key !== "api");
+  const apiEntry = entries.find(([key]) => key === "api");
+
+  const pluginResults = await Promise.allSettled(
+    pluginEntries.map(async ([key, pluginConfig]) => {
       console.log(`[API] Loading plugin: ${pluginConfig.name} from ${pluginConfig.entry}`);
       return loadApiPlugin({
         key,
@@ -120,10 +129,13 @@ export async function loadApiPluginsFromRuntimeConfig(
   const plugins: LoadedPluginResult[] = [];
   const errors: Array<{ key: string; error: string }> = [];
 
-  loaded.forEach((result, index) => {
-    const [key] = entries[index] ?? ["unknown"];
+  const pluginsClient: Record<string, unknown> = {};
+
+  pluginResults.forEach((result, index) => {
+    const [key] = pluginEntries[index] ?? ["unknown"];
     if (result.status === "fulfilled") {
       plugins.push(result.value);
+      pluginsClient[key] = result.value.createClient;
     } else {
       errors.push({
         key,
@@ -132,7 +144,31 @@ export async function loadApiPluginsFromRuntimeConfig(
     }
   });
 
-  const base = plugins.find((plugin) => plugin.key === "api") ?? null;
+  // Phase 2: Load API plugin with injected plugins client
+  let base: LoadedPluginResult | null = null;
+
+  if (apiEntry) {
+    const [key, apiConfig] = apiEntry;
+    try {
+      console.log(`[API] Loading API plugin: ${apiConfig.name} from ${apiConfig.entry}`);
+      base = await loadApiPlugin({
+        key,
+        runtimeId: apiConfig.name,
+        name: apiConfig.name,
+        entry: apiConfig.entry,
+        variables: apiConfig.variables,
+        secrets: collectSecrets(apiConfig, envSecrets),
+        integrity: apiConfig.integrity,
+        plugins: pluginsClient,
+      });
+    } catch (error) {
+      errors.push({
+        key,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   return { base, plugins, errors };
 }
 

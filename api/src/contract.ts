@@ -46,6 +46,30 @@ export const contract = oc.router({
     .route({ method: "GET", path: "/protected/error" })
     .output(z.object({ message: z.string(), accountId: z.string() }))
     .errors({ NOT_FOUND, UNAUTHORIZED }),
+
+  pluginDemo: oc
+    .route({
+      method: "GET",
+      path: "/demo/plugins",
+      summary: "Demo: variable + plugin client flow",
+      description:
+        "Returns the API variable from bos.config.json, calls the registry plugin via pluginsClient, and lists available plugins. No auth required.",
+      tags: ["Demo"],
+    })
+    .output(
+      z.object({
+        apiVariable: z.string(),
+        registryStatus: z.object({
+          discoveredApps: z.number().int().nonnegative(),
+          metadataContractId: z.string(),
+          metadataFastKvUrl: z.string().url(),
+          relayEnabled: z.boolean(),
+          relayAccountId: z.string().nullable(),
+          timestamp: z.string(),
+        }),
+        availablePlugins: z.array(z.string()),
+      }),
+    ),
 });
 
 export type ContractType = typeof contract;

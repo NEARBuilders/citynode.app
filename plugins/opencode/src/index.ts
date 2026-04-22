@@ -2,10 +2,9 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
+import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
 import { OpencodeService } from "./service";
-
-type Auth = any;
 
 interface AuthContext {
   userId: string;
@@ -46,7 +45,7 @@ export default createPlugin({
   contract,
 
   initialize: (config) =>
-    Effect.gen(function* () {
+    Effect.sync(() => {
       const service = new OpencodeService(
         config.variables.opencodeHost,
         config.variables.opencodePort,
@@ -75,7 +74,10 @@ export default createPlugin({
       if (context.user.role !== "admin") {
         throw new ORPCError("FORBIDDEN", {
           message: "Admin access required",
-          data: { role: context.user.role, hint: "Only users with admin role can access opencode features" },
+          data: {
+            role: context.user.role,
+            hint: "Only users with admin role can access opencode features",
+          },
         });
       }
 
