@@ -104,6 +104,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build everything-dev
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: bun run --cwd packages/everything-dev build
+
       - name: Publish runtime config
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: bun packages/everything-dev/cli.js publish --deploy

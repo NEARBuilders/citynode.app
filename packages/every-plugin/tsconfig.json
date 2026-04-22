@@ -10,9 +10,13 @@
       "every-plugin/effect": ["./src/effect.ts"],
       "every-plugin/zod": ["./src/zod.ts"],
       "every-plugin/orpc": ["./src/orpc.ts"],
+      "every-plugin/orpc/client": ["./src/orpc-client.ts"],
+      "every-plugin/orpc/openapi": ["./src/orpc-openapi.ts"],
       "every-plugin/normalize": ["./src/runtime/services/normalize.ts"],
       "every-plugin/testing": ["./src/testing/index.ts"],
-      "every-plugin/runtime": ["./src/runtime/index.ts"]
+      "every-plugin/runtime": ["./src/runtime/index.ts"],
+      "every-plugin/errors": ["./src/errors.ts"],
+      "every-plugin/types": ["./src/types.ts"]
     }
   },
   "files": ["tests/types.d.ts"],

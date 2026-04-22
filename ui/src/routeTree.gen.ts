@@ -21,15 +21,15 @@ import { Route as LayoutAuthenticatedSettingsRouteImport } from './routes/_layou
 import { Route as LayoutAuthenticatedHomeRouteImport } from './routes/_layout/_authenticated/home'
 import { Route as LayoutAuthenticatedAdminRouteImport } from './routes/_layout/_authenticated/_admin'
 import { Route as LayoutAppsAccountIdIndexRouteImport } from './routes/_layout/apps/$accountId/index'
+import { Route as LayoutAuthenticatedProjectsIndexRouteImport } from './routes/_layout/_authenticated/projects/index'
 import { Route as LayoutAuthenticatedOrganizationsIndexRouteImport } from './routes/_layout/_authenticated/organizations/index'
 import { Route as LayoutAuthenticatedKeysIndexRouteImport } from './routes/_layout/_authenticated/keys/index'
 import { Route as LayoutAppsAccountIdGatewayIdRouteImport } from './routes/_layout/apps/$accountId/$gatewayId'
+import { Route as LayoutAuthenticatedProjectsNewRouteImport } from './routes/_layout/_authenticated/projects/new'
+import { Route as LayoutAuthenticatedProjectsIdRouteImport } from './routes/_layout/_authenticated/projects/$id'
 import { Route as LayoutAuthenticatedOrganizationsNewRouteImport } from './routes/_layout/_authenticated/organizations/new'
 import { Route as LayoutAuthenticatedOrganizationsIdRouteImport } from './routes/_layout/_authenticated/organizations/$id'
 import { Route as LayoutAuthenticatedKeysKeyRouteImport } from './routes/_layout/_authenticated/keys/$key'
-import { Route as LayoutAuthenticatedProjectsIndexRouteImport } from './routes/_layout/_authenticated/projects/index'
-import { Route as LayoutAuthenticatedProjectsNewRouteImport } from './routes/_layout/_authenticated/projects/new'
-import { Route as LayoutAuthenticatedProjectsIdRouteImport } from './routes/_layout/_authenticated/projects/$id'
 import { Route as LayoutAuthenticatedAdminDashboardRouteImport } from './routes/_layout/_authenticated/_admin/dashboard'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -92,6 +92,12 @@ const LayoutAppsAccountIdIndexRoute =
     path: '/apps/$accountId/',
     getParentRoute: () => LayoutRoute,
   } as any)
+const LayoutAuthenticatedProjectsIndexRoute =
+  LayoutAuthenticatedProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
 const LayoutAuthenticatedOrganizationsIndexRoute =
   LayoutAuthenticatedOrganizationsIndexRouteImport.update({
     id: '/organizations/',
@@ -110,6 +116,18 @@ const LayoutAppsAccountIdGatewayIdRoute =
     path: '/apps/$accountId/$gatewayId',
     getParentRoute: () => LayoutRoute,
   } as any)
+const LayoutAuthenticatedProjectsNewRoute =
+  LayoutAuthenticatedProjectsNewRouteImport.update({
+    id: '/projects/new',
+    path: '/projects/new',
+    getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
+const LayoutAuthenticatedProjectsIdRoute =
+  LayoutAuthenticatedProjectsIdRouteImport.update({
+    id: '/projects/$id',
+    path: '/projects/$id',
+    getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
 const LayoutAuthenticatedOrganizationsNewRoute =
   LayoutAuthenticatedOrganizationsNewRouteImport.update({
     id: '/organizations/new',
@@ -126,24 +144,6 @@ const LayoutAuthenticatedKeysKeyRoute =
   LayoutAuthenticatedKeysKeyRouteImport.update({
     id: '/keys/$key',
     path: '/keys/$key',
-    getParentRoute: () => LayoutAuthenticatedRoute,
-  } as any)
-const LayoutAuthenticatedProjectsIndexRoute =
-  LayoutAuthenticatedProjectsIndexRouteImport.update({
-    id: '/projects/',
-    path: '/projects/',
-    getParentRoute: () => LayoutAuthenticatedRoute,
-  } as any)
-const LayoutAuthenticatedProjectsNewRoute =
-  LayoutAuthenticatedProjectsNewRouteImport.update({
-    id: '/projects/new',
-    path: '/projects/new',
-    getParentRoute: () => LayoutAuthenticatedRoute,
-  } as any)
-const LayoutAuthenticatedProjectsIdRoute =
-  LayoutAuthenticatedProjectsIdRouteImport.update({
-    id: '/projects/$id',
-    path: '/projects/$id',
     getParentRoute: () => LayoutAuthenticatedRoute,
   } as any)
 const LayoutAuthenticatedAdminDashboardRoute =
@@ -170,8 +170,8 @@ export interface FileRoutesByFullPath {
   '/projects/new': typeof LayoutAuthenticatedProjectsNewRoute
   '/apps/$accountId/$gatewayId': typeof LayoutAppsAccountIdGatewayIdRoute
   '/keys/': typeof LayoutAuthenticatedKeysIndexRoute
-  '/projects/': typeof LayoutAuthenticatedProjectsIndexRoute
   '/organizations/': typeof LayoutAuthenticatedOrganizationsIndexRoute
+  '/projects/': typeof LayoutAuthenticatedProjectsIndexRoute
   '/apps/$accountId/': typeof LayoutAppsAccountIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -191,8 +191,8 @@ export interface FileRoutesByTo {
   '/projects/new': typeof LayoutAuthenticatedProjectsNewRoute
   '/apps/$accountId/$gatewayId': typeof LayoutAppsAccountIdGatewayIdRoute
   '/keys': typeof LayoutAuthenticatedKeysIndexRoute
-  '/projects': typeof LayoutAuthenticatedProjectsIndexRoute
   '/organizations': typeof LayoutAuthenticatedOrganizationsIndexRoute
+  '/projects': typeof LayoutAuthenticatedProjectsIndexRoute
   '/apps/$accountId': typeof LayoutAppsAccountIdIndexRoute
 }
 export interface FileRoutesById {
@@ -216,8 +216,8 @@ export interface FileRoutesById {
   '/_layout/_authenticated/projects/new': typeof LayoutAuthenticatedProjectsNewRoute
   '/_layout/apps/$accountId/$gatewayId': typeof LayoutAppsAccountIdGatewayIdRoute
   '/_layout/_authenticated/keys/': typeof LayoutAuthenticatedKeysIndexRoute
-  '/_layout/_authenticated/projects/': typeof LayoutAuthenticatedProjectsIndexRoute
   '/_layout/_authenticated/organizations/': typeof LayoutAuthenticatedOrganizationsIndexRoute
+  '/_layout/_authenticated/projects/': typeof LayoutAuthenticatedProjectsIndexRoute
   '/_layout/apps/$accountId/': typeof LayoutAppsAccountIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -239,8 +239,8 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/apps/$accountId/$gatewayId'
     | '/keys/'
-    | '/projects/'
     | '/organizations/'
+    | '/projects/'
     | '/apps/$accountId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -260,8 +260,8 @@ export interface FileRouteTypes {
     | '/projects/new'
     | '/apps/$accountId/$gatewayId'
     | '/keys'
-    | '/projects'
     | '/organizations'
+    | '/projects'
     | '/apps/$accountId'
   id:
     | '__root__'
@@ -284,8 +284,8 @@ export interface FileRouteTypes {
     | '/_layout/_authenticated/projects/new'
     | '/_layout/apps/$accountId/$gatewayId'
     | '/_layout/_authenticated/keys/'
-    | '/_layout/_authenticated/projects/'
     | '/_layout/_authenticated/organizations/'
+    | '/_layout/_authenticated/projects/'
     | '/_layout/apps/$accountId/'
   fileRoutesById: FileRoutesById
 }
@@ -379,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAppsAccountIdIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/_authenticated/projects/': {
+      id: '/_layout/_authenticated/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof LayoutAuthenticatedProjectsIndexRouteImport
+      parentRoute: typeof LayoutAuthenticatedRoute
+    }
     '/_layout/_authenticated/organizations/': {
       id: '/_layout/_authenticated/organizations/'
       path: '/organizations'
@@ -400,20 +407,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAppsAccountIdGatewayIdRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/_authenticated/organizations/new': {
-      id: '/_layout/_authenticated/organizations/new'
-      path: '/organizations/new'
-      fullPath: '/organizations/new'
-      preLoaderRoute: typeof LayoutAuthenticatedOrganizationsNewRouteImport
-      parentRoute: typeof LayoutAuthenticatedRoute
-    }
-    '/_layout/_authenticated/projects/$id': {
-      id: '/_layout/_authenticated/projects/$id'
-      path: '/projects/$id'
-      fullPath: '/projects/$id'
-      preLoaderRoute: typeof LayoutAuthenticatedProjectsIdRouteImport
-      parentRoute: typeof LayoutAuthenticatedRoute
-    }
     '/_layout/_authenticated/projects/new': {
       id: '/_layout/_authenticated/projects/new'
       path: '/projects/new'
@@ -428,11 +421,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedProjectsIdRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
-    '/_layout/_authenticated/projects/': {
-      id: '/_layout/_authenticated/projects/'
-      path: '/projects'
-      fullPath: '/projects/'
-      preLoaderRoute: typeof LayoutAuthenticatedProjectsIndexRouteImport
+    '/_layout/_authenticated/organizations/new': {
+      id: '/_layout/_authenticated/organizations/new'
+      path: '/organizations/new'
+      fullPath: '/organizations/new'
+      preLoaderRoute: typeof LayoutAuthenticatedOrganizationsNewRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
     '/_layout/_authenticated/organizations/$id': {

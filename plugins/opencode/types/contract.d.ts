@@ -25,8 +25,8 @@ export declare const PromptResultSchema: z.ZodObject<{
     sessionId: z.ZodString;
     messageId: z.ZodOptional<z.ZodString>;
     status: z.ZodEnum<{
-        error: "error";
         sent: "sent";
+        error: "error";
     }>;
 }, z.core.$strip>;
 export declare const ServerEventSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
@@ -159,8 +159,8 @@ export declare const contract: {
             sessionId: z.ZodString;
             messageId: z.ZodOptional<z.ZodString>;
             status: z.ZodEnum<{
-                error: "error";
                 sent: "sent";
+                error: "error";
             }>;
         }, z.core.$strip>;
     }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {

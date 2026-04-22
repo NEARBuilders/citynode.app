@@ -5,23 +5,134 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": {
+    "development": "./src/index.ts",
+    "types": "./dist/index.d.mts",
+    "import": "./dist/index.mjs",
+    "require": "./dist/index.cjs"
+  },
+  "module": {
+    "development": "./src/index.ts",
+    "import": "./dist/index.mjs"
+  },
+  "types": {
+    "development": "./src/index.ts",
+    "types": "./dist/index.d.mts"
+  },
   "exports": {
-    ".": "./src/index.ts",
-    "./runtime": "./src/runtime/index.ts",
-    "./testing": "./src/testing/index.ts",
-    "./normalize": "./src/runtime/services/normalize.ts",
-    "./effect": "./src/effect.ts",
-    "./zod": "./src/zod.ts",
-    "./zod/v4/core": "./src/zod-core.ts",
-    "./orpc": "./src/orpc.ts",
-    "./orpc/client": "./src/orpc-client.ts",
-    "./orpc/openapi": "./src/orpc-openapi.ts",
-    "./errors": "./src/errors.ts",
-    "./types": "./src/types.ts",
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./runtime": {
+      "development": {
+        "types": "./src/runtime/index.ts",
+        "import": "./src/runtime/index.ts"
+      },
+      "types": "./dist/runtime/index.d.mts",
+      "import": "./dist/runtime/index.mjs",
+      "require": "./dist/runtime/index.cjs"
+    },
+    "./testing": {
+      "development": {
+        "types": "./src/testing/index.ts",
+        "import": "./src/testing/index.ts"
+      },
+      "types": "./dist/testing/index.d.mts",
+      "import": "./dist/testing/index.mjs",
+      "require": "./dist/testing/index.cjs"
+    },
+    "./normalize": {
+      "development": {
+        "types": "./src/runtime/services/normalize.ts",
+        "import": "./src/runtime/services/normalize.ts"
+      },
+      "types": "./dist/runtime/services/normalize.d.mts",
+      "import": "./dist/runtime/services/normalize.mjs",
+      "require": "./dist/runtime/services/normalize.cjs"
+    },
+    "./effect": {
+      "development": {
+        "types": "./src/effect.ts",
+        "import": "./src/effect.ts"
+      },
+      "types": "./dist/effect.d.mts",
+      "import": "./dist/effect.mjs",
+      "require": "./dist/effect.cjs"
+    },
+    "./zod": {
+      "development": {
+        "types": "./src/zod.ts",
+        "import": "./src/zod.ts"
+      },
+      "types": "./dist/zod.d.mts",
+      "import": "./dist/zod.mjs",
+      "require": "./dist/zod.cjs"
+    },
+    "./zod/v4/core": {
+      "development": {
+        "types": "./src/zod-core.ts",
+        "import": "./src/zod-core.ts"
+      },
+      "types": "./dist/zod-core.d.mts",
+      "import": "./dist/zod-core.mjs",
+      "require": "./dist/zod-core.cjs"
+    },
+    "./orpc": {
+      "development": {
+        "types": "./src/orpc.ts",
+        "import": "./src/orpc.ts"
+      },
+      "types": "./dist/orpc.d.mts",
+      "import": "./dist/orpc.mjs",
+      "require": "./dist/orpc.cjs"
+    },
+    "./orpc/client": {
+      "development": {
+        "types": "./src/orpc-client.ts",
+        "import": "./src/orpc-client.ts"
+      },
+      "types": "./dist/orpc-client.d.mts",
+      "import": "./dist/orpc-client.mjs",
+      "require": "./dist/orpc-client.cjs"
+    },
+    "./orpc/openapi": {
+      "development": {
+        "types": "./src/orpc-openapi.ts",
+        "import": "./src/orpc-openapi.ts"
+      },
+      "types": "./dist/orpc-openapi.d.mts",
+      "import": "./dist/orpc-openapi.mjs",
+      "require": "./dist/orpc-openapi.cjs"
+    },
+    "./errors": {
+      "development": {
+        "types": "./src/errors.ts",
+        "import": "./src/errors.ts"
+      },
+      "types": "./dist/errors.d.mts",
+      "import": "./dist/errors.mjs",
+      "require": "./dist/errors.cjs"
+    },
+    "./types": {
+      "development": {
+        "types": "./src/types.ts",
+        "import": "./src/types.ts"
+      },
+      "types": "./dist/types.d.mts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.cjs"
+    },
     "./build/rspack": {
+      "development": {
+        "types": "./src/build/rspack/index.ts",
+        "import": "./src/build/rspack/index.ts"
+      },
       "types": {
         "import": "./dist/build/rspack/index.d.mts",
         "require": "./dist/build/rspack/index.d.cts"
@@ -32,11 +143,13 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "tsdown",
     "build:test": "cd tests/fixtures/test-plugin && bun run build",
+    "prepublishOnly": "tsdown",
     "test": "vitest run --config vitest.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "bun run build:test && vitest run --config vitest.integration.config.ts",
@@ -50,7 +163,11 @@
     "effect": "^3.21.0",
     "zod": "^4.3.6",
     "@orpc/contract": "^1.13.4",
-    "@orpc/server": "^1.13.4"
+    "@orpc/server": "^1.13.4",
+    "@orpc/client": "^1.13.4",
+    "@orpc/openapi": "^1.13.4",
+    "@orpc/zod": "^1.13.4",
+    "@orpc/react-query": "^1.13.4"
   },
   "devDependencies": {
     "@effect/language-service": "^0.84.3",
@@ -71,14 +188,10 @@
     "@module-federation/enhanced": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
-    "@orpc/client": "^1.13.4",
     "@orpc/contract": "^1.13.4",
     "@orpc/experimental-publisher": "^1.13.4",
-    "@orpc/openapi": "^1.13.4",
-    "@orpc/react-query": "^1.13.4",
     "@orpc/server": "^1.13.4",
-    "@orpc/tanstack-query": "^1.13.4",
-    "@orpc/zod": "^1.13.4"
+    "@orpc/tanstack-query": "^1.13.4"
   },
   "keywords": [
     "plugin",

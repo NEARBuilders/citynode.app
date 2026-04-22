@@ -12,6 +12,7 @@
     "jsx": "react-jsx",
     "allowJs": true,
     "moduleResolution": "bundler",
+    "customConditions": ["development"],
     "paths": {
       "@/*": ["./src/*"]
     },

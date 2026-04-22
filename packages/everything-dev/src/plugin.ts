@@ -333,6 +333,37 @@ async function buildEveryPluginQuietly(cwd: string) {
   );
 }
 
+async function buildEverythingDevQuietly(cwd: string) {
+  const distPath = `${cwd}/packages/everything-dev/dist/index.mjs`;
+  const distExists = await Bun.file(distPath).exists();
+
+  if (distExists) {
+    return;
+  }
+
+  const result = (await run("bun", ["run", "--cwd", "packages/everything-dev", "build"], {
+    cwd,
+    capture: true,
+  })) as { stdout: string; stderr: string; exitCode: number };
+
+  if (result.exitCode === 0) {
+    console.log("[everything-dev] build succeeded");
+    return;
+  }
+
+  if (result.stdout.trim()) {
+    process.stdout.write(result.stdout);
+  }
+
+  if (result.stderr.trim()) {
+    process.stderr.write(result.stderr);
+  }
+
+  throw new Error(
+    `bun run --cwd packages/everything-dev build failed with exit code ${result.exitCode}`,
+  );
+}
+
 async function fetchPublishedConfig(
   accountId: string,
   gatewayId: string,
@@ -402,6 +433,8 @@ async function buildWorkspaceTargets(opts: {
   if (existing.some((entry) => entry.key === "api")) {
     await buildEveryPluginQuietly(opts.configDir);
   }
+
+  await buildEverythingDevQuietly(opts.configDir);
 
   const env: Record<string, string> = {
     ...process.env,
@@ -655,6 +688,8 @@ export default createPlugin({
       ) {
         await buildEveryPluginQuietly(deps.configDir);
       }
+
+      await buildEverythingDevQuietly(deps.configDir);
 
       const refreshed = await loadConfig({ cwd: deps.configDir });
       deps.bosConfig = refreshed?.config ?? deps.bosConfig;
