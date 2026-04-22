@@ -11,16 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
-import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation/$invitationId'
 import { Route as LayoutOpencodeRouteImport } from './routes/_layout/opencode'
 import { Route as LayoutLoginRouteImport } from './routes/_layout/login'
 import { Route as LayoutConfigRouteImport } from './routes/_layout/config'
 import { Route as LayoutAboutRouteImport } from './routes/_layout/about'
 import { Route as LayoutAuthenticatedRouteImport } from './routes/_layout/_authenticated'
 import { Route as LayoutAppsIndexRouteImport } from './routes/_layout/apps/index'
-import { Route as LayoutProjectsNewRouteImport } from './routes/_layout/projects.new'
-import { Route as LayoutProjectsIdRouteImport } from './routes/_layout/projects.$id'
-import { Route as LayoutAppsAccountIdRouteImport } from './routes/_layout/apps/_accountId'
 import { Route as LayoutAuthenticatedSettingsRouteImport } from './routes/_layout/_authenticated/settings'
 import { Route as LayoutAuthenticatedHomeRouteImport } from './routes/_layout/_authenticated/home'
 import { Route as LayoutAuthenticatedAdminRouteImport } from './routes/_layout/_authenticated/_admin'
@@ -42,12 +38,6 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRoute,
 } as any)
-const AcceptInvitationInvitationIdRoute =
-  AcceptInvitationInvitationIdRouteImport.update({
-    id: '/accept-invitation/$invitationId',
-    path: '/accept-invitation/$invitationId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const LayoutOpencodeRoute = LayoutOpencodeRouteImport.update({
   id: '/opencode',
   path: '/opencode',
@@ -75,21 +65,6 @@ const LayoutAuthenticatedRoute = LayoutAuthenticatedRouteImport.update({
 const LayoutAppsIndexRoute = LayoutAppsIndexRouteImport.update({
   id: '/apps/',
   path: '/apps/',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutProjectsNewRoute = LayoutProjectsNewRouteImport.update({
-  id: '/projects/new',
-  path: '/projects/new',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutProjectsIdRoute = LayoutProjectsIdRouteImport.update({
-  id: '/projects/$id',
-  path: '/projects/$id',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutAppsAccountIdRoute = LayoutAppsAccountIdRouteImport.update({
-  id: '/apps/_accountId',
-  path: '/apps',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAuthenticatedSettingsRoute =
@@ -163,12 +138,8 @@ export interface FileRoutesByFullPath {
   '/config': typeof LayoutConfigRoute
   '/login': typeof LayoutLoginRoute
   '/opencode': typeof LayoutOpencodeRoute
-  '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/home': typeof LayoutAuthenticatedHomeRoute
   '/settings': typeof LayoutAuthenticatedSettingsRoute
-  '/apps': typeof LayoutAppsAccountIdRoute
-  '/projects/$id': typeof LayoutProjectsIdRoute
-  '/projects/new': typeof LayoutProjectsNewRoute
   '/apps/': typeof LayoutAppsIndexRoute
   '/dashboard': typeof LayoutAuthenticatedAdminDashboardRoute
   '/keys/$key': typeof LayoutAuthenticatedKeysKeyRoute
@@ -185,12 +156,9 @@ export interface FileRoutesByTo {
   '/config': typeof LayoutConfigRoute
   '/login': typeof LayoutLoginRoute
   '/opencode': typeof LayoutOpencodeRoute
-  '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/home': typeof LayoutAuthenticatedHomeRoute
   '/settings': typeof LayoutAuthenticatedSettingsRoute
   '/apps': typeof LayoutAppsIndexRoute
-  '/projects/$id': typeof LayoutProjectsIdRoute
-  '/projects/new': typeof LayoutProjectsNewRoute
   '/dashboard': typeof LayoutAuthenticatedAdminDashboardRoute
   '/keys/$key': typeof LayoutAuthenticatedKeysKeyRoute
   '/organizations/$id': typeof LayoutAuthenticatedOrganizationsIdRoute
@@ -208,14 +176,10 @@ export interface FileRoutesById {
   '/_layout/config': typeof LayoutConfigRoute
   '/_layout/login': typeof LayoutLoginRoute
   '/_layout/opencode': typeof LayoutOpencodeRoute
-  '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/_authenticated/_admin': typeof LayoutAuthenticatedAdminRouteWithChildren
   '/_layout/_authenticated/home': typeof LayoutAuthenticatedHomeRoute
   '/_layout/_authenticated/settings': typeof LayoutAuthenticatedSettingsRoute
-  '/_layout/apps/_accountId': typeof LayoutAppsAccountIdRoute
-  '/_layout/projects/$id': typeof LayoutProjectsIdRoute
-  '/_layout/projects/new': typeof LayoutProjectsNewRoute
   '/_layout/apps/': typeof LayoutAppsIndexRoute
   '/_layout/_authenticated/_admin/dashboard': typeof LayoutAuthenticatedAdminDashboardRoute
   '/_layout/_authenticated/keys/$key': typeof LayoutAuthenticatedKeysKeyRoute
@@ -234,12 +198,8 @@ export interface FileRouteTypes {
     | '/config'
     | '/login'
     | '/opencode'
-    | '/accept-invitation/$invitationId'
     | '/home'
     | '/settings'
-    | '/apps'
-    | '/projects/$id'
-    | '/projects/new'
     | '/apps/'
     | '/dashboard'
     | '/keys/$key'
@@ -256,12 +216,9 @@ export interface FileRouteTypes {
     | '/config'
     | '/login'
     | '/opencode'
-    | '/accept-invitation/$invitationId'
     | '/home'
     | '/settings'
     | '/apps'
-    | '/projects/$id'
-    | '/projects/new'
     | '/dashboard'
     | '/keys/$key'
     | '/organizations/$id'
@@ -278,14 +235,10 @@ export interface FileRouteTypes {
     | '/_layout/config'
     | '/_layout/login'
     | '/_layout/opencode'
-    | '/accept-invitation/$invitationId'
     | '/_layout/'
     | '/_layout/_authenticated/_admin'
     | '/_layout/_authenticated/home'
     | '/_layout/_authenticated/settings'
-    | '/_layout/apps/_accountId'
-    | '/_layout/projects/$id'
-    | '/_layout/projects/new'
     | '/_layout/apps/'
     | '/_layout/_authenticated/_admin/dashboard'
     | '/_layout/_authenticated/keys/$key'
@@ -299,7 +252,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
-  AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -317,13 +269,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
-    }
-    '/accept-invitation/$invitationId': {
-      id: '/accept-invitation/$invitationId'
-      path: '/accept-invitation/$invitationId'
-      fullPath: '/accept-invitation/$invitationId'
-      preLoaderRoute: typeof AcceptInvitationInvitationIdRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/_layout/opencode': {
       id: '/_layout/opencode'
@@ -365,27 +310,6 @@ declare module '@tanstack/react-router' {
       path: '/apps'
       fullPath: '/apps/'
       preLoaderRoute: typeof LayoutAppsIndexRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/projects/new': {
-      id: '/_layout/projects/new'
-      path: '/projects/new'
-      fullPath: '/projects/new'
-      preLoaderRoute: typeof LayoutProjectsNewRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/projects/$id': {
-      id: '/_layout/projects/$id'
-      path: '/projects/$id'
-      fullPath: '/projects/$id'
-      preLoaderRoute: typeof LayoutProjectsIdRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/apps/_accountId': {
-      id: '/_layout/apps/_accountId'
-      path: '/apps'
-      fullPath: '/apps'
-      preLoaderRoute: typeof LayoutAppsAccountIdRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/_authenticated/settings': {
@@ -518,9 +442,6 @@ interface LayoutRouteChildren {
   LayoutLoginRoute: typeof LayoutLoginRoute
   LayoutOpencodeRoute: typeof LayoutOpencodeRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
-  LayoutAppsAccountIdRoute: typeof LayoutAppsAccountIdRoute
-  LayoutProjectsIdRoute: typeof LayoutProjectsIdRoute
-  LayoutProjectsNewRoute: typeof LayoutProjectsNewRoute
   LayoutAppsIndexRoute: typeof LayoutAppsIndexRoute
   LayoutAppsAccountIdGatewayIdRoute: typeof LayoutAppsAccountIdGatewayIdRoute
   LayoutAppsAccountIdIndexRoute: typeof LayoutAppsAccountIdIndexRoute
@@ -533,9 +454,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutLoginRoute: LayoutLoginRoute,
   LayoutOpencodeRoute: LayoutOpencodeRoute,
   LayoutIndexRoute: LayoutIndexRoute,
-  LayoutAppsAccountIdRoute: LayoutAppsAccountIdRoute,
-  LayoutProjectsIdRoute: LayoutProjectsIdRoute,
-  LayoutProjectsNewRoute: LayoutProjectsNewRoute,
   LayoutAppsIndexRoute: LayoutAppsIndexRoute,
   LayoutAppsAccountIdGatewayIdRoute: LayoutAppsAccountIdGatewayIdRoute,
   LayoutAppsAccountIdIndexRoute: LayoutAppsAccountIdIndexRoute,
@@ -546,7 +464,6 @@ const LayoutRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
-  AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -205,7 +205,7 @@ export type CreatePluginWithPlugins<P extends Record<string, unknown>> = <
   config: PluginDefinition<V, S, TContract, TRequestContext, TDeps, P>,
 ) => LoadedPluginWithBinding<TContract, V, S, TRequestContext, TDeps>;
 
-function withPlugins<P extends Record<string, unknown>>(): CreatePluginWithPlugins<P> {
+export function withPlugins<P extends Record<string, unknown>>(): CreatePluginWithPlugins<P> {
   return <
     V extends AnySchema,
     S extends AnySchema,
