@@ -107,7 +107,7 @@ export default createPlugin({
       });
     });
 
-    const requireNearAccount = builder.middleware(async ({ context, next }) => {
+    const _requireNearAccount = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
           message: "Authentication required",

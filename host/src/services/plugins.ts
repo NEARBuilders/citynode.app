@@ -203,7 +203,7 @@ export const initializePlugins = Effect.gen(function* () {
             },
           } satisfies LoadedPlugin;
 
-          loadedPlugins["api"] = baseApi;
+          loadedPlugins.api = baseApi;
           loadedPluginKeys.unshift("api");
         } catch (error) {
           errors.push(error instanceof Error ? error.message : String(error));

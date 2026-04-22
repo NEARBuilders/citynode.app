@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { getPluginClient, teardown } from "../setup";
 
 describe("API Integration", () => {

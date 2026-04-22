@@ -5,7 +5,6 @@ import {
   fetchBosConfigFromFastKv,
   getFastKvBaseUrlForAccount,
   getFastKvBaseUrlForNetwork,
-  getNetworkIdForAccount,
   getRegistryConfigKey,
   getRegistryMetadataKey,
   getRegistryNamespaceForAccount,

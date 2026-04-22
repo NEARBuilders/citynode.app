@@ -47,7 +47,7 @@ export class OpencodeService {
   private headers(): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };
     if (this.apiKey) {
-      h["Authorization"] = `Bearer ${this.apiKey}`;
+      h.Authorization = `Bearer ${this.apiKey}`;
     }
     return h;
   }

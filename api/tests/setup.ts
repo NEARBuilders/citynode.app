@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPluginRuntime } from "every-plugin";
 import Plugin from "@/index";
