@@ -79,8 +79,11 @@ export const cliCommandMeta = {
     summary: "Scaffold a new project from a bos template",
     interactive: true,
     fields: {
-      account: { positional: true, description: "Parent NEAR account (e.g., dev.everything.near)" },
-      gateway: { positional: true, description: "Parent gateway ID (e.g., everything.dev)" },
+      account: {
+        positional: true,
+        description: "Parent NEAR account (defaults to dev.everything.near)",
+      },
+      gateway: { positional: true, description: "Parent gateway ID (defaults to everything.dev)" },
       destination: { description: "Target directory (defaults to ./gateway)" },
       name: { description: "New project NEAR account" },
       domain: { description: "New project domain" },

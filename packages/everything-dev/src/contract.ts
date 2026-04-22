@@ -134,8 +134,8 @@ export const KeyPublishResultSchema = z.object({
 });
 
 export const InitOptionsSchema = z.object({
-  account: z.string(),
-  gateway: z.string(),
+  account: z.string().optional(),
+  gateway: z.string().optional(),
   destination: z.string().optional(),
   name: z.string().optional(),
   domain: z.string().optional(),

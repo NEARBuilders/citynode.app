@@ -10,6 +10,7 @@ import {
   resolveSourceDir,
   runBunInstall,
 } from "./cli/init";
+import { promptInitOptions } from "./cli/prompts";
 import {
   buildRuntimePluginsForConfig,
   getHostDevelopmentPort,
@@ -1009,9 +1010,50 @@ export default createPlugin({
 
     init: builder.init.handler(async ({ input }: { input: InitOptions }) => {
       try {
+        let account = input.account;
+        let gateway = input.gateway;
+        let destination = input.destination;
+        let name = input.name;
+        let domain = input.domain;
+        let withHost = input.withHost;
+
+        if (!account || !gateway) {
+          if (input.noInteractive) {
+            return {
+              status: "error" as const,
+              destination: "",
+              parentAccount: account ?? "",
+              parentGateway: gateway ?? "",
+              name: input.name,
+              domain: input.domain,
+              extends: account && gateway ? `bos://${account}/${gateway}` : "",
+              filesCopied: 0,
+              error:
+                "account and gateway are required (use --no-interactive to skip prompts and provide them as positional args)",
+            };
+          }
+
+          const prompted = await promptInitOptions({
+            account,
+            gateway,
+            destination,
+            name,
+            domain,
+            withHost,
+          });
+          account = prompted.account;
+          gateway = prompted.gateway;
+          destination = prompted.destination;
+          name = prompted.name;
+          domain = prompted.domain;
+          withHost = prompted.withHost;
+        }
+
+        destination = destination || gateway;
+
         const { sourceDir, cleanup } = await resolveSourceDir({
-          account: input.account,
-          gateway: input.gateway,
+          account,
+          gateway,
           source: input.source,
         });
 
@@ -1020,42 +1062,40 @@ export default createPlugin({
           if (patterns.length === 0) {
             return {
               status: "error" as const,
-              destination: "",
-              parentAccount: input.account,
-              parentGateway: input.gateway,
-              name: input.name,
-              domain: input.domain,
-              extends: `bos://${input.account}/${input.gateway}`,
+              destination,
+              parentAccount: account,
+              parentGateway: gateway,
+              name,
+              domain,
+              extends: `bos://${account}/${gateway}`,
               filesCopied: 0,
               error: "No .templatekeep found in template source",
             };
           }
 
-          const destination = input.destination ?? input.gateway;
-
           const filesCopied = await copyFilteredFiles(sourceDir, destination, patterns, {
-            withHost: input.withHost,
+            withHost,
           });
 
           await personalizeConfig(destination, {
-            parentAccount: input.account,
-            parentGateway: input.gateway,
-            name: input.name,
-            domain: input.domain,
+            parentAccount: account,
+            parentGateway: gateway,
+            name: name || account,
+            domain: domain || gateway,
           });
 
-          if (!input.noInstall && !input.noInteractive) {
+          if (!input.noInstall) {
             await runBunInstall(destination);
           }
 
           return {
             status: "initialized" as const,
             destination: resolve(destination),
-            parentAccount: input.account,
-            parentGateway: input.gateway,
-            name: input.name,
-            domain: input.domain,
-            extends: `bos://${input.account}/${input.gateway}`,
+            parentAccount: account,
+            parentGateway: gateway,
+            name,
+            domain,
+            extends: `bos://${account}/${gateway}`,
             filesCopied,
           };
         } finally {
@@ -1064,12 +1104,12 @@ export default createPlugin({
       } catch (error) {
         return {
           status: "error" as const,
-          destination: input.destination ?? input.gateway,
-          parentAccount: input.account,
-          parentGateway: input.gateway,
+          destination: input.destination ?? input.gateway ?? "",
+          parentAccount: input.account ?? "",
+          parentGateway: input.gateway ?? "",
           name: input.name,
           domain: input.domain,
-          extends: `bos://${input.account}/${input.gateway}`,
+          extends: input.account && input.gateway ? `bos://${input.account}/${input.gateway}` : "",
           filesCopied: 0,
           error: error instanceof Error ? error.message : "Unknown error",
         };

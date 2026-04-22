@@ -50,21 +50,44 @@ jobs:
           publish: bun run release
           title: "chore: version packages"
           commit: "chore: version packages"
-          createGithubReleases: true
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Releases
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: |
-          for pkg in api ui host; do
-            VERSION=$(jq -r '.version' "$pkg/package.json")
-            TAG="$pkg@$VERSION"
+          # Collect packages from bos.config.json (app keys + plugin keys) plus framework packages
+          APP_KEYS=$(jq -r '.app | keys[]' bos.config.json)
+          PLUGIN_KEYS=$(jq -r '.plugins | keys[]' bos.config.json 2>/dev/null || true)
+          FRAMEWORK_PKGS="packages/every-plugin packages/everything-dev"
+          
+          ALL_KEYS=""
+          for key in $APP_KEYS $PLUGIN_KEYS; do
+            ALL_KEYS="$ALL_KEYS $key"
+          done
+          
+          for pkg_dir in $ALL_KEYS $FRAMEWORK_PKGS; do
+            PKG_NAME=$(basename "$pkg_dir")
+            PKG_JSON="${pkg_dir}/package.json"
+            
+            if [ ! -f "$PKG_JSON" ]; then
+              echo "Skipping $pkg_dir — no package.json"
+              continue
+            fi
+            
+            VERSION=$(jq -r '.version' "$PKG_JSON")
+            NAME=$(jq -r '.name' "$PKG_JSON")
+            TAG="${NAME}@${VERSION}"
             
             if ! gh release view "$TAG" &>/dev/null; then
               echo "Creating release for $TAG"
               
-              NOTES=$(sed -n '/^## '$VERSION'/,/^## [0-9]/p' "$pkg/CHANGELOG.md" | sed '$d' | tail -n +2)
+              CHANGELOG="${pkg_dir}/CHANGELOG.md"
+              NOTES=""
+              if [ -f "$CHANGELOG" ]; then
+                NOTES=$(sed -n "/^## ${VERSION}/,/^## [0-9]/p" "$CHANGELOG" | sed '$d' | tail -n +2)
+              fi
               
               if [ -z "$NOTES" ]; then
                 NOTES="Release $TAG"

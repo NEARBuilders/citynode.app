@@ -1,6 +1,6 @@
 ---
 "api": minor
-"@everything-dev/every-plugin": minor
+"every-plugin": minor
 "everything-dev": minor
 ---
 

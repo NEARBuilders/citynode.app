@@ -90,6 +90,10 @@ async function main() {
 
     if (descriptor.key === "init") {
       console.log();
+      if (result.status === "error") {
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
       console.log(colors.green(`${icons.ok} Project initialized`));
       console.log(`  ${colors.dim("Extends:")} ${result.extends}`);
       console.log(`  ${colors.dim("Destination:")} ${result.destination}`);

@@ -6,6 +6,7 @@ import {
   EveryPluginDevServer,
   FixMfDataUriPlugin,
 } from "every-plugin/build/rspack";
+import { computeSriHashForUrl } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rspack-plugin";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,7 +25,7 @@ function resolveLocalTarget(value, configRoot) {
   return normalizePath(path.resolve(configRoot, value.slice("local:".length)));
 }
 
-function updateBosConfig(url) {
+function updateBosConfig(url, integrity) {
   try {
     const configPath = path.resolve(__dirname, "../../bos.config.json");
     const configRoot = path.dirname(configPath);
@@ -42,8 +43,16 @@ function updateBosConfig(url) {
 
     const [key] = match;
     config.plugins[key].production = url;
+    if (integrity) {
+      config.plugins[key].productionIntegrity = integrity;
+    } else {
+      delete config.plugins[key].productionIntegrity;
+    }
     fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
     console.log(`   ✅ Updated bos.config.json: plugins.${key}.production`);
+    if (integrity) {
+      console.log(`   ✅ Updated bos.config.json: plugins.${key}.productionIntegrity`);
+    }
   } catch (err) {
     console.error("   ❌ Failed to update bos.config.json:", err.message);
   }
@@ -64,9 +73,10 @@ const baseConfig = {
 export default shouldDeploy
   ? withZephyr({
       hooks: {
-        onDeployComplete: (info) => {
+        onDeployComplete: async (info) => {
           console.log("🚀 Opencode Plugin Deployed:", info.url);
-          updateBosConfig(info.url);
+          const integrity = await computeSriHashForUrl(info.url);
+          updateBosConfig(info.url, integrity ?? undefined);
         },
       },
     })(baseConfig)

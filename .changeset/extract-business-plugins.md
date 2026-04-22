@@ -33,6 +33,8 @@ Projects CRUD, KV store, org management, API keys. SQLite via libsql.
 
 ### UI changes
 
+Stale route files for organizations, keys, apps, and settings pages were removed. Project pages (detail, list, new) were later restored to work with the namespaced projects plugin client.
+
 All `apiClient` calls to business routes must now use namespaced access:
 - `apiClient.listRegistryApps()` → `apiClient.registry.listRegistryApps()`
 - `apiClient.getProject()` → `apiClient.projects.getProject()`

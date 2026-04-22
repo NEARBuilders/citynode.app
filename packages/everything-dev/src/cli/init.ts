@@ -146,7 +146,7 @@ export async function copyFilteredFiles(
   }
 
   const effectivePatterns = options.withHost
-    ? patterns
+    ? [...patterns, "host/**"]
     : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
 
   const allFiles = new Set<string>();
