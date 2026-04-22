@@ -63,7 +63,7 @@ export function UserNav() {
           size="sm"
           className="hidden sm:flex max-w-[120px] text-xs text-muted-foreground"
         >
-          <Link to="/organizations">
+          <Link to="/home">
             <span className="truncate">{activeOrg.name}</span>
           </Link>
         </Button>
@@ -88,22 +88,6 @@ export function UserNav() {
           <DropdownMenuItem asChild>
             <Link to="/home">workspace</Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link to="/organizations">organizations</Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link to="/settings">settings</Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link to="/apps" search={{}}>
-              published apps
-            </Link>
-          </DropdownMenuItem>
-          {user.role === "admin" && (
-            <DropdownMenuItem asChild>
-              <Link to="/dashboard">admin</Link>
-            </DropdownMenuItem>
-          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
@@ -135,17 +119,6 @@ function DotControl() {
         <DropdownMenuLabel className="text-xs text-muted-foreground">navigate</DropdownMenuLabel>
         <DropdownMenuItem asChild>
           <Link to="/login">connect</Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/apps" search={{}}>
-            apps
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/about">about</Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href="/api">api reference</a>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
