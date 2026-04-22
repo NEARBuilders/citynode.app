@@ -5,12 +5,9 @@ WORKDIR /app
 
 RUN apk add --no-cache curl
 
-COPY package.json bun.lock bunfig.toml ./
-COPY */package.json ./*/
+COPY . .
 
 RUN bun install --frozen-lockfile
-
-COPY . .
 
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
 
