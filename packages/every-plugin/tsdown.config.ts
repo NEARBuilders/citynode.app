@@ -1,4 +1,5 @@
 import { defineConfig } from "tsdown";
+import packageJson from "./package.json" with { type: "json" };
 
 export default defineConfig({
   entry: [
@@ -26,5 +27,8 @@ export default defineConfig({
   sourcemap: true,
   minify: false,
   unbundle: true,
+  define: {
+    __EVERY_PLUGIN_VERSION__: JSON.stringify(packageJson.version),
+  },
   deps: { neverBundle: ["effect", "zod", /^@orpc\/.*/, /^@module-federation\/.*/] },
 });

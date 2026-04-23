@@ -303,6 +303,12 @@ async function buildEnvVars(
 }
 
 async function buildEveryPluginQuietly(cwd: string) {
+  const packageDir = `${cwd}/packages/every-plugin`;
+  const packageExists = await Bun.file(`${packageDir}/package.json`).exists();
+  if (!packageExists) {
+    return;
+  }
+
   const distPath = `${cwd}/packages/every-plugin/dist/build/rspack/plugin.mjs`;
   const distExists = await Bun.file(distPath).exists();
 
@@ -334,6 +340,12 @@ async function buildEveryPluginQuietly(cwd: string) {
 }
 
 async function buildEverythingDevQuietly(cwd: string) {
+  const packageDir = `${cwd}/packages/everything-dev`;
+  const packageExists = await Bun.file(`${packageDir}/package.json`).exists();
+  if (!packageExists) {
+    return;
+  }
+
   const distPath = `${cwd}/packages/everything-dev/dist/index.mjs`;
   const distExists = await Bun.file(distPath).exists();
 
@@ -1117,6 +1129,7 @@ export default createPlugin({
             parentGateway: gateway,
             name: name || account,
             domain: domain || gateway,
+            workspaceOpts: { sourceDir },
           });
 
           if (!input.noInstall) {

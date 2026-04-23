@@ -3,6 +3,7 @@
 .gitignore
 .github
 .changeset
+.release
 
 # Dependencies (installed fresh in container)
 node_modules

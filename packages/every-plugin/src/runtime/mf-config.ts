@@ -1,8 +1,18 @@
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const pkg = require("../../package.json") as { version: string };
-export const PLUGIN_VERSION = pkg.version;
+declare const __EVERY_PLUGIN_VERSION__: string | undefined;
+
+function readPackageVersion(): string {
+  try {
+    return (require("../../package.json") as { version: string }).version;
+  } catch {
+    return "0.0.0";
+  }
+}
+
+export const PLUGIN_VERSION =
+  typeof __EVERY_PLUGIN_VERSION__ === "string" ? __EVERY_PLUGIN_VERSION__ : readPackageVersion();
 
 export const SHARE_CONFIG = {
   singleton: true,

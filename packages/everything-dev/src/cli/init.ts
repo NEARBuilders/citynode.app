@@ -14,6 +14,10 @@ import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { glob } from "glob";
 import { fetchBosConfigFromFastKv } from "../fastkv";
+import {
+  loadManifestNormalizationSpec,
+  normalizePackageManifestsInTree,
+} from "../internal/manifest-normalizer";
 import type { BosConfig } from "../types";
 
 const require = createRequire(import.meta.url);
@@ -278,8 +282,12 @@ export async function personalizeConfig(
 
     if (!pkg.dependencies) pkg.dependencies = {};
     const deps = pkg.dependencies as Record<string, string>;
-    if (!deps["everything-dev"]) deps["everything-dev"] = "^1.1.0";
-    if (!deps["every-plugin"]) deps["every-plugin"] = "^2.0.0";
+    const spec = opts.workspaceOpts?.sourceDir
+      ? loadManifestNormalizationSpec(opts.workspaceOpts.sourceDir)
+      : null;
+    if (!deps["everything-dev"] && spec)
+      deps["everything-dev"] = spec.rootCatalog["everything-dev"];
+    if (!deps["every-plugin"] && spec) deps["every-plugin"] = spec.rootCatalog["every-plugin"];
 
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
@@ -291,11 +299,6 @@ export async function runBunInstall(destination: string): Promise<void> {
   await execCommand("bun", ["install"], destination);
 }
 
-const WORKSPACE_VERSION_MAP: Record<string, string> = {
-  "everything-dev": "^1.1.0",
-  "every-plugin": "^2.0.0",
-};
-
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
   "everything-dev": "packages/everything-dev",
   "every-plugin": "packages/every-plugin",
@@ -305,44 +308,12 @@ async function resolveWorkspaceRefs(
   destination: string,
   options?: { localOverrides?: boolean; sourceDir?: string },
 ): Promise<void> {
-  const files = await glob("**/package.json", {
-    cwd: destination,
-    nodir: true,
-    dot: false,
-    absolute: false,
-    ignore: ["**/node_modules/**"],
+  await normalizePackageManifestsInTree({
+    sourceRootDir: options?.sourceDir ?? destination,
+    targetDir: destination,
+    resolveCatalogRefs: false,
+    removeWorkspaceDeps: ["host"],
   });
-
-  for (const file of files) {
-    const filePath = join(destination, file);
-    const content = readFileSync(filePath, "utf-8");
-    if (!content.includes("workspace:")) continue;
-
-    const pkg = JSON.parse(content) as Record<string, unknown>;
-    let modified = false;
-
-    for (const depField of ["dependencies", "devDependencies", "peerDependencies"]) {
-      const deps = pkg[depField];
-      if (!deps || typeof deps !== "object") continue;
-      const map = deps as Record<string, string>;
-      for (const [name, version] of Object.entries(map)) {
-        if (version === "workspace:*") {
-          const resolved = WORKSPACE_VERSION_MAP[name];
-          if (resolved) {
-            map[name] = resolved;
-            modified = true;
-          } else if (name === "host") {
-            delete map[name];
-            modified = true;
-          }
-        }
-      }
-    }
-
-    if (modified) {
-      writeFileSync(filePath, `${JSON.stringify(pkg, null, 2)}\n`);
-    }
-  }
 
   if (options?.localOverrides && options.sourceDir) {
     const rootPkgPath = join(destination, "package.json");

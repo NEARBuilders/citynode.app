@@ -25,6 +25,8 @@ This repository uses four workflows: release, staging, preview, and CI. The rele
                                           ↓
                                           Build every-plugin + everything-dev
                                           ↓
+                                          Stage normalized release manifests
+                                          ↓
                                           npm publish (gates everything below)
                                           ↓
                                           GitHub Releases for all packages
@@ -40,7 +42,8 @@ This repository uses four workflows: release, staging, preview, and CI. The rele
 
 - **npm publish gates everything.** If npm publish fails, no Zephyr deploy or Docker build happens. The `everything-dev` and `every-plugin` packages must be on npm before the Docker image can be built (the image installs them from npm, not from workspace refs).
 - **Single sequential job.** All steps run in one job so that failure at any point stops the pipeline. There is no separate `publish-npm` job or `docker.yml` dispatch.
-- **Multi-stage Docker build.** The builder stage copies the full repo (including `packages/`), resolves `workspace:*` refs to npm versions via `scripts/resolve-workspace-refs.ts`, then runs `bun install`. The final stage copies only app code + `node_modules` — no `packages/` directory. This produces a smaller image with a clean separation between framework packages (from npm) and app code.
+- **Normalized manifests for shipping.** Source manifests keep `workspace:*` and `workspaces.catalog` for monorepo development. Release staging, generated apps, and Docker builds normalize framework refs to concrete semver while preserving `workspaces.catalog` where appropriate.
+- **Multi-stage Docker build.** The builder stage copies the full repo (including `packages/`), normalizes framework workspace refs via `scripts/resolve-workspace-refs.ts`, then runs `bun install`. The final stage copies only app code + `node_modules` — no `packages/` directory. This produces a smaller image with a clean separation between framework packages (from npm) and app code.
 - **`bos start` reads config from `bos.config.json`.** The Docker start command uses `bos start --env production --no-interactive` instead of passing `--account`/`--domain` flags. Account and domain are read from the config file at runtime.
 
 ### Staging (`staging.yml`)
@@ -80,7 +83,7 @@ The Docker image uses a multi-stage build:
 ```
 Builder stage:
   COPY . .                              # Full repo (including packages/)
-  RUN bun run scripts/resolve-workspace-refs.ts   # workspace:* → npm versions
+  RUN bun run scripts/resolve-workspace-refs.ts   # normalize framework refs for install
   RUN bun install                       # Installs from npm + remaining workspaces
 
 Final stage:
@@ -94,7 +97,7 @@ Final stage:
 **Why this design:**
 
 - `packages/everything-dev` and `packages/every-plugin` are framework packages published to npm. The Docker image installs them from the registry, not from local source.
-- The resolve script (`scripts/resolve-workspace-refs.ts`) replaces `workspace:*` references with the just-published npm versions in all `package.json` files, and removes `packages/*` from the workspace list. This happens in the builder stage only — the committed `package.json` on `main` keeps `workspace:*` for local development.
+- The normalize script (`scripts/resolve-workspace-refs.ts`) rewrites framework `workspace:*` references to concrete package versions and updates matching `workspaces.catalog` entries before install. This happens in the builder stage only — committed manifests keep monorepo-friendly refs for local development.
 - The final image is smaller because `packages/` source code (including tests, build configs, etc.) is excluded.
 - The start command uses `bos` (the CLI binary from `node_modules/.bin/bos`) instead of `bun packages/everything-dev/cli.js`.
 
@@ -104,13 +107,14 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 
 **How it works:**
 1. The release workflow has `permissions: id-token: write` to generate OIDC tokens
-2. Before publishing, npm is upgraded to >= 11.5.1 (`npm install -g npm@latest`) which is required for OIDC support
-3. `npm publish --provenance` authenticates via OIDC instead of a stored token
-4. Provenance attestations are automatically generated, linking the published package to the exact commit and workflow
+2. `actions/setup-node@v6` provisions Node 24 with npm 11 support and configures the npm registry
+3. Release staging writes normalized package manifests into `.release/` before publish
+4. `npm publish --provenance` authenticates via OIDC instead of a stored token
+5. Provenance attestations are automatically generated, linking the published package to the exact commit and workflow
 
 **Setup (already done):**
 - Trusted publisher configured on npm for both `every-plugin` and `everything-dev` at `https://www.npmjs.com/package/<name>/access`
-- Publisher points to `nearbuilders/everything-dev` repo, `.github/workflows/release.yml` workflow
+- Publisher points to `NEARBuilders/everything-dev` repo, `release.yml` workflow filename
 - No `NPM_TOKEN` secret is needed
 
 ## Environment Variables

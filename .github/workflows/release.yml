@@ -70,23 +70,23 @@ jobs:
           npm-version: "11"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Build every-plugin
+      - name: Build packages for staging
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: bun run --cwd packages/every-plugin build
+        run: |
+          bun run --cwd packages/every-plugin build
+          bun run --cwd packages/everything-dev build
 
-      - name: Build everything-dev
+      - name: Stage release packages
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: bun run --cwd packages/everything-dev build
+        run: bun run scripts/stage-release-packages.ts
 
       - name: Publish every-plugin to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm publish --provenance --access public
-        working-directory: packages/every-plugin
+        run: npm publish --provenance --access public .release/every-plugin
 
       - name: Publish everything-dev to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm publish --provenance --access public
-        working-directory: packages/everything-dev
+        run: npm publish --provenance --access public .release/everything-dev
 
       - name: Create GitHub Releases
         if: steps.changesets.outputs.hasChangesets == 'false'
