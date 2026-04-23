@@ -25,7 +25,6 @@ COPY --from=builder /app/bos.config.json .
 COPY --from=builder /app/package.json .
 COPY --from=builder /app/bun.lock .
 COPY --from=builder /app/bunfig.toml .
-COPY --from=builder /app/railway.toml .
 COPY --from=builder /app/host ./host
 COPY --from=builder /app/api ./api
 COPY --from=builder /app/ui ./ui
