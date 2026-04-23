@@ -71,7 +71,7 @@ jobs:
 
       - name: Upgrade npm for OIDC
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm install -g npm@latest
+        run: corepack enable && npm install -g npm@11
 
       - name: Build every-plugin
         if: steps.changesets.outputs.hasChangesets == 'false'
