@@ -7,7 +7,7 @@ const configSchema = z
   .object({
     secrets: z.record(z.string(), z.unknown()),
   })
-  .loose();
+  .passthrough();
 
 export class SecretsConfigTag extends Context.Tag("SecretsConfig")<
   SecretsConfigTag,
