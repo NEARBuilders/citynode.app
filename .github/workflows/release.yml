@@ -78,11 +78,23 @@ jobs:
 
       - name: Publish every-plugin to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm publish --provenance --access public .release/every-plugin
+        run: |
+          VERSION=$(jq -r .version .release/every-plugin/package.json)
+          if npm view every-plugin@"$VERSION" version 2>/dev/null; then
+            echo "every-plugin@$VERSION already published, skipping"
+          else
+            npm publish --provenance --access public .release/every-plugin
+          fi
 
       - name: Publish everything-dev to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm publish --provenance --access public .release/everything-dev
+        run: |
+          VERSION=$(jq -r .version .release/everything-dev/package.json)
+          if npm view everything-dev@"$VERSION" version 2>/dev/null; then
+            echo "everything-dev@$VERSION already published, skipping"
+          else
+            npm publish --provenance --access public .release/everything-dev
+          fi
 
       - name: Create GitHub Releases
         if: steps.changesets.outputs.hasChangesets == 'false'
