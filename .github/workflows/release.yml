@@ -64,14 +64,11 @@ jobs:
 
       - name: Setup Node
         if: steps.changesets.outputs.hasChangesets == 'false'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
+          npm-version: "11"
           registry-url: "https://registry.npmjs.org"
-
-      - name: Upgrade npm for OIDC
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        run: corepack enable && npm install -g npm@11
 
       - name: Build every-plugin
         if: steps.changesets.outputs.hasChangesets == 'false'
