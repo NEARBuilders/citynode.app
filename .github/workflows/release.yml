@@ -68,7 +68,6 @@ jobs:
         with:
           node-version: "24"
           npm-version: "11"
-          registry-url: "https://registry.npmjs.org"
 
       - name: Build every-plugin
         if: steps.changesets.outputs.hasChangesets == 'false'
