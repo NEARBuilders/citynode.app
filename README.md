@@ -24,8 +24,8 @@ bos dev --host remote   # Start development (typical workflow)
 
 This will start serving the UI, the API, and mounting it on a universally shared (remote) HOST application's build.
 
-Visit through the host: http://localhost:3000
-Visit the api: http://localhost:3000/api
+- Host: http://localhost:3000
+- API: http://localhost:3000/api
 
 This maintains a flexible, well-typed architecture that connects the entirity of the application, it's operating system, and a cli to interact with it. It is a perpetually in-development model for the [Blockchain Operating System (BOS)](https://near.social/#/)
 
