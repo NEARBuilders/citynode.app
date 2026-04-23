@@ -16,14 +16,7 @@ function encodePathKey(key: string): string {
 }
 
 export function createRouterMounts(plugins: PluginResult): RouterMount[] {
-  const mounts: RouterMount[] = [
-    {
-      key: "api",
-      title: plugins.api?.name ?? "api",
-      suffix: "",
-      router: plugins.api?.router ?? {},
-    },
-  ];
+  const mounts: RouterMount[] = [];
 
   for (const [key, plugin] of Object.entries(plugins.plugins)) {
     if (key === "api" || !plugin.router) continue;
@@ -35,6 +28,13 @@ export function createRouterMounts(plugins: PluginResult): RouterMount[] {
       router: plugin.router,
     });
   }
+
+  mounts.push({
+    key: "api",
+    title: plugins.api?.name ?? "api",
+    suffix: "",
+    router: plugins.api?.router ?? {},
+  });
 
   return mounts;
 }

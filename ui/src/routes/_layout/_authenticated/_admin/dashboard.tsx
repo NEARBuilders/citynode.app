@@ -5,7 +5,7 @@ import { Badge, Input } from "@/components";
 import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
-type Tab = "server" | "prompt" | "config";
+type Tab = "server" | "prompt";
 
 export const Route = createFileRoute("/_layout/_authenticated/_admin/dashboard")({
   component: AdminDashboard,
@@ -16,7 +16,6 @@ function AdminDashboard() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "server", label: "server" },
     { key: "prompt", label: "prompt" },
-    { key: "config", label: "config" },
   ];
 
   return (
@@ -47,7 +46,6 @@ function AdminDashboard() {
 
       {tab === "server" && <ServerSection />}
       {tab === "prompt" && <PromptSection />}
-      {tab === "config" && <ConfigSection />}
     </div>
   );
 }
@@ -232,41 +230,6 @@ function PromptSection() {
           send →
         </button>
       </form>
-    </div>
-  );
-}
-
-function ConfigSection() {
-  const apiClient = useApiClient();
-  const reloadConfigMutation = useMutation({
-    mutationFn: async () => {
-      return await apiClient.reloadConfig();
-    },
-  });
-
-  return (
-    <div className="space-y-4">
-      <span className="text-sm font-mono">host config reload</span>
-      <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">
-        Re-fetch the published config from FastKV and signal a scope rebuild. Currently a full host
-        restart is needed to pick up changes.
-      </p>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => reloadConfigMutation.mutate()}
-          disabled={reloadConfigMutation.isPending}
-          className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-        >
-          {reloadConfigMutation.isPending ? "reloading…" : "reload config →"}
-        </button>
-        {reloadConfigMutation.data && (
-          <span className="text-xs text-muted-foreground">
-            <Badge variant="outline">{reloadConfigMutation.data.status}</Badge>
-            <span className="ml-2">{reloadConfigMutation.data.note}</span>
-          </span>
-        )}
-      </div>
     </div>
   );
 }

@@ -46,9 +46,6 @@
     "api": {
       "name": "api",
       "development": "local:api",
-      "variables": {
-        "demoMessage": "Hello from bos.config.json"
-      },
       "secrets": [],
       "production": "https://elliot-braem-2783-api-everything-dev-nearbuilders-faf9eb4ee-ze.zephyrcloud.app",
       "productionIntegrity": "sha384-mjmj87ws1rK9McYa4XX/Q1b61dNANRMVZwyeWZrHamrzOyLIXDyzgHvGBQONeRQi"

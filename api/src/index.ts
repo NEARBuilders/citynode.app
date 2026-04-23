@@ -22,9 +22,7 @@ export interface AuthContext {
 }
 
 export default createPlugin.withPlugins<PluginsClient>()({
-  variables: z.object({
-    demoMessage: z.string().optional(),
-  }),
+  variables: z.object({}),
 
   secrets: z.object({
     API_DATABASE_URL: z.string().default("file:./api.db"),
@@ -64,8 +62,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     Effect.sync(() => {
       console.log("[API] Services Initialized");
       console.log("[API] Plugins available:", Object.keys(plugins).join(", ") || "none");
-      console.log("[API] demoMessage:", config.variables.demoMessage ?? "(not configured)");
-      return { plugins, demoMessage: config.variables.demoMessage ?? "not configured" };
+      return { plugins };
     }),
 
   shutdown: () => Effect.log("[API] Shutdown"),
@@ -100,58 +97,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
         timestamp: new Date().toISOString(),
       })),
 
-      reloadConfig: builder.reloadConfig.handler(async () => ({
-        status: "pending" as const,
-        note: "restart host to pick up new config",
-      })),
-
       authHealth: builder.authHealth.use(requireAuth).handler(async () => ({
         status: "ok",
         emailConfigured: !!process.env.EMAIL_PROVIDER,
         smsConfigured: !!process.env.SMS_PROVIDER,
       })),
-
-      publicError: builder.publicError.handler(() => {
-        throw new ORPCError("UNAUTHORIZED", {
-          message: "Test UNAUTHORIZED error - thrown directly from handler",
-          data: {
-            provider: "test-provider",
-            action: "test-action",
-            timestamp: new Date().toISOString(),
-          },
-        });
-      }),
-
-      protectedError: builder.protectedError.use(requireAuth).handler(() => {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Test NOT_FOUND error - thrown after auth middleware",
-          data: {
-            resource: "test-resource",
-            resourceId: "test-id-123",
-            timestamp: new Date().toISOString(),
-          },
-        });
-      }),
-
-      pluginDemo: builder.pluginDemo.handler(async () => {
-        const createRegistryClient = services.plugins.registry;
-        const registryStatus = createRegistryClient
-          ? await createRegistryClient().getRegistryStatus()
-          : {
-              discoveredApps: 0,
-              metadataContractId: "",
-              metadataFastKvUrl: "https://unavailable",
-              relayEnabled: false,
-              relayAccountId: null,
-              timestamp: new Date().toISOString(),
-            };
-
-        return {
-          apiVariable: services.demoMessage,
-          registryStatus,
-          availablePlugins: Object.keys(services.plugins),
-        };
-      }),
     };
   },
 });
