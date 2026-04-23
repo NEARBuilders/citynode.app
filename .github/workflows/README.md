@@ -98,6 +98,21 @@ Final stage:
 - The final image is smaller because `packages/` source code (including tests, build configs, etc.) is excluded.
 - The start command uses `bos` (the CLI binary from `node_modules/.bin/bos`) instead of `bun packages/everything-dev/cli.js`.
 
+## npm Trusted Publishing (OIDC)
+
+npm packages are published using **Trusted Publishing** (OpenID Connect), which eliminates the need for long-lived `NPM_TOKEN` secrets. Instead, GitHub Actions generates short-lived OIDC tokens that npm verifies against the configured trusted publisher.
+
+**How it works:**
+1. The release workflow has `permissions: id-token: write` to generate OIDC tokens
+2. Before publishing, npm is upgraded to >= 11.5.1 (`npm install -g npm@latest`) which is required for OIDC support
+3. `npm publish --provenance` authenticates via OIDC instead of a stored token
+4. Provenance attestations are automatically generated, linking the published package to the exact commit and workflow
+
+**Setup (already done):**
+- Trusted publisher configured on npm for both `every-plugin` and `everything-dev` at `https://www.npmjs.com/package/<name>/access`
+- Publisher points to `nearbuilders/everything-dev` repo, `.github/workflows/release.yml` workflow
+- No `NPM_TOKEN` secret is needed
+
 ## Environment Variables
 
 | Variable | Where | Purpose |
@@ -105,7 +120,6 @@ Final stage:
 | `ZE_SECRET_TOKEN` | Release | Zephyr Cloud auth for CDN deploy |
 | `ZE_SERVER_TOKEN` | Release | Zephyr Cloud server auth |
 | `ZE_USER_EMAIL` | Release | Zephyr Cloud user email |
-| `NPM_TOKEN` | Release | npm registry auth for publishing |
 | `NEAR_PRIVATE_KEY` | Release | NEAR key for FastKV publish |
 | `BOS_INSTALL_NEAR_CLI` | Release | Ensures NEAR CLI is available |
 | `APP_ENV` | Docker runtime | `production` or `staging` |

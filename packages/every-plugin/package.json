@@ -193,12 +193,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/near-everything/every-plugin.git"
+    "url": "https://github.com/nearbuilders/everything-dev.git",
+    "directory": "packages/every-plugin"
   },
   "bugs": {
-    "url": "https://github.com/near-everything/every-plugin/issues"
+    "url": "https://github.com/nearbuilders/everything-dev/issues"
   },
-  "homepage": "https://plugin.everything.dev",
+  "homepage": "https://everything.dev",
   "workspaces": [
     "tests/fixtures/*"
   ]

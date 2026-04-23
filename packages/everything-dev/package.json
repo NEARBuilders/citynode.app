@@ -206,6 +206,11 @@
     "everything-dev": "./cli.js",
     "bos": "./cli.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nearbuilders/everything-dev.git",
+    "directory": "packages/everything-dev"
+  },
   "scripts": {
     "build": "tsdown",
     "dev": "echo 'Source exports - no build needed'",

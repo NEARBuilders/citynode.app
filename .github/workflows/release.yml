@@ -20,13 +20,13 @@ jobs:
       contents: write
       pull-requests: write
       packages: write
+      id-token: write
     env:
       ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
       ZE_SERVER_TOKEN: ${{ secrets.ZEPHYR_SERVER_AUTH_TOKEN }}
       ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
       BOS_INSTALL_NEAR_CLI: "true"
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,7 +66,12 @@ jobs:
         if: steps.changesets.outputs.hasChangesets == 'false'
         uses: actions/setup-node@v4
         with:
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm for OIDC
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: npm install -g npm@latest
 
       - name: Build every-plugin
         if: steps.changesets.outputs.hasChangesets == 'false'
@@ -78,15 +83,13 @@ jobs:
 
       - name: Publish every-plugin to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm publish --workspace packages/every-plugin --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+        working-directory: packages/every-plugin
 
       - name: Publish everything-dev to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm publish --workspace packages/everything-dev --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+        working-directory: packages/everything-dev
 
       - name: Create GitHub Releases
         if: steps.changesets.outputs.hasChangesets == 'false'
