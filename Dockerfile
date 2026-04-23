@@ -1,13 +1,28 @@
 # syntax=docker/dockerfile:1.7
 
-FROM oven/bun:1-alpine AS base
+FROM oven/bun:1-alpine AS builder
+WORKDIR /app
+
+COPY . .
+
+RUN bun run scripts/resolve-workspace-refs.ts
+RUN bun install
+
+FROM oven/bun:1-alpine
 WORKDIR /app
 
 RUN apk add --no-cache curl
 
-COPY . .
-
-RUN bun install --frozen-lockfile
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/bos.config.json .
+COPY --from=builder /app/package.json .
+COPY --from=builder /app/bun.lock .
+COPY --from=builder /app/bunfig.toml .
+COPY --from=builder /app/railway.json .
+COPY --from=builder /app/host ./host
+COPY --from=builder /app/api ./api
+COPY --from=builder /app/ui ./ui
+COPY --from=builder /app/plugins ./plugins
 
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
 

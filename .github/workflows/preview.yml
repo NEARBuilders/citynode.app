@@ -11,62 +11,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy-preview:
-    name: Preview PR ${{ github.event.pull_request.number }}
+  comment-preview:
+    name: Comment preview info for PR ${{ github.event.pull_request.number }}
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
-    environment: preview
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Read domain from config
+      - name: Read config
         id: config
         run: |
+          ACCOUNT=$(jq -r '.account' bos.config.json)
           DOMAIN=$(jq -r '.domain' bos.config.json)
+          echo "account=${ACCOUNT}" >> $GITHUB_OUTPUT
           echo "domain=${DOMAIN}" >> $GITHUB_OUTPUT
-          echo "preview_domain=pr-${{ github.event.pull_request.number }}.${DOMAIN}" >> $GITHUB_OUTPUT
-
-      - name: Lowercase repository name
-        run: echo "REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ env.REPO }}
-          tags: |
-            type=raw,value=pr-${{ github.event.pull_request.number }}
-            type=sha
-
-      - name: Build and push preview image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Comment preview URL
         uses: actions/github-script@v7
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-            const imageTag = `ghcr.io/${process.env.REPO}:pr-${prNumber}`;
-            const domain = `${{ steps.config.outputs.preview_domain }}`;
+            const account = '${{ steps.config.outputs.account }}';
+            const domain = '${{ steps.config.outputs.domain }}';
 
             github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -75,12 +42,13 @@ jobs:
               body: [
                 '### Preview Deployment',
                 '',
-                `**Image:** \`${imageTag}\``,
+                `**Account:** \`${account}\``,
                 `**Domain:** \`${domain}\``,
                 '',
-                'Railway will auto-deploy from the `:pr-' + prNumber + '` tag.',
+                'Railway will build and deploy from this branch automatically.',
+                'The preview URL will appear in the Railway deployment comment above.',
                 '',
-                '> This preview uses the staging database and the production UI/API.',
+                '> Preview uses production UI/API from CDN. Host and Docker changes are tested against this branch.',
               ].join('\n')
             });
 
