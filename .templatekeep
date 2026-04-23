@@ -14,6 +14,7 @@ ui/package.json
 ui/rsbuild.config.ts
 ui/tsconfig.json
 ui/public/**
+ui/src/assets/**
 ui/src/hydrate.tsx
 ui/src/router.tsx
 ui/src/router.server.tsx
@@ -24,8 +25,6 @@ ui/src/app.ts
 ui/src/api-contract.ts
 ui/src/components/index.ts
 ui/src/components/ui/**
-ui/src/components/error-boundary.tsx
-ui/src/components/loading.tsx
 ui/src/components/theme-toggle.tsx
 ui/src/components/splash.tsx
 ui/src/components/under-construction.tsx
@@ -40,15 +39,23 @@ ui/src/lib/branding.ts
 ui/src/lib/session.ts
 ui/src/lib/utils.ts
 ui/src/lib/use-api-client.ts
+ui/src/integrations/tanstack-query/devtools.tsx
 ui/src/routes/__root.tsx
 ui/src/routes/_layout.tsx
-ui/src/routes/_layout/_authenticated.tsx
-ui/src/routes/_layout/_admin.tsx
-ui/src/routes/_layout/_admin/**
-ui/src/routes/_layout/login.tsx
 ui/src/routes/_layout/index.tsx
+ui/src/routes/_layout/about.tsx
 ui/src/routes/_layout/config.tsx
-ui/src/routes/accept-invitation/**
+ui/src/routes/_layout/login.tsx
+ui/src/routes/_layout/opencode.tsx
+ui/src/routes/_layout/_authenticated.tsx
+ui/src/routes/_layout/_authenticated/home.tsx
+ui/src/routes/_layout/_authenticated/settings.tsx
+ui/src/routes/_layout/_authenticated/_admin.tsx
+ui/src/routes/_layout/_authenticated/_admin/**
+ui/src/routes/_layout/_authenticated/projects/**
+ui/src/routes/_layout/_authenticated/organizations/**
+ui/src/routes/_layout/_authenticated/keys/**
+ui/src/routes/_layout/apps/**
 
 api/package.json
 api/rspack.config.js

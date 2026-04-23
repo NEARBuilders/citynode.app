@@ -184,6 +184,24 @@ export class EveryPluginDevServer implements RspackPluginInstance {
       compiler.options.resolve = {};
     }
     compiler.options.resolve.extensions = ["...", ".tsx", ".ts"];
+    compiler.options.resolve.conditionNames = [
+      "webpack",
+      "import",
+      "module",
+      "require",
+      "node",
+      "default",
+    ];
+    if (compiler.options.resolve.byDependency) {
+      for (const depType of Object.keys(compiler.options.resolve.byDependency)) {
+        const depConfig = (
+          compiler.options.resolve.byDependency as Record<string, { conditionNames?: string[] }>
+        )[depType];
+        if (depConfig?.conditionNames) {
+          depConfig.conditionNames = depConfig.conditionNames.filter((c) => c !== "development");
+        }
+      }
+    }
     compiler.options.resolve.fallback = {
       ...compiler.options.resolve.fallback,
       bufferutil: false,

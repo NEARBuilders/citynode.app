@@ -293,6 +293,12 @@ export async function personalizeConfig(
   }
 
   await resolveWorkspaceRefs(destination, opts.workspaceOpts);
+
+  const genContractPath = join(destination, "ui", "src", "api-contract.gen.ts");
+  if (!existsSync(genContractPath)) {
+    mkdirSync(dirname(genContractPath), { recursive: true });
+    writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
+  }
 }
 
 export async function runBunInstall(destination: string): Promise<void> {
