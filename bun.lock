@@ -25,7 +25,7 @@
     },
     "api": {
       "name": "api",
-      "version": "1.1.0",
+      "version": "2.0.0",
       "dependencies": {
         "@libsql/client": "catalog:",
         "@orpc/contract": "^1.13.4",
@@ -53,7 +53,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "dependencies": {
         "@hono/node-server": "^1.19.9",
         "@hot-labs/near-connect": "catalog:",
@@ -100,7 +100,7 @@
     },
     "packages/every-plugin": {
       "name": "every-plugin",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "dependencies": {
         "@module-federation/enhanced": "catalog:",
         "@module-federation/node": "catalog:",
@@ -140,7 +140,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -216,7 +216,7 @@
     },
     "plugins/opencode": {
       "name": "@everything-dev/opencode-plugin",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "dependencies": {
         "@orpc/contract": "^1.13.4",
         "@orpc/server": "^1.13.4",
@@ -241,7 +241,7 @@
     },
     "plugins/projects": {
       "name": "@everything-dev/projects-plugin",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "dependencies": {
         "@libsql/client": "catalog:",
         "@orpc/contract": "^1.13.4",
@@ -270,7 +270,7 @@
     },
     "plugins/registry": {
       "name": "@everything-dev/registry-plugin",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "dependencies": {
         "@orpc/contract": "^1.13.4",
         "@orpc/server": "^1.13.4",
@@ -296,7 +296,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "dependencies": {
         "@hot-labs/near-connect": "catalog:",
         "@orpc/client": "^1.12.3",
