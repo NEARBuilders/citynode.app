@@ -12,6 +12,7 @@ AGENTS.md
 
 ui/package.json
 ui/rsbuild.config.ts
+ui/postcss.config.mjs
 ui/tsconfig.json
 ui/public/**
 ui/src/assets/**

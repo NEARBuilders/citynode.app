@@ -204,6 +204,18 @@ function shouldCopyPackageFile(sourceDir: string, filePath: string) {
   return !segments.includes("node_modules") && !segments.includes("tests");
 }
 
+function stripDevelopmentExports(pkg: PackageJson) {
+  const exports = pkg.exports;
+  if (!exports || typeof exports !== "object") return;
+
+  for (const key of Object.keys(exports as Record<string, unknown>)) {
+    const entry = (exports as Record<string, unknown>)[key];
+    if (entry && typeof entry === "object") {
+      delete (entry as Record<string, unknown>).development;
+    }
+  }
+}
+
 export function stageReleasePackage(opts: {
   repoRoot: string;
   packageName: string;
@@ -228,6 +240,8 @@ export function stageReleasePackage(opts: {
     removeWorkspaces: true,
     removePublishScripts: true,
   });
+
+  stripDevelopmentExports(pkg);
 
   writeJson(packageJsonPath, pkg);
 }
