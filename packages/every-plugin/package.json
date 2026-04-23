@@ -138,7 +138,6 @@
   "scripts": {
     "build": "tsdown",
     "build:test": "cd tests/fixtures/test-plugin && bun run build",
-    "prepublishOnly": "tsdown",
     "test": "vitest run --config vitest.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "bun run build:test && vitest run --config vitest.integration.config.ts",
