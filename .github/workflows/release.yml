@@ -82,15 +82,11 @@ jobs:
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: npm publish --provenance --access public
         working-directory: packages/every-plugin
-        env:
-          NODE_AUTH_TOKEN: ""
 
       - name: Publish everything-dev to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: npm publish --provenance --access public
         working-directory: packages/everything-dev
-        env:
-          NODE_AUTH_TOKEN: ""
 
       - name: Create GitHub Releases
         if: steps.changesets.outputs.hasChangesets == 'false'
