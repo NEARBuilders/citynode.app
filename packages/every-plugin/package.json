@@ -193,7 +193,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nearbuilders/everything-dev.git",
+    "url": "git+https://github.com/nearbuilders/everything-dev.git",
     "directory": "packages/every-plugin"
   },
   "bugs": {
