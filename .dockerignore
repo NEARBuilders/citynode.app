@@ -26,6 +26,10 @@ dist
 !.env.example
 !.env.*.example
 
+# Railway
+railway.toml
+railway.json
+
 # BOS runtime files
 .bos/logs
 .bos/pids.json
