@@ -372,10 +372,7 @@ export function setupApiRoutes(
               title,
               version: "1.0.0",
             },
-            servers: [
-              { url: basePath },
-              { url: `${config.hostUrl}${basePath}` },
-            ],
+            servers: [{ url: basePath }, { url: `${config.hostUrl}${basePath}` }],
           },
         }),
       ],

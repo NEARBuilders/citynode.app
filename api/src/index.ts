@@ -58,7 +58,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, plugins) =>
+  initialize: (_config, plugins) =>
     Effect.sync(() => {
       console.log("[API] Services Initialized");
       console.log("[API] Plugins available:", Object.keys(plugins).join(", ") || "none");
@@ -67,7 +67,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   shutdown: () => Effect.log("[API] Shutdown"),
 
-  createRouter: (services, builder) => {
+  createRouter: (_services, builder) => {
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
