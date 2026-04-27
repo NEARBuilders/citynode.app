@@ -32,11 +32,14 @@ COPY --from=builder --chown=appuser:appgroup /app/api ./api
 COPY --from=builder --chown=appuser:appgroup /app/ui ./ui
 COPY --from=builder --chown=appuser:appgroup /app/plugins ./plugins
 
-RUN mkdir -p .bos/generated .bos/logs && chown -R appuser:appgroup .bos
+RUN mkdir -p .bos/generated .bos/logs /app/data && \
+    chown -R appuser:appgroup .bos /app/data && \
+    chown appuser:appgroup /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
+ENV HOST_DATABASE_URL=file:/app/data/database.db
 
 EXPOSE 3000
 
