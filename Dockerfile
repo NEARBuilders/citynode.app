@@ -20,17 +20,19 @@ WORKDIR /app
 
 RUN apk add --no-cache curl
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/bos.config.json .
-COPY --from=builder /app/package.json .
-COPY --from=builder /app/bun.lock .
-COPY --from=builder /app/bunfig.toml .
-COPY --from=builder /app/host ./host
-COPY --from=builder /app/api ./api
-COPY --from=builder /app/ui ./ui
-COPY --from=builder /app/plugins ./plugins
-
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
+
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/bos.config.json .
+COPY --from=builder --chown=appuser:appgroup /app/package.json .
+COPY --from=builder --chown=appuser:appgroup /app/bun.lock .
+COPY --from=builder --chown=appuser:appgroup /app/bunfig.toml .
+COPY --from=builder --chown=appuser:appgroup /app/host ./host
+COPY --from=builder --chown=appuser:appgroup /app/api ./api
+COPY --from=builder --chown=appuser:appgroup /app/ui ./ui
+COPY --from=builder --chown=appuser:appgroup /app/plugins ./plugins
+
+RUN mkdir -p .bos/generated .bos/logs && chown -R appuser:appgroup .bos
 
 ENV NODE_ENV=production
 ENV PORT=3000
