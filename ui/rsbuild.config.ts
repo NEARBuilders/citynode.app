@@ -61,7 +61,6 @@ function createClientConfig() {
         "./components": "./src/components/index.ts",
         "./providers": "./src/providers/index.tsx",
         "./hooks": "./src/hooks/index.ts",
-        "./types": "./src/types/index.ts",
       },
       shared: uiSharedDeps,
     }),
