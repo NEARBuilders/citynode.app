@@ -1112,7 +1112,7 @@ export default createPlugin({
 
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
-        directory = directory || (domain ? domain.split(".")[0] : extendsGateway);
+        directory = directory || domain || extendsGateway;
 
         try {
           await fetchParentConfig(extendsAccount, extendsGateway);
@@ -1174,7 +1174,7 @@ export default createPlugin({
 
           return {
             status: "initialized" as const,
-            directory: resolve(directory),
+            directory,
             extendsAccount,
             extendsGateway,
             account,

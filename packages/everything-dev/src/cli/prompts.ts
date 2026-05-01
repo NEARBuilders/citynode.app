@@ -26,8 +26,7 @@ export async function promptYesNo(question: string, defaultVal = false): Promise
 }
 
 function deriveDirectoryFromDomain(domain: string): string {
-  const firstSegment = domain.split(".")[0];
-  return firstSegment || domain;
+  return domain;
 }
 
 function deriveAccountFromDomain(domain: string, extendsAccount: string): string {
