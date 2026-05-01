@@ -8,7 +8,8 @@
   "plugins": {
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-2871-every-plugin-template-everythin-8e65680a4-ze.zephyrcloud.app"
+      "production": "https://elliot-braem-2871-every-plugin-template-everythin-8e65680a4-ze.zephyrcloud.app",
+      "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"]
     },
     "registry": {
       "development": "local:plugins/registry",
@@ -16,17 +17,24 @@
         "registryNamespace": "dev.everything.near"
       },
       "production": "https://elliot-braem-2872-everything-dev-registry-plugin--4885caae1-ze.zephyrcloud.app",
-      "productionIntegrity": "sha384-6BnwKKB3NZB82gOt7PbyOQ769acJzszqGHFwVKbzrvLSAPZQ3rx14uiRTRn8iWdg"
+      "productionIntegrity": "sha384-6BnwKKB3NZB82gOt7PbyOQ769acJzszqGHFwVKbzrvLSAPZQ3rx14uiRTRn8iWdg",
+      "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"]
     },
     "projects": {
       "development": "local:plugins/projects",
       "production": "https://elliot-braem-2873-everything-dev-projects-plugin--b5ff4eedd-ze.zephyrcloud.app",
-      "productionIntegrity": "sha384-JPSNoEDISL7/kqURYfD/o1u5pt6pKph0lcCZm2E7bHpDJnlpXbHsuoAGiNGh1To+"
+      "productionIntegrity": "sha384-JPSNoEDISL7/kqURYfD/o1u5pt6pKph0lcCZm2E7bHpDJnlpXbHsuoAGiNGh1To+",
+      "routes": [
+        "ui/src/routes/_layout/_authenticated/organizations/**",
+        "ui/src/routes/_layout/_authenticated/projects/**",
+        "ui/src/routes/_layout/_authenticated/keys/**"
+      ]
     },
     "opencode": {
       "development": "local:plugins/opencode",
       "production": "https://elliot-braem-2874-everything-dev-opencode-plugin--b4d5e203d-ze.zephyrcloud.app",
-      "productionIntegrity": "sha384-2r8LcfUNeNH/HXrDyeiZhF/Lf8BnGAdCC4qTVRnBftCqysnJmEcW4ozDo7JK0b7u"
+      "productionIntegrity": "sha384-2r8LcfUNeNH/HXrDyeiZhF/Lf8BnGAdCC4qTVRnBftCqysnJmEcW4ozDo7JK0b7u",
+      "routes": ["ui/src/routes/_layout/_authenticated/_admin/**"]
     }
   },
   "app": {

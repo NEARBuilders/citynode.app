@@ -50,11 +50,6 @@ ui/src/routes/_layout/index.tsx
 ui/src/routes/_layout/login.tsx
 ui/src/routes/_layout/_authenticated.tsx
 ui/src/routes/_layout/_authenticated/home.tsx
-ui/src/routes/_layout/_authenticated/settings.tsx
-ui/src/routes/_layout/_authenticated/_admin.tsx
-ui/src/routes/_layout/_authenticated/_admin/**
-ui/src/routes/_layout/apps/**
-ui/src/routes/_layout/_authenticated/organizations/**
 
 api/package.json
 api/rspack.config.js
@@ -69,4 +64,4 @@ api/src/db/layer.ts
 api/src/db/schema.ts
 
 plugins/_template/**
-plugins/registry/**
+.templates/.github/**

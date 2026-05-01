@@ -43,6 +43,7 @@ export const BosPluginRefSchema = z.object({
   proxy: z.string().optional(),
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
+  routes: z.array(z.string()).optional(),
 });
 export type BosPluginRef = z.infer<typeof BosPluginRefSchema>;
 

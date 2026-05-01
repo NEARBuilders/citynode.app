@@ -113,6 +113,8 @@ async function main() {
       console.log(`  ${colors.dim("Directory:")} ${result.directory}`);
       if (result.account) console.log(`  ${colors.dim("Account:")} ${result.account}`);
       if (result.domain) console.log(`  ${colors.dim("Domain:")} ${result.domain}`);
+      if (result.plugins && result.plugins.length > 0)
+        console.log(`  ${colors.dim("Plugins:")} ${result.plugins.join(", ")}`);
       console.log(`  ${colors.dim("Files copied:")} ${result.filesCopied}`);
       console.log();
       console.log(colors.dim("  Next steps:"));
@@ -156,6 +158,24 @@ async function main() {
       if (result.updated.length === 0 && result.added.length === 0 && result.skipped.length === 0) {
         console.log(`  ${colors.dim("Already up to date")}`);
       }
+      if (result.status !== "dry-run" && result.updated.length > 0) {
+        console.log();
+        console.log(colors.dim("  Review changes — your customizations take priority:"));
+        console.log(
+          colors.dim(
+            "    • api/src/contract.ts, api/src/index.ts, api/src/db/schema.ts — never overwritten",
+          ),
+        );
+        console.log(
+          colors.dim("    • ui/src/components/**, ui/src/styles.css — never overwritten"),
+        );
+        console.log(
+          colors.dim(
+            "    • Other updated files — accept framework improvements, then restore your changes",
+          ),
+        );
+        console.log(colors.dim("    • Skipped files — yours already, only update with --force"));
+      }
       console.log();
       return;
     }
@@ -169,7 +189,7 @@ async function main() {
       if (result.status === "dry-run") {
         console.log(colors.cyan(`${icons.ok} Dry run — no changes applied`));
       } else {
-        console.log(colors.green(`${icons.ok} Framework upgraded`));
+        console.log(colors.green(`${icons.ok} Upgrade successful`));
       }
       for (const pkg of result.packages) {
         if (pkg.from && pkg.from !== pkg.to) {
@@ -186,15 +206,46 @@ async function main() {
       if (result.sync) {
         const sync = result.sync;
         if (sync.updated.length > 0) {
-          console.log(`  ${colors.dim("Synced updated:")} ${sync.updated.length} file(s)`);
+          console.log(`  ${colors.dim("Updated:")} ${sync.updated.length} file(s)`);
+          for (const f of sync.updated) console.log(`    ${colors.dim(f)}`);
         }
         if (sync.added.length > 0) {
-          console.log(`  ${colors.dim("Synced added:")} ${sync.added.length} file(s)`);
+          console.log(`  ${colors.dim("Added:")} ${sync.added.length} file(s)`);
+          for (const f of sync.added) console.log(`    ${colors.dim(f)}`);
         }
         if (sync.skipped.length > 0) {
           console.log(
-            `  ${colors.yellow("Synced skipped:")} ${sync.skipped.length} file(s) (locally modified, use --force to overwrite)`,
+            `  ${colors.yellow("Skipped:")} ${sync.skipped.length} file(s) (locally modified, use --force to overwrite)`,
           );
+          for (const f of sync.skipped) console.log(`    ${colors.dim(f)}`);
+        }
+        if (
+          result.status !== "dry-run" &&
+          (sync.updated.length > 0 || sync.added.length > 0 || sync.skipped.length > 0)
+        ) {
+          console.log();
+          console.log(colors.dim("  Resolve differences — your code takes priority:"));
+          console.log();
+          console.log(colors.dim("  Never overwritten (safe):"));
+          console.log(
+            colors.dim("    • api/src/contract.ts, api/src/index.ts, api/src/db/schema.ts"),
+          );
+          console.log(colors.dim("    • ui/src/components/**, ui/src/styles.css"));
+          console.log();
+          console.log(colors.dim("  Replaced — review and keep your changes:"));
+          console.log(
+            colors.dim(
+              "    • api/drizzle.config.ts, api/tsconfig.json, api/tsconfig.contract.json",
+            ),
+          );
+          console.log(colors.dim("    • api/plugin.dev.ts, api/rspack.config.js"));
+          console.log(colors.dim("    • ui/src/routes/* (core routes only)"));
+          console.log();
+          console.log(colors.dim("  Merged — your deps preserved:"));
+          console.log(colors.dim("    • package.json, api/package.json, ui/package.json"));
+          console.log();
+          console.log(colors.dim("  Skipped — already yours:"));
+          console.log(colors.dim("    • Use --force only if you want framework updates"));
         }
       }
       console.log();

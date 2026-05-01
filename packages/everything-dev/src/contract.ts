@@ -134,12 +134,14 @@ export const KeyPublishResultSchema = z.object({
 });
 
 export const InitOptionsSchema = z.object({
+  extends: z.string().optional(),
   extendsAccount: z.string().optional(),
   extendsGateway: z.string().optional(),
   directory: z.string().optional(),
   account: z.string().optional(),
   domain: z.string().optional(),
   source: z.string().optional(),
+  plugins: z.array(z.string()).optional(),
   withHost: z.boolean().default(false),
   noInteractive: z.boolean().default(false),
   noInstall: z.boolean().default(false),
@@ -153,6 +155,7 @@ export const InitResultSchema = z.object({
   account: z.string().optional(),
   domain: z.string().optional(),
   extends: z.string(),
+  plugins: z.array(z.string()).optional(),
   filesCopied: z.number(),
   error: z.string().optional(),
 });

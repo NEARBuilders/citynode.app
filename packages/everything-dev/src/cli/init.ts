@@ -148,7 +148,7 @@ export async function copyFilteredFiles(
   sourceDir: string,
   destination: string,
   patterns: string[],
-  options: { withHost: boolean },
+  options: { withHost: boolean; plugins?: string[]; pluginRoutes?: Record<string, string[]> },
 ): Promise<number> {
   if (patterns.length === 0) {
     return 0;
@@ -158,8 +158,24 @@ export async function copyFilteredFiles(
     ? [...patterns, "host/**"]
     : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
 
+  const filteredPatterns = effectivePatterns.filter((p) => {
+    const pluginMatch = p.match(/^plugins\/([^/]+)/);
+    if (!pluginMatch) return true;
+    const pluginName = pluginMatch[1];
+    return options.plugins?.includes(pluginName) ?? true;
+  });
+
+  const excludedRoutePatterns: string[] = [];
+  if (options.pluginRoutes) {
+    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
+      if (!(options.plugins?.includes(pluginKey) ?? true)) {
+        excludedRoutePatterns.push(...routePatterns);
+      }
+    }
+  }
+
   const allFiles = new Set<string>();
-  for (const pattern of effectivePatterns) {
+  for (const pattern of filteredPatterns) {
     const matches = await glob(pattern, {
       cwd: sourceDir,
       nodir: true,
@@ -167,9 +183,37 @@ export async function copyFilteredFiles(
       absolute: false,
     });
     for (const match of matches) {
+      const pluginMatch = match.match(/^plugins\/([^/]+)/);
+      if (pluginMatch) {
+        const pluginName = pluginMatch[1];
+        if (!(options.plugins?.includes(pluginName) ?? true)) continue;
+      }
+      if (isRouteExcluded(match, excludedRoutePatterns)) continue;
       allFiles.add(match);
     }
   }
+
+  const routeFiles = new Set<string>();
+  if (options.pluginRoutes) {
+    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
+      if (!(options.plugins?.includes(pluginKey) ?? true)) continue;
+      for (const rp of routePatterns) {
+        const matches = await glob(rp, {
+          cwd: sourceDir,
+          nodir: true,
+          dot: true,
+          absolute: false,
+        });
+        for (const match of matches) {
+          if (!isRouteExcluded(match, excludedRoutePatterns)) {
+            routeFiles.add(match);
+          }
+        }
+      }
+    }
+  }
+
+  for (const f of routeFiles) allFiles.add(f);
 
   mkdirSync(destination, { recursive: true });
 
@@ -179,7 +223,10 @@ export async function copyFilteredFiles(
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
 
-    const dest = join(destination, filePath);
+    const destPath = filePath.startsWith(".templates/")
+      ? filePath.slice(".templates/".length)
+      : filePath;
+    const dest = join(destination, destPath);
     mkdirSync(dirname(dest), { recursive: true });
     const content = readFileSync(src);
     writeFileSync(dest, content);
@@ -189,6 +236,19 @@ export async function copyFilteredFiles(
   return count;
 }
 
+function isRouteExcluded(filePath: string, excludedPatterns: string[]): boolean {
+  if (excludedPatterns.length === 0) return false;
+  for (const pattern of excludedPatterns) {
+    if (pattern.endsWith("/**")) {
+      const prefix = pattern.slice(0, -3);
+      if (filePath.startsWith(`${prefix}/`) || filePath === prefix) return true;
+    } else if (filePath === pattern || filePath.startsWith(`${pattern}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function personalizeConfig(
   destination: string,
   opts: {
@@ -196,6 +256,8 @@ export async function personalizeConfig(
     extendsGateway: string;
     account?: string;
     domain?: string;
+    plugins?: string[];
+    pluginRoutes?: Record<string, string[]>;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
   },
 ): Promise<void> {
@@ -228,6 +290,15 @@ export async function personalizeConfig(
 
     if (config.plugins && typeof config.plugins === "object") {
       const plugins = config.plugins as Record<string, unknown>;
+
+      if (opts.plugins && opts.plugins.length > 0) {
+        for (const pluginKey of Object.keys(plugins)) {
+          if (!opts.plugins.includes(pluginKey)) {
+            delete plugins[pluginKey];
+          }
+        }
+      }
+
       for (const pluginKey of Object.keys(plugins)) {
         const plugin = plugins[pluginKey];
         if (plugin && typeof plugin === "object") {
@@ -235,6 +306,10 @@ export async function personalizeConfig(
           delete p.production;
           delete p.productionIntegrity;
         }
+      }
+
+      if (Object.keys(plugins).length === 0) {
+        delete config.plugins;
       }
     }
 
@@ -248,7 +323,13 @@ export async function personalizeConfig(
     if (pkg.workspaces && typeof pkg.workspaces === "object") {
       const ws = pkg.workspaces as { packages?: string[] };
       if (Array.isArray(ws.packages)) {
-        ws.packages = ws.packages.filter((p: string) => p !== "host" && !p.startsWith("packages/"));
+        ws.packages = ws.packages
+          .filter((p: string) => p !== "host" && !p.startsWith("packages/"))
+          .filter((p: string) => {
+            const pluginMatch = p.match(/^plugins\/([^/]+)/);
+            if (!pluginMatch) return true;
+            return opts.plugins?.includes(pluginMatch[1]) ?? true;
+          });
       }
     }
 
@@ -322,7 +403,7 @@ async function resolveWorkspaceRefs(
   await normalizePackageManifestsInTree({
     sourceRootDir: options?.sourceDir ?? destination,
     targetDir: destination,
-    resolveCatalogRefs: false,
+    resolveCatalogRefs: true,
     removeWorkspaceDeps: ["host"],
   });
 
@@ -363,11 +444,20 @@ export async function writeInitSnapshot(
   extendsGateway: string,
   sourceDir: string,
   patterns: string[],
-  options: { withHost: boolean },
+  options: { withHost: boolean; plugins?: string[]; pluginRoutes?: Record<string, string[]> },
 ): Promise<void> {
   const effectivePatterns = options.withHost
     ? [...patterns, "host/**"]
     : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
+
+  const excludedRoutePatterns: string[] = [];
+  if (options.pluginRoutes) {
+    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
+      if (!(options.plugins?.includes(pluginKey) ?? true)) {
+        excludedRoutePatterns.push(...routePatterns);
+      }
+    }
+  }
 
   const allFiles = new Set<string>();
   for (const pattern of effectivePatterns) {
@@ -378,7 +468,29 @@ export async function writeInitSnapshot(
       absolute: false,
     });
     for (const match of matches) {
+      const pluginMatch = match.match(/^plugins\/([^/]+)/);
+      if (pluginMatch && !(options.plugins?.includes(pluginMatch[1]) ?? true)) continue;
+      if (isRouteExcluded(match, excludedRoutePatterns)) continue;
       allFiles.add(match);
+    }
+  }
+
+  if (options.pluginRoutes) {
+    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
+      if (!(options.plugins?.includes(pluginKey) ?? true)) continue;
+      for (const rp of routePatterns) {
+        const matches = await glob(rp, {
+          cwd: sourceDir,
+          nodir: true,
+          dot: true,
+          absolute: false,
+        });
+        for (const match of matches) {
+          if (!isRouteExcluded(match, excludedRoutePatterns)) {
+            allFiles.add(match);
+          }
+        }
+      }
     }
   }
 
@@ -388,7 +500,10 @@ export async function writeInitSnapshot(
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
     const content = readFileSync(src);
-    fileHashes[filePath] = computeHash(content);
+    const destPath = filePath.startsWith(".templates/")
+      ? filePath.slice(".templates/".length)
+      : filePath;
+    fileHashes[destPath] = computeHash(content);
   }
 
   await writeSnapshot(destination, {

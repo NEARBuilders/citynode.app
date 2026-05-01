@@ -1076,30 +1076,25 @@ export default createPlugin({
         let account = input.account;
         let domain = input.domain;
         let withHost = input.withHost;
+        let plugins = input.plugins;
 
-        if (!domain) {
-          if (input.noInteractive) {
-            return {
-              status: "error" as const,
-              directory: "",
-              extendsAccount: extendsAccount ?? "",
-              extendsGateway: extendsGateway ?? "",
-              account: input.account,
-              domain: input.domain,
-              extends:
-                extendsAccount && extendsGateway ? `bos://${extendsAccount}/${extendsGateway}` : "",
-              filesCopied: 0,
-              error:
-                "domain is required (use --no-interactive to skip prompts and provide it as a flag)",
-            };
+        if (input.extends) {
+          const match = input.extends.match(/^(?:bos:\/\/)?([^/]+)\/(.+)$/);
+          if (match) {
+            if (!extendsAccount) extendsAccount = match[1];
+            if (!extendsGateway) extendsGateway = match[2];
           }
+        }
 
+        if (!input.noInteractive && (!domain || !plugins)) {
           const prompted = await promptInitOptions({
             extendsAccount,
             extendsGateway,
+            extends: input.extends,
             directory,
             account,
             domain,
+            plugins,
             withHost,
           });
           extendsAccount = prompted.extendsAccount;
@@ -1108,11 +1103,30 @@ export default createPlugin({
           account = prompted.account;
           domain = prompted.domain;
           withHost = prompted.withHost;
+          plugins = prompted.plugins;
+        }
+
+        if (!domain) {
+          return {
+            status: "error" as const,
+            directory: "",
+            extendsAccount: extendsAccount ?? "",
+            extendsGateway: extendsGateway ?? "",
+            account: input.account,
+            domain: input.domain,
+            extends:
+              extendsAccount && extendsGateway ? `bos://${extendsAccount}/${extendsGateway}` : "",
+            plugins: plugins ?? [],
+            filesCopied: 0,
+            error:
+              "domain is required (use --no-interactive to skip prompts and provide it as a flag)",
+          };
         }
 
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
         directory = directory || domain || extendsGateway;
+        plugins = plugins?.length ? plugins : ["_template"];
 
         try {
           await fetchParentConfig(extendsAccount, extendsGateway);
@@ -1125,12 +1139,13 @@ export default createPlugin({
             account,
             domain,
             extends: `bos://${extendsAccount}/${extendsGateway}`,
+            plugins: plugins ?? [],
             filesCopied: 0,
             error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
           };
         }
 
-        const { sourceDir, cleanup } = await resolveSourceDir({
+        const { sourceDir, parentConfig, cleanup } = await resolveSourceDir({
           extendsAccount,
           extendsGateway,
           source: input.source,
@@ -1147,13 +1162,25 @@ export default createPlugin({
               account,
               domain,
               extends: `bos://${extendsAccount}/${extendsGateway}`,
+              plugins: plugins ?? [],
               filesCopied: 0,
               error: "No .templatekeep found in template source",
             };
           }
 
+          const pluginRoutes: Record<string, string[]> = {};
+          if (parentConfig.plugins) {
+            for (const [key, ref] of Object.entries(parentConfig.plugins)) {
+              if (ref.routes && ref.routes.length > 0) {
+                pluginRoutes[key] = ref.routes;
+              }
+            }
+          }
+
           const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns, {
             withHost,
+            plugins,
+            pluginRoutes,
           });
 
           await personalizeConfig(directory, {
@@ -1161,11 +1188,15 @@ export default createPlugin({
             extendsGateway,
             account: account || extendsAccount,
             domain: domain || extendsGateway,
+            plugins,
+            pluginRoutes,
             workspaceOpts: { sourceDir },
           });
 
           await writeInitSnapshot(directory, extendsAccount, extendsGateway, sourceDir, patterns, {
             withHost,
+            plugins,
+            pluginRoutes,
           });
 
           if (!input.noInstall) {
@@ -1180,6 +1211,7 @@ export default createPlugin({
             account,
             domain,
             extends: `bos://${extendsAccount}/${extendsGateway}`,
+            plugins,
             filesCopied,
           };
         } finally {
@@ -1197,6 +1229,7 @@ export default createPlugin({
             input.extendsAccount && input.extendsGateway
               ? `bos://${input.extendsAccount}/${input.extendsGateway}`
               : "",
+          plugins: input.plugins ?? [],
           filesCopied: 0,
           error: error instanceof Error ? error.message : "Unknown error",
         };
