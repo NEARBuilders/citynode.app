@@ -1,6 +1,7 @@
 bos.config.json
 package.json
 .env.example
+.gitignore
 .templatesync-exclude
 biome.json
 bunfig.toml
