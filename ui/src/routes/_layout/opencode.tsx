@@ -1,16 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import { getSessionFromData, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/opencode")({
   head: () => ({
     meta: [
-      { title: `Opencode | ${APP_NAME}` },
+      { title: "Opencode | app" },
       {
         name: "description",
-        content: `Build and edit ${APP_NAME} with opencode — an open-source AI coding agent that understands runtime composition, authClient, and apiClient.`,
+        content:
+          "Build and edit app with opencode — an open-source AI coding agent that understands runtime composition, authClient, and apiClient.",
       },
     ],
   }),

@@ -5,13 +5,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { APP_NAME } from "@/lib/branding";
 import { createOrganization, organizationsQueryOptions, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/organizations/new")({
   head: () => ({
     meta: [
-      { title: `New Organization | ${APP_NAME}` },
+      { title: "New Organization | app" },
       { name: "description", content: "Create a new organization." },
     ],
   }),

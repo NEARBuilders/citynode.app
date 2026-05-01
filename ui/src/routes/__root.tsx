@@ -11,10 +11,9 @@ import { getRemoteScripts } from "everything-dev/ui/head";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
-import { getBaseStyles, getRuntimeBasePath } from "@/app";
-import { APP_DESCRIPTION, APP_NAME, METADATA_IMAGE_ALT } from "@/lib/branding";
+import type { RouterContext } from "@/app";
+import { getAppName, getBaseStyles, getRuntimeBasePath } from "@/app";
 import { sessionQueryOptions } from "@/lib/session";
-import type { RouterContext } from "@/types";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -49,16 +48,17 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     const siteUrl = runtimeConfig?.hostUrl
       ? `${runtimeConfig.hostUrl}${runtimeBasePath === "/" ? "" : runtimeBasePath}`
       : "";
-    const title = APP_NAME;
-    const description = APP_DESCRIPTION;
-    const siteName = APP_NAME;
+    const title = getAppName(runtimeConfig);
+    const description =
+      "Open runtime for apps on NEAR, composed from published config and loaded through a shared host, UI, and API runtime.";
+    const siteName = title;
     const ogImage = `${assetsUrl}/metadata.png`;
 
     const structuredData = {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: APP_NAME,
-      description: APP_DESCRIPTION,
+      name: title,
+      description,
       url: runtimeConfig?.hostUrl || undefined,
     };
 
@@ -87,7 +87,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
           description,
           siteName,
           siteUrl,
-          alt: METADATA_IMAGE_ALT,
+          alt: "app preview",
         }),
       ],
       links: [

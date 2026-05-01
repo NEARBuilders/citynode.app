@@ -10,6 +10,7 @@ export const colors = {
   magenta: chalk.hex("#ff00ff"),
   green: chalk.hex("#00ff41"),
   blue: chalk.hex("#0080ff"),
+  yellow: chalk.hex("#ffcc00"),
   white: chalk.hex("#f0f0f0"),
   gray: chalk.hex("#555555"),
   dim: chalk.dim,

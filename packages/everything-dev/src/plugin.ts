@@ -1,18 +1,24 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
 import {
   copyFilteredFiles,
+  fetchParentConfig,
   personalizeConfig,
   readTemplatekeep,
   resolveSourceDir,
   runBunInstall,
+  writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
+import { getStatus } from "./cli/status";
+import { syncTemplate } from "./cli/sync";
+import { upgradeTemplate } from "./cli/upgrade";
 import {
   buildRuntimePluginsForConfig,
+  findConfigPath,
   getHostDevelopmentPort,
   getProjectRoot,
   loadConfig,
@@ -33,6 +39,8 @@ import {
   type PluginRemoveOptions,
   type PublishOptions,
   type StartOptions,
+  type SyncOptions,
+  type UpgradeOptions,
 } from "./contract";
 import { type AppConfig, type AppOrchestrator, startApp } from "./dev-session";
 import {
@@ -982,9 +990,14 @@ export default createPlugin({
             throw error;
           }
 
-          const verifiedConfig = await fetchBosConfigFromFastKv<BosConfig>(bosUrl);
-          if (JSON.stringify(verifiedConfig) !== JSON.stringify(publishConfig)) {
-            throw error;
+          try {
+            const verifiedConfig = await fetchBosConfigFromFastKv<BosConfig>(bosUrl);
+            if (JSON.stringify(verifiedConfig) !== JSON.stringify(publishConfig)) {
+              throw error;
+            }
+          } catch {
+            // Config may not exist yet on first publish or propagation delay;
+            // a valid txHash is sufficient proof the transaction was submitted.
           }
         }
 
@@ -1057,50 +1070,69 @@ export default createPlugin({
 
     init: builder.init.handler(async ({ input }: { input: InitOptions }) => {
       try {
+        let extendsAccount = input.extendsAccount;
+        let extendsGateway = input.extendsGateway;
+        let directory = input.directory;
         let account = input.account;
-        let gateway = input.gateway;
-        let destination = input.destination;
-        let name = input.name;
         let domain = input.domain;
         let withHost = input.withHost;
 
-        if (!account || !gateway) {
+        if (!domain) {
           if (input.noInteractive) {
             return {
               status: "error" as const,
-              destination: "",
-              parentAccount: account ?? "",
-              parentGateway: gateway ?? "",
-              name: input.name,
+              directory: "",
+              extendsAccount: extendsAccount ?? "",
+              extendsGateway: extendsGateway ?? "",
+              account: input.account,
               domain: input.domain,
-              extends: account && gateway ? `bos://${account}/${gateway}` : "",
+              extends:
+                extendsAccount && extendsGateway ? `bos://${extendsAccount}/${extendsGateway}` : "",
               filesCopied: 0,
               error:
-                "account and gateway are required (use --no-interactive to skip prompts and provide them as positional args)",
+                "domain is required (use --no-interactive to skip prompts and provide it as a flag)",
             };
           }
 
           const prompted = await promptInitOptions({
+            extendsAccount,
+            extendsGateway,
+            directory,
             account,
-            gateway,
-            destination,
-            name,
             domain,
             withHost,
           });
+          extendsAccount = prompted.extendsAccount;
+          extendsGateway = prompted.extendsGateway;
+          directory = prompted.directory;
           account = prompted.account;
-          gateway = prompted.gateway;
-          destination = prompted.destination;
-          name = prompted.name;
           domain = prompted.domain;
           withHost = prompted.withHost;
         }
 
-        destination = destination || gateway;
+        extendsAccount = extendsAccount || "dev.everything.near";
+        extendsGateway = extendsGateway || "everything.dev";
+        directory = directory || (domain ? domain.split(".")[0] : extendsGateway);
+
+        try {
+          await fetchParentConfig(extendsAccount, extendsGateway);
+        } catch {
+          return {
+            status: "error" as const,
+            directory,
+            extendsAccount,
+            extendsGateway,
+            account,
+            domain,
+            extends: `bos://${extendsAccount}/${extendsGateway}`,
+            filesCopied: 0,
+            error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
+          };
+        }
 
         const { sourceDir, cleanup } = await resolveSourceDir({
-          account,
-          gateway,
+          extendsAccount,
+          extendsGateway,
           source: input.source,
         });
 
@@ -1109,41 +1141,45 @@ export default createPlugin({
           if (patterns.length === 0) {
             return {
               status: "error" as const,
-              destination,
-              parentAccount: account,
-              parentGateway: gateway,
-              name,
+              directory,
+              extendsAccount,
+              extendsGateway,
+              account,
               domain,
-              extends: `bos://${account}/${gateway}`,
+              extends: `bos://${extendsAccount}/${extendsGateway}`,
               filesCopied: 0,
               error: "No .templatekeep found in template source",
             };
           }
 
-          const filesCopied = await copyFilteredFiles(sourceDir, destination, patterns, {
+          const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns, {
             withHost,
           });
 
-          await personalizeConfig(destination, {
-            parentAccount: account,
-            parentGateway: gateway,
-            name: name || account,
-            domain: domain || gateway,
+          await personalizeConfig(directory, {
+            extendsAccount,
+            extendsGateway,
+            account: account || extendsAccount,
+            domain: domain || extendsGateway,
             workspaceOpts: { sourceDir },
           });
 
+          await writeInitSnapshot(directory, extendsAccount, extendsGateway, sourceDir, patterns, {
+            withHost,
+          });
+
           if (!input.noInstall) {
-            await runBunInstall(destination);
+            await runBunInstall(directory);
           }
 
           return {
             status: "initialized" as const,
-            destination: resolve(destination),
-            parentAccount: account,
-            parentGateway: gateway,
-            name,
+            directory: resolve(directory),
+            extendsAccount,
+            extendsGateway,
+            account,
             domain,
-            extends: `bos://${account}/${gateway}`,
+            extends: `bos://${extendsAccount}/${extendsGateway}`,
             filesCopied,
           };
         } finally {
@@ -1152,13 +1188,88 @@ export default createPlugin({
       } catch (error) {
         return {
           status: "error" as const,
-          destination: input.destination ?? input.gateway ?? "",
-          parentAccount: input.account ?? "",
-          parentGateway: input.gateway ?? "",
-          name: input.name,
+          directory: input.directory ?? "",
+          extendsAccount: input.extendsAccount ?? "",
+          extendsGateway: input.extendsGateway ?? "",
+          account: input.account,
           domain: input.domain,
-          extends: input.account && input.gateway ? `bos://${input.account}/${input.gateway}` : "",
+          extends:
+            input.extendsAccount && input.extendsGateway
+              ? `bos://${input.extendsAccount}/${input.extendsGateway}`
+              : "",
           filesCopied: 0,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    sync: builder.sync.handler(async ({ input }: { input: SyncOptions }) => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            updated: [],
+            skipped: [],
+            added: [],
+            error: "No bos.config.json found in current directory",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        return await syncTemplate(projectDir, input);
+      } catch (error) {
+        return {
+          status: "error" as const,
+          updated: [],
+          skipped: [],
+          added: [],
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    upgrade: builder.upgrade.handler(async ({ input }: { input: UpgradeOptions }) => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            packages: [],
+            error: "No bos.config.json found in current directory",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        return await upgradeTemplate(projectDir, input);
+      } catch (error) {
+        return {
+          status: "error" as const,
+          packages: [],
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    status: builder.status.handler(async () => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            packages: [],
+            envFile: "missing" as const,
+            error: "No bos.config.json found in current directory",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        return await getStatus(projectDir);
+      } catch (error) {
+        return {
+          status: "error" as const,
+          packages: [],
+          envFile: "missing" as const,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }

@@ -60,9 +60,9 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
     });
 
     await personalizeConfig(testDir, {
-      parentAccount: "dev.everything.near",
-      parentGateway: "everything.dev",
-      name: "test.near",
+      extendsAccount: "dev.everything.near",
+      extendsGateway: "everything.dev",
+      account: "test.near",
       domain: "test.dev",
       workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
     });

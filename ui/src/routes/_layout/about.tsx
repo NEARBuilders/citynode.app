@@ -1,18 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getActiveRuntime } from "@/app";
+import { getActiveRuntime, getAppName } from "@/app";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 import { Route as RootRoute } from "../__root";
 
 export const Route = createFileRoute("/_layout/about")({
   head: () => ({
     meta: [
-      { title: `About | ${APP_NAME}` },
+      { title: "About | app" },
       {
         name: "description",
-        content: `${APP_NAME} is a runtime-composed site on NEAR where published config defines how host, UI, and API load together.`,
+        content:
+          "app is a runtime-composed site on NEAR where published config defines how host, UI, and API load together.",
       },
     ],
   }),
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/_layout/about")({
 function About() {
   const apiClient = useApiClient();
   const { runtimeConfig } = RootRoute.useLoaderData();
+  const appName = getAppName(runtimeConfig);
   const activeRuntime = getActiveRuntime(runtimeConfig);
   const registryAccountId = activeRuntime?.accountId ?? "every.near";
   const registryGatewayId = activeRuntime?.gatewayId ?? "everything.dev";
@@ -52,7 +53,7 @@ function About() {
             Runtime composition, published in public
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-            <strong className="text-foreground">{APP_NAME}</strong> is a runtime-composed site on{" "}
+            <strong className="text-foreground">{appName}</strong> is a runtime-composed site on{" "}
             <a
               href="https://near.org"
               className="underline hover:text-foreground transition-colors"
@@ -133,7 +134,7 @@ function About() {
               <BoxLink
                 href="/README.md"
                 title="read the public overview"
-                body={`human-readable context for what ${APP_NAME} is and how it is composed`}
+                body={`human-readable context for what ${appName} is and how it is composed`}
               />
               <BoxLink
                 href="/skill.md"
@@ -234,7 +235,7 @@ function About() {
       <section className="space-y-4 max-w-3xl">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">wider context</div>
         <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-          <strong className="text-foreground">{APP_NAME}</strong> sits within a broader ecosystem of
+          <strong className="text-foreground">{appName}</strong> sits within a broader ecosystem of
           internet forward ideas coming from{" "}
           <a href="https://near.org" className="underline hover:text-foreground transition-colors">
             NEAR Protocol

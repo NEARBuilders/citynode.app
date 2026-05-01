@@ -134,10 +134,10 @@ export const KeyPublishResultSchema = z.object({
 });
 
 export const InitOptionsSchema = z.object({
+  extendsAccount: z.string().optional(),
+  extendsGateway: z.string().optional(),
+  directory: z.string().optional(),
   account: z.string().optional(),
-  gateway: z.string().optional(),
-  destination: z.string().optional(),
-  name: z.string().optional(),
   domain: z.string().optional(),
   source: z.string().optional(),
   withHost: z.boolean().default(false),
@@ -147,13 +147,66 @@ export const InitOptionsSchema = z.object({
 
 export const InitResultSchema = z.object({
   status: z.enum(["initialized", "error"]),
-  destination: z.string(),
-  parentAccount: z.string(),
-  parentGateway: z.string(),
-  name: z.string().optional(),
+  directory: z.string(),
+  extendsAccount: z.string(),
+  extendsGateway: z.string(),
+  account: z.string().optional(),
   domain: z.string().optional(),
   extends: z.string(),
   filesCopied: z.number(),
+  error: z.string().optional(),
+});
+
+export const SyncOptionsSchema = z.object({
+  dryRun: z.boolean().default(false),
+  force: z.boolean().default(false),
+  noInstall: z.boolean().default(false),
+});
+
+export const SyncResultSchema = z.object({
+  status: z.enum(["synced", "dry-run", "error"]),
+  updated: z.array(z.string()),
+  skipped: z.array(z.string()),
+  added: z.array(z.string()),
+  error: z.string().optional(),
+});
+
+export const UpgradeOptionsSchema = z.object({
+  dryRun: z.boolean().default(false),
+  force: z.boolean().default(false),
+  noInstall: z.boolean().default(false),
+  noSync: z.boolean().default(false),
+});
+
+export const UpgradeResultSchema = z.object({
+  status: z.enum(["upgraded", "dry-run", "error"]),
+  packages: z.array(
+    z.object({
+      name: z.string(),
+      from: z.string().optional(),
+      to: z.string(),
+    }),
+  ),
+  sync: SyncResultSchema.optional(),
+  changelogUrl: z.string().optional(),
+  error: z.string().optional(),
+});
+
+export const StatusResultSchema = z.object({
+  status: z.enum(["ok", "error"]),
+  extends: z.string().optional(),
+  account: z.string().optional(),
+  domain: z.string().optional(),
+  packages: z.array(
+    z.object({
+      name: z.string(),
+      installed: z.string().optional(),
+      latest: z.string().optional(),
+    }),
+  ),
+  lastSync: z.string().optional(),
+  envFile: z.enum(["found", "missing", "example-only"]),
+  parentReachable: z.boolean().optional(),
   error: z.string().optional(),
 });
 
@@ -193,6 +246,15 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/init" })
     .input(InitOptionsSchema)
     .output(InitResultSchema),
+  sync: oc
+    .route({ method: "POST", path: "/sync" })
+    .input(SyncOptionsSchema)
+    .output(SyncResultSchema),
+  upgrade: oc
+    .route({ method: "POST", path: "/upgrade" })
+    .input(UpgradeOptionsSchema)
+    .output(UpgradeResultSchema),
+  status: oc.route({ method: "GET", path: "/status" }).output(StatusResultSchema),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -211,3 +273,8 @@ export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
 export type InitOptions = z.infer<typeof InitOptionsSchema>;
 export type InitResult = z.infer<typeof InitResultSchema>;
+export type SyncOptions = z.infer<typeof SyncOptionsSchema>;
+export type SyncResult = z.infer<typeof SyncResultSchema>;
+export type UpgradeOptions = z.infer<typeof UpgradeOptionsSchema>;
+export type UpgradeResult = z.infer<typeof UpgradeResultSchema>;
+export type StatusResult = z.infer<typeof StatusResultSchema>;

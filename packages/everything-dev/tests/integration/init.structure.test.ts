@@ -43,19 +43,20 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "packages"))).toBe(false);
     expect(existsSync(join(testDir, "plans"))).toBe(false);
     expect(existsSync(join(testDir, ".changeset"))).toBe(false);
-    expect(existsSync(join(testDir, "ui/src/routes/_layout/apps"))).toBe(false);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/keys"))).toBe(false);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/organizations"))).toBe(
       false,
     );
+    expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(false);
   });
 
   it("personalizes bos.config.json", async () => {
     await personalizeConfig(testDir, {
-      parentAccount: "dev.everything.near",
-      parentGateway: "everything.dev",
-      name: "test.near",
+      extendsAccount: "dev.everything.near",
+      extendsGateway: "everything.dev",
+      account: "test.near",
       domain: "test.dev",
+      workspaceOpts: { sourceDir: REPO_ROOT },
     });
 
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8"));

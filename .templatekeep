@@ -1,6 +1,7 @@
 bos.config.json
 package.json
 .env.example
+.templatesync-exclude
 biome.json
 bunfig.toml
 
@@ -9,6 +10,11 @@ railway.json
 
 .agent/
 AGENTS.md
+.opencode/skills/everything-dev/SKILL.md
+.changeset/config.json
+.changeset/README.md
+README.md
+CONTRIBUTING.md
 
 ui/package.json
 ui/rsbuild.config.ts
@@ -21,22 +27,18 @@ ui/src/router.tsx
 ui/src/router.server.tsx
 ui/src/styles.css
 ui/src/globals.d.ts
-ui/src/global.d.ts
 ui/src/app.ts
 ui/src/api-contract.ts
 ui/src/components/index.ts
 ui/src/components/ui/**
 ui/src/components/theme-toggle.tsx
-ui/src/components/splash.tsx
 ui/src/components/under-construction.tsx
 ui/src/components/user-nav.tsx
 ui/src/providers/index.tsx
 ui/src/hooks/index.ts
 ui/src/hooks/use-client.ts
-ui/src/types/index.ts
 ui/src/lib/api-client.ts
 ui/src/lib/auth-client.ts
-ui/src/lib/branding.ts
 ui/src/lib/session.ts
 ui/src/lib/utils.ts
 ui/src/lib/use-api-client.ts
@@ -44,19 +46,14 @@ ui/src/integrations/tanstack-query/devtools.tsx
 ui/src/routes/__root.tsx
 ui/src/routes/_layout.tsx
 ui/src/routes/_layout/index.tsx
-ui/src/routes/_layout/about.tsx
-ui/src/routes/_layout/config.tsx
 ui/src/routes/_layout/login.tsx
-ui/src/routes/_layout/opencode.tsx
 ui/src/routes/_layout/_authenticated.tsx
 ui/src/routes/_layout/_authenticated/home.tsx
 ui/src/routes/_layout/_authenticated/settings.tsx
 ui/src/routes/_layout/_authenticated/_admin.tsx
 ui/src/routes/_layout/_authenticated/_admin/**
-ui/src/routes/_layout/_authenticated/projects/**
-ui/src/routes/_layout/_authenticated/organizations/**
-ui/src/routes/_layout/_authenticated/keys/**
 ui/src/routes/_layout/apps/**
+ui/src/routes/_layout/_authenticated/organizations/**
 
 api/package.json
 api/rspack.config.js
@@ -72,4 +69,3 @@ api/src/db/schema.ts
 
 plugins/_template/**
 plugins/registry/**
-plugins/projects/**

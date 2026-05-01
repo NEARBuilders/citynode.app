@@ -25,39 +25,57 @@ export async function promptYesNo(question: string, defaultVal = false): Promise
   return answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
 }
 
+function deriveDirectoryFromDomain(domain: string): string {
+  const firstSegment = domain.split(".")[0];
+  return firstSegment || domain;
+}
+
+function deriveAccountFromDomain(domain: string, extendsAccount: string): string {
+  const firstSegment = domain.split(".")[0];
+  if (!firstSegment) return "";
+  const suffix = extendsAccount.includes(".")
+    ? extendsAccount.substring(extendsAccount.indexOf(".") + 1)
+    : extendsAccount;
+  return `${firstSegment}.${suffix}`;
+}
+
 export async function promptInitOptions(input: {
+  extendsAccount?: string;
+  extendsGateway?: string;
+  directory?: string;
   account?: string;
-  gateway?: string;
-  destination?: string;
-  name?: string;
   domain?: string;
   withHost?: boolean;
 }): Promise<{
-  account: string;
-  gateway: string;
-  destination: string;
-  name?: string;
+  extendsAccount: string;
+  extendsGateway: string;
+  directory: string;
+  account?: string;
   domain?: string;
   withHost: boolean;
 }> {
-  const account = input.account || (await prompt("NEAR account", "dev.everything.near"));
+  const extendsAccount =
+    input.extendsAccount || (await prompt("Extends account", "dev.everything.near"));
 
-  const gateway = input.gateway || (await prompt("Gateway ID", "everything.dev"));
+  const extendsGateway =
+    input.extendsGateway || (await prompt("Extends gateway", "everything.dev"));
 
-  const destination = input.destination || (await prompt("Project directory", gateway));
+  const domain = input.domain || (await prompt("Project domain"));
 
-  const name = input.name || (await prompt("New project NEAR account (optional)", ""));
+  const accountDefault = domain ? deriveAccountFromDomain(domain, extendsAccount) : "";
+  const account = input.account || (await prompt("Project NEAR account", accountDefault));
 
-  const domain = input.domain || (await prompt("New project domain (optional)", ""));
+  const directoryDefault = domain ? deriveDirectoryFromDomain(domain) : extendsGateway;
+  const directory = input.directory || (await prompt("Project directory", directoryDefault));
 
   const withHost =
     input.withHost !== undefined ? input.withHost : await promptYesNo("Include host?", false);
 
   return {
-    account,
-    gateway,
-    destination,
-    name: name || undefined,
+    extendsAccount,
+    extendsGateway,
+    directory,
+    account: account || undefined,
     domain: domain || undefined,
     withHost,
   };

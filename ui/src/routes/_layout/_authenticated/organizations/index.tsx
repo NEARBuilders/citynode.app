@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import {
   isPersonalOrganization,
   type Organization,
@@ -14,7 +13,7 @@ import {
 export const Route = createFileRoute("/_layout/_authenticated/organizations/")({
   head: () => ({
     meta: [
-      { title: `Organizations | ${APP_NAME}` },
+      { title: "Organizations | app" },
       { name: "description", content: "Manage your organizations and teams." },
     ],
   }),

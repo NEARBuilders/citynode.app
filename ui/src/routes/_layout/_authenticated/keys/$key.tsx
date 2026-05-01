@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { Badge, Button, Card, CardContent } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import { useApiClient } from "@/lib/use-api-client";
 
 export type KvValueResult = Awaited<ReturnType<import("@/app").ApiClient["projects"]["getValue"]>>;
@@ -28,7 +27,7 @@ export const Route = createFileRoute("/_layout/_authenticated/keys/$key")({
   head: ({ params, loaderData }) => {
     const keyName = params.key;
     const hasData = loaderData?.data !== null;
-    const title = `Key: ${keyName} | ${APP_NAME}`;
+    const title = `Key: ${keyName} | app`;
     const description = hasData
       ? `View the value for key "${keyName}" in the key-value store.`
       : `Key "${keyName}" not found in the store.`;

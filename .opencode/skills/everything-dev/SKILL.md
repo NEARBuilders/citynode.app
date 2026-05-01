@@ -248,12 +248,12 @@ function MyPage() {
 ```tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
-import { APP_NAME } from "@/lib/branding";
+import { getAppName } from "@/app";
 
 export const Route = createFileRoute("/_layout/my-page")({
   head: () => ({
     meta: [
-      { title: `My Page | ${APP_NAME}` },
+      { title: "My Page | app" },
       { name: "description", content: "Description of my page." },
     ],
   }),

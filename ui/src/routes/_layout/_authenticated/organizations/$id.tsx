@@ -3,7 +3,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import {
   inviteMember,
   type Organization,
@@ -53,7 +52,7 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
   },
   head: () => ({
     meta: [
-      { title: `Organization | ${APP_NAME}` },
+      { title: "Organization | app" },
       { name: "description", content: "Manage organization details and members." },
     ],
   }),

@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { authClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
-import { APP_NAME } from "@/lib/branding";
 import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -14,7 +13,7 @@ export const Route = createFileRoute("/_layout/apps/$accountId/$gatewayId")({
   head: ({ params }) => ({
     meta: [
       {
-        title: `${params.accountId}/${params.gatewayId} | Published Apps | ${APP_NAME}`,
+        title: `${params.accountId}/${params.gatewayId} | Published Apps | app`,
       },
       {
         name: "description",

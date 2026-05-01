@@ -32,6 +32,20 @@ function printConfigView(result: {
   console.log();
 }
 
+function formatTimeAgo(isoTimestamp: string): string {
+  const now = Date.now();
+  const then = new Date(isoTimestamp).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  return isoTimestamp.split("T")[0] ?? isoTimestamp;
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -96,18 +110,151 @@ async function main() {
       }
       console.log(colors.green(`${icons.ok} Project initialized`));
       console.log(`  ${colors.dim("Extends:")} ${result.extends}`);
-      console.log(`  ${colors.dim("Destination:")} ${result.destination}`);
-      if (result.name) console.log(`  ${colors.dim("Account:")} ${result.name}`);
+      console.log(`  ${colors.dim("Directory:")} ${result.directory}`);
+      if (result.account) console.log(`  ${colors.dim("Account:")} ${result.account}`);
       if (result.domain) console.log(`  ${colors.dim("Domain:")} ${result.domain}`);
       console.log(`  ${colors.dim("Files copied:")} ${result.filesCopied}`);
       console.log();
       console.log(colors.dim("  Next steps:"));
-      console.log(colors.dim(`    cd ${result.destination}`));
+      console.log(colors.dim(`    cd ${result.directory}`));
+      console.log(colors.dim("    cp .env.example .env   # then fill in your values"));
       if (result.status === "initialized" && !(input as any)?.noInstall) {
-        console.log(colors.dim("    bos dev --host remote"));
+        console.log(colors.dim("    bun run dev"));
       } else {
         console.log(colors.dim("    bun install"));
-        console.log(colors.dim("    bos dev --host remote"));
+        console.log(colors.dim("    bun run dev"));
+      }
+      console.log();
+      return;
+    }
+
+    if (descriptor.key === "sync") {
+      console.log();
+      if (result.status === "error") {
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
+      if (result.status === "dry-run") {
+        console.log(colors.cyan(`${icons.ok} Dry run — no files written`));
+      } else {
+        console.log(colors.green(`${icons.ok} Template synced`));
+      }
+      if (result.updated.length > 0) {
+        console.log(`  ${colors.dim("Updated:")} ${result.updated.length} file(s)`);
+        for (const f of result.updated) console.log(`    ${colors.dim(f)}`);
+      }
+      if (result.added.length > 0) {
+        console.log(`  ${colors.dim("Added:")} ${result.added.length} file(s)`);
+        for (const f of result.added) console.log(`    ${colors.dim(f)}`);
+      }
+      if (result.skipped.length > 0) {
+        console.log(
+          `  ${colors.yellow("Skipped:")} ${result.skipped.length} file(s) (locally modified, use --force to overwrite)`,
+        );
+        for (const f of result.skipped) console.log(`    ${colors.dim(f)}`);
+      }
+      if (result.updated.length === 0 && result.added.length === 0 && result.skipped.length === 0) {
+        console.log(`  ${colors.dim("Already up to date")}`);
+      }
+      console.log();
+      return;
+    }
+
+    if (descriptor.key === "upgrade") {
+      console.log();
+      if (result.status === "error") {
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
+      if (result.status === "dry-run") {
+        console.log(colors.cyan(`${icons.ok} Dry run — no changes applied`));
+      } else {
+        console.log(colors.green(`${icons.ok} Framework upgraded`));
+      }
+      for (const pkg of result.packages) {
+        if (pkg.from && pkg.from !== pkg.to) {
+          console.log(`  ${colors.dim(`${pkg.name}:`)} ${pkg.from} → ${pkg.to}`);
+        } else if (!pkg.from) {
+          console.log(`  ${colors.dim(`${pkg.name}:`)} ${pkg.to} (new)`);
+        } else {
+          console.log(`  ${colors.dim(`${pkg.name}:`)} ${pkg.to} (up to date)`);
+        }
+      }
+      if (result.changelogUrl) {
+        console.log(`  ${colors.dim("Changelog:")} ${result.changelogUrl}`);
+      }
+      if (result.sync) {
+        const sync = result.sync;
+        if (sync.updated.length > 0) {
+          console.log(`  ${colors.dim("Synced updated:")} ${sync.updated.length} file(s)`);
+        }
+        if (sync.added.length > 0) {
+          console.log(`  ${colors.dim("Synced added:")} ${sync.added.length} file(s)`);
+        }
+        if (sync.skipped.length > 0) {
+          console.log(
+            `  ${colors.yellow("Synced skipped:")} ${sync.skipped.length} file(s) (locally modified, use --force to overwrite)`,
+          );
+        }
+      }
+      console.log();
+      return;
+    }
+
+    if (descriptor.key === "status") {
+      console.log();
+      if (result.status === "error") {
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
+      console.log(colors.cyan(frames.top(52)));
+      console.log(`  ${icons.app} ${gradients.cyber("STATUS")}`);
+      console.log(colors.cyan(frames.bottom(52)));
+      console.log();
+      if (result.extends) console.log(`  ${colors.dim("Extends:")}     ${result.extends}`);
+      if (result.account) console.log(`  ${colors.dim("Account:")}     ${result.account}`);
+      if (result.domain) console.log(`  ${colors.dim("Domain:")}      ${result.domain}`);
+      console.log();
+      console.log(`  ${colors.dim("Packages:")}`);
+      for (const pkg of result.packages) {
+        const hasUpdate = pkg.installed && pkg.latest && pkg.installed !== pkg.latest;
+        const versionStr = hasUpdate
+          ? `${pkg.installed}  →  ${pkg.latest}`
+          : pkg.installed || "not installed";
+        const label = hasUpdate ? colors.yellow(versionStr) : colors.dim(versionStr);
+        console.log(`    ${colors.dim(`${pkg.name}`)}  ${label}`);
+      }
+      console.log();
+      if (result.lastSync) {
+        const ago = formatTimeAgo(result.lastSync);
+        console.log(`  ${colors.dim("Last sync:")}   ${ago}`);
+      } else {
+        console.log(`  ${colors.dim("Last sync:")}   never`);
+      }
+      const envLabel =
+        result.envFile === "found"
+          ? colors.green("found")
+          : result.envFile === "example-only"
+            ? colors.yellow("missing (only .env.example found)")
+            : colors.error("missing");
+      console.log(`  ${colors.dim(".env:")}         ${envLabel}`);
+      if (result.parentReachable !== undefined) {
+        const parentLabel = result.parentReachable
+          ? colors.green("reachable")
+          : colors.error("unreachable");
+        console.log(`  ${colors.dim("Parent:")}      ${parentLabel}`);
+      }
+      const hasUpdates = result.packages.some(
+        (p: { installed?: string; latest?: string }) =>
+          p.installed && p.latest && p.installed !== p.latest,
+      );
+      if (hasUpdates) {
+        console.log();
+        console.log(
+          colors.dim(
+            `  Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`,
+          ),
+        );
       }
       console.log();
       return;

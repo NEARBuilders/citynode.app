@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   createWriteStream,
   existsSync,
@@ -19,6 +20,7 @@ import {
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
 import type { BosConfig } from "../types";
+import { writeSnapshot } from "./snapshot";
 
 const require = createRequire(import.meta.url);
 
@@ -29,8 +31,8 @@ interface SourceResult {
 }
 
 export async function resolveSourceDir(opts: {
-  account: string;
-  gateway: string;
+  extendsAccount: string;
+  extendsGateway: string;
   source?: string;
 }): Promise<SourceResult> {
   if (opts.source) {
@@ -44,7 +46,7 @@ export async function resolveSourceDir(opts: {
     return { sourceDir, parentConfig, cleanup: async () => {} };
   }
 
-  const parentConfig = await fetchParentConfig(opts.account, opts.gateway);
+  const parentConfig = await fetchParentConfig(opts.extendsAccount, opts.extendsGateway);
 
   if (!parentConfig.repository) {
     throw new Error("Parent config has no repository field — cannot locate template source");
@@ -54,8 +56,11 @@ export async function resolveSourceDir(opts: {
   return { sourceDir, parentConfig, cleanup };
 }
 
-export async function fetchParentConfig(account: string, gateway: string): Promise<BosConfig> {
-  const bosUrl = `bos://${account}/${gateway}`;
+export async function fetchParentConfig(
+  extendsAccount: string,
+  extendsGateway: string,
+): Promise<BosConfig> {
+  const bosUrl = `bos://${extendsAccount}/${extendsGateway}`;
   return fetchBosConfigFromFastKv<BosConfig>(bosUrl);
 }
 
@@ -187,9 +192,9 @@ export async function copyFilteredFiles(
 export async function personalizeConfig(
   destination: string,
   opts: {
-    parentAccount: string;
-    parentGateway: string;
-    name?: string;
+    extendsAccount: string;
+    extendsGateway: string;
+    account?: string;
     domain?: string;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
   },
@@ -198,10 +203,10 @@ export async function personalizeConfig(
   if (existsSync(configPath)) {
     const config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
 
-    config.extends = `bos://${opts.parentAccount}/${opts.parentGateway}`;
+    config.extends = `bos://${opts.extendsAccount}/${opts.extendsGateway}`;
 
-    if (opts.name) {
-      config.account = opts.name;
+    if (opts.account) {
+      config.account = opts.account;
     }
     if (opts.domain) {
       config.domain = opts.domain;
@@ -350,6 +355,50 @@ async function resolveWorkspaceRefs(
       writeFileSync(rootPkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
     }
   }
+}
+
+export async function writeInitSnapshot(
+  destination: string,
+  extendsAccount: string,
+  extendsGateway: string,
+  sourceDir: string,
+  patterns: string[],
+  options: { withHost: boolean },
+): Promise<void> {
+  const effectivePatterns = options.withHost
+    ? [...patterns, "host/**"]
+    : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
+
+  const allFiles = new Set<string>();
+  for (const pattern of effectivePatterns) {
+    const matches = await glob(pattern, {
+      cwd: sourceDir,
+      nodir: true,
+      dot: true,
+      absolute: false,
+    });
+    for (const match of matches) {
+      allFiles.add(match);
+    }
+  }
+
+  const fileHashes: Record<string, string> = {};
+  for (const filePath of allFiles) {
+    const src = join(sourceDir, filePath);
+    const stat = lstatSync(src);
+    if (!stat.isFile()) continue;
+    const content = readFileSync(src);
+    fileHashes[filePath] = computeHash(content);
+  }
+
+  await writeSnapshot(destination, {
+    parentRef: `bos://${extendsAccount}/${extendsGateway}`,
+    files: fileHashes,
+  });
+}
+
+function computeHash(data: Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex").substring(0, 16);
 }
 
 function mkTmpDir(prefix: string): string {

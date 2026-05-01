@@ -1,24 +1,20 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { toast } from "sonner";
 import { authClient } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import {
   getActiveOrganization,
   isPersonalOrganization,
   organizationsQueryOptions,
   passkeysQueryOptions,
   sessionQueryOptions,
-  setActiveOrganization,
 } from "@/lib/session";
-import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/_authenticated/home")({
   head: () => ({
     meta: [
-      { title: `Workspace | ${APP_NAME}` },
+      { title: "Workspace | app" },
       { name: "description", content: "Your workspace center." },
     ],
   }),
@@ -26,19 +22,10 @@ export const Route = createFileRoute("/_layout/_authenticated/home")({
 });
 
 function Home() {
-  const queryClient = useQueryClient();
-  const apiClient = useApiClient();
-
-  type ProjectsResult = Awaited<ReturnType<typeof apiClient.projects.listProjects>>;
-
   const { data: session } = useQuery(sessionQueryOptions());
   const { data: organizations = [] } = useQuery(organizationsQueryOptions());
   const { data: passkeys = [] } = useQuery(passkeysQueryOptions());
   const user = session?.user;
-  const { data: projectsData } = useQuery<ProjectsResult>({
-    queryKey: ["projects"],
-    queryFn: () => apiClient.projects.listProjects({ ownerId: user?.id, limit: 5 }),
-  });
 
   const activeOrgId = session?.session?.activeOrganizationId;
   const nearAccountId = authClient.near.getAccountId();
@@ -67,19 +54,6 @@ function Home() {
       isAdmin: user.role === "admin",
     };
   }, [user, nearAccountId, passkeys.length]);
-
-  const switchOrgMutation = useMutation({
-    mutationFn: (orgId: string) => setActiveOrganization(orgId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: sessionQueryOptions().queryKey,
-      });
-      toast.success("Switched organization");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to switch organization");
-    },
-  });
 
   if (!user) {
     return (
@@ -110,8 +84,7 @@ function Home() {
                 {user.name || user.email || user.id.slice(0, 8)}
               </h1>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Manage identity, switch organizations, create API keys, and jump back into the
-                published runtime browser.
+                Manage identity and settings.
               </p>
               <UnderConstruction
                 label="home"
@@ -122,14 +95,6 @@ function Home() {
             <div className="flex flex-wrap gap-2">
               <Button asChild>
                 <Link to="/settings">identity settings</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/organizations">organizations</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/apps" search={{}}>
-                  published apps
-                </Link>
               </Button>
             </div>
           </CardContent>
@@ -184,44 +149,24 @@ function Home() {
             <div className="text-xs uppercase tracking-wide text-muted-foreground">navigator</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <WorkspaceTile
-                title="organizations"
-                body="members, invitations, switching, and team-level access"
-                to="/organizations"
-              />
-              <WorkspaceTile
                 title="settings"
                 body="profile, linked auth methods, sessions, and sign out"
                 to="/settings"
-              />
-              <WorkspaceTile
-                title="developer access"
-                body="test keys, API access, and protected endpoint workflows"
-                to="/keys"
-              />
-              <WorkspaceTile
-                title="published apps"
-                body="return to the registry and inspect runtime records"
-                href="/apps"
               />
             </div>
           </CardContent>
         </Card>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+      {activeOrg && (
+        <section className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Active Organization</h2>
             <p className="text-sm text-muted-foreground">
               The current workspace target for organization-scoped actions.
             </p>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/organizations/new">new org</Link>
-          </Button>
-        </div>
 
-        {activeOrg ? (
           <Card>
             <CardContent className="p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4 min-w-0">
@@ -246,143 +191,10 @@ function Home() {
                   <div className="text-xs font-mono text-muted-foreground">@{activeOrg.slug}</div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm">
-                  <Link to="/organizations/$id" params={{ id: activeOrg.id }}>
-                    open org
-                  </Link>
-                </Button>
-                {organizations.length > 1 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const otherOrg = organizations.find((org) => org.id !== activeOrgId);
-                      if (otherOrg) {
-                        switchOrgMutation.mutate(otherOrg.id);
-                      }
-                    }}
-                    disabled={switchOrgMutation.isPending}
-                  >
-                    {switchOrgMutation.isPending ? "switching..." : "switch org"}
-                  </Button>
-                )}
-              </div>
             </CardContent>
           </Card>
-        ) : (
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <p className="text-sm text-muted-foreground">No active organization is selected.</p>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/organizations">choose organization</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">My Projects</h2>
-            <p className="text-sm text-muted-foreground">
-              Projects you can access across your organizations.
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/projects/new">new project</Link>
-          </Button>
-        </div>
-
-        {projectsData && projectsData.data.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {projectsData.data.map((project: ProjectsResult["data"][number]) => (
-              <Card key={project.id}>
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          variant={
-                            project.status === "active"
-                              ? "default"
-                              : project.status === "paused"
-                                ? "secondary"
-                                : "destructive"
-                          }
-                        >
-                          {project.status}
-                        </Badge>
-                        <Badge variant="outline">{project.visibility}</Badge>
-                      </div>
-                      <Link
-                        to="/projects/$id"
-                        params={{ id: project.id }}
-                        className="font-medium hover:underline break-all"
-                      >
-                        {project.title}
-                      </Link>
-                      {project.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {project.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                No projects yet. Create your first project to start organizing apps.
-              </p>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/projects/new">create project</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Quick Actions</h2>
-          <p className="text-sm text-muted-foreground">Shortcuts for the most common next steps.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/organizations/new">create org</Link>
-          </Button>
-          {activeOrgId ? (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/organizations/$id" params={{ id: activeOrgId }}>
-                invite member
-              </Link>
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" disabled>
-              invite member
-            </Button>
-          )}
-          <Button asChild variant="outline" size="sm">
-            <Link to="/settings">add passkey</Link>
-          </Button>
-          {!profile.hasNear && (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/settings">link NEAR</Link>
-            </Button>
-          )}
-          <Button asChild variant="outline" size="sm">
-            <Link to="/apps" search={{}}>
-              open registry
-            </Link>
-          </Button>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }
@@ -405,17 +217,7 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
   );
 }
 
-function WorkspaceTile({
-  title,
-  body,
-  to,
-  href,
-}: {
-  title: string;
-  body: string;
-  to?: "/organizations" | "/settings" | "/keys";
-  href?: string;
-}) {
+function WorkspaceTile({ title, body, to }: { title: string; body: string; to?: "/settings" }) {
   const tile = (
     <Card className="transition-colors hover:bg-muted/20">
       <CardContent className="p-4 space-y-2">
@@ -429,5 +231,5 @@ function WorkspaceTile({
     return <Link to={to}>{tile}</Link>;
   }
 
-  return <a href={href}>{tile}</a>;
+  return tile;
 }

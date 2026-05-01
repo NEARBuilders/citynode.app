@@ -79,18 +79,48 @@ export const cliCommandMeta = {
     summary: "Scaffold a new project from a bos template",
     interactive: true,
     fields: {
-      account: {
+      domain: {
         positional: true,
-        description: "Parent NEAR account (defaults to dev.everything.near)",
+        description: "New project domain (e.g. ironclaw.everything.dev)",
       },
-      gateway: { positional: true, description: "Parent gateway ID (defaults to everything.dev)" },
-      destination: { description: "Target directory (defaults to ./gateway)" },
-      name: { description: "New project NEAR account" },
-      domain: { description: "New project domain" },
+      account: { description: "New project NEAR account (auto-derived from domain)" },
+      extendsAccount: {
+        description: "Parent NEAR account to extend from (defaults to dev.everything.near)",
+      },
+      extendsGateway: {
+        description: "Parent gateway to extend from (defaults to everything.dev)",
+      },
+      directory: { description: "Target directory (auto-derived from domain)" },
       source: { description: "Local source dir (skips GitHub download)" },
       withHost: { description: "Include host/ in template output" },
       noInteractive: { description: "Skip prompts, use flags only" },
       noInstall: { description: "Skip bun install" },
     },
+  },
+  sync: {
+    commandPath: ["sync"],
+    summary: "Sync template files from parent project",
+    interactive: false,
+    fields: {
+      dryRun: { description: "Preview changes without writing files" },
+      force: { description: "Overwrite user-modified files" },
+      noInstall: { description: "Skip bun install" },
+    },
+  },
+  upgrade: {
+    commandPath: ["upgrade"],
+    summary: "Upgrade framework packages and sync template files",
+    interactive: false,
+    fields: {
+      dryRun: { description: "Preview changes without writing" },
+      force: { description: "Overwrite user-modified files during sync" },
+      noInstall: { description: "Skip bun install" },
+      noSync: { description: "Only upgrade packages, skip template sync" },
+    },
+  },
+  status: {
+    commandPath: ["status"],
+    summary: "Show project health, versions, and update availability",
+    interactive: false,
   },
 } as const satisfies Record<string, CliCommandMeta>;

@@ -1,16 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getActiveRuntime } from "@/app";
 import { Card, CardContent, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import { Route as RootRoute } from "../__root";
 
 export const Route = createFileRoute("/_layout/config")({
   head: () => ({
     meta: [
-      { title: `Config | ${APP_NAME}` },
+      { title: "Config | app" },
       {
         name: "description",
-        content: `Resolved runtime configuration for the active ${APP_NAME} runtime.`,
+        content: "Resolved runtime configuration for the active app runtime.",
       },
     ],
   }),

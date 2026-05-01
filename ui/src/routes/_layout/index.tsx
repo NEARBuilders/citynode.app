@@ -1,17 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { buildRuntimeHref, getActiveRuntime } from "@/app";
+import { buildRuntimeHref, getActiveRuntime, getAppName } from "@/app";
 import { Button } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import { Route as RootRoute } from "../__root";
 
 export const Route = createFileRoute("/_layout/")({
   head: () => ({
     meta: [
-      { title: `${APP_NAME} | Runtime composition on NEAR` },
+      { title: "app | Runtime composition on NEAR" },
       {
         name: "description",
-        content: `${APP_NAME} is an open runtime for apps on NEAR, composed from published config and loaded at runtime.`,
+        content:
+          "app is an open runtime for apps on NEAR, composed from published config and loaded at runtime.",
       },
     ],
   }),
@@ -31,6 +31,7 @@ const subtitles = [
 
 function Landing() {
   const { runtimeConfig } = RootRoute.useLoaderData();
+  const appName = getAppName(runtimeConfig);
   const [subtitleIndex, setSubtitleIndex] = useState(0);
   const activeRuntime = getActiveRuntime(runtimeConfig);
   const runtimeLabel = activeRuntime
@@ -58,7 +59,7 @@ function Landing() {
             textShadow: "rgba(0,0,0,0.08) 1px 1px 1px, rgba(0,0,0,0.06) 3px 3px 3px",
           }}
         >
-          {APP_NAME}
+          {appName}
         </h1>
 
         <div className="mt-2 flex min-h-[1.75rem] items-center justify-center sm:min-h-[2rem]">

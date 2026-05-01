@@ -1,14 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent } from "@/components";
-import { APP_NAME } from "@/lib/branding";
 import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/_authenticated/projects/")({
   head: () => ({
     meta: [
-      { title: `Projects | ${APP_NAME}` },
+      { title: "Projects | app" },
       { name: "description", content: "Manage your projects and linked apps." },
     ],
   }),

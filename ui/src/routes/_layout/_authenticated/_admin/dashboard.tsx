@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { getAppName } from "@/app";
 import { Badge, Input } from "@/components";
-import { APP_NAME } from "@/lib/branding";
+import { useClientValue } from "@/hooks/use-client";
 import { useApiClient } from "@/lib/use-api-client";
 
 type Tab = "server" | "prompt";
@@ -13,6 +14,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_admin/dashboard")
 
 function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("server");
+  const appName = useClientValue(() => getAppName(), "app");
   const tabs: { key: Tab; label: string }[] = [
     { key: "server", label: "server" },
     { key: "prompt", label: "prompt" },
@@ -23,7 +25,7 @@ function AdminDashboard() {
       <div className="flex items-center justify-between pb-4 border-b border-border/50">
         <div className="flex items-center gap-2 text-xs font-mono">
           <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors">
-            {APP_NAME}
+            {appName}
           </Link>
           <span className="text-muted-foreground">/</span>
           <span className="text-foreground">admin</span>

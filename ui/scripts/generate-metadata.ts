@@ -8,7 +8,10 @@ import {
   SOCIAL_IMAGE_WIDTH,
 } from "everything-dev/ui/metadata";
 import sharp from "sharp";
-import { APP_NAME, BRAND_DOT_COLOR, METADATA_IMAGE_ALT } from "../src/lib/branding";
+
+const APP_NAME = "everything.dev";
+const BRAND_DOT_COLOR = "#111111";
+const METADATA_IMAGE_ALT = "everything.dev splash screen with an under construction banner";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
