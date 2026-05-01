@@ -148,7 +148,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -383,6 +383,7 @@
   "overrides": {
     "@orpc/contract": "1.13.14",
     "@orpc/server": "1.13.14",
+    "@tanstack/router-generator>zod": "^3.24.2",
     "axios": "1.13.6",
     "effect": "3.21.0",
     "zod": "4.3.6",
