@@ -84,6 +84,7 @@
   "dependencies": {
     "@better-auth/api-key": "^1.5.4",
     "@better-auth/passkey": "^1.5.4",
+    "@libsql/client": "^0.17.0",
     "@orpc/contract": "^1.13.14",
     "every-plugin": "workspace:*",
     "everything-dev": "workspace:*"
