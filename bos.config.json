@@ -68,6 +68,21 @@
   },
   "testnet": "dev.allthethings.testnet",
   "shared": {
-    "ui": {}
+    "ui": {
+      "effect": {
+        "singleton": true,
+        "strictVersion": false,
+        "version": "3.21.0",
+        "requiredVersion": "^3.21.0",
+        "shareScope": "default"
+      },
+      "zod": {
+        "singleton": true,
+        "strictVersion": false,
+        "version": "4.3.6",
+        "requiredVersion": "^4.3.6",
+        "shareScope": "default"
+      }
+    }
   }
 }

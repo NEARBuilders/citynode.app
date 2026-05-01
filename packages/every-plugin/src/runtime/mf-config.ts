@@ -11,6 +11,15 @@ function readPackageVersion(): string {
   }
 }
 
+function getInstalledPackageVersion(packageName: string, fallbackRange: string): string {
+  try {
+    return require(`${packageName}/package.json`).version as string;
+  } catch {
+    const match = fallbackRange.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
+    return match ? match[0] : fallbackRange.replace(/^[\^~>=<\s]+/, "");
+  }
+}
+
 export const PLUGIN_VERSION =
   typeof __EVERY_PLUGIN_VERSION__ === "string" ? __EVERY_PLUGIN_VERSION__ : readPackageVersion();
 
@@ -27,11 +36,11 @@ export const MF_SHARED_DEPS = {
     shareConfig: SHARE_CONFIG,
   },
   effect: {
-    version: "^3.21.0",
+    version: getInstalledPackageVersion("effect", "^3.21.0"),
     shareConfig: SHARE_CONFIG,
   },
   zod: {
-    version: "^4.3.6",
+    version: getInstalledPackageVersion("zod", "^4.3.6"),
     shareConfig: SHARE_CONFIG,
   },
 } as const;

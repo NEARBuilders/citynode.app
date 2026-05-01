@@ -80,7 +80,12 @@ function mergePackageJson(
 ): Record<string, unknown> {
   const merged = { ...template };
 
-  for (const depField of ["dependencies", "devDependencies", "peerDependencies"] as const) {
+  for (const depField of [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "overrides",
+  ] as const) {
     const localDeps = local[depField] as Record<string, string> | undefined;
     const templateDeps = template[depField] as Record<string, string> | undefined;
 
