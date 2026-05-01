@@ -142,7 +142,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -298,7 +298,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "dependencies": {
         "@hot-labs/near-connect": "catalog:",
         "@orpc/client": "^1.12.3",
