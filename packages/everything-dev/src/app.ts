@@ -115,10 +115,7 @@ export const startDevServers = (
     const shutdown = Effect.gen(function* () {
       const reversed = [...handles].reverse();
       for (const handle of reversed) {
-        yield* Effect.tryPromise({
-          try: () => handle.kill(),
-          catch: () => null,
-        }).pipe(Effect.ignore);
+        yield* handle.kill.pipe(Effect.ignore);
       }
     });
 

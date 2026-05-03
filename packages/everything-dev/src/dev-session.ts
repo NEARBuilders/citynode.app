@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Deferred, Effect, Exit } from "effect";
 import {
   type DevViewHandle,
   type LogEntry,
@@ -14,7 +14,7 @@ import {
   type ProcessCallbacks,
   type ProcessHandle,
 } from "./orchestrator";
-import { makeProcessRegistry } from "./process-registry";
+import { makeProcessRegistry, type ProcessRegistry } from "./process-registry";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 
 export interface AppConfig {
@@ -87,9 +87,23 @@ function formatLogLine(entry: LogEntry): string {
   return `[${ts}] [${entry.source}] [${prefix}] ${entry.line}`;
 }
 
+const scopedProcess = (
+  pkg: string,
+  env: Record<string, string> | undefined,
+  callbacks: ProcessCallbacks,
+  portOverride: number | undefined,
+  bosConfig: BosConfig | undefined,
+  runtimeConfig: RuntimeConfig | undefined,
+  registry: ProcessRegistry | undefined,
+) =>
+  Effect.acquireRelease(
+    makeDevProcess(pkg, env, callbacks, portOverride, bosConfig, runtimeConfig, registry),
+    (handle) => handle.kill.pipe(Effect.ignore),
+  );
+
 export const runDevSession = (
   orchestrator: AppOrchestrator,
-  onCleanupReady?: (cleanup: () => Promise<void>) => void,
+  onShutdownReady?: (requestShutdown: () => void) => void,
 ) =>
   Effect.gen(function* () {
     const configDir = getProjectRoot();
@@ -125,50 +139,21 @@ export const runDevSession = (
     const logger = yield* Effect.promise(() =>
       createDevLogger(configDir, orchestrator.description),
     );
-    const handles: ProcessHandle[] = [];
+
+    const shutdown = yield* Deferred.make<void>();
+
+    onShutdownReady?.(() => {
+      void Effect.runPromise(Deferred.succeed(shutdown, undefined));
+    });
+
     const allLogs: LogEntry[] = [];
     let view: DevViewHandle | null = null;
-    let shuttingDown = false;
+    let shouldExportLogs = false;
 
-    const killAll = async () => {
-      const reversed = [...handles].reverse();
-      for (const handle of reversed) {
-        try {
-          await handle.kill();
-        } catch {}
-      }
-      await Effect.runPromise(registry.killAll(true)).catch(() => {});
+    const requestShutdownAndExport = () => {
+      shouldExportLogs = true;
+      void Effect.runPromise(Deferred.succeed(shutdown, undefined));
     };
-
-    const exportLogs = async () => {
-      console.log("\n");
-      console.log("═".repeat(70));
-      console.log(`  SESSION LOGS: ${orchestrator.description}`);
-      console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
-      console.log(`  Total entries: ${allLogs.length}`);
-      console.log("═".repeat(70));
-      console.log("");
-      for (const entry of allLogs) {
-        console.log(formatLogLine(entry));
-      }
-      console.log("");
-      console.log("═".repeat(70));
-      console.log(`  Full logs saved to: ${logger.logFile}`);
-      console.log("═".repeat(70));
-      console.log("");
-    };
-
-    const cleanup = async (showLogs = false) => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      view?.unmount();
-      await killAll();
-      if (showLogs) {
-        await exportLogs();
-      }
-    };
-
-    onCleanupReady?.(cleanup);
 
     const useInteractive = orchestrator.interactive ?? isInteractiveSupported();
     view = useInteractive
@@ -176,11 +161,14 @@ export const runDevSession = (
           initialProcesses,
           orchestrator.description,
           orchestrator.env,
-          () => cleanup(false),
-          () => cleanup(true),
+          () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
+          requestShutdownAndExport,
         )
-      : renderStreamingView(initialProcesses, orchestrator.description, orchestrator.env, () =>
-          cleanup(false),
+      : renderStreamingView(
+          initialProcesses,
+          orchestrator.description,
+          orchestrator.env,
+          () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
         );
 
     const callbacks: ProcessCallbacks = {
@@ -207,7 +195,7 @@ export const runDevSession = (
 
     const startProcess = (pkg: string) => {
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
-      return makeDevProcess(
+      return scopedProcess(
         pkg,
         orchestrator.env,
         callbacks,
@@ -237,7 +225,6 @@ export const runDevSession = (
     const hostPackages = orderedPackages.filter((pkg) => pkg === "host");
 
     const nonHostHandles = yield* startGroup(nonHostPackages);
-    handles.push(...nonHostHandles);
 
     yield* Effect.forEach(
       nonHostHandles.map((handle, index) => ({
@@ -249,7 +236,6 @@ export const runDevSession = (
     );
 
     const hostHandles = yield* startGroup(hostPackages);
-    handles.push(...hostHandles);
 
     yield* Effect.forEach(
       hostHandles.map((handle, index) => ({ handle, pkg: hostPackages[index] ?? handle.name })),
@@ -257,16 +243,48 @@ export const runDevSession = (
       { concurrency: "unbounded" },
     );
 
-    yield* Effect.addFinalizer(() => Effect.promise(() => cleanup(false)));
-    yield* Effect.never;
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        view?.unmount();
+
+        if (shouldExportLogs) {
+          console.log("\n");
+          console.log("═".repeat(70));
+          console.log(`  SESSION LOGS: ${orchestrator.description}`);
+          console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
+          console.log(`  Total entries: ${allLogs.length}`);
+          console.log("═".repeat(70));
+          console.log("");
+          for (const entry of allLogs) {
+            console.log(formatLogLine(entry));
+          }
+          console.log("");
+          console.log("═".repeat(70));
+          console.log(`  Full logs saved to: ${logger.logFile}`);
+          console.log("═".repeat(70));
+          console.log("");
+        }
+
+        yield* registry.killAll(true).pipe(Effect.ignore);
+      }),
+    );
+
+    yield* Deferred.await(shutdown);
   });
 
 export const startApp = (orchestrator: AppOrchestrator) => {
-  let activeCleanup: (() => Promise<void>) | null = null;
+  let requestShutdown: (() => void) | null = null;
+  let signalCount = 0;
+  let forceExitTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const forceExit = () => {
+    console.log("\n[Dev] Force exit");
+    process.exit(0);
+  };
 
   const program = Effect.scoped(
-    runDevSession(orchestrator, (cleanup) => {
-      activeCleanup = cleanup;
+    runDevSession(orchestrator, (shutdown) => {
+      requestShutdown = shutdown;
     }),
   ).pipe(
     Effect.catchAll((e) =>
@@ -281,38 +299,22 @@ export const startApp = (orchestrator: AppOrchestrator) => {
     ),
   );
 
-  const handleSignal = async () => {
-    if (activeCleanup) await activeCleanup();
-  };
-
-  const forceExit = () => {
-    console.log("\n[Dev] Force exit");
-    process.exit(0);
-  };
-
-  let signalCount = 0;
-  process.on("SIGINT", () => {
+  const handleSignal = () => {
     signalCount++;
     if (signalCount > 1) {
       forceExit();
       return;
     }
-    const timeout = setTimeout(forceExit, 5000);
-    void handleSignal().finally(() => {
-      clearTimeout(timeout);
-    });
-  });
-  process.on("SIGTERM", () => {
-    signalCount++;
-    if (signalCount > 1) {
-      forceExit();
-      return;
-    }
-    const timeout = setTimeout(forceExit, 5000);
-    void handleSignal().finally(() => {
-      clearTimeout(timeout);
-    });
-  });
+    console.log("\n[Dev] Shutting down...");
+    forceExitTimer = setTimeout(forceExit, 8000);
+    requestShutdown?.();
+  };
 
-  void Effect.runPromise(program);
+  process.on("SIGINT", handleSignal);
+  process.on("SIGTERM", handleSignal);
+
+  Effect.runPromiseExit(program).then((exit) => {
+    if (forceExitTimer) clearTimeout(forceExitTimer);
+    process.exit(Exit.isSuccess(exit) ? 0 : 0);
+  });
 };

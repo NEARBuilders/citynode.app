@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
@@ -55,6 +56,35 @@ import { createPlugin, z } from "./sdk";
 import { syncAndGenerateSharedUi } from "./shared";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
+
+function ensureEnvFile(configDir: string): void {
+  const envPath = join(configDir, ".env");
+  const examplePath = join(configDir, ".env.example");
+
+  if (existsSync(envPath)) return;
+
+  if (!existsSync(examplePath)) return;
+
+  const content = readFileSync(examplePath, "utf-8");
+  const lines = content.split("\n");
+
+  const secret = randomBytes(32).toString("base64url");
+
+  const updated = lines
+    .map((line) => {
+      if (/^BETTER_AUTH_SECRET=/.test(line)) {
+        return `BETTER_AUTH_SECRET=${secret}`;
+      }
+      if (/^BETTER_AUTH_URL=/.test(line)) {
+        return `BETTER_AUTH_URL=http://localhost:3000`;
+      }
+      return line;
+    })
+    .join("\n");
+
+  writeFileSync(envPath, updated);
+  console.log(`[CLI] Created .env from .env.example with generated BETTER_AUTH_SECRET`);
+}
 
 const DEFAULT_DEV_CONFIG: AppConfig = {
   host: "local",
@@ -681,6 +711,8 @@ export default createPlugin({
     ),
 
     dev: builder.dev.handler(async ({ input }: { input: DevOptions }) => {
+      ensureEnvFile(deps.configDir);
+
       const localPackages = detectLocalPackages(
         deps.bosConfig ?? undefined,
         deps.runtimeConfig ?? undefined,
@@ -778,6 +810,8 @@ export default createPlugin({
     }),
 
     start: builder.start.handler(async ({ input }: { input: StartOptions }) => {
+      ensureEnvFile(deps.configDir);
+
       let remoteConfig: BosConfig | null = null;
 
       if (input.account && input.domain) {
@@ -1202,6 +1236,8 @@ export default createPlugin({
           if (!input.noInstall) {
             await runBunInstall(directory);
           }
+
+          ensureEnvFile(directory);
 
           return {
             status: "initialized" as const,

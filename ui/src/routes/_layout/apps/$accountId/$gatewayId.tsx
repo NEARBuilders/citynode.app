@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { authClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
+import { getNearClient } from "@/lib/near-client";
 import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -127,7 +128,7 @@ function AppDetailPage() {
   const publishMetadataMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const near = authClient.near.getNearClient();
+      const near = getNearClient();
       const signerId = authClient.near.getAccountId();
 
       if (!signerId) {
@@ -160,7 +161,7 @@ function AppDetailPage() {
   const signDelegateMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const near = authClient.near.getNearClient();
+      const near = getNearClient();
       const signerId = authClient.near.getAccountId();
 
       if (!signerId) {

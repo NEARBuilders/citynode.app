@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
-    "@hot-labs/near-connect": "catalog:",
+    "@fastnear/near-connect": "catalog:",
     "@libsql/client": "catalog:",
     "@module-federation/enhanced": "catalog:",
     "@module-federation/node": "catalog:",
@@ -41,7 +41,6 @@
     "drizzle-orm": "catalog:",
     "every-plugin": "catalog:",
     "hono": "^4.11.4",
-    "near-kit": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "effect": "catalog:",

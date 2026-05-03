@@ -17,7 +17,8 @@
     "build:types": "tsc --declaration --emitDeclarationOnly --outDir dist/types"
   },
   "dependencies": {
-    "@hot-labs/near-connect": "catalog:",
+    "@fastnear/wallet": "catalog:",
+    "@fastnear/near-connect": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -59,7 +60,7 @@
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "@hot-labs/near-connect": "catalog:",
+    "@fastnear/near-connect": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "near-kit": "catalog:",

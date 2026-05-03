@@ -24,7 +24,7 @@ export interface ProcessCallbacks {
 export interface ProcessHandle {
   name: string;
   pid: number | undefined;
-  kill: () => Promise<void>;
+  kill: Effect.Effect<void, unknown>;
   waitForReady: Effect.Effect<void, Error>;
   waitForExit: Effect.Effect<unknown>;
 }
@@ -62,7 +62,6 @@ const processConfigBases: Record<string, ProcessConfigBase> = {
     command: "bun",
     args: ["run", "dev"],
     cwd: "ui",
-    // Wait for the client build (mf) specifically, not just SSR.
     readyPatterns: [/\bready\s+built in\b/i, /\bLocal:\b/i, /\bcompiled\b.*successfully/i],
     errorPatterns: [/error/i, /failed to compile/i],
   },
@@ -386,11 +385,14 @@ export const spawnRemoteHost = (
     return {
       name: config.name,
       pid: process.pid,
-      kill: async () => {
+      kill: Effect.gen(function* () {
         callbacks.onLog(config.name, "Shutting down remote host...");
         restoreConsole();
-        await serverHandle.shutdown();
-      },
+        yield* Effect.tryPromise({
+          try: () => serverHandle.shutdown(),
+          catch: () => {},
+        }).pipe(Effect.ignore);
+      }),
       waitForReady: Effect.succeed(undefined),
       waitForExit: Effect.never,
     } satisfies ProcessHandle;
@@ -441,14 +443,12 @@ export const spawnDevProcess = (
       yield* Deferred.succeed(readyDeferred, undefined).pipe(Effect.ignore);
     });
 
-    // Prefer probe-based readiness to avoid brittle log regexes.
-    // This is best-effort and complements log detection.
     if (config.port > 0) {
       const readinessPath =
         config.name === "host" ? "/health" : config.name === "ui-ssr" ? "/" : "/remoteEntry.js";
       const url = `http://127.0.0.1:${config.port}${readinessPath}`;
 
-      yield* Effect.fork(
+      yield* Effect.forkScoped(
         Effect.gen(function* () {
           const deadline = Date.now() + 90_000;
           while (Date.now() < deadline) {
@@ -483,7 +483,7 @@ export const spawnDevProcess = (
       });
     }
 
-    yield* Effect.fork(
+    yield* Effect.forkScoped(
       Effect.promise(() => proc.exited).pipe(
         Effect.andThen((code) =>
           Effect.gen(function* () {
@@ -531,7 +531,7 @@ export const spawnDevProcess = (
 
     const decoder = new TextDecoder();
 
-    const stdoutFiber = yield* Effect.fork(
+    const stdoutFiber = yield* Effect.forkScoped(
       Effect.async<void>((resume) => {
         if (!proc.stdout) {
           resume(Effect.void);
@@ -539,13 +539,13 @@ export const spawnDevProcess = (
         }
         const reader = proc.stdout.getReader();
         let buffer = "";
+        let active = true;
 
         const pump = (): Promise<void> =>
           reader.read().then(({ done, value }) => {
+            if (!active) return;
             if (done) {
-              if (buffer) {
-                Effect.runSync(handleLine(buffer, false));
-              }
+              if (buffer) Effect.runSync(handleLine(buffer, false));
               return;
             }
             buffer += decoder
@@ -560,11 +560,18 @@ export const spawnDevProcess = (
             return pump();
           });
 
-        pump().then(() => resume(Effect.void));
+        pump().then(() => {
+          if (active) resume(Effect.void);
+        });
+
+        return Effect.sync(() => {
+          active = false;
+          reader.cancel();
+        });
       }),
     );
 
-    const stderrFiber = yield* Effect.fork(
+    const stderrFiber = yield* Effect.forkScoped(
       Effect.async<void>((resume) => {
         if (!proc.stderr) {
           resume(Effect.void);
@@ -572,13 +579,13 @@ export const spawnDevProcess = (
         }
         const reader = proc.stderr.getReader();
         let buffer = "";
+        let active = true;
 
         const pump = (): Promise<void> =>
           reader.read().then(({ done, value }) => {
+            if (!active) return;
             if (done) {
-              if (buffer) {
-                Effect.runSync(handleLine(buffer, true));
-              }
+              if (buffer) Effect.runSync(handleLine(buffer, true));
               return;
             }
             buffer += decoder
@@ -593,25 +600,29 @@ export const spawnDevProcess = (
             return pump();
           });
 
-        pump().then(() => resume(Effect.void));
+        pump().then(() => {
+          if (active) resume(Effect.void);
+        });
+
+        return Effect.sync(() => {
+          active = false;
+          reader.cancel();
+        });
       }),
     );
 
     const handle: ProcessHandle = {
       name: config.name,
       pid: proc.pid,
-      kill: async () => {
-        const pid = proc.pid;
-        if (pid) {
-          await Effect.runPromise(killProcessTree(pid));
-        } else {
-          proc.kill("SIGTERM");
-          await new Promise((r) => setTimeout(r, 100));
-          try {
-            proc.kill("SIGKILL");
-          } catch {}
-        }
-      },
+      kill: proc.pid
+        ? killProcessTree(proc.pid)
+        : Effect.gen(function* () {
+            proc.kill("SIGTERM");
+            yield* Effect.sleep("100 millis");
+            try {
+              proc.kill("SIGKILL");
+            } catch {}
+          }),
       waitForReady: Deferred.await(readyDeferred),
       waitForExit: Effect.gen(function* () {
         yield* Fiber.joinAll([stdoutFiber, stderrFiber]);

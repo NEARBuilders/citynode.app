@@ -161,7 +161,10 @@ export function createAuthInstance(config: RuntimeConfig, db: Database) {
       },
     },
     plugins: [
-      siwn({ recipient: config.account }),
+      siwn({
+        recipient: config.account,
+        relayer: {},
+      }),
       admin({ defaultRole: "user", adminRoles: ["admin"] }),
       anonymous({ emailDomainName: config.account }),
       phoneNumber({
