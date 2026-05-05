@@ -1,24 +1,19 @@
 import type { Context, Next } from "hono";
 import type { LoadedPlugin, PluginResult } from "./plugins";
 
+interface AuthUser {
+  id: string;
+  [key: string]: unknown;
+}
+
+interface AuthSession {
+  activeOrganizationId?: string | null;
+  [key: string]: unknown;
+}
+
 export interface AuthVariables {
-  user: {
-    id: string;
-    role?: string | null;
-    email?: string | null;
-    name?: string | null;
-  } | null;
-  session: {
-    id: string;
-    userId: string;
-    expiresAt: Date;
-    token: string;
-    createdAt: Date;
-    updatedAt: Date;
-    ipAddress?: string | null;
-    userAgent?: string | null;
-    activeOrganizationId?: string | null;
-  } | null;
+  user: AuthUser | null;
+  session: AuthSession | null;
   reqHeaders: Record<string, string>;
 }
 
@@ -28,44 +23,31 @@ function resolveAuthPlugin(plugins: PluginResult): LoadedPlugin | null {
   return plugins.auth ?? plugins.plugins.auth ?? null;
 }
 
-function getAuthHandler(plugins: PluginResult): ((req: Request) => Promise<Response>) | null {
+function getAuthInternals(plugins: PluginResult) {
   const authPlugin = resolveAuthPlugin(plugins);
   if (!authPlugin) return null;
-  const initialized = (authPlugin as any).initialized;
-  return typeof initialized?.context?.handler === "function" ? initialized.context.handler : null;
-}
-
-function getAuthInstance(
-  plugins: PluginResult,
-): { api: { getSession: (opts: { headers: Headers }) => Promise<any> } } | null {
-  const authPlugin = resolveAuthPlugin(plugins);
-  if (!authPlugin) return null;
-  const initialized = (authPlugin as any).initialized;
-  return initialized?.context?.auth ?? null;
+  return (authPlugin as any).initialized?.context ?? null;
 }
 
 export function registerAuthHandler(app: { on: (...args: any[]) => any }, plugins: PluginResult) {
-  const handler = getAuthHandler(plugins);
-  if (handler) {
-    app.on(["POST", "GET"], "/api/auth/*", (c: Context<HonoEnv>) => handler(c.req.raw));
+  const internals = getAuthInternals(plugins);
+  if (typeof internals?.handler === "function") {
+    app.on(["POST", "GET"], "/api/auth/*", (c: Context<HonoEnv>) => internals.handler(c.req.raw));
   }
 }
 
 export function createSessionMiddleware(plugins: PluginResult) {
-  const authInstance = getAuthInstance(plugins);
+  const authApi = getAuthInternals(plugins)?.auth?.api ?? null;
 
   return async (c: Context<HonoEnv>, next: Next) => {
     if (c.req.path.startsWith("/api/auth/")) {
       return next();
     }
 
-    const reqHeaders: Record<string, string> = {};
-    c.req.raw.headers.forEach((value, key) => {
-      reqHeaders[key] = value;
-    });
+    const reqHeaders = Object.fromEntries(c.req.raw.headers);
     c.set("reqHeaders", reqHeaders);
 
-    if (!authInstance) {
+    if (!authApi) {
       c.set("user", null);
       c.set("session", null);
       await next();
@@ -74,33 +56,9 @@ export function createSessionMiddleware(plugins: PluginResult) {
 
     try {
       const headers = new Headers(Object.entries(reqHeaders) as [string, string][]);
-      const sessionResult = await authInstance.api.getSession({ headers });
-
-      const user = sessionResult?.user
-        ? {
-            id: sessionResult.user.id,
-            role: sessionResult.user.role ?? null,
-            email: sessionResult.user.email ?? null,
-            name: sessionResult.user.name ?? null,
-          }
-        : null;
-
-      const session = sessionResult?.session
-        ? {
-            id: sessionResult.session.id,
-            userId: sessionResult.session.userId,
-            expiresAt: sessionResult.session.expiresAt,
-            token: sessionResult.session.token,
-            createdAt: sessionResult.session.createdAt,
-            updatedAt: sessionResult.session.updatedAt,
-            ipAddress: null,
-            userAgent: null,
-            activeOrganizationId: sessionResult.session.activeOrganizationId ?? null,
-          }
-        : null;
-
-      c.set("user", user);
-      c.set("session", session);
+      const sessionResult = await authApi.getSession({ headers });
+      c.set("user", sessionResult?.user ?? null);
+      c.set("session", sessionResult?.session ?? null);
     } catch (error) {
       console.warn(
         `[Auth] Session resolution failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -118,15 +76,8 @@ export function buildPluginContext(c: Context<HonoEnv>) {
   const session = c.get("session");
 
   return {
-    userId: user?.id ?? undefined,
-    user: user
-      ? {
-          id: user.id,
-          role: user.role ?? undefined,
-          email: user.email ?? undefined,
-          name: user.name ?? undefined,
-        }
-      : undefined,
+    userId: user?.id,
+    user: user ?? undefined,
     organizationId: session?.activeOrganizationId ?? undefined,
     reqHeaders: c.get("reqHeaders"),
   };

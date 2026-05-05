@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { authClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
-import { getNearClient } from "@/lib/near-client";
 import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -128,26 +127,34 @@ function AppDetailPage() {
   const publishMetadataMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const near = getNearClient();
       const signerId = authClient.near.getAccountId();
 
       if (!signerId) {
         throw new Error("Connect a NEAR wallet before publishing metadata.");
       }
 
-      return near
-        .transaction(signerId)
-        .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
-          gas: "10 Tgas",
-          attachedDeposit: "0 yocto",
-        })
-        .send({ waitUntil: "NONE" });
+      const signedDelegateAction = await authClient.near.buildSignedDelegateAction({
+        receiverId: prepared.data.contractId,
+        actions: [
+          {
+            type: "FunctionCall",
+            methodName: prepared.data.methodName,
+            args: prepared.data.args,
+            gas: "10000000000000",
+            deposit: "0",
+          },
+        ],
+      });
+
+      const result = await authClient.near.relayTransaction({ signedDelegateAction });
+      if (result.error) throw new Error(result.error.message || "Relay failed");
+      return result.data;
     },
-    onSuccess: async (result: { transaction?: { hash?: string } }) => {
+    onSuccess: async (result) => {
       setDelegatePayload(null);
       toast.success("Registry metadata submitted", {
-        description: result?.transaction?.hash
-          ? `Submitted transaction ${result.transaction.hash}. FastKV indexing can still succeed even if the contract call looks failed.`
+        description: result?.txHash
+          ? `Submitted transaction ${result.txHash}. FastKV indexing can still succeed even if the contract call looks failed.`
           : "The transaction was submitted. FastKV indexing can take a moment.",
       });
       await refreshQueries();
@@ -161,23 +168,28 @@ function AppDetailPage() {
   const signDelegateMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const near = getNearClient();
       const signerId = authClient.near.getAccountId();
 
       if (!signerId) {
         throw new Error("Connect a NEAR wallet before signing delegate payloads.");
       }
 
-      return near
-        .transaction(signerId)
-        .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
-          gas: "10 Tgas",
-          attachedDeposit: "0 yocto",
-        })
-        .delegate();
+      const signedDelegateAction = await authClient.near.buildSignedDelegateAction({
+        receiverId: prepared.data.contractId,
+        actions: [
+          {
+            type: "FunctionCall",
+            methodName: prepared.data.methodName,
+            args: prepared.data.args,
+            gas: "10000000000000",
+            deposit: "0",
+          },
+        ],
+      });
+
+      return signedDelegateAction;
     },
-    onSuccess: (result: { payload: string | Uint8Array }) => {
-      const payload = typeof result.payload === "string" ? result.payload : null;
+    onSuccess: (payload: string) => {
       setDelegatePayload(payload);
       toast.success("Delegate payload signed", {
         description: payload
@@ -196,12 +208,16 @@ function AppDetailPage() {
         throw new Error("Sign a delegate payload first.");
       }
 
-      return apiClient.registry.relayRegistryMetadataWrite({ payload: delegatePayload });
+      const result = await authClient.near.relayTransaction({
+        signedDelegateAction: delegatePayload,
+      });
+      if (result.error) throw new Error(result.error.message || "Relay failed");
+      return result.data;
     },
     onSuccess: async (result) => {
       toast.success("Delegate payload relayed", {
-        description: result.data.transactionHash
-          ? `Submitted relayed transaction ${result.data.transactionHash}.`
+        description: result?.txHash
+          ? `Submitted relayed transaction ${result.txHash}.`
           : "Relay submitted the signed delegate action.",
       });
       await refreshQueries();
