@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
-import DrizzleORMMigrations from "@proj-airi/unplugin-drizzle-orm-migrations/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { computeSriHashForUrl } from "everything-dev/integrity";
@@ -75,7 +74,7 @@ export default defineConfig({
         uniqueName: "host",
         library: { type: "commonjs-module" },
       },
-      externals: [/^node:/, /^bun:/, "@libsql/client"],
+      externals: [/^node:/, /^bun:/],
       resolve: {
         fallback: { bufferutil: false, "utf-8-validate": false },
       },
@@ -84,7 +83,6 @@ export default defineConfig({
       },
       stats: "errors-warnings",
       plugins: [
-        DrizzleORMMigrations(),
         new ModuleFederationPlugin({
           name: "host",
           filename: "remoteEntry.js",
