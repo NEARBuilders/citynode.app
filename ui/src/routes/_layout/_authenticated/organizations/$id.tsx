@@ -2,7 +2,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type Organization } from "@/app";
+import { getAuthClient, type Organization, type SessionData } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -65,7 +65,14 @@ function OrganizationDetail() {
   const apiClient = useApiClient();
 
   const auth = getAuthClient();
-  const { data: session } = auth.useSession();
+  const { data: session } = useQuery<SessionData | null>({
+    queryKey: ["session"],
+    queryFn: async () => {
+      const { data } = await auth.getSession();
+      return data ?? null;
+    },
+    staleTime: 60 * 1000,
+  });
   const { data: organizations = [] } = useQuery({
     queryKey: ["organizations"],
     queryFn: async () => {

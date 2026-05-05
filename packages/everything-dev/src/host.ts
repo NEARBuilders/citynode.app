@@ -258,7 +258,7 @@ async function runHostServer(opts: {
     }),
   );
 
-  app.use("*", secureHeaders());
+  app.use("*", secureHeaders({ crossOriginOpenerPolicy: "same-origin-allow-popups" }));
 
   app.get("/health", (c) => c.text("OK"));
   app.get("/ready", async (c) => {

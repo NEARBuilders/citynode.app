@@ -133,20 +133,18 @@ function AppDetailPage() {
         throw new Error("Connect a NEAR wallet before publishing metadata.");
       }
 
-      const signedDelegateAction = await auth.near.buildSignedDelegateAction({
-        receiverId: prepared.data.contractId,
-        actions: [
-          {
-            type: "FunctionCall",
-            methodName: prepared.data.methodName,
-            args: prepared.data.args,
-            gas: "10000000000000",
-            deposit: "0",
-          },
-        ],
-      });
+      const signedDelegateAction = await auth.near.buildSignedDelegateAction(
+        prepared.data.contractId,
+        (builder) =>
+          builder.functionCall(
+            prepared.data.contractId,
+            prepared.data.methodName,
+            prepared.data.args,
+            { gas: "10000000000000", attachedDeposit: 0n },
+          ),
+      );
 
-      const result = await auth.near.relayTransaction({ signedDelegateAction });
+      const result = await auth.near.relayTransaction({ payload: signedDelegateAction });
       if (result.error) throw new Error(result.error.message || "Relay failed");
       return result.data;
     },
@@ -174,18 +172,16 @@ function AppDetailPage() {
         throw new Error("Connect a NEAR wallet before signing delegate payloads.");
       }
 
-      const signedDelegateAction = await auth.near.buildSignedDelegateAction({
-        receiverId: prepared.data.contractId,
-        actions: [
-          {
-            type: "FunctionCall",
-            methodName: prepared.data.methodName,
-            args: prepared.data.args,
-            gas: "10000000000000",
-            deposit: "0",
-          },
-        ],
-      });
+      const signedDelegateAction = await auth.near.buildSignedDelegateAction(
+        prepared.data.contractId,
+        (builder) =>
+          builder.functionCall(
+            prepared.data.contractId,
+            prepared.data.methodName,
+            prepared.data.args,
+            { gas: "10000000000000", attachedDeposit: 0n },
+          ),
+      );
 
       return signedDelegateAction;
     },
@@ -209,7 +205,7 @@ function AppDetailPage() {
       }
 
       const result = await auth.near.relayTransaction({
-        signedDelegateAction: delegatePayload,
+        payload: delegatePayload,
       });
       if (result.error) throw new Error(result.error.message || "Relay failed");
       return result.data;

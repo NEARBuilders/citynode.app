@@ -27,6 +27,7 @@ type SearchParams = {
 type AuthMethod = "near" | "email" | "phone" | "passkey" | "anonymous" | "github";
 
 export const Route = createFileRoute("/_layout/login")({
+  ssr: false,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
   }),

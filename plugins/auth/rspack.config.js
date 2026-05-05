@@ -15,10 +15,6 @@ const __dirname = path.dirname(__filename);
 
 const shouldDeploy = process.env.DEPLOY === "true";
 
-function normalizePath(input) {
-  return input.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
 function updateBosConfig(url, integrity) {
   try {
     const configPath = path.resolve(__dirname, "../../bos.config.json");
@@ -48,7 +44,7 @@ const baseConfig = {
     new EmitPluginManifest({
       additionalExports: [
         {
-          srcPath: "types/auth-export.d.ts",
+          srcPath: "auth-export.d.ts",
           exportNames: ["Auth", "AuthSession", "createAuthInstance"],
         },
       ],

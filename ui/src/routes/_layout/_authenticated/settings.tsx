@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type Passkey } from "@/app";
+import { getAuthClient, type Passkey, type SessionData } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/settings")({
@@ -19,7 +19,15 @@ export const Route = createFileRoute("/_layout/_authenticated/settings")({
 });
 
 function Settings() {
-  const { data: session } = getAuthClient().useSession();
+  const auth = getAuthClient();
+  const { data: session } = useQuery<SessionData | null>({
+    queryKey: ["session"],
+    queryFn: async () => {
+      const { data } = await auth.getSession();
+      return data ?? null;
+    },
+    staleTime: 60 * 1000,
+  });
   const { data: passkeys = [] } = useQuery({
     queryKey: ["passkeys"],
     queryFn: async () => {
@@ -30,16 +38,10 @@ function Settings() {
   });
 
   const user = session?.user;
-  const nearAccountId = getAuthClient().near.getAccountId();
+  const nearAccountId = auth.near.getAccountId();
 
   if (!user) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-sm text-muted-foreground">
-          Loading settings...
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   return (

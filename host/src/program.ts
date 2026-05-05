@@ -438,7 +438,7 @@ export const createStartServer = (onReady?: () => void) =>
       }),
     );
 
-    app.use("*", secureHeaders());
+    app.use("*", secureHeaders({ crossOriginOpenerPolicy: "same-origin-allow-popups" }));
 
     app.get("/health", (c: Context<HonoEnv>) => c.text("OK"));
 
