@@ -223,8 +223,8 @@ export async function copyFilteredFiles(
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
 
-    const destPath = filePath.startsWith(".templates/")
-      ? filePath.slice(".templates/".length)
+    const destPath = filePath.startsWith(".github/templates/")
+      ? filePath.replace(/^\.github\/templates\//, ".github/")
       : filePath;
     const dest = join(destination, destPath);
     mkdirSync(dirname(dest), { recursive: true });
@@ -500,8 +500,8 @@ export async function writeInitSnapshot(
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
     const content = readFileSync(src);
-    const destPath = filePath.startsWith(".templates/")
-      ? filePath.slice(".templates/".length)
+    const destPath = filePath.startsWith(".github/templates/")
+      ? filePath.replace(/^\.github\/templates\//, ".github/")
       : filePath;
     fileHashes[destPath] = computeHash(content);
   }

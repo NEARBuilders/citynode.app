@@ -70,33 +70,33 @@
 
 - 8582862: Allow `api/package.json`, `api/plugin.dev.ts`, and `api/rspack.config.js` to sync on upgrade with package.json merge logic that preserves project-specific deps and scripts; protect `ui/src/components/**` and all `api/src/**` from sync overwrite
 - 8445bc2: Fix `bos init` output: default directory to full domain name instead of first segment, and show relative path instead of absolute
-- 8582862: Add helpful merge guidance to upgrade and sync output, use `.templates/` directory for consumer workflows
+- 8582862: Add helpful merge guidance to upgrade and sync output, use `.github/templates/` directory for consumer workflows
 
   **Upgrade/sync output:**
 
   - "Upgrade successful" with categorized guidance: never overwritten (safe), replaced (review), merged (deps preserved), skipped (already yours)
   - Sync output includes similar review prompt when files are updated
 
-  **Consumer workflow templates (`.templates/`):**
+  **Consumer workflow templates (`.github/templates/`):**
 
   - `release-sync.yml` — build, deploy, publish, Docker (no monorepo-specific steps)
   - `ci.yml` — lint, typecheck, Docker build
   - `dependabot.yml` — dependency updates
-  - `.templates/` prefix stripped on copy so files land at correct paths
+  - `.github/templates/` prefix replaced with `.github/` on copy so files land at correct paths
 
   **Sync exclude refinements:**
 
   - Removed `AGENTS.md`, `api/drizzle.config.ts`, `api/tsconfig.*` from exclude — these are replaced/merged on upgrade
   - Only core business logic remains protected: `api/src/contract.ts`, `api/src/index.ts`, `api/src/db/schema.ts`
 
-- 8582862: Add consumer-friendly workflow templates (`.templates/`), remove AGENTS.md and API config from sync exclude, add `routes` to plugin schema
+- 8582862: Add consumer-friendly workflow templates (`.github/templates/`), remove AGENTS.md and API config from sync exclude, add `routes` to plugin schema
 
   **Workflow templates:**
 
-  - `.templates/.github/workflows/release-sync.yml` — consumer build/deploy/publish pipeline (no monorepo-specific steps)
-  - `.templates/.github/workflows/ci.yml` — consumer lint/typecheck/docker workflow
-  - `.templates/.github/dependabot.yml` — consumer dependency updates
-  - `.templates/` prefix is stripped on copy so files land at correct paths
+  - `.github/templates/workflows/release-sync.yml` — consumer build/deploy/publish pipeline (no monorepo-specific steps)
+  - `.github/templates/workflows/ci.yml` — consumer lint/typecheck/docker workflow
+  - `.github/templates/dependabot.yml` — consumer dependency updates
+  - `.github/templates/` prefix is replaced with `.github/` on copy so files land at correct paths
 
   **Sync exclude changes:**
 

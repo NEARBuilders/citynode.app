@@ -64,4 +64,4 @@ api/src/db/layer.ts
 api/src/db/schema.ts
 
 plugins/_template/**
-.templates/.github/**
+.github/templates/**

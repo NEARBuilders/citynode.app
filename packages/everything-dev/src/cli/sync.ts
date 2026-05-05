@@ -117,13 +117,15 @@ function mergePackageJson(
 }
 
 function toDestPath(filePath: string): string {
-  return filePath.startsWith(".templates/") ? filePath.slice(".templates/".length) : filePath;
+  return filePath.startsWith(".github/templates/")
+    ? filePath.replace(/^\.github\/templates\//, ".github/")
+    : filePath;
 }
 
 function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string): void {
   const src = join(sourceDir, filePath);
-  const destPath = filePath.startsWith(".templates/")
-    ? filePath.slice(".templates/".length)
+  const destPath = filePath.startsWith(".github/templates/")
+    ? filePath.replace(/^\.github\/templates\//, ".github/")
     : filePath;
   const dest = join(projectDir, destPath);
   mkdirSync(dirname(dest), { recursive: true });
