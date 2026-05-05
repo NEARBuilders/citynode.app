@@ -20,7 +20,7 @@
       "drizzle-orm": "^0.45.1",
       "drizzle-kit": "^0.31.8",
       "better-auth": "^1.6.9",
-      "better-near-auth": "file:../../lib/better-near-auth",
+      "better-near-auth": "^1.0.0",
       "every-plugin": "workspace:*",
       "typescript": "^5.9.3",
       "vitest": "^4.0.17",
@@ -90,6 +90,7 @@
   "dependencies": {
     "@better-auth/api-key": "^1.6.9",
     "@better-auth/passkey": "^1.6.9",
+    "@hot-labs/near-connect": "0.11.2",
     "@libsql/client": "^0.17.0",
     "@orpc/contract": "^1.13.14",
     "effect": "catalog:",
@@ -103,6 +104,7 @@
     "zod": "4.3.6",
     "@tanstack/router-generator>zod": "^3.24.2",
     "@orpc/contract": "1.13.14",
-    "@orpc/server": "1.13.14"
+    "@orpc/server": "1.13.14",
+    "@hot-labs/near-connect": "0.11.2"
   }
 }
