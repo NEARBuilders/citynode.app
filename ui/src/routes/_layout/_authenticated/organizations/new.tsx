@@ -1,11 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getAuthClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createOrganization, organizationsQueryOptions, sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/organizations/new")({
   head: () => ({
@@ -19,18 +19,16 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/new"
 
 function NewOrganization() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const data = await createOrganization(name, slug);
+      const { data, error } = await getAuthClient().organization.create({ name, slug });
+      if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: organizationsQueryOptions().queryKey });
-      await queryClient.invalidateQueries({ queryKey: sessionQueryOptions().queryKey });
       toast.success(`Organization "${data?.name}" created`);
       if (data?.id) {
         await router.navigate({

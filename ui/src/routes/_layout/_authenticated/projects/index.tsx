@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { getAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
-import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/_authenticated/projects/")({
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_layout/_authenticated/projects/")({
 
 function ProjectsList() {
   const apiClient = useApiClient();
-  const { data: session } = useQuery(sessionQueryOptions());
+  const { data: session } = getAuthClient().useSession();
 
   const user = session?.user;
 

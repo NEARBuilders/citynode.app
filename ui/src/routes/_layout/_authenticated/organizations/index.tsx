@@ -1,14 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { getAuthClient, type Organization } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
-import {
-  isPersonalOrganization,
-  type Organization,
-  organizationsQueryOptions,
-  sessionQueryOptions,
-  setActiveOrganization,
-} from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/organizations/")({
   head: () => ({
@@ -21,23 +15,27 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/")({
 });
 
 function OrganizationsList() {
-  const queryClient = useQueryClient();
-
-  const { data: session } = useQuery(sessionQueryOptions());
-  const { data: organizations = [] } = useQuery(organizationsQueryOptions());
+  const auth = getAuthClient();
+  const { data: session } = auth.useSession();
+  const { data: organizations = [] } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await auth.organization.list();
+      return (data || []) as Organization[];
+    },
+    staleTime: 30 * 1000,
+  });
 
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
 
   const switchOrgMutation = useMutation({
-    mutationFn: (orgId: string) => setActiveOrganization(orgId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: sessionQueryOptions().queryKey });
-      toast.success("Switched organization");
+    mutationFn: async (orgId: string) => {
+      const { error } = await auth.organization.setActive({ organizationId: orgId });
+      if (error) throw new Error(error.message);
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to switch organization");
-    },
+    onSuccess: () => toast.success("Switched organization"),
+    onError: (error: Error) => toast.error(error.message || "Failed to switch organization"),
   });
 
   return (
@@ -95,7 +93,9 @@ function OrganizationsList() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {organizations.map((org: Organization) => {
             const isActive = org.id === activeOrgId;
-            const isPersonal = user ? isPersonalOrganization(org, user.id) : false;
+            const isPersonal = user
+              ? org.slug === user.id || org.metadata?.isPersonal === true
+              : false;
 
             return (
               <Card key={org.id}>

@@ -3,10 +3,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { authClient } from "@/app";
+import { getAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
-import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/apps/$accountId/$gatewayId")({
@@ -41,9 +40,10 @@ function AppDetailPage() {
     queryFn: () => apiClient.registry.getRegistryStatus(),
     staleTime: 60_000,
   });
-  const sessionQuery = useQuery(sessionQueryOptions());
+  const auth = getAuthClient();
+  const { data: session } = auth.useSession();
 
-  const nearAccountId = authClient.near.getAccountId();
+  const nearAccountId = auth.near.getAccountId();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
@@ -127,13 +127,13 @@ function AppDetailPage() {
   const publishMetadataMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const signerId = authClient.near.getAccountId();
+      const signerId = auth.near.getAccountId();
 
       if (!signerId) {
         throw new Error("Connect a NEAR wallet before publishing metadata.");
       }
 
-      const signedDelegateAction = await authClient.near.buildSignedDelegateAction({
+      const signedDelegateAction = await auth.near.buildSignedDelegateAction({
         receiverId: prepared.data.contractId,
         actions: [
           {
@@ -146,7 +146,7 @@ function AppDetailPage() {
         ],
       });
 
-      const result = await authClient.near.relayTransaction({ signedDelegateAction });
+      const result = await auth.near.relayTransaction({ signedDelegateAction });
       if (result.error) throw new Error(result.error.message || "Relay failed");
       return result.data;
     },
@@ -168,13 +168,13 @@ function AppDetailPage() {
   const signDelegateMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const signerId = authClient.near.getAccountId();
+      const signerId = auth.near.getAccountId();
 
       if (!signerId) {
         throw new Error("Connect a NEAR wallet before signing delegate payloads.");
       }
 
-      const signedDelegateAction = await authClient.near.buildSignedDelegateAction({
+      const signedDelegateAction = await auth.near.buildSignedDelegateAction({
         receiverId: prepared.data.contractId,
         actions: [
           {
@@ -208,7 +208,7 @@ function AppDetailPage() {
         throw new Error("Sign a delegate payload first.");
       }
 
-      const result = await authClient.near.relayTransaction({
+      const result = await auth.near.relayTransaction({
         signedDelegateAction: delegatePayload,
       });
       if (result.error) throw new Error(result.error.message || "Relay failed");
@@ -497,7 +497,7 @@ function AppDetailPage() {
             </p>
           </div>
 
-          {!sessionQuery.data?.user ? (
+          {!session?.user ? (
             <div className="rounded-sm border border-border bg-muted/10 p-4 text-sm text-muted-foreground">
               Sign in first, then link a NEAR wallet to publish metadata for this app.
             </div>

@@ -41,12 +41,20 @@ export function getAuthClient() {
   return _authClient;
 }
 
-export const authClient: ReturnType<typeof createAuthClient> = new Proxy(
-  {} as ReturnType<typeof createAuthClient>,
-  {
-    get(_target, prop) {
-      if (prop === "then") return undefined;
-      return Reflect.get(getAuthClient() as object, prop);
-    },
-  },
-);
+export type AuthClient = ReturnType<typeof createAuthClient>;
+export type SessionData = AuthClient["$Infer"]["Session"];
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logo?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface Passkey {
+  id: string;
+  name?: string;
+  createdAt?: Date;
+}

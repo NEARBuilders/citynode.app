@@ -1,19 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { authClient } from "@/app";
+import { getAuthClient, type Passkey } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
-import {
-  addPasskey,
-  changePassword,
-  linkNearWallet,
-  passkeysQueryOptions,
-  removePasskey,
-  revokeOtherSessions,
-  sessionQueryOptions,
-  updateProfile,
-} from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/settings")({
   head: () => ({
@@ -29,11 +19,18 @@ export const Route = createFileRoute("/_layout/_authenticated/settings")({
 });
 
 function Settings() {
-  const { data: session } = useQuery(sessionQueryOptions());
-  const { data: passkeys = [] } = useQuery(passkeysQueryOptions());
+  const { data: session } = getAuthClient().useSession();
+  const { data: passkeys = [] } = useQuery({
+    queryKey: ["passkeys"],
+    queryFn: async () => {
+      const { data } = await getAuthClient().passkey.listUserPasskeys();
+      return (data || []) as Passkey[];
+    },
+    staleTime: 60 * 1000,
+  });
 
   const user = session?.user;
-  const nearAccountId = authClient.near.getAccountId();
+  const nearAccountId = getAuthClient().near.getAccountId();
 
   if (!user) {
     return (
@@ -103,17 +100,14 @@ function ProfileSection({
 }: {
   user: { id: string; email?: string; name?: string; isAnonymous?: boolean | null };
 }) {
-  const queryClient = useQueryClient();
   const [name, setName] = useState(user.name || "");
 
   const updateMutation = useMutation({
-    mutationFn: () => updateProfile(name),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: sessionQueryOptions().queryKey,
-      });
-      toast.success("Profile updated");
+    mutationFn: async () => {
+      const { error } = await getAuthClient().updateUser({ name });
+      if (error) throw new Error(error.message);
     },
+    onSuccess: () => toast.success("Profile updated"),
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -187,38 +181,29 @@ function AuthMethodsSection({
   passkeys: Array<{ id: string; name?: string }>;
   nearAccountId: string | null;
 }) {
-  const queryClient = useQueryClient();
-
   const addPasskeyMutation = useMutation({
-    mutationFn: addPasskey,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: passkeysQueryOptions().queryKey,
-      });
-      toast.success("Passkey added");
+    mutationFn: async () => {
+      const { error } = await getAuthClient().passkey.addPasskey();
+      if (error) throw new Error(error.message);
     },
+    onSuccess: () => toast.success("Passkey added"),
     onError: (err: Error) => toast.error(err.message),
   });
 
   const removePasskeyMutation = useMutation({
-    mutationFn: (passkeyId: string) => removePasskey(passkeyId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: passkeysQueryOptions().queryKey,
-      });
-      toast.success("Passkey removed");
+    mutationFn: async (passkeyId: string) => {
+      const { error } = await getAuthClient().passkey.deletePasskey({ id: passkeyId });
+      if (error) throw new Error(error.message);
     },
+    onSuccess: () => toast.success("Passkey removed"),
     onError: (err: Error) => toast.error(err.message),
   });
 
   const linkNearMutation = useMutation({
-    mutationFn: linkNearWallet,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: sessionQueryOptions().queryKey,
-      });
-      toast.success("NEAR wallet linked");
+    mutationFn: async () => {
+      await getAuthClient().signIn.near();
     },
+    onSuccess: () => toast.success("NEAR wallet linked"),
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -296,7 +281,6 @@ function AuthMethodsSection({
 }
 
 function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boolean | null } }) {
-  const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -309,7 +293,10 @@ function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boole
       if (newPassword.length < 8) {
         throw new Error("Password must be at least 8 characters");
       }
-      return changePassword(currentPassword, newPassword);
+      return (async () => {
+        const { error } = await getAuthClient().changePassword({ currentPassword, newPassword });
+        if (error) throw new Error(error.message);
+      })();
     },
     onSuccess: () => {
       toast.success("Password changed");
@@ -321,18 +308,20 @@ function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boole
   });
 
   const revokeSessionsMutation = useMutation({
-    mutationFn: revokeOtherSessions,
+    mutationFn: async () => {
+      const { error } = await getAuthClient().revokeSessions();
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => toast.success("Other sessions revoked"),
     onError: (err: Error) => toast.error(err.message),
   });
 
   const signOutMutation = useMutation({
     mutationFn: async () => {
-      await authClient.signOut();
-      await authClient.near.disconnect().catch(() => {});
-      await queryClient.invalidateQueries({
-        queryKey: sessionQueryOptions().queryKey,
-      });
+      await getAuthClient().signOut();
+      await getAuthClient()
+        .near.disconnect()
+        .catch(() => {});
     },
     onSuccess: () => {
       window.location.href = "/";

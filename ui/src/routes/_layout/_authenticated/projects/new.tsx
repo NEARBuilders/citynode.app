@@ -1,9 +1,8 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/_authenticated/projects/new")({
@@ -22,7 +21,6 @@ export const Route = createFileRoute("/_layout/_authenticated/projects/new")({
 function NewProjectPage() {
   const navigate = useNavigate();
   const apiClient = useApiClient();
-  const sessionQuery = useQuery(sessionQueryOptions());
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
@@ -49,29 +47,6 @@ function NewProjectPage() {
       toast.error(error.message || "Failed to create project");
     },
   });
-
-  if (sessionQuery.isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-sm text-muted-foreground">
-          Loading...
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!sessionQuery.data?.user) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center space-y-3">
-          <p className="text-sm">Sign in to create a project.</p>
-          <Button asChild variant="outline" size="sm">
-            <a href="/login">sign in</a>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <div className="space-y-8">

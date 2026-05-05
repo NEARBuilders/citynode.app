@@ -2,14 +2,8 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getAuthClient, type Organization } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import {
-  inviteMember,
-  type Organization,
-  organizationsQueryOptions,
-  sessionQueryOptions,
-  setActiveOrganization,
-} from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 type ApiClient = import("@/app").ApiClient;
@@ -31,8 +25,14 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
     params: { id: string };
   }) => {
     await Promise.all([
-      context.queryClient.ensureQueryData(sessionQueryOptions()),
-      context.queryClient.ensureQueryData(organizationsQueryOptions()),
+      context.queryClient.ensureQueryData({
+        queryKey: ["organizations"],
+        queryFn: async () => {
+          const { data } = await getAuthClient().organization.list();
+          return (data || []) as Organization[];
+        },
+        staleTime: 30 * 1000,
+      }),
       context.queryClient.ensureQueryData({
         queryKey: orgMembersQueryKey(params.id),
         queryFn: async (): Promise<OrgMembersResult> =>
@@ -64,8 +64,16 @@ function OrganizationDetail() {
   const { id: orgId } = Route.useParams();
   const apiClient = useApiClient();
 
-  const { data: session } = useQuery(sessionQueryOptions());
-  const { data: organizations = [] } = useQuery(organizationsQueryOptions());
+  const auth = getAuthClient();
+  const { data: session } = auth.useSession();
+  const { data: organizations = [] } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await auth.organization.list();
+      return (data || []) as Organization[];
+    },
+    staleTime: 30 * 1000,
+  });
   const membersQuery = useQuery({
     queryKey: orgMembersQueryKey(orgId),
     queryFn: async (): Promise<OrgMembersResult> =>
@@ -106,18 +114,23 @@ function OrganizationDetail() {
   };
 
   const switchOrgMutation = useMutation({
-    mutationFn: () => setActiveOrganization(orgId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: sessionQueryOptions().queryKey });
-      toast.success("Switched to this organization");
+    mutationFn: async () => {
+      const { error } = await auth.organization.setActive({ organizationId: orgId });
+      if (error) throw new Error(error.message);
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to switch organization");
-    },
+    onSuccess: () => toast.success("Switched to this organization"),
+    onError: (error: Error) => toast.error(error.message || "Failed to switch organization"),
   });
 
   const inviteMutation = useMutation({
-    mutationFn: () => inviteMember(orgId, inviteEmail, inviteRole),
+    mutationFn: async () => {
+      const { error } = await auth.organization.inviteMember({
+        organizationId: orgId,
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      if (error) throw new Error(error.message);
+    },
     onSuccess: async () => {
       toast.success(`Invitation sent to ${inviteEmail}`);
       setInviteEmail("");

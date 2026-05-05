@@ -1,15 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { authClient } from "@/app";
+import { getAuthClient, type Organization, type Passkey } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
-import {
-  getActiveOrganization,
-  isPersonalOrganization,
-  organizationsQueryOptions,
-  passkeysQueryOptions,
-  sessionQueryOptions,
-} from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/home")({
   head: () => ({
@@ -22,16 +15,34 @@ export const Route = createFileRoute("/_layout/_authenticated/home")({
 });
 
 function Home() {
-  const { data: session } = useQuery(sessionQueryOptions());
-  const { data: organizations = [] } = useQuery(organizationsQueryOptions());
-  const { data: passkeys = [] } = useQuery(passkeysQueryOptions());
+  const auth = getAuthClient();
+  const { data: session } = auth.useSession();
+  const { data: organizations = [] } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await auth.organization.list();
+      return (data || []) as Organization[];
+    },
+    staleTime: 30 * 1000,
+  });
+  const { data: passkeys = [] } = useQuery({
+    queryKey: ["passkeys"],
+    queryFn: async () => {
+      const { data } = await auth.passkey.listUserPasskeys();
+      return (data || []) as Passkey[];
+    },
+    staleTime: 60 * 1000,
+  });
   const user = session?.user;
 
   const activeOrgId = session?.session?.activeOrganizationId;
-  const nearAccountId = authClient.near.getAccountId();
+  const nearAccountId = auth.near.getAccountId();
 
   const activeOrg = useMemo(
-    () => getActiveOrganization(organizations, activeOrgId),
+    () =>
+      activeOrgId && organizations.length
+        ? (organizations.find((org) => org.id === activeOrgId) ?? null)
+        : null,
     [organizations, activeOrgId],
   );
 
@@ -184,7 +195,7 @@ function Home() {
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="font-medium break-all">{activeOrg.name}</div>
-                    {isPersonalOrganization(activeOrg, user.id) && (
+                    {(activeOrg.slug === user.id || activeOrg.metadata?.isPersonal === true) && (
                       <Badge variant="outline">personal</Badge>
                     )}
                   </div>

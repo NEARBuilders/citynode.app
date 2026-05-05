@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { getAuthClient, type Organization } from "@/app";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,15 +11,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { organizationsQueryOptions, sessionQueryOptions, signOut } from "@/lib/session";
 
 export function UserNav() {
-  const queryClient = useQueryClient();
-
-  const { data: session } = useQuery(sessionQueryOptions());
+  const auth = getAuthClient();
+  const { data: session } = auth.useSession();
   const user = session?.user;
   const { data: organizations } = useQuery({
-    ...organizationsQueryOptions(),
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await auth.organization.list();
+      return (data || []) as Organization[];
+    },
+    staleTime: 30 * 1000,
     enabled: !!user,
   });
   const activeOrgId = session?.session?.activeOrganizationId;
@@ -29,9 +33,8 @@ export function UserNav() {
 
   const signOutMutation = useMutation({
     mutationFn: async () => {
-      await signOut();
-      await queryClient.invalidateQueries({ queryKey: sessionQueryOptions().queryKey });
-      await queryClient.invalidateQueries({ queryKey: organizationsQueryOptions().queryKey });
+      await auth.signOut();
+      await auth.near.disconnect().catch(() => {});
     },
     onSuccess: () => {
       if (typeof window !== "undefined") {
