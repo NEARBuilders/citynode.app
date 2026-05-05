@@ -2,7 +2,7 @@ import { type Context, Hono } from "hono";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { proxyRequest, setupApiRoutes } from "../../src/program";
 import { type HonoEnv, registerAuthHandler } from "../../src/services/auth";
-import { type PluginResult } from "../../src/services/plugins";
+import type { PluginResult } from "../../src/services/plugins";
 
 const createMockResponse = (body: string, status = 200, headers: Record<string, string> = {}) => {
   return new Response(body, {
@@ -293,6 +293,7 @@ describe("API Proxy", () => {
         } as any,
         api: null,
         plugins: {},
+        authClient: null,
         status: {
           available: false,
           pluginName: null,
@@ -304,19 +305,13 @@ describe("API Proxy", () => {
 
       registerAuthHandler(app, plugins);
 
-      setupApiRoutes(
-        app,
-        config,
-        plugins,
-        async (_c, next) => next(),
-        {
-          status: "ready",
-          startTime: Date.now(),
-          milestones: [],
-          error: null,
-          ssrEnabled: false,
-        },
-      );
+      setupApiRoutes(app, config, plugins, async (_c, next) => next(), {
+        status: "ready",
+        startTime: Date.now(),
+        milestones: [],
+        error: null,
+        ssrEnabled: false,
+      });
 
       const response = await app.fetch(new Request("http://localhost:3000/api/auth/session"));
 

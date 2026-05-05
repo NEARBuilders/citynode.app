@@ -9,8 +9,8 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { siwnClient } from "better-near-auth/client";
-import type { createAuthInstance } from "host/src/services/auth";
 import { getAccount, getHostUrl, getNetworkId } from "@/app";
+import type { createAuthInstance } from "../../../plugins/auth/src/auth-export";
 
 function createAuthClient() {
   return createBetterAuthClient({

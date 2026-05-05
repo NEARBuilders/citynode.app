@@ -32,12 +32,12 @@ function updateBosConfig(url: string, integrity: string | undefined) {
     const configRoot = path.dirname(configPath);
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 
-    if (config.auth) {
-      config.auth.production = url;
+    if (config.app?.auth) {
+      config.app.auth.production = url;
       if (integrity) {
-        config.auth.integrity = integrity;
+        config.app.auth.integrity = integrity;
       } else {
-        delete config.auth.integrity;
+        delete config.app.auth.integrity;
       }
       fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
       console.log(`   ✅ Updated bos.config.json: auth.production`);

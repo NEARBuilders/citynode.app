@@ -29,6 +29,7 @@ export interface PluginResult {
   auth: LoadedPlugin | null;
   api: LoadedPlugin | null;
   plugins: Record<string, LoadedPlugin>;
+  authClient: ((ctx?: unknown) => unknown) | null;
   status: PluginStatus;
 }
 
@@ -51,6 +52,7 @@ const unavailableResult = (
   auth: null,
   api: null,
   plugins: {},
+  authClient: null,
   status: { available: false, pluginName, error, errorDetails, loadedPlugins },
 });
 
@@ -94,9 +96,7 @@ async function loadPluginEntry(
 
   const args: [unknown, unknown?] = [
     {
-      // @ts-expect-error dynamic runtime config
       variables,
-      // @ts-expect-error dynamic runtime config
       secrets: collectSecrets(entry.config),
     },
   ];
@@ -105,7 +105,7 @@ async function loadPluginEntry(
     args.push(pluginsClient);
   }
 
-  const plugin = await runtime.usePlugin(entry.runtimeId as never, ...args);
+  const plugin = await (runtime.usePlugin as any)(entry.runtimeId, ...args);
 
   return {
     key: entry.key,
@@ -130,6 +130,7 @@ export const initializePlugins = Effect.gen(function* () {
       auth: null,
       api: null,
       plugins: {},
+      authClient: null,
       status: {
         available: false,
         pluginName: config.api.name,
@@ -167,6 +168,7 @@ export const initializePlugins = Effect.gen(function* () {
 
       // Phase 0: Load auth plugin (app-level infrastructure)
       let authPlugin: LoadedPlugin | null = null;
+      let authClient: ((ctx?: unknown) => unknown) | null = null;
       if (config.auth?.url) {
         const authEntry: RuntimePluginEntry = {
           key: "auth",
@@ -175,6 +177,7 @@ export const initializePlugins = Effect.gen(function* () {
         };
         try {
           authPlugin = await loadPluginEntry(runtime, authEntry);
+          authClient = authPlugin.createClient;
           console.log(`[Plugins] Auth plugin loaded: ${authPlugin.name}`);
         } catch (error) {
           console.error(
@@ -195,12 +198,6 @@ export const initializePlugins = Effect.gen(function* () {
       const pluginsClient: Record<string, unknown> = {};
       const errors: string[] = [];
 
-      if (authPlugin) {
-        loadedPlugins.auth = authPlugin;
-        loadedPluginKeys.push("auth");
-        pluginsClient.auth = authPlugin.createClient;
-      }
-
       pluginResults.forEach((result, index) => {
         const entry = pluginEntries[index];
         const key = entry?.key ?? "unknown";
@@ -215,13 +212,18 @@ export const initializePlugins = Effect.gen(function* () {
         }
       });
 
-      // Phase 2: Load the API plugin with injected plugins client
+      // Phase 2: Load the API plugin with pluginsClient + authClient
       let baseApi: LoadedPlugin | null = null;
       const apiEntry = registryEntries.find((e) => e.key === "api");
 
       if (apiEntry) {
         try {
-          baseApi = await loadPluginEntry(runtime, apiEntry, pluginsClient);
+          const apiPluginsClient: Record<string, unknown> = { ...pluginsClient };
+          if (authClient) {
+            apiPluginsClient.auth = authClient;
+          }
+
+          baseApi = await loadPluginEntry(runtime, apiEntry, apiPluginsClient);
           loadedPlugins.api = baseApi;
           loadedPluginKeys.unshift("api");
         } catch (error) {
@@ -234,6 +236,7 @@ export const initializePlugins = Effect.gen(function* () {
         auth: authPlugin,
         api: baseApi,
         plugins: loadedPlugins,
+        authClient,
         status: {
           available: Boolean(baseApi),
           pluginName: config.api.name,
@@ -302,6 +305,10 @@ export function createPluginsClient(result: PluginResult, context?: unknown): un
   for (const [key, plugin] of Object.entries(result.plugins)) {
     if (key === "api") continue;
     client[key] = plugin.createClient(context);
+  }
+
+  if (result.authClient) {
+    client.auth = result.authClient(context);
   }
 
   return client;

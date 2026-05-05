@@ -12,13 +12,13 @@ import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
 import {
   buildPluginContext,
   createSessionMiddleware,
   type HonoEnv,
   registerAuthHandler,
 } from "./services/auth";
+import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
 import { loadRouterModule, type RouterModule } from "./services/federation.server";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
 import { createRouterMounts } from "./services/router";

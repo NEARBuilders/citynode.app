@@ -42,7 +42,10 @@ export const cliCommandMeta = {
     summary: "Add a plugin attachment",
     interactive: false,
     fields: {
-      source: { positional: true, description: "Plugin source (local:path, bos://account/plugins/name, or URL)" },
+      source: {
+        positional: true,
+        description: "Plugin source (local:path, bos://account/plugins/name, or URL)",
+      },
       as: { description: "Plugin alias" },
       production: { description: "Production URL override" },
     },

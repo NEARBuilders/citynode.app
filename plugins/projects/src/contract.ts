@@ -3,7 +3,6 @@ import { oc } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 
 export const contract = oc.router({
-  // KV endpoints
   listKeys: oc
     .route({ method: "GET", path: "/kv" })
     .input(
@@ -74,7 +73,6 @@ export const contract = oc.router({
     )
     .errors({ NOT_FOUND, FORBIDDEN, UNAUTHORIZED }),
 
-  // Projects
   listProjects: oc
     .route({ method: "GET", path: "/v1/projects" })
     .input(
@@ -289,108 +287,6 @@ export const contract = oc.router({
       }),
     )
     .errors({ BAD_REQUEST }),
-
-  // API Keys
-  listApiKeys: oc
-    .route({ method: "GET", path: "/organizations/{organizationId}/api-keys" })
-    .input(z.object({ organizationId: z.string() }))
-    .output(
-      z.object({
-        keys: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            prefix: z.string(),
-            permissions: z.array(z.string()),
-            lastUsed: z.iso.datetime().nullable(),
-            createdAt: z.iso.datetime(),
-            expiresAt: z.iso.datetime().nullable(),
-          }),
-        ),
-      }),
-    )
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
-
-  createApiKey: oc
-    .route({ method: "POST", path: "/organizations/{organizationId}/api-keys" })
-    .input(
-      z.object({
-        organizationId: z.string(),
-        name: z.string().min(1).max(100),
-        permissions: z.array(z.string()).optional(),
-        expiresInDays: z.number().int().min(1).max(365).optional(),
-      }),
-    )
-    .output(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        key: z.string(),
-        prefix: z.string(),
-        permissions: z.array(z.string()),
-        createdAt: z.iso.datetime(),
-        expiresAt: z.iso.datetime().nullable(),
-      }),
-    )
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN, BAD_REQUEST }),
-
-  deleteApiKey: oc
-    .route({ method: "DELETE", path: "/api-keys/{keyId}" })
-    .input(z.object({ keyId: z.string() }))
-    .output(z.object({ deleted: z.boolean() }))
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
-
-  // Organization Members
-  listOrgMembers: oc
-    .route({ method: "GET", path: "/organizations/{organizationId}/members" })
-    .input(z.object({ organizationId: z.string() }))
-    .output(
-      z.object({
-        members: z.array(
-          z.object({
-            id: z.string(),
-            userId: z.string(),
-            role: z.enum(["owner", "admin", "member"]),
-            name: z.string().nullable(),
-            email: z.string().nullable(),
-            createdAt: z.iso.datetime(),
-          }),
-        ),
-      }),
-    )
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
-
-  // Organization Invitations
-  listOrgInvitations: oc
-    .route({ method: "GET", path: "/organizations/{organizationId}/invitations" })
-    .input(z.object({ organizationId: z.string() }))
-    .output(
-      z.object({
-        invitations: z.array(
-          z.object({
-            id: z.string(),
-            email: z.string(),
-            role: z.enum(["admin", "member"]),
-            status: z.enum(["pending", "accepted", "rejected", "expired"]),
-            expiresAt: z.iso.datetime(),
-            createdAt: z.iso.datetime(),
-          }),
-        ),
-      }),
-    )
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
-
-  cancelInvitation: oc
-    .route({ method: "DELETE", path: "/invitations/{invitationId}" })
-    .input(z.object({ invitationId: z.string() }))
-    .output(z.object({ cancelled: z.boolean() }))
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
-
-  resendInvitation: oc
-    .route({ method: "POST", path: "/invitations/{invitationId}/resend" })
-    .input(z.object({ invitationId: z.string() }))
-    .output(z.object({ sent: z.boolean() }))
-    .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
 });
 
 export type ContractType = typeof contract;

@@ -88,6 +88,15 @@ function localApiContractSource(configDir: string): ContractSource {
   };
 }
 
+function localAuthContractSource(configDir: string): ContractSource {
+  const sourcePath = join(configDir, "plugins", "auth", "src", "contract.ts");
+  return {
+    key: "auth",
+    importName: "authContract",
+    sourceFilePath: sourcePath,
+  };
+}
+
 async function remoteContractSource(opts: {
   configDir: string;
   runtimeDir: string;
@@ -190,14 +199,13 @@ async function resolveContractSource(opts: {
   });
 }
 
-function writeAggregateContractFile(opts: {
+function writeGeneratedFiles(opts: {
   configDir: string;
   sources: ContractSource[];
   pluginKeys: string[];
-  authIncluded: boolean;
+  authSource: ContractSource | null;
 }) {
   const baseSource = opts.sources.find((source) => source.key === "api");
-  const authSource = opts.sources.find((source) => source.key === "auth");
   const pluginSources = opts.pluginKeys
     .map((key) => opts.sources.find((entry) => entry.key === key))
     .filter((source): source is ContractSource => Boolean(source));
@@ -218,13 +226,11 @@ function writeAggregateContractFile(opts: {
   uiLines.push("");
 
   const compositeParts: string[] = [];
-  if (authSource) {
-    compositeParts.push(`auth: ${authSource.importName}`);
+  if (opts.authSource) {
+    compositeParts.push(`auth: ${opts.authSource.importName}`);
   }
   for (const source of pluginSources) {
-    const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
-      ? source.key
-      : JSON.stringify(source.key);
+    const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key) ? source.key : JSON.stringify(source.key);
     compositeParts.push(`${key}: ${source.importName}`);
   }
 
@@ -244,9 +250,7 @@ function writeAggregateContractFile(opts: {
   const pluginsClientPath = join(opts.configDir, "api", "src", "plugins-client.gen.ts");
   const pluginsClientLines: string[] = [];
 
-  const clientSources = [...(authSource ? [authSource] : []), ...pluginSources];
-
-  for (const source of clientSources) {
+  for (const source of pluginSources) {
     const importPath = toImportPath(pluginsClientPath, source.sourceFilePath);
     pluginsClientLines.push(
       `import type { ContractType as ${source.importName} } from "${importPath}";`,
@@ -261,11 +265,11 @@ function writeAggregateContractFile(opts: {
   );
   pluginsClientLines.push("");
 
-  if (clientSources.length === 0) {
+  if (pluginSources.length === 0) {
     pluginsClientLines.push("export type PluginsClient = Record<string, never>;");
   } else {
     pluginsClientLines.push("export type PluginsClient = {");
-    for (const source of clientSources) {
+    for (const source of pluginSources) {
       const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
         ? source.key
         : JSON.stringify(source.key);
@@ -277,16 +281,29 @@ function writeAggregateContractFile(opts: {
   mkdirSync(dirname(pluginsClientPath), { recursive: true });
   writeFileIfChanged(pluginsClientPath, `${pluginsClientLines.join("\n")}\n`);
 
-  return uiContractPath;
-}
+  // --- Generate api/src/auth-client.gen.ts ---
+  if (opts.authSource) {
+    const authClientPath = join(opts.configDir, "api", "src", "auth-client.gen.ts");
+    const authClientLines: string[] = [];
 
-function localAuthContractSource(configDir: string): ContractSource {
-  const sourcePath = join(configDir, "plugins", "auth", "src", "contract.ts");
-  return {
-    key: "auth",
-    importName: "authContract",
-    sourceFilePath: sourcePath,
-  };
+    const importPath = toImportPath(authClientPath, opts.authSource.sourceFilePath);
+    authClientLines.push(
+      `import type { ContractType as ${opts.authSource.importName} } from "${importPath}";`,
+    );
+    authClientLines.push(
+      'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
+    );
+    authClientLines.push(
+      "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+    );
+    authClientLines.push("");
+    authClientLines.push(`export type AuthClient = ClientFactory<${opts.authSource.importName}>;`);
+
+    mkdirSync(dirname(authClientPath), { recursive: true });
+    writeFileIfChanged(authClientPath, `${authClientLines.join("\n")}\n`);
+  }
+
+  return uiContractPath;
 }
 
 export async function syncApiContractBridge(opts: {
@@ -306,6 +323,7 @@ export async function syncApiContractBridge(opts: {
   const sources: ContractSource[] = [];
   let manifest: ApiPluginManifest | null = null;
   let generatedPath: string | null = null;
+  let authSource: ContractSource | null = null;
 
   const baseSource = await resolveContractSource({
     configDir: opts.configDir,
@@ -318,7 +336,7 @@ export async function syncApiContractBridge(opts: {
   sources.push(baseSource);
 
   if (opts.runtimeConfig.auth) {
-    const authSource = await resolveContractSource({
+    authSource = await resolveContractSource({
       configDir: opts.configDir,
       runtimeDir,
       key: "auth",
@@ -350,11 +368,11 @@ export async function syncApiContractBridge(opts: {
 
   const allPluginKeys = pluginEntries.map(([key]) => key);
 
-  writeAggregateContractFile({
+  writeGeneratedFiles({
     configDir: opts.configDir,
     sources,
     pluginKeys: allPluginKeys,
-    authIncluded: Boolean(opts.runtimeConfig.auth),
+    authSource,
   });
 
   if (opts.runtimeConfig.api.source !== "local") {

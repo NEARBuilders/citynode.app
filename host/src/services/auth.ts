@@ -25,7 +25,7 @@ export interface AuthVariables {
 export type HonoEnv = { Variables: AuthVariables };
 
 function resolveAuthPlugin(plugins: PluginResult): LoadedPlugin | null {
-  return plugins.auth ?? plugins.plugins["auth"] ?? null;
+  return plugins.auth ?? plugins.plugins.auth ?? null;
 }
 
 function getAuthHandler(plugins: PluginResult): ((req: Request) => Promise<Response>) | null {
@@ -33,6 +33,15 @@ function getAuthHandler(plugins: PluginResult): ((req: Request) => Promise<Respo
   if (!authPlugin) return null;
   const initialized = (authPlugin as any).initialized;
   return typeof initialized?.context?.handler === "function" ? initialized.context.handler : null;
+}
+
+function getAuthInstance(
+  plugins: PluginResult,
+): { api: { getSession: (opts: { headers: Headers }) => Promise<any> } } | null {
+  const authPlugin = resolveAuthPlugin(plugins);
+  if (!authPlugin) return null;
+  const initialized = (authPlugin as any).initialized;
+  return initialized?.context?.auth ?? null;
 }
 
 export function registerAuthHandler(app: { on: (...args: any[]) => any }, plugins: PluginResult) {
@@ -43,7 +52,7 @@ export function registerAuthHandler(app: { on: (...args: any[]) => any }, plugin
 }
 
 export function createSessionMiddleware(plugins: PluginResult) {
-  const authPlugin = resolveAuthPlugin(plugins);
+  const authInstance = getAuthInstance(plugins);
 
   return async (c: Context<HonoEnv>, next: Next) => {
     if (c.req.path.startsWith("/api/auth/")) {
@@ -56,7 +65,7 @@ export function createSessionMiddleware(plugins: PluginResult) {
     });
     c.set("reqHeaders", reqHeaders);
 
-    if (!authPlugin?.createClient) {
+    if (!authInstance) {
       c.set("user", null);
       c.set("session", null);
       await next();
@@ -64,8 +73,8 @@ export function createSessionMiddleware(plugins: PluginResult) {
     }
 
     try {
-      const authClient = authPlugin.createClient({ reqHeaders }) as any;
-      const sessionResult = await authClient.getSession();
+      const headers = new Headers(Object.entries(reqHeaders) as [string, string][]);
+      const sessionResult = await authInstance.api.getSession({ headers });
 
       const user = sessionResult?.user
         ? {

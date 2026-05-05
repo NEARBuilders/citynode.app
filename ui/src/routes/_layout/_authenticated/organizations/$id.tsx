@@ -13,10 +13,10 @@ import {
 import { useApiClient } from "@/lib/use-api-client";
 
 type ApiClient = import("@/app").ApiClient;
-type OrgApiKeysResult = Awaited<ReturnType<ApiClient["projects"]["listApiKeys"]>>;
-type CreatedApiKey = Awaited<ReturnType<ApiClient["projects"]["createApiKey"]>>;
-type OrgMembersResult = Awaited<ReturnType<ApiClient["projects"]["listOrgMembers"]>>;
-type OrgInvitationsResult = Awaited<ReturnType<ApiClient["projects"]["listOrgInvitations"]>>;
+type OrgApiKeysResult = Awaited<ReturnType<ApiClient["auth"]["listApiKeys"]>>;
+type CreatedApiKey = Awaited<ReturnType<ApiClient["auth"]["createApiKey"]>>;
+type OrgMembersResult = Awaited<ReturnType<ApiClient["auth"]["listMembers"]>>;
+type OrgInvitationsResult = Awaited<ReturnType<ApiClient["auth"]["listInvitations"]>>;
 
 const orgMembersQueryKey = (orgId: string) => ["org-members", orgId] as const;
 const orgInvitationsQueryKey = (orgId: string) => ["org-invitations", orgId] as const;
@@ -36,17 +36,17 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
       context.queryClient.ensureQueryData({
         queryKey: orgMembersQueryKey(params.id),
         queryFn: async (): Promise<OrgMembersResult> =>
-          context.apiClient.projects.listOrgMembers({ organizationId: params.id }),
+          context.apiClient.auth.listMembers({ organizationId: params.id }),
       }),
       context.queryClient.ensureQueryData({
         queryKey: orgInvitationsQueryKey(params.id),
         queryFn: async (): Promise<OrgInvitationsResult> =>
-          context.apiClient.projects.listOrgInvitations({ organizationId: params.id }),
+          context.apiClient.auth.listInvitations({ organizationId: params.id }),
       }),
       context.queryClient.ensureQueryData({
         queryKey: orgApiKeysQueryKey(params.id),
         queryFn: async (): Promise<OrgApiKeysResult> =>
-          context.apiClient.projects.listApiKeys({ organizationId: params.id }),
+          context.apiClient.auth.listApiKeys({ organizationId: params.id }),
       }),
     ]);
   },
@@ -69,25 +69,25 @@ function OrganizationDetail() {
   const membersQuery = useQuery({
     queryKey: orgMembersQueryKey(orgId),
     queryFn: async (): Promise<OrgMembersResult> =>
-      apiClient.projects.listOrgMembers({ organizationId: orgId }),
+      apiClient.auth.listMembers({ organizationId: orgId }),
   });
   const invitationsQuery = useQuery({
     queryKey: orgInvitationsQueryKey(orgId),
     queryFn: async (): Promise<OrgInvitationsResult> =>
-      apiClient.projects.listOrgInvitations({ organizationId: orgId }),
+      apiClient.auth.listInvitations({ organizationId: orgId }),
   });
   const apiKeysQuery = useQuery({
     queryKey: orgApiKeysQueryKey(orgId),
     queryFn: async (): Promise<OrgApiKeysResult> =>
-      apiClient.projects.listApiKeys({ organizationId: orgId }),
+      apiClient.auth.listApiKeys({ organizationId: orgId }),
   });
 
   const org = organizations.find((o: Organization) => o.id === orgId);
   const activeOrgId = session?.session?.activeOrganizationId;
   const isActive = orgId === activeOrgId;
-  const members = membersQuery.data?.members || [];
-  const invitations = invitationsQuery.data?.invitations || [];
-  const apiKeys = apiKeysQuery.data?.keys || [];
+  const members = membersQuery.data || [];
+  const invitations = invitationsQuery.data || [];
+  const apiKeys = apiKeysQuery.data || [];
 
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -130,7 +130,7 @@ function OrganizationDetail() {
   });
 
   const cancelInvitationMutation = useMutation({
-    mutationFn: (invitationId: string) => apiClient.projects.cancelInvitation({ invitationId }),
+    mutationFn: (invitationId: string) => apiClient.auth.cancelInvitation({ id: invitationId }),
     onSuccess: async () => {
       toast.success("Invitation cancelled");
       await queryClient.invalidateQueries({ queryKey: ["org-invitations", orgId] });
@@ -141,36 +141,9 @@ function OrganizationDetail() {
   });
 
   const createApiKeyMutation = useMutation({
-    mutationFn: () => apiClient.projects.createApiKey({ organizationId: orgId, name: apiKeyName }),
+    mutationFn: () => apiClient.auth.createApiKey({ organizationId: orgId, name: apiKeyName }),
     onSuccess: async (data) => {
       setCreatedApiKey(data);
-      queryClient.setQueryData<OrgApiKeysResult>(
-        orgApiKeysQueryKey(orgId),
-        (current: OrgApiKeysResult | undefined) => {
-          const nextKey = {
-            id: data.id,
-            name: data.name,
-            prefix: data.prefix,
-            permissions: data.permissions,
-            lastUsed: null,
-            createdAt: data.createdAt,
-            expiresAt: data.expiresAt,
-          };
-
-          if (!current) {
-            return { keys: [nextKey] };
-          }
-
-          if (current.keys.some((key: OrgApiKeysResult["keys"][number]) => key.id === data.id)) {
-            return current;
-          }
-
-          return {
-            ...current,
-            keys: [nextKey, ...current.keys],
-          };
-        },
-      );
       toast.success("API key created");
       setApiKeyName("");
       setShowApiKeyForm(false);
@@ -184,7 +157,7 @@ function OrganizationDetail() {
   });
 
   const deleteApiKeyMutation = useMutation({
-    mutationFn: (keyId: string) => apiClient.projects.deleteApiKey({ keyId }),
+    mutationFn: (keyId: string) => apiClient.auth.deleteApiKey({ id: keyId }),
     onMutate: async (keyId) => {
       await queryClient.cancelQueries({
         queryKey: orgApiKeysQueryKey(orgId),
@@ -194,14 +167,8 @@ function OrganizationDetail() {
       queryClient.setQueryData<OrgApiKeysResult>(
         orgApiKeysQueryKey(orgId),
         (current: OrgApiKeysResult | undefined) => {
-          if (!current) {
-            return current;
-          }
-
-          return {
-            ...current,
-            keys: current.keys.filter((key: OrgApiKeysResult["keys"][number]) => key.id !== keyId),
-          };
+          if (!current) return current;
+          return current.filter((key) => key.id !== keyId);
         },
       );
 
@@ -421,8 +388,8 @@ function OrganizationDetail() {
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <InfoRow label="name" value={createdApiKey.name} />
-              <InfoRow label="prefix" value={`${createdApiKey.prefix}...`} mono />
+              <InfoRow label="name" value={createdApiKey.name ?? "unnamed"} />
+              <InfoRow label="prefix" value={`${createdApiKey.prefix ?? "api_"}...`} mono />
               <InfoRow label="created" value={new Date(createdApiKey.createdAt).toLocaleString()} />
             </div>
           </CardContent>
@@ -435,17 +402,15 @@ function OrganizationDetail() {
           <LoadingCard label="Loading members..." />
         ) : members.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
-            {members.map((member: OrgMembersResult["members"][number]) => (
+            {members.map((member) => (
               <Card key={member.id}>
                 <CardContent className="p-5 space-y-2">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-medium break-all">
-                      {member.name || member.email || member.userId}
-                    </div>
+                    <div className="font-medium break-all">{member.userId}</div>
                     <Badge variant="outline">{member.role}</Badge>
                   </div>
                   <div className="text-xs text-muted-foreground font-mono break-all">
-                    {member.email || member.userId}
+                    {member.userId}
                   </div>
                 </CardContent>
               </Card>
@@ -462,7 +427,7 @@ function OrganizationDetail() {
           <LoadingCard label="Loading invitations..." />
         ) : invitations.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
-            {invitations.map((invitation: OrgInvitationsResult["invitations"][number]) => (
+            {invitations.map((invitation) => (
               <Card key={invitation.id}>
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -499,12 +464,14 @@ function OrganizationDetail() {
           <LoadingCard label="Loading api keys..." />
         ) : apiKeys.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
-            {apiKeys.map((key: OrgApiKeysResult["keys"][number]) => (
+            {apiKeys.map((key) => (
               <Card key={key.id}>
                 <CardContent className="p-5 space-y-3">
                   <div className="space-y-1">
-                    <div className="font-medium break-all">{key.name}</div>
-                    <div className="text-xs text-muted-foreground font-mono">{key.prefix}...</div>
+                    <div className="font-medium break-all">{key.name ?? "unnamed"}</div>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      {key.prefix ?? "api_"}...
+                    </div>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     created {new Date(key.createdAt).toLocaleString()}

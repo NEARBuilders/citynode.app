@@ -2,8 +2,11 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
+import type { AuthClient } from "./auth-client.gen";
 import { contract } from "./contract";
 import type { PluginsClient } from "./plugins-client.gen";
+
+type ApiPluginsClient = PluginsClient & { auth: AuthClient };
 
 export interface AuthContext {
   userId: string;
@@ -17,7 +20,7 @@ export interface AuthContext {
   reqHeaders?: Record<string, string>;
 }
 
-export default createPlugin.withPlugins<PluginsClient>()({
+export default createPlugin.withPlugins<ApiPluginsClient>()({
   variables: z.object({}),
 
   secrets: z.object({
@@ -43,9 +46,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   initialize: (_config, plugins) =>
     Effect.sync(() => {
+      const { auth, ...restPlugins } = plugins;
       console.log("[API] Services Initialized");
-      console.log("[API] Plugins available:", Object.keys(plugins).join(", ") || "none");
-      return { plugins };
+      console.log("[API] Auth client available:", Boolean(auth));
+      console.log("[API] Plugins available:", Object.keys(restPlugins).join(", ") || "none");
+      return { auth, plugins: restPlugins };
     }),
 
   shutdown: () => Effect.log("[API] Shutdown"),
