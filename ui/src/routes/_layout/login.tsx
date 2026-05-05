@@ -1,10 +1,5 @@
-import {
-  createFileRoute,
-  Navigate,
-  redirect,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getAuthClient, type SessionData } from "@/app";
@@ -56,7 +51,6 @@ export const Route = createFileRoute("/_layout/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const router = useRouter();
   const auth = getAuthClient();
   const { data: session } = auth.useSession();
   const { redirect } = Route.useSearch();
@@ -71,11 +65,16 @@ function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
 
   const [isPending, setIsPending] = useState(false);
+  const queryClient = useQueryClient();
 
-  const handleSuccess = (message: string) => {
+  const handleSuccess = async (message: string) => {
     const redirectTo = redirect?.startsWith("/") ? redirect : "/home";
     toast.success(message);
-    router.invalidate();
+    const { data: freshSession } = await auth.getSession();
+    if (freshSession) {
+      queryClient.setQueryData(["session"], freshSession);
+    }
+    await queryClient.invalidateQueries({ queryKey: ["session"] });
     navigate({ to: redirectTo, replace: true, search: {} });
   };
 
@@ -96,14 +95,16 @@ function LoginPage() {
 
   const handleNear = async () => {
     setIsPending(true);
-    try {
-      await auth.signIn.near({
-        onSuccess: () => handleSuccess("Signed in with NEAR"),
-        onError: (error) => handleError(error),
-      });
-    } finally {
-      setIsPending(false);
-    }
+    await auth.signIn.near({
+      onSuccess: async () => {
+        setIsPending(false);
+        await handleSuccess("Signed in with NEAR");
+      },
+      onError: (error) => {
+        setIsPending(false);
+        handleError(error);
+      },
+    });
   };
 
   const handlePasskey = async () => {
@@ -112,11 +113,17 @@ function LoginPage() {
       await auth.signIn.passkey({
         autoFill: false,
         fetchOptions: {
-          onSuccess: () => handleSuccess("Signed in with passkey"),
-          onError: (ctx) => handleError(new Error(ctx.error?.message || "Passkey sign in failed")),
+          onSuccess: async () => {
+            setIsPending(false);
+            await handleSuccess("Signed in with passkey");
+          },
+          onError: (ctx) => {
+            setIsPending(false);
+            handleError(new Error(ctx.error?.message || "Passkey sign in failed"));
+          },
         },
       });
-    } finally {
+    } catch {
       setIsPending(false);
     }
   };
@@ -126,12 +133,17 @@ function LoginPage() {
     try {
       await auth.signIn.anonymous({
         fetchOptions: {
-          onSuccess: () => handleSuccess("Started anonymous session"),
-          onError: (ctx) =>
-            handleError(new Error(ctx.error?.message || "Anonymous sign in failed")),
+          onSuccess: async () => {
+            setIsPending(false);
+            await handleSuccess("Started anonymous session");
+          },
+          onError: (ctx) => {
+            setIsPending(false);
+            handleError(new Error(ctx.error?.message || "Anonymous sign in failed"));
+          },
         },
       });
-    } finally {
+    } catch {
       setIsPending(false);
     }
   };
@@ -147,11 +159,17 @@ function LoginPage() {
         email,
         password,
         fetchOptions: {
-          onSuccess: () => handleSuccess("Signed in successfully"),
-          onError: (ctx) => handleError(new Error(ctx.error?.message || "Sign in failed")),
+          onSuccess: async () => {
+            setIsPending(false);
+            await handleSuccess("Signed in successfully");
+          },
+          onError: (ctx) => {
+            setIsPending(false);
+            handleError(new Error(ctx.error?.message || "Sign in failed"));
+          },
         },
       });
-    } finally {
+    } catch {
       setIsPending(false);
     }
   };
@@ -172,11 +190,17 @@ function LoginPage() {
         password,
         name: email.split("@")[0],
         fetchOptions: {
-          onSuccess: () => handleSuccess("Account created! Check your email to verify."),
-          onError: (ctx) => handleError(new Error(ctx.error?.message || "Sign up failed")),
+          onSuccess: async () => {
+            setIsPending(false);
+            await handleSuccess("Account created! Check your email to verify.");
+          },
+          onError: (ctx) => {
+            setIsPending(false);
+            handleError(new Error(ctx.error?.message || "Sign up failed"));
+          },
         },
       });
-    } finally {
+    } catch {
       setIsPending(false);
     }
   };
@@ -214,12 +238,17 @@ function LoginPage() {
         phoneNumber,
         code: otpCode,
         fetchOptions: {
-          onSuccess: () => handleSuccess("Signed in with phone"),
-          onError: (ctx: { error?: { message?: string } }) =>
-            handleError(new Error(ctx.error?.message || "Invalid code")),
+          onSuccess: async () => {
+            setIsPending(false);
+            await handleSuccess("Signed in with phone");
+          },
+          onError: (ctx: { error?: { message?: string } }) => {
+            setIsPending(false);
+            handleError(new Error(ctx.error?.message || "Invalid code"));
+          },
         },
       });
-    } finally {
+    } catch {
       setIsPending(false);
     }
   };
