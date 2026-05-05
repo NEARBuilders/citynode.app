@@ -2,7 +2,6 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
 import { OpencodeService } from "./service";
 
@@ -14,8 +13,7 @@ interface AuthContext {
     email?: string;
     name?: string;
   };
-  reqHeaders?: Headers;
-  auth: Auth;
+  reqHeaders?: Record<string, string>;
 }
 
 export default createPlugin({
@@ -38,8 +36,7 @@ export default createPlugin({
         name: z.string().optional(),
       })
       .optional(),
-    reqHeaders: z.custom<Headers>().optional(),
-    auth: z.custom<Auth>().optional(),
+    reqHeaders: z.record(z.string(), z.string()).optional(),
   }),
 
   contract,
@@ -86,7 +83,6 @@ export default createPlugin({
           userId: context.userId,
           user: context.user,
           reqHeaders: context.reqHeaders,
-          auth: context.auth!,
         } as AuthContext,
       });
     });

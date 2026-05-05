@@ -2,22 +2,14 @@ import { createPlugin } from "every-plugin";
 import { Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
 import { RegistryConfigService } from "./services/fastkv";
 import { RegistryService } from "./services/registry";
 
 interface AuthContext {
   userId: string;
-  user: {
-    id: string;
-    role?: string;
-    email?: string;
-    name?: string;
-  };
   nearAccountId?: string;
-  reqHeaders?: Headers;
-  auth: Auth;
+  reqHeaders?: Record<string, string>;
 }
 
 export default createPlugin({
@@ -34,8 +26,7 @@ export default createPlugin({
   context: z.object({
     userId: z.string().optional(),
     nearAccountId: z.string().optional(),
-    reqHeaders: z.custom<Headers>().optional(),
-    auth: z.custom<Auth>().optional(),
+    reqHeaders: z.record(z.string(), z.string()).optional(),
   }),
 
   contract,
@@ -75,7 +66,6 @@ export default createPlugin({
         context: {
           nearAccountId: context.nearAccountId,
           reqHeaders: context.reqHeaders,
-          auth: context.auth!,
         } as AuthContext,
       });
     });

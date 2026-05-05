@@ -60,6 +60,8 @@ export const PluginAddResultSchema = z.object({
   key: z.string(),
   development: z.string().optional(),
   production: z.string().optional(),
+  integrity: z.string().optional(),
+  version: z.string().optional(),
   error: z.string().optional(),
 });
 
@@ -100,6 +102,8 @@ export const PluginPublishResultSchema = z.object({
   path: z.string().optional(),
   script: z.string().optional(),
   production: z.string().optional(),
+  integrity: z.string().optional(),
+  version: z.string().optional(),
   error: z.string().optional(),
 });
 
