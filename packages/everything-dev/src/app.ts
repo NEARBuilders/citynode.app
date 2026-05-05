@@ -7,6 +7,7 @@ import {
   isLocalDevelopmentTarget,
   parsePort,
   resolveLocalDevelopmentPath,
+  resolvePluginRuntimeName,
 } from "./config";
 import { getNetworkIdForAccount } from "./network";
 import { makeDevProcess, type ProcessCallbacks, type ProcessHandle } from "./orchestrator";
@@ -23,10 +24,11 @@ export interface AppOrchestrator {
   interactive?: boolean;
 }
 
-const STARTUP_ORDER = ["ui-ssr", "ui", "api", "plugin", "host-build", "host"];
+const STARTUP_ORDER = ["ui-ssr", "ui", "auth", "api", "plugin", "host-build", "host"];
 const DEFAULT_HOST_PORT = 3000;
 const DEFAULT_UI_PORT = 3002;
 const DEFAULT_API_PORT = 3014;
+const DEFAULT_AUTH_PORT = 3020;
 const DEFAULT_PLUGIN_PORT_START = 3021;
 
 const sortByOrder = (packages: string[]): string[] => {
@@ -159,6 +161,13 @@ export function detectLocalPackages(
     }
   }
 
+  const authLocalPath =
+    runtimeConfig?.auth?.localPath ??
+    resolveLocalDevelopmentPath(bosConfig?.app.auth?.development, configDir);
+  if (authLocalPath && existsSync(join(authLocalPath, "package.json"))) {
+    packages.push("auth");
+  }
+
   return packages;
 }
 
@@ -167,6 +176,7 @@ export function buildRuntimeConfig(
   options: {
     uiSource?: "local" | "remote";
     apiSource?: "local" | "remote";
+    authSource?: "local" | "remote";
     hostUrl: string;
     proxy?: string;
     env?: "development" | "production";
@@ -176,10 +186,15 @@ export function buildRuntimeConfig(
   const configDir = getProjectRoot();
   const uiConfig = bosConfig.app.ui;
   const apiConfig = bosConfig.app.api;
+  const authConfig = bosConfig.app.auth;
   const uiSource = options.uiSource ?? "local";
   const apiSource = options.apiSource ?? "local";
+  const authSource = options.authSource ?? "local";
   const uiLocalPath = resolveLocalDevelopmentPath(uiConfig.development, configDir);
   const apiLocalPath = resolveLocalDevelopmentPath(apiConfig.development, configDir);
+  const authLocalPath = authConfig
+    ? resolveLocalDevelopmentPath(authConfig.development, configDir)
+    : null;
   const uiLocalUrl =
     !uiLocalPath && uiConfig.development && !isLocalDevelopmentTarget(uiConfig.development)
       ? uiConfig.development
@@ -187,6 +202,13 @@ export function buildRuntimeConfig(
   const apiLocalUrl =
     !apiLocalPath && apiConfig.development && !isLocalDevelopmentTarget(apiConfig.development)
       ? apiConfig.development
+      : "";
+  const authLocalUrl =
+    authConfig &&
+    !authLocalPath &&
+    authConfig.development &&
+    !isLocalDevelopmentTarget(authConfig.development)
+      ? authConfig.development
       : "";
 
   return {
@@ -243,6 +265,29 @@ export function buildRuntimeConfig(
           entry: "/mf-manifest.json",
           source: apiSource,
         },
+    auth: authConfig
+      ? {
+          name: resolvePluginRuntimeName(
+            undefined,
+            authSource === "local" ? (authLocalPath ?? undefined) : undefined,
+            authConfig.name,
+          ),
+          url: authSource === "remote" ? (authConfig.production ?? "") : authLocalUrl,
+          entry:
+            authSource === "remote"
+              ? `${authConfig.production ?? ""}/mf-manifest.json`
+              : authLocalUrl
+                ? `${authLocalUrl}/mf-manifest.json`
+                : "/mf-manifest.json",
+          localPath: authSource === "local" ? (authLocalPath ?? undefined) : undefined,
+          port: authSource === "local" && authLocalUrl ? parsePort(authLocalUrl) : undefined,
+          source: authSource === "local" ? (authLocalPath ? "local" : "remote") : "remote",
+          proxy: authConfig.proxy,
+          variables: authConfig.variables,
+          secrets: authConfig.secrets,
+          integrity: authSource === "remote" ? authConfig.integrity : undefined,
+        }
+      : undefined,
     plugins: options.plugins,
   };
 }
@@ -305,6 +350,7 @@ export async function prepareDevelopmentRuntimeConfig(
     hostUrl: `http://localhost:${hostPort}`,
     ui: { ...runtimeConfig.ui },
     api: { ...runtimeConfig.api },
+    auth: runtimeConfig.auth ? { ...runtimeConfig.auth } : undefined,
     plugins: runtimeConfig.plugins ? { ...runtimeConfig.plugins } : undefined,
   };
 
@@ -337,6 +383,11 @@ export async function prepareDevelopmentRuntimeConfig(
       next.plugins[pluginId] = withLocalRuntimeUrl(plugin, pluginPort);
       pluginBasePort = pluginPort + 1;
     }
+  }
+
+  if (next.auth?.source === "local" && next.auth.localPath) {
+    const authPort = await pickAvailablePort(next.auth.port ?? DEFAULT_AUTH_PORT, usedPorts);
+    next.auth = withLocalRuntimeUrl(next.auth, authPort);
   }
 
   return next;

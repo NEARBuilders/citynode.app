@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import DrizzleORMMigrations from "@proj-airi/unplugin-drizzle-orm-migrations/rspack";
 import {
   EmitPluginManifest,
   EveryPluginDevServer,
@@ -14,22 +15,13 @@ const __dirname = path.dirname(__filename);
 
 const shouldDeploy = process.env.DEPLOY === "true";
 
-function normalizePath(input: string) {
+function normalizePath(input) {
   return input.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function resolveLocalTarget(value: unknown, configRoot: string): string | null {
-  if (typeof value !== "string" || !value.startsWith("local:")) {
-    return null;
-  }
-
-  return normalizePath(path.resolve(configRoot, value.slice("local:".length)));
-}
-
-function updateBosConfig(url: string, integrity: string | undefined) {
+function updateBosConfig(url, integrity) {
   try {
     const configPath = path.resolve(__dirname, "../../bos.config.json");
-    const configRoot = path.dirname(configPath);
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 
     if (config.app?.auth) {
@@ -46,11 +38,12 @@ function updateBosConfig(url: string, integrity: string | undefined) {
       }
     }
   } catch (err) {
-    console.error("   ❌ Failed to update bos.config.json:", (err as Error).message);
+    console.error("   ❌ Failed to update bos.config.json:", err.message);
   }
 }
 
 const baseConfig = {
+  externals: [/^@libsql\/.*/],
   plugins: [
     new EmitPluginManifest({
       additionalExports: [
@@ -62,6 +55,7 @@ const baseConfig = {
     }),
     new EveryPluginDevServer({ dts: false }),
     new FixMfDataUriPlugin(),
+    DrizzleORMMigrations(),
   ],
   infrastructureLogging: {
     level: "error",
@@ -72,7 +66,7 @@ const baseConfig = {
 export default shouldDeploy
   ? withZephyr({
       hooks: {
-        onDeployComplete: async (info: { url: string }) => {
+        onDeployComplete: async (info) => {
           console.log("🚀 Auth Plugin Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
           updateBosConfig(info.url, integrity ?? undefined);

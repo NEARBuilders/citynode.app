@@ -5,7 +5,15 @@ import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { RPCHandler } from "@orpc/server/fetch";
 import { BatchHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import { Cause, Deferred, Effect, Exit, Fiber, Layer, ManagedRuntime } from "every-plugin/effect";
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  FiberHandle,
+  Layer,
+  ManagedRuntime,
+} from "every-plugin/effect";
 import { formatORPCError } from "every-plugin/errors";
 import { onError } from "every-plugin/orpc";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
@@ -19,7 +27,11 @@ import {
   registerAuthHandler,
 } from "./services/auth";
 import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
-import { loadRouterModule, type RouterModule } from "./services/federation.server";
+import {
+  loadRouterModule,
+  type RouterModule,
+  resetFederationInstance,
+} from "./services/federation.server";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
 import { createRouterMounts } from "./services/router";
 import { logger } from "./utils/logger";
@@ -627,6 +639,9 @@ export const createStartServer = (onReady?: () => void) =>
       };
 
       const server = serve({ fetch: proxiedFetch, port, hostname }, () => {
+        logger.info(
+          `[Server] Host ${isDev ? "dev" : "production"} server running at http://${hostname}:${port}`,
+        );
         onReady?.();
       });
       return server;
@@ -635,16 +650,13 @@ export const createStartServer = (onReady?: () => void) =>
     const httpServer = startHttpServer();
 
     yield* Effect.addFinalizer(() =>
-      Effect.promise(
-        () =>
-          new Promise<void>((resolve) => {
-            logger.info("[Server] Closing HTTP server...");
-            httpServer.close(() => {
-              logger.info("[Server] HTTP server closed");
-              resolve();
-            });
-          }),
-      ),
+      Effect.async<void, never>((resume) => {
+        logger.info("[Server] Closing HTTP server...");
+        httpServer.close(() => {
+          logger.info("[Server] HTTP server closed");
+          resume(Effect.void);
+        });
+      }),
     );
 
     yield* Effect.never;
@@ -664,35 +676,40 @@ export const runServer = (input: ServerInput): ServerHandle => {
   const ServerLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
 
   const runtime = ManagedRuntime.make(ServerLive);
-  let serverFiber: Fiber.RuntimeFiber<void, any> | null = null;
+  let programFiber: Fiber.RuntimeFiber<void, unknown> | null = null;
 
-  const program = Effect.gen(function* () {
-    const readyDeferred = yield* Deferred.make<void>();
+  const ready = new Promise<void>((resolveReady, rejectReady) => {
+    const serverEffect = createStartServer(() => resolveReady());
 
-    const fiber = yield* Effect.forkDaemon(
-      Effect.scoped(createStartServer(() => Deferred.unsafeDone(readyDeferred, Exit.void))),
-    );
+    const program = Effect.gen(function* () {
+      const handle = yield* FiberHandle.make();
+      yield* FiberHandle.run(handle, serverEffect);
+      yield* FiberHandle.join(handle);
+    }).pipe(Effect.scoped);
 
-    serverFiber = fiber;
+    programFiber = runtime.runFork(program);
 
-    yield* Deferred.await(readyDeferred);
+    programFiber.addObserver((exit) => {
+      if (Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause)) {
+        rejectReady(Cause.squash(exit.cause));
+      }
+    });
   });
-
-  const ready = runtime.runPromise(program);
 
   const shutdown = async () => {
     logger.info("[Server] Shutting down...");
 
-    if (serverFiber) {
+    if (programFiber) {
       await Effect.runPromise(
-        Fiber.interrupt(serverFiber).pipe(
-          Effect.timeout("3 seconds"),
+        Fiber.interrupt(programFiber).pipe(
+          Effect.timeout("5 seconds"),
           Effect.catchAll(() => Effect.void),
         ),
       );
     }
 
     await runtime.dispose();
+    resetFederationInstance();
     logger.info("[Server] Shutdown complete");
   };
 

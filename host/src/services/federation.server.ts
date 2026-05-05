@@ -10,6 +10,10 @@ export type { RouterModule };
 
 let federationInstance: ReturnType<typeof createInstance> | null = null;
 
+export function resetFederationInstance() {
+  federationInstance = null;
+}
+
 function getOrCreateFederationInstance(config: RuntimeConfig) {
   if (federationInstance) return federationInstance;
 

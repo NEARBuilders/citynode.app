@@ -20,7 +20,7 @@
       "@fastnear/near-connect": "0.12.2",
       "drizzle-orm": "^0.45.1",
       "drizzle-kit": "^0.31.8",
-      "better-auth": "^1.5.4",
+      "better-auth": "^1.6.9",
       "better-near-auth": "0.6.0",
       "every-plugin": "workspace:*",
       "typescript": "^5.9.3",
@@ -89,8 +89,8 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@better-auth/api-key": "^1.5.4",
-    "@better-auth/passkey": "^1.5.4",
+    "@better-auth/api-key": "^1.6.9",
+    "@better-auth/passkey": "^1.6.9",
     "@libsql/client": "^0.17.0",
     "@orpc/contract": "^1.13.14",
     "effect": "catalog:",

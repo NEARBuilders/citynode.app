@@ -90,6 +90,25 @@ export function getProcessConfig(
   bosConfig?: BosConfig,
   runtimeConfig?: RuntimeConfig,
 ): DevProcess | null {
+  if (pkg === "auth") {
+    const authConfig = runtimeConfig?.auth;
+    if (!authConfig?.localPath || authConfig.source !== "local") return null;
+
+    const port =
+      portOverride ?? authConfig.port ?? (authConfig.url ? parsePort(authConfig.url) : 3020);
+
+    return {
+      name: "auth",
+      command: "bun",
+      args: ["run", "dev"],
+      cwd: authConfig.localPath,
+      port,
+      readyPatterns: [/ready in/i, /compiled.*successfully/i, /listening/i, /started/i],
+      errorPatterns: [/error/i, /failed/i],
+      env,
+    };
+  }
+
   if (pkg.startsWith("plugin:")) {
     const pluginId = pkg.slice("plugin:".length);
     const pluginConfig = runtimeConfig?.plugins?.[pluginId] ?? null;

@@ -3,16 +3,50 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import { type Auth, createAuthInstance } from "./auth-instance";
+import type { AuthServices } from "./auth-export";
+import { createAuthInstance } from "./auth-instance";
 import { contract } from "./contract";
-import { type AuthDatabase, createAuthDatabase } from "./db/layer";
+import { createAuthDatabase } from "./db/layer";
+import { migrate } from "./db/migrator";
 import * as schema from "./db/schema";
 
-interface AuthServices {
-  auth: Auth;
-  db: AuthDatabase;
-  handler: (req: Request) => Promise<Response>;
+interface AnonymousUser {
+  isAnonymous?: boolean;
 }
+
+interface OrganizationMember {
+  organizationId?: string;
+}
+
+interface ApiKeyListResponse {
+  apiKeys?: Array<{ id: string; name: string; prefix: string; createdAt: Date }>;
+}
+
+interface CreateApiKeyResponse {
+  id: string;
+  name: string;
+  prefix: string;
+  key: string;
+  createdAt: Date;
+}
+
+interface CreateInvitationBody {
+  email: string;
+  role: string;
+  organizationId: string;
+  expiresAt?: Date;
+}
+
+function tryJsonParse(value: string | null | undefined): unknown {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+export type { AuthServices } from "./auth-export";
 
 export default createPlugin({
   variables: z.object({
@@ -26,21 +60,33 @@ export default createPlugin({
   secrets: z.object({
     AUTH_DATABASE_URL: z.string().default("file:./auth.db"),
     AUTH_DATABASE_AUTH_TOKEN: z.string().optional(),
-    BETTER_AUTH_SECRET: z.string().optional(),
+    BETTER_AUTH_SECRET: z.string(),
   }),
 
   context: z.object({
-    reqHeaders: z.record(z.string()).optional(),
+    reqHeaders: z.record(z.string(), z.string()).optional(),
   }),
 
   contract,
 
   initialize: (config) =>
     Effect.gen(function* () {
-      const { db } = createAuthDatabase(
-        config.secrets.AUTH_DATABASE_URL,
-        config.secrets.AUTH_DATABASE_AUTH_TOKEN,
+      const { db, client } = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          createAuthDatabase(
+            config.secrets.AUTH_DATABASE_URL,
+            config.secrets.AUTH_DATABASE_AUTH_TOKEN,
+          ),
+        ),
+        ({ client }) =>
+          Effect.sync(() => {
+            client.close();
+          }),
       );
+
+      const migrations = yield* Effect.promise(() => import("virtual:drizzle-migrations.sql"));
+      yield* Effect.promise(() => migrate(client, migrations.default));
+      console.log("[Auth] Migrations applied");
 
       const auth = createAuthInstance(
         {
@@ -91,9 +137,29 @@ export default createPlugin({
       getSession: builder.getSession.handler(async ({ context }) => {
         const headers = new Headers(Object.entries(context.reqHeaders ?? {}) as [string, string][]);
         const session = await services.auth.api.getSession({ headers });
+        const s = session?.session ?? null;
+        const u = session?.user ?? null;
         return {
-          session: session?.session ?? null,
-          user: session?.user ?? null,
+          session: s
+            ? {
+                id: s.id,
+                token: s.token,
+                userId: s.userId,
+                expiresAt: s.expiresAt,
+                activeOrganizationId: s.activeOrganizationId ?? null,
+              }
+            : null,
+          user: u
+            ? {
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                emailVerified: u.emailVerified,
+                image: u.image ?? null,
+                role: u.role ?? null,
+                isAnonymous: (u as AnonymousUser).isAnonymous ?? null,
+              }
+            : null,
         };
       }),
 
@@ -197,7 +263,7 @@ export default createPlugin({
                     name: org.name,
                     slug: org.slug,
                     logo: org.logo,
-                    metadata: org.metadata ? JSON.parse(org.metadata) : undefined,
+                    metadata: tryJsonParse(org.metadata),
                   },
                   member: {
                     id: membership.id,
@@ -250,7 +316,10 @@ export default createPlugin({
           return {
             id: member.id,
             role: member.role,
-            organizationId: "organizationId" in member ? (member as any).organizationId : null,
+            organizationId:
+              "organizationId" in member
+                ? ((member as OrganizationMember).organizationId ?? null)
+                : null,
           };
         }),
 
@@ -259,23 +328,27 @@ export default createPlugin({
           headers: new Headers(Object.entries(context.reqHeaders ?? {}) as [string, string][]),
           query: input?.organizationId ? { organizationId: input.organizationId } : undefined,
         });
-        return (result as any[]) ?? [];
+        return (result as ApiKeyListResponse).apiKeys ?? [];
       }),
 
       createApiKey: builder.createApiKey.use(requireAuth).handler(async ({ input, context }) => {
-        const { ...apiKeyInput } = input;
-        const result = await services.auth.api.createApiKey({
+        const result = await (
+          services.auth.api.createApiKey as (args: {
+            headers: Headers;
+            body: unknown;
+          }) => Promise<CreateApiKeyResponse>
+        )({
           headers: new Headers(Object.entries(context.reqHeaders ?? {}) as [string, string][]),
-          ...apiKeyInput,
+          body: input,
         });
-        return result as any;
+        return result;
       }),
 
       deleteApiKey: builder.deleteApiKey.use(requireAuth).handler(async ({ input, context }) => {
         try {
           await services.auth.api.deleteApiKey({
             headers: new Headers(Object.entries(context.reqHeaders ?? {}) as [string, string][]),
-            id: input.id,
+            body: { keyId: input.id },
           });
           return { success: true };
         } catch {
@@ -322,25 +395,21 @@ export default createPlugin({
           const headers = new Headers(
             Object.entries(context.reqHeaders ?? {}) as [string, string][],
           );
-          await services.auth.api.cancelInvitation({
+
+          await (
+            services.auth.api.createInvitation as (args: {
+              headers: Headers;
+              body: CreateInvitationBody & { resend?: boolean };
+            }) => Promise<void>
+          )({
             headers,
-            body: { invitationId: input.id },
+            body: {
+              email: invitation.email,
+              role: invitation.role ?? "member",
+              organizationId: invitation.organizationId,
+              resend: true,
+            },
           });
-
-          const org = await services.db.query.organization.findFirst({
-            where: eq(schema.organization.id, invitation.organizationId),
-          });
-
-          if (org) {
-            await services.auth.api.inviteMember({
-              headers,
-              body: {
-                organizationId: invitation.organizationId,
-                email: invitation.email,
-                role: invitation.role ?? "member",
-              },
-            });
-          }
 
           return { sent: true };
         }),

@@ -15,7 +15,8 @@ export default {
     secrets: {
       AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || "file:./auth.db",
       AUTH_DATABASE_AUTH_TOKEN: process.env.AUTH_DATABASE_AUTH_TOKEN || undefined,
-      BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || undefined,
+      BETTER_AUTH_SECRET:
+        process.env.BETTER_AUTH_SECRET || "dev-only-secret-do-not-use-in-production",
     },
   } satisfies PluginConfigInput<typeof Plugin>,
 };

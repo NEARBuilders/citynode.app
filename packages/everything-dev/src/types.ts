@@ -1,5 +1,29 @@
 import { z } from "./sdk";
 
+export interface BosConfigInput extends Record<string, unknown> {
+  extends?: string;
+  account?: string;
+  domain?: string;
+  testnet?: string;
+  template?: string;
+  gateway?: {
+    development?: string;
+    production?: string;
+    account?: string;
+  };
+  development?: string;
+  production?: string;
+  integrity?: string;
+  name?: string;
+  version?: string;
+  proxy?: string;
+  variables?: Record<string, string>;
+  secrets?: string[];
+  app?: Record<string, Record<string, unknown>>;
+  shared?: Record<string, Record<string, Record<string, unknown>>>;
+  plugins?: Record<string, BosConfigInput>;
+}
+
 export const SourceModeSchema = z.enum(["local", "remote"]);
 export type SourceMode = z.infer<typeof SourceModeSchema>;
 

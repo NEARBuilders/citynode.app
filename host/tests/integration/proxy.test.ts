@@ -286,9 +286,9 @@ describe("API Proxy", () => {
           router: {},
           metadata: { remoteUrl: "local" },
           initialized: {
-            context: {
-              handler: authHandler,
-            },
+            handler: authHandler,
+            auth: { api: { getSession: vi.fn() } },
+            db: {} as any,
           },
         } as any,
         api: null,

@@ -124,8 +124,10 @@ export interface AuthConfig {
 
 export function createAuthInstance(config: AuthConfig, db: AuthDatabase) {
   const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret && process.env.NODE_ENV === "production") {
-    console.warn("[Security] BETTER_AUTH_SECRET is not set in production. Using insecure default.");
+  if (!secret) {
+    throw new Error(
+      "BETTER_AUTH_SECRET environment variable is required. Set it before starting the server.",
+    );
   }
 
   const baseUrl = process.env.BETTER_AUTH_URL || config.hostUrl;
@@ -139,7 +141,7 @@ export function createAuthInstance(config: AuthConfig, db: AuthDatabase) {
       config.hostUrl,
       ...(config.uiUrl ? [config.uiUrl] : []),
     ],
-    secret: secret || "default-secret-change-in-production",
+    secret,
     baseURL: baseUrl,
     socialProviders: {
       github: {

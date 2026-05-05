@@ -202,6 +202,9 @@ function determineProcesses(
   const processes: string[] = [];
   if (config.ssr && config.ui === "local") processes.push("ui-ssr");
   if (config.ui === "local") processes.push("ui");
+  if (localPackages.includes("auth") && runtimeConfig?.auth?.source === "local") {
+    processes.push("auth");
+  }
   if (config.api === "local" && !config.proxy) processes.push("api");
   for (const pkg of localPackages) {
     if (pkg.startsWith("plugin:")) {
@@ -928,6 +931,7 @@ export default createPlugin({
       const developmentRuntime = buildRuntimeConfig(deps.bosConfig, {
         uiSource: appConfig.ui,
         apiSource: appConfig.api,
+        authSource: refreshedLocalPackages.includes("auth") ? "local" : "remote",
         hostUrl: `http://localhost:${hostPort}`,
         proxy: env.API_PROXY,
         env: "development",
@@ -997,6 +1001,7 @@ export default createPlugin({
       const runtimeConfig = buildRuntimeConfig(config, {
         uiSource: "remote",
         apiSource: "remote",
+        authSource: "remote",
         hostUrl: `http://localhost:${port}`,
         env: "production",
         plugins: runtimePlugins,
@@ -1056,6 +1061,7 @@ export default createPlugin({
       const runtimeConfig = buildRuntimeConfig(deps.bosConfig, {
         uiSource: deps.bosConfig.app.ui?.development ? "local" : "remote",
         apiSource: deps.bosConfig.app.api?.development ? "local" : "remote",
+        authSource: deps.bosConfig.app.auth?.development ? "local" : "remote",
         hostUrl: resolveDevelopmentHostUrl(deps.bosConfig.app.host.development),
         env: "development",
         plugins: deps.runtimeConfig?.plugins,

@@ -2,23 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { getNetworkIdForAccount } from "./network";
-import type { BosConfig, RuntimeConfig, RuntimePluginConfig } from "./types";
+import type { BosConfig, BosConfigInput, RuntimeConfig, RuntimePluginConfig } from "./types";
 import { BosConfigSchema } from "./types";
-
-interface BosConfigInput extends Record<string, unknown> {
-  extends?: string;
-  development?: string;
-  production?: string;
-  integrity?: string;
-  name?: string;
-  version?: string;
-  proxy?: string;
-  variables?: Record<string, string>;
-  secrets?: string[];
-  app?: Record<string, Record<string, unknown>>;
-  shared?: Record<string, Record<string, Record<string, unknown>>>;
-  plugins?: Record<string, BosConfigInput>;
-}
 
 const LOCAL_PREFIX = "local:";
 const DEFAULT_HOST_PORT = 3000;
@@ -196,7 +181,7 @@ function buildRuntimeConfig(
     },
     auth: authConfig
       ? {
-          name: authConfig.name,
+          name: resolvePluginRuntimeName(undefined, authRuntime!.localPath, authConfig.name),
           url: authRuntime!.url,
           entry: authRuntime!.url ? `${authRuntime!.url}/mf-manifest.json` : "/mf-manifest.json",
           localPath: authRuntime!.localPath,
@@ -384,7 +369,7 @@ function buildRuntimePluginConfig(
   };
 }
 
-function resolvePluginRuntimeName(
+export function resolvePluginRuntimeName(
   explicitName: string | undefined,
   localPath: string | undefined,
   fallback: string,
