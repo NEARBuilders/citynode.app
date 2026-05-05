@@ -5,15 +5,18 @@ import type { RuntimeConfig } from "everything-dev/types";
 import { ConfigService } from "./config";
 import { PluginError } from "./errors";
 
-export interface LoadedPlugin {
+export interface InitializedPluginResult {
+  context: unknown;
+  [key: string]: unknown;
+}
+
+export interface HostPluginEntry {
   key: string;
   name: string;
-  createClient: (ctx?: unknown) => unknown;
+  createClient: (context?: unknown) => unknown;
   router: unknown;
-  metadata: {
-    remoteUrl: string;
-    version?: string;
-  };
+  metadata: { remoteUrl: string; version?: string };
+  initialized?: InitializedPluginResult;
 }
 
 export interface PluginStatus {
@@ -26,9 +29,9 @@ export interface PluginStatus {
 
 export interface PluginResult {
   runtime: ReturnType<typeof createPluginRuntime> | null;
-  auth: LoadedPlugin | null;
-  api: LoadedPlugin | null;
-  plugins: Record<string, LoadedPlugin>;
+  auth: HostPluginEntry | null;
+  api: HostPluginEntry | null;
+  plugins: Record<string, HostPluginEntry>;
   authClient: ((ctx?: unknown) => unknown) | null;
   status: PluginStatus;
 }
@@ -82,41 +85,21 @@ function collectSecrets(config: { secrets?: string[] }): Record<string, string> 
 }
 
 async function loadPluginEntry(
-  runtime: ReturnType<typeof createPluginRuntime>,
+  runtime: any,
   entry: RuntimePluginEntry,
   pluginsClient?: Record<string, unknown>,
-): Promise<LoadedPlugin> {
+): Promise<HostPluginEntry> {
   if (entry.config.integrity) {
     await verifySriForUrl(entry.config.url, entry.config.integrity);
   }
 
-  const variables: Record<string, unknown> = {
-    ...entry.config.variables,
-  };
+  const variables: Record<string, unknown> = { ...entry.config.variables };
+  const args: [unknown, unknown?] = [{ variables, secrets: collectSecrets(entry.config) }];
+  if (pluginsClient) args.push(pluginsClient);
 
-  const args: [unknown, unknown?] = [
-    {
-      variables,
-      secrets: collectSecrets(entry.config),
-    },
-  ];
+  const result = await runtime.usePlugin(entry.runtimeId, ...args);
 
-  if (pluginsClient) {
-    args.push(pluginsClient);
-  }
-
-  const plugin = await (runtime.usePlugin as any)(entry.runtimeId, ...args);
-
-  return {
-    key: entry.key,
-    name: entry.config.name,
-    createClient: plugin.createClient as unknown as (ctx?: unknown) => unknown,
-    router: plugin.router,
-    metadata: {
-      remoteUrl: entry.config.url,
-      version: plugin.metadata.version,
-    },
-  };
+  return { key: entry.key, name: entry.config.name, ...result };
 }
 
 export const initializePlugins = Effect.gen(function* () {
@@ -167,7 +150,7 @@ export const initializePlugins = Effect.gen(function* () {
       });
 
       // Phase 0: Load auth plugin (app-level infrastructure)
-      let authPlugin: LoadedPlugin | null = null;
+      let authPlugin: HostPluginEntry | null = null;
       let authClient: ((ctx?: unknown) => unknown) | null = null;
       if (config.auth?.url) {
         const authEntry: RuntimePluginEntry = {
@@ -193,7 +176,7 @@ export const initializePlugins = Effect.gen(function* () {
         pluginEntries.map((entry) => loadPluginEntry(runtime, entry)),
       );
 
-      const loadedPlugins: Record<string, LoadedPlugin> = {};
+      const loadedPlugins: Record<string, HostPluginEntry> = {};
       const loadedPluginKeys: string[] = [];
       const pluginsClient: Record<string, unknown> = {};
       const errors: string[] = [];
@@ -206,14 +189,17 @@ export const initializePlugins = Effect.gen(function* () {
           loadedPluginKeys.push(key);
           pluginsClient[key] = result.value.createClient;
         } else {
-          errors.push(
-            result.reason instanceof Error ? result.reason.message : String(result.reason),
-          );
+          const msg =
+            result.reason instanceof Error ? result.reason.message : String(result.reason);
+          errors.push(msg);
+          pluginsClient[key] = () => {
+            throw new Error(`Plugin "${key}" failed to load: ${msg}`);
+          };
         }
       });
 
       // Phase 2: Load the API plugin with pluginsClient + authClient
-      let baseApi: LoadedPlugin | null = null;
+      let baseApi: HostPluginEntry | null = null;
       const apiEntry = registryEntries.find((e) => e.key === "api");
 
       if (apiEntry) {
@@ -282,10 +268,10 @@ export class PluginsService extends Context.Tag("host/PluginsService")<
       const plugins = yield* initializePlugins;
 
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
+        Effect.promise(async () => {
           if (plugins.runtime) {
             console.log("[Plugins] Shutting down plugin runtime...");
-            plugins.runtime.shutdown();
+            await plugins.runtime.shutdown();
           }
         }),
       );

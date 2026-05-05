@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
-import type { LoadedPlugin, PluginResult } from "./plugins";
+import type { AuthServices } from "../../../plugins/auth/src/auth-export";
+import type { HostPluginEntry, PluginResult } from "./plugins";
 
 interface AuthUser {
   id: string;
@@ -19,25 +20,25 @@ export interface AuthVariables {
 
 export type HonoEnv = { Variables: AuthVariables };
 
-function resolveAuthPlugin(plugins: PluginResult): LoadedPlugin | null {
+function resolveAuthEntry(plugins: PluginResult): HostPluginEntry | null {
   return plugins.auth ?? plugins.plugins.auth ?? null;
 }
 
-function getAuthInternals(plugins: PluginResult) {
-  const authPlugin = resolveAuthPlugin(plugins);
-  if (!authPlugin) return null;
-  return (authPlugin as any).initialized?.context ?? null;
+function getAuthServices(plugins: PluginResult): AuthServices | null {
+  const entry = resolveAuthEntry(plugins);
+  if (!entry?.initialized?.context) return null;
+  return entry.initialized.context as AuthServices;
 }
 
 export function registerAuthHandler(app: { on: (...args: any[]) => any }, plugins: PluginResult) {
-  const internals = getAuthInternals(plugins);
-  if (typeof internals?.handler === "function") {
-    app.on(["POST", "GET"], "/api/auth/*", (c: Context<HonoEnv>) => internals.handler(c.req.raw));
-  }
+  const services = getAuthServices(plugins);
+  if (!services) return;
+  app.on(["POST", "GET"], "/api/auth/*", (c: Context<HonoEnv>) => services.handler(c.req.raw));
 }
 
 export function createSessionMiddleware(plugins: PluginResult) {
-  const authApi = getAuthInternals(plugins)?.auth?.api ?? null;
+  const services = getAuthServices(plugins);
+  const authApi = services?.auth?.api ?? null;
 
   return async (c: Context<HonoEnv>, next: Next) => {
     if (c.req.path.startsWith("/api/auth/")) {
