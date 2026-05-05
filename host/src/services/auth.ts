@@ -1,265 +1,124 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { apiKey } from "@better-auth/api-key";
-import { passkey } from "@better-auth/passkey";
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin, anonymous, organization, phoneNumber } from "better-auth/plugins";
-import { siwn } from "better-near-auth";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import * as schema from "../db/schema/auth";
-import type { RuntimeConfig } from "./config";
-import { ConfigService } from "./config";
-import type { Database } from "./database";
-import { DatabaseService } from "./database";
+import type { Context, Next } from "hono";
+import type { LoadedPlugin, PluginResult } from "./plugins";
 
-// Dev preview directory for email/SMS
-const DEV_PREVIEW_DIR = path.join(process.cwd(), ".dev-preview");
-const EMAIL_PREVIEW_FILE = path.join(DEV_PREVIEW_DIR, "emails.jsonl");
-const SMS_PREVIEW_FILE = path.join(DEV_PREVIEW_DIR, "sms.jsonl");
+export interface AuthVariables {
+  user: {
+    id: string;
+    role?: string | null;
+    email?: string | null;
+    name?: string | null;
+  } | null;
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+    token: string;
+    createdAt: Date;
+    updatedAt: Date;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    activeOrganizationId?: string | null;
+  } | null;
+  reqHeaders: Record<string, string>;
+}
 
-// Ensure dev preview directory exists
-function ensureDevPreviewDir() {
-  if (!fs.existsSync(DEV_PREVIEW_DIR)) {
-    fs.mkdirSync(DEV_PREVIEW_DIR, { recursive: true });
+export type HonoEnv = { Variables: AuthVariables };
+
+function resolveAuthPlugin(plugins: PluginResult): LoadedPlugin | null {
+  return plugins.auth ?? plugins.plugins["auth"] ?? null;
+}
+
+function getAuthHandler(plugins: PluginResult): ((req: Request) => Promise<Response>) | null {
+  const authPlugin = resolveAuthPlugin(plugins);
+  if (!authPlugin) return null;
+  const initialized = (authPlugin as any).initialized;
+  return typeof initialized?.context?.handler === "function" ? initialized.context.handler : null;
+}
+
+export function registerAuthHandler(app: { on: (...args: any[]) => any }, plugins: PluginResult) {
+  const handler = getAuthHandler(plugins);
+  if (handler) {
+    app.on(["POST", "GET"], "/api/auth/*", (c: Context<HonoEnv>) => handler(c.req.raw));
   }
 }
 
-// Email sending function - dev preview mode
-async function sendEmail({
-  to,
-  subject,
-  text,
-  html,
-}: {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}) {
-  ensureDevPreviewDir();
+export function createSessionMiddleware(plugins: PluginResult) {
+  const authPlugin = resolveAuthPlugin(plugins);
 
-  const entry = {
-    type: "email",
-    timestamp: new Date().toISOString(),
-    to,
-    subject,
-    text,
-    html,
-    previewUrl: null as string | null,
+  return async (c: Context<HonoEnv>, next: Next) => {
+    if (c.req.path.startsWith("/api/auth/")) {
+      return next();
+    }
+
+    const reqHeaders: Record<string, string> = {};
+    c.req.raw.headers.forEach((value, key) => {
+      reqHeaders[key] = value;
+    });
+    c.set("reqHeaders", reqHeaders);
+
+    if (!authPlugin?.createClient) {
+      c.set("user", null);
+      c.set("session", null);
+      await next();
+      return;
+    }
+
+    try {
+      const authClient = authPlugin.createClient({ reqHeaders }) as any;
+      const sessionResult = await authClient.getSession();
+
+      const user = sessionResult?.user
+        ? {
+            id: sessionResult.user.id,
+            role: sessionResult.user.role ?? null,
+            email: sessionResult.user.email ?? null,
+            name: sessionResult.user.name ?? null,
+          }
+        : null;
+
+      const session = sessionResult?.session
+        ? {
+            id: sessionResult.session.id,
+            userId: sessionResult.session.userId,
+            expiresAt: sessionResult.session.expiresAt,
+            token: sessionResult.session.token,
+            createdAt: sessionResult.session.createdAt,
+            updatedAt: sessionResult.session.updatedAt,
+            ipAddress: null,
+            userAgent: null,
+            activeOrganizationId: sessionResult.session.activeOrganizationId ?? null,
+          }
+        : null;
+
+      c.set("user", user);
+      c.set("session", session);
+    } catch (error) {
+      console.warn(
+        `[Auth] Session resolution failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      c.set("user", null);
+      c.set("session", null);
+    }
+
+    await next();
   };
-
-  // Append to preview log
-  fs.appendFileSync(EMAIL_PREVIEW_FILE, `${JSON.stringify(entry)}\n`);
-
-  // Also log to console for visibility
-  console.log(`\n📧 [Email Preview] ============================================`);
-  console.log(`To: ${to}`);
-  console.log(`Subject: ${subject}`);
-  console.log(`----------------------------------------------------------------`);
-  console.log(text);
-  console.log(`================================================================\n`);
-
-  // In production, integrate with your email provider:
-  // Example: await resend.emails.send({ to, subject, text, html });
 }
 
-// SMS sending function - dev preview mode
-async function sendSMS({ phoneNumber, code }: { phoneNumber: string; code: string }) {
-  ensureDevPreviewDir();
+export function buildPluginContext(c: Context<HonoEnv>) {
+  const user = c.get("user");
+  const session = c.get("session");
 
-  const entry = {
-    type: "sms",
-    timestamp: new Date().toISOString(),
-    phoneNumber,
-    code,
-    message: `Your verification code is: ${code}`,
+  return {
+    userId: user?.id ?? undefined,
+    user: user
+      ? {
+          id: user.id,
+          role: user.role ?? undefined,
+          email: user.email ?? undefined,
+          name: user.name ?? undefined,
+        }
+      : undefined,
+    organizationId: session?.activeOrganizationId ?? undefined,
+    reqHeaders: c.get("reqHeaders"),
   };
-
-  // Append to preview log
-  fs.appendFileSync(SMS_PREVIEW_FILE, `${JSON.stringify(entry)}\n`);
-
-  // Also log to console for visibility
-  console.log(`\n📱 [SMS Preview] ================================================`);
-  console.log(`To: ${phoneNumber}`);
-  console.log(`Code: ${code}`);
-  console.log(`Message: Your verification code is: ${code}`);
-  console.log(`================================================================\n`);
-
-  // In production, integrate with your SMS provider:
-  // Example: await twilioClient.messages.create({ to: phoneNumber, body: `Your code: ${code}` });
-}
-
-// Helper to create personal organization for a user
-async function createPersonalOrganization(
-  database: Database,
-  user: { id: string; name?: string; email?: string; isAnonymous?: boolean },
-) {
-  if (user.isAnonymous) {
-    return null;
-  }
-
-  const existingOrg = await database.query.organization.findFirst({
-    where: (org, { eq, and }) =>
-      and(eq(org.slug, user.id), eq(org.metadata, JSON.stringify({ isPersonal: true }))),
-  });
-
-  if (existingOrg) {
-    return existingOrg;
-  }
-
-  // Create personal organization
-  const personalOrg = await database
-    .insert(schema.organization)
-    .values({
-      id: crypto.randomUUID(),
-      name: user.name || "My Organization",
-      slug: user.id,
-      logo: null,
-      metadata: JSON.stringify({ isPersonal: true }),
-      createdAt: new Date(),
-    })
-    .returning()
-    .get();
-
-  // Create owner membership
-  await database.insert(schema.member).values({
-    id: crypto.randomUUID(),
-    userId: user.id,
-    organizationId: personalOrg.id,
-    role: "owner",
-    createdAt: new Date(),
-  });
-
-  console.log(`[Auth] Created personal organization ${personalOrg.id} for user ${user.id}`);
-  return personalOrg;
-}
-
-export function createAuthInstance(config: RuntimeConfig, db: Database) {
-  const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret && process.env.NODE_ENV === "production") {
-    console.warn("[Security] BETTER_AUTH_SECRET is not set in production. Using insecure default.");
-  }
-
-  const baseUrl = process.env.BETTER_AUTH_URL || config.hostUrl;
-
-  return betterAuth({
-    database: drizzleAdapter(db, {
-      provider: "sqlite",
-      schema: schema,
-    }),
-    trustedOrigins: process.env.CORS_ORIGIN?.split(",").map((o: string) => o.trim()) ?? [
-      config.hostUrl,
-      ...(config.ui?.url ? [config.ui.url] : []),
-    ],
-    secret: secret || "default-secret-change-in-production",
-    baseURL: baseUrl,
-    socialProviders: {
-      github: {
-        clientId: process.env.GITHUB_CLIENT_ID!,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      },
-    },
-    plugins: [
-      siwn({
-        recipient: config.account,
-        relayer: {},
-      }),
-      admin({ defaultRole: "user", adminRoles: ["admin"] }),
-      anonymous({ emailDomainName: config.account }),
-      phoneNumber({
-        sendOTP: async ({ phoneNumber, code }) => {
-          await sendSMS({ phoneNumber, code });
-        },
-        signUpOnVerification: {
-          getTempEmail: (phoneNumber) => `${phoneNumber}@${config.account}`,
-          getTempName: (phoneNumber) => phoneNumber,
-        },
-      }),
-      passkey(),
-      organization({
-        async sendInvitationEmail(data) {
-          const inviteLink = `${baseUrl}/accept-invitation/${data.id}`;
-          await sendEmail({
-            to: data.email,
-            subject: `Invitation to join ${data.organization.name}`,
-            text: `You've been invited by ${data.inviter.user.name} (${data.inviter.user.email}) to join ${data.organization.name}.\n\nClick here to accept: ${inviteLink}`,
-          });
-        },
-      }),
-      apiKey(),
-    ],
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: true,
-      sendResetPassword: async ({ user, url }, _request) => {
-        void sendEmail({
-          to: user.email,
-          subject: "Reset your password",
-          text: `Click the link to reset your password: ${url}`,
-        });
-      },
-    },
-    emailVerification: {
-      sendVerificationEmail: async ({ user, url }, _request) => {
-        void sendEmail({
-          to: user.email,
-          subject: "Verify your email address",
-          text: `Click the link to verify your email: ${url}`,
-        });
-      },
-      sendOnSignUp: true,
-      sendOnSignIn: true,
-      autoSignInAfterVerification: true,
-      async afterEmailVerification(user, _request) {
-        console.log(`${user.email} has been successfully verified!`);
-      },
-    },
-    databaseHooks: {
-      user: {
-        create: {
-          after: async (user) => {
-            const userData = user as typeof schema.user.$inferInsert & { isAnonymous?: boolean };
-            if (!userData.isAnonymous) {
-              await createPersonalOrganization(db, user);
-            }
-          },
-        },
-      },
-    },
-    account: {
-      accountLinking: {
-        enabled: true,
-        trustedProviders: ["siwn", "email-password"],
-        allowDifferentEmails: true,
-        updateUserInfoOnLink: true,
-      },
-    },
-    session: {
-      cookieCache: {
-        enabled: process.env.NODE_ENV === "production",
-        maxAge: 5 * 60,
-      },
-    },
-    advanced: {
-      defaultCookieAttributes: {
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        httpOnly: true,
-      },
-    },
-  });
-}
-
-export type Auth = ReturnType<typeof createAuthInstance>;
-export type AuthSession = Auth["$Infer"]["Session"];
-
-export const createAuth = Effect.gen(function* () {
-  const config = yield* ConfigService;
-  const db = yield* DatabaseService;
-  return createAuthInstance(config, db);
-});
-
-export class AuthService extends Context.Tag("host/AuthService")<AuthService, Auth>() {
-  static Default = Layer.effect(AuthService, createAuth);
 }

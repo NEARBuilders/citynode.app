@@ -281,7 +281,7 @@ export async function personalizeConfig(
         if (entry && typeof entry === "object") {
           const e = entry as Record<string, unknown>;
           delete e.production;
-          delete e.productionIntegrity;
+          delete e.integrity;
           delete e.ssr;
           delete e.ssrIntegrity;
         }
@@ -304,7 +304,7 @@ export async function personalizeConfig(
         if (plugin && typeof plugin === "object") {
           const p = plugin as Record<string, unknown>;
           delete p.production;
-          delete p.productionIntegrity;
+          delete p.integrity;
         }
       }
 

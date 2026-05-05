@@ -109,6 +109,34 @@ interface DiscoveredConfig {
 
 const DISCOVERY_PREFIX = "apps/";
 
+export interface KvEntry {
+  key: string;
+  value: unknown;
+  blockHeight?: number;
+  blockTimestamp?: number;
+  txHash?: string;
+  signerId?: string;
+}
+
+export interface KvListInput {
+  prefix: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface KvWriteEntry {
+  path: string;
+  value: unknown;
+}
+
+export interface PreparedKvWrite {
+  contractId: string;
+  methodName: "__fastdata_kv";
+  args: Record<string, string>;
+  gas: string;
+  attachedDeposit: string;
+}
+
 export class RegistryService extends Context.Tag("registry/RegistryService")<
   RegistryService,
   {
@@ -137,6 +165,13 @@ export class RegistryService extends Context.Tag("registry/RegistryService")<
       signedDelegateActionPayload: string,
     ) => Promise<RegistryRelayResult>;
     getRegistryRelaySender: (signedDelegateActionPayload: string) => string;
+    kvGet: (path: string) => Promise<unknown | null>;
+    kvList: (input: KvListInput) => Promise<{
+      data: KvEntry[];
+      meta: { total: number; hasMore: boolean; nextCursor: string | null };
+    }>;
+    kvPrepareWrite: (entries: KvWriteEntry[]) => PreparedKvWrite;
+    kvRelayWrite: (signedDelegateActionPayload: string) => Promise<RegistryRelayResult>;
   }
 >() {
   static Live = Layer.effect(
@@ -470,6 +505,102 @@ function createRegistryMethods(config: RegistryConfig) {
     getRegistryRelaySender: (signedDelegateActionPayload: string) => {
       const signedDelegate = decodeSignedDelegateAction(signedDelegateActionPayload);
       return signedDelegate.signedDelegate.delegateAction.senderId;
+    },
+
+    kvGet: async (path: string) => {
+      const accountIdMatch = path.match(/^plugins\/([^/]+)\//);
+      const accountId = accountIdMatch?.[1] ?? config.namespace;
+      return readLatestValue({
+        baseUrl: getFastKvBaseUrlForAccount(accountId),
+        currentAccountId: getRegistryNamespaceForAccount(accountId, config),
+        key: path,
+      });
+    },
+
+    kvList: async (input: KvListInput) => {
+      const accountIdMatch = input.prefix.match(/^plugins\/([^/]+)\//);
+      const accountId = accountIdMatch?.[1] ?? config.namespace;
+      const limit = clamp(input.limit ?? 50, 1, 200);
+      const allEntries: KvEntry[] = [];
+      let pageToken: string | null = input.cursor ?? null;
+      let lastPageToken: string | null = null;
+
+      for (;;) {
+        const page = await listLatestValues({
+          baseUrl: getFastKvBaseUrlForAccount(accountId),
+          currentAccountId: getRegistryNamespaceForAccount(accountId, config),
+          keyPrefix: input.prefix,
+          pageToken: pageToken ?? undefined,
+          limit,
+          includeMetadata: true,
+        });
+
+        for (const entry of page.entries) {
+          allEntries.push({
+            key: entry.key,
+            value: entry.value,
+            blockHeight: entry.block_height,
+            blockTimestamp: entry.block_timestamp,
+            txHash: entry.tx_hash,
+            signerId: entry.signer_id,
+          });
+        }
+
+        lastPageToken = page.pageToken;
+        if (!page.pageToken) break;
+        if (allEntries.length >= limit) break;
+        pageToken = page.pageToken;
+      }
+
+      const hasMore = lastPageToken != null;
+      return {
+        data: allEntries.slice(0, limit),
+        meta: {
+          total: allEntries.length,
+          hasMore,
+          nextCursor: hasMore ? lastPageToken : null,
+        },
+      };
+    },
+
+    kvPrepareWrite: (entries: KvWriteEntry[]) => {
+      const args: Record<string, string> = {};
+      for (const { path, value } of entries) {
+        args[path] = JSON.stringify(value);
+      }
+      return {
+        contractId: config.namespace,
+        methodName: "__fastdata_kv" as const,
+        args,
+        gas: `${Math.max(10, entries.length * 5)} Tgas`,
+        attachedDeposit: "0 yocto",
+      };
+    },
+
+    kvRelayWrite: async (signedDelegateActionPayload: string) => {
+      if (!config.relayAccountId || !config.relayPrivateKey) {
+        throw new Error("Registry relay is not configured on this server.");
+      }
+
+      const signedDelegate = decodeSignedDelegateAction(signedDelegateActionPayload);
+      const senderId = signedDelegate.signedDelegate.delegateAction.senderId;
+
+      const near = new Near({
+        network: config.relayNetwork ?? "mainnet",
+        defaultSignerId: config.relayAccountId,
+        privateKey: config.relayPrivateKey as never,
+      });
+
+      const result = await near
+        .transaction(config.relayAccountId)
+        .signedDelegateAction(signedDelegate)
+        .send({ waitUntil: "NONE" });
+
+      return {
+        transactionHash: result?.transaction?.hash ?? null,
+        relayerAccountId: config.relayAccountId,
+        senderId,
+      };
     },
   };
 }

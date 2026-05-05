@@ -1,6 +1,8 @@
 import { type Context, Hono } from "hono";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { proxyRequest, setupApiRoutes } from "../../src/program";
+import { type HonoEnv, registerAuthHandler } from "../../src/services/auth";
+import { type PluginResult } from "../../src/services/plugins";
 
 const createMockResponse = (body: string, status = 200, headers: Record<string, string> = {}) => {
   return new Response(body, {
@@ -258,7 +260,7 @@ describe("API Proxy", () => {
 
   describe("setupApiRoutes auth route precedence", () => {
     it("handles /api/auth before the generic API router", async () => {
-      const app = new Hono();
+      const app = new Hono<HonoEnv>();
       const authHandler = vi.fn(async () => new Response("auth ok", { status: 200 }));
 
       const config = {
@@ -275,23 +277,38 @@ describe("API Proxy", () => {
         },
       } as any;
 
+      const plugins: PluginResult = {
+        runtime: null,
+        auth: {
+          key: "auth",
+          name: "auth",
+          createClient: () => ({}),
+          router: {},
+          metadata: { remoteUrl: "local" },
+          initialized: {
+            context: {
+              handler: authHandler,
+            },
+          },
+        } as any,
+        api: null,
+        plugins: {},
+        status: {
+          available: false,
+          pluginName: null,
+          error: null,
+          errorDetails: null,
+          loadedPlugins: [],
+        },
+      };
+
+      registerAuthHandler(app, plugins);
+
       setupApiRoutes(
         app,
         config,
-        { handler: authHandler } as any,
-        {} as any,
-        {
-          runtime: null,
-          api: null,
-          plugins: {},
-          status: {
-            available: false,
-            pluginName: null,
-            error: null,
-            errorDetails: null,
-            loadedPlugins: [],
-          },
-        },
+        plugins,
+        async (_c, next) => next(),
         {
           status: "ready",
           startTime: Date.now(),

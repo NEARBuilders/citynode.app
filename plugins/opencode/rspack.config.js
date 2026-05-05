@@ -44,14 +44,14 @@ function updateBosConfig(url, integrity) {
     const [key] = match;
     config.plugins[key].production = url;
     if (integrity) {
-      config.plugins[key].productionIntegrity = integrity;
+      config.plugins[key].integrity = integrity;
     } else {
-      delete config.plugins[key].productionIntegrity;
+      delete config.plugins[key].integrity;
     }
     fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
     console.log(`   ✅ Updated bos.config.json: plugins.${key}.production`);
     if (integrity) {
-      console.log(`   ✅ Updated bos.config.json: plugins.${key}.productionIntegrity`);
+      console.log(`   ✅ Updated bos.config.json: plugins.${key}.integrity`);
     }
   } catch (err) {
     console.error("   ❌ Failed to update bos.config.json:", err.message);

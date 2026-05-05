@@ -20,14 +20,14 @@ function updateBosConfig(url: string, integrity?: string) {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     config.app.host.production = url;
     if (integrity) {
-      config.app.host.productionIntegrity = integrity;
+      config.app.host.integrity = integrity;
     } else {
-      delete config.app.host.productionIntegrity;
+      delete config.app.host.integrity;
     }
     fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
     console.log(`   ✅ Updated bos.config.json: app.host.production`);
     if (integrity) {
-      console.log(`   ✅ Updated bos.config.json: app.host.productionIntegrity`);
+      console.log(`   ✅ Updated bos.config.json: app.host.integrity`);
     }
   } catch (err) {
     console.error("   ❌ Failed to update bos.config.json:", (err as Error).message);

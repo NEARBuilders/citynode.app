@@ -26,6 +26,7 @@ export interface PluginStatus {
 
 export interface PluginResult {
   runtime: ReturnType<typeof createPluginRuntime> | null;
+  auth: LoadedPlugin | null;
   api: LoadedPlugin | null;
   plugins: Record<string, LoadedPlugin>;
   status: PluginStatus;
@@ -47,6 +48,7 @@ const unavailableResult = (
   loadedPlugins: string[] = [],
 ): PluginResult => ({
   runtime: null,
+  auth: null,
   api: null,
   plugins: {},
   status: { available: false, pluginName, error, errorDetails, loadedPlugins },
@@ -77,6 +79,46 @@ function collectSecrets(config: { secrets?: string[] }): Record<string, string> 
   return secretsFromEnv(config.secrets ?? []);
 }
 
+async function loadPluginEntry(
+  runtime: ReturnType<typeof createPluginRuntime>,
+  entry: RuntimePluginEntry,
+  pluginsClient?: Record<string, unknown>,
+): Promise<LoadedPlugin> {
+  if (entry.config.integrity) {
+    await verifySriForUrl(entry.config.url, entry.config.integrity);
+  }
+
+  const variables: Record<string, unknown> = {
+    ...entry.config.variables,
+  };
+
+  const args: [unknown, unknown?] = [
+    {
+      // @ts-expect-error dynamic runtime config
+      variables,
+      // @ts-expect-error dynamic runtime config
+      secrets: collectSecrets(entry.config),
+    },
+  ];
+
+  if (pluginsClient) {
+    args.push(pluginsClient);
+  }
+
+  const plugin = await runtime.usePlugin(entry.runtimeId as never, ...args);
+
+  return {
+    key: entry.key,
+    name: entry.config.name,
+    createClient: plugin.createClient as unknown as (ctx?: unknown) => unknown,
+    router: plugin.router,
+    metadata: {
+      remoteUrl: entry.config.url,
+      version: plugin.metadata.version,
+    },
+  };
+}
+
 export const initializePlugins = Effect.gen(function* () {
   const config: RuntimeConfig = yield* ConfigService;
 
@@ -85,6 +127,7 @@ export const initializePlugins = Effect.gen(function* () {
     console.log(`[Plugins] API requests will be proxied to: ${config.api.proxy}`);
     return {
       runtime: null,
+      auth: null,
       api: null,
       plugins: {},
       status: {
@@ -98,7 +141,7 @@ export const initializePlugins = Effect.gen(function* () {
   }
 
   const registryEntries = buildRegistryEntries(config);
-  if (registryEntries.length === 0) {
+  if (registryEntries.length === 0 && !config.auth) {
     console.log("[Plugins] No remote plugins configured, using host API only");
     return unavailableResult(config.api.name, null, null);
   }
@@ -107,52 +150,56 @@ export const initializePlugins = Effect.gen(function* () {
 
   const result = yield* Effect.tryPromise({
     try: async () => {
+      const allEntries: RuntimePluginEntry[] = [];
+
+      if (config.auth?.url) {
+        allEntries.push({ key: "auth", runtimeId: config.auth.name, config: config.auth });
+      }
+
+      allEntries.push(...registryEntries);
+
       const runtime = createPluginRuntime({
         registry: Object.fromEntries(
-          registryEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
+          allEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
         ),
         secrets: {},
       });
 
-      // Phase 1: Load all non-API plugins first
+      // Phase 0: Load auth plugin (app-level infrastructure)
+      let authPlugin: LoadedPlugin | null = null;
+      if (config.auth?.url) {
+        const authEntry: RuntimePluginEntry = {
+          key: "auth",
+          runtimeId: config.auth.name,
+          config: config.auth,
+        };
+        try {
+          authPlugin = await loadPluginEntry(runtime, authEntry);
+          console.log(`[Plugins] Auth plugin loaded: ${authPlugin.name}`);
+        } catch (error) {
+          console.error(
+            `[Plugins] Failed to load auth plugin: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+
+      // Phase 1: Load all non-API plugins
       const pluginEntries = registryEntries.filter((e) => e.key !== "api");
-      const apiEntry = registryEntries.find((e) => e.key === "api");
 
       const pluginResults = await Promise.allSettled(
-        pluginEntries.map(async (entry) => {
-          if (entry.config.integrity) {
-            await verifySriForUrl(entry.config.url, entry.config.integrity);
-          }
-
-          const variables: Record<string, unknown> = {
-            ...entry.config.variables,
-          };
-
-          const plugin = await runtime.usePlugin(entry.runtimeId as never, {
-            // @ts-expect-error dynamic runtime config
-            variables,
-            // @ts-expect-error dynamic runtime config
-            secrets: collectSecrets(entry.config),
-          });
-
-          return {
-            key: entry.key,
-            name: entry.config.name,
-            createClient: plugin.createClient as unknown as (ctx?: unknown) => unknown,
-            router: plugin.router,
-            metadata: {
-              remoteUrl: entry.config.url,
-              version: plugin.metadata.version,
-            },
-          } satisfies LoadedPlugin;
-        }),
+        pluginEntries.map((entry) => loadPluginEntry(runtime, entry)),
       );
 
-      // Build plugins client map from Phase 1 results
       const loadedPlugins: Record<string, LoadedPlugin> = {};
       const loadedPluginKeys: string[] = [];
       const pluginsClient: Record<string, unknown> = {};
       const errors: string[] = [];
+
+      if (authPlugin) {
+        loadedPlugins.auth = authPlugin;
+        loadedPluginKeys.push("auth");
+        pluginsClient.auth = authPlugin.createClient;
+      }
 
       pluginResults.forEach((result, index) => {
         const entry = pluginEntries[index];
@@ -170,39 +217,11 @@ export const initializePlugins = Effect.gen(function* () {
 
       // Phase 2: Load the API plugin with injected plugins client
       let baseApi: LoadedPlugin | null = null;
+      const apiEntry = registryEntries.find((e) => e.key === "api");
 
       if (apiEntry) {
         try {
-          if (apiEntry.config.integrity) {
-            await verifySriForUrl(apiEntry.config.url, apiEntry.config.integrity);
-          }
-
-          const apiVariables: Record<string, unknown> = {
-            ...apiEntry.config.variables,
-          };
-
-          const apiPlugin = await runtime.usePlugin(
-            apiEntry.runtimeId as never,
-            {
-              // @ts-expect-error dynamic runtime config
-              variables: apiVariables,
-              // @ts-expect-error dynamic runtime config
-              secrets: collectSecrets(apiEntry.config),
-            },
-            pluginsClient,
-          );
-
-          baseApi = {
-            key: "api",
-            name: apiEntry.config.name,
-            createClient: apiPlugin.createClient as unknown as (ctx?: unknown) => unknown,
-            router: apiPlugin.router,
-            metadata: {
-              remoteUrl: apiEntry.config.url,
-              version: apiPlugin.metadata.version,
-            },
-          } satisfies LoadedPlugin;
-
+          baseApi = await loadPluginEntry(runtime, apiEntry, pluginsClient);
           loadedPlugins.api = baseApi;
           loadedPluginKeys.unshift("api");
         } catch (error) {
@@ -212,6 +231,7 @@ export const initializePlugins = Effect.gen(function* () {
 
       return {
         runtime,
+        auth: authPlugin,
         api: baseApi,
         plugins: loadedPlugins,
         status: {

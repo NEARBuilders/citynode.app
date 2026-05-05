@@ -12,11 +12,13 @@ import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import { BaseLive, PluginsLive } from "./layers";
-import { type Auth, AuthService } from "./services/auth";
 import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
-import { createRequestContext } from "./services/context";
-import { type Database, DatabaseService } from "./services/database";
+import {
+  buildPluginContext,
+  createSessionMiddleware,
+  type HonoEnv,
+  registerAuthHandler,
+} from "./services/auth";
 import { loadRouterModule, type RouterModule } from "./services/federation.server";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
 import { createRouterMounts } from "./services/router";
@@ -94,9 +96,9 @@ async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
 }
 
 function registerAllPaths(
-  app: Hono,
+  app: Hono<HonoEnv>,
   paths: string[],
-  handler: (c: Context) => Response | Promise<Response>,
+  handler: (c: Context<HonoEnv>) => Response | Promise<Response>,
 ) {
   for (const path of paths) {
     app.all(path, handler);
@@ -266,11 +268,10 @@ export async function proxyRequest(
 }
 
 export function setupApiRoutes(
-  app: Hono,
+  app: Hono<HonoEnv>,
   config: RuntimeConfig,
-  auth: Auth,
-  db: Database,
   plugins: PluginResult,
+  sessionMiddleware: ReturnType<typeof createSessionMiddleware>,
   loadingState: {
     status: string;
     startTime: number;
@@ -306,7 +307,7 @@ export function setupApiRoutes(
     const proxyTarget = apiConfig.proxy!;
     logger.info(`[API] Proxy mode enabled → ${proxyTarget}`);
 
-    app.all("/api/*", async (c: Context) => {
+    app.all("/api/*", async (c: Context<HonoEnv>) => {
       if (c.req.path === "/api/_health") {
         return c.json(getHealthStatus());
       }
@@ -317,32 +318,18 @@ export function setupApiRoutes(
     return;
   }
 
-  app.get("/api/_health", (c: Context) => {
+  app.get("/api/_health", (c: Context<HonoEnv>) => {
     return c.json(getHealthStatus());
   });
 
+  app.use("/api/*", sessionMiddleware);
+
   const handleOrpc = async (
-    c: Context,
+    c: Context<HonoEnv>,
     handler: RPCHandler<any> | OpenAPIHandler<any>,
     prefix: `/${string}`,
   ) => {
-    // Clone early so raw body can be read later even after oRPC consumes the request body.
-    const rawClone = c.req.method === "GET" || c.req.method === "HEAD" ? null : c.req.raw.clone();
-
-    const baseContext = await createRequestContext(c.req.raw, auth, db);
-    let cachedRawBody: string | null = null;
-    const context = {
-      ...baseContext,
-      getRawBody: async () => {
-        if (cachedRawBody !== null) return cachedRawBody;
-        if (!rawClone) {
-          cachedRawBody = "";
-          return cachedRawBody;
-        }
-        cachedRawBody = await rawClone.text();
-        return cachedRawBody;
-      },
-    };
+    const context = buildPluginContext(c);
 
     const result = await handler.handle(c.req.raw, { prefix, context });
     return result.response
@@ -384,13 +371,11 @@ export function setupApiRoutes(
       ],
     });
 
-    app.all(rpcPath, (c: Context) => handleOrpc(c, rpcHandler, rpcPath));
-    app.all(`${rpcPath}/*`, (c: Context) => handleOrpc(c, rpcHandler, rpcPath));
-    app.all(basePath, (c: Context) => handleOrpc(c, apiHandler, basePath));
-    app.all(`${basePath}/*`, (c: Context) => handleOrpc(c, apiHandler, basePath));
+    app.all(rpcPath, (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, rpcPath));
+    app.all(`${rpcPath}/*`, (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, rpcPath));
+    app.all(basePath, (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, basePath));
+    app.all(`${basePath}/*`, (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, basePath));
   };
-
-  app.on(["POST", "GET"], "/api/auth/*", (c: Context) => auth.handler(c.req.raw));
 
   for (const mount of createRouterMounts(plugins)) {
     mountRouter(mount.router, mount.suffix, mount.title);
@@ -413,13 +398,11 @@ export const createStartServer = (onReady?: () => void) =>
 
     const config = yield* ConfigService;
     const uiConfig = config.ui!;
-    const db = yield* DatabaseService;
-    const auth = yield* AuthService;
     const plugins = yield* PluginsService;
 
-    const app = new Hono();
+    const app = new Hono<HonoEnv>();
 
-    app.onError((err: unknown, c: Context) => {
+    app.onError((err: unknown, c: Context<HonoEnv>) => {
       const details = extractErrorDetails(err);
       logger.error(`[Hono Error] ${c.req.method} ${c.req.path}`);
       logger.error(`[Hono Error] Message: ${details.message}`);
@@ -445,7 +428,7 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.use("*", secureHeaders());
 
-    app.get("/health", (c: Context) => c.text("OK"));
+    app.get("/health", (c: Context<HonoEnv>) => c.text("OK"));
 
     let ssrRouterModule: RouterModule | null = null;
 
@@ -458,7 +441,7 @@ export const createStartServer = (onReady?: () => void) =>
     };
 
     const renderClientShell = (
-      ctx: Context,
+      ctx: Context<HonoEnv>,
       runtimeConfig: ClientRuntimeConfig,
       error?: Error | null,
     ) => {
@@ -516,7 +499,7 @@ export const createStartServer = (onReady?: () => void) =>
       loadingState.milestones.push(message);
     };
 
-    const proxyUiAssetRequest = (c: Context) => proxyRequest(c.req.raw, uiConfig.url);
+    const proxyUiAssetRequest = (c: Context<HonoEnv>) => proxyRequest(c.req.raw, uiConfig.url);
     const staticAssetPaths = [
       "/static/*",
       "/.well-known/*",
@@ -529,7 +512,10 @@ export const createStartServer = (onReady?: () => void) =>
       "/llms.txt",
     ];
 
-    setupApiRoutes(app, config, auth, db, plugins, loadingState);
+    const sessionMiddleware = createSessionMiddleware(plugins);
+
+    registerAuthHandler(app, plugins);
+    setupApiRoutes(app, config, plugins, sessionMiddleware, loadingState);
 
     const shouldProxyUiAssets = isDev || uiConfig.source === "remote";
 
@@ -558,7 +544,9 @@ export const createStartServer = (onReady?: () => void) =>
       loadingState.status = "ready";
     }
 
-    app.get("*", async (c: Context) => {
+    app.use("/*", sessionMiddleware);
+
+    app.get("*", async (c: Context<HonoEnv>) => {
       const activeRuntime = await resolveActiveRuntime(config, c.req.raw);
 
       const runtimeConfig = buildRuntimeClientConfig(config, c.req.raw, activeRuntime);
@@ -573,14 +561,13 @@ export const createStartServer = (onReady?: () => void) =>
 
       try {
         const assetsUrl = uiConfig.url;
-
-        const requestContext = await createRequestContext(c.req.raw, auth, db);
-        const ssrApiClient = createPluginsClient(plugins, requestContext);
+        const pluginContext = buildPluginContext(c);
+        const ssrApiClient = createPluginsClient(plugins, pluginContext);
 
         const render = () =>
           ssrRouterModule?.renderToStream(c.req.raw, {
             assetsUrl,
-            session: requestContext.session,
+            session: c.get("session") ? { session: c.get("session"), user: c.get("user") } : null,
             basepath: runtimeConfig.runtime?.runtimeBasePath,
             runtimeConfig,
             apiClient: ssrApiClient,
@@ -674,7 +661,7 @@ export interface ServerHandle {
 
 export const runServer = (input: ServerInput): ServerHandle => {
   const ConfigLive = Layer.succeed(ConfigService, input.config);
-  const ServerLive = Layer.provideMerge(Layer.mergeAll(BaseLive, PluginsLive), ConfigLive);
+  const ServerLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
 
   const runtime = ManagedRuntime.make(ServerLive);
   let serverFiber: Fiber.RuntimeFiber<void, any> | null = null;

@@ -220,6 +220,45 @@ export const apikey = sqliteTable(
   ],
 );
 
+export const relayedTransaction = sqliteTable(
+  "relayed_transaction",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    txHash: text("tx_hash").notNull(),
+    senderId: text("sender_id").notNull(),
+    receiverId: text("receiver_id").notNull(),
+    network: text("network").notNull(),
+    status: text("status").notNull(),
+    gasUsed: text("gas_used"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$onUpdate(
+      () => /* @__PURE__ */ new Date(),
+    ),
+  },
+  (table) => [
+    index("relayedTransaction_txHash_idx").on(table.txHash),
+    index("relayedTransaction_userId_idx").on(table.userId),
+  ],
+);
+
+export const relayerKey = sqliteTable("relayer_key", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+  iv: text("iv").notNull(),
+  publicKey: text("public_key").notNull(),
+  network: text("network").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+});
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
@@ -227,6 +266,7 @@ export const userRelations = relations(user, ({ many }) => ({
   passkeys: many(passkey),
   members: many(member),
   invitations: many(invitation),
+  relayedTransactions: many(relayedTransaction),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -280,6 +320,13 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   }),
   user: one(user, {
     fields: [invitation.inviterId],
+    references: [user.id],
+  }),
+}));
+
+export const relayedTransactionRelations = relations(relayedTransaction, ({ one }) => ({
+  user: one(user, {
+    fields: [relayedTransaction.userId],
     references: [user.id],
   }),
 }));

@@ -159,6 +159,53 @@ export default createPlugin({
             });
           }
         }),
+
+      kvGet: builder.kvGet.handler(async ({ input, errors }) => {
+        const value = await services.registryService.kvGet(input.path);
+        if (value == null) {
+          throw errors.NOT_FOUND({
+            message: "Key not found",
+            data: { resource: "kv-key", resourceId: input.path },
+          });
+        }
+        return { data: value };
+      }),
+
+      kvList: builder.kvList.handler(async ({ input }) => {
+        return services.registryService.kvList(input);
+      }),
+
+      kvPrepareWrite: builder.kvPrepareWrite.handler(async ({ input }) => {
+        return { data: services.registryService.kvPrepareWrite(input.entries) };
+      }),
+
+      kvRelayWrite: builder.kvRelayWrite
+        .use(requireNearAccount)
+        .handler(async ({ input, context, errors }) => {
+          try {
+            const senderId = services.registryService.getRegistryRelaySender(input.payload);
+
+            if (context.nearAccountId && senderId !== context.nearAccountId) {
+              throw errors.FORBIDDEN({
+                message: "Signed delegate payload does not match your linked NEAR account",
+                data: { action: "relay" },
+              });
+            }
+
+            const result = await services.registryService.kvRelayWrite(input.payload);
+
+            return { data: result };
+          } catch (error) {
+            if (error instanceof ORPCError) {
+              throw error;
+            }
+
+            throw errors.BAD_REQUEST({
+              message: error instanceof Error ? error.message : "Failed to relay KV write",
+              data: {},
+            });
+          }
+        }),
     };
   },
 });

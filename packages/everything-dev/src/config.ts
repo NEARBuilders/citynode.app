@@ -9,7 +9,9 @@ interface BosConfigInput extends Record<string, unknown> {
   extends?: string;
   development?: string;
   production?: string;
-  productionIntegrity?: string;
+  integrity?: string;
+  name?: string;
+  version?: string;
   proxy?: string;
   variables?: Record<string, string>;
   secrets?: string[];
@@ -143,6 +145,7 @@ function buildRuntimeConfig(
 ): RuntimeConfig {
   const uiConfig = config.app.ui;
   const apiConfig = config.app.api;
+  const authConfig = config.app.auth;
   const uiRuntime =
     env === "development"
       ? resolveRuntimeTarget(uiConfig.development, baseDir)
@@ -151,6 +154,11 @@ function buildRuntimeConfig(
     env === "development"
       ? resolveRuntimeTarget(apiConfig.development, baseDir)
       : resolveRuntimeTarget(apiConfig.production, baseDir, "remote");
+  const authRuntime = authConfig
+    ? env === "development"
+      ? resolveRuntimeTarget(authConfig.development, baseDir)
+      : resolveRuntimeTarget(authConfig.production, baseDir, "remote")
+    : undefined;
 
   return {
     env,
@@ -171,7 +179,7 @@ function buildRuntimeConfig(
       port: uiRuntime.port,
       ssrUrl: uiConfig.ssr,
       ssrIntegrity: env === "production" ? uiConfig.ssrIntegrity : undefined,
-      integrity: env === "production" ? uiConfig.productionIntegrity : undefined,
+      integrity: env === "production" ? uiConfig.integrity : undefined,
       source: uiRuntime.source,
     },
     api: {
@@ -184,8 +192,22 @@ function buildRuntimeConfig(
       proxy: apiConfig.proxy,
       variables: apiConfig.variables,
       secrets: apiConfig.secrets,
-      integrity: env === "production" ? apiConfig.productionIntegrity : undefined,
+      integrity: env === "production" ? apiConfig.integrity : undefined,
     },
+    auth: authConfig
+      ? {
+          name: authConfig.name,
+          url: authRuntime!.url,
+          entry: authRuntime!.url ? `${authRuntime!.url}/mf-manifest.json` : "/mf-manifest.json",
+          localPath: authRuntime!.localPath,
+          port: authRuntime!.port,
+          source: authRuntime!.source,
+          proxy: authConfig.proxy,
+          variables: authConfig.variables,
+          secrets: authConfig.secrets,
+          integrity: env === "production" ? authConfig.integrity : undefined,
+        }
+      : undefined,
     plugins:
       options?.plugins && Object.keys(options.plugins).length > 0 ? options.plugins : undefined,
   };
@@ -265,20 +287,29 @@ async function resolveRuntimePlugins(
       pluginInput,
     );
     if (
+      pluginInput.name &&
+      typeof pluginInput.name === "string" &&
+      !pluginRuntime.name.includes("/")
+    ) {
+      pluginRuntime.name = pluginInput.name;
+    }
+
+    const integrity = pluginInput.integrity;
+    if (env === "production" && integrity) {
+      pluginRuntime.integrity = integrity;
+    }
+
+    if (
       pluginRuntime.source === "remote" &&
       pluginRuntime.url &&
       !pluginRuntime.localPath &&
-      typeof resolvedConfig.app?.api?.name !== "string"
+      typeof resolvedConfig.app?.api?.name !== "string" &&
+      !pluginInput.name
     ) {
       pluginRuntime.name = await resolveRemotePluginRuntimeName(
         pluginRuntime.url,
         pluginRuntime.name,
       );
-    }
-
-    const productionIntegrity = pluginInput.productionIntegrity;
-    if (env === "production" && productionIntegrity) {
-      pluginRuntime.integrity = productionIntegrity;
     }
 
     out[runtimeKey] = pluginRuntime;

@@ -28,7 +28,7 @@ export const ApiPluginConfigSchema = z.object({
   name: z.string(),
   development: z.string().optional(),
   production: z.string().optional(),
-  productionIntegrity: z.string().optional(),
+  integrity: z.string().optional(),
   proxy: z.string().optional(),
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
@@ -39,7 +39,9 @@ export const BosPluginRefSchema = z.object({
   extends: z.string().optional(),
   development: z.string().optional(),
   production: z.string().optional(),
-  productionIntegrity: z.string().optional(),
+  integrity: z.string().optional(),
+  name: z.string().optional(),
+  version: z.string().optional(),
   proxy: z.string().optional(),
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
@@ -65,7 +67,7 @@ export const UiConfigSchema = z.object({
   name: z.string(),
   development: z.string().optional(),
   production: z.string().optional(),
-  productionIntegrity: z.string().optional(),
+  integrity: z.string().optional(),
   ssr: z.string().optional(),
   ssrIntegrity: z.string().optional(),
 });
@@ -74,7 +76,7 @@ export type UiConfig = z.infer<typeof UiConfigSchema>;
 export const HostConfigSchema = z.object({
   development: z.string(),
   production: z.string(),
-  productionIntegrity: z.string().optional(),
+  integrity: z.string().optional(),
   secrets: z.array(z.string()).optional(),
 });
 export type HostConfig = z.infer<typeof HostConfigSchema>;
@@ -106,6 +108,7 @@ export const BosConfigSchema = z.object({
     host: HostConfigSchema,
     ui: UiConfigSchema,
     api: ApiPluginConfigSchema,
+    auth: ApiPluginConfigSchema.optional(),
   }),
 });
 export type BosConfig = z.infer<typeof BosConfigSchema>;
@@ -136,6 +139,13 @@ export const RuntimeConfigSchema = z.object({
     variables: z.record(z.string(), z.string()).optional(),
     secrets: z.array(z.string()).optional(),
   }),
+  auth: FederationEntrySchema.extend({
+    localPath: z.string().optional(),
+    port: z.number().optional(),
+    proxy: z.string().optional(),
+    variables: z.record(z.string(), z.string()).optional(),
+    secrets: z.array(z.string()).optional(),
+  }).optional(),
   plugins: z.record(z.string(), RuntimePluginConfigSchema).optional(),
 });
 export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;

@@ -127,6 +127,101 @@ export async function fetchBosConfigFromFastKv<T>(bosUrl: string): Promise<T> {
   return value as T;
 }
 
+export interface PluginManifest {
+  schemaVersion: number;
+  kind: string;
+  plugin: { name: string; version: string };
+  runtime: { remoteEntry: string };
+  contract: {
+    kind: string;
+    types: { path: string; exportName: string; typeName: string; sha256: string };
+  };
+  additionalExports?: Array<{ path: string; exports: string[]; sha256: string }>;
+}
+
+export interface PluginMetadata {
+  title: string | null;
+  description: string | null;
+  repoUrl: string | null;
+  version: string;
+  publishedAt: string;
+  cdnUrl: string;
+  integrity: string | null;
+}
+
+export interface PluginRegistryEntry {
+  manifest: PluginManifest;
+  metadata: PluginMetadata;
+}
+
+export function parsePluginBosUrl(
+  source: string,
+): { accountId: string; pluginName: string } | null {
+  if (!source.startsWith("bos://")) return null;
+  const match = source.match(/^bos:\/\/([^/]+)\/plugins\/([^/]+)$/);
+  if (!match?.[1] || !match[2]) return null;
+  return { accountId: match[1], pluginName: match[2] };
+}
+
+async function fetchKvValue(accountId: string, key: string): Promise<unknown | null> {
+  const payload = await fetchJson<FastKvListResponse>(
+    `${getFastKvBaseUrlForAccount(accountId)}/v0/latest/${encodeURIComponent(getRegistryNamespaceForAccount(accountId))}/${encodeURIComponent(accountId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ key, limit: 1 }),
+    },
+  );
+  const value = payload?.entries?.find(Boolean)?.value;
+  if (value == null) return null;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  return value;
+}
+
+export async function fetchPluginFromRegistry(
+  accountId: string,
+  pluginName: string,
+): Promise<PluginRegistryEntry | null> {
+  const manifestKey = `plugins/${accountId}/${pluginName}/manifest.json`;
+  const metadataKey = `plugins/${accountId}/${pluginName}/metadata`;
+
+  const [rawManifest, rawMetadata] = await Promise.all([
+    fetchKvValue(accountId, manifestKey),
+    fetchKvValue(accountId, metadataKey),
+  ]);
+
+  if (!rawManifest || typeof rawManifest !== "object") return null;
+
+  return {
+    manifest: rawManifest as PluginManifest,
+    metadata: (rawMetadata ?? {
+      title: null,
+      description: null,
+      repoUrl: null,
+      version: "",
+      publishedAt: "",
+      cdnUrl: "",
+      integrity: null,
+    }) as PluginMetadata,
+  };
+}
+
+export async function fetchRemotePluginManifest(cdnUrl: string): Promise<PluginManifest | null> {
+  try {
+    const baseUrl = cdnUrl.replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}/plugin.manifest.json`);
+    if (!response.ok) return null;
+    return (await response.json()) as PluginManifest;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FASTKV_TIMEOUT_MS);

@@ -32,7 +32,7 @@ function updateBosConfig(field: "production" | "ssr", url: string, integrity?: s
     }
 
     config.app.ui[field] = url;
-    const integrityField = field === "production" ? "productionIntegrity" : "ssrIntegrity";
+    const integrityField = field === "production" ? "integrity" : "ssrIntegrity";
     if (integrity) {
       config.app.ui[integrityField] = integrity;
     } else {

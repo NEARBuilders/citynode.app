@@ -47,9 +47,14 @@ import { type AppConfig, type AppOrchestrator, startApp } from "./dev-session";
 import {
   buildRegistryConfigUrlForNetwork,
   fetchBosConfigFromFastKv,
+  fetchPluginFromRegistry,
+  fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
   getRegistryNamespaceForNetwork,
+  type PluginManifest,
+  parsePluginBosUrl,
 } from "./fastkv";
+import { computeSriHashForUrl } from "./integrity";
 import { addFunctionCallAccessKey, ensureNearCli, executeTransaction } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { createPlugin, z } from "./sdk";
@@ -286,6 +291,9 @@ function listPluginAttachments(config: BosConfig | null) {
       source: attachment.development?.startsWith("local:")
         ? ("local" as const)
         : ("remote" as const),
+      integrity: attachment.integrity,
+      version: attachment.version,
+      name: attachment.name,
     }))
     .sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -552,7 +560,74 @@ export default createPlugin({
         };
       }
 
-      const key = sanitizePluginKey(input.as ?? defaultPluginKey(input.source));
+      const pluginRef = parsePluginBosUrl(input.source);
+      let production = input.production ?? input.source;
+      let integrity: string | undefined;
+      let version: string | undefined;
+      let name: string | undefined;
+
+      if (pluginRef) {
+        try {
+          const entry = await fetchPluginFromRegistry(pluginRef.accountId, pluginRef.pluginName);
+          if (!entry) {
+            return {
+              status: "error" as const,
+              key: "",
+              error: `Plugin not found in registry: bos://${pluginRef.accountId}/plugins/${pluginRef.pluginName}`,
+            };
+          }
+
+          const manifest = entry.manifest;
+          if (
+            manifest.schemaVersion !== 1 ||
+            manifest.kind !== "every-plugin/manifest" ||
+            !manifest.plugin?.name ||
+            !manifest.plugin?.version ||
+            !manifest.runtime?.remoteEntry
+          ) {
+            return {
+              status: "error" as const,
+              key: "",
+              error: `Invalid plugin manifest for bos://${pluginRef.accountId}/plugins/${pluginRef.pluginName}`,
+            };
+          }
+
+          production = entry.metadata.cdnUrl || input.production || input.source;
+          name = manifest.plugin.name;
+          version = manifest.plugin.version;
+        } catch (error) {
+          return {
+            status: "error" as const,
+            key: "",
+            error: `Failed to resolve plugin from registry: ${error instanceof Error ? error.message : error}`,
+          };
+        }
+      }
+
+      if (!input.source.startsWith("local:") && !pluginRef && production.startsWith("https://")) {
+        try {
+          const manifest = await fetchRemotePluginManifest(production);
+          if (manifest) {
+            name = manifest.plugin.name;
+            version = manifest.plugin.version;
+          }
+        } catch {
+          console.warn(`[plugin add] Could not fetch manifest from ${production}`);
+        }
+      }
+
+      if (!input.source.startsWith("local:") && production.startsWith("https://")) {
+        try {
+          const computed = await computeSriHashForUrl(production);
+          if (computed) integrity = computed;
+        } catch {
+          console.warn(`[plugin add] Could not compute integrity for ${production}`);
+        }
+      }
+
+      const key = sanitizePluginKey(
+        input.as ?? (pluginRef ? pluginRef.pluginName : defaultPluginKey(input.source)),
+      );
       const existing = deps.bosConfig.plugins?.[key];
       const nextPlugins = { ...(deps.bosConfig.plugins ?? {}) };
 
@@ -564,7 +639,10 @@ export default createPlugin({
           }
         : {
             ...(existing ?? {}),
-            production: input.production ?? input.source,
+            production,
+            ...(integrity ? { integrity } : {}),
+            ...(name ? { name } : {}),
+            ...(version ? { version } : {}),
           };
 
       deps.bosConfig = {
@@ -580,6 +658,8 @@ export default createPlugin({
         key,
         development: deps.bosConfig.plugins?.[key]?.development,
         production: deps.bosConfig.plugins?.[key]?.production,
+        integrity,
+        version,
       };
     }),
 
@@ -663,7 +743,11 @@ export default createPlugin({
           };
         }
 
-        const pkgJson = (await Bun.file(pkgPath).json()) as { scripts?: Record<string, string> };
+        const pkgJson = (await Bun.file(pkgPath).json()) as {
+          scripts?: Record<string, string>;
+          name?: string;
+          version?: string;
+        };
         const script = pkgJson.scripts?.deploy ? "deploy" : "build";
 
         const { stdout, stderr, exitCode } = (await run("bun", ["run", script], {
@@ -684,7 +768,21 @@ export default createPlugin({
         if (stdout.trim()) process.stdout.write(stdout);
         if (stderr.trim()) process.stderr.write(stderr);
 
-        const publishedUrl = extractPublishedUrl(`${stdout}\n${stderr}`);
+        let publishedUrl = extractPublishedUrl(`${stdout}\n${stderr}`);
+
+        let manifest: PluginManifest | null = null;
+        if (publishedUrl) {
+          manifest = await fetchRemotePluginManifest(publishedUrl);
+        } else if (attachment.production) {
+          manifest = await fetchRemotePluginManifest(attachment.production);
+          if (manifest) {
+            publishedUrl = attachment.production;
+          }
+        }
+
+        const integrity = publishedUrl ? await computeSriHashForUrl(publishedUrl) : null;
+        const version = manifest?.plugin.version ?? pkgJson.version;
+
         if (publishedUrl) {
           deps.bosConfig = {
             ...deps.bosConfig,
@@ -693,10 +791,65 @@ export default createPlugin({
               [input.key]: {
                 ...(deps.bosConfig.plugins?.[input.key] ?? {}),
                 production: publishedUrl,
+                ...(integrity ? { integrity } : {}),
+                ...(manifest?.plugin.name ? { name: manifest.plugin.name } : {}),
+                ...(version ? { version } : {}),
               },
             },
           };
           await saveBosConfig(deps.configDir, deps.bosConfig);
+
+          const account = deps.bosConfig.account;
+          const network = getNetworkIdForAccount(account);
+          if (manifest && version) {
+            try {
+              const registryEntries: Record<string, string> = {
+                [`plugins/${account}/${input.key}/manifest.json`]: JSON.stringify(manifest),
+                [`plugins/${account}/${input.key}/metadata`]: JSON.stringify({
+                  title: null,
+                  description: null,
+                  repoUrl: deps.bosConfig.repository ?? null,
+                  version,
+                  publishedAt: new Date().toISOString(),
+                  cdnUrl: publishedUrl,
+                  integrity,
+                }),
+                [`plugins/${account}/${input.key}/versions/${version}/manifest.json`]:
+                  JSON.stringify(manifest),
+              };
+              const payload = JSON.stringify(registryEntries);
+              const argsBase64 = Buffer.from(payload).toString("base64");
+              const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
+
+              await Effect.runPromise(ensureNearCli);
+              try {
+                await Effect.runPromise(
+                  executeTransaction({
+                    account,
+                    contract: getRegistryNamespaceForNetwork(network),
+                    method: "__fastdata_kv",
+                    argsBase64,
+                    network,
+                    privateKey,
+                    gas: "50Tgas",
+                    deposit: "0NEAR",
+                  }),
+                );
+              } catch (registryError) {
+                const txHash = extractTransactionHash(registryError);
+                if (!txHash) {
+                  console.warn(
+                    `[publish] Plugin registry write failed: ${registryError instanceof Error ? registryError.message : registryError}`,
+                  );
+                }
+              }
+            } catch (registryError) {
+              console.warn(
+                `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
+              );
+            }
+          }
+
           await refreshApiContractBridge(deps.configDir);
         }
 
@@ -706,6 +859,8 @@ export default createPlugin({
           path: localPath,
           script,
           production: publishedUrl ?? attachment.production,
+          integrity: integrity ?? undefined,
+          version: version ?? undefined,
         };
       },
     ),

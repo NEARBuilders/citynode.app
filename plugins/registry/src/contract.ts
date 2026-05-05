@@ -70,6 +70,23 @@ const registryRelayResultSchema = z.object({
   senderId: z.string(),
 });
 
+const kvEntrySchema = z.object({
+  key: z.string(),
+  value: z.unknown(),
+  blockHeight: z.number().optional(),
+  blockTimestamp: z.number().optional(),
+  txHash: z.string().optional(),
+  signerId: z.string().optional(),
+});
+
+const preparedKvWriteSchema = z.object({
+  contractId: z.string(),
+  methodName: z.literal("__fastdata_kv"),
+  args: z.record(z.string(), z.string()),
+  gas: z.string(),
+  attachedDeposit: z.string(),
+});
+
 export const contract = oc.router({
   listRegistryApps: oc
     .route({ method: "GET", path: "/v1/registry/apps" })
@@ -139,6 +156,50 @@ export const contract = oc.router({
 
   relayRegistryMetadataWrite: oc
     .route({ method: "POST", path: "/v1/registry/metadata/relay" })
+    .input(z.object({ payload: z.string() }))
+    .output(z.object({ data: registryRelayResultSchema }))
+    .errors({ BAD_REQUEST, FORBIDDEN, UNAUTHORIZED }),
+
+  kvGet: oc
+    .route({ method: "GET", path: "/v1/kv" })
+    .input(z.object({ path: z.string() }))
+    .output(z.object({ data: z.unknown().nullable() }))
+    .errors({ NOT_FOUND }),
+
+  kvList: oc
+    .route({ method: "GET", path: "/v1/kv/list" })
+    .input(
+      z.object({
+        prefix: z.string(),
+        limit: z.number().int().min(1).max(200).optional(),
+        cursor: z.string().optional(),
+      }),
+    )
+    .output(
+      z.object({
+        data: z.array(kvEntrySchema),
+        meta: registryMetaSchema,
+      }),
+    )
+    .errors({ BAD_REQUEST }),
+
+  kvPrepareWrite: oc
+    .route({ method: "POST", path: "/v1/kv/prepare" })
+    .input(
+      z.object({
+        entries: z.array(
+          z.object({
+            path: z.string(),
+            value: z.unknown(),
+          }),
+        ),
+      }),
+    )
+    .output(z.object({ data: preparedKvWriteSchema }))
+    .errors({ BAD_REQUEST }),
+
+  kvRelayWrite: oc
+    .route({ method: "POST", path: "/v1/kv/relay" })
     .input(z.object({ payload: z.string() }))
     .output(z.object({ data: registryRelayResultSchema }))
     .errors({ BAD_REQUEST, FORBIDDEN, UNAUTHORIZED }),

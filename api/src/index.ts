@@ -2,7 +2,6 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import type { Auth } from "host/src/services/auth";
 import { contract } from "./contract";
 import type { PluginsClient } from "./plugins-client.gen";
 
@@ -14,11 +13,8 @@ export interface AuthContext {
     email?: string;
     name?: string;
   };
-  nearAccountId?: string;
   organizationId?: string;
-  organizationRole?: string;
-  reqHeaders?: Headers;
-  auth: Auth;
+  reqHeaders?: Record<string, string>;
 }
 
 export default createPlugin.withPlugins<PluginsClient>()({
@@ -39,21 +35,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         name: z.string().optional(),
       })
       .optional(),
-    nearAccountId: z.string().optional(),
-    nearAccounts: z
-      .array(
-        z.object({
-          accountId: z.string(),
-          network: z.string(),
-          isPrimary: z.boolean(),
-        }),
-      )
-      .optional(),
     organizationId: z.string().optional(),
-    organizationRole: z.string().optional(),
-    reqHeaders: z.custom<Headers>().optional(),
-    getRawBody: z.custom<() => Promise<string>>().optional(),
-    auth: z.custom<Auth>().optional(),
+    reqHeaders: z.custom<Record<string, string>>().optional(),
   }),
 
   contract,
@@ -82,11 +65,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         context: {
           userId: context.userId,
           user: context.user,
-          nearAccountId: context.nearAccountId,
           organizationId: context.organizationId,
-          organizationRole: context.organizationRole,
           reqHeaders: context.reqHeaders,
-          auth: context.auth!,
         } as AuthContext,
       });
     });

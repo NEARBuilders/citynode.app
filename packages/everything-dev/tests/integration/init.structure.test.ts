@@ -69,8 +69,8 @@ describe("bos init — structure", () => {
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8"));
     expect(config.app.ui.production).toBeUndefined();
     expect(config.app.api.production).toBeUndefined();
-    expect(config.app.ui.productionIntegrity).toBeUndefined();
-    expect(config.app.api.productionIntegrity).toBeUndefined();
+    expect(config.app.ui.integrity).toBeUndefined();
+    expect(config.app.api.integrity).toBeUndefined();
   });
 
   it("includes host when withHost is true", async () => {

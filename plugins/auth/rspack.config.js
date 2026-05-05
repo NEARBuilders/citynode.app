@@ -14,11 +14,11 @@ const __dirname = path.dirname(__filename);
 
 const shouldDeploy = process.env.DEPLOY === "true";
 
-function normalizePath(input) {
+function normalizePath(input: string) {
   return input.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function resolveLocalTarget(value, configRoot) {
+function resolveLocalTarget(value: unknown, configRoot: string): string | null {
   if (typeof value !== "string" || !value.startsWith("local:")) {
     return null;
   }
@@ -26,42 +26,40 @@ function resolveLocalTarget(value, configRoot) {
   return normalizePath(path.resolve(configRoot, value.slice("local:".length)));
 }
 
-function updateBosConfig(url, integrity) {
+function updateBosConfig(url: string, integrity: string | undefined) {
   try {
     const configPath = path.resolve(__dirname, "../../bos.config.json");
     const configRoot = path.dirname(configPath);
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    const pluginDir = normalizePath(__dirname);
 
-    const match = Object.entries(config.plugins ?? {}).find(([, plugin]) => {
-      return resolveLocalTarget(plugin.development, configRoot) === pluginDir;
-    });
-
-    if (!match) {
-      console.warn(`   ⚠️  No matching plugin entry found for ${pluginDir}`);
-      return;
-    }
-
-    const [key] = match;
-    config.plugins[key].production = url;
-    if (integrity) {
-      config.plugins[key].integrity = integrity;
-    } else {
-      delete config.plugins[key].integrity;
-    }
-    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-    console.log(`   ✅ Updated bos.config.json: plugins.${key}.production`);
-    if (integrity) {
-      console.log(`   ✅ Updated bos.config.json: plugins.${key}.integrity`);
+    if (config.auth) {
+      config.auth.production = url;
+      if (integrity) {
+        config.auth.integrity = integrity;
+      } else {
+        delete config.auth.integrity;
+      }
+      fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+      console.log(`   ✅ Updated bos.config.json: auth.production`);
+      if (integrity) {
+        console.log(`   ✅ Updated bos.config.json: auth.integrity`);
+      }
     }
   } catch (err) {
-    console.error("   ❌ Failed to update bos.config.json:", err.message);
+    console.error("   ❌ Failed to update bos.config.json:", (err as Error).message);
   }
 }
 
 const baseConfig = {
   plugins: [
-    new EmitPluginManifest(),
+    new EmitPluginManifest({
+      additionalExports: [
+        {
+          srcPath: "types/auth-export.d.ts",
+          exportNames: ["Auth", "AuthSession", "createAuthInstance"],
+        },
+      ],
+    }),
     new EveryPluginDevServer({ dts: false }),
     new FixMfDataUriPlugin(),
   ],
@@ -74,8 +72,8 @@ const baseConfig = {
 export default shouldDeploy
   ? withZephyr({
       hooks: {
-        onDeployComplete: async (info) => {
-          console.log("🚀 Template Plugin Deployed:", info.url);
+        onDeployComplete: async (info: { url: string }) => {
+          console.log("🚀 Auth Plugin Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
           updateBosConfig(info.url, integrity ?? undefined);
         },
