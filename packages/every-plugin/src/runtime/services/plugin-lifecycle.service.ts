@@ -1,4 +1,4 @@
-import { Effect, Ref } from "effect";
+import { Effect, Exit, Ref, Scope } from "effect";
 import type { AnyPlugin, InitializedPlugin } from "../../types";
 import { toPluginRuntimeError } from "../errors";
 
@@ -50,36 +50,31 @@ export class PluginLifecycleService extends Effect.Service<PluginLifecycleServic
           Effect.gen(function* () {
             const plugins = yield* Ref.get(activePlugins);
 
-            // Shutdown all active plugins concurrently
             yield* Effect.forEach(
               plugins,
               (plugin) =>
-                plugin.plugin.shutdown().pipe(
-                  Effect.mapError((error) =>
-                    toPluginRuntimeError(
-                      error,
-                      plugin.plugin.id,
-                      undefined,
-                      "cleanup-shutdown",
-                      false,
+                Effect.gen(function* () {
+                  yield* plugin.plugin
+                    .shutdown()
+                    .pipe(
+                      Effect.catchAll((error) =>
+                        Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, error),
+                      ),
+                    );
+                  yield* Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
+                    Effect.catchAll((error) =>
+                      Effect.logWarning(
+                        `Failed to close scope for plugin ${plugin.plugin.id}`,
+                        error,
+                      ),
                     ),
-                  ),
-                  Effect.catchAll((error) =>
-                    Effect.logError(
-                      `Failed to shutdown plugin ${plugin.plugin.id} during cleanup`,
-                      error,
-                      { pluginId: plugin.plugin.id },
-                    ),
-                  ),
-                ),
+                  );
+                }),
               { concurrency: "unbounded" },
             );
 
-            // Clear the active plugins set
             yield* Ref.set(activePlugins, new Set());
-          }).pipe(
-            Effect.catchAll(() => Effect.void), // Convert errors to void for cleanup
-          ),
+          }).pipe(Effect.catchAll((error) => Effect.logWarning("Plugin cleanup failed", error))),
       };
     }),
   },

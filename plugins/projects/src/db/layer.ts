@@ -5,7 +5,10 @@ export const DatabaseTag = Context.Tag("projects/Database")<Database, Database>(
 export type DatabaseTag = typeof DatabaseTag;
 
 export const DatabaseLive = (url: string, authToken?: string) =>
-  Layer.effect(
+  Layer.scoped(
     DatabaseTag,
-    Effect.sync(() => createDatabase(url, authToken)),
+    Effect.acquireRelease(
+      Effect.sync(() => createDatabase(url, authToken)),
+      (acquired) => Effect.sync(() => acquired.client.close()),
+    ).pipe(Effect.map((acquired) => acquired.db)),
   );

@@ -25,7 +25,7 @@ export default createPlugin({
         name: z.string().optional(),
       })
       .optional(),
-    reqHeaders: z.record(z.string()).optional(),
+    reqHeaders: z.record(z.string(), z.string()).optional(),
   }),
 
   contract,

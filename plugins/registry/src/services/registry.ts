@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
-import { decodeSignedDelegateAction, Near } from "near-kit";
+import type { BosConfigInput } from "everything-dev";
+import { decodeSignedDelegateAction, isPrivateKey, Near } from "near-kit";
 import {
   buildRegistryConfigUrl,
   fetchBosConfigFromFastKv,
@@ -16,22 +17,24 @@ import {
   readLatestValue,
 } from "./fastkv";
 
-type JsonObject = Record<string, unknown>;
+type PrivateKey = `ed25519:${string}` | `secp256k1:${string}`;
 
-type BosConfigInput = {
-  extends?: string;
-  account?: string;
-  domain?: string;
-  gateway?: {
-    development?: string;
-    production?: string;
-    account?: string;
-  };
-  app?: Record<string, JsonObject>;
-  shared?: Record<string, Record<string, JsonObject>>;
-  template?: string;
-  testnet?: string;
-};
+function assertPrivateKey(key: string): PrivateKey {
+  if (!isPrivateKey(key)) {
+    throw new Error(
+      `Invalid private key format: must start with "ed25519:" or "secp256k1:". Got: ${key.slice(0, 10)}...`,
+    );
+  }
+  return key as PrivateKey;
+}
+
+function createRelayNear(accountId: string, privateKey: string, network?: string) {
+  return new Near({
+    network: network ?? "mainnet",
+    defaultSignerId: accountId,
+    privateKey: assertPrivateKey(privateKey),
+  });
+}
 
 export interface RegistryListInput {
   q?: string;
@@ -484,14 +487,14 @@ function createRegistryMethods(config: RegistryConfig) {
       const signedDelegate = decodeSignedDelegateAction(signedDelegateActionPayload);
       const senderId = signedDelegate.signedDelegate.delegateAction.senderId;
 
-      const near = new Near({
-        network: config.relayNetwork ?? "mainnet",
-        defaultSignerId: config.relayAccountId,
-        privateKey: config.relayPrivateKey as never,
-      });
+      const near = createRelayNear(
+        config.relayAccountId!,
+        config.relayPrivateKey!,
+        config.relayNetwork,
+      );
 
       const result = await near
-        .transaction(config.relayAccountId)
+        .transaction(config.relayAccountId!)
         .signedDelegateAction(signedDelegate)
         .send({ waitUntil: "NONE" });
 
@@ -585,14 +588,14 @@ function createRegistryMethods(config: RegistryConfig) {
       const signedDelegate = decodeSignedDelegateAction(signedDelegateActionPayload);
       const senderId = signedDelegate.signedDelegate.delegateAction.senderId;
 
-      const near = new Near({
-        network: config.relayNetwork ?? "mainnet",
-        defaultSignerId: config.relayAccountId,
-        privateKey: config.relayPrivateKey as never,
-      });
+      const near = createRelayNear(
+        config.relayAccountId!,
+        config.relayPrivateKey!,
+        config.relayNetwork,
+      );
 
       const result = await near
-        .transaction(config.relayAccountId)
+        .transaction(config.relayAccountId!)
         .signedDelegateAction(signedDelegate)
         .send({ waitUntil: "NONE" });
 

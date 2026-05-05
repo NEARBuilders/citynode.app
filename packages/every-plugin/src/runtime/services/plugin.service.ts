@@ -27,13 +27,16 @@ export class PluginService extends Effect.Service<PluginService>()("PluginServic
       initializePlugin: loader.initializePlugin,
       shutdownPlugin: (plugin: InitializedPlugin<AnyPlugin>) =>
         Effect.gen(function* () {
-          // Shutdown the plugin first (graceful cleanup)
-          yield* plugin.plugin.shutdown().pipe(Effect.catchAll(() => Effect.void));
+          yield* plugin.plugin
+            .shutdown()
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, error),
+              ),
+            );
 
-          // Close the plugin scope to interrupt fibers and release resources
           yield* Scope.close(plugin.scope, Exit.succeed(undefined));
 
-          // Unregister from lifecycle tracking
           yield* lifecycle.unregister(plugin);
         }),
       cleanup: lifecycle.cleanup,

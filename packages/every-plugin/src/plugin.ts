@@ -152,8 +152,15 @@ export const createPlugin: CreatePluginFn = function createPlugin<
       const self = this;
       return Effect.gen(function* () {
         if (config.shutdown && self._deps) {
-          yield* config.shutdown(self._deps).pipe(Effect.catchAll(() => Effect.void));
+          yield* config
+            .shutdown(self._deps)
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning(`Plugin shutdown hook failed for ${self.id}`, error),
+              ),
+            );
         }
+        self._deps = null;
       });
     }
 

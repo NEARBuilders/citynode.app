@@ -63,12 +63,7 @@ export function setupPluginMiddleware(
       const loaded = await runtime.usePlugin(pluginId, (devConfig?.config ?? defaultConfig) as any);
 
       cleanup = async () => {
-        if (loaded && typeof (loaded as any).dispose === "function") {
-          await (loaded as any).dispose();
-        }
-        if (runtime && typeof (runtime as any).cleanup === "function") {
-          await (runtime as any).cleanup();
-        }
+        if (runtime) await runtime.shutdown();
         handlers.rpc = null;
         handlers.api = null;
         if (devServer.app.locals.handlers) {

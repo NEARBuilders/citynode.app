@@ -23,4 +23,5 @@ export type {
   PluginVariables,
   RegisteredPlugins,
   SecretsConfig,
+  UsePluginResult,
 } from "./types";

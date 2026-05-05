@@ -165,10 +165,18 @@ export class PluginRuntime<R = RegisteredPlugins> {
         if (pluginResult) {
           yield* pluginService
             .shutdownPlugin(pluginResult)
-            .pipe(Effect.catchAll(() => Effect.void));
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning(`Failed to shutdown evicted plugin ${pluginId}`, error),
+              ),
+            );
         }
       }
-    }).pipe(Effect.catchAll(() => Effect.void));
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.logWarning(`Plugin eviction failed for ${pluginId}`, error),
+      ),
+    );
 
     return this.runPromise(effect);
   }
