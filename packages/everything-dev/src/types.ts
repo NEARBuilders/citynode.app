@@ -144,7 +144,12 @@ export const RuntimeConfigSchema = z.object({
   networkId: z.enum(["mainnet", "testnet"]),
   title: z.string().optional(),
   repository: z.string().optional(),
-  hostUrl: z.string(),
+  host: FederationEntrySchema.extend({
+    localPath: z.string().optional(),
+    port: z.number().optional(),
+    secrets: z.array(z.string()).optional(),
+    remoteUrl: z.string().optional(),
+  }),
   shared: z
     .object({
       ui: z.record(z.string(), SharedConfigSchema).optional(),
@@ -183,6 +188,7 @@ export const ClientRuntimeConfigSchema = z.object({
   apiBase: z.string(),
   rpcBase: z.string(),
   repository: z.string().optional(),
+  authAvailable: z.boolean().optional(),
   runtime: ClientRuntimeInfoSchema.optional(),
   ui: z
     .object({

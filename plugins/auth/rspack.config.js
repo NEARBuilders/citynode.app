@@ -15,6 +15,10 @@ const __dirname = path.dirname(__filename);
 
 const shouldDeploy = process.env.DEPLOY === "true";
 
+function _normalizePath(input) {
+  return input.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 function updateBosConfig(url, integrity) {
   try {
     const configPath = path.resolve(__dirname, "../../bos.config.json");
@@ -40,6 +44,7 @@ function updateBosConfig(url, integrity) {
 
 const baseConfig = {
   externals: [/^@libsql\/.*/],
+  devtool: shouldDeploy ? false : "source-map",
   plugins: [
     new EmitPluginManifest({
       additionalExports: [

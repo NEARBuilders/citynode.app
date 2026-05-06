@@ -15,27 +15,8 @@ import {
   type ProcessHandle,
 } from "./orchestrator";
 import { makeProcessRegistry, type ProcessRegistry } from "./process-registry";
-import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
-
-export interface AppConfig {
-  host: SourceMode;
-  ui: SourceMode;
-  api: SourceMode;
-  proxy?: boolean;
-  ssr?: boolean;
-}
-
-export interface AppOrchestrator {
-  packages: string[];
-  env: Record<string, string>;
-  description: string;
-  appConfig: AppConfig;
-  bosConfig: BosConfig;
-  runtimeConfig: RuntimeConfig;
-  port?: number;
-  interactive?: boolean;
-  noLogs?: boolean;
-}
+import type { AppOrchestrator, ServiceDescriptor } from "./service-descriptor";
+import type { RuntimeConfig } from "./types";
 
 const LOG_NOISE_PATTERNS = [
   /\[ Federation Runtime \] Version .* from (host|ui) of shared singleton module/,
@@ -64,7 +45,7 @@ const isInteractiveSupported = (): boolean => {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
 };
 
-const STARTUP_ORDER = ["ui-ssr", "ui", "api", "plugin", "host-build", "host"];
+const STARTUP_ORDER = ["ui-ssr", "ui", "auth", "api", "plugin", "host-build", "host"];
 
 const sortByOrder = (packages: string[]): string[] => {
   return [...packages].sort((a, b) => {
@@ -92,12 +73,12 @@ const scopedProcess = (
   env: Record<string, string> | undefined,
   callbacks: ProcessCallbacks,
   portOverride: number | undefined,
-  bosConfig: BosConfig | undefined,
   runtimeConfig: RuntimeConfig | undefined,
+  services: Map<string, ServiceDescriptor> | undefined,
   registry: ProcessRegistry | undefined,
 ) =>
   Effect.acquireRelease(
-    makeDevProcess(pkg, env, callbacks, portOverride, bosConfig, runtimeConfig, registry),
+    makeDevProcess({ pkg, env, callbacks, portOverride, runtimeConfig, services, registry }),
     (handle) => handle.kill.pipe(Effect.ignore),
   );
 
@@ -110,26 +91,18 @@ export const runDevSession = (
     const orderedPackages = sortByOrder(orchestrator.packages);
     const initialProcesses: ProcessState[] = orderedPackages.map((pkg) => {
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
-      const config = getProcessConfig(
+      const config = getProcessConfig({
         pkg,
-        undefined,
         portOverride,
-        orchestrator.bosConfig,
-        orchestrator.runtimeConfig,
-      );
-      const source =
-        pkg === "host"
-          ? orchestrator.appConfig.host
-          : pkg === "ui"
-            ? orchestrator.appConfig.ui
-            : pkg === "api"
-              ? orchestrator.appConfig.api
-              : undefined;
+        runtimeConfig: orchestrator.runtimeConfig,
+        services: orchestrator.services,
+      });
+      const descriptor = orchestrator.services.get(pkg);
       return {
         name: pkg,
         status: "pending" as const,
         port: config?.port ?? 0,
-        source,
+        source: descriptor?.source,
       };
     });
 
@@ -200,8 +173,8 @@ export const runDevSession = (
         orchestrator.env,
         callbacks,
         portOverride,
-        orchestrator.bosConfig,
         orchestrator.runtimeConfig,
+        orchestrator.services,
         registry,
       );
     };

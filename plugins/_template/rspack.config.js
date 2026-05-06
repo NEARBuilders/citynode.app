@@ -60,6 +60,7 @@ function updateBosConfig(url, integrity) {
 }
 
 const baseConfig = {
+  devtool: shouldDeploy ? false : "source-map",
   plugins: [
     new EmitPluginManifest(),
     new EveryPluginDevServer({ dts: false }),

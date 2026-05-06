@@ -1,6 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getAuthClient } from "@/app";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
+import { sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/opencode")({
   head: () => ({
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_layout/opencode")({
 });
 
 function OpencodePage() {
-  const { data: session } = getAuthClient().useSession();
+  const { data: session } = useQuery(sessionQueryOptions());
   const isAdmin = session?.user?.role === "admin";
 
   return (

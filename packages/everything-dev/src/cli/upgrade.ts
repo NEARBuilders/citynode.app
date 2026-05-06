@@ -56,7 +56,11 @@ function bumpDepField(
   return true;
 }
 
-function bumpCatalog(catalog: Record<string, string> | undefined, packageName: string, newVersion: string): boolean {
+function bumpCatalog(
+  catalog: Record<string, string> | undefined,
+  packageName: string,
+  newVersion: string,
+): boolean {
   if (!catalog) return false;
   if (!(packageName in catalog)) return false;
   const current = catalog[packageName];
@@ -70,7 +74,11 @@ interface BumpResult {
   fields: string[];
 }
 
-function bumpPackageJson(pkg: Record<string, unknown>, packageName: string, newVersion: string): BumpResult {
+function bumpPackageJson(
+  pkg: Record<string, unknown>,
+  packageName: string,
+  newVersion: string,
+): BumpResult {
   const fields: string[] = [];
 
   for (const fieldName of ["dependencies", "devDependencies", "peerDependencies"] as const) {
@@ -88,7 +96,11 @@ function bumpPackageJson(pkg: Record<string, unknown>, packageName: string, newV
   return { modified: fields.length > 0, fields };
 }
 
-function updatePackageVersionInFile(filePath: string, packageName: string, newVersion: string): boolean {
+function updatePackageVersionInFile(
+  filePath: string,
+  packageName: string,
+  newVersion: string,
+): boolean {
   const pkg = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
   const result = bumpPackageJson(pkg, packageName, newVersion);
   if (result.modified) {
@@ -97,7 +109,11 @@ function updatePackageVersionInFile(filePath: string, packageName: string, newVe
   return result.modified;
 }
 
-function updatePackageVersion(projectDir: string, packageName: string, newVersion: string): boolean {
+function updatePackageVersion(
+  projectDir: string,
+  packageName: string,
+  newVersion: string,
+): boolean {
   return updatePackageVersionInFile(join(projectDir, "package.json"), packageName, newVersion);
 }
 

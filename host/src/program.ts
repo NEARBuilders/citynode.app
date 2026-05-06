@@ -80,7 +80,7 @@ function getFallbackGatewayId(config: RuntimeConfig) {
     return process.env.GATEWAY_DOMAIN;
   }
 
-  return normalizeUrl(config.hostUrl)?.replace(/^https?:\/\//, "") ?? "runtime";
+  return normalizeUrl(config.host?.url)?.replace(/^https?:\/\//, "") ?? "runtime";
 }
 
 async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
@@ -121,6 +121,7 @@ function buildRuntimeClientConfig(
   config: RuntimeConfig,
   request: Request,
   activeRuntime: ActiveRuntimeState,
+  plugins: PluginResult,
 ): RuntimeClientConfig {
   const requestUrl = new URL(request.url);
   const uiConfig = config.ui;
@@ -137,6 +138,7 @@ function buildRuntimeClientConfig(
     assetsUrl: uiConfig.url,
     apiBase: "/api",
     rpcBase: "/api/rpc",
+    authAvailable: plugins.auth !== null,
     repository: config.repository,
     ui: {
       name: uiConfig.name,
@@ -371,7 +373,7 @@ export function setupApiRoutes(
               title,
               version: "1.0.0",
             },
-            servers: [{ url: basePath }, { url: `${config.hostUrl}${basePath}` }],
+            servers: [{ url: basePath }, { url: `${config.host?.url ?? ""}${basePath}` }],
           },
         }),
       ],
@@ -431,7 +433,7 @@ export const createStartServer = (onReady?: () => void) =>
       "/*",
       cors({
         origin: process.env.CORS_ORIGIN?.split(",").map((o: string) => o.trim()) ?? [
-          config.hostUrl,
+          config.host?.url ?? "",
           ...(uiConfig.url ? [uiConfig.url] : []),
         ],
         credentials: true,
@@ -561,7 +563,7 @@ export const createStartServer = (onReady?: () => void) =>
     app.get("*", async (c: Context<HonoEnv>) => {
       const activeRuntime = await resolveActiveRuntime(config, c.req.raw);
 
-      const runtimeConfig = buildRuntimeClientConfig(config, c.req.raw, activeRuntime);
+      const runtimeConfig = buildRuntimeClientConfig(config, c.req.raw, activeRuntime, plugins);
 
       if (!uiConfig.ssrUrl) {
         return renderClientShell(c, runtimeConfig);

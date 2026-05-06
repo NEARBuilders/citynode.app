@@ -131,9 +131,12 @@ export function renderStreamingView(
     const icon = getStatusIcon(status);
     const displayName = getDisplayName(name).padEnd(columnWidths.name);
     const sourceLabel = proc?.source ? ` (${proc.source})` : "";
+    const isRemote = proc?.source === "remote";
     const statusText =
       status === "ready"
-        ? "ready"
+        ? isRemote
+          ? "loaded"
+          : "ready"
         : status === "starting"
           ? "starting"
           : status === "error"

@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { getAuthClient, type Organization, type Passkey, type SessionData } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
+import { sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/home")({
   head: () => ({
@@ -16,14 +17,7 @@ export const Route = createFileRoute("/_layout/_authenticated/home")({
 
 function Home() {
   const auth = getAuthClient();
-  const { data: session } = useQuery<SessionData | null>({
-    queryKey: ["session"],
-    queryFn: async () => {
-      const { data } = await auth.getSession();
-      return data ?? null;
-    },
-    staleTime: 60 * 1000,
-  });
+  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions());
   const { data: organizations = [] } = useQuery({
     queryKey: ["organizations"],
     queryFn: async () => {

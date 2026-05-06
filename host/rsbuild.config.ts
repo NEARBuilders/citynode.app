@@ -1,10 +1,13 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { computeSriHashForUrl } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rsbuild-plugin";
+
+const require = createRequire(import.meta.url);
 
 const __dirname = import.meta.dirname;
 const shouldDeploy = process.env.DEPLOY === "true";
@@ -13,6 +16,59 @@ const configPath = process.env.BOS_CONFIG_PATH ?? path.resolve(__dirname, "../bo
 
 const bosConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const sharedUi = bosConfig.shared?.ui ?? {};
+
+let pluginPkg: {
+  version: string;
+  peerDependencies: {
+    effect: string;
+    zod: string;
+    "@orpc/contract": string;
+    "@orpc/server": string;
+  };
+};
+try {
+  pluginPkg = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "../packages/every-plugin/package.json"), "utf8"),
+  );
+} catch {
+  pluginPkg = require("every-plugin/package.json") as typeof pluginPkg;
+}
+
+function getInstalledVersion(pkg: string, fallback: string): string {
+  try {
+    return require(`${pkg}/package.json`).version as string;
+  } catch {
+    const match = fallback.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
+    return match ? match[0] : fallback.replace(/^[\^~>=<\s]+/, "");
+  }
+}
+
+const SHARE_DEFAULTS = {
+  requiredVersion: false,
+  singleton: true,
+  strictVersion: false,
+  eager: false,
+};
+
+const pluginShared = {
+  "every-plugin": { version: pluginPkg.version, ...SHARE_DEFAULTS },
+  effect: {
+    version: getInstalledVersion("effect", pluginPkg.peerDependencies.effect),
+    ...SHARE_DEFAULTS,
+  },
+  zod: { version: getInstalledVersion("zod", pluginPkg.peerDependencies.zod), ...SHARE_DEFAULTS },
+  "better-auth": { version: getInstalledVersion("better-auth", "^1.6.9"), ...SHARE_DEFAULTS },
+  "drizzle-orm": { version: getInstalledVersion("drizzle-orm", "^0.45.1"), ...SHARE_DEFAULTS },
+  "@orpc/contract": {
+    version: getInstalledVersion("@orpc/contract", pluginPkg.peerDependencies["@orpc/contract"]),
+    ...SHARE_DEFAULTS,
+  },
+  "@orpc/server": {
+    version: getInstalledVersion("@orpc/server", pluginPkg.peerDependencies["@orpc/server"]),
+    ...SHARE_DEFAULTS,
+  },
+};
+const shared = { ...pluginShared, ...sharedUi };
 
 function updateBosConfig(url: string, integrity?: string) {
   try {
@@ -92,7 +148,7 @@ export default defineConfig({
           exposes: {
             "./Server": "./src/program.ts",
           },
-          shared: sharedUi,
+          shared,
         }),
       ],
     },

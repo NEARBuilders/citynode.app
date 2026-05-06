@@ -46,6 +46,7 @@ function updateHostConfig(name, url, integrity) {
 
 const baseConfig = {
   externals: [/^@libsql\/.*/],
+  devtool: shouldDeploy ? false : "source-map",
   plugins: [
     new EmitPluginManifest(),
     new EveryPluginDevServer({ dts: false }),

@@ -12,38 +12,49 @@ const sharedModuleLoaders = {
   "every-plugin": () => import("every-plugin"),
   effect: () => import("effect"),
   zod: () => import("zod"),
+  "better-auth": () => import("better-auth"),
+  "drizzle-orm": () => import("drizzle-orm"),
+  "@orpc/contract": () => import("@orpc/contract"),
+  "@orpc/server": () => import("@orpc/server"),
 } satisfies Record<SharedDepName, () => Promise<unknown>>;
+
+function buildSharedConfig(): Record<
+  string,
+  {
+    version: string;
+    get: () => Promise<() => unknown>;
+    shareConfig: (typeof MF_SHARED_DEPS)[SharedDepName]["shareConfig"];
+  }
+> {
+  return Object.fromEntries(
+    (
+      Object.entries(MF_SHARED_DEPS) as [SharedDepName, (typeof MF_SHARED_DEPS)[SharedDepName]][]
+    ).map(([name, config]) => {
+      const load = sharedModuleLoaders[name];
+
+      if (!load) {
+        throw new Error(`Missing shared module loader for ${name}`);
+      }
+
+      return [
+        name,
+        {
+          version: config.version,
+          get: () => load().then((mod) => () => mod),
+          shareConfig: config.shareConfig,
+        },
+      ];
+    }),
+  );
+}
 
 const createModuleFederationInstance = Effect.cached(
   Effect.sync(() => {
     try {
+      const shared = buildSharedConfig();
       let instance = getInstance();
 
       if (!instance) {
-        const shared = Object.fromEntries(
-          (
-            Object.entries(MF_SHARED_DEPS) as [
-              SharedDepName,
-              (typeof MF_SHARED_DEPS)[SharedDepName],
-            ][]
-          ).map(([name, config]) => {
-            const load = sharedModuleLoaders[name];
-
-            if (!load) {
-              throw new Error(`Missing shared module loader for ${name}`);
-            }
-
-            return [
-              name,
-              {
-                version: config.version,
-                get: () => load().then((mod) => () => mod),
-                shareConfig: config.shareConfig,
-              },
-            ];
-          }),
-        );
-
         instance = createInstance({
           name: "host",
           remotes: [],
@@ -51,6 +62,8 @@ const createModuleFederationInstance = Effect.cached(
         });
 
         setGlobalFederationInstance(instance);
+      } else {
+        instance.registerShared(shared);
       }
 
       return instance;

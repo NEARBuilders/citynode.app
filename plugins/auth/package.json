@@ -1,6 +1,6 @@
 {
   "name": "@everything-dev/auth-plugin",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Authentication plugin using Better Auth with NEAR Protocol, passkeys, and more",
   "type": "module",
   "exports": {
@@ -14,22 +14,22 @@
     }
   },
   "peerDependencies": {
-    "typescript": "catalog:"
+    "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@better-auth/api-key": "^1.6.9",
-    "@better-auth/passkey": "^1.6.9",
-    "@libsql/client": "^0.15.7",
-    "@orpc/contract": "^1.13.4",
-    "@orpc/server": "^1.13.4",
-    "better-auth": "^1.6.9",
+    "@better-auth/api-key": "catalog:",
+    "@better-auth/passkey": "catalog:",
+    "@libsql/client": "catalog:",
+    "better-auth": "catalog:",
     "better-near-auth": "catalog:",
-    "drizzle-orm": "^0.44.0",
+    "drizzle-orm": "catalog:",
     "every-plugin": "workspace:*"
   },
   "devDependencies": {
     "@effect/language-service": "^0.84.3",
     "@module-federation/node": "catalog:",
+    "@orpc/contract": "catalog:",
+    "@orpc/server": "catalog:",
     "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
     "@rspack/cli": "^1.6.8",
     "@rspack/core": "^1.6.8",
@@ -40,7 +40,7 @@
     "drizzle-kit": "catalog:",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "catalog:",
-    "zephyr-rspack-plugin": "^1.0.1"
+    "zephyr-rspack-plugin": "^1.1.0"
   },
   "scripts": {
     "build": "bun run build:types && rspack build",

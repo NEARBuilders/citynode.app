@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
+import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/apps/$accountId/$gatewayId")({
@@ -41,7 +42,7 @@ function AppDetailPage() {
     staleTime: 60_000,
   });
   const auth = getAuthClient();
-  const { data: session } = auth.useSession();
+  const { data: session } = useQuery(sessionQueryOptions());
 
   const nearAccountId = auth.near.getAccountId();
   const [title, setTitle] = useState("");

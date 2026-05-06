@@ -122,6 +122,18 @@ export async function buildRuntimePluginsForConfig(
   return Object.keys(plugins).length > 0 ? plugins : undefined;
 }
 
+function resolveDevelopmentTarget(
+  development: string | undefined,
+  production: string | undefined,
+  baseDir: string,
+): RuntimeTarget {
+  const devTarget = resolveRuntimeTarget(development, baseDir);
+  if (devTarget.source === "local" && (!devTarget.localPath || !existsSync(devTarget.localPath))) {
+    return resolveRuntimeTarget(production, baseDir, "remote");
+  }
+  return devTarget;
+}
+
 function buildRuntimeConfig(
   config: BosConfig,
   baseDir: string,
@@ -133,17 +145,25 @@ function buildRuntimeConfig(
   const authConfig = config.app.auth;
   const uiRuntime =
     env === "development"
-      ? resolveRuntimeTarget(uiConfig.development, baseDir)
+      ? resolveDevelopmentTarget(uiConfig.development, uiConfig.production, baseDir)
       : resolveRuntimeTarget(uiConfig.production, baseDir, "remote");
   const apiRuntime =
     env === "development"
-      ? resolveRuntimeTarget(apiConfig.development, baseDir)
+      ? resolveDevelopmentTarget(apiConfig.development, apiConfig.production, baseDir)
       : resolveRuntimeTarget(apiConfig.production, baseDir, "remote");
   const authRuntime = authConfig
     ? env === "development"
-      ? resolveRuntimeTarget(authConfig.development, baseDir)
+      ? resolveDevelopmentTarget(authConfig.development, authConfig.production, baseDir)
       : resolveRuntimeTarget(authConfig.production, baseDir, "remote")
     : undefined;
+
+  const hostConfig = config.app.host;
+  const hostRuntime =
+    env === "development"
+      ? resolveDevelopmentTarget(hostConfig.development, hostConfig.production, baseDir)
+      : resolveRuntimeTarget(hostConfig.production, baseDir, "remote");
+
+  const hostListeningUrl = resolveDevelopmentHostUrl(hostConfig.development);
 
   return {
     env,
@@ -151,10 +171,17 @@ function buildRuntimeConfig(
     domain: config.domain,
     networkId: getNetworkIdForAccount(config.account),
     repository: config.repository,
-    hostUrl:
-      env === "development"
-        ? resolveDevelopmentHostUrl(config.app.host.development)
-        : config.app.host.production,
+    host: {
+      name: "host",
+      url: hostListeningUrl,
+      entry: `${hostListeningUrl}/mf-manifest.json`,
+      localPath: hostRuntime.localPath,
+      port: hostRuntime.port ?? DEFAULT_HOST_PORT,
+      secrets: hostConfig.secrets,
+      integrity: env === "production" ? hostConfig.integrity : undefined,
+      source: hostRuntime.source,
+      remoteUrl: hostRuntime.source === "remote" ? hostRuntime.url : undefined,
+    },
     shared: config.shared,
     ui: {
       name: uiConfig.name,
@@ -464,10 +491,15 @@ function resolveRuntimeTarget(
       throw new Error(`Invalid local development target: ${value}`);
     }
 
+    const localPath = resolve(baseDir, localTarget);
+    if (!existsSync(localPath)) {
+      return { source: defaultSource, url: "" };
+    }
+
     return {
       source: "local",
       url: "",
-      localPath: resolve(baseDir, localTarget),
+      localPath,
     };
   }
 

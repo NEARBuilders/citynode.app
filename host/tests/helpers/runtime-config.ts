@@ -38,7 +38,7 @@ export function buildTestClientRuntimeConfig(config: RuntimeConfig): Partial<Cli
     env: config.env,
     account: config.account,
     networkId: config.networkId,
-    hostUrl: config.hostUrl,
+    hostUrl: config.host?.url,
     assetsUrl: config.ui.url,
     apiBase: "/api",
     rpcBase: "/api/rpc",

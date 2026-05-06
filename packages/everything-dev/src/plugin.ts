@@ -23,8 +23,6 @@ import {
   getHostDevelopmentPort,
   getProjectRoot,
   loadConfig,
-  parsePort,
-  resolveDevelopmentHostUrl,
   resolveLocalDevelopmentPath,
 } from "./config";
 import {
@@ -43,7 +41,7 @@ import {
   type SyncOptions,
   type UpgradeOptions,
 } from "./contract";
-import { type AppConfig, type AppOrchestrator, startApp } from "./dev-session";
+import { startApp } from "./dev-session";
 import {
   buildRegistryConfigUrlForNetwork,
   fetchBosConfigFromFastKv,
@@ -58,6 +56,12 @@ import { computeSriHashForUrl } from "./integrity";
 import { addFunctionCallAccessKey, ensureNearCli, executeTransaction } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { createPlugin, z } from "./sdk";
+import type { AppOrchestrator } from "./service-descriptor";
+import {
+  buildDescription,
+  buildServiceDescriptorMap,
+  type ServiceDescriptor,
+} from "./service-descriptor";
 import { syncAndGenerateSharedUi } from "./shared";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
@@ -91,13 +95,6 @@ function ensureEnvFile(configDir: string): void {
   console.log(`[CLI] Created .env from .env.example with generated BETTER_AUTH_SECRET`);
 }
 
-const DEFAULT_DEV_CONFIG: AppConfig = {
-  host: "local",
-  ui: "local",
-  api: "local",
-  ssr: false,
-};
-
 const buildCommands: Record<string, { cmd: string; args: string[] }> = {
   host: { cmd: "bun", args: ["run", "build"] },
   ui: { cmd: "bun", args: ["run", "build"] },
@@ -117,35 +114,6 @@ type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
 function parseSourceMode(value: string | undefined, defaultValue: SourceMode): SourceMode {
   if (value === "local" || value === "remote") return value;
   return defaultValue;
-}
-
-function buildAppConfig(options: {
-  host?: string;
-  ui?: string;
-  api?: string;
-  proxy?: boolean;
-  ssr?: boolean;
-}): AppConfig {
-  return {
-    host: parseSourceMode(options.host, DEFAULT_DEV_CONFIG.host),
-    ui: parseSourceMode(options.ui, DEFAULT_DEV_CONFIG.ui),
-    api: parseSourceMode(options.api, DEFAULT_DEV_CONFIG.api),
-    proxy: options.proxy,
-    ssr: options.ssr ?? DEFAULT_DEV_CONFIG.ssr,
-  };
-}
-
-function buildDescription(config: AppConfig): string {
-  if (config.host === "local" && config.ui === "local" && config.api === "local" && !config.proxy) {
-    return "Full Local Development";
-  }
-
-  const parts: string[] = [];
-  parts.push(config.host === "remote" ? "Remote Host" : "Local Host");
-  if (config.ui === "remote") parts.push("Remote UI");
-  if (config.proxy) parts.push("Proxy API → Production");
-  else if (config.api === "remote") parts.push("Remote API");
-  return parts.join(" + ");
 }
 
 function buildConfigResult(bosConfig: BosConfig | null): BosConfigResult {
@@ -194,28 +162,12 @@ function resolveWorkspaceTarget(
   return null;
 }
 
-function determineProcesses(
-  config: AppConfig,
-  localPackages: string[],
-  runtimeConfig?: RuntimeConfig | null,
-): string[] {
-  const processes: string[] = [];
-  if (config.ssr && config.ui === "local") processes.push("ui-ssr");
-  if (config.ui === "local") processes.push("ui");
-  if (localPackages.includes("auth") && runtimeConfig?.auth?.source === "local") {
-    processes.push("auth");
+function determineServiceKeys(services: Map<string, ServiceDescriptor>): string[] {
+  const keys: string[] = [];
+  for (const descriptor of services.values()) {
+    keys.push(descriptor.key);
   }
-  if (config.api === "local" && !config.proxy) processes.push("api");
-  for (const pkg of localPackages) {
-    if (pkg.startsWith("plugin:")) {
-      const pluginId = pkg.slice("plugin:".length);
-      if (runtimeConfig?.plugins?.[pluginId]?.source === "local") {
-        processes.push(pkg);
-      }
-    }
-  }
-  processes.push("host");
-  return processes;
+  return keys;
 }
 
 function isValidProxyUrl(url: string): boolean {
@@ -316,39 +268,6 @@ function extractPublishedUrl(output: string): string | null {
   const match = output.match(/https?:\/\/[^\s"'<>]+/g);
   if (!match || match.length === 0) return null;
   return match[match.length - 1] ?? null;
-}
-
-async function buildEnvVars(
-  config: AppConfig,
-  bosConfig?: BosConfig | null,
-): Promise<Record<string, string>> {
-  const env: Record<string, string> = {
-    HOST_SOURCE: config.host,
-    UI_SOURCE: config.ui,
-    API_SOURCE: config.api,
-  };
-
-  if (config.host === "remote") {
-    const remoteUrl = bosConfig?.app.host.production;
-    if (remoteUrl) env.HOST_REMOTE_URL = remoteUrl;
-  }
-
-  if (config.ui === "remote") {
-    const remoteUrl = bosConfig?.app.ui.production;
-    if (remoteUrl) env.UI_REMOTE_URL = remoteUrl;
-  }
-
-  if (config.api === "remote") {
-    const remoteUrl = bosConfig?.app.api.production;
-    if (remoteUrl) env.API_REMOTE_URL = remoteUrl;
-  }
-
-  if (config.proxy && bosConfig) {
-    const proxyUrl = resolveProxyUrl(bosConfig);
-    if (proxyUrl) env.API_PROXY = proxyUrl;
-  }
-
-  return env;
 }
 
 async function buildEveryPluginQuietly(cwd: string) {
@@ -876,24 +795,31 @@ export default createPlugin({
         deps.runtimeConfig ?? undefined,
       );
 
-      const appConfig = buildAppConfig({
-        host: localPackages.includes("host") ? (input.host as string) : "remote",
-        ui: localPackages.includes("ui") ? (input.ui as string) : "remote",
-        api: localPackages.includes("api") ? (input.api as string) : "remote",
-        proxy: input.proxy,
-        ssr: input.ssr,
-      });
+      const hostSource: SourceMode = localPackages.includes("host")
+        ? parseSourceMode(input.host as string, "local")
+        : "remote";
+      const uiSource: SourceMode = localPackages.includes("ui")
+        ? parseSourceMode(input.ui as string, "local")
+        : "remote";
+      const apiSource: SourceMode = localPackages.includes("api")
+        ? parseSourceMode(input.api as string, "local")
+        : "remote";
+      const authSource: SourceMode = localPackages.includes("auth")
+        ? parseSourceMode(input.auth as string, "local")
+        : "remote";
+      const ssr = input.ssr ?? false;
+      const proxy = input.proxy ?? false;
 
       const sharedSync = await syncAndGenerateSharedUi({
         configDir: deps.configDir,
-        hostMode: appConfig.host,
+        hostMode: hostSource,
         bosConfig: deps.bosConfig ?? undefined,
       });
       if (sharedSync.catalogChanged) {
         await run("bun", ["install"], { cwd: deps.configDir });
       }
       if (
-        (appConfig.api === "local" && !appConfig.proxy) ||
+        (apiSource === "local" && !proxy) ||
         localPackages.some((pkg) => pkg.startsWith("plugin:"))
       ) {
         await buildEveryPluginQuietly(deps.configDir);
@@ -913,7 +839,7 @@ export default createPlugin({
         };
       }
 
-      if (appConfig.proxy && !resolveProxyUrl(deps.bosConfig)) {
+      if (proxy && !resolveProxyUrl(deps.bosConfig)) {
         return {
           status: "error" as const,
           description: "No valid proxy URL configured in bos.config.json",
@@ -921,26 +847,28 @@ export default createPlugin({
         };
       }
 
-      const refreshedLocalPackages = detectLocalPackages(
-        deps.bosConfig ?? undefined,
-        deps.runtimeConfig ?? undefined,
-      );
-      const processes = determineProcesses(appConfig, refreshedLocalPackages, deps.runtimeConfig);
-      const env = await buildEnvVars(appConfig, deps.bosConfig);
       const hostPort = input.port ?? getHostDevelopmentPort(deps.bosConfig.app.host.development);
       const developmentRuntime = buildRuntimeConfig(deps.bosConfig, {
-        uiSource: appConfig.ui,
-        apiSource: appConfig.api,
-        authSource: refreshedLocalPackages.includes("auth") ? "local" : "remote",
-        hostUrl: `http://localhost:${hostPort}`,
-        proxy: env.API_PROXY,
+        uiSource,
+        apiSource,
+        authSource,
+        hostSource,
         env: "development",
         plugins: deps.runtimeConfig?.plugins,
       });
       const runtimeConfig = await prepareDevelopmentRuntimeConfig(developmentRuntime, {
         hostPort,
-        ssr: appConfig.ssr,
+        ssr,
       });
+
+      const services = buildServiceDescriptorMap(runtimeConfig, { ssr, proxy });
+      const processes = determineServiceKeys(services);
+      const env: Record<string, string> = {};
+      const apiDescriptor = services.get("api");
+      if (apiDescriptor?.proxy) {
+        const proxyUrl = resolveProxyUrl(deps.bosConfig);
+        if (proxyUrl) env.API_PROXY = proxyUrl;
+      }
 
       await syncApiContractBridge({
         configDir: deps.configDir,
@@ -951,11 +879,11 @@ export default createPlugin({
       const orchestrator: AppOrchestrator = {
         packages: processes,
         env,
-        description: buildDescription(appConfig),
-        appConfig,
+        description: buildDescription(services),
+        services,
         bosConfig: deps.bosConfig,
         runtimeConfig,
-        port: parsePort(runtimeConfig.hostUrl),
+        port: runtimeConfig.host.port,
         interactive: input.interactive,
       };
 
@@ -992,8 +920,6 @@ export default createPlugin({
       }
 
       const port = input.port ?? getHostDevelopmentPort(config.app.host.development);
-      const appConfig: AppConfig = { host: "remote", ui: "remote", api: "remote" };
-      const env = await buildEnvVars(appConfig, config);
       const isStaging = input.env === "staging";
       const runtimePlugins = remoteConfig
         ? await buildRuntimePluginsForConfig(config, deps.configDir, "production")
@@ -1002,10 +928,13 @@ export default createPlugin({
         uiSource: "remote",
         apiSource: "remote",
         authSource: "remote",
-        hostUrl: `http://localhost:${port}`,
+        hostSource: "remote",
         env: "production",
         plugins: runtimePlugins,
       });
+
+      const services = buildServiceDescriptorMap(runtimeConfig);
+      const env: Record<string, string> = {};
 
       await syncApiContractBridge({
         configDir: deps.configDir,
@@ -1025,7 +954,7 @@ export default createPlugin({
           ...stagingEnvVars,
         },
         description: `${isStaging ? "Staging" : "Production"} Mode (${config.account})`,
-        appConfig,
+        services,
         bosConfig: config,
         runtimeConfig,
         port,
@@ -1062,7 +991,7 @@ export default createPlugin({
         uiSource: deps.bosConfig.app.ui?.development ? "local" : "remote",
         apiSource: deps.bosConfig.app.api?.development ? "local" : "remote",
         authSource: deps.bosConfig.app.auth?.development ? "local" : "remote",
-        hostUrl: resolveDevelopmentHostUrl(deps.bosConfig.app.host.development),
+        hostSource: deps.bosConfig.app.host?.development ? "local" : "remote",
         env: "development",
         plugins: deps.runtimeConfig?.plugins,
       });

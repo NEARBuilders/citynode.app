@@ -205,7 +205,7 @@ export class EveryPluginDevServer implements RspackPluginInstance {
       compiler.options.mode = process.env.NODE_ENV === "development" ? "development" : "production";
     }
 
-    if (!compiler.options.devtool) {
+    if (compiler.options.devtool === undefined) {
       compiler.options.devtool = "source-map";
     }
 

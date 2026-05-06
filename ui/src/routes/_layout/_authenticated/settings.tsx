@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { getAuthClient, type Passkey, type SessionData } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
+import { sessionQueryOptions } from "@/lib/session";
 
 export const Route = createFileRoute("/_layout/_authenticated/settings")({
   head: () => ({
@@ -20,14 +21,7 @@ export const Route = createFileRoute("/_layout/_authenticated/settings")({
 
 function Settings() {
   const auth = getAuthClient();
-  const { data: session } = useQuery<SessionData | null>({
-    queryKey: ["session"],
-    queryFn: async () => {
-      const { data } = await auth.getSession();
-      return data ?? null;
-    },
-    staleTime: 60 * 1000,
-  });
+  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions());
   const { data: passkeys = [] } = useQuery({
     queryKey: ["passkeys"],
     queryFn: async () => {

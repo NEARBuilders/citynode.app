@@ -5,6 +5,7 @@ export const DevOptionsSchema = z.object({
   host: SourceModeSchema.default("local"),
   ui: SourceModeSchema.default("local"),
   api: SourceModeSchema.default("local"),
+  auth: SourceModeSchema.default("local"),
   proxy: z.boolean().default(false),
   ssr: z.boolean().default(false),
   port: z.number().optional(),

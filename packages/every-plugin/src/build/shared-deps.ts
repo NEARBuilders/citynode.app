@@ -54,6 +54,22 @@ export const pluginSharedDependencies = {
     version: getInstalledPackageVersion("zod", pkg.peerDependencies.zod),
     ...DEFAULT_SHARE_CONFIG,
   },
+  "better-auth": {
+    version: getInstalledPackageVersion("better-auth", "^1.6.9"),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "drizzle-orm": {
+    version: getInstalledPackageVersion("drizzle-orm", "^0.45.1"),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "@orpc/contract": {
+    version: getInstalledPackageVersion("@orpc/contract", pkg.peerDependencies["@orpc/contract"]),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "@orpc/server": {
+    version: getInstalledPackageVersion("@orpc/server", pkg.peerDependencies["@orpc/server"]),
+    ...DEFAULT_SHARE_CONFIG,
+  },
 } satisfies SharedDependencies;
 
 export type PluginSharedDependencyName = keyof typeof pluginSharedDependencies;

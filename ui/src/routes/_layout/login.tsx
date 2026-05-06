@@ -1,24 +1,12 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type SessionData } from "@/app";
+import { getAuthClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UnderConstruction } from "@/components/under-construction";
-
-const sessionQueryKey = ["session"] as const;
-
-const sessionQueryOptions = (initialSession?: SessionData | null) => ({
-  queryKey: sessionQueryKey,
-  queryFn: async () => {
-    const { data: session } = await getAuthClient().getSession();
-    return session ?? null;
-  },
-  staleTime: 60 * 1000,
-  gcTime: 10 * 60 * 1000,
-  initialData: initialSession,
-});
+import { sessionQueryOptions } from "@/lib/session";
 
 type SearchParams = {
   redirect?: string;
@@ -53,7 +41,7 @@ export const Route = createFileRoute("/_layout/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const auth = getAuthClient();
-  const { data: session } = auth.useSession();
+  const { data: session } = useQuery(sessionQueryOptions());
   const { redirect } = Route.useSearch();
   const [authMethod, setAuthMethod] = useState<AuthMethod>("anonymous");
 

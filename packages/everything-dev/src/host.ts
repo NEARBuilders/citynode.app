@@ -32,10 +32,11 @@ function buildClientRuntimeConfig(runtimeConfig: RuntimeConfig): ClientRuntimeCo
     env: runtimeConfig.env,
     account: runtimeConfig.account,
     networkId: runtimeConfig.networkId,
-    hostUrl: runtimeConfig.hostUrl,
+    hostUrl: runtimeConfig.host.url,
     assetsUrl: runtimeConfig.ui.url,
     apiBase: "/api",
     rpcBase: "/api/rpc",
+    authAvailable: !!runtimeConfig.auth,
     ui: runtimeConfig.ui
       ? {
           name: runtimeConfig.ui.name,
@@ -240,7 +241,7 @@ async function runHostServer(opts: {
   const app = new Hono();
 
   const corsOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? [
-    runtimeConfig.hostUrl,
+    runtimeConfig.host.url,
     ...(runtimeConfig.ui?.url ? [runtimeConfig.ui.url] : []),
   ];
 
@@ -373,7 +374,7 @@ async function runHostServer(opts: {
       {
         status: allRequiredOk ? "ready" : "not_ready",
         host: {
-          url: runtimeConfig.hostUrl,
+          url: runtimeConfig.host.url,
           env: runtimeConfig.env,
         },
         checks,

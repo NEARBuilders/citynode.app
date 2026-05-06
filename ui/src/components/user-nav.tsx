@@ -11,10 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { sessionQueryOptions } from "@/lib/session";
 
 export function UserNav() {
   const auth = getAuthClient();
-  const { data: session } = auth.useSession();
+  const { data: session } = useQuery(sessionQueryOptions());
   const user = session?.user;
   const { data: organizations } = useQuery({
     queryKey: ["organizations"],

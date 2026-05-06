@@ -100,7 +100,9 @@ function ProcessRow({
       : proc.status === "starting"
         ? "starting"
         : proc.status === "ready"
-          ? "running"
+          ? proc.source === "remote"
+            ? "loaded"
+            : "running"
           : "failed";
 
   return (

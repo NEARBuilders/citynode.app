@@ -12,17 +12,10 @@ import {
 import { getNetworkIdForAccount } from "./network";
 import { makeDevProcess, type ProcessCallbacks, type ProcessHandle } from "./orchestrator";
 import type { ProcessRegistry } from "./process-registry";
+import type { AppOrchestrator } from "./service-descriptor";
 import type { BosConfig, RuntimeConfig, RuntimePluginConfig } from "./types";
 
-export interface AppOrchestrator {
-  packages: string[];
-  env: Record<string, string>;
-  description: string;
-  bosConfig: BosConfig;
-  runtimeConfig: RuntimeConfig;
-  port?: number;
-  interactive?: boolean;
-}
+export type { AppOrchestrator };
 
 const STARTUP_ORDER = ["ui-ssr", "ui", "auth", "api", "plugin", "host-build", "host"];
 const DEFAULT_HOST_PORT = 3000;
@@ -64,15 +57,15 @@ export const startDevServers = (
 
     const startProcess = (pkg: string) => {
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
-      return makeDevProcess(
+      return makeDevProcess({
         pkg,
-        orchestrator.env,
+        env: orchestrator.env,
         callbacks,
         portOverride,
-        orchestrator.bosConfig,
-        orchestrator.runtimeConfig,
+        runtimeConfig: orchestrator.runtimeConfig,
+        services: orchestrator.services,
         registry,
-      );
+      });
     };
 
     const startGroup = (packages: string[]) =>
@@ -148,7 +141,9 @@ export function detectLocalPackages(
     packages.push("api");
   }
 
-  const hostLocalPath = resolveLocalDevelopmentPath(bosConfig?.app.host.development, configDir);
+  const hostLocalPath =
+    runtimeConfig?.host?.localPath ??
+    resolveLocalDevelopmentPath(bosConfig?.app.host.development, configDir);
   if (hostLocalPath && existsSync(join(hostLocalPath, "package.json"))) {
     packages.push("host");
   } else if (existsSync(join(configDir, "host", "package.json"))) {
@@ -174,120 +169,123 @@ export function detectLocalPackages(
 export function buildRuntimeConfig(
   bosConfig: BosConfig,
   options: {
+    hostSource?: "local" | "remote";
     uiSource?: "local" | "remote";
     apiSource?: "local" | "remote";
     authSource?: "local" | "remote";
-    hostUrl: string;
     proxy?: string;
     env?: "development" | "production";
     plugins?: Record<string, RuntimePluginConfig>;
   },
 ): RuntimeConfig {
   const configDir = getProjectRoot();
+  const hostConfig = bosConfig.app.host;
   const uiConfig = bosConfig.app.ui;
   const apiConfig = bosConfig.app.api;
   const authConfig = bosConfig.app.auth;
-  const uiSource = options.uiSource ?? "local";
-  const apiSource = options.apiSource ?? "local";
-  const authSource = options.authSource ?? "local";
-  const uiLocalPath = resolveLocalDevelopmentPath(uiConfig.development, configDir);
-  const apiLocalPath = resolveLocalDevelopmentPath(apiConfig.development, configDir);
-  const authLocalPath = authConfig
-    ? resolveLocalDevelopmentPath(authConfig.development, configDir)
-    : null;
-  const uiLocalUrl =
-    !uiLocalPath && uiConfig.development && !isLocalDevelopmentTarget(uiConfig.development)
-      ? uiConfig.development
-      : "";
-  const apiLocalUrl =
-    !apiLocalPath && apiConfig.development && !isLocalDevelopmentTarget(apiConfig.development)
-      ? apiConfig.development
-      : "";
-  const authLocalUrl =
-    authConfig &&
-    !authLocalPath &&
-    authConfig.development &&
-    !isLocalDevelopmentTarget(authConfig.development)
-      ? authConfig.development
-      : "";
+
+  function resolveDevelopmentEntry(
+    entry: { development?: string; production?: string },
+    preferredSource: "local" | "remote",
+  ): { source: "local" | "remote"; url: string; localPath?: string; port?: number } {
+    if (preferredSource === "remote") {
+      return { source: "remote", url: entry.production ?? "" };
+    }
+
+    const localPath = resolveLocalDevelopmentPath(entry.development, configDir);
+    if (localPath && existsSync(localPath)) {
+      return { source: "local", url: "", localPath };
+    }
+
+    const devUrl =
+      entry.development && !isLocalDevelopmentTarget(entry.development)
+        ? entry.development.replace(/\/$/, "")
+        : null;
+    if (devUrl) {
+      return { source: "local", url: devUrl, port: parsePort(devUrl) };
+    }
+
+    return { source: "remote", url: entry.production ?? "" };
+  }
+
+  const hostEntry = resolveDevelopmentEntry(hostConfig, options.hostSource ?? "local");
+  const uiEntry = resolveDevelopmentEntry(uiConfig, options.uiSource ?? "local");
+  const apiEntry = resolveDevelopmentEntry(apiConfig, options.apiSource ?? "local");
+  const authEntry = authConfig
+    ? resolveDevelopmentEntry(authConfig, options.authSource ?? "local")
+    : undefined;
+
+  const hostUrl = `http://localhost:${DEFAULT_HOST_PORT}`;
 
   return {
     env: options.env ?? "development",
     account: bosConfig.account,
     domain: bosConfig.domain,
     networkId: getNetworkIdForAccount(bosConfig.account),
-    hostUrl: options.hostUrl,
+    host: {
+      name: "host",
+      url: hostUrl,
+      entry: `${hostUrl}/mf-manifest.json`,
+      localPath: hostEntry.localPath,
+      port: hostEntry.port ?? DEFAULT_HOST_PORT,
+      secrets: hostConfig.secrets,
+      integrity: hostEntry.source === "remote" ? hostConfig.integrity : undefined,
+      source: hostEntry.source,
+      remoteUrl: hostEntry.source === "remote" ? hostEntry.url : undefined,
+    },
     shared: bosConfig.shared,
     ui: uiConfig
       ? {
           name: uiConfig.name,
-          url: uiSource === "remote" ? (uiConfig.production ?? "") : uiLocalUrl,
-          entry:
-            uiSource === "remote"
-              ? `${uiConfig.production ?? ""}/mf-manifest.json`
-              : uiLocalUrl
-                ? `${uiLocalUrl}/mf-manifest.json`
-                : "/mf-manifest.json",
-          localPath: uiSource === "local" ? (uiLocalPath ?? undefined) : undefined,
-          port: uiSource === "local" && uiLocalUrl ? parsePort(uiLocalUrl) : undefined,
-          ssrUrl: uiSource === "remote" ? uiConfig.ssr : undefined,
-          ssrIntegrity: uiSource === "remote" ? uiConfig.ssrIntegrity : undefined,
-          integrity: uiSource === "remote" ? uiConfig.integrity : undefined,
-          source: uiSource === "local" ? (uiLocalPath ? "local" : "remote") : "remote",
+          url: uiEntry.url,
+          entry: uiEntry.url ? `${uiEntry.url}/mf-manifest.json` : "/mf-manifest.json",
+          localPath: uiEntry.localPath,
+          port: uiEntry.port,
+          ssrUrl: uiEntry.source === "remote" ? uiConfig.ssr : undefined,
+          ssrIntegrity: uiEntry.source === "remote" ? uiConfig.ssrIntegrity : undefined,
+          integrity: uiEntry.source === "remote" ? uiConfig.integrity : undefined,
+          source: uiEntry.source,
         }
       : {
           name: "ui",
           url: "",
           entry: "/mf-manifest.json",
-          source: uiSource,
+          source: uiEntry.source,
         },
     api: apiConfig
       ? {
           name: apiConfig.name,
-          url: apiSource === "remote" ? (apiConfig.production ?? "") : apiLocalUrl,
-          entry:
-            apiSource === "remote"
-              ? `${apiConfig.production ?? ""}/mf-manifest.json`
-              : apiLocalUrl
-                ? `${apiLocalUrl}/mf-manifest.json`
-                : "/mf-manifest.json",
-          localPath: apiSource === "local" ? (apiLocalPath ?? undefined) : undefined,
-          port: apiSource === "local" && apiLocalUrl ? parsePort(apiLocalUrl) : undefined,
-          source: apiSource === "local" ? (apiLocalPath ? "local" : "remote") : "remote",
+          url: apiEntry.url,
+          entry: apiEntry.url ? `${apiEntry.url}/mf-manifest.json` : "/mf-manifest.json",
+          localPath: apiEntry.localPath,
+          port: apiEntry.port,
+          source: apiEntry.source,
           proxy: options.proxy ?? apiConfig.proxy,
           variables: apiConfig.variables,
           secrets: apiConfig.secrets,
-          integrity: apiSource === "remote" ? apiConfig.integrity : undefined,
+          integrity: apiEntry.source === "remote" ? apiConfig.integrity : undefined,
         }
       : {
           name: "api",
           url: "",
           entry: "/mf-manifest.json",
-          source: apiSource,
+          source: apiEntry.source,
         },
-    auth: authConfig
-      ? {
-          name: resolvePluginRuntimeName(
-            undefined,
-            authSource === "local" ? (authLocalPath ?? undefined) : undefined,
-            authConfig.name,
-          ),
-          url: authSource === "remote" ? (authConfig.production ?? "") : authLocalUrl,
-          entry:
-            authSource === "remote"
-              ? `${authConfig.production ?? ""}/mf-manifest.json`
-              : authLocalUrl
-                ? `${authLocalUrl}/mf-manifest.json`
-                : "/mf-manifest.json",
-          localPath: authSource === "local" ? (authLocalPath ?? undefined) : undefined,
-          port: authSource === "local" && authLocalUrl ? parsePort(authLocalUrl) : undefined,
-          source: authSource === "local" ? (authLocalPath ? "local" : "remote") : "remote",
-          proxy: authConfig.proxy,
-          variables: authConfig.variables,
-          secrets: authConfig.secrets,
-          integrity: authSource === "remote" ? authConfig.integrity : undefined,
-        }
-      : undefined,
+    auth:
+      authEntry && authConfig
+        ? {
+            name: resolvePluginRuntimeName(undefined, authEntry.localPath, authConfig.name),
+            url: authEntry.url,
+            entry: authEntry.url ? `${authEntry.url}/mf-manifest.json` : "/mf-manifest.json",
+            localPath: authEntry.localPath,
+            port: authEntry.port,
+            source: authEntry.source,
+            proxy: authConfig.proxy,
+            variables: authConfig.variables,
+            secrets: authConfig.secrets,
+            integrity: authEntry.source === "remote" ? authConfig.integrity : undefined,
+          }
+        : undefined,
     plugins: options.plugins,
   };
 }
@@ -339,15 +337,11 @@ export async function prepareDevelopmentRuntimeConfig(
   options?: { hostPort?: number; ssr?: boolean },
 ): Promise<RuntimeConfig> {
   const usedPorts = new Set<number>();
-  const hostPort = await pickAvailablePort(
-    options?.hostPort ??
-      (runtimeConfig.hostUrl ? parsePort(runtimeConfig.hostUrl) : DEFAULT_HOST_PORT),
-    usedPorts,
-  );
+  const hostPort = await pickAvailablePort(options?.hostPort ?? DEFAULT_HOST_PORT, usedPorts);
 
   const next: RuntimeConfig = {
     ...runtimeConfig,
-    hostUrl: `http://localhost:${hostPort}`,
+    host: { ...runtimeConfig.host, url: `http://localhost:${hostPort}`, port: hostPort },
     ui: { ...runtimeConfig.ui },
     api: { ...runtimeConfig.api },
     auth: runtimeConfig.auth ? { ...runtimeConfig.auth } : undefined,

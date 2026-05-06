@@ -151,7 +151,12 @@ function buildRuntimeConfig(
     env: "development",
     account: config.account,
     title: config.account,
-    hostUrl,
+    host: {
+      name: "host",
+      url: hostUrl,
+      entry: `${hostUrl}/mf-manifest.json`,
+      source: "remote" as const,
+    },
     shared: config.shared,
     ui: {
       name: config.app?.ui?.name ?? "ui",

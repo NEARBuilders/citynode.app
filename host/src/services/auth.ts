@@ -1,6 +1,14 @@
 import type { Context, Next } from "hono";
-import type { AuthServices } from "../../../plugins/auth/src/auth-export";
 import type { HostPluginEntry, PluginResult } from "./plugins";
+
+interface AuthServices {
+  handler: (req: Request) => Promise<Response>;
+  auth: {
+    api: {
+      getSession: (args: { headers: Headers }) => Promise<{ user?: any; session?: any } | null>;
+    };
+  };
+}
 
 interface AuthUser {
   id: string;

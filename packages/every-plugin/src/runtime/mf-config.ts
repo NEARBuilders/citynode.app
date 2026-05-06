@@ -43,6 +43,22 @@ export const MF_SHARED_DEPS = {
     version: getInstalledPackageVersion("zod", "^4.3.6"),
     shareConfig: SHARE_CONFIG,
   },
+  "better-auth": {
+    version: getInstalledPackageVersion("better-auth", "^1.6.9"),
+    shareConfig: SHARE_CONFIG,
+  },
+  "drizzle-orm": {
+    version: getInstalledPackageVersion("drizzle-orm", "^0.45.1"),
+    shareConfig: SHARE_CONFIG,
+  },
+  "@orpc/contract": {
+    version: getInstalledPackageVersion("@orpc/contract", "^1.13.4"),
+    shareConfig: SHARE_CONFIG,
+  },
+  "@orpc/server": {
+    version: getInstalledPackageVersion("@orpc/server", "^1.13.4"),
+    shareConfig: SHARE_CONFIG,
+  },
 } as const;
 
 export type SharedDepName = keyof typeof MF_SHARED_DEPS;
