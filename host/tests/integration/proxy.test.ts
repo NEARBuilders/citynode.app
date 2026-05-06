@@ -207,13 +207,13 @@ describe("API Proxy", () => {
         hostUrl: "http://localhost:3000",
         api: {
           name: "api",
-          url: "http://localhost:3014",
+          url: "http://localhost:3001",
           source: "local" as const,
           proxy: "https://production-api.example.com",
         },
         ui: {
           name: "ui",
-          url: "http://localhost:3002",
+          url: "http://localhost:3003",
           source: "local" as const,
         },
       };
@@ -267,12 +267,12 @@ describe("API Proxy", () => {
         hostUrl: "http://localhost:3000",
         api: {
           name: "api",
-          url: "http://localhost:3014",
+          url: "http://localhost:3001",
           source: "local" as const,
         },
         ui: {
           name: "ui",
-          url: "http://localhost:3002",
+          url: "http://localhost:3003",
           source: "local" as const,
         },
       } as any;
@@ -329,12 +329,12 @@ describe("API Proxy", () => {
           host: { development: "http://localhost:3000", production: "https://prod.example.com" },
           ui: {
             name: "ui",
-            development: "http://localhost:3002",
+            development: "http://localhost:3003",
             production: "https://ui.example.com",
           },
           api: {
             name: "api",
-            development: "http://localhost:3014",
+            development: "http://localhost:3001",
             production: "https://api.example.com",
             proxy: "https://staging-api.example.com",
           },
@@ -372,7 +372,7 @@ describe("API Proxy", () => {
       };
 
       expect(isValidUrl("https://api.example.com")).toBe(true);
-      expect(isValidUrl("http://localhost:3014")).toBe(true);
+      expect(isValidUrl("http://localhost:3001")).toBe(true);
       expect(isValidUrl("true")).toBe(false);
       expect(isValidUrl("invalid")).toBe(false);
       expect(isValidUrl("")).toBe(false);

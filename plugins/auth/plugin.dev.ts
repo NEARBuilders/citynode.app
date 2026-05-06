@@ -5,12 +5,12 @@ import type Plugin from "./src/index";
 
 export default {
   pluginId: packageJson.name,
-  port: Number(process.env.PORT) || 3021,
+  port: Number(process.env.PORT) || 3002,
   config: {
     variables: {
       account: process.env.ACCOUNT || "dev.everything.near",
       hostUrl: process.env.HOST_URL || "http://localhost:3000",
-      uiUrl: process.env.UI_URL || "http://localhost:3002",
+      uiUrl: process.env.UI_URL || "http://localhost:3003",
     },
     secrets: {
       AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || "file:./auth.db",

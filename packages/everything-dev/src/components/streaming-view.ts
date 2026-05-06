@@ -132,17 +132,19 @@ export function renderStreamingView(
     const displayName = getDisplayName(name).padEnd(columnWidths.name);
     const sourceLabel = proc?.source ? ` (${proc.source})` : "";
     const isRemote = proc?.source === "remote";
+    const isHost = name === "host";
+    const showPort = proc.port > 0 && (isHost || !isRemote) && status === "ready";
     const statusText =
       status === "ready"
-        ? isRemote
+        ? isRemote && !isHost
           ? "loaded"
-          : "ready"
+          : "running"
         : status === "starting"
           ? "starting"
           : status === "error"
             ? "failed"
             : "waiting";
-    const portStr = proc.port > 0 && status === "ready" ? ` :${proc.port}` : "";
+    const portStr = showPort ? ` :${proc.port}` : "";
 
     write(
       `${colors.dim(`[${getTimestamp()}]`)} ${color(`[${displayName}]`)}  ${status === "ready" ? colors.green(icon) : status === "error" ? colors.error(icon) : icon} ${statusText}${sourceLabel.padEnd(columnWidths.source)}${portStr}`,

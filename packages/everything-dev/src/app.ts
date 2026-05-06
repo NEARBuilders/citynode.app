@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
-import { Effect } from "effect";
 import {
   getProjectRoot,
   isLocalDevelopmentTarget,
@@ -10,115 +9,16 @@ import {
   resolvePluginRuntimeName,
 } from "./config";
 import { getNetworkIdForAccount } from "./network";
-import { makeDevProcess, type ProcessCallbacks, type ProcessHandle } from "./orchestrator";
-import type { ProcessRegistry } from "./process-registry";
 import type { AppOrchestrator } from "./service-descriptor";
 import type { BosConfig, RuntimeConfig, RuntimePluginConfig } from "./types";
 
 export type { AppOrchestrator };
 
-const STARTUP_ORDER = ["ui-ssr", "ui", "auth", "api", "plugin", "host-build", "host"];
 const DEFAULT_HOST_PORT = 3000;
-const DEFAULT_UI_PORT = 3002;
-const DEFAULT_API_PORT = 3014;
-const DEFAULT_AUTH_PORT = 3020;
-const DEFAULT_PLUGIN_PORT_START = 3021;
-
-const sortByOrder = (packages: string[]): string[] => {
-  return [...packages].sort((a, b) => {
-    const aIdx = a.startsWith("plugin:")
-      ? STARTUP_ORDER.indexOf("plugin")
-      : STARTUP_ORDER.indexOf(a);
-    const bIdx = b.startsWith("plugin:")
-      ? STARTUP_ORDER.indexOf("plugin")
-      : STARTUP_ORDER.indexOf(b);
-    if (aIdx === -1 && bIdx === -1) return 0;
-    if (aIdx === -1) return 1;
-    if (bIdx === -1) return -1;
-    return aIdx - bIdx;
-  });
-};
-
-// Note: log filtering and persistence lives at the CLI layer.
-
-export interface DevServersHandle {
-  handles: ProcessHandle[];
-  shutdown: Effect.Effect<void>;
-}
-
-export const startDevServers = (
-  orchestrator: AppOrchestrator,
-  callbacks: ProcessCallbacks,
-  registry?: ProcessRegistry,
-) => {
-  const run = Effect.gen(function* () {
-    const orderedPackages = sortByOrder(orchestrator.packages);
-    const handles: ProcessHandle[] = [];
-
-    const startProcess = (pkg: string) => {
-      const portOverride = pkg === "host" ? orchestrator.port : undefined;
-      return makeDevProcess({
-        pkg,
-        env: orchestrator.env,
-        callbacks,
-        portOverride,
-        runtimeConfig: orchestrator.runtimeConfig,
-        services: orchestrator.services,
-        registry,
-      });
-    };
-
-    const startGroup = (packages: string[]) =>
-      Effect.forEach(packages, startProcess, { concurrency: "unbounded" });
-
-    const awaitReady = (pkg: string, handle: ProcessHandle) =>
-      Effect.race(
-        handle.waitForReady,
-        Effect.sleep("30 seconds").pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              callbacks.onLog(pkg, "Timeout waiting for ready, continuing...", true);
-            }),
-          ),
-        ),
-      );
-
-    const nonHostPackages = orderedPackages.filter((pkg) => pkg !== "host");
-    const hostPackages = orderedPackages.filter((pkg) => pkg === "host");
-
-    const nonHostHandles = yield* startGroup(nonHostPackages);
-    handles.push(...nonHostHandles);
-
-    yield* Effect.forEach(
-      nonHostHandles.map((handle, index) => ({
-        handle,
-        pkg: nonHostPackages[index] ?? handle.name,
-      })),
-      ({ handle, pkg }) => awaitReady(pkg, handle),
-      { concurrency: "unbounded" },
-    );
-
-    const hostHandles = yield* startGroup(hostPackages);
-    handles.push(...hostHandles);
-
-    yield* Effect.forEach(
-      hostHandles.map((handle, index) => ({ handle, pkg: hostPackages[index] ?? handle.name })),
-      ({ handle, pkg }) => awaitReady(pkg, handle),
-      { concurrency: "unbounded" },
-    );
-
-    const shutdown = Effect.gen(function* () {
-      const reversed = [...handles].reverse();
-      for (const handle of reversed) {
-        yield* handle.kill.pipe(Effect.ignore);
-      }
-    });
-
-    return { handles, shutdown } satisfies DevServersHandle;
-  });
-
-  return run;
-};
+const DEFAULT_API_PORT = 3001;
+const DEFAULT_AUTH_PORT = 3002;
+const DEFAULT_UI_PORT = 3003;
+const DEFAULT_PLUGIN_PORT_START = 3010;
 
 export function detectLocalPackages(
   bosConfig?: BosConfig,
@@ -348,6 +248,16 @@ export async function prepareDevelopmentRuntimeConfig(
     plugins: runtimeConfig.plugins ? { ...runtimeConfig.plugins } : undefined,
   };
 
+  if (next.api.source === "local" && next.api.localPath) {
+    const apiPort = await pickAvailablePort(next.api.port ?? DEFAULT_API_PORT, usedPorts);
+    next.api = withLocalRuntimeUrl(next.api, apiPort);
+  }
+
+  if (next.auth?.source === "local" && next.auth.localPath) {
+    const authPort = await pickAvailablePort(next.auth.port ?? DEFAULT_AUTH_PORT, usedPorts);
+    next.auth = withLocalRuntimeUrl(next.auth, authPort);
+  }
+
   if (next.ui.source === "local" && next.ui.localPath) {
     const uiPort = await pickAvailablePort(next.ui.port ?? DEFAULT_UI_PORT, usedPorts);
     next.ui = withLocalRuntimeUrl(next.ui, uiPort);
@@ -357,11 +267,6 @@ export async function prepareDevelopmentRuntimeConfig(
     } else {
       next.ui.ssrUrl = undefined;
     }
-  }
-
-  if (next.api.source === "local" && next.api.localPath) {
-    const apiPort = await pickAvailablePort(next.api.port ?? DEFAULT_API_PORT, usedPorts);
-    next.api = withLocalRuntimeUrl(next.api, apiPort);
   }
 
   if (next.plugins) {
@@ -377,11 +282,6 @@ export async function prepareDevelopmentRuntimeConfig(
       next.plugins[pluginId] = withLocalRuntimeUrl(plugin, pluginPort);
       pluginBasePort = pluginPort + 1;
     }
-  }
-
-  if (next.auth?.source === "local" && next.auth.localPath) {
-    const authPort = await pickAvailablePort(next.auth.port ?? DEFAULT_AUTH_PORT, usedPorts);
-    next.auth = withLocalRuntimeUrl(next.auth, authPort);
   }
 
   return next;

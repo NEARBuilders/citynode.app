@@ -41,7 +41,7 @@ import {
   type SyncOptions,
   type UpgradeOptions,
 } from "./contract";
-import { startApp } from "./dev-session";
+import { devApp, startApp } from "./dev-session";
 import {
   buildRegistryConfigUrlForNetwork,
   fetchBosConfigFromFastKv,
@@ -56,11 +56,10 @@ import { computeSriHashForUrl } from "./integrity";
 import { addFunctionCallAccessKey, ensureNearCli, executeTransaction } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { createPlugin, z } from "./sdk";
-import type { AppOrchestrator } from "./service-descriptor";
 import {
+  type AppOrchestrator,
   buildDescription,
   buildServiceDescriptorMap,
-  type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncAndGenerateSharedUi } from "./shared";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
@@ -160,14 +159,6 @@ function resolveWorkspaceTarget(
   }
 
   return null;
-}
-
-function determineServiceKeys(services: Map<string, ServiceDescriptor>): string[] {
-  const keys: string[] = [];
-  for (const descriptor of services.values()) {
-    keys.push(descriptor.key);
-  }
-  return keys;
 }
 
 function isValidProxyUrl(url: string): boolean {
@@ -862,12 +853,12 @@ export default createPlugin({
       });
 
       const services = buildServiceDescriptorMap(runtimeConfig, { ssr, proxy });
-      const processes = determineServiceKeys(services);
-      const env: Record<string, string> = {};
+      const packages = [...services.keys()];
+      const displayEnv: Record<string, string> = {};
       const apiDescriptor = services.get("api");
       if (apiDescriptor?.proxy) {
         const proxyUrl = resolveProxyUrl(deps.bosConfig);
-        if (proxyUrl) env.API_PROXY = proxyUrl;
+        if (proxyUrl) displayEnv.API_PROXY = proxyUrl;
       }
 
       await syncApiContractBridge({
@@ -877,22 +868,19 @@ export default createPlugin({
       });
 
       const orchestrator: AppOrchestrator = {
-        packages: processes,
-        env,
+        packages,
+        env: displayEnv,
         description: buildDescription(services),
-        services,
-        bosConfig: deps.bosConfig,
-        runtimeConfig,
         port: runtimeConfig.host.port,
         interactive: input.interactive,
       };
 
-      startApp(orchestrator);
+      devApp(orchestrator, services, runtimeConfig);
 
       return {
         status: "started" as const,
         description: orchestrator.description,
-        processes,
+        processes: packages,
       };
     }),
 
@@ -934,7 +922,6 @@ export default createPlugin({
       });
 
       const services = buildServiceDescriptorMap(runtimeConfig);
-      const env: Record<string, string> = {};
 
       await syncApiContractBridge({
         configDir: deps.configDir,
@@ -950,19 +937,15 @@ export default createPlugin({
         packages: ["host"],
         env: {
           NODE_ENV: "production",
-          ...env,
           ...stagingEnvVars,
         },
         description: `${isStaging ? "Staging" : "Production"} Mode (${config.account})`,
-        services,
-        bosConfig: config,
-        runtimeConfig,
         port,
         interactive: input.interactive,
         noLogs: true,
       };
 
-      startApp(orchestrator);
+      startApp(orchestrator, services, runtimeConfig);
       return {
         status: "running" as const,
         url: `http://localhost:${port}`,

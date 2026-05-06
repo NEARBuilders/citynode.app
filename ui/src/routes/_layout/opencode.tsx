@@ -115,7 +115,7 @@ function OpencodePage() {
         />
         <FactCard
           title="hot reload loop"
-          body="Edit a page in opencode, save the file, and watch it update in your browser at localhost:3002. The Module Federation dev server hot-reloads without a full rebuild."
+          body="Edit a page in opencode, save the file, and watch it update in your browser at localhost:3003. The Module Federation dev server hot-reloads without a full rebuild."
         />
         <FactCard
           title="deploy then restart"

@@ -1,21 +1,14 @@
 import { createConnection } from "node:net";
-import { Deferred, Effect, Fiber, Ref } from "effect";
-import { getProjectRoot, parsePort } from "./config";
+import { Command } from "@effect/platform";
+import type { ExitCode } from "@effect/platform/CommandExecutor";
+import { Deferred, Effect, Ref, Stream } from "effect";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
-import type { ProcessRegistry } from "./process-registry";
-import type { ServiceDescriptor } from "./service-descriptor";
+import {
+  DevRuntimeConfig,
+  type ServiceDescriptor,
+  ServiceDescriptorMap,
+} from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
-
-export interface DevProcess {
-  name: string;
-  command: string;
-  args: string[];
-  cwd: string;
-  env?: Record<string, string>;
-  port: number;
-  readyPatterns: RegExp[];
-  errorPatterns: RegExp[];
-}
 
 export interface ProcessCallbacks {
   onStatus: (name: string, status: ProcessStatus, message?: string) => void;
@@ -27,189 +20,17 @@ export interface ProcessHandle {
   pid: number | undefined;
   kill: Effect.Effect<void, unknown>;
   waitForReady: Effect.Effect<void, Error>;
-  waitForExit: Effect.Effect<unknown>;
+  waitForExit: Effect.Effect<ExitCode, unknown>;
 }
 
 export type ProcessStatus = "pending" | "starting" | "ready" | "error";
 
-const PLUGIN_READY_PATTERNS = [/ready in/i, /compiled.*successfully/i, /listening/i, /started/i];
-
-const PLUGIN_ERROR_PATTERNS = [/error/i, /failed/i];
-
-const PROCESS_CONFIGS: Record<
-  string,
-  {
-    command: string;
-    args: string[];
-    cwd: string;
-    readyPatterns: RegExp[];
-    errorPatterns: RegExp[];
-  }
-> = {
-  "host-build": {
-    command: "bun",
-    args: ["run", "build"],
-    cwd: "host",
-    readyPatterns: [/built in/i, /compiled.*successfully/i],
-    errorPatterns: [/error:/i, /failed/i, /exception/i],
-  },
-  host: {
-    command: "bun",
-    args: ["run", "dev"],
-    cwd: "host",
-    readyPatterns: [/Host (dev|production) server running at/i, /Server running at/i],
-    errorPatterns: [/error:/i, /failed/i, /exception/i],
-  },
-  ui: {
-    command: "bun",
-    args: ["run", "dev"],
-    cwd: "ui",
-    readyPatterns: [/\bready\s+built in\b/i, /\bLocal:\b/i, /\bcompiled\b.*successfully/i],
-    errorPatterns: [/error/i, /failed to compile/i],
-  },
-  "ui-ssr": {
-    command: "bun",
-    args: ["run", "dev:ssr"],
-    cwd: "ui",
-    readyPatterns: [/\bready\s+built in\b/i, /\bcompiled\b.*successfully/i],
-    errorPatterns: [/error/i, /failed/i],
-  },
-  api: {
-    command: "bun",
-    args: ["run", "dev"],
-    cwd: "api",
-    readyPatterns: PLUGIN_READY_PATTERNS,
-    errorPatterns: PLUGIN_ERROR_PATTERNS,
-  },
-  auth: {
-    command: "bun",
-    args: ["run", "dev"],
-    cwd: "auth",
-    readyPatterns: PLUGIN_READY_PATTERNS,
-    errorPatterns: PLUGIN_ERROR_PATTERNS,
-  },
-};
-
-export interface GetProcessConfigOptions {
-  pkg: string;
-  env?: Record<string, string>;
-  portOverride?: number;
-  services?: Map<string, ServiceDescriptor>;
-  runtimeConfig?: RuntimeConfig;
-}
-
-export function getProcessConfig(options: GetProcessConfigOptions): DevProcess | null {
-  const { pkg, env, portOverride, services, runtimeConfig } = options;
-  const descriptor = services?.get(pkg);
-
-  if (descriptor) {
-    if (pkg === "host") {
-      const config = PROCESS_CONFIGS.host;
-      const port = portOverride ?? descriptor.port ?? descriptor.defaultPort;
-      const cwd = descriptor.localPath ?? config.cwd;
-      return {
-        name: pkg,
-        command: config.command,
-        args: config.args,
-        cwd,
-        port,
-        readyPatterns: config.readyPatterns,
-        errorPatterns: config.errorPatterns,
-        env,
-      };
-    }
-
-    if (descriptor.source !== "local") return null;
-
-    const config = PROCESS_CONFIGS[pkg] ?? {
-      command: "bun",
-      args: ["run", "dev"],
-      cwd: descriptor.localPath ?? descriptor.key.replace("plugin:", ""),
-      readyPatterns: PLUGIN_READY_PATTERNS,
-      errorPatterns: PLUGIN_ERROR_PATTERNS,
-    };
-
-    const port = portOverride ?? descriptor.port ?? descriptor.defaultPort;
-    const cwd = descriptor.localPath ?? config.cwd;
-
-    return {
-      name: pkg,
-      command: config.command,
-      args: config.args,
-      cwd,
-      port,
-      readyPatterns: config.readyPatterns,
-      errorPatterns: config.errorPatterns,
-      env,
-    };
-  }
-
-  const config = PROCESS_CONFIGS[pkg];
-  if (!config) return null;
-
-  if (pkg === "host") {
-    const port = portOverride ?? runtimeConfig?.host?.port ?? 3000;
-    const cwd = runtimeConfig?.host?.localPath ?? config.cwd;
-    return { ...config, name: pkg, cwd, port, env };
-  }
-
-  if (pkg === "auth") {
-    const authConfig = runtimeConfig?.auth;
-    if (!authConfig?.localPath || authConfig.source !== "local") return null;
-    const port =
-      portOverride ?? authConfig.port ?? (authConfig.url ? parsePort(authConfig.url) : 3020);
-    return {
-      name: "auth",
-      command: "bun",
-      args: ["run", "dev"],
-      cwd: authConfig.localPath,
-      port,
-      readyPatterns: PLUGIN_READY_PATTERNS,
-      errorPatterns: PLUGIN_ERROR_PATTERNS,
-      env,
-    };
-  }
-
-  if (pkg.startsWith("plugin:")) {
-    const pluginId = pkg.slice("plugin:".length);
-    const pluginConfig = runtimeConfig?.plugins?.[pluginId] ?? null;
-    const localPath = pluginConfig?.localPath;
-    if (!localPath || pluginConfig?.source !== "local") return null;
-    const port =
-      portOverride ?? pluginConfig?.port ?? (pluginConfig?.url ? parsePort(pluginConfig.url) : 0);
-    return {
-      name: pkg,
-      command: "bun",
-      args: ["run", "dev"],
-      cwd: localPath,
-      port,
-      readyPatterns: PLUGIN_READY_PATTERNS,
-      errorPatterns: PLUGIN_ERROR_PATTERNS,
-      env,
-    };
-  }
-
-  let port: number;
-  if (pkg === "ui") {
-    port = runtimeConfig?.ui.port ?? 3002;
-  } else if (pkg === "ui-ssr") {
-    port = runtimeConfig?.ui.ssrUrl
-      ? parsePort(runtimeConfig.ui.ssrUrl)
-      : (runtimeConfig?.ui.port ?? 3002) + 1;
-  } else if (pkg === "api") {
-    port = runtimeConfig?.api.port ?? 3014;
-  } else {
-    port = 0;
-  }
-
-  const cwd =
-    pkg === "ui"
-      ? (runtimeConfig?.ui.localPath ?? config.cwd)
-      : pkg === "api"
-        ? (runtimeConfig?.api.localPath ?? config.cwd)
-        : config.cwd;
-
-  return { ...config, name: pkg, cwd, port, env };
+export interface ProcessState {
+  name: string;
+  status: ProcessStatus;
+  port: number;
+  message?: string;
+  source?: "local" | "remote";
 }
 
 const stripAnsi = (input: string): string => {
@@ -220,95 +41,60 @@ const stripAnsi = (input: string): string => {
     .replace(new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g"), "");
 };
 
-const probeHttpOk = async (url: string, timeoutMs = 400): Promise<boolean> => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    return res.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-};
+const probeHttpOk = (url: string, timeoutMs = 400) =>
+  Effect.tryPromise({
+    try: async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        return res.ok;
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    catch: () => false,
+  });
 
-const probeTcpOpen = async (port: number, timeoutMs = 250): Promise<boolean> => {
-  return new Promise((resolve) => {
+const probeTcpOpen = (port: number, timeoutMs = 250) =>
+  Effect.async<boolean>((resume) => {
     const socket = createConnection({ host: "127.0.0.1", port });
     const timer = setTimeout(() => {
       socket.destroy();
-      resolve(false);
+      resume(Effect.succeed(false));
     }, timeoutMs);
     socket.once("connect", () => {
       clearTimeout(timer);
       socket.destroy();
-      resolve(true);
+      resume(Effect.succeed(true));
     });
     socket.once("error", () => {
       clearTimeout(timer);
-      resolve(false);
+      resume(Effect.succeed(false));
     });
   });
-};
 
 const detectStatus = (
   line: string,
-  config: DevProcess,
+  descriptor: ServiceDescriptor,
 ): { status: ProcessStatus; isError: boolean } | null => {
   const cleanLine = stripAnsi(line);
-  for (const pattern of config.errorPatterns) {
+  const errorPatterns = descriptor.errorPatterns ?? [];
+  const readyPatterns = descriptor.readyPatterns ?? [];
+  for (const pattern of errorPatterns) {
     if (pattern.test(cleanLine)) {
       return { status: "error", isError: true };
     }
   }
-  for (const pattern of config.readyPatterns) {
+  for (const pattern of readyPatterns) {
     if (pattern.test(cleanLine)) {
       return { status: "ready", isError: false };
     }
   }
   return null;
 };
-
-const killProcessTree = (pid: number) =>
-  Effect.gen(function* () {
-    const killSignal = (signal: NodeJS.Signals) =>
-      Effect.try({
-        try: () => {
-          process.kill(-pid, signal);
-        },
-        catch: () => null,
-      }).pipe(Effect.ignore);
-
-    const killDirect = (signal: NodeJS.Signals) =>
-      Effect.try({
-        try: () => {
-          process.kill(pid, signal);
-        },
-        catch: () => null,
-      }).pipe(Effect.ignore);
-
-    const isRunning = () =>
-      Effect.try({
-        try: () => {
-          process.kill(pid, 0);
-          return true;
-        },
-        catch: () => false,
-      });
-
-    yield* killSignal("SIGTERM");
-    yield* killDirect("SIGTERM");
-
-    yield* Effect.sleep("200 millis");
-
-    const stillRunning = yield* isRunning();
-    if (stillRunning) {
-      yield* killSignal("SIGKILL");
-      yield* killDirect("SIGKILL");
-      yield* Effect.sleep("100 millis");
-    }
-  });
 
 interface ServerHandle {
   ready: Promise<void>;
@@ -352,28 +138,18 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
   };
 };
 
-export const spawnRemoteHost = (
-  config: DevProcess,
-  callbacks: ProcessCallbacks,
-  runtimeConfig: RuntimeConfig,
-  descriptor: ServiceDescriptor,
-) =>
+const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
   Effect.gen(function* () {
+    const runtimeConfig = yield* DevRuntimeConfig;
     const remoteUrl = descriptor.remoteUrl;
     if (!remoteUrl) {
       return yield* Effect.fail(new Error("remoteUrl not provided on host descriptor"));
     }
 
-    if (config.env) {
-      for (const [key, value] of Object.entries(config.env)) {
-        process.env[key] = value;
-      }
-    }
-
-    callbacks.onStatus(config.name, "starting");
-    callbacks.onLog(config.name, `Remote: ${remoteUrl}`);
-    const restoreConsole = patchConsole(config.name, callbacks);
-    callbacks.onLog(config.name, "Loading Module Federation runtime...");
+    callbacks.onStatus(descriptor.key, "starting");
+    callbacks.onLog(descriptor.key, `Remote: ${remoteUrl}`);
+    const restoreConsole = patchConsole(descriptor.key, callbacks);
+    callbacks.onLog(descriptor.key, "Loading Module Federation runtime...");
 
     const mfRuntime = yield* Effect.tryPromise({
       try: () => import("@module-federation/enhanced/runtime"),
@@ -421,7 +197,7 @@ export const spawnRemoteHost = (
     });
 
     (mf as any).registerRemotes([{ name: "host", entry: entryUrl }]);
-    callbacks.onLog(config.name, `Loading host from ${entryUrl}...`);
+    callbacks.onLog(descriptor.key, `Loading host from ${entryUrl}...`);
 
     const hostModule = yield* Effect.tryPromise({
       try: () =>
@@ -435,20 +211,20 @@ export const spawnRemoteHost = (
       return yield* Effect.fail(new Error("Host module does not export runServer function"));
     }
 
-    callbacks.onLog(config.name, "Starting server...");
+    callbacks.onLog(descriptor.key, "Starting server...");
     const serverHandle = hostModule.runServer({ config: runtimeConfig });
     yield* Effect.tryPromise({
       try: () => serverHandle.ready,
       catch: (e) => new Error(`Server failed to start: ${e}`),
     });
 
-    callbacks.onStatus(config.name, "ready");
+    callbacks.onStatus(descriptor.key, "ready");
 
     return {
-      name: config.name,
+      name: descriptor.key,
       pid: process.pid,
       kill: Effect.gen(function* () {
-        callbacks.onLog(config.name, "Shutting down remote host...");
+        callbacks.onLog(descriptor.key, "Shutting down remote host...");
         restoreConsole();
         yield* Effect.tryPromise({
           try: () => serverHandle.shutdown(),
@@ -460,55 +236,53 @@ export const spawnRemoteHost = (
     } satisfies ProcessHandle;
   });
 
-export const spawnDevProcess = (
-  config: DevProcess,
-  callbacks: ProcessCallbacks,
-  runtimeConfig?: RuntimeConfig,
-  registry?: ProcessRegistry,
-) =>
+const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
   Effect.gen(function* () {
-    let configDir: string;
-    try {
-      configDir = getProjectRoot();
-    } catch {
-      configDir = process.cwd();
+    const runtimeConfig = yield* DevRuntimeConfig;
+
+    if (!descriptor.localPath) {
+      return yield* Effect.fail(new Error(`No localPath for local service: ${descriptor.key}`));
     }
-    const fullCwd = config.cwd.startsWith("/") ? config.cwd : `${configDir}/${config.cwd}`;
+
+    const fullCwd = descriptor.localPath;
+    const command = descriptor.command ?? "bun";
+    const args = descriptor.args ?? ["run", "dev"];
+    const port = descriptor.port ?? descriptor.defaultPort;
+    const name = descriptor.key;
+
     const readyDeferred = yield* Deferred.make<void, Error>();
     const statusRef = yield* Ref.make<ProcessStatus>("starting");
 
-    callbacks.onStatus(config.name, "starting");
+    callbacks.onStatus(name, "starting");
 
     const envVars: Record<string, string> = {
       ...(process.env as Record<string, string>),
-      ...config.env,
       FORCE_COLOR: "1",
-      ...(config.port > 0 ? { PORT: String(config.port) } : {}),
+      ...(port > 0 ? { PORT: String(port) } : {}),
     };
 
-    if (runtimeConfig && config.name === "host") {
+    if (name === "host") {
       envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
     }
 
-    const proc = Bun.spawn({
-      cmd: [config.command, ...config.args],
-      cwd: fullCwd,
-      env: envVars,
-      stdio: ["inherit", "pipe", "pipe"],
-    });
+    const cmd = Command.make(command, ...args).pipe(
+      Command.workingDirectory(fullCwd),
+      Command.env(envVars),
+    );
+
+    const proc = yield* Command.start(cmd);
 
     const markReady = Effect.gen(function* () {
       const currentStatus = yield* Ref.get(statusRef);
       if (currentStatus === "ready" || currentStatus === "error") return;
       yield* Ref.set(statusRef, "ready");
-      callbacks.onStatus(config.name, "ready", "loaded");
+      callbacks.onStatus(name, "ready");
       yield* Deferred.succeed(readyDeferred, undefined).pipe(Effect.ignore);
     });
 
-    if (config.port > 0) {
-      const readinessPath =
-        config.name === "host" ? "/health" : config.name === "ui-ssr" ? "/" : "/remoteEntry.js";
-      const url = `http://127.0.0.1:${config.port}${readinessPath}`;
+    if (port > 0) {
+      const readinessPath = descriptor.readinessPath;
+      const url = `http://127.0.0.1:${port}${readinessPath}`;
 
       yield* Effect.forkScoped(
         Effect.gen(function* () {
@@ -516,16 +290,13 @@ export const spawnDevProcess = (
           while (Date.now() < deadline) {
             const status = yield* Ref.get(statusRef);
             if (status === "ready" || status === "error") return;
-            const ok = url
-              ? yield* Effect.tryPromise({
-                  try: () => probeHttpOk(url),
-                  catch: () => false,
-                })
-              : yield* Effect.tryPromise({
-                  try: () => probeTcpOpen(config.port),
-                  catch: () => false,
-                });
+            const ok = yield* probeHttpOk(url);
             if (ok) {
+              yield* markReady;
+              return;
+            }
+            const tcpOk = yield* probeTcpOpen(port);
+            if (tcpOk) {
               yield* markReady;
               return;
             }
@@ -535,55 +306,45 @@ export const spawnDevProcess = (
       );
     }
 
-    if (registry && proc.pid) {
-      yield* registry.track({
-        pid: proc.pid,
-        name: config.name,
-        port: config.port,
-        startedAt: Date.now(),
-        command: [config.command, ...config.args].join(" "),
-      });
-    }
+    const pid = Number(proc.pid);
 
     yield* Effect.forkScoped(
-      Effect.promise(() => proc.exited).pipe(
-        Effect.andThen((code) =>
-          Effect.gen(function* () {
-            if (registry && proc.pid) {
-              yield* registry.untrack(proc.pid).pipe(Effect.ignore);
-            }
-            const currentStatus = yield* Ref.get(statusRef);
-            if (currentStatus === "ready") return;
-            callbacks.onLog(config.name, `Process exited before ready (exit code: ${code})`, true);
-            yield* Ref.set(statusRef, "error");
-            callbacks.onStatus(config.name, "error");
-            yield* Deferred.fail(
-              readyDeferred,
-              new Error(`Process exited before ready: ${config.name}`),
-            ).pipe(Effect.ignore);
-          }),
-        ),
-      ),
+      Effect.gen(function* () {
+        const exitCode = yield* proc.exitCode;
+        const currentStatus = yield* Ref.get(statusRef);
+        if (currentStatus === "ready") return;
+        callbacks.onLog(name, `Process exited before ready (exit code: ${exitCode})`, true);
+        yield* Ref.set(statusRef, "error");
+        callbacks.onStatus(name, "error");
+        yield* Deferred.fail(readyDeferred, new Error(`Process exited before ready: ${name}`)).pipe(
+          Effect.ignore,
+        );
+      }),
     );
 
     const handleLine = (line: string, isStderr: boolean) =>
       Effect.gen(function* () {
         if (!line.trim()) return;
 
-        callbacks.onLog(config.name, line, isStderr);
+        const cleanLine = stripAnsi(line);
+        const looksLikeError =
+          isStderr &&
+          /^(error|fail|fatal|exception|unhandled|reject)/i.test(cleanLine) &&
+          !/^\$/.test(cleanLine);
+        callbacks.onLog(name, line, looksLikeError);
 
         const currentStatus = yield* Ref.get(statusRef);
         if (currentStatus === "ready") return;
 
-        const detected = detectStatus(line, config);
+        const detected = detectStatus(line, descriptor);
         if (detected) {
           yield* Ref.set(statusRef, detected.status);
-          callbacks.onStatus(config.name, detected.status);
+          callbacks.onStatus(name, detected.status);
           if (detected.status === "ready" || detected.status === "error") {
             if (detected.status === "ready") {
               yield* Deferred.succeed(readyDeferred, undefined).pipe(Effect.ignore);
             } else {
-              yield* Deferred.fail(readyDeferred, new Error(`Process failed: ${config.name}`)).pipe(
+              yield* Deferred.fail(readyDeferred, new Error(`Process failed: ${name}`)).pipe(
                 Effect.ignore,
               );
             }
@@ -591,150 +352,28 @@ export const spawnDevProcess = (
         }
       });
 
-    const decoder = new TextDecoder();
-
-    const stdoutFiber = yield* Effect.forkScoped(
-      Effect.async<void>((resume) => {
-        if (!proc.stdout) {
-          resume(Effect.void);
-          return;
-        }
-        const reader = proc.stdout.getReader();
-        let buffer = "";
-        let active = true;
-
-        const pump = (): Promise<void> =>
-          reader.read().then(({ done, value }) => {
-            if (!active) return;
-            if (done) {
-              if (buffer) Effect.runSync(handleLine(buffer, false));
-              return;
-            }
-            buffer += decoder
-              .decode(value, { stream: true })
-              .replace(/\r\n/g, "\n")
-              .replace(/\r/g, "\n");
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-            for (const line of lines) {
-              Effect.runSync(handleLine(line, false));
-            }
-            return pump();
-          });
-
-        pump().then(() => {
-          if (active) resume(Effect.void);
-        });
-
-        return Effect.sync(() => {
-          active = false;
-          reader.cancel();
-        });
-      }),
+    yield* Effect.forkScoped(
+      Stream.runForEach((line: string) => handleLine(line, false))(
+        Stream.splitLines(Stream.decodeText(proc.stdout, "utf-8")),
+      ),
     );
 
-    const stderrFiber = yield* Effect.forkScoped(
-      Effect.async<void>((resume) => {
-        if (!proc.stderr) {
-          resume(Effect.void);
-          return;
-        }
-        const reader = proc.stderr.getReader();
-        let buffer = "";
-        let active = true;
-
-        const pump = (): Promise<void> =>
-          reader.read().then(({ done, value }) => {
-            if (!active) return;
-            if (done) {
-              if (buffer) Effect.runSync(handleLine(buffer, true));
-              return;
-            }
-            buffer += decoder
-              .decode(value, { stream: true })
-              .replace(/\r\n/g, "\n")
-              .replace(/\r/g, "\n");
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-            for (const line of lines) {
-              Effect.runSync(handleLine(line, true));
-            }
-            return pump();
-          });
-
-        pump().then(() => {
-          if (active) resume(Effect.void);
-        });
-
-        return Effect.sync(() => {
-          active = false;
-          reader.cancel();
-        });
-      }),
+    yield* Effect.forkScoped(
+      Stream.runForEach((line: string) => handleLine(line, true))(
+        Stream.splitLines(Stream.decodeText(proc.stderr, "utf-8")),
+      ),
     );
 
-    const handle: ProcessHandle = {
-      name: config.name,
-      pid: proc.pid,
-      kill: proc.pid
-        ? killProcessTree(proc.pid)
-        : Effect.gen(function* () {
-            proc.kill("SIGTERM");
-            yield* Effect.sleep("100 millis");
-            try {
-              proc.kill("SIGKILL");
-            } catch {}
-          }),
+    return {
+      name,
+      pid,
+      kill: proc.kill("SIGTERM").pipe(
+        Effect.orElse(() => proc.kill("SIGKILL")),
+        Effect.ignore,
+      ),
       waitForReady: Deferred.await(readyDeferred),
-      waitForExit: Effect.gen(function* () {
-        yield* Fiber.joinAll([stdoutFiber, stderrFiber]);
-        return yield* Effect.promise(() => proc.exited);
-      }),
-    };
-
-    return handle;
-  });
-
-export interface MakeDevProcessOptions {
-  pkg: string;
-  env?: Record<string, string>;
-  callbacks: ProcessCallbacks;
-  portOverride?: number;
-  runtimeConfig?: RuntimeConfig;
-  services?: Map<string, ServiceDescriptor>;
-  registry?: ProcessRegistry;
-}
-
-export const makeDevProcess = (options: MakeDevProcessOptions) =>
-  Effect.gen(function* () {
-    const { pkg, env, callbacks, portOverride, runtimeConfig, services, registry } = options;
-    const descriptor = services?.get(pkg);
-
-    const config = getProcessConfig({ pkg, env, portOverride, services, runtimeConfig });
-
-    if (pkg === "host" && descriptor?.source === "remote") {
-      if (!config) {
-        return yield* Effect.fail(new Error("Host process config required even for remote host"));
-      }
-      return yield* spawnRemoteHost(config, callbacks, runtimeConfig!, descriptor);
-    }
-
-    if (!config) {
-      if (descriptor?.source === "remote" && descriptor.url) {
-        return yield* spawnRemoteProbe(pkg, descriptor, callbacks);
-      }
-
-      callbacks.onStatus(pkg, "ready", "Remote");
-      return {
-        name: pkg,
-        pid: undefined,
-        kill: Effect.void,
-        waitForReady: Effect.void,
-        waitForExit: Effect.never,
-      } satisfies ProcessHandle;
-    }
-
-    return yield* spawnDevProcess(config, callbacks, runtimeConfig, registry);
+      waitForExit: proc.exitCode,
+    } satisfies ProcessHandle;
   });
 
 const spawnRemoteProbe = (
@@ -771,20 +410,14 @@ const spawnRemoteProbe = (
           const status = yield* Ref.get(statusRef);
           if (status === "ready" || status === "error") return;
 
-          const ok = yield* Effect.tryPromise({
-            try: () => probeHttpOk(probeUrl, 400),
-            catch: () => false,
-          });
+          const ok = yield* probeHttpOk(probeUrl, 400);
 
           if (ok) {
             yield* markReady;
             return;
           }
 
-          const fallbackOk = yield* Effect.tryPromise({
-            try: () => probeHttpOk(entryUrl, 400),
-            catch: () => false,
-          });
+          const fallbackOk = yield* probeHttpOk(entryUrl, 400);
 
           if (fallbackOk) {
             yield* markReady;
@@ -812,3 +445,51 @@ const spawnRemoteProbe = (
       waitForExit: Effect.never,
     } satisfies ProcessHandle;
   });
+
+export const makeDevProcess = (pkg: string, callbacks: ProcessCallbacks, portOverride?: number) =>
+  Effect.gen(function* () {
+    const services = yield* ServiceDescriptorMap;
+    const descriptor = services.get(pkg);
+
+    if (!descriptor) {
+      callbacks.onStatus(pkg, "ready", "Remote");
+      return {
+        name: pkg,
+        pid: undefined,
+        kill: Effect.void,
+        waitForReady: Effect.void,
+        waitForExit: Effect.never,
+      } satisfies ProcessHandle;
+    }
+
+    if (pkg === "host" && descriptor.source === "remote") {
+      return yield* spawnRemoteHost(descriptor, callbacks);
+    }
+
+    if (descriptor.source === "remote" || !descriptor.localPath) {
+      return yield* spawnRemoteProbe(pkg, descriptor, callbacks);
+    }
+
+    const resolvedDescriptor = portOverride ? { ...descriptor, port: portOverride } : descriptor;
+
+    return yield* spawnDevProcess(resolvedDescriptor, callbacks);
+  });
+
+export function getProcessStates(
+  packages: string[],
+  services: Map<string, ServiceDescriptor>,
+  portOverride?: number,
+): ProcessState[] {
+  return packages.map((pkg) => {
+    const descriptor = services.get(pkg);
+    return {
+      name: pkg,
+      status: "pending" as const,
+      port:
+        portOverride && pkg === "host"
+          ? portOverride
+          : (descriptor?.port ?? descriptor?.defaultPort ?? 0),
+      source: descriptor?.source,
+    };
+  });
+}

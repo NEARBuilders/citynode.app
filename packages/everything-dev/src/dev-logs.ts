@@ -2,6 +2,12 @@ import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+const ESC = "\x1b";
+const BEL = "\x07";
+const ANSI_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}]*${BEL}`, "g");
+
+const stripAnsi = (input: string): string => input.replace(ANSI_RE, "");
+
 export interface LogEntry {
   timestamp: number;
   source: string;
@@ -27,7 +33,8 @@ export function getLogsDir(configDir: string): string {
 function formatLogLine(entry: LogEntry): string {
   const ts = new Date(entry.timestamp).toISOString();
   const prefix = entry.isError ? "ERR" : "OUT";
-  return `[${ts}] [${entry.source}] [${prefix}] ${entry.line}`;
+  const clean = stripAnsi(entry.line);
+  return `[${ts}] [${entry.source}] [${prefix}] ${clean}`;
 }
 
 export async function createDevLogger(configDir: string, description: string): Promise<DevLogger> {

@@ -1,3 +1,4 @@
+import { NodeContext } from "@effect/platform-node";
 import { Deferred, Effect, Exit } from "effect";
 import {
   type DevViewHandle,
@@ -9,13 +10,18 @@ import { renderStreamingView } from "./components/streaming-view";
 import { getProjectRoot } from "./config";
 import { createDevLogger } from "./dev-logs";
 import {
-  getProcessConfig,
+  getProcessStates,
   makeDevProcess,
   type ProcessCallbacks,
   type ProcessHandle,
 } from "./orchestrator";
-import { makeProcessRegistry, type ProcessRegistry } from "./process-registry";
-import type { AppOrchestrator, ServiceDescriptor } from "./service-descriptor";
+import {
+  type AppOrchestrator,
+  DevRuntimeConfigLive,
+  type ServiceDescriptor,
+  ServiceDescriptorMap,
+  ServiceDescriptorMapLive,
+} from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
 
 const LOG_NOISE_PATTERNS = [
@@ -68,46 +74,19 @@ function formatLogLine(entry: LogEntry): string {
   return `[${ts}] [${entry.source}] [${prefix}] ${entry.line}`;
 }
 
-const scopedProcess = (
-  pkg: string,
-  env: Record<string, string> | undefined,
-  callbacks: ProcessCallbacks,
-  portOverride: number | undefined,
-  runtimeConfig: RuntimeConfig | undefined,
-  services: Map<string, ServiceDescriptor> | undefined,
-  registry: ProcessRegistry | undefined,
-) =>
-  Effect.acquireRelease(
-    makeDevProcess({ pkg, env, callbacks, portOverride, runtimeConfig, services, registry }),
-    (handle) => handle.kill.pipe(Effect.ignore),
-  );
-
 export const runDevSession = (
   orchestrator: AppOrchestrator,
   onShutdownReady?: (requestShutdown: () => void) => void,
 ) =>
   Effect.gen(function* () {
     const configDir = getProjectRoot();
+    const services = yield* ServiceDescriptorMap;
     const orderedPackages = sortByOrder(orchestrator.packages);
-    const initialProcesses: ProcessState[] = orderedPackages.map((pkg) => {
-      const portOverride = pkg === "host" ? orchestrator.port : undefined;
-      const config = getProcessConfig({
-        pkg,
-        portOverride,
-        runtimeConfig: orchestrator.runtimeConfig,
-        services: orchestrator.services,
-      });
-      const descriptor = orchestrator.services.get(pkg);
-      return {
-        name: pkg,
-        status: "pending" as const,
-        port: config?.port ?? 0,
-        source: descriptor?.source,
-      };
-    });
-
-    const registry = yield* makeProcessRegistry(configDir);
-    yield* registry.killAll().pipe(Effect.ignore);
+    const initialProcesses: ProcessState[] = getProcessStates(
+      orderedPackages,
+      services,
+      orchestrator.port,
+    );
 
     const logger = yield* Effect.promise(() =>
       createDevLogger(configDir, orchestrator.description),
@@ -168,14 +147,22 @@ export const runDevSession = (
 
     const startProcess = (pkg: string) => {
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
-      return scopedProcess(
-        pkg,
-        orchestrator.env,
-        callbacks,
-        portOverride,
-        orchestrator.runtimeConfig,
-        orchestrator.services,
-        registry,
+      return makeDevProcess(pkg, callbacks, portOverride).pipe(
+        Effect.tapError((err) =>
+          Effect.sync(() => {
+            callbacks.onLog(pkg, `Failed to start: ${err}`, true);
+            callbacks.onStatus(pkg, "error");
+          }),
+        ),
+        Effect.catchAll(() =>
+          Effect.succeed({
+            name: pkg,
+            pid: undefined,
+            kill: Effect.void,
+            waitForReady: Effect.void,
+            waitForExit: Effect.never,
+          } satisfies ProcessHandle),
+        ),
       );
     };
 
@@ -216,8 +203,16 @@ export const runDevSession = (
       { concurrency: "unbounded" },
     );
 
+    const allHandles = [...nonHostHandles, ...hostHandles];
+
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
+        yield* Effect.forEach(allHandles, (h) => h.kill.pipe(Effect.ignore), {
+          concurrency: "unbounded",
+        });
+
+        yield* Effect.sleep("200 millis");
+
         view?.unmount();
 
         if (shouldExportLogs) {
@@ -237,15 +232,17 @@ export const runDevSession = (
           console.log("═".repeat(70));
           console.log("");
         }
-
-        yield* registry.killAll(true).pipe(Effect.ignore);
       }),
     );
 
     yield* Deferred.await(shutdown);
   });
 
-export const startApp = (orchestrator: AppOrchestrator) => {
+const runApp = (
+  orchestrator: AppOrchestrator,
+  services: Map<string, ServiceDescriptor>,
+  runtimeConfig: RuntimeConfig,
+) => {
   let requestShutdown: (() => void) | null = null;
   let signalCount = 0;
   let forceExitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -263,13 +260,16 @@ export const startApp = (orchestrator: AppOrchestrator) => {
     Effect.catchAll((e) =>
       Effect.sync(() => {
         if (e instanceof Error) {
-          console.error("App server error:", e.message);
+          console.error("App error:", e.message);
           if (e.stack) console.error(e.stack);
         } else {
-          console.error("App server error:", e);
+          console.error("App error:", e);
         }
       }),
     ),
+    Effect.provide(ServiceDescriptorMapLive(services)),
+    Effect.provide(DevRuntimeConfigLive(runtimeConfig)),
+    Effect.provide(NodeContext.layer),
   );
 
   const handleSignal = () => {
@@ -291,3 +291,7 @@ export const startApp = (orchestrator: AppOrchestrator) => {
     process.exit(Exit.isSuccess(exit) ? 0 : 0);
   });
 };
+
+export const devApp = runApp;
+
+export const startApp = runApp;

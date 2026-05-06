@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Layer } from "effect";
 import type { RuntimeConfig, SourceMode } from "./types";
 
 export interface ServiceDescriptor {
@@ -19,7 +19,6 @@ export interface ServiceDescriptor {
   ssr?: boolean;
   command?: string;
   args?: string[];
-  cwd?: string;
   readyPatterns?: RegExp[];
   errorPatterns?: RegExp[];
 }
@@ -42,52 +41,47 @@ const SERVICE_CONFIGS: Record<
   string,
   Pick<
     ServiceDescriptor,
-    "command" | "args" | "cwd" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
+    "command" | "args" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
   >
 > = {
   host: {
     command: "bun",
     args: ["run", "dev"],
-    cwd: "host",
     readyPatterns: [/Host (dev|production) server running at/i, /Server running at/i],
     errorPatterns: [/error:/i, /failed/i, /exception/i],
     defaultPort: 3000,
     readinessPath: "/health",
   },
+  auth: {
+    command: "bun",
+    args: ["run", "dev"],
+    readyPatterns: PLUGIN_READY_PATTERNS,
+    errorPatterns: PLUGIN_ERROR_PATTERNS,
+    defaultPort: 3002,
+    readinessPath: "/remoteEntry.js",
+  },
   ui: {
     command: "bun",
     args: ["run", "dev"],
-    cwd: "ui",
     readyPatterns: [/\bready\s+built in\b/i, /\bLocal:\b/i, /\bcompiled\b.*successfully/i],
     errorPatterns: [/error/i, /failed to compile/i],
-    defaultPort: 3002,
+    defaultPort: 3003,
     readinessPath: "/remoteEntry.js",
   },
   "ui-ssr": {
     command: "bun",
     args: ["run", "dev:ssr"],
-    cwd: "ui",
     readyPatterns: [/\bready\s+built in\b/i, /\bcompiled\b.*successfully/i],
     errorPatterns: [/error/i, /failed/i],
-    defaultPort: 3003,
+    defaultPort: 3004,
     readinessPath: "/",
   },
   api: {
     command: "bun",
     args: ["run", "dev"],
-    cwd: "api",
     readyPatterns: PLUGIN_READY_PATTERNS,
     errorPatterns: PLUGIN_ERROR_PATTERNS,
-    defaultPort: 3014,
-    readinessPath: "/remoteEntry.js",
-  },
-  auth: {
-    command: "bun",
-    args: ["run", "dev"],
-    cwd: "auth",
-    readyPatterns: PLUGIN_READY_PATTERNS,
-    errorPatterns: PLUGIN_ERROR_PATTERNS,
-    defaultPort: 3020,
+    defaultPort: 3001,
     readinessPath: "/remoteEntry.js",
   },
 };
@@ -145,7 +139,7 @@ export function buildServiceDescriptorMap(
       localPath: runtimeConfig.ui.localPath,
       port: runtimeConfig.ui.ssrUrl
         ? Number.parseInt(new URL(runtimeConfig.ui.ssrUrl).port, 10)
-        : (runtimeConfig.ui.port ?? 3002) + 1,
+        : (runtimeConfig.ui.port ?? 3003) + 1,
       ...SERVICE_CONFIGS["ui-ssr"],
     });
   }
@@ -185,7 +179,7 @@ export function buildServiceDescriptorMap(
   }
 
   if (runtimeConfig.plugins) {
-    let pluginBasePort = 3021;
+    let pluginBasePort = 3010;
     for (const [pluginId, pluginConfig] of Object.entries(runtimeConfig.plugins)) {
       const pluginKey = `plugin:${pluginId}`;
       const resolvedPort = pluginConfig.port ?? pluginBasePort;
@@ -206,7 +200,6 @@ export function buildServiceDescriptorMap(
         secrets: pluginConfig.secrets,
         command: "bun",
         args: ["run", "dev"],
-        cwd: pluginConfig.localPath ?? pluginId,
         readyPatterns: PLUGIN_READY_PATTERNS,
         errorPatterns: PLUGIN_ERROR_PATTERNS,
         defaultPort: resolvedPort,
@@ -220,11 +213,8 @@ export function buildServiceDescriptorMap(
 
 export interface AppOrchestrator {
   packages: string[];
-  env: Record<string, string>;
   description: string;
-  services: Map<string, ServiceDescriptor>;
-  bosConfig: import("./types").BosConfig;
-  runtimeConfig: import("./types").RuntimeConfig;
+  env: Record<string, string>;
   port?: number;
   interactive?: boolean;
   noLogs?: boolean;
@@ -235,26 +225,6 @@ export const ServiceDescriptorMapLive = (map: Map<string, ServiceDescriptor>) =>
 
 export const DevRuntimeConfigLive = (config: RuntimeConfig) =>
   Layer.succeed(DevRuntimeConfig, config);
-
-export const DevServiceLayer = (
-  services: Map<string, ServiceDescriptor>,
-  runtimeConfig: RuntimeConfig,
-) =>
-  Layer.merge(
-    ServiceDescriptorMapLive(services),
-    DevRuntimeConfigLive(runtimeConfig),
-  );
-
-export function getServiceKeys(map: Map<string, ServiceDescriptor>): string[] {
-  return [...map.keys()];
-}
-
-export function getServiceSource(
-  map: Map<string, ServiceDescriptor>,
-  key: string,
-): SourceMode | undefined {
-  return map.get(key)?.source;
-}
 
 export function buildDescription(map: Map<string, ServiceDescriptor>): string {
   const descriptors = [...map.values()].filter(

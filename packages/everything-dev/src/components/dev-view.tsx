@@ -91,7 +91,10 @@ function ProcessRow({
   sourceWidth: number;
 }) {
   const color = getServiceColor(proc.name);
-  const portStr = proc.port > 0 ? `:${proc.port}` : "";
+  const isRemote = proc.source === "remote";
+  const isHost = proc.name === "host";
+  const showPort = proc.port > 0 && (isHost || !isRemote);
+  const portStr = showPort ? `:${proc.port}` : "";
   const sourceLabel = proc.source ? ` (${proc.source})` : "";
 
   const statusText =
@@ -100,7 +103,7 @@ function ProcessRow({
       : proc.status === "starting"
         ? "starting"
         : proc.status === "ready"
-          ? proc.source === "remote"
+          ? isRemote && !isHost
             ? "loaded"
             : "running"
           : "failed";
@@ -115,7 +118,7 @@ function ProcessRow({
       </Text>
       <Text color="gray">{sourceLabel.padEnd(sourceWidth)}</Text>
       <Text color={proc.status === "ready" ? "#00ff41" : "gray"}>{statusText}</Text>
-      {proc.port > 0 && <Text color="#00ffff"> {portStr}</Text>}
+      {showPort && <Text color="#00ffff"> {portStr}</Text>}
     </Box>
   );
 }
