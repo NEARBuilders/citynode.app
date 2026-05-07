@@ -32,9 +32,9 @@ import {
   type RouterModule,
   resetFederationInstance,
 } from "./services/federation.server";
+import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
 import { createRouterMounts } from "./services/router";
-import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { logger } from "./utils/logger";
 
 type ActiveRuntimeState = NonNullable<ClientRuntimeConfig["runtime"]>;

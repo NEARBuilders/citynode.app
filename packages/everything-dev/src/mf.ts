@@ -53,10 +53,10 @@ export function installIntegrityFetchHook(
         console.error(
           `[SRI] Integrity check failed in MF fetch pipeline for ${url}\n  Expected: ${expectedHash}\n  Computed: ${computed}`,
         );
-        return new Response(
-          `Integrity check failed for ${url}`,
-          { status: 500, statusText: "Integrity Check Failed" },
-        );
+        return new Response(`Integrity check failed for ${url}`, {
+          status: 500,
+          statusText: "Integrity Check Failed",
+        });
       }
 
       console.log(`[SRI] Integrity verified in pipeline for ${url}`);

@@ -107,8 +107,8 @@ function OpencodePage() {
           body={
             <>
               Skill files live in{" "}
-              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.opencode/skills/</code>. They
-              make agent knowledge codified, versioned, and auto-discovered.
+              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.opencode/skills/</code>.
+              They make agent knowledge codified, versioned, and auto-discovered.
             </>
           }
         />
