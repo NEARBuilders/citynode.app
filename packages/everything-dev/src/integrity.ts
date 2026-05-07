@@ -49,8 +49,6 @@ export async function verifySriForUrl(url: string, expectedIntegrity: string): P
       `[SRI] Integrity check failed for ${entryUrl}\n  Expected: ${expectedIntegrity}\n  Computed: ${computed}`,
     );
   }
-
-  console.log(`[SRI] Integrity verified for ${entryUrl}`);
 }
 
 export class IntegrityRegistry {
