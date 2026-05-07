@@ -45,7 +45,7 @@ For the full argument, see [A New Renaissance: Why Software Must Compose or Coll
 
 ## CLI Commands
 
-`everything-dev` is the canonical runtime package and CLI. `bos` is a command alias for the same tool. See [.agent/skills/bos/SKILL.md](.agent/skills/bos/SKILL.md) for the full reference.
+`everything-dev` is the canonical runtime package and CLI. `bos` is a command alias for the same tool. See [AGENTS.md](./AGENTS.md) for the quick reference and [LLM.txt](./LLM.txt) for the full technical guide.
 
 ### Development
 
@@ -244,7 +244,7 @@ Required runtime vars:
 - `HOST_DATABASE_AUTH_TOKEN` - Database auth token
 - `CORS_ORIGIN` - Comma-separated allowed origins (defaults to host + UI URLs from config)
 
-See [.agent/skills/bos/docs/types.md](.agent/skills/bos/docs/types.md) for the complete schema.
+See [LLM.txt](./LLM.txt) for the complete schema and configuration reference.
 
 ## Lint Setup
 
