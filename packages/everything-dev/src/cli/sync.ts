@@ -74,6 +74,76 @@ function backupFiles(projectDir: string, filePaths: string[]): string | null {
   return backupDir;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeJsonValues(local: unknown, template: unknown): unknown {
+  if (isPlainObject(local) && isPlainObject(template)) {
+    const merged: Record<string, unknown> = {};
+    // Preserve local key order first
+    for (const key of Object.keys(local)) {
+      merged[key] = mergeJsonValues(local[key], template[key]);
+    }
+    // Append any new template keys at the end
+    for (const key of Object.keys(template)) {
+      if (!(key in merged)) {
+        merged[key] = template[key];
+      }
+    }
+    return merged;
+  }
+  // For arrays and primitives, local always wins
+  return local ?? template;
+}
+
+function mergeBosConfig(
+  local: Record<string, unknown>,
+  template: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+
+  // 1. extends always first
+  if (local.extends !== undefined) merged.extends = local.extends;
+  else if (template.extends !== undefined) merged.extends = template.extends;
+
+  // 2. Fixed trailing group: app, plugins, shared
+  const TRAIL_GROUP = ["app", "plugins", "shared"];
+
+  const localKeys = Object.keys(local).filter((k) => k !== "extends");
+  const templateKeys = Object.keys(template).filter((k) => k !== "extends" && !localKeys.includes(k));
+
+  // Find the first trailing-group key present locally ("app" comes first in the group)
+  const firstTrailIndex = localKeys.findIndex((k) => TRAIL_GROUP.includes(k));
+
+  const orderedKeys: string[] = [];
+
+  if (firstTrailIndex >= 0) {
+    // Keys before the trail group stay in local order
+    orderedKeys.push(...localKeys.slice(0, firstTrailIndex));
+    // New template keys inserted right before the trail group
+    orderedKeys.push(...templateKeys);
+    // Trail group keys (app, plugins, shared) in canonical order, preserving local if present
+    for (const trailKey of TRAIL_GROUP) {
+      if (localKeys.includes(trailKey)) orderedKeys.push(trailKey);
+    }
+  } else {
+    // No trail group found locally — keep local order then append new keys and trail group
+    orderedKeys.push(...localKeys);
+    orderedKeys.push(...templateKeys);
+    for (const trailKey of TRAIL_GROUP) {
+      if (templateKeys.includes(trailKey)) orderedKeys.push(trailKey);
+    }
+  }
+
+  // 3. Merge values for each key
+  for (const key of orderedKeys) {
+    merged[key] = mergeJsonValues(local[key], template[key]);
+  }
+
+  return merged;
+}
+
 function mergePackageJson(
   local: Record<string, unknown>,
   template: Record<string, unknown>,
@@ -129,6 +199,19 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
     : filePath;
   const dest = join(projectDir, destPath);
   mkdirSync(dirname(dest), { recursive: true });
+
+  if (filePath.endsWith("bos.config.json")) {
+    const localContent = existsSync(dest) ? readFileSync(dest, "utf-8") : null;
+    const templateContent = readFileSync(src, "utf-8");
+
+    if (localContent) {
+      const local = JSON.parse(localContent) as Record<string, unknown>;
+      const template = JSON.parse(templateContent) as Record<string, unknown>;
+      const merged = mergeBosConfig(local, template);
+      writeFileSync(dest, `${JSON.stringify(merged, null, 2)}\n`);
+      return;
+    }
+  }
 
   if (filePath.endsWith("package.json")) {
     const localContent = existsSync(dest) ? readFileSync(dest, "utf-8") : null;
@@ -348,6 +431,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       plugins: childPlugins,
       pluginRoutes,
       workspaceOpts: { sourceDir },
+      mode: "sync",
     });
 
     if (!options.noInstall) {

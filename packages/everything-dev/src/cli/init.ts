@@ -259,8 +259,10 @@ export async function personalizeConfig(
     plugins?: string[];
     pluginRoutes?: Record<string, string[]>;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
+    mode?: "init" | "sync";
   },
 ): Promise<void> {
+  const isInit = opts.mode !== "sync";
   const configPath = join(destination, "bos.config.json");
   if (existsSync(configPath)) {
     const config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
@@ -274,7 +276,7 @@ export async function personalizeConfig(
       config.domain = opts.domain;
     }
 
-    if (config.app && typeof config.app === "object") {
+    if (isInit && config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
       for (const entryKey of Object.keys(app)) {
         const entry = app[entryKey];
@@ -299,12 +301,14 @@ export async function personalizeConfig(
         }
       }
 
-      for (const pluginKey of Object.keys(plugins)) {
-        const plugin = plugins[pluginKey];
-        if (plugin && typeof plugin === "object") {
-          const p = plugin as Record<string, unknown>;
-          delete p.production;
-          delete p.integrity;
+      if (isInit) {
+        for (const pluginKey of Object.keys(plugins)) {
+          const plugin = plugins[pluginKey];
+          if (plugin && typeof plugin === "object") {
+            const p = plugin as Record<string, unknown>;
+            delete p.production;
+            delete p.integrity;
+          }
         }
       }
 
