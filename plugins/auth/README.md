@@ -11,7 +11,7 @@ This plugin exposes a complete **oRPC contract** with endpoints for:
 - **Organization Support**: Members, invitations, roles, and personal organizations (auto-created per user)
 - **API Keys**: Scoped, rate-limited, organization-aware API keys
 - **NEAR SIWN**: Sign-In-With-NEAR — link NEAR accounts to platform users, view profiles, relay transactions via a built-in relayer, and view contract state
-- **Multi-Database Driver**: SQLite via libsql (default), better-sqlite3, Bun SQLite, or Node.js built-in sqlite
+- **libsql Database Driver**: SQLite via `@libsql/client` (supports local files and remote Turso databases)
 
 It runs inside the **everything-plugin** framework (oRPC + Effect) and is designed to be mounted as a federated module in the Everything workspace.
 
@@ -20,14 +20,13 @@ It runs inside the **everything-plugin** framework (oRPC + Effect) and is design
 | Package | Version | Required |
 |---------|---------|----------|
 | Node.js | `>=22.5.0` | Yes |
-| `better-auth` | `^1.6.9` | Yes |
+| `better-auth` | `catalog:` | Yes |
 | `better-near-auth` | `catalog:` | Yes |
-| `drizzle-orm` | `^0.44.0` | Yes |
+| `drizzle-orm` | `catalog:` | Yes |
 | `every-plugin` | `workspace:*` | Yes |
-| `@orpc/contract` | `^1.13.4` | Yes |
-| `@orpc/server` | `^1.13.4` | Yes |
-| `@libsql/client` | `^0.15.7` | Optional (for libsql driver) |
-| `better-sqlite3` | `^11.0.0` | Optional (for better-sqlite3 driver) |
+| `@libsql/client` | `catalog:` | Yes |
+| `@orpc/contract` | `catalog:` | Dev only |
+| `@orpc/server` | `catalog:` | Dev only |
 
 ## Configuration
 
@@ -37,18 +36,23 @@ It runs inside the **everything-plugin** framework (oRPC + Effect) and is design
 |----------|------|---------|-------------|
 | `account` | `string` | — | Your app account identifier (used for NEAR SIWN recipient) |
 | `hostUrl` | `string` | — | Base URL of the auth server (e.g. `https://auth.example.com`) |
-| `uiUrl` | `string` | — | Base URL of your frontend (for CORS/trusted origins) |
-| `githubClientId` | `string` | — | GitHub OAuth client ID |
-| `githubClientSecret` | `string` | — | GitHub OAuth client secret |
+| `uiUrl` | `string` | — | Optional. Base URL of your frontend (for CORS/trusted origins) |
+| `githubClientId` | `string` | — | Optional. GitHub OAuth client ID |
+| `githubClientSecret` | `string` | — | Optional. GitHub OAuth client secret |
 
 ### Plugin Secrets
 
 | Secret | Type | Default | Description |
 |--------|------|---------|-------------|
-| `AUTH_DATABASE_URL` | `string` | `file:./auth.db` | SQLite database URL |
-| `AUTH_DATABASE_AUTH_TOKEN` | `string` | — | Auth token for remote libsql databases (Turso) |
-| `AUTH_DATABASE_DRIVER` | `"libsql" \| "better-sqlite3" \| "bun" \| "node"` | `libsql` | SQLite driver backend |
+| `AUTH_DATABASE_URL` | `string` | `file:./auth.db` | SQLite database URL (libsql) |
+| `AUTH_DATABASE_AUTH_TOKEN` | `string` | — | Optional. Auth token for remote libsql databases (Turso) |
 | `BETTER_AUTH_SECRET` | `string` | — | Secret key for Better Auth session signing |
+
+### Plugin Context
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reqHeaders` | `Record<string, string>` | Optional. Request headers forwarded for session resolution |
 
 ### Environment Variables
 
