@@ -1369,6 +1369,7 @@ export default createPlugin({
             plugins,
             pluginRoutes,
             workspaceOpts: { sourceDir },
+            withHost,
           });
 
           await writeInitSnapshot(directory, extendsAccount, extendsGateway, sourceDir, patterns, {

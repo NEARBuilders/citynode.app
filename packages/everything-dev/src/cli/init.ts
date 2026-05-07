@@ -290,6 +290,7 @@ export async function personalizeConfig(
     pluginRoutes?: Record<string, string[]>;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
     mode?: "init" | "sync";
+    withHost?: boolean;
   },
 ): Promise<void> {
   const isInit = opts.mode !== "sync";
@@ -357,13 +358,14 @@ export async function personalizeConfig(
     if (pkg.workspaces && typeof pkg.workspaces === "object") {
       const ws = pkg.workspaces as { packages?: string[] };
       if (Array.isArray(ws.packages)) {
-        ws.packages = ws.packages
-          .filter((p: string) => p !== "host" && !p.startsWith("packages/"))
-          .filter((p: string) => {
-            const pluginMatch = p.match(/^plugins\/([^/]+)/);
-            if (!pluginMatch) return true;
-            return opts.plugins?.includes(pluginMatch[1]) ?? true;
-          });
+        ws.packages = ws.packages.filter((p: string) => {
+          if (p.startsWith("packages/")) return false;
+          if (p === "host") return opts.withHost ?? false;
+          if (p === "plugins/*") return (opts.plugins?.length ?? 0) > 0;
+          const pluginMatch = p.match(/^plugins\/([^/]+)/);
+          if (pluginMatch) return opts.plugins?.includes(pluginMatch[1]) ?? true;
+          return true;
+        });
       }
     }
 
