@@ -52,9 +52,7 @@
       "development": "local:plugins/_template",
       "production": "https://elliot-braem-2960-every-plugin-template-everythin-1059b381f-ze.zephyrcloud.app",
       "integrity": "sha384-rgMPfcwSrUpsGxEWXGLJXeGtpIpc9+NG7j2kMl4ELAeWNR7qVkZk3kjs+GNDZ1tK",
-      "routes": [
-        "ui/src/routes/_layout/_authenticated/settings.tsx"
-      ]
+      "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"]
     },
     "registry": {
       "development": "local:plugins/registry",
@@ -63,10 +61,7 @@
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
-      "routes": [
-        "ui/src/routes/_layout/apps/**",
-        "ui/src/routes/_layout/about.tsx"
-      ]
+      "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"]
     },
     "projects": {
       "development": "local:plugins/projects",
@@ -82,9 +77,7 @@
       "development": "local:plugins/opencode",
       "production": "https://elliot-braem-2963-everything-dev-opencode-plugin--402fa0e17-ze.zephyrcloud.app",
       "integrity": "sha384-e5FQGQgfs9qBRba2TgMMJrIWYq9NOLdIl2Bt2JWoqQ0WA9x5akHA3OgitnbvlBp4",
-      "routes": [
-        "ui/src/routes/_layout/_authenticated/_admin/**"
-      ]
+      "routes": ["ui/src/routes/_layout/_authenticated/_admin/**"]
     }
   },
   "app": {
@@ -116,11 +109,7 @@
         "hostUrl": "http://localhost:3000",
         "uiUrl": "http://localhost:3003"
       },
-      "secrets": [
-        "AUTH_DATABASE_URL",
-        "AUTH_DATABASE_AUTH_TOKEN",
-        "BETTER_AUTH_SECRET"
-      ]
+      "secrets": ["AUTH_DATABASE_URL", "AUTH_DATABASE_AUTH_TOKEN", "BETTER_AUTH_SECRET"]
     }
   }
 }
