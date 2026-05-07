@@ -401,10 +401,10 @@ export async function personalizeConfig(
       if (scripts.postinstall) {
         scripts.postinstall = "bos types gen";
       }
-        if (scripts.typecheck) {
-          scripts.typecheck = scripts.typecheck
-            .replace("bun types gen && ", "")
-            .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
+      if (scripts.typecheck) {
+        scripts.typecheck = scripts.typecheck
+          .replace("bun types gen && ", "")
+          .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
         if (!opts.withHost) {
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
         }
@@ -468,10 +468,7 @@ export async function personalizeConfig(
   const authTypesGenPath = join(destination, "ui", "src", "auth-types.gen.ts");
   if (!existsSync(authTypesGenPath)) {
     mkdirSync(dirname(authTypesGenPath), { recursive: true });
-    writeFileSync(
-      authTypesGenPath,
-      `export type { createAuthInstance } from "better-auth";\n`,
-    );
+    writeFileSync(authTypesGenPath, `export type { createAuthInstance } from "better-auth";\n`);
   }
 }
 

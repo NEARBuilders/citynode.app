@@ -77,8 +77,8 @@ function isExpectedRouteError(line: string): boolean {
     "routes/_layout/_authenticated/projects",
     "routes/_layout/_authenticated/keys",
     "routes/_layout/_authenticated/_admin",
-    "to=\"/settings\"",
-    "to=\"/projects",
+    'to="/settings"',
+    'to="/projects',
   ];
   return expectedPatterns.some((p) => line.includes(p));
 }
@@ -155,24 +155,34 @@ describe("bos init — typecheck with expected route errors", () => {
   }, 120000);
 
   it("typechecks api with zero unexpected errors", async () => {
-    const result = await runCommand("bun", ["run", "--cwd", "api", "tsc", "--noEmit"], testDir, 120000);
+    const result = await runCommand(
+      "bun",
+      ["run", "--cwd", "api", "tsc", "--noEmit"],
+      testDir,
+      120000,
+    );
     const errors = parseTypeErrors(result.stdout + result.stderr);
     const unexpected = errors.filter(isUnexpectedError);
 
     if (unexpected.length > 0) {
-      console.error("\nUnexpected API type errors:\n" + unexpected.join("\n---\n"));
+      console.error(`\nUnexpected API type errors:\n${unexpected.join("\n---\n")}`);
     }
 
     expect(unexpected).toEqual([]);
   });
 
   it("typechecks ui with only expected route errors", async () => {
-    const result = await runCommand("bun", ["run", "--cwd", "ui", "tsc", "--noEmit"], testDir, 120000);
+    const result = await runCommand(
+      "bun",
+      ["run", "--cwd", "ui", "tsc", "--noEmit"],
+      testDir,
+      120000,
+    );
     const errors = parseTypeErrors(result.stdout + result.stderr);
     const unexpected = errors.filter(isUnexpectedError);
 
     if (unexpected.length > 0) {
-      console.error("\nUnexpected UI type errors:\n" + unexpected.join("\n---\n"));
+      console.error(`\nUnexpected UI type errors:\n${unexpected.join("\n---\n")}`);
     }
 
     expect(unexpected).toEqual([]);

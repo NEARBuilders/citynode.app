@@ -1487,8 +1487,7 @@ export default createPlugin({
 
         const projectDir = resolve(dirname(configPath));
         const env =
-          input.env ??
-          (process.env.NODE_ENV === "production" ? "production" : "development");
+          input.env ?? (process.env.NODE_ENV === "production" ? "production" : "development");
 
         const refreshed = await loadConfig({ cwd: projectDir, env });
         if (!refreshed) {

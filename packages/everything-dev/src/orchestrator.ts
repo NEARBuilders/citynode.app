@@ -1,4 +1,3 @@
-import { createConnection } from "node:net";
 import { Command } from "@effect/platform";
 import type { ExitCode } from "@effect/platform/CommandExecutor";
 import { Deferred, Effect, Option, Ref, Stream } from "effect";
@@ -63,26 +62,8 @@ const probeHttpOk = (url: string, timeoutMs = 400) =>
         clearTimeout(timer);
       }
     },
-    catch: () => false,
-  });
-
-const probeTcpOpen = (port: number, timeoutMs = 250) =>
-  Effect.async<boolean>((resume) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      resume(Effect.succeed(false));
-    }, timeoutMs);
-    socket.once("connect", () => {
-      clearTimeout(timer);
-      socket.destroy();
-      resume(Effect.succeed(true));
-    });
-    socket.once("error", () => {
-      clearTimeout(timer);
-      resume(Effect.succeed(false));
-    });
-  });
+  catch: () => false,
+});
 
 const detectStatus = (
   line: string,

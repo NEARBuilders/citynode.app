@@ -318,7 +318,9 @@ async function main() {
       }
       console.log(colors.green(`${icons.ok} Types generated`));
       if (result.source) {
-        console.log(`  ${colors.dim("Mode:")} ${result.source === "remote" ? colors.cyan("remote") : colors.dim("local")}`);
+        console.log(
+          `  ${colors.dim("Mode:")} ${result.source === "remote" ? colors.cyan("remote") : colors.dim("local")}`,
+        );
       }
       if (result.generated.length > 0) {
         console.log(`  ${colors.dim("Generated:")}`);
