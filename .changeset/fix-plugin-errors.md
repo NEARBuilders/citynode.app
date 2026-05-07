@@ -13,5 +13,5 @@ Fix plugin error handling and shared dependency resolution in production.
 - Re-throw non-ORPC errors from the `onError` interceptor so they propagate to the caller instead of being swallowed, which caused oRPC to serialize `undefined` as `{}`.
 
 ### Config
-- Move `better-auth` from `shared.plugins` to both `shared.ui` and `shared.plugins` in `bos.config.json` so it is shared correctly across both browser and server Module Federation boundaries.
+- Move `better-auth` to `shared.ui` only in `bos.config.json`; remove from `shared.plugins`. The auth plugin bundles its own `better-auth` server-side — only the browser Module Federation boundary between host and UI needs it shared.
 - Remove `drizzle-orm` from shared dependencies; it is an auth plugin implementation detail, not a runtime shared boundary.

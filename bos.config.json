@@ -37,15 +37,7 @@
         "shareScope": "default"
       }
     },
-    "plugins": {
-      "better-auth": {
-        "version": "1.6.9",
-        "requiredVersion": "^1.6.9",
-        "singleton": true,
-        "strictVersion": false,
-        "shareScope": "default"
-      }
-    }
+    "plugins": {}
   },
   "plugins": {
     "template": {
