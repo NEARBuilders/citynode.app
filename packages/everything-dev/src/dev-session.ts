@@ -169,10 +169,8 @@ export const runDevSession = (
     const startGroup = (packages: string[]) =>
       Effect.forEach(packages, startProcess, { concurrency: "unbounded" });
 
-    const awaitReady = (pkg: string, handle: ProcessHandle) =>
-      handle.waitForReady.pipe(
-        Effect.catchAll(() => Effect.void),
-      );
+    const awaitReady = (_pkg: string, handle: ProcessHandle) =>
+      handle.waitForReady.pipe(Effect.catchAll(() => Effect.void));
 
     const nonHostPackages = orderedPackages.filter((pkg) => pkg !== "host");
     const hostPackages = orderedPackages.filter((pkg) => pkg === "host");
@@ -250,16 +248,6 @@ const runApp = (
       requestShutdown = shutdown;
     }),
   ).pipe(
-    Effect.catchAll((e) =>
-      Effect.sync(() => {
-        if (e instanceof Error) {
-          console.error("App error:", e.message);
-          if (e.stack) console.error(e.stack);
-        } else {
-          console.error("App error:", e);
-        }
-      }),
-    ),
     Effect.provide(ServiceDescriptorMapLive(services)),
     Effect.provide(DevRuntimeConfigLive(runtimeConfig)),
     Effect.provide(NodeContext.layer),
