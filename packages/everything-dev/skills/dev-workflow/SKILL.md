@@ -53,10 +53,10 @@ The orchestrator:
 
 ## Contract Sync & Type Generation
 
-Plugin types are auto-generated from `bos.config.json` via `bun run sync:api-contract`:
+Plugin types are auto-generated from `bos.config.json` via `bos types gen`:
 
 ```bash
-bun run sync:api-contract   # Regenerate ui/src/api-contract.gen.ts and api/src/plugins-client.gen.ts
+bos types gen   # Regenerate ui/src/api-contract.gen.ts and api/src/plugins-client.gen.ts
 ```
 
 **When it auto-runs:**
@@ -73,7 +73,7 @@ bun run sync:api-contract   # Regenerate ui/src/api-contract.gen.ts and api/src/
 
 **Source of truth:** `bos.config.json`. If a plugin is listed there, its routes appear on `ApiContract`. If removed, TypeScript catches stale usage.
 
-**After hand-editing `bos.config.json`:** Run `bun run sync:api-contract` or restart `bos dev` to pick up changes.
+**After hand-editing `bos.config.json`:** Run `bos types gen` or restart `bos dev` to pick up changes.
 
 ## Runtime Config Loading
 

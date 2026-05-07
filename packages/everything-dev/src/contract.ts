@@ -221,6 +221,21 @@ export const StatusResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const TypesGenOptionsSchema = z.object({
+  env: z.enum(["development", "production"]).optional(),
+  dryRun: z.boolean().default(false),
+});
+
+export const TypesGenResultSchema = z.object({
+  status: z.enum(["success", "error"]),
+  generated: z.array(z.string()),
+  fetched: z.array(z.string()),
+  skipped: z.array(z.string()),
+  failed: z.array(z.string()),
+  source: z.enum(["local", "remote"]).optional(),
+  error: z.string().optional(),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -266,6 +281,10 @@ export const bosContract = oc.router({
     .input(UpgradeOptionsSchema)
     .output(UpgradeResultSchema),
   status: oc.route({ method: "GET", path: "/status" }).output(StatusResultSchema),
+  typesGen: oc
+    .route({ method: "POST", path: "/types/gen" })
+    .input(TypesGenOptionsSchema)
+    .output(TypesGenResultSchema),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -289,3 +308,5 @@ export type SyncResult = z.infer<typeof SyncResultSchema>;
 export type UpgradeOptions = z.infer<typeof UpgradeOptionsSchema>;
 export type UpgradeResult = z.infer<typeof UpgradeResultSchema>;
 export type StatusResult = z.infer<typeof StatusResultSchema>;
+export type TypesGenOptions = z.infer<typeof TypesGenOptionsSchema>;
+export type TypesGenResult = z.infer<typeof TypesGenResultSchema>;

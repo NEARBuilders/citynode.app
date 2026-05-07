@@ -2,11 +2,8 @@ import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import type { AuthClient } from "./auth-client.gen";
 import { contract } from "./contract";
 import type { PluginsClient } from "./plugins-client.gen";
-
-type ApiPluginsClient = PluginsClient & { auth: AuthClient };
 
 export interface AuthContext {
   userId: string;
@@ -20,7 +17,7 @@ export interface AuthContext {
   reqHeaders?: Record<string, string>;
 }
 
-export default createPlugin.withPlugins<ApiPluginsClient>()({
+export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({}),
 
   secrets: z.object({

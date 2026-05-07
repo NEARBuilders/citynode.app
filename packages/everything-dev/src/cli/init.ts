@@ -399,12 +399,12 @@ export async function personalizeConfig(
       rewrite("start", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
 
       if (scripts.postinstall) {
-        delete scripts.postinstall;
+        scripts.postinstall = "bos types gen";
       }
-      if (scripts.typecheck) {
-        scripts.typecheck = scripts.typecheck
-          .replace("bun run sync:api-contract && ", "")
-          .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
+        if (scripts.typecheck) {
+          scripts.typecheck = scripts.typecheck
+            .replace("bun types gen && ", "")
+            .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
         if (!opts.withHost) {
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
         }
@@ -456,21 +456,21 @@ export async function personalizeConfig(
     writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
   }
 
-  const authClientGenPath = join(destination, "api", "src", "auth-client.gen.ts");
-  if (!existsSync(authClientGenPath)) {
-    mkdirSync(dirname(authClientGenPath), { recursive: true });
-    writeFileSync(
-      authClientGenPath,
-      `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type AuthClient = ClientFactory<any>;\n`,
-    );
-  }
-
   const pluginsClientGenPath = join(destination, "api", "src", "plugins-client.gen.ts");
   if (!existsSync(pluginsClientGenPath)) {
     mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
     writeFileSync(
       pluginsClientGenPath,
       `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type PluginsClient = Record<string, never>;\n`,
+    );
+  }
+
+  const authTypesGenPath = join(destination, "ui", "src", "auth-types.gen.ts");
+  if (!existsSync(authTypesGenPath)) {
+    mkdirSync(dirname(authTypesGenPath), { recursive: true });
+    writeFileSync(
+      authTypesGenPath,
+      `export type { createAuthInstance } from "better-auth";\n`,
     );
   }
 }

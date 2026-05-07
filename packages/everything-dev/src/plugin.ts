@@ -40,6 +40,7 @@ import {
   type PublishOptions,
   type StartOptions,
   type SyncOptions,
+  type TypesGenOptions,
   type UpgradeOptions,
 } from "./contract";
 import { devApp, startApp } from "./dev-session";
@@ -256,8 +257,11 @@ function listPluginAttachments(config: BosConfig | null) {
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
-async function refreshApiContractBridge(configDir: string): Promise<void> {
-  const refreshed = await loadConfig({ cwd: configDir, env: "development" });
+async function refreshApiContractBridge(
+  configDir: string,
+  env: "development" | "production" = "development",
+): Promise<void> {
+  const refreshed = await loadConfig({ cwd: configDir, env });
   if (!refreshed) return;
 
   await syncApiContractBridge({
@@ -1462,6 +1466,117 @@ export default createPlugin({
         return {
           status: "error" as const,
           packages: [],
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    typesGen: builder.typesGen.handler(async ({ input }: { input: TypesGenOptions }) => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            generated: [],
+            fetched: [],
+            skipped: [],
+            failed: [],
+            error: "No bos.config.json found in current directory",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        const env =
+          input.env ??
+          (process.env.NODE_ENV === "production" ? "production" : "development");
+
+        const refreshed = await loadConfig({ cwd: projectDir, env });
+        if (!refreshed) {
+          return {
+            status: "error" as const,
+            generated: [],
+            fetched: [],
+            skipped: [],
+            failed: [],
+            error: "Failed to load bos.config.json",
+          };
+        }
+
+        if (input.dryRun) {
+          const pluginEntries = Object.entries(refreshed.runtime.plugins ?? {});
+          const fetched: string[] = [];
+          const skipped: string[] = [];
+
+          if (refreshed.runtime.api.source !== "local") {
+            fetched.push(refreshed.runtime.api.url);
+          } else {
+            skipped.push("api (local)");
+          }
+
+          if (refreshed.runtime.auth) {
+            if (refreshed.runtime.auth.source !== "local") {
+              fetched.push(refreshed.runtime.auth.url);
+            } else {
+              skipped.push("auth (local)");
+            }
+          }
+
+          for (const [key, plugin] of pluginEntries) {
+            if (plugin.url && plugin.source !== "local") {
+              fetched.push(plugin.url);
+            } else if (plugin.localPath) {
+              skipped.push(`${key} (local)`);
+            }
+          }
+
+          return {
+            status: "success" as const,
+            generated: [
+              "ui/src/api-contract.gen.ts",
+              "ui/src/auth-types.gen.ts",
+              "api/src/plugins-client.gen.ts",
+              "api/src/auth-client.gen.ts",
+            ],
+            fetched,
+            skipped,
+            failed: [],
+            source: refreshed.runtime.api.source,
+          };
+        }
+
+        const result = await syncApiContractBridge({
+          configDir: projectDir,
+          runtimeConfig: refreshed.runtime,
+          apiBaseUrl: refreshed.runtime.api.url,
+        });
+
+        const generated = [
+          "ui/src/api-contract.gen.ts",
+          "api/src/plugins-client.gen.ts",
+          "api/src/auth-client.gen.ts",
+        ];
+        if (
+          refreshed.runtime.auth &&
+          (refreshed.runtime.auth.source !== "local" || refreshed.runtime.auth.localPath)
+        ) {
+          generated.push("ui/src/auth-types.gen.ts");
+        }
+
+        return {
+          status: "success" as const,
+          generated,
+          fetched: result.source === "remote" ? [refreshed.runtime.api.url] : [],
+          skipped: result.source === "local" ? ["api (local)"] : [],
+          failed: [],
+          source: result.source,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          generated: [],
+          fetched: [],
+          skipped: [],
+          failed: [],
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }

@@ -310,6 +310,36 @@ async function main() {
       return;
     }
 
+    if (descriptor.key === "typesGen") {
+      console.log();
+      if (result.status === "error") {
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
+      console.log(colors.green(`${icons.ok} Types generated`));
+      if (result.source) {
+        console.log(`  ${colors.dim("Mode:")} ${result.source === "remote" ? colors.cyan("remote") : colors.dim("local")}`);
+      }
+      if (result.generated.length > 0) {
+        console.log(`  ${colors.dim("Generated:")}`);
+        for (const f of result.generated) console.log(`    ${colors.dim(f)}`);
+      }
+      if (result.fetched.length > 0) {
+        console.log(`  ${colors.dim("Fetched from remote:")}`);
+        for (const url of result.fetched) console.log(`    ${colors.dim(url)}`);
+      }
+      if (result.skipped.length > 0) {
+        console.log(`  ${colors.dim("Skipped (local):")}`);
+        for (const s of result.skipped) console.log(`    ${colors.dim(s)}`);
+      }
+      if (result.failed.length > 0) {
+        console.log(`  ${colors.yellow("Failed:")}`);
+        for (const f of result.failed) console.log(`    ${colors.error(f)}`);
+      }
+      console.log();
+      return;
+    }
+
     if (result?.status === "error") {
       console.error(`[CLI] ${result.error || "Unknown error"}`);
       process.exit(1);

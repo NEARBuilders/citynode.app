@@ -121,6 +121,15 @@ export const cliCommandMeta = {
       noSync: { description: "Only upgrade packages, skip template sync" },
     },
   },
+  typesGen: {
+    commandPath: ["types", "gen"],
+    summary: "Generate type definitions from configured API and plugin contracts",
+    interactive: false,
+    fields: {
+      env: { description: "Environment: development (default) or production" },
+      dryRun: { description: "Preview what would be fetched without writing files" },
+    },
+  },
   status: {
     commandPath: ["status"],
     summary: "Show project health, versions, and update availability",

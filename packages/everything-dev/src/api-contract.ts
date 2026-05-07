@@ -22,6 +22,11 @@ export interface ApiPluginManifest {
       sha256?: string;
     };
   };
+  additionalExports?: Array<{
+    path: string;
+    exports: string[];
+    sha256?: string;
+  }>;
 }
 
 interface ContractSource {
@@ -136,6 +141,51 @@ async function remoteContractSource(opts: {
   };
 }
 
+async function fetchAuthExportTypes(opts: {
+  baseUrl: string;
+  runtimeDir: string;
+  manifest: ApiPluginManifest;
+}): Promise<string | null> {
+  if (!opts.manifest.additionalExports || opts.manifest.additionalExports.length === 0) {
+    return null;
+  }
+
+  const authExportEntry = opts.manifest.additionalExports.find(
+    (entry) => entry.path.includes("auth-export") || entry.path.endsWith("auth-export.d.ts"),
+  );
+
+  if (!authExportEntry) {
+    return null;
+  }
+
+  const exportUrl = `${trimTrailingSlash(opts.baseUrl)}/${authExportEntry.path.replace(/^\.\//, "")}`;
+  const response = await fetch(exportUrl);
+  if (!response.ok) {
+    console.warn(`[API Contract] Failed to fetch auth export types: ${response.status}`);
+    return null;
+  }
+
+  const content = await response.text();
+  if (authExportEntry.sha256 && authExportEntry.sha256 !== sha256(content)) {
+    console.warn("[API Contract] Auth export types checksum mismatch");
+    return null;
+  }
+
+  const generatedPath = join(opts.runtimeDir, "auth", "auth-export.d.ts");
+  mkdirSync(dirname(generatedPath), { recursive: true });
+  writeFileIfChanged(generatedPath, content);
+
+  return generatedPath;
+}
+
+function writeAuthTypesGen(configDir: string, authExportPath: string) {
+  const authTypesPath = join(configDir, "ui", "src", "auth-types.gen.ts");
+  const importPath = toImportPath(authTypesPath, authExportPath);
+  const content = `export type { createAuthInstance } from "${importPath}";\n`;
+  mkdirSync(dirname(authTypesPath), { recursive: true });
+  writeFileIfChanged(authTypesPath, content);
+}
+
 async function resolveContractSource(opts: {
   configDir: string;
   runtimeDir: string;
@@ -202,6 +252,7 @@ function writeGeneratedFiles(opts: {
   sources: ContractSource[];
   pluginKeys: string[];
   authSource: ContractSource | null;
+  authExportPath?: string | null;
 }) {
   const baseSource = opts.sources.find((source) => source.key === "api");
   const pluginSources = opts.pluginKeys
@@ -245,6 +296,7 @@ function writeGeneratedFiles(opts: {
   writeFileIfChanged(uiContractPath, `${uiLines.join("\n")}\n`);
 
   // --- Generate api/src/plugins-client.gen.ts ---
+  // Includes both plugin contracts AND auth as a unified PluginsClient type
   const pluginsClientPath = join(opts.configDir, "api", "src", "plugins-client.gen.ts");
   const pluginsClientLines: string[] = [];
 
@@ -252,6 +304,13 @@ function writeGeneratedFiles(opts: {
     const importPath = toImportPath(pluginsClientPath, source.sourceFilePath);
     pluginsClientLines.push(
       `import type { ContractType as ${source.importName} } from "${importPath}";`,
+    );
+  }
+
+  if (opts.authSource) {
+    const authImportPath = toImportPath(pluginsClientPath, opts.authSource.sourceFilePath);
+    pluginsClientLines.push(
+      `import type { ContractType as ${opts.authSource.importName} } from "${authImportPath}";`,
     );
   }
 
@@ -263,11 +322,16 @@ function writeGeneratedFiles(opts: {
   );
   pluginsClientLines.push("");
 
-  if (pluginSources.length === 0) {
+  const allPluginSources = [...pluginSources];
+  if (opts.authSource) {
+    allPluginSources.push({ ...opts.authSource, key: "auth" });
+  }
+
+  if (allPluginSources.length === 0) {
     pluginsClientLines.push("export type PluginsClient = Record<string, never>;");
   } else {
     pluginsClientLines.push("export type PluginsClient = {");
-    for (const source of pluginSources) {
+    for (const source of allPluginSources) {
       const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
         ? source.key
         : JSON.stringify(source.key);
@@ -279,26 +343,9 @@ function writeGeneratedFiles(opts: {
   mkdirSync(dirname(pluginsClientPath), { recursive: true });
   writeFileIfChanged(pluginsClientPath, `${pluginsClientLines.join("\n")}\n`);
 
-  // --- Generate api/src/auth-client.gen.ts ---
-  if (opts.authSource) {
-    const authClientPath = join(opts.configDir, "api", "src", "auth-client.gen.ts");
-    const authClientLines: string[] = [];
-
-    const importPath = toImportPath(authClientPath, opts.authSource.sourceFilePath);
-    authClientLines.push(
-      `import type { ContractType as ${opts.authSource.importName} } from "${importPath}";`,
-    );
-    authClientLines.push(
-      'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
-    );
-    authClientLines.push(
-      "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
-    );
-    authClientLines.push("");
-    authClientLines.push(`export type AuthClient = ClientFactory<${opts.authSource.importName}>;`);
-
-    mkdirSync(dirname(authClientPath), { recursive: true });
-    writeFileIfChanged(authClientPath, `${authClientLines.join("\n")}\n`);
+  // --- Generate ui/src/auth-types.gen.ts ---
+  if (opts.authExportPath) {
+    writeAuthTypesGen(opts.configDir, opts.authExportPath);
   }
 
   return uiContractPath;
@@ -322,6 +369,7 @@ export async function syncApiContractBridge(opts: {
   let manifest: ApiPluginManifest | null = null;
   let generatedPath: string | null = null;
   let authSource: ContractSource | null = null;
+  let authExportPath: string | null = null;
 
   const baseSource = await resolveContractSource({
     configDir: opts.configDir,
@@ -346,6 +394,30 @@ export async function syncApiContractBridge(opts: {
     sources.push(authSource);
     if (authSource.generatedPath) {
       generatedPath = authSource.generatedPath;
+    }
+
+    // Fetch auth additional exports (auth-export.d.ts) for remote auth
+    if (opts.runtimeConfig.auth.url && opts.runtimeConfig.auth.source !== "local") {
+      try {
+        const authManifest = await fetchApiPluginManifest(opts.runtimeConfig.auth.url);
+        const fetchedAuthExportPath = await fetchAuthExportTypes({
+          baseUrl: opts.runtimeConfig.auth.url,
+          runtimeDir,
+          manifest: authManifest,
+        });
+        if (fetchedAuthExportPath) {
+          authExportPath = fetchedAuthExportPath;
+        }
+      } catch (error) {
+        console.warn(
+          `[API Contract] Failed to fetch auth additional exports: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    // Fallback to local auth export source if remote fetch failed or auth is local
+    if (!authExportPath) {
+      authExportPath = join(opts.configDir, "plugins", "auth", "src", "auth-export.ts");
     }
   }
 
@@ -377,6 +449,7 @@ export async function syncApiContractBridge(opts: {
     sources,
     pluginKeys: allPluginKeys,
     authSource,
+    authExportPath,
   });
 
   if (opts.runtimeConfig.api.source !== "local") {
