@@ -1,6 +1,6 @@
-import type { PgDatabase } from "drizzle-orm/pg-core";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
-export type AuthDatabase = PgDatabase<any, typeof schema>;
+export type AuthDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
 export interface DatabaseDriver {
     readonly db: AuthDatabase;
     close(): Promise<void>;

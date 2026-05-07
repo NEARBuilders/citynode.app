@@ -44,6 +44,7 @@ import {
 } from "./contract";
 import { devApp, startApp } from "./dev-session";
 import {
+  buildRegistryConfigUrl,
   buildRegistryConfigUrlForNetwork,
   fetchBosConfigFromFastKv,
   fetchPluginFromRegistry,
@@ -65,6 +66,7 @@ import {
 import { syncAndGenerateSharedUi } from "./shared";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
+import { colors } from "./utils/theme";
 
 function ensureEnvFile(configDir: string): void {
   const envPath = join(configDir, ".env");
@@ -140,6 +142,15 @@ function resolveWorkspaceTarget(
   configDir: string,
 ): WorkspaceTarget | null {
   if (bosConfig?.app && key in bosConfig.app) {
+    const appEntry = (bosConfig.app as Record<string, { development?: string }>)[key];
+    const devPath = resolveLocalDevelopmentPath(appEntry?.development, configDir);
+    if (devPath) {
+      return {
+        key,
+        kind: "app",
+        path: devPath,
+      };
+    }
     return {
       key,
       kind: "app",
@@ -924,30 +935,13 @@ export default createPlugin({
 
       // ── Production Readiness Validation ──
       const productionEnv: Record<string, string> = {};
+      const warnings: string[] = [];
 
       // Default CORS_ORIGIN to the configured domain if not set
       if (!process.env.CORS_ORIGIN && config.domain) {
         const defaultOrigin = `https://${config.domain}`;
         productionEnv.CORS_ORIGIN = defaultOrigin;
-        console.log(`[Start] CORS_ORIGIN not set, defaulting to ${defaultOrigin}`);
-      }
-
-      // Validate shared.plugins packages are resolvable
-      const missingSharedDeps: string[] = [];
-      if (config.shared?.plugins) {
-        for (const depName of Object.keys(config.shared.plugins)) {
-          try {
-            require.resolve(depName);
-          } catch {
-            missingSharedDeps.push(depName);
-          }
-        }
-      }
-      if (missingSharedDeps.length > 0) {
-        console.error(
-          `[Start] Missing ${missingSharedDeps.length} shared plugin dependency(s): ${missingSharedDeps.join(", ")}`,
-        );
-        console.error(`[Start] Ensure these packages are installed in node_modules.`);
+        warnings.push(`CORS_ORIGIN defaulting to ${defaultOrigin}`);
       }
 
       // Validate required secrets
@@ -974,12 +968,7 @@ export default createPlugin({
       }
 
       if (missingSecrets.length > 0) {
-        console.warn(
-          `[Start] Missing ${missingSecrets.length} required secret(s): ${missingSecrets.join(", ")}`,
-        );
-        console.warn(
-          `[Start] Auth endpoints and database connections may fail without these secrets.`,
-        );
+        warnings.push(`Missing ${missingSecrets.length} secret(s): ${missingSecrets.join(", ")}`);
       }
 
       const services = buildServiceDescriptorMap(runtimeConfig);
@@ -993,6 +982,40 @@ export default createPlugin({
       const stagingEnvVars: Record<string, string> = isStaging
         ? { GATEWAY_DOMAIN: config.staging?.domain ?? config.domain ?? "" }
         : {};
+
+      const configSource = remoteConfig
+        ? `bos://${input.account}/${input.domain}`
+        : (findConfigPath() ?? "bos.config.json");
+
+      const configSourceHttp =
+        remoteConfig && input.account && input.domain
+          ? buildRegistryConfigUrl(input.account, input.domain)
+          : undefined;
+
+      console.log();
+      console.log(`  ${colors.dim("Config Source:")}  ${configSource}`);
+      if (configSourceHttp) {
+        console.log(`                  ${colors.dim(configSourceHttp)}`);
+      }
+      console.log(`  ${colors.dim("Account:")}        ${config.account}`);
+      console.log(`  ${colors.dim("Domain:")}         ${config.domain ?? "not configured"}`);
+      console.log();
+      console.log(`  ${colors.dim("Modules:")}`);
+      console.log(
+        `    ${colors.dim("HOST")}  → ${runtimeConfig.host.remoteUrl ?? runtimeConfig.host.url ?? "local"}`,
+      );
+      console.log(`    ${colors.dim("UI")}   → ${runtimeConfig.ui.url ?? "local"}`);
+      console.log(`    ${colors.dim("API")}  → ${runtimeConfig.api.url ?? "local"}`);
+      if (runtimeConfig.auth) {
+        console.log(`    ${colors.dim("AUTH")}  → ${runtimeConfig.auth.url ?? "local"}`);
+      }
+      if (warnings.length > 0) {
+        console.log();
+        for (const w of warnings) {
+          console.log(`  ${colors.yellow(w)}`);
+        }
+      }
+      console.log();
 
       const orchestrator: AppOrchestrator = {
         packages: ["host"],
