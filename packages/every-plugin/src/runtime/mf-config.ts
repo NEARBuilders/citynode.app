@@ -66,7 +66,9 @@ export interface AppSharedDepConfig {
 
 export type AppSharedDeps = Record<string, AppSharedDepConfig>;
 
-export function buildMergedSharedDeps(appShared?: AppSharedDeps): Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> {
+export function buildMergedSharedDeps(
+  appShared?: AppSharedDeps,
+): Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> {
   const merged: Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> = {};
 
   for (const [name, config] of Object.entries(MF_CORE_SHARED_DEPS)) {

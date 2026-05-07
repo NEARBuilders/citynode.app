@@ -1,9 +1,9 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
-import { Context, Effect, Option } from "effect";
+import { Effect } from "effect";
 import type { AnyPlugin } from "../../types";
 import { ModuleFederationError } from "../errors";
-import { type AppSharedDeps, MF_CORE_SHARED_DEPS, type CoreSharedDepName, SHARE_CONFIG } from "../mf-config";
+import { type CoreSharedDepName, MF_CORE_SHARED_DEPS } from "../mf-config";
 import { getNormalizedRemoteName } from "./normalize";
 
 type RemoteModule = (new () => AnyPlugin) | { default: new () => AnyPlugin };
@@ -16,79 +16,63 @@ const coreModuleLoaders: Record<CoreSharedDepName, () => Promise<unknown>> = {
   "@orpc/server": () => import("@orpc/server"),
 };
 
-type SharedConfigEntry = {
-  version: string;
-  get: () => Promise<() => unknown>;
-  shareConfig: typeof SHARE_CONFIG;
-};
-
-function buildSharedConfig(appShared?: AppSharedDeps): Record<string, SharedConfigEntry> {
-  const entries: Record<string, SharedConfigEntry> = {};
-
-  for (const [name, config] of Object.entries(MF_CORE_SHARED_DEPS)) {
-    const loader = coreModuleLoaders[name as CoreSharedDepName];
-    if (!loader) {
-      throw new Error(`Missing core shared module loader for ${name}`);
-    }
-    entries[name] = {
-      version: config.version,
-      get: () => loader().then((mod) => () => mod),
-      shareConfig: config.shareConfig,
-    };
+function buildSharedConfig(): Record<
+  string,
+  {
+    version: string;
+    get: () => Promise<() => unknown>;
+    shareConfig: (typeof MF_CORE_SHARED_DEPS)[CoreSharedDepName]["shareConfig"];
   }
+> {
+  return Object.fromEntries(
+    (
+      Object.entries(MF_CORE_SHARED_DEPS) as [
+        CoreSharedDepName,
+        (typeof MF_CORE_SHARED_DEPS)[CoreSharedDepName],
+      ][]
+    ).map(([name, config]) => {
+      const load = coreModuleLoaders[name];
 
-  if (appShared) {
-    for (const [name, config] of Object.entries(appShared)) {
-      // NOTE: This dynamic import() is RUNTIME-ONLY. It is preserved as-is by
-      // the tsdown bundler (unbundle: true) and resolved by Bun/Node at server
-      // startup. Build-time shared dependencies for rspack are configured
-      // separately in packages/every-plugin/src/build/shared-deps.ts.
-      entries[name] = {
-        version: config.version,
-        get: () => import(name).then((mod) => () => mod),
-        shareConfig: {
-          singleton: (config.singleton ?? true) as true,
-          requiredVersion: (config.requiredVersion ?? false) as false,
-          strictVersion: (config.strictVersion ?? false) as false,
-          eager: (config.eager ?? false) as false,
+      if (!load) {
+        throw new Error(`Missing core shared module loader for ${name}`);
+      }
+
+      return [
+        name,
+        {
+          version: config.version,
+          get: () => load().then((mod) => () => mod),
+          shareConfig: config.shareConfig,
         },
-      };
-    }
-  }
-
-  return entries;
+      ];
+    }),
+  );
 }
 
-export class AppSharedDepsTag extends Context.Tag("every-plugin/AppSharedDeps")<
-  AppSharedDepsTag,
-  AppSharedDeps
->() {}
+const createModuleFederationInstance = Effect.cached(
+  Effect.sync(() => {
+    try {
+      const shared = buildSharedConfig();
+      let instance = getInstance();
 
-const createModuleFederationInstance = Effect.gen(function* () {
-  const appShared = yield* Effect.option(AppSharedDepsTag);
-  const appSharedValue = Option.isSome(appShared) ? appShared.value : undefined;
+      if (!instance) {
+        instance = createInstance({
+          name: "host",
+          remotes: [],
+          shared,
+        });
 
-  try {
-    const shared = buildSharedConfig(appSharedValue);
-    let instance = getInstance();
+        setGlobalFederationInstance(instance);
+      } else {
+        instance.registerShared(shared);
+      }
 
-    if (!instance) {
-      instance = createInstance({
-        name: "host",
-        remotes: [],
-        shared,
-      });
-
-      setGlobalFederationInstance(instance);
-    } else {
-      instance.registerShared(shared);
+      return instance;
+    } catch (error) {
+      throw new Error(`Failed to initialize Module Federation: ${error}`);
     }
-
-    return instance;
-  } catch (error) {
-    throw new Error(`Failed to initialize Module Federation: ${error}`);
-  }
-}).pipe(Effect.cached);
+  }),
+);
 
 export class ModuleFederationService extends Effect.Service<ModuleFederationService>()(
   "ModuleFederationService",

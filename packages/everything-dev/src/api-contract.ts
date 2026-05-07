@@ -175,7 +175,12 @@ async function resolveContractSource(opts: {
     }
   }
 
-  if (opts.source && "localPath" in opts.source && opts.source.localPath != null && opts.source.localPath !== "") {
+  if (
+    opts.source &&
+    "localPath" in opts.source &&
+    opts.source.localPath != null &&
+    opts.source.localPath !== ""
+  ) {
     return {
       key: opts.key,
       importName: `${sanitizeIdentifier(opts.key)}Contract`,

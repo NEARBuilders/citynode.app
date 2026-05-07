@@ -1,7 +1,7 @@
-import * as p from "@clack/prompts";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import * as p from "@clack/prompts";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
@@ -974,8 +974,12 @@ export default createPlugin({
       }
 
       if (missingSecrets.length > 0) {
-        console.warn(`[Start] Missing ${missingSecrets.length} required secret(s): ${missingSecrets.join(", ")}`);
-        console.warn(`[Start] Auth endpoints and database connections may fail without these secrets.`);
+        console.warn(
+          `[Start] Missing ${missingSecrets.length} required secret(s): ${missingSecrets.join(", ")}`,
+        );
+        console.warn(
+          `[Start] Auth endpoints and database connections may fail without these secrets.`,
+        );
       }
 
       const services = buildServiceDescriptorMap(runtimeConfig);

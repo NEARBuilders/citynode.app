@@ -1,8 +1,10 @@
+import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
+import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { createPluginRuntime } from "every-plugin";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
-import type { RuntimeConfig } from "everything-dev/types";
+import type { RuntimeConfig, SharedConfig } from "everything-dev/types";
 import { ConfigService } from "./config";
 import { PluginError } from "./errors";
 
@@ -63,6 +65,72 @@ function formatError(error: unknown): string {
     return JSON.stringify(error);
   }
   return String(error);
+}
+
+/**
+ * Pre-registers app-specific shared dependencies in the Module Federation runtime.
+ * This runs in the host scope where packages like drizzle-orm and better-auth are
+ * resolvable, before every-plugin initializes its own core-only MF instance.
+ */
+async function registerAppSharedDeps(
+  appShared: Record<string, SharedConfig> | undefined,
+): Promise<void> {
+  if (!appShared || Object.keys(appShared).length === 0) return;
+
+  const sharedEntries: Record<
+    string,
+    {
+      version: string;
+      get: () => Promise<() => unknown>;
+      shareConfig: {
+        singleton: true;
+        requiredVersion: false;
+        strictVersion: false;
+        eager: false;
+      };
+    }
+  > = {};
+
+  for (const [name, config] of Object.entries(appShared)) {
+    try {
+      // Import from host scope — this is where app-specific deps are installed
+      const mod = await import(name);
+      sharedEntries[name] = {
+        version: config.version,
+        get: () => Promise.resolve(() => mod),
+        shareConfig: {
+          singleton: true,
+          requiredVersion: false,
+          strictVersion: false,
+          eager: false,
+        },
+      };
+    } catch (error) {
+      console.error(`[Plugins] Failed to preload shared dependency ${name}: ${formatError(error)}`);
+      throw new Error(
+        `Shared dependency "${name}" is configured in bos.config.json but could not be resolved. ` +
+          `Ensure it is installed in the host workspace.`,
+      );
+    }
+  }
+
+  let instance = getInstance();
+  if (!instance) {
+    instance = createInstance({
+      name: "host",
+      remotes: [],
+      shared: sharedEntries,
+    });
+    setGlobalFederationInstance(instance);
+    console.log(
+      `[Plugins] Pre-registered ${Object.keys(sharedEntries).length} app-specific shared dep(s)`,
+    );
+  } else {
+    instance.registerShared(sharedEntries);
+    console.log(
+      `[Plugins] Augmented existing MF instance with ${Object.keys(sharedEntries).length} app-specific shared dep(s)`,
+    );
+  }
 }
 
 const unavailableResult = (
@@ -186,12 +254,14 @@ export const initializePlugins = Effect.gen(function* () {
 
       const integrityRegistry = new IntegrityRegistry();
 
+      // Pre-register app-specific shared deps in host scope before every-plugin initializes
+      await registerAppSharedDeps(config.shared?.plugins);
+
       const runtime = createPluginRuntime({
         registry: Object.fromEntries(
           allEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
         ),
         secrets: {},
-        shared: config.shared?.plugins,
       });
 
       const mfInstance = (runtime as any).__mfInstance as any | undefined;

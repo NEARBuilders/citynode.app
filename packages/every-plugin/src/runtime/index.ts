@@ -257,7 +257,7 @@ export function createPluginRuntime<TRegistry extends Record<string, PluginRegis
   const normalizedRegistry = normalizeRegistry(config.registry);
   const pluginMap = extractPluginMap(config.registry);
 
-  const layer = PluginService.Live(normalizedRegistry, secrets, pluginMap, config.shared);
+  const layer = PluginService.Live(normalizedRegistry, secrets, pluginMap);
   const runtime = ManagedRuntime.make(layer);
 
   return new PluginRuntime(runtime, normalizedRegistry) as PluginRuntime<

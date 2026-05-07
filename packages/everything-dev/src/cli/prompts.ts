@@ -1,5 +1,5 @@
-import * as p from "@clack/prompts";
 import process from "node:process";
+import * as p from "@clack/prompts";
 
 function parseExtendsRef(ref: string): { account: string; gateway: string } | null {
   const match = ref.match(/^(?:bos:\/\/)?([^/]+)\/(.+)$/);
@@ -85,7 +85,7 @@ export async function promptInitOptions(input: {
 
   if (p.isCancel(account)) process.exit(0);
 
-  const directory = input.directory || (domain || extendsGateway);
+  const directory = input.directory || domain || extendsGateway;
 
   const plugins =
     input.plugins ??
