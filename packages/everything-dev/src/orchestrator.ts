@@ -307,7 +307,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       Effect.gen(function* () {
         const exitCode = yield* proc.exitCode;
         const currentStatus = yield* Ref.get(statusRef);
-        if (currentStatus === "ready") return;
+        if (currentStatus === "ready" || currentStatus === "error") return;
         callbacks.onLog(name, `Process exited before ready (exit code: ${exitCode})`, true);
         yield* Ref.set(statusRef, "error");
         callbacks.onStatus(name, "error");
@@ -329,7 +329,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         callbacks.onLog(name, line, looksLikeError);
 
         const currentStatus = yield* Ref.get(statusRef);
-        if (currentStatus === "ready") return;
+        if (currentStatus === "ready" || currentStatus === "error") return;
 
         const detected = detectStatus(line, descriptor);
         if (detected) {

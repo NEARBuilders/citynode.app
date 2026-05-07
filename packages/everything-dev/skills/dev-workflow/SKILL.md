@@ -51,6 +51,30 @@ The orchestrator:
 - **API changes**: Rspack HMR — instant at :3001, no rebuild
 - **Config changes**: Require host restart (`bos kill && bos dev --host remote`)
 
+## Contract Sync & Type Generation
+
+Plugin types are auto-generated from `bos.config.json` via `bun run sync:api-contract`:
+
+```bash
+bun run sync:api-contract   # Regenerate ui/src/api-contract.gen.ts and api/src/plugins-client.gen.ts
+```
+
+**When it auto-runs:**
+- `bun install` (postinstall hook)
+- `bun typecheck`
+- `bos dev` startup
+- `bos build`, `bos deploy`, `bos publish`
+- `bos pluginAdd` / `bos pluginRemove`
+
+**How plugin types are resolved:**
+1. `local:plugins/<name>` → reads `src/contract.ts` directly from disk
+2. Remote URL → fetches contract types from the deployed plugin's manifest
+3. Missing local path with no URL → skipped with a warning
+
+**Source of truth:** `bos.config.json`. If a plugin is listed there, its routes appear on `ApiContract`. If removed, TypeScript catches stale usage.
+
+**After hand-editing `bos.config.json`:** Run `bun run sync:api-contract` or restart `bos dev` to pick up changes.
+
 ## Runtime Config Loading
 
 The host reads `BOS_RUNTIME_CONFIG` at startup (resolved from `bos.config.json` by the CLI). `ConfigService` is an immutable Effect Layer — every service is built from that one snapshot.
