@@ -107,8 +107,8 @@
     "effect": "catalog:",
     "zod": "catalog:",
     "@opentelemetry/api": "catalog:",
-    "every-plugin": "catalog:",
-    "everything-dev": "^1.6.0"
+    "every-plugin": "workspace:*",
+    "everything-dev": "workspace:*"
   },
   "overrides": {
     "axios": "1.13.6",
