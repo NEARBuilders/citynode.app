@@ -175,6 +175,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
           }
 
           formatORPCError(error);
+          throw error;
         }),
       );
       const router = config.createRouter(deps, builder as any);

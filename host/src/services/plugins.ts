@@ -362,7 +362,7 @@ export const initializePlugins = Effect.gen(function* () {
   Effect.catchAll((error) => {
     const pluginName = error instanceof PluginError ? error.pluginName : null;
     const pluginUrl = error instanceof PluginError ? error.pluginUrl : null;
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = formatError(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
 
     console.error("[Plugins] ❌ Failed to initialize plugin");

@@ -5,6 +5,7 @@ export interface RouterMount {
   title: string;
   suffix: `/${string}` | "";
   router: unknown;
+  available: boolean;
 }
 
 function encodePathKey(key: string): string {
@@ -26,14 +27,17 @@ export function createRouterMounts(plugins: PluginResult): RouterMount[] {
       title: plugin.name,
       suffix: `/${encodePathKey(key)}`,
       router: plugin.router,
+      available: true,
     });
   }
 
+  const apiAvailable = Boolean(plugins.api?.router);
   mounts.push({
     key: "api",
     title: plugins.api?.name ?? "api",
     suffix: "",
     router: plugins.api?.router ?? {},
+    available: apiAvailable,
   });
 
   return mounts;
