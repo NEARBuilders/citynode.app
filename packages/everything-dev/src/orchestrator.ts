@@ -295,11 +295,6 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
               yield* markReady;
               return;
             }
-            const tcpOk = yield* probeTcpOpen(port);
-            if (tcpOk) {
-              yield* markReady;
-              return;
-            }
             yield* Effect.sleep("200 millis");
           }
         }),
