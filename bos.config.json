@@ -34,23 +34,28 @@
   "plugins": {
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-2908-every-plugin-template-everythin-237f2296a-ze.zephyrcloud.app",
-      "integrity": "sha384-cw63FcYzzpBFlPsWoA6sXtvJbk+BA0Xy/X5IVJPHRpGrLqqHQSqfm9n8D4RQgLok",
-      "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"]
+      "production": "https://elliot-braem-2928-every-plugin-template-everythin-a85325f23-ze.zephyrcloud.app",
+      "integrity": "sha384-pBVEbsXNvNWj4d00RvYnO06krai1f021+1c2xgLr9+mJwDJPuYKHGiilIGJqytdj",
+      "routes": [
+        "ui/src/routes/_layout/_authenticated/settings.tsx"
+      ]
     },
     "registry": {
       "development": "local:plugins/registry",
-      "production": "https://elliot-braem-2880-everything-dev-registry-plugin--4093ad210-ze.zephyrcloud.app",
-      "integrity": "sha384-6BnwKKB3NZB82gOt7PbyOQ769acJzszqGHFwVKbzrvLSAPZQ3rx14uiRTRn8iWdg",
+      "production": "https://elliot-braem-2929-everything-dev-registry-plugin--f3d6a61b5-ze.zephyrcloud.app",
+      "integrity": "sha384-9mQ3kXsyfpQydOvUblY/9djCnqtT7CwQl/WunM4uBXSet3R+LrVQsjoZ08FIquS9",
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
-      "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"]
+      "routes": [
+        "ui/src/routes/_layout/apps/**",
+        "ui/src/routes/_layout/about.tsx"
+      ]
     },
     "projects": {
       "development": "local:plugins/projects",
-      "production": "https://elliot-braem-2881-everything-dev-projects-plugin--17cfc6347-ze.zephyrcloud.app",
-      "integrity": "sha384-JPSNoEDISL7/kqURYfD/o1u5pt6pKph0lcCZm2E7bHpDJnlpXbHsuoAGiNGh1To+",
+      "production": "https://elliot-braem-2930-everything-dev-projects-plugin--bff3568e5-ze.zephyrcloud.app",
+      "integrity": "sha384-2Q2IVGKBQ2S/jMwYr8L3ci8lKA6jJ6RhbJU9+65MC8TVMXS0SlsJKC3WeQkN9piE",
       "routes": [
         "ui/src/routes/_layout/_authenticated/organizations/**",
         "ui/src/routes/_layout/_authenticated/projects/**",
@@ -59,23 +64,25 @@
     },
     "opencode": {
       "development": "local:plugins/opencode",
-      "production": "https://elliot-braem-2882-everything-dev-opencode-plugin--c49e169ca-ze.zephyrcloud.app",
-      "integrity": "sha384-2r8LcfUNeNH/HXrDyeiZhF/Lf8BnGAdCC4qTVRnBftCqysnJmEcW4ozDo7JK0b7u",
-      "routes": ["ui/src/routes/_layout/_authenticated/_admin/**"]
+      "production": "https://elliot-braem-2931-everything-dev-opencode-plugin--1f9d31233-ze.zephyrcloud.app",
+      "integrity": "sha384-iXyrmUjDK8Z1r+4LQPNPJVc8xHoCE2DqhLyGM2OI4LWOwiEyNBoqCblHA9vGuh+N",
+      "routes": [
+        "ui/src/routes/_layout/_authenticated/_admin/**"
+      ]
     }
   },
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-2921-host-everything-dev-nearbuilder-5190a1c50-ze.zephyrcloud.app",
-      "integrity": "sha384-uJXxzAVfGaBs1QDvPocXJhgjwaRBBcCPgwhrnH2D+iU4r5EP5E8PnWkhe4p20dRI"
+      "production": "https://elliot-braem-2932-host-everything-dev-nearbuilder-54cb82808-ze.zephyrcloud.app",
+      "integrity": "sha384-pdCwFk2kXIXgIY6WzCBnNgnelr2QioTqQQt8dgG/3iEHCulKk9SyspHtK5t2flzS"
     },
     "ui": {
       "name": "ui",
       "development": "local:ui",
-      "production": "https://elliot-braem-2897-ui-everything-dev-nearbuilders-78c6c3bf2-ze.zephyrcloud.app",
-      "integrity": "sha384-dyWw4yAHbjmYwRrz0U7H23JLR2ifLRYZ2CDeJZCNiEimTDOUt8TOe0AEvvgDX9L/",
-      "ssr": "https://elliot-braem-2898-ui-everything-dev-nearbuilders-dc9c80c4c-ze.zephyrcloud.app"
+      "production": "https://elliot-braem-2925-ui-everything-dev-nearbuilders-225f1321f-ze.zephyrcloud.app",
+      "integrity": "sha384-7ZPUTv7o2EzyVFftBCaqzXHtpLFp3wpuFFmit/PYLm1Alb5jv7510DJW/3KNI5II",
+      "ssr": "https://elliot-braem-2926-ui-everything-dev-nearbuilders-6c928b24e-ze.zephyrcloud.app"
     },
     "api": {
       "name": "api",
@@ -94,7 +101,11 @@
         "hostUrl": "http://localhost:3000",
         "uiUrl": "http://localhost:3003"
       },
-      "secrets": ["AUTH_DATABASE_URL", "AUTH_DATABASE_AUTH_TOKEN", "BETTER_AUTH_SECRET"]
+      "secrets": [
+        "AUTH_DATABASE_URL",
+        "AUTH_DATABASE_AUTH_TOKEN",
+        "BETTER_AUTH_SECRET"
+      ]
     }
   }
 }

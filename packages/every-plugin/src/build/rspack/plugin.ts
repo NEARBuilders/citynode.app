@@ -243,6 +243,7 @@ export class EveryPluginDevServer implements RspackPluginInstance {
       ...compiler.options.resolve.fallback,
       bufferutil: false,
       "utf-8-validate": false,
+      "@opentelemetry/api": false,
     };
   }
 
