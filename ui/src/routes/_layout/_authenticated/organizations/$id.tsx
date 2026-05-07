@@ -511,5 +511,3 @@ function EmptyCard({ label }: { label: string }) {
     </Card>
   );
 }
-
-

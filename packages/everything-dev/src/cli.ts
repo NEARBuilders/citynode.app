@@ -66,7 +66,9 @@ async function warnIfOutdated(client: any, command: string): Promise<void> {
       console.log(colors.dim(`    ${pkg.name}  ${pkg.installed} → ${pkg.latest}`));
     }
     console.log(
-      colors.dim(`    Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`),
+      colors.dim(
+        `    Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`,
+      ),
     );
     console.log();
   } catch {

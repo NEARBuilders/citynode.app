@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
 import { Reorder } from "framer-motion";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { getAuthClient, type SessionData } from "@/app";
 import { Badge, Button } from "@/components";
@@ -166,10 +166,7 @@ function ProjectsList() {
     return (
       <div className="space-y-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-24 border border-border bg-muted/10 animate-pulse rounded-lg"
-          />
+          <div key={i} className="h-24 border border-border bg-muted/10 animate-pulse rounded-lg" />
         ))}
       </div>
     );
@@ -213,7 +210,9 @@ function ProjectsList() {
                 project={project}
                 upvoteCount={project.upvoteCount}
                 isUpvoting={upvoteMutation.isPending && upvoteMutation.variables === project.id}
-                isDownvoting={downvoteMutation.isPending && downvoteMutation.variables === project.id}
+                isDownvoting={
+                  downvoteMutation.isPending && downvoteMutation.variables === project.id
+                }
                 onUpvote={() => upvoteMutation.mutate(project.id)}
                 onDownvote={() => downvoteMutation.mutate(project.id)}
               />

@@ -12,7 +12,7 @@ export const DatabaseLive = (url: string) =>
         const driver = await createDatabaseDriver(url);
         return driver.db;
       }),
-      (db) =>
+      (_db) =>
         Effect.promise(async () => {
           const { createDatabaseDriver } = await import("./index");
           const driver = await createDatabaseDriver(url);

@@ -33,5 +33,7 @@ export const projectApps = pgTable(
     createdByUserId: text("created_by_user_id").notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("project_app_unique").on(table.projectId, table.accountId, table.gatewayId)],
+  (table) => [
+    uniqueIndex("project_app_unique").on(table.projectId, table.accountId, table.gatewayId),
+  ],
 );

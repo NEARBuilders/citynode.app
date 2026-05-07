@@ -80,9 +80,7 @@ export const contract = oc.router({
       }),
     ),
 
-  subscribeUpvotes: oc
-    .route({ method: "GET", path: "/upvotes/stream" })
-    .output(z.unknown()),
+  subscribeUpvotes: oc.route({ method: "GET", path: "/upvotes/stream" }).output(z.unknown()),
 });
 
 export type ContractType = typeof contract;

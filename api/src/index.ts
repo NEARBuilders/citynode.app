@@ -67,9 +67,7 @@ function createUpvoteService(db: any, eventTarget: EventTarget) {
     },
 
     async downvoteThing(thingId: string, userId: string) {
-      await db
-        .delete(upvotes)
-        .where(and(eq(upvotes.thingId, thingId), eq(upvotes.userId, userId)));
+      await db.delete(upvotes).where(and(eq(upvotes.thingId, thingId), eq(upvotes.userId, userId)));
 
       const [result] = await db
         .select({ count: count() })
@@ -102,7 +100,7 @@ function createUpvoteService(db: any, eventTarget: EventTarget) {
       return { thingId, totalCount: result?.count ?? 0 };
     },
 
-    async getUpvoteFeed(limit = 50, cursor?: string) {
+    async getUpvoteFeed(limit = 50, _cursor?: string) {
       const pageLimit = Math.min(limit, 100);
       const records = await db
         .select()
@@ -123,7 +121,7 @@ function createUpvoteService(db: any, eventTarget: EventTarget) {
         meta: {
           total: data.length,
           hasMore,
-          nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
+          nextCursor: hasMore ? (data[data.length - 1]?.id ?? null) : null,
         },
       };
     },
@@ -232,9 +230,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
         const stream = new ReadableStream({
           start(controller) {
-            controller.enqueue(
-              encoder.encode("event: connected\ndata: {}\n\n"),
-            );
+            controller.enqueue(encoder.encode("event: connected\ndata: {}\n\n"));
 
             listener = (e: Event) => {
               const detail = (e as CustomEvent<VoteEventDetail>).detail;

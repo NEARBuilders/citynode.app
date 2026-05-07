@@ -270,7 +270,7 @@ export const ProjectServiceLive = Layer.effect(
               gatewayId: a.gatewayId,
               position: a.position,
               createdByUserId: a.createdByUserId,
-            createdAt: toIsoString(a.createdAt),
+              createdAt: toIsoString(a.createdAt),
             })),
           };
         }),
@@ -431,15 +431,15 @@ export const ProjectServiceLive = Layer.effect(
           );
 
           if (existing) {
-          return {
-            id: existing.id,
-            projectId: existing.projectId,
-            accountId: existing.accountId,
-            gatewayId: existing.gatewayId,
-            position: existing.position,
-            createdByUserId: existing.createdByUserId,
-            createdAt: toIsoString(existing.createdAt),
-          };
+            return {
+              id: existing.id,
+              projectId: existing.projectId,
+              accountId: existing.accountId,
+              gatewayId: existing.gatewayId,
+              position: existing.position,
+              createdByUserId: existing.createdByUserId,
+              createdAt: toIsoString(existing.createdAt),
+            };
           }
 
           const [maxPos] = yield* Effect.promise(() =>
