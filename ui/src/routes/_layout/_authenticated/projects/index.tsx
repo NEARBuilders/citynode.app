@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reorder } from "framer-motion";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { Eye, Globe, Lock, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { getAuthClient, type SessionData } from "@/app";
@@ -56,9 +56,15 @@ function ProjectsList() {
 
   const user = session?.user;
 
+  const walletAddress = (user as { walletAddress?: string | null } | null | undefined)
+    ?.walletAddress;
   const { data: projectsData, isLoading } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => apiClient.projects.listProjects({ ownerId: user?.id, limit: 50 }),
+    queryFn: () =>
+      apiClient.projects.listProjects({
+        ownerId: walletAddress ?? user?.id,
+        limit: 50,
+      }),
     enabled: !!user,
   });
 
@@ -182,7 +188,10 @@ function ProjectsList() {
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/projects/new">+ New Project</Link>
+          <Link to="/projects/new">
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            New Project
+          </Link>
         </Button>
       </div>
 
@@ -268,7 +277,14 @@ function ProjectCard({
           >
             {project.status}
           </Badge>
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-[10px] flex items-center gap-1">
+            {project.visibility === "public" ? (
+              <Globe className="h-2.5 w-2.5" />
+            ) : project.visibility === "unlisted" ? (
+              <Eye className="h-2.5 w-2.5" />
+            ) : (
+              <Lock className="h-2.5 w-2.5" />
+            )}
             {project.visibility}
           </Badge>
         </div>
@@ -293,7 +309,7 @@ function ProjectCard({
           onClick={onUpvote}
           disabled={isUpvoting}
         >
-          <ArrowUp className="h-4 w-4" />
+          <TrendingUp className="h-4 w-4" />
         </Button>
         <span className="text-sm font-bold tabular-nums text-foreground leading-none py-0.5">
           {upvoteCount}
@@ -305,7 +321,7 @@ function ProjectCard({
           onClick={onDownvote}
           disabled={isDownvoting}
         >
-          <ArrowDown className="h-4 w-4" />
+          <TrendingDown className="h-4 w-4" />
         </Button>
       </div>
     </div>

@@ -63,8 +63,7 @@ export const contract = oc.router({
               id: z.string(),
               projectId: z.string(),
               accountId: z.string(),
-              gatewayId: z.string(),
-              position: z.number().int(),
+              domain: z.string(),
               createdByUserId: z.string(),
               createdAt: z.iso.datetime(),
             }),
@@ -152,8 +151,7 @@ export const contract = oc.router({
             id: z.string(),
             projectId: z.string(),
             accountId: z.string(),
-            gatewayId: z.string(),
-            position: z.number().int(),
+            domain: z.string(),
             createdByUserId: z.string(),
             createdAt: z.iso.datetime(),
           }),
@@ -168,40 +166,29 @@ export const contract = oc.router({
       z.object({
         projectId: z.string(),
         accountId: z.string(),
-        gatewayId: z.string(),
-      }),
-    )
-    .output(
-      z.object({
-        id: z.string(),
-        projectId: z.string(),
-        accountId: z.string(),
-        gatewayId: z.string(),
-        position: z.number().int(),
-        createdByUserId: z.string(),
-        createdAt: z.iso.datetime(),
+        domain: z.string(),
       }),
     )
     .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
 
   unlinkAppFromProject: oc
-    .route({ method: "DELETE", path: "/v1/projects/{projectId}/apps/{accountId}/{gatewayId}" })
+    .route({ method: "DELETE", path: "/v1/projects/{projectId}/apps/{accountId}/{domain}" })
     .input(
       z.object({
         projectId: z.string(),
         accountId: z.string(),
-        gatewayId: z.string(),
+        domain: z.string(),
       }),
     )
     .output(z.object({ deleted: z.boolean() }))
     .errors({ UNAUTHORIZED, NOT_FOUND, FORBIDDEN }),
 
   listProjectsForApp: oc
-    .route({ method: "GET", path: "/v1/apps/{accountId}/{gatewayId}/projects" })
+    .route({ method: "GET", path: "/v1/apps/{accountId}/{domain}/projects" })
     .input(
       z.object({
         accountId: z.string(),
-        gatewayId: z.string(),
+        domain: z.string(),
       }),
     )
     .output(

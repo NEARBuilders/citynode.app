@@ -24,6 +24,7 @@ export interface AuthVariables {
   user: AuthUser | null;
   session: AuthSession | null;
   reqHeaders: Record<string, string>;
+  walletAddress: string | null;
 }
 
 export type HonoEnv = { Variables: AuthVariables };
@@ -59,6 +60,7 @@ export function createSessionMiddleware(plugins: PluginResult) {
     if (!authApi) {
       c.set("user", null);
       c.set("session", null);
+      c.set("walletAddress", null);
       await next();
       return;
     }
@@ -68,12 +70,14 @@ export function createSessionMiddleware(plugins: PluginResult) {
       const sessionResult = await authApi.getSession({ headers });
       c.set("user", sessionResult?.user ?? null);
       c.set("session", sessionResult?.session ?? null);
+      c.set("walletAddress", sessionResult?.user?.walletAddress ?? null);
     } catch (error) {
       console.warn(
         `[Auth] Session resolution failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       c.set("user", null);
       c.set("session", null);
+      c.set("walletAddress", null);
     }
 
     await next();
@@ -83,10 +87,12 @@ export function createSessionMiddleware(plugins: PluginResult) {
 export function buildPluginContext(c: Context<HonoEnv>) {
   const user = c.get("user");
   const session = c.get("session");
+  const walletAddress = c.get("walletAddress");
 
   return {
     userId: user?.id,
     user: user ?? undefined,
+    walletAddress: walletAddress ?? undefined,
     organizationId: session?.activeOrganizationId ?? undefined,
     reqHeaders: c.get("reqHeaders"),
   };

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Github, Pencil, Trash } from "lucide-react";
+import { ExternalLink, Github, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -151,7 +151,9 @@ function ProjectDetailPage() {
   }
 
   const project = projectQuery.data.data;
-  const isOwner = session?.user?.id === project.ownerId;
+  const walletAddress = (session?.user as { walletAddress?: string | null } | null | undefined)
+    ?.walletAddress;
+  const isOwner = (walletAddress ?? session?.user?.id) === project.ownerId;
 
   return (
     <div className="space-y-8">
@@ -182,7 +184,7 @@ function ProjectDetailPage() {
                 }}
                 disabled={deleteMutation.isPending}
               >
-                <Trash className="h-3.5 w-3.5 mr-1" />
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
                 delete
               </Button>
             </div>
@@ -346,15 +348,17 @@ function ProjectDetailPage() {
 
             <div className="grid gap-3 text-xs font-mono text-muted-foreground">
               <div className="grid gap-1 sm:grid-cols-[140px_1fr] sm:gap-4">
-                <span className="uppercase tracking-wide">id</span>
-                <span className="break-all">{project.id}</span>
-              </div>
-              <div className="grid gap-1 sm:grid-cols-[140px_1fr] sm:gap-4">
-                <span className="uppercase tracking-wide">slug</span>
+                <span className="uppercase tracking-wide flex items-center gap-1.5">
+                  <LinkIcon className="h-3 w-3" />
+                  slug
+                </span>
                 <span className="break-all">{project.slug}</span>
               </div>
               <div className="grid gap-1 sm:grid-cols-[140px_1fr] sm:gap-4">
-                <span className="uppercase tracking-wide">owner</span>
+                <span className="uppercase tracking-wide flex items-center gap-1.5">
+                  <ExternalLink className="h-3 w-3" />
+                  owner
+                </span>
                 <span className="break-all">{project.ownerId}</span>
               </div>
               {project.organizationId && (

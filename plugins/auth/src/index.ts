@@ -144,6 +144,16 @@ export default createPlugin({
         const session = await services.auth.api.getSession({ headers });
         const s = session?.session ?? null;
         const u = session?.user ?? null;
+
+        let walletAddress: string | null = null;
+        if (u?.id) {
+          const nearAccounts = await services.db.query.nearAccount.findMany({
+            where: eq(schema.nearAccount.userId, u.id),
+          });
+          const primary = nearAccounts.find((acc) => acc.isPrimary) ?? nearAccounts[0];
+          walletAddress = primary?.accountId ?? null;
+        }
+
         return {
           session: s
             ? {
@@ -163,6 +173,7 @@ export default createPlugin({
                 image: u.image ?? null,
                 role: u.role ?? null,
                 isAnonymous: (u as UserWithAnonymous).isAnonymous ?? null,
+                walletAddress,
               }
             : null,
         };

@@ -31,8 +31,7 @@ export interface ProjectApp {
   id: string;
   projectId: string;
   accountId: string;
-  gatewayId: string;
-  position: number;
+  domain: string;
   createdByUserId: string;
   createdAt: string;
 }
@@ -104,20 +103,20 @@ export class ProjectService extends Context.Tag("projects/ProjectService")<
     linkAppToProject: (
       projectId: string,
       accountId: string,
-      gatewayId: string,
+      domain: string,
       userId: string,
     ) => Effect.Effect<ProjectApp, ORPCError<string, unknown>>;
 
     unlinkAppFromProject: (
       projectId: string,
       accountId: string,
-      gatewayId: string,
+      domain: string,
       userId: string,
     ) => Effect.Effect<{ deleted: boolean }, ORPCError<string, unknown>>;
 
     listProjectsForApp: (
       accountId: string,
-      gatewayId: string,
+      domain: string,
       userId?: string,
     ) => Effect.Effect<Project[], ORPCError<string, unknown>>;
   }
@@ -205,9 +204,11 @@ export const ProjectServiceLive = Layer.effect(
               .limit(limit),
           );
 
-          const filtered = userId
-            ? records
-            : records.filter((p: any) => p.visibility === "public" || p.visibility === "unlisted");
+          const filtered = records.filter((p: any) => {
+            if (p.visibility === "public" || p.visibility === "unlisted") return true;
+            if (userId && p.ownerId === userId) return true;
+            return false;
+          });
 
           const data: Project[] = filtered.map((p: any) => ({
             id: p.id,
@@ -253,7 +254,7 @@ export const ProjectServiceLive = Layer.effect(
               .select()
               .from(projectApps)
               .where(eq(projectApps.projectId, id))
-              .orderBy(projectApps.position),
+              .orderBy(projectApps.createdAt),
           );
 
           return {
@@ -272,8 +273,7 @@ export const ProjectServiceLive = Layer.effect(
               id: a.id,
               projectId: a.projectId,
               accountId: a.accountId,
-              gatewayId: a.gatewayId,
-              position: a.position,
+              domain: a.domain,
               createdByUserId: a.createdByUserId,
               createdAt: toIsoString(a.createdAt),
             })),
@@ -400,21 +400,20 @@ export const ProjectServiceLive = Layer.effect(
               .select()
               .from(projectApps)
               .where(eq(projectApps.projectId, projectId))
-              .orderBy(projectApps.position),
+              .orderBy(projectApps.createdAt),
           );
 
           return apps.map((a: any) => ({
             id: a.id,
             projectId: a.projectId,
             accountId: a.accountId,
-            gatewayId: a.gatewayId,
-            position: a.position,
+            domain: a.domain,
             createdByUserId: a.createdByUserId,
             createdAt: toIsoString(a.createdAt),
           }));
         }),
 
-      linkAppToProject: (projectId, accountId, gatewayId, userId) =>
+      linkAppToProject: (projectId, accountId, domain, userId) =>
         Effect.gen(function* () {
           const canEdit = yield* canEditProject(db, projectId, userId);
           if (!canEdit) {
@@ -433,7 +432,7 @@ export const ProjectServiceLive = Layer.effect(
                 and(
                   eq(projectApps.projectId, projectId),
                   eq(projectApps.accountId, accountId),
-                  eq(projectApps.gatewayId, gatewayId),
+                  eq(projectApps.domain, domain),
                 ),
               )
               .limit(1),
@@ -444,21 +443,12 @@ export const ProjectServiceLive = Layer.effect(
               id: existing.id,
               projectId: existing.projectId,
               accountId: existing.accountId,
-              gatewayId: existing.gatewayId,
-              position: existing.position,
+              domain: existing.domain,
               createdByUserId: existing.createdByUserId,
               createdAt: toIsoString(existing.createdAt),
             };
           }
 
-          const [maxPos] = yield* Effect.promise(() =>
-            db
-              .select({ max: count() })
-              .from(projectApps)
-              .where(eq(projectApps.projectId, projectId)),
-          );
-
-          const position = (maxPos?.max ?? 0) + 1;
           const now = new Date();
           const id = generateProjectAppId();
 
@@ -467,8 +457,7 @@ export const ProjectServiceLive = Layer.effect(
               id,
               projectId,
               accountId,
-              gatewayId,
-              position,
+              domain,
               createdByUserId: userId,
               createdAt: now,
             }),
@@ -478,14 +467,13 @@ export const ProjectServiceLive = Layer.effect(
             id,
             projectId,
             accountId,
-            gatewayId,
-            position,
+            domain,
             createdByUserId: userId,
             createdAt: toIsoString(now),
           };
         }),
 
-      unlinkAppFromProject: (projectId, accountId, gatewayId, userId) =>
+      unlinkAppFromProject: (projectId, accountId, domain, userId) =>
         Effect.gen(function* () {
           const canEdit = yield* canEditProject(db, projectId, userId);
           if (!canEdit) {
@@ -503,7 +491,7 @@ export const ProjectServiceLive = Layer.effect(
                 and(
                   eq(projectApps.projectId, projectId),
                   eq(projectApps.accountId, accountId),
-                  eq(projectApps.gatewayId, gatewayId),
+                  eq(projectApps.domain, domain),
                 ),
               ),
           );
@@ -511,24 +499,22 @@ export const ProjectServiceLive = Layer.effect(
           return { deleted: true };
         }),
 
-      listProjectsForApp: (accountId, gatewayId, userId) =>
+      listProjectsForApp: (accountId, domain, userId) =>
         Effect.gen(function* () {
           const results = yield* Effect.promise(() =>
             db
               .select({ project: projects })
               .from(projectApps)
               .innerJoin(projects, eq(projectApps.projectId, projects.id))
-              .where(
-                and(eq(projectApps.accountId, accountId), eq(projectApps.gatewayId, gatewayId)),
-              ),
+              .where(and(eq(projectApps.accountId, accountId), eq(projectApps.domain, domain))),
           );
 
-          const filtered = userId
-            ? results
-            : results.filter(
-                (r: any) =>
-                  r.project.visibility === "public" || r.project.visibility === "unlisted",
-              );
+          const filtered = results.filter((r: any) => {
+            if (r.project.visibility === "public" || r.project.visibility === "unlisted")
+              return true;
+            if (userId && r.project.ownerId === userId) return true;
+            return false;
+          });
 
           return filtered.map((r: any) => ({
             id: r.project.id,

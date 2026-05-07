@@ -15,6 +15,7 @@ export default createPlugin({
 
   context: z.object({
     userId: z.string().optional(),
+    walletAddress: z.string().optional(),
     user: z
       .object({
         id: z.string(),
@@ -55,6 +56,7 @@ export default createPlugin({
       return next({
         context: {
           userId: context.userId,
+          walletAddress: context.walletAddress,
           user: context.user,
           reqHeaders: context.reqHeaders,
         },
@@ -62,8 +64,9 @@ export default createPlugin({
     });
 
     return {
-      listProjects: builder.listProjects.handler(async ({ input }) => {
-        const exit = await Effect.runPromiseExit(services.project.listProjects(input));
+      listProjects: builder.listProjects.handler(async ({ input, context }) => {
+        const ownerId = context.walletAddress ?? context.userId;
+        const exit = await Effect.runPromiseExit(services.project.listProjects(input, ownerId));
 
         if (Exit.isFailure(exit)) {
           const squashed = Cause.squash(exit.cause);
@@ -76,8 +79,9 @@ export default createPlugin({
         return exit.value;
       }),
 
-      getProject: builder.getProject.handler(async ({ input, errors }) => {
-        const exit = await Effect.runPromiseExit(services.project.getProject(input.id));
+      getProject: builder.getProject.handler(async ({ input, errors, context }) => {
+        const ownerId = context.walletAddress ?? context.userId;
+        const exit = await Effect.runPromiseExit(services.project.getProject(input.id, ownerId));
 
         if (Exit.isFailure(exit)) {
           const squashed = Cause.squash(exit.cause);
@@ -98,9 +102,8 @@ export default createPlugin({
       }),
 
       createProject: builder.createProject.use(requireAuth).handler(async ({ input, context }) => {
-        const exit = await Effect.runPromiseExit(
-          services.project.createProject(input, context.userId),
-        );
+        const ownerId = context.walletAddress ?? context.userId;
+        const exit = await Effect.runPromiseExit(services.project.createProject(input, ownerId));
 
         if (Exit.isFailure(exit)) {
           const squashed = Cause.squash(exit.cause);
@@ -117,7 +120,11 @@ export default createPlugin({
         .use(requireAuth)
         .handler(async ({ input, context, errors }) => {
           const exit = await Effect.runPromiseExit(
-            services.project.updateProject(input.id, input, context.userId),
+            services.project.updateProject(
+              input.id,
+              input,
+              context.walletAddress ?? context.userId,
+            ),
           );
 
           if (Exit.isFailure(exit)) {
@@ -143,7 +150,7 @@ export default createPlugin({
         .use(requireAuth)
         .handler(async ({ input, context, errors }) => {
           const exit = await Effect.runPromiseExit(
-            services.project.deleteProject(input.id, context.userId),
+            services.project.deleteProject(input.id, context.walletAddress ?? context.userId),
           );
 
           if (Exit.isFailure(exit)) {
@@ -186,8 +193,8 @@ export default createPlugin({
             services.project.linkAppToProject(
               input.projectId,
               input.accountId,
-              input.gatewayId,
-              context.userId,
+              input.domain,
+              context.walletAddress ?? context.userId,
             ),
           );
 
@@ -217,8 +224,8 @@ export default createPlugin({
             services.project.unlinkAppFromProject(
               input.projectId,
               input.accountId,
-              input.gatewayId,
-              context.userId,
+              input.domain,
+              context.walletAddress ?? context.userId,
             ),
           );
 
@@ -243,7 +250,7 @@ export default createPlugin({
 
       listProjectsForApp: builder.listProjectsForApp.handler(async ({ input }) => {
         const exit = await Effect.runPromiseExit(
-          services.project.listProjectsForApp(input.accountId, input.gatewayId),
+          services.project.listProjectsForApp(input.accountId, input.domain),
         );
 
         if (Exit.isFailure(exit)) {

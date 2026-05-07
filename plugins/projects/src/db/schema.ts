@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const projects = pgTable(
   "projects",
@@ -29,12 +29,9 @@ export const projectApps = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     accountId: text("account_id").notNull(),
-    gatewayId: text("gateway_id").notNull(),
-    position: integer("position").notNull().default(0),
+    domain: text("domain").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    uniqueIndex("project_app_unique").on(table.projectId, table.accountId, table.gatewayId),
-  ],
+  (table) => [uniqueIndex("project_app_unique").on(table.projectId, table.accountId, table.domain)],
 );

@@ -34,7 +34,7 @@ function AppDetailPage() {
   });
   const projectsQuery = useQuery({
     queryKey: ["app-projects", accountId, gatewayId],
-    queryFn: () => apiClient.projects.listProjectsForApp({ accountId, gatewayId }),
+    queryFn: () => apiClient.projects.listProjectsForApp({ accountId, domain: gatewayId }),
   });
   const registryStatusQuery = useQuery({
     queryKey: ["registry-status"],
