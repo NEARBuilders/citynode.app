@@ -24,6 +24,36 @@ import { writeSnapshot } from "./snapshot";
 
 const require = createRequire(import.meta.url);
 
+const BOS_CONFIG_ORDER = [
+  "extends",
+  "account",
+  "domain",
+  "testnet",
+  "staging",
+  "repository",
+  "app",
+  "plugins",
+  "shared",
+];
+
+function rebuildOrderedConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const ordered: Record<string, unknown> = {};
+
+  for (const key of BOS_CONFIG_ORDER) {
+    if (key in config) {
+      ordered[key] = config[key];
+    }
+  }
+
+  for (const key of Object.keys(config)) {
+    if (!BOS_CONFIG_ORDER.includes(key)) {
+      ordered[key] = config[key];
+    }
+  }
+
+  return ordered;
+}
+
 interface SourceResult {
   sourceDir: string;
   parentConfig: BosConfig;
@@ -313,11 +343,11 @@ export async function personalizeConfig(
       }
 
       if (Object.keys(plugins).length === 0) {
-        delete config.plugins;
+        config.plugins = {};
       }
     }
 
-    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    writeFileSync(configPath, `${JSON.stringify(rebuildOrderedConfig(config), null, 2)}\n`);
   }
 
   const pkgPath = join(destination, "package.json");

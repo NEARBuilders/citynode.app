@@ -103,6 +103,7 @@
     "@orpc/server": "^1.13.14",
     "better-auth": "^1.6.9",
     "drizzle-orm": "^0.45.1",
+    "@electric-sql/pglite": "catalog:",
     "effect": "catalog:",
     "zod": "catalog:",
     "@opentelemetry/api": "catalog:",

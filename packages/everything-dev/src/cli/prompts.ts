@@ -16,10 +16,7 @@ function deriveAccountFromDomain(domain: string, extendsAccount: string): string
   return `${firstSegment}.${suffix}`;
 }
 
-const AVAILABLE_PLUGINS = [
-  { value: "_template", label: "template" },
-  { value: "registry", label: "registry" },
-];
+const AVAILABLE_PLUGINS = [{ value: "_template", label: "template" }];
 
 export async function promptInitOptions(input: {
   extendsAccount?: string;

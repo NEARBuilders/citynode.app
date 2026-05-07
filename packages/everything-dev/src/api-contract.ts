@@ -350,8 +350,10 @@ export async function syncApiContractBridge(opts: {
   }
 
   for (const [key, plugin] of pluginEntries) {
-    if (!plugin.url) {
-      console.warn(`[API Contract] Skipping plugin "${key}" — no URL resolved (local path missing and no production URL configured)`);
+    if (!plugin.url && !plugin.localPath) {
+      console.warn(
+        `[API Contract] Skipping plugin "${key}" — no URL resolved (local path missing and no production URL configured)`,
+      );
       continue;
     }
     const source = await resolveContractSource({

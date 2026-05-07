@@ -23,11 +23,11 @@
     "better-near-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "every-plugin": "workspace:*",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "@electric-sql/pglite": "catalog:"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
-    "@electric-sql/pglite": "^0.4.5",
     "@module-federation/node": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/server": "catalog:",

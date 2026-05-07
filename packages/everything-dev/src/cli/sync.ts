@@ -111,7 +111,9 @@ function mergeBosConfig(
   const TRAIL_GROUP = ["app", "plugins", "shared"];
 
   const localKeys = Object.keys(local).filter((k) => k !== "extends");
-  const templateKeys = Object.keys(template).filter((k) => k !== "extends" && !localKeys.includes(k));
+  const templateKeys = Object.keys(template).filter(
+    (k) => k !== "extends" && !localKeys.includes(k),
+  );
 
   // Find the first trailing-group key present locally ("app" comes first in the group)
   const firstTrailIndex = localKeys.findIndex((k) => TRAIL_GROUP.includes(k));
