@@ -403,7 +403,7 @@ export async function personalizeConfig(
       }
       if (scripts.typecheck) {
         scripts.typecheck = scripts.typecheck
-          .replace("bun types gen && ", "")
+          .replace("bun run types:gen && ", "")
           .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
         if (!opts.withHost) {
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
