@@ -42,7 +42,8 @@
       "@module-federation/rsbuild-plugin": "^2.3.2",
       "@module-federation/runtime-core": "^2.3.2",
       "@module-federation/sdk": "^2.3.2",
-      "@module-federation/dts-plugin": "^2.3.2"
+      "@module-federation/dts-plugin": "^2.3.2",
+      "@tanstack/intent": "^0.0.40"
     }
   },
   "scripts": {

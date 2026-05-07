@@ -45,6 +45,11 @@ jobs:
       - name: Run typecheck
         run: bun typecheck
 
+      - name: Validate intent skills
+        run: |
+          bunx @tanstack/intent@latest validate packages/every-plugin
+          bunx @tanstack/intent@latest validate packages/everything-dev
+
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest

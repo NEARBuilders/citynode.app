@@ -23,20 +23,25 @@ The default template comes from `every.near/everything.dev` published in the Fas
 Keep your project in sync with the root template:
 
 ```bash
-# Update from every.near/everything.dev (default)
-bos update
+# Upgrade every-plugin and everything-dev in all workspaces, then sync
+bos upgrade
 
-# Update from a specific account/gateway
-bos update --account other.near --gateway other-gateway.com
+# Or sync only (no version upgrades)
+bos sync
+
+# Sync from a specific account/gateway
+bos sync --account other.near --gateway other-gateway.com
 
 # Force update (even if versions match)
-bos update --force
+bos sync --force
 
 # Install updated dependencies
 bun install
 ```
 
-What gets synced from remote:
+**`bos upgrade`** bumps `every-plugin` and `everything-dev` in **all workspace `package.json`s**, not just the root. It also updates `peerDependencies` and `workspaces.catalog` while correctly skipping `workspace:*` and `catalog:` references.
+
+**`bos sync`** pulls from remote. What gets synced:
 - `app.*.production` - Zephyr production URLs
 - `app.*.ssr` - SSR URLs
 - `app.*.template` - package templates
@@ -127,10 +132,10 @@ Your config is now at: `{account}/bos/gateways/{gateway}/bos.config.json`
 
 ### 2. Others Update
 
-Now others can update from your published config:
+Now others can sync from your published config:
 
 ```bash
-bos update --account your.near --gateway your-gateway.com
+bos sync --account your.near --gateway your-gateway.com
 ```
 
 ### Build Only

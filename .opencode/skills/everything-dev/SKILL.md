@@ -17,13 +17,13 @@ everything.dev is a runtime-composed site on NEAR. A published `bos.config.json`
 │  - Module Federation host                               │
 │  - every-plugin runtime                                │
 └─────────────────────────────────────────────────────────┘
-            ↓                         ↓
-┌───────────────────────┐ ┌───────────────────────┐
-│    UI Remote           │ │    API Plugin          │
-│  - React 19            │ │  - every-plugin         │
-│  - TanStack Router     │ │  - oRPC contract        │
-│  - Module Federation   │ │  - Effect services      │
-└───────────────────────┘ └───────────────────────┘
+            ↓                ↓                ↓
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│    UI Remote       │ │  Auth Plugin     │ │  API Plugin      │
+│  - React 19        │ │  - every-plugin  │ │  - every-plugin  │
+│  - TanStack Router │ │  - Better-Auth   │ │  - oRPC contract │
+│  - Module Fed.     │ │  - NEAR SIWN     │ │  - Effect svc    │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
 Key point: `bos.config.json` is the single source of truth. URLs and composition are loaded at runtime, not baked into a build.
@@ -37,7 +37,7 @@ Key point: `bos.config.json` is the single source of truth. URLs and composition
 5. **On page refresh** — browser re-fetches HTML shell from host, which injects current config; MF container re-initializes from fresh `remoteEntry.js`
 
 This means:
-- **In dev**: file changes hot-reload instantly via HMR at `:3002`
+- **In dev**: file changes hot-reload instantly via HMR at `:3003`
 - **In production**: a new deployment updates `bos.config.json` with new CDN URLs; host restart picks up new config; next refresh loads new UI/API
 
 ### Why restart is needed after deployment
@@ -59,8 +59,9 @@ This is a design choice, not a limitation — production hosts restart via deplo
 # Typical: remote host, local UI + API
 bos dev --host remote
 
-# UI on http://localhost:3002
-# API on http://localhost:3014
+# UI on http://localhost:3003
+# API on http://localhost:3001
+# Auth on http://localhost:3002
 # Host on remote (production URL from bos.config.json)
 
 # Isolate work on UI only (API is remote)
@@ -73,7 +74,7 @@ bos dev --ui remote
 bos dev
 ```
 
-2. Edit files — changes hot-reload at `:3002` with no rebuild
+2. Edit files — changes hot-reload at `:3003` with no rebuild
 3. Run `bun typecheck` to verify types before committing
 
 ### Using opencode
@@ -103,7 +104,7 @@ opencode can also run as an HTTP server for programmatic access:
 
 ```bash
 # Start alongside bos dev
-opencode serve --port 4096 --cors http://localhost:3002
+opencode serve --port 4096 --cors http://localhost:3003
 
 # Available endpoints:
 # POST /session/:id/message  — send a prompt
@@ -164,7 +165,7 @@ After deployment, `bos.config.json` is automatically updated with new Zephyr CDN
 bos dev --host remote
 
 # 2. Edit files (opencode or manual)
-#    changes auto-reload at :3002
+#    changes auto-reload at :3003
 
 # 3. Verify
 bun typecheck

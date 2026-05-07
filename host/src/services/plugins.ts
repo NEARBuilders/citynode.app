@@ -1,6 +1,7 @@
 import { createPluginRuntime } from "every-plugin";
 import { Context, Effect, Layer } from "every-plugin/effect";
-import { verifySriForUrl } from "everything-dev/integrity";
+import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
+import { installIntegrityFetchHook } from "everything-dev/mf";
 import type { RuntimeConfig } from "everything-dev/types";
 import { ConfigService } from "./config";
 import { PluginError } from "./errors";
@@ -84,13 +85,22 @@ function collectSecrets(config: { secrets?: string[] }): Record<string, string> 
   return secretsFromEnv(config.secrets ?? []);
 }
 
+function createSafeClientFactory(
+  rawFactory: (context?: unknown) => any,
+): (context?: unknown) => any {
+  return (_context?: unknown) => {
+    return rawFactory({});
+  };
+}
+
 async function loadPluginEntry(
   runtime: any,
   entry: RuntimePluginEntry,
+  integrityRegistry: IntegrityRegistry,
   pluginsClient?: Record<string, unknown>,
 ): Promise<HostPluginEntry> {
   if (entry.config.integrity) {
-    await verifySriForUrl(entry.config.url, entry.config.integrity);
+    integrityRegistry.registerEntry(entry.config.url, entry.config.integrity);
   }
 
   const variables: Record<string, unknown> = { ...entry.config.variables };
@@ -132,6 +142,19 @@ export const initializePlugins = Effect.gen(function* () {
 
   console.log(`[Plugins] Registering ${registryEntries.length} plugin(s)`);
 
+  if (config.env === "production" && config.account) {
+    const bosUrl = `bos://${config.account}/${config.domain ?? "everything.dev"}`;
+    verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl)
+      .then(({ verified, mismatches }) => {
+        if (!verified) {
+          console.error(
+            `[Attestation] Config integrity does not match on-chain anchor. Mismatches: ${mismatches.join(", ")}`,
+          );
+        }
+      })
+      .catch(() => {});
+  }
+
   const result = yield* Effect.tryPromise({
     try: async () => {
       const allEntries: RuntimePluginEntry[] = [];
@@ -142,12 +165,19 @@ export const initializePlugins = Effect.gen(function* () {
 
       allEntries.push(...registryEntries);
 
+      const integrityRegistry = new IntegrityRegistry();
+
       const runtime = createPluginRuntime({
         registry: Object.fromEntries(
           allEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
         ),
         secrets: {},
       });
+
+      const mfInstance = (runtime as any).__mfInstance as any | undefined;
+      if (mfInstance) {
+        installIntegrityFetchHook(mfInstance, integrityRegistry);
+      }
 
       // Phase 0: Load auth plugin (app-level infrastructure)
       let authPlugin: HostPluginEntry | null = null;
@@ -159,7 +189,7 @@ export const initializePlugins = Effect.gen(function* () {
           config: config.auth,
         };
         try {
-          authPlugin = await loadPluginEntry(runtime, authEntry);
+          authPlugin = await loadPluginEntry(runtime, authEntry, integrityRegistry);
           authClient = authPlugin.createClient;
           console.log(`[Plugins] Auth plugin loaded: ${authPlugin.name}`);
         } catch (error) {
@@ -173,7 +203,7 @@ export const initializePlugins = Effect.gen(function* () {
       const pluginEntries = registryEntries.filter((e) => e.key !== "api");
 
       const pluginResults = await Promise.allSettled(
-        pluginEntries.map((entry) => loadPluginEntry(runtime, entry)),
+        pluginEntries.map((entry) => loadPluginEntry(runtime, entry, integrityRegistry)),
       );
 
       const loadedPlugins: Record<string, HostPluginEntry> = {};
@@ -187,7 +217,7 @@ export const initializePlugins = Effect.gen(function* () {
         if (result.status === "fulfilled") {
           loadedPlugins[key] = result.value;
           loadedPluginKeys.push(key);
-          pluginsClient[key] = result.value.createClient;
+          pluginsClient[key] = createSafeClientFactory(result.value.createClient);
         } else {
           const msg =
             result.reason instanceof Error ? result.reason.message : String(result.reason);
@@ -209,7 +239,7 @@ export const initializePlugins = Effect.gen(function* () {
             apiPluginsClient.auth = authClient;
           }
 
-          baseApi = await loadPluginEntry(runtime, apiEntry, apiPluginsClient);
+          baseApi = await loadPluginEntry(runtime, apiEntry, integrityRegistry, apiPluginsClient);
           loadedPlugins.api = baseApi;
           loadedPluginKeys.unshift("api");
         } catch (error) {

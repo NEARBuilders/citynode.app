@@ -80,7 +80,7 @@ bos dev --ui remote     # Isolate API work
   "app": {
     "api": {
       "name": "api",
-      "development": "http://localhost:3014",
+      "development": "http://localhost:3001",
       "production": "https://example-api.zephyrcloud.app",
       "proxy": "https://example-api.zephyrcloud.app",
       "variables": {},
@@ -113,7 +113,7 @@ bos dev --ui remote     # Isolate API work
 
 ## Scripts
 
-- `bun dev` - Start dev server (port 3014)
+- `bun dev` - Start dev server (port 3001)
 - `bun build` - Build plugin
 - `bun test` - Run tests
 - `bun db:push` - Push schema to database

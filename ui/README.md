@@ -50,6 +50,6 @@ File-based routing with auth guards via TanStack Router:
 
 ## Scripts
 
-- `bun dev` - Start dev server (port 3002)
+- `bun dev` - Start dev server (port 3003)
 - `bun build` - Build for production
 - `bun type-check` - Type checking

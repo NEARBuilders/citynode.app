@@ -19,7 +19,7 @@ import { onError } from "every-plugin/orpc";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
-import { secureHeaders } from "hono/secure-headers";
+import { NONCE, secureHeaders } from "hono/secure-headers";
 import {
   buildPluginContext,
   createSessionMiddleware,
@@ -34,6 +34,7 @@ import {
 } from "./services/federation.server";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
 import { createRouterMounts } from "./services/router";
+import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { logger } from "./utils/logger";
 
 type ActiveRuntimeState = NonNullable<ClientRuntimeConfig["runtime"]>;
@@ -440,7 +441,52 @@ export const createStartServer = (onReady?: () => void) =>
       }),
     );
 
-    app.use("*", secureHeaders({ crossOriginOpenerPolicy: "same-origin-allow-popups" }));
+    const remoteOrigins = [
+      ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
+      ...(config.api?.url ? [new URL(config.api.url).origin] : []),
+      ...(config.auth?.url ? [new URL(config.auth.url).origin] : []),
+      ...Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) =>
+        p.url ? [new URL(p.url).origin] : [],
+      ),
+    ];
+
+    const uniqueOrigins = [...new Set(remoteOrigins)];
+
+    const wsOrigins = isDev
+      ? uniqueOrigins.filter((o) => o.startsWith("http:")).map((o) => o.replace(/^http:/, "ws:"))
+      : [];
+
+    const CSP_STRICT = false;
+
+    const cspScriptSrc = CSP_STRICT
+      ? [NONCE, "'strict-dynamic'", "'unsafe-eval'"]
+      : ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...uniqueOrigins];
+
+    app.use(
+      "*",
+      secureHeaders({
+        crossOriginOpenerPolicy: "same-origin-allow-popups",
+        contentSecurityPolicy: {
+          defaultSrc: ["'self'"],
+          scriptSrc: cspScriptSrc,
+          styleSrc: ["'self'", "'unsafe-inline'", "https:", ...uniqueOrigins],
+          imgSrc: [
+            "'self'",
+            "data:",
+            ...(isDev ? ["http:"] : ["https:"]),
+            ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
+          ],
+          connectSrc: ["'self'", "https:", ...uniqueOrigins, ...wsOrigins],
+          fontSrc: ["'self'", "https:", ...uniqueOrigins],
+          manifestSrc: ["'self'", ...(uiConfig.url ? [new URL(uiConfig.url).origin] : [])],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+          workerSrc: ["'self'", ...uniqueOrigins],
+        },
+      }),
+    );
 
     app.get("/health", (c: Context<HonoEnv>) => c.text("OK"));
 
@@ -459,14 +505,17 @@ export const createStartServer = (onReady?: () => void) =>
       runtimeConfig: ClientRuntimeConfig,
       error?: Error | null,
     ) => {
+      const nonce = CSP_STRICT ? ctx.get("secureHeadersNonce") : undefined;
       const clientUrl = uiConfig.url;
       const uiIntegrity = uiConfig.integrity;
       const themeInitScript = (getThemeInitScript() as { children?: string }).children ?? "";
+      const configWithNonce = nonce ? { ...runtimeConfig, cspNonce: nonce } : runtimeConfig;
       const hydrateScript =
-        (getHydrateScript(runtimeConfig as ClientRuntimeConfig) as { children?: string })
+        (getHydrateScript(configWithNonce as ClientRuntimeConfig) as { children?: string })
           .children ?? "";
 
       const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
+      const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
 
       return ctx.html(
         `<!DOCTYPE html>
@@ -485,9 +534,9 @@ export const createStartServer = (onReady?: () => void) =>
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 .error { color: #fca5a5; }
               </style>
-              <script src="${clientUrl}/remoteEntry.js"${sriAttr}></script>
-              <script>${themeInitScript}</script>
-              <script>${hydrateScript}</script>
+              <script${nonceAttr} src="${clientUrl}/remoteEntry.js"${sriAttr}></script>
+              <script${nonceAttr}>${themeInitScript}</script>
+              <script${nonceAttr}>${hydrateScript}</script>
             </head>
             <body>
               <div id="root">
@@ -575,6 +624,7 @@ export const createStartServer = (onReady?: () => void) =>
 
       try {
         const assetsUrl = uiConfig.url;
+        const nonce = CSP_STRICT ? c.get("secureHeadersNonce") : undefined;
         const pluginContext = buildPluginContext(c);
         const ssrApiClient = createPluginsClient(plugins, pluginContext);
 
@@ -585,12 +635,18 @@ export const createStartServer = (onReady?: () => void) =>
             basepath: runtimeConfig.runtime?.runtimeBasePath,
             runtimeConfig,
             apiClient: ssrApiClient,
+            cspNonce: nonce,
           } as any);
 
         const result = await render();
+        const responseHeaders = new Headers(result?.headers);
+        const cspHeader = c.res.headers.get("Content-Security-Policy");
+        if (cspHeader) {
+          responseHeaders.set("Content-Security-Policy", cspHeader);
+        }
         return new Response(result?.stream, {
           status: result?.statusCode,
-          headers: result?.headers,
+          headers: responseHeaders,
         });
       } catch (error) {
         logger.error("[SSR] Streaming error:", error);
@@ -677,6 +733,8 @@ export const runServer = (input: ServerInput): ServerHandle => {
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const ServerLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
 
+  const stopMonitor = startIntegrityMonitor(input.config);
+
   const runtime = ManagedRuntime.make(ServerLive);
   let programFiber: Fiber.RuntimeFiber<void, unknown> | null = null;
 
@@ -700,6 +758,7 @@ export const runServer = (input: ServerInput): ServerHandle => {
 
   const shutdown = async () => {
     logger.info("[Server] Shutting down...");
+    stopMonitor();
 
     if (programFiber) {
       await Effect.runPromise(

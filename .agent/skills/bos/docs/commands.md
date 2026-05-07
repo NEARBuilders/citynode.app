@@ -110,6 +110,15 @@ bos sync --force                            # Force update
 bos sync --files                            # Also sync template files (rsbuild.config.ts, etc.)
 ```
 
+### `bos upgrade`
+
+Check for new versions of `every-plugin` and `everything-dev`, update them in **all workspace `package.json`s** (not just root), and then sync. Also updates `peerDependencies` and `workspaces.catalog` while correctly skipping `workspace:*` and `catalog:` references.
+
+```bash
+bos upgrade              # Check for new versions, update, then sync
+bos upgrade --dry-run    # Preview without making changes
+```
+
 ### `bos info`
 
 Show current configuration.

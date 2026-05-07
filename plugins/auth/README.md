@@ -176,7 +176,7 @@ export default {
     variables: {
       account: "myapp.near",
       hostUrl: "http://localhost:3000",
-      uiUrl: "http://localhost:3002",
+      uiUrl: "http://localhost:3003",
     },
     secrets: {
       AUTH_DATABASE_URL: "file:./auth.db",

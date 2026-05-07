@@ -465,14 +465,14 @@ Future: a button on the page that triggers deploy via opencode server + reload.
 **Dev workflow (today):**
 
 ```
-opencode edits file → HMR at :3002 → see changes instantly
+opencode edits file → HMR at :3003 → see changes instantly
 bos publish --deploy → host restart required → new UI live
 ```
 
 **Dev workflow (after this refactor):**
 
 ```
-opencode edits file → HMR at :3002 → see changes instantly
+opencode edits file → HMR at :3003 → see changes instantly
 bos publish --deploy → POST /api/_reload-config → new UI live without restart
 ```
 

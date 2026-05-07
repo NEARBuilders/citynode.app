@@ -279,7 +279,7 @@ const runApp = (
       return;
     }
     console.log("\n[Dev] Shutting down...");
-    forceExitTimer = setTimeout(forceExit, 8000);
+    forceExitTimer = setTimeout(forceExit, 5000);
     requestShutdown?.();
   };
 

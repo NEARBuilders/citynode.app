@@ -25,6 +25,8 @@ The bootstrap root is published from `dev.everything.near/everything.dev` and co
 - Sites can share the same host while changing composition through config.
 - UI and API can evolve independently.
 - The system can keep being built over time because composition is externalized.
+- Integrity hashes prove what runs matches what was published.
+- Agents compose from verified primitives instead of building insecure bundles from scratch.
 
 ## Public files
 
@@ -35,11 +37,14 @@ The bootstrap root is published from `dev.everything.near/everything.dev` and co
 
 ## Related ideas
 
-- BOS
-- Web4
-- NEAR Intents
-- Near DNS
-- `every-plugin`
+- BOS — composable on-chain frontends
+- web4 — verifiable on-chain hosting
+- NEAR Intents — cross-chain settlement
+- near-dns — blockchain-backed DNS
+- NameSky — composable identity
+- OutLayer — verifiable off-chain computation
+- `every-plugin` — typed plugin contracts
+- better-near-auth — cryptographic identity + gasless relay
 
 ## Canonical context
 

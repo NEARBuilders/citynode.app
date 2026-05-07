@@ -82,3 +82,8 @@ export function getRepository(config?: Partial<ClientRuntimeConfig>): string | u
   const cfg = config ?? getRuntimeConfig();
   return cfg?.repository;
 }
+
+export function getCspNonce(config?: Partial<ClientRuntimeConfig>): string | undefined {
+  const cfg = config ?? getRuntimeConfig();
+  return cfg?.cspNonce;
+}

@@ -1,7 +1,7 @@
 import { createConnection } from "node:net";
 import { Command } from "@effect/platform";
 import type { ExitCode } from "@effect/platform/CommandExecutor";
-import { Deferred, Effect, Ref, Stream } from "effect";
+import { Deferred, Effect, Option, Ref, Stream } from "effect";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
   DevRuntimeConfig,
@@ -367,10 +367,14 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     return {
       name,
       pid,
-      kill: proc.kill("SIGTERM").pipe(
-        Effect.orElse(() => proc.kill("SIGKILL")),
-        Effect.ignore,
-      ),
+      kill: Effect.gen(function* () {
+        const result = yield* proc.kill("SIGTERM").pipe(Effect.timeout("3 seconds"), Effect.option);
+        if (Option.isNone(result)) {
+          const pid = Number(proc.pid);
+          yield* Effect.try(() => process.kill(-pid, "SIGKILL")).pipe(Effect.ignore);
+          yield* Effect.sleep("250 millis");
+        }
+      }).pipe(Effect.ignore),
       waitForReady: Deferred.await(readyDeferred),
       waitForExit: proc.exitCode,
     } satisfies ProcessHandle;

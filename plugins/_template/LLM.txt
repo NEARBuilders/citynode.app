@@ -720,7 +720,7 @@ Use the included rspack config for Module Federation builds:
 
 ```bash
 # Development server with hot reload
-npm run dev         # Serves at http://localhost:3014
+npm run dev         # Serves at http://localhost:3001
 
 # Production build
 npm run build       # Creates dist/ with remoteEntry.js
@@ -757,7 +757,7 @@ Deploy to a CDN/hosting service, then register:
 const runtime = createPluginRuntime({
   registry: {
     "my-org/my-plugin": {
-      remote: "http://localhost:3014/remoteEntry.js"
+      remote: "http://localhost:3001/remoteEntry.js"
     }
   }
 });

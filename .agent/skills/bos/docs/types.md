@@ -19,10 +19,12 @@ interface BosConfig {
     ui?: Record<string, SharedDepConfig>;
     api?: Record<string, SharedDepConfig>;
   };
+  plugins?: Record<string, RemoteConfig>; // Plugin modules (registry, projects, opencode, etc.)
   app: {
     host: HostConfig;
     ui?: RemoteConfig;
     api?: RemoteConfig;
+    auth?: RemoteConfig;
     [key: string]: HostConfig | RemoteConfig;
   };
 }
@@ -118,17 +120,28 @@ interface SyncConfig {
     },
     "ui": {
       "name": "ui",
-      "development": "http://localhost:3002",
+      "development": "http://localhost:3003",
       "production": "https://my-ui.zephyrcloud.app",
       "ssr": "https://my-ui-ssr.zephyrcloud.app",
       "template": "near-everything/every-plugin/demo/ui"
     },
     "api": {
       "name": "api",
-      "development": "http://localhost:3014",
+      "development": "http://localhost:3001",
       "production": "https://my-api.zephyrcloud.app",
       "variables": {},
       "secrets": ["API_DATABASE_URL"]
+    },
+    "auth": {
+      "name": "everything-dev_auth-plugin",
+      "development": "http://localhost:3002",
+      "production": "https://my-auth.zephyrcloud.app",
+      "variables": {
+        "account": "myapp.near",
+        "hostUrl": "http://localhost:3000",
+        "uiUrl": "http://localhost:3003"
+      },
+      "secrets": ["AUTH_DATABASE_URL", "AUTH_DATABASE_AUTH_TOKEN", "BETTER_AUTH_SECRET"]
     }
   }
 }

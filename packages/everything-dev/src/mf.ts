@@ -1,5 +1,6 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
+import { computeSriHash, type IntegrityRegistry } from "./integrity";
 
 type FederationInstance = ReturnType<typeof createInstance>;
 
@@ -24,6 +25,47 @@ export function patchManifestFetchForSsrPublicPath(mf: FederationInstance): void
           headers: { "content-type": "application/json" },
         });
       });
+  });
+}
+
+export function installIntegrityFetchHook(
+  mf: FederationInstance,
+  registry: IntegrityRegistry,
+): void {
+  if (!mf || !(mf as any).loaderHook?.lifecycle?.fetch?.on) {
+    console.warn("[SRI] MF lifecycle fetch hook not available, skipping integrity-in-pipeline");
+    return;
+  }
+  if ((mf as any).__everythingDevIntegrityHook === true) return;
+  (mf as any).__everythingDevIntegrityHook = true;
+
+  (mf as any).loaderHook.lifecycle.fetch.on((url: unknown, init: unknown) => {
+    if (typeof url !== "string") return;
+
+    const expectedHash = registry.get(url);
+    if (!expectedHash) return;
+
+    return fetch(url, init as any).then(async (res) => {
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const computed = computeSriHash(buffer);
+
+      if (computed !== expectedHash) {
+        console.error(
+          `[SRI] Integrity check failed in MF fetch pipeline for ${url}\n  Expected: ${expectedHash}\n  Computed: ${computed}`,
+        );
+        return new Response(
+          `Integrity check failed for ${url}`,
+          { status: 500, statusText: "Integrity Check Failed" },
+        );
+      }
+
+      console.log(`[SRI] Integrity verified in pipeline for ${url}`);
+      return new Response(buffer, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: res.headers,
+      });
+    });
   });
 }
 

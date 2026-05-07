@@ -200,12 +200,17 @@
   "files": [
     "dist",
     "src",
-    "cli.js"
+    "cli.js",
+    "skills",
+    "!skills/_artifacts"
   ],
   "bin": {
     "everything-dev": "./cli.js",
     "bos": "./cli.js"
   },
+  "keywords": [
+    "tanstack-intent"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/NEARBuilders/everything-dev",
@@ -257,6 +262,7 @@
     }
   },
   "devDependencies": {
+    "@tanstack/intent": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@types/gradient-string": "^1.1.6",

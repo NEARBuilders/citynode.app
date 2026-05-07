@@ -16,13 +16,13 @@ This is a **Module Federation monorepo** with runtime-loaded configuration:
 │  - Module Federation host                               │
 │  - every-plugin runtime                                 │
 └─────────────────────────────────────────────────────────┘
-            ↓                         ↓
-┌───────────────────────┐ ┌───────────────────────┐
-│    UI Remote          │ │    API Plugin         │
-│  - React 19           │ │  - every-plugin       │
-│  - TanStack Router    │ │  - oRPC contract      │
-│  - Module Federation  │ │  - Effect services    │
-└───────────────────────┘ └───────────────────────┘
+            ↓                ↓                ↓
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│    UI Remote      │ │  Auth Plugin     │ │  API Plugin      │
+│  - React 19       │ │  - every-plugin  │ │  - every-plugin  │
+│  - TanStack Router│ │  - Better-Auth   │ │  - oRPC contract │
+│  - Module Fed.    │ │  - NEAR SIWN     │ │  - Effect svc    │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
 **Key Characteristics:**
@@ -47,15 +47,26 @@ The **entire system** is configured via `bos.config.json` - a runtime-loaded JSO
     },
     "ui": {
       "name": "ui",
-      "development": "http://localhost:3002",
+      "development": "http://localhost:3003",
       "production": "https://cdn.example.com/ui/remoteEntry.js"
     },
     "api": {
       "name": "api",
-      "development": "http://localhost:3014",
+      "development": "http://localhost:3001",
       "production": "https://cdn.example.com/api/remoteEntry.js",
       "variables": {},
       "secrets": ["API_DATABASE_URL", "API_DATABASE_AUTH_TOKEN"]
+    },
+    "auth": {
+      "name": "everything-dev_auth-plugin",
+      "development": "http://localhost:3002",
+      "production": "https://cdn.example.com/auth/remoteEntry.js",
+      "variables": {
+        "account": "example.near",
+        "hostUrl": "http://localhost:3000",
+        "uiUrl": "http://localhost:3003"
+      },
+      "secrets": ["AUTH_DATABASE_URL", "AUTH_DATABASE_AUTH_TOKEN", "BETTER_AUTH_SECRET"]
     }
   }
 }
@@ -68,6 +79,32 @@ The **entire system** is configured via `bos.config.json` - a runtime-loaded JSO
 - Single source of truth for all configurations
 
 **Implementation:** See `host/src/config.ts` for the loader.
+
+### Auth Plugin (plugins/auth/)
+
+**Technology:** Rspack + `every-plugin`
+
+The auth plugin is a standalone **every-plugin** that provides authentication and authorization. It runs as a separate service loaded by the host via Module Federation.
+
+**Features:**
+- Better-Auth with NEAR SIWN (Sign-In-With-NEAR)
+- Email/Password with verification
+- Anonymous authentication
+- Organization management (members, invitations, roles)
+- API keys (scoped, rate-limited, organization-aware)
+- NEAR relay (meta-transactions via built-in relayer)
+- NEAR view calls (contract read methods)
+- Multi-database driver (libsql, better-sqlite3, bun, node)
+
+**oRPC Contract Routes:**
+- Session: `getSession`, `getContext`, `getActiveMember`
+- NEAR SIWN: `nearNonce`, `nearVerify`, `nearProfile`, `nearLinkAccount`, `nearUnlinkAccount`, `nearListAccounts`
+- Relay: `nearRelay`, `nearRelayStatus`, `nearRelayerInfo`, `nearRelayHistory`, `nearView`
+- API Keys: `listApiKeys`, `createApiKey`, `deleteApiKey`
+- Organizations: `listMembers`, `listInvitations`, `cancelInvitation`, `resendInvitation`
+- Health: `health`
+
+The UI accesses auth via the API's composed `pluginsClient`: `apiClient.auth.getSession()`, etc.
 
 ## Module Federation Setup
 
@@ -455,15 +492,16 @@ bun --filter api db:push
 ```bash
 bun dev
 # Starts:
-# - API: http://localhost:3014
-# - UI: http://localhost:3002
+# - API: http://localhost:3001
+# - Auth: http://localhost:3002
+# - UI: http://localhost:3003
 # - Host: http://localhost:3000
 ```
 
 **Individual services:**
 ```bash
-bun dev:api   # API only (port 3014)
-bun dev:ui    # UI only (port 3002)
+bun dev:api   # API only (port 3001)
+bun dev:ui    # UI only (port 3003)
 bun dev:host  # Host only (port 3000)
 ```
 
@@ -477,7 +515,7 @@ NODE_ENV=production bun dev:host
 ```
 
 The host reads `NODE_ENV` and loads URLs from `bos.config.json`:
-- `development` → `http://localhost:3002`, `http://localhost:3014`
+- `development` → `http://localhost:3003`, `http://localhost:3001`
 - `production` → CDN URLs
 
 ### Development Commands with bos CLI
@@ -514,13 +552,13 @@ Development Mode (bos dev --host remote):
 ┌─────────────────────────────────────────┐
 │  Host (Remote)                          │
 │  - Running on production/staging URL   │
-│  - Loads UI from localhost:3002          │
-│  - Loads API from localhost:3014         │
+│  - Loads UI from localhost:3003          │
+│  - Loads API from localhost:3001         │
 └─────────────────────────────────────────┘
             ↓                    ↓
     ┌──────────────┐    ┌──────────────┐
     │ UI (Local)   │    │ API (Local)  │
-    │ :3002        │    │ :3014        │
+    │ :3003        │    │ :3001        │
     └──────────────┘    └──────────────┘
 ```
 
@@ -549,7 +587,7 @@ cat .bos/logs/ui.log    # UI process logs
 2. Check `.bos/logs/api.log` - any startup errors?
 3. Check `bos status` - are remotes healthy?
 4. Verify `bos.config.json` - are URLs correct?
-5. Test directly: `curl http://localhost:3014/health`
+5. Test directly: `curl http://localhost:3001/health`
 
 **UI Not Loading:**
 1. Check `bos ps` - is UI process running?
