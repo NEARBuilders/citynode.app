@@ -81,7 +81,7 @@ async function createPersonalOrganization(
   }
 
   const existingOrg = await database.query.organization.findFirst({
-    where: (org: any, { eq, and }: any) =>
+    where: (org, { eq, and }) =>
       and(eq(org.slug, user.id), eq(org.metadata, JSON.stringify({ isPersonal: true }))),
   });
 

@@ -201,7 +201,7 @@ The plugin's core login flow — a NEAR wallet signing a NEP-413 message, postin
 **Current status:**
 - ✅ Dependencies resolve correctly (`every-plugin@2.4.0`, `everything-dev@1.7.0`, `near-kit@0.14.0`)
 - ✅ Sandbox starts and responds to RPC
-- ✅ Auth instance creates successfully with the libsql database driver
+- ✅ Auth instance creates successfully with the pglite database driver
 - ⚠️ Full SIWN flow test **skips the actual verification** because `near-kit`'s `Sandbox.patchState()` does not create visible accounts in this environment. The patched account is not queryable via `near.accountExists()` after `patchState` + `fastForward(1)`.
 
 **What's needed:**

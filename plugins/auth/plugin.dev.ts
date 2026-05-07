@@ -11,6 +11,8 @@ export default {
       account: process.env.ACCOUNT || "dev.everything.near",
       hostUrl: process.env.HOST_URL || "http://localhost:3000",
       uiUrl: process.env.UI_URL || "http://localhost:3003",
+      githubClientId: process.env.GITHUB_CLIENT_ID,
+      githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
     },
     secrets: {
       AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || "pglite:./auth-local.db",

@@ -193,14 +193,14 @@ export default createPlugin({
           });
 
           if (nearAccounts.length > 0) {
-            const linkedAccounts = nearAccounts.map((acc: any) => ({
+            const linkedAccounts = nearAccounts.map((acc) => ({
               accountId: acc.accountId,
               network: acc.network,
               publicKey: acc.publicKey,
               isPrimary: acc.isPrimary ?? false,
             }));
 
-            const primary = nearAccounts.find((acc: any) => acc.isPrimary) ?? nearAccounts[0];
+            const primary = nearAccounts.find((acc) => acc.isPrimary) ?? nearAccounts[0];
 
             nearCapabilities = {
               primaryAccountId: primary?.accountId ?? null,
