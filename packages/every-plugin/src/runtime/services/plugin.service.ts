@@ -6,7 +6,8 @@ import type {
   PluginRegistry,
   SecretsConfig,
 } from "../../types";
-import { ModuleFederationService } from "./module-federation.service";
+import type { AppSharedDeps } from "../mf-config";
+import { AppSharedDepsTag, ModuleFederationService } from "./module-federation.service";
 import { PluginLifecycleService } from "./plugin-lifecycle.service";
 import {
   PluginLoaderService,
@@ -47,11 +48,13 @@ export class PluginService extends Effect.Service<PluginService>()("PluginServic
     registry: PluginRegistry,
     secrets: SecretsConfig,
     pluginMap: Record<string, AnyPluginConstructor> = {},
+    appShared?: AppSharedDeps,
   ) => {
     const contextLayer = Layer.mergeAll(
       Layer.succeed(PluginRegistryTag, registry),
       Layer.succeed(SecretsConfigTag, secrets),
       Layer.succeed(PluginMapTag, pluginMap),
+      Layer.succeed(AppSharedDepsTag, appShared ?? {}),
     );
 
     const servicesLayer = Layer.mergeAll(

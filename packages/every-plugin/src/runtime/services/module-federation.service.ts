@@ -1,6 +1,6 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Option } from "effect";
 import type { AnyPlugin } from "../../types";
 import { ModuleFederationError } from "../errors";
 import { type AppSharedDeps, MF_CORE_SHARED_DEPS, type CoreSharedDepName, SHARE_CONFIG } from "../mf-config";
@@ -39,14 +39,18 @@ function buildSharedConfig(appShared?: AppSharedDeps): Record<string, SharedConf
 
   if (appShared) {
     for (const [name, config] of Object.entries(appShared)) {
+      // NOTE: This dynamic import() is RUNTIME-ONLY. It is preserved as-is by
+      // the tsdown bundler (unbundle: true) and resolved by Bun/Node at server
+      // startup. Build-time shared dependencies for rspack are configured
+      // separately in packages/every-plugin/src/build/shared-deps.ts.
       entries[name] = {
         version: config.version,
         get: () => import(name).then((mod) => () => mod),
         shareConfig: {
-          singleton: config.singleton ?? true,
-          requiredVersion: config.requiredVersion ?? false,
-          strictVersion: config.strictVersion ?? false,
-          eager: config.eager ?? false,
+          singleton: (config.singleton ?? true) as true,
+          requiredVersion: (config.requiredVersion ?? false) as false,
+          strictVersion: (config.strictVersion ?? false) as false,
+          eager: (config.eager ?? false) as false,
         },
       };
     }
@@ -55,7 +59,7 @@ function buildSharedConfig(appShared?: AppSharedDeps): Record<string, SharedConf
   return entries;
 }
 
-class AppSharedDepsTag extends Context.Tag("every-plugin/AppSharedDeps")<
+export class AppSharedDepsTag extends Context.Tag("every-plugin/AppSharedDeps")<
   AppSharedDepsTag,
   AppSharedDeps
 >() {}

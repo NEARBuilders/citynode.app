@@ -922,6 +922,62 @@ export default createPlugin({
         plugins: runtimePlugins,
       });
 
+      // ── Production Readiness Validation ──
+      const productionEnv: Record<string, string> = {};
+
+      // Default CORS_ORIGIN to the configured domain if not set
+      if (!process.env.CORS_ORIGIN && config.domain) {
+        const defaultOrigin = `https://${config.domain}`;
+        productionEnv.CORS_ORIGIN = defaultOrigin;
+        console.log(`[Start] CORS_ORIGIN not set, defaulting to ${defaultOrigin}`);
+      }
+
+      // Validate shared.plugins packages are resolvable
+      const missingSharedDeps: string[] = [];
+      if (config.shared?.plugins) {
+        for (const depName of Object.keys(config.shared.plugins)) {
+          try {
+            require.resolve(depName);
+          } catch {
+            missingSharedDeps.push(depName);
+          }
+        }
+      }
+      if (missingSharedDeps.length > 0) {
+        console.error(
+          `[Start] Missing ${missingSharedDeps.length} shared plugin dependency(s): ${missingSharedDeps.join(", ")}`,
+        );
+        console.error(`[Start] Ensure these packages are installed in node_modules.`);
+      }
+
+      // Validate required secrets
+      const requiredSecrets = new Set<string>();
+      const missingSecrets: string[] = [];
+
+      if (runtimeConfig.auth?.secrets) {
+        for (const s of runtimeConfig.auth.secrets) requiredSecrets.add(s);
+      }
+      if (runtimeConfig.api?.secrets) {
+        for (const s of runtimeConfig.api.secrets) requiredSecrets.add(s);
+      }
+      for (const plugin of Object.values(runtimeConfig.plugins ?? {})) {
+        if (plugin.secrets) {
+          for (const s of plugin.secrets) requiredSecrets.add(s);
+        }
+      }
+
+      for (const secret of requiredSecrets) {
+        const value = process.env[secret];
+        if (!value || value.length === 0) {
+          missingSecrets.push(secret);
+        }
+      }
+
+      if (missingSecrets.length > 0) {
+        console.warn(`[Start] Missing ${missingSecrets.length} required secret(s): ${missingSecrets.join(", ")}`);
+        console.warn(`[Start] Auth endpoints and database connections may fail without these secrets.`);
+      }
+
       const services = buildServiceDescriptorMap(runtimeConfig);
 
       await syncApiContractBridge({
@@ -938,6 +994,7 @@ export default createPlugin({
         packages: ["host"],
         env: {
           NODE_ENV: "production",
+          ...productionEnv,
           ...stagingEnvVars,
         },
         description: `${isStaging ? "Staging" : "Production"} Mode (${config.account})`,

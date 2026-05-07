@@ -46,6 +46,25 @@ function secretsFromEnv(keys: string[]): Record<string, string> {
   return out;
 }
 
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    let msg = error.message || error.name || "Error";
+    if (error.cause instanceof Error) {
+      msg += ` (caused by: ${error.cause.message || error.cause.name})`;
+    } else if (error.cause) {
+      msg += ` (caused by: ${String(error.cause)})`;
+    }
+    return msg;
+  }
+  if (typeof error === "object" && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (err.message) return String(err.message);
+    if (err._tag) return `[${err._tag}] ${JSON.stringify(error)}`;
+    return JSON.stringify(error);
+  }
+  return String(error);
+}
+
 const unavailableResult = (
   pluginName: string | null,
   error: string | null,
@@ -172,6 +191,7 @@ export const initializePlugins = Effect.gen(function* () {
           allEntries.map((entry) => [entry.runtimeId, { remote: entry.config.url }]),
         ),
         secrets: {},
+        shared: config.shared?.plugins,
       });
 
       const mfInstance = (runtime as any).__mfInstance as any | undefined;
@@ -193,9 +213,7 @@ export const initializePlugins = Effect.gen(function* () {
           authClient = authPlugin.createClient;
           console.log(`[Plugins] Auth plugin loaded: ${authPlugin.name}`);
         } catch (error) {
-          console.error(
-            `[Plugins] Failed to load auth plugin: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          console.error(`[Plugins] Failed to load auth plugin: ${formatError(error)}`);
         }
       }
 
@@ -219,8 +237,7 @@ export const initializePlugins = Effect.gen(function* () {
           loadedPluginKeys.push(key);
           pluginsClient[key] = createSafeClientFactory(result.value.createClient);
         } else {
-          const msg =
-            result.reason instanceof Error ? result.reason.message : String(result.reason);
+          const msg = formatError(result.reason);
           errors.push(msg);
           pluginsClient[key] = () => {
             throw new Error(`Plugin "${key}" failed to load: ${msg}`);
@@ -243,7 +260,7 @@ export const initializePlugins = Effect.gen(function* () {
           loadedPlugins.api = baseApi;
           loadedPluginKeys.unshift("api");
         } catch (error) {
-          errors.push(error instanceof Error ? error.message : String(error));
+          errors.push(formatError(error));
         }
       }
 

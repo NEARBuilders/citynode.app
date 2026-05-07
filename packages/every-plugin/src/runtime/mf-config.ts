@@ -68,24 +68,24 @@ export type AppSharedDeps = Record<string, AppSharedDepConfig>;
 
 export function buildMergedSharedDeps(appShared?: AppSharedDeps): Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> {
   const merged: Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> = {};
-  
+
   for (const [name, config] of Object.entries(MF_CORE_SHARED_DEPS)) {
     merged[name] = { version: config.version, shareConfig: config.shareConfig };
   }
-  
+
   if (appShared) {
     for (const [name, config] of Object.entries(appShared)) {
       merged[name] = {
         version: config.version,
         shareConfig: {
-          singleton: config.singleton ?? true,
-          requiredVersion: config.requiredVersion ?? false,
-          strictVersion: config.strictVersion ?? false,
-          eager: config.eager ?? false,
+          singleton: (config.singleton ?? true) as true,
+          requiredVersion: (config.requiredVersion ?? false) as false,
+          strictVersion: (config.strictVersion ?? false) as false,
+          eager: (config.eager ?? false) as false,
         },
       };
     }
   }
-  
+
   return merged;
 }

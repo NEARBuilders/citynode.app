@@ -7,6 +7,7 @@ import type {
 import type { Router, RouterClient } from "@orpc/server";
 import type { Scope } from "effect";
 import type { Plugin } from "./plugin";
+import type { AppSharedDeps } from "./runtime/mf-config";
 
 /**
  * Registry bindings interface - populated via module augmentation
@@ -295,6 +296,7 @@ export interface PluginRuntimeConfig<
 > {
   registry: R;
   secrets?: SecretsConfig;
+  shared?: AppSharedDeps;
   options?: RuntimeOptions;
 }
 

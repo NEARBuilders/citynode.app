@@ -153,6 +153,7 @@ export const RuntimeConfigSchema = z.object({
   shared: z
     .object({
       ui: z.record(z.string(), SharedConfigSchema).optional(),
+      plugins: z.record(z.string(), SharedConfigSchema).optional(),
     })
     .optional(),
   ui: FederationEntrySchema.extend({

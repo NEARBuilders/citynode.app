@@ -16,6 +16,7 @@ const configPath = process.env.BOS_CONFIG_PATH ?? path.resolve(__dirname, "../bo
 
 const bosConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const sharedUi = bosConfig.shared?.ui ?? {};
+const sharedPlugins = bosConfig.shared?.plugins ?? {};
 
 let pluginPkg: {
   version: string;
@@ -57,8 +58,6 @@ const pluginShared = {
     ...SHARE_DEFAULTS,
   },
   zod: { version: getInstalledVersion("zod", pluginPkg.peerDependencies.zod), ...SHARE_DEFAULTS },
-  "better-auth": { version: getInstalledVersion("better-auth", "^1.6.9"), ...SHARE_DEFAULTS },
-  "drizzle-orm": { version: getInstalledVersion("drizzle-orm", "^0.45.1"), ...SHARE_DEFAULTS },
   "@orpc/contract": {
     version: getInstalledVersion("@orpc/contract", pluginPkg.peerDependencies["@orpc/contract"]),
     ...SHARE_DEFAULTS,
@@ -68,7 +67,7 @@ const pluginShared = {
     ...SHARE_DEFAULTS,
   },
 };
-const shared = { ...pluginShared, ...sharedUi };
+const shared = { ...pluginShared, ...sharedUi, ...sharedPlugins };
 
 function updateBosConfig(url: string, integrity?: string) {
   try {
