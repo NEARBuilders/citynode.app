@@ -50,23 +50,28 @@
   "plugins": {
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-2952-every-plugin-template-everythin-afa4f53ff-ze.zephyrcloud.app",
-      "integrity": "sha384-HeZzYmwOHv3frqz6w/Ibt7B+d3ATdW1HQkbxdgO0VR1A6crAi5ceGfLVkDpiZYtY",
-      "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"]
+      "production": "https://elliot-braem-2960-every-plugin-template-everythin-1059b381f-ze.zephyrcloud.app",
+      "integrity": "sha384-rgMPfcwSrUpsGxEWXGLJXeGtpIpc9+NG7j2kMl4ELAeWNR7qVkZk3kjs+GNDZ1tK",
+      "routes": [
+        "ui/src/routes/_layout/_authenticated/settings.tsx"
+      ]
     },
     "registry": {
       "development": "local:plugins/registry",
-      "production": "https://elliot-braem-2953-everything-dev-registry-plugin--75c8c6e27-ze.zephyrcloud.app",
-      "integrity": "sha384-2Q0rIk+G0g/YfdDN9/+RtByHWE8RpNVcxWuY29ESepfwd82xBHc3LMDkQSsg94zh",
+      "production": "https://elliot-braem-2961-everything-dev-registry-plugin--7f10f6960-ze.zephyrcloud.app",
+      "integrity": "sha384-u3p5su+kzStycYxDPGUniJkvAayoAW9uBdDBnYRAVAyf4wC7nZVaZEWlb0chMgfA",
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
-      "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"]
+      "routes": [
+        "ui/src/routes/_layout/apps/**",
+        "ui/src/routes/_layout/about.tsx"
+      ]
     },
     "projects": {
       "development": "local:plugins/projects",
-      "production": "https://elliot-braem-2954-everything-dev-projects-plugin--b8fff0d75-ze.zephyrcloud.app",
-      "integrity": "sha384-lfAfCOI1poYyqBzsarJZtaF/FtxHgb9AQ+rKToX1KBTSmNHMLiiG5eYjfMhZbyfP",
+      "production": "https://elliot-braem-2962-everything-dev-projects-plugin--c5ab43732-ze.zephyrcloud.app",
+      "integrity": "sha384-0Xziw5tjb1hug+THptqZuZ5R2y4v4BzUu+ncFpskznUESsHLHNcBof47Ra+jytSd",
       "routes": [
         "ui/src/routes/_layout/_authenticated/organizations/**",
         "ui/src/routes/_layout/_authenticated/projects/**",
@@ -75,28 +80,30 @@
     },
     "opencode": {
       "development": "local:plugins/opencode",
-      "production": "https://elliot-braem-2955-everything-dev-opencode-plugin--d396df46f-ze.zephyrcloud.app",
-      "integrity": "sha384-xpxwQvpaE2XGUXOd9+dRNEQZKqXm+Py2T1PEA5xeWa1+ekOjzPLK9PWGLYdlPnDC",
-      "routes": ["ui/src/routes/_layout/_authenticated/_admin/**"]
+      "production": "https://elliot-braem-2963-everything-dev-opencode-plugin--402fa0e17-ze.zephyrcloud.app",
+      "integrity": "sha384-e5FQGQgfs9qBRba2TgMMJrIWYq9NOLdIl2Bt2JWoqQ0WA9x5akHA3OgitnbvlBp4",
+      "routes": [
+        "ui/src/routes/_layout/_authenticated/_admin/**"
+      ]
     }
   },
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-2956-host-everything-dev-nearbuilder-20dad3bde-ze.zephyrcloud.app"
+      "production": "https://elliot-braem-2964-host-everything-dev-nearbuilder-f02341e0b-ze.zephyrcloud.app"
     },
     "ui": {
       "name": "ui",
       "development": "local:ui",
-      "production": "https://elliot-braem-2949-ui-everything-dev-nearbuilders-8f33292d0-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-2957-ui-everything-dev-nearbuilders-d123c67c4-ze.zephyrcloud.app",
       "integrity": "sha384-PQeDgJhK5DeTJka1r3yTq21rqakHIr0jAVwgZmGwf0Mpm68wojOL+VT1VLDdUDf8",
-      "ssr": "https://elliot-braem-2950-ui-everything-dev-nearbuilders-5e736964e-ze.zephyrcloud.app"
+      "ssr": "https://elliot-braem-2958-ui-everything-dev-nearbuilders-81bec772e-ze.zephyrcloud.app"
     },
     "api": {
       "name": "api",
       "development": "local:api",
-      "production": "https://elliot-braem-2951-api-everything-dev-nearbuilders-df644a316-ze.zephyrcloud.app",
-      "integrity": "sha384-ta/QeYNuEYN2uiuVISDLjvhj45I2CVy15HRe67DI+ZN7Mzyyltto9nPnRkOPDYAQ",
+      "production": "https://elliot-braem-2959-api-everything-dev-nearbuilders-4a67b7c08-ze.zephyrcloud.app",
+      "integrity": "sha384-LcIlcS4/X3fmVAmbz4j/lN4942ZWWoRZN9QCelcFQwk1id4uHEJ7zL0OrTXw5ISW",
       "secrets": []
     },
     "auth": {
@@ -109,7 +116,11 @@
         "hostUrl": "http://localhost:3000",
         "uiUrl": "http://localhost:3003"
       },
-      "secrets": ["AUTH_DATABASE_URL", "AUTH_DATABASE_AUTH_TOKEN", "BETTER_AUTH_SECRET"]
+      "secrets": [
+        "AUTH_DATABASE_URL",
+        "AUTH_DATABASE_AUTH_TOKEN",
+        "BETTER_AUTH_SECRET"
+      ]
     }
   }
 }
