@@ -24,6 +24,7 @@ function NewProjectPage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
+  const [repository, setRepository] = useState("");
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("private");
 
   type CreateProjectResult = Awaited<ReturnType<typeof apiClient.projects.createProject>>;
@@ -37,6 +38,7 @@ function NewProjectPage() {
           .toLowerCase()
           .replace(/[^a-z0-9-]/g, "-"),
         description: description.trim() || undefined,
+        repository: repository.trim() || undefined,
         visibility,
       }),
     onSuccess: (result) => {
@@ -128,6 +130,26 @@ function NewProjectPage() {
               className="flex min-h-[80px] w-full rounded-md border-2 border-inset border-[rgb(51,51,51)] bg-[rgb(255,255,255)] px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus:ring-2 focus:ring-ring dark:bg-[rgb(40,40,40)] dark:border-[rgb(100,100,100)]"
               placeholder="Describe your project..."
             />
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="repository"
+              className="text-xs uppercase tracking-wide text-muted-foreground"
+            >
+              Repository URL (optional)
+            </label>
+            <Input
+              id="repository"
+              type="url"
+              value={repository}
+              onChange={(e) => setRepository(e.target.value)}
+              placeholder="https://github.com/user/repo"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              README will be fetched from the default branch.
+            </p>
           </div>
 
           <div className="space-y-2">

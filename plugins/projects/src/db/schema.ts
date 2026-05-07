@@ -11,6 +11,7 @@ export const projects = pgTable(
     description: text("description"),
     status: text("status").notNull().default("active"),
     visibility: text("visibility").notNull().default("private"),
+    repository: text("repository"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
       .defaultNow()

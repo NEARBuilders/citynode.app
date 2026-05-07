@@ -174,11 +174,16 @@ function ProjectsList() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Ranked by upvotes. Vote to reshuffle the leaderboard in real time.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Ranked by upvotes. Vote to reshuffle the leaderboard in real time.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/projects/new">+ New Project</Link>
+        </Button>
       </div>
 
       {rankedProjects.length === 0 ? (

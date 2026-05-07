@@ -27,6 +27,7 @@ export const contract = oc.router({
             description: z.string().nullable(),
             status: z.enum(["active", "paused", "archived"]),
             visibility: z.enum(["private", "unlisted", "public"]),
+            repository: z.string().nullable(),
             createdAt: z.iso.datetime(),
             updatedAt: z.iso.datetime(),
           }),
@@ -54,6 +55,7 @@ export const contract = oc.router({
           description: z.string().nullable(),
           status: z.enum(["active", "paused", "archived"]),
           visibility: z.enum(["private", "unlisted", "public"]),
+          repository: z.string().nullable(),
           createdAt: z.iso.datetime(),
           updatedAt: z.iso.datetime(),
           apps: z.array(
@@ -84,6 +86,7 @@ export const contract = oc.router({
           .regex(/^[a-z0-9-]+$/),
         description: z.string().max(1000).optional(),
         visibility: z.enum(["private", "unlisted", "public"]).optional(),
+        repository: z.string().url().max(500).optional(),
         organizationId: z.string().optional(),
       }),
     )
@@ -97,6 +100,7 @@ export const contract = oc.router({
         description: z.string().nullable(),
         status: z.enum(["active", "paused", "archived"]),
         visibility: z.enum(["private", "unlisted", "public"]),
+        repository: z.string().nullable(),
         createdAt: z.iso.datetime(),
         updatedAt: z.iso.datetime(),
       }),
@@ -112,6 +116,7 @@ export const contract = oc.router({
         description: z.string().max(1000).optional(),
         status: z.enum(["active", "paused", "archived"]).optional(),
         visibility: z.enum(["private", "unlisted", "public"]).optional(),
+        repository: z.string().url().max(500).optional(),
       }),
     )
     .output(
@@ -124,6 +129,7 @@ export const contract = oc.router({
         description: z.string().nullable(),
         status: z.enum(["active", "paused", "archived"]),
         visibility: z.enum(["private", "unlisted", "public"]),
+        repository: z.string().nullable(),
         createdAt: z.iso.datetime(),
         updatedAt: z.iso.datetime(),
       }),
@@ -210,6 +216,7 @@ export const contract = oc.router({
             description: z.string().nullable(),
             status: z.enum(["active", "paused", "archived"]),
             visibility: z.enum(["private", "unlisted", "public"]),
+            repository: z.string().nullable(),
             createdAt: z.iso.datetime(),
             updatedAt: z.iso.datetime(),
           }),

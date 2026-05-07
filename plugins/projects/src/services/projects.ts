@@ -18,6 +18,7 @@ export interface Project {
   description: string | null;
   status: "active" | "paused" | "archived";
   visibility: "private" | "unlisted" | "public";
+  repository: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +76,7 @@ export class ProjectService extends Context.Tag("projects/ProjectService")<
         slug: string;
         description?: string;
         visibility?: "private" | "unlisted" | "public";
+        repository?: string;
         organizationId?: string;
       },
       userId: string,
@@ -87,6 +89,7 @@ export class ProjectService extends Context.Tag("projects/ProjectService")<
         description?: string;
         status?: "active" | "paused" | "archived";
         visibility?: "private" | "unlisted" | "public";
+        repository?: string;
       },
       userId: string,
     ) => Effect.Effect<Project, ORPCError<string, unknown>>;
@@ -215,6 +218,7 @@ export const ProjectServiceLive = Layer.effect(
             description: p.description,
             status: p.status as "active" | "paused" | "archived",
             visibility: p.visibility as "private" | "unlisted" | "public",
+            repository: p.repository ?? null,
             createdAt: toIsoString(p.createdAt),
             updatedAt: toIsoString(p.updatedAt),
           }));
@@ -261,6 +265,7 @@ export const ProjectServiceLive = Layer.effect(
             description: project.description,
             status: project.status as "active" | "paused" | "archived",
             visibility: project.visibility as "private" | "unlisted" | "public",
+            repository: project.repository ?? null,
             createdAt: toIsoString(project.createdAt),
             updatedAt: toIsoString(project.updatedAt),
             apps: apps.map((a: any) => ({
@@ -306,6 +311,7 @@ export const ProjectServiceLive = Layer.effect(
               description: input.description ?? null,
               status: "active",
               visibility: input.visibility ?? "private",
+              repository: input.repository ?? null,
               createdAt: now,
               updatedAt: now,
             }),
@@ -320,6 +326,7 @@ export const ProjectServiceLive = Layer.effect(
             description: input.description ?? null,
             status: "active" as const,
             visibility: (input.visibility ?? "private") as "private" | "unlisted" | "public",
+            repository: input.repository ?? null,
             createdAt: toIsoString(now),
             updatedAt: toIsoString(now),
           };
@@ -351,6 +358,7 @@ export const ProjectServiceLive = Layer.effect(
           if (input.description !== undefined) updates.description = input.description;
           if (input.status !== undefined) updates.status = input.status;
           if (input.visibility !== undefined) updates.visibility = input.visibility;
+          if (input.repository !== undefined) updates.repository = input.repository;
 
           yield* Effect.promise(() => db.update(projects).set(updates).where(eq(projects.id, id)));
 
@@ -363,6 +371,7 @@ export const ProjectServiceLive = Layer.effect(
             description: updates.description ?? existing.description,
             status: updates.status ?? existing.status,
             visibility: updates.visibility ?? existing.visibility,
+            repository: updates.repository ?? existing.repository ?? null,
             createdAt: toIsoString(existing.createdAt),
             updatedAt: toIsoString(now),
           };
@@ -530,6 +539,7 @@ export const ProjectServiceLive = Layer.effect(
             description: r.project.description,
             status: r.project.status as "active" | "paused" | "archived",
             visibility: r.project.visibility as "private" | "unlisted" | "public",
+            repository: r.project.repository ?? null,
             createdAt: toIsoString(r.project.createdAt),
             updatedAt: toIsoString(r.project.updatedAt),
           }));
