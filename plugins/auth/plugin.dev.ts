@@ -15,7 +15,7 @@ export default {
       githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
     },
     secrets: {
-      AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || "pglite:./auth-local.db",
+      AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || ":memory:",
       BETTER_AUTH_SECRET:
         process.env.BETTER_AUTH_SECRET || "dev-only-secret-do-not-use-in-production",
     },
