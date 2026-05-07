@@ -1,8 +1,10 @@
+import { and, count, desc, eq } from "drizzle-orm";
 import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
+import { upvotes } from "./db/schema";
 import type { PluginsClient } from "./plugins-client.gen";
 
 export interface AuthContext {
@@ -17,12 +19,122 @@ export interface AuthContext {
   reqHeaders?: Record<string, string>;
 }
 
+interface VoteEventDetail {
+  type: "upvote" | "downvote";
+  thingId: string;
+  userId: string;
+  timestamp: string;
+  totalCount: number;
+}
+
+function generateId(): string {
+  return `uv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+function createUpvoteService(db: any, eventTarget: EventTarget) {
+  return {
+    async upvoteThing(thingId: string, userId: string) {
+      try {
+        await db.insert(upvotes).values({
+          id: generateId(),
+          thingId,
+          userId,
+        });
+      } catch {
+        // unique constraint violation — already upvoted
+      }
+
+      const [result] = await db
+        .select({ count: count() })
+        .from(upvotes)
+        .where(eq(upvotes.thingId, thingId));
+
+      const totalCount = result?.count ?? 0;
+
+      eventTarget.dispatchEvent(
+        new CustomEvent<VoteEventDetail>("vote", {
+          detail: {
+            type: "upvote",
+            thingId,
+            userId,
+            timestamp: new Date().toISOString(),
+            totalCount,
+          },
+        }),
+      );
+
+      return { thingId, userId, totalCount };
+    },
+
+    async downvoteThing(thingId: string, userId: string) {
+      await db
+        .delete(upvotes)
+        .where(and(eq(upvotes.thingId, thingId), eq(upvotes.userId, userId)));
+
+      const [result] = await db
+        .select({ count: count() })
+        .from(upvotes)
+        .where(eq(upvotes.thingId, thingId));
+
+      const totalCount = result?.count ?? 0;
+
+      eventTarget.dispatchEvent(
+        new CustomEvent<VoteEventDetail>("vote", {
+          detail: {
+            type: "downvote",
+            thingId,
+            userId,
+            timestamp: new Date().toISOString(),
+            totalCount,
+          },
+        }),
+      );
+
+      return { thingId, totalCount };
+    },
+
+    async getUpvoteCount(thingId: string) {
+      const [result] = await db
+        .select({ count: count() })
+        .from(upvotes)
+        .where(eq(upvotes.thingId, thingId));
+
+      return { thingId, totalCount: result?.count ?? 0 };
+    },
+
+    async getUpvoteFeed(limit = 50, cursor?: string) {
+      const pageLimit = Math.min(limit, 100);
+      const records = await db
+        .select()
+        .from(upvotes)
+        .orderBy(desc(upvotes.createdAt))
+        .limit(pageLimit + 1);
+
+      const hasMore = records.length > pageLimit;
+      const data = records.slice(0, pageLimit).map((r: any) => ({
+        id: r.id,
+        thingId: r.thingId,
+        userId: r.userId,
+        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+      }));
+
+      return {
+        data,
+        meta: {
+          total: data.length,
+          hasMore,
+          nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
+        },
+      };
+    },
+  };
+}
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({}),
 
   secrets: z.object({
-    API_DATABASE_URL: z.string().default("file:./api.db"),
-    API_DATABASE_AUTH_TOKEN: z.string().optional(),
+    API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
   }),
 
   context: z.object({
@@ -41,18 +153,29 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (_config, plugins) =>
-    Effect.sync(() => {
+  initialize: (config, plugins) =>
+    Effect.promise(async () => {
+      const { createDatabaseDriver } = await import("./db/index");
+      const driver = await createDatabaseDriver(config.secrets.API_DATABASE_URL);
+
       const { auth, ...restPlugins } = plugins;
       console.log("[API] Services Initialized");
       console.log("[API] Auth client available:", Boolean(auth));
       console.log("[API] Plugins available:", Object.keys(restPlugins).join(", ") || "none");
-      return { auth, plugins: restPlugins };
+
+      const eventTarget = new EventTarget();
+      const upvoteService = createUpvoteService(driver.db, eventTarget);
+
+      return { auth, plugins: restPlugins, db: driver.db, upvoteService, eventTarget, driver };
     }),
 
-  shutdown: () => Effect.log("[API] Shutdown"),
+  shutdown: (services) =>
+    Effect.promise(async () => {
+      console.log("[API] Shutdown");
+      await (services as any).driver?.close?.();
+    }),
 
-  createRouter: (_services, builder) => {
+  createRouter: (services, builder) => {
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", {
@@ -84,6 +207,58 @@ export default createPlugin.withPlugins<PluginsClient>()({
         emailConfigured: !!process.env.EMAIL_PROVIDER,
         smsConfigured: !!process.env.SMS_PROVIDER,
       })),
+
+      upvoteThing: builder.upvoteThing.use(requireAuth).handler(async ({ input, context }) => {
+        return await services.upvoteService.upvoteThing(input.thingId, context.userId);
+      }),
+
+      downvoteThing: builder.downvoteThing.use(requireAuth).handler(async ({ input, context }) => {
+        return await services.upvoteService.downvoteThing(input.thingId, context.userId);
+      }),
+
+      getUpvoteCount: builder.getUpvoteCount.handler(async ({ input }) => {
+        return await services.upvoteService.getUpvoteCount(input.thingId);
+      }),
+
+      getUpvoteFeed: builder.getUpvoteFeed.handler(async ({ input }) => {
+        return await services.upvoteService.getUpvoteFeed(input.limit, input.cursor);
+      }),
+
+      subscribeUpvotes: builder.subscribeUpvotes.handler(async () => {
+        const encoder = new TextEncoder();
+        const eventTarget = services.eventTarget;
+
+        let listener: ((e: Event) => void) | null = null;
+
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode("event: connected\ndata: {}\n\n"),
+            );
+
+            listener = (e: Event) => {
+              const detail = (e as CustomEvent<VoteEventDetail>).detail;
+              const payload = JSON.stringify(detail);
+              controller.enqueue(encoder.encode(`event: vote\ndata: ${payload}\n\n`));
+            };
+
+            eventTarget.addEventListener("vote", listener);
+          },
+          cancel() {
+            if (listener) {
+              eventTarget.removeEventListener("vote", listener);
+            }
+          },
+        });
+
+        return new Response(stream, {
+          headers: {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+            connection: "keep-alive",
+          },
+        });
+      }),
     };
   },
 });

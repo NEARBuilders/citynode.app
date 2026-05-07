@@ -5,7 +5,7 @@ export default defineConfig({
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.AUTH_DATABASE_URL || "pglite:./auth-local.db",
+    url: process.env.AUTH_DATABASE_URL || "pglite:.bos/auth/:memory:",
   },
   verbose: true,
   strict: true,

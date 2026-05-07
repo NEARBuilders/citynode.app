@@ -23,13 +23,11 @@ import { Route as LayoutAuthenticatedAdminRouteImport } from './routes/_layout/_
 import { Route as LayoutAppsAccountIdIndexRouteImport } from './routes/_layout/apps/$accountId/index'
 import { Route as LayoutAuthenticatedProjectsIndexRouteImport } from './routes/_layout/_authenticated/projects/index'
 import { Route as LayoutAuthenticatedOrganizationsIndexRouteImport } from './routes/_layout/_authenticated/organizations/index'
-import { Route as LayoutAuthenticatedKeysIndexRouteImport } from './routes/_layout/_authenticated/keys/index'
 import { Route as LayoutAppsAccountIdGatewayIdRouteImport } from './routes/_layout/apps/$accountId/$gatewayId'
 import { Route as LayoutAuthenticatedProjectsNewRouteImport } from './routes/_layout/_authenticated/projects/new'
 import { Route as LayoutAuthenticatedProjectsIdRouteImport } from './routes/_layout/_authenticated/projects/$id'
 import { Route as LayoutAuthenticatedOrganizationsNewRouteImport } from './routes/_layout/_authenticated/organizations/new'
 import { Route as LayoutAuthenticatedOrganizationsIdRouteImport } from './routes/_layout/_authenticated/organizations/$id'
-import { Route as LayoutAuthenticatedKeysKeyRouteImport } from './routes/_layout/_authenticated/keys/$key'
 import { Route as LayoutAuthenticatedAdminDashboardRouteImport } from './routes/_layout/_authenticated/_admin/dashboard'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -104,12 +102,6 @@ const LayoutAuthenticatedOrganizationsIndexRoute =
     path: '/organizations/',
     getParentRoute: () => LayoutAuthenticatedRoute,
   } as any)
-const LayoutAuthenticatedKeysIndexRoute =
-  LayoutAuthenticatedKeysIndexRouteImport.update({
-    id: '/keys/',
-    path: '/keys/',
-    getParentRoute: () => LayoutAuthenticatedRoute,
-  } as any)
 const LayoutAppsAccountIdGatewayIdRoute =
   LayoutAppsAccountIdGatewayIdRouteImport.update({
     id: '/apps/$accountId/$gatewayId',
@@ -140,12 +132,6 @@ const LayoutAuthenticatedOrganizationsIdRoute =
     path: '/organizations/$id',
     getParentRoute: () => LayoutAuthenticatedRoute,
   } as any)
-const LayoutAuthenticatedKeysKeyRoute =
-  LayoutAuthenticatedKeysKeyRouteImport.update({
-    id: '/keys/$key',
-    path: '/keys/$key',
-    getParentRoute: () => LayoutAuthenticatedRoute,
-  } as any)
 const LayoutAuthenticatedAdminDashboardRoute =
   LayoutAuthenticatedAdminDashboardRouteImport.update({
     id: '/dashboard',
@@ -163,13 +149,11 @@ export interface FileRoutesByFullPath {
   '/settings': typeof LayoutAuthenticatedSettingsRoute
   '/apps/': typeof LayoutAppsIndexRoute
   '/dashboard': typeof LayoutAuthenticatedAdminDashboardRoute
-  '/keys/$key': typeof LayoutAuthenticatedKeysKeyRoute
   '/organizations/$id': typeof LayoutAuthenticatedOrganizationsIdRoute
   '/organizations/new': typeof LayoutAuthenticatedOrganizationsNewRoute
   '/projects/$id': typeof LayoutAuthenticatedProjectsIdRoute
   '/projects/new': typeof LayoutAuthenticatedProjectsNewRoute
   '/apps/$accountId/$gatewayId': typeof LayoutAppsAccountIdGatewayIdRoute
-  '/keys/': typeof LayoutAuthenticatedKeysIndexRoute
   '/organizations/': typeof LayoutAuthenticatedOrganizationsIndexRoute
   '/projects/': typeof LayoutAuthenticatedProjectsIndexRoute
   '/apps/$accountId/': typeof LayoutAppsAccountIdIndexRoute
@@ -184,13 +168,11 @@ export interface FileRoutesByTo {
   '/settings': typeof LayoutAuthenticatedSettingsRoute
   '/apps': typeof LayoutAppsIndexRoute
   '/dashboard': typeof LayoutAuthenticatedAdminDashboardRoute
-  '/keys/$key': typeof LayoutAuthenticatedKeysKeyRoute
   '/organizations/$id': typeof LayoutAuthenticatedOrganizationsIdRoute
   '/organizations/new': typeof LayoutAuthenticatedOrganizationsNewRoute
   '/projects/$id': typeof LayoutAuthenticatedProjectsIdRoute
   '/projects/new': typeof LayoutAuthenticatedProjectsNewRoute
   '/apps/$accountId/$gatewayId': typeof LayoutAppsAccountIdGatewayIdRoute
-  '/keys': typeof LayoutAuthenticatedKeysIndexRoute
   '/organizations': typeof LayoutAuthenticatedOrganizationsIndexRoute
   '/projects': typeof LayoutAuthenticatedProjectsIndexRoute
   '/apps/$accountId': typeof LayoutAppsAccountIdIndexRoute
@@ -209,13 +191,11 @@ export interface FileRoutesById {
   '/_layout/_authenticated/settings': typeof LayoutAuthenticatedSettingsRoute
   '/_layout/apps/': typeof LayoutAppsIndexRoute
   '/_layout/_authenticated/_admin/dashboard': typeof LayoutAuthenticatedAdminDashboardRoute
-  '/_layout/_authenticated/keys/$key': typeof LayoutAuthenticatedKeysKeyRoute
   '/_layout/_authenticated/organizations/$id': typeof LayoutAuthenticatedOrganizationsIdRoute
   '/_layout/_authenticated/organizations/new': typeof LayoutAuthenticatedOrganizationsNewRoute
   '/_layout/_authenticated/projects/$id': typeof LayoutAuthenticatedProjectsIdRoute
   '/_layout/_authenticated/projects/new': typeof LayoutAuthenticatedProjectsNewRoute
   '/_layout/apps/$accountId/$gatewayId': typeof LayoutAppsAccountIdGatewayIdRoute
-  '/_layout/_authenticated/keys/': typeof LayoutAuthenticatedKeysIndexRoute
   '/_layout/_authenticated/organizations/': typeof LayoutAuthenticatedOrganizationsIndexRoute
   '/_layout/_authenticated/projects/': typeof LayoutAuthenticatedProjectsIndexRoute
   '/_layout/apps/$accountId/': typeof LayoutAppsAccountIdIndexRoute
@@ -232,13 +212,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/apps/'
     | '/dashboard'
-    | '/keys/$key'
     | '/organizations/$id'
     | '/organizations/new'
     | '/projects/$id'
     | '/projects/new'
     | '/apps/$accountId/$gatewayId'
-    | '/keys/'
     | '/organizations/'
     | '/projects/'
     | '/apps/$accountId/'
@@ -253,13 +231,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/apps'
     | '/dashboard'
-    | '/keys/$key'
     | '/organizations/$id'
     | '/organizations/new'
     | '/projects/$id'
     | '/projects/new'
     | '/apps/$accountId/$gatewayId'
-    | '/keys'
     | '/organizations'
     | '/projects'
     | '/apps/$accountId'
@@ -277,13 +253,11 @@ export interface FileRouteTypes {
     | '/_layout/_authenticated/settings'
     | '/_layout/apps/'
     | '/_layout/_authenticated/_admin/dashboard'
-    | '/_layout/_authenticated/keys/$key'
     | '/_layout/_authenticated/organizations/$id'
     | '/_layout/_authenticated/organizations/new'
     | '/_layout/_authenticated/projects/$id'
     | '/_layout/_authenticated/projects/new'
     | '/_layout/apps/$accountId/$gatewayId'
-    | '/_layout/_authenticated/keys/'
     | '/_layout/_authenticated/organizations/'
     | '/_layout/_authenticated/projects/'
     | '/_layout/apps/$accountId/'
@@ -393,13 +367,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedOrganizationsIndexRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
-    '/_layout/_authenticated/keys/': {
-      id: '/_layout/_authenticated/keys/'
-      path: '/keys'
-      fullPath: '/keys/'
-      preLoaderRoute: typeof LayoutAuthenticatedKeysIndexRouteImport
-      parentRoute: typeof LayoutAuthenticatedRoute
-    }
     '/_layout/apps/$accountId/$gatewayId': {
       id: '/_layout/apps/$accountId/$gatewayId'
       path: '/apps/$accountId/$gatewayId'
@@ -435,13 +402,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedOrganizationsIdRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
-    '/_layout/_authenticated/keys/$key': {
-      id: '/_layout/_authenticated/keys/$key'
-      path: '/keys/$key'
-      fullPath: '/keys/$key'
-      preLoaderRoute: typeof LayoutAuthenticatedKeysKeyRouteImport
-      parentRoute: typeof LayoutAuthenticatedRoute
-    }
     '/_layout/_authenticated/_admin/dashboard': {
       id: '/_layout/_authenticated/_admin/dashboard'
       path: '/dashboard'
@@ -471,12 +431,10 @@ interface LayoutAuthenticatedRouteChildren {
   LayoutAuthenticatedAdminRoute: typeof LayoutAuthenticatedAdminRouteWithChildren
   LayoutAuthenticatedHomeRoute: typeof LayoutAuthenticatedHomeRoute
   LayoutAuthenticatedSettingsRoute: typeof LayoutAuthenticatedSettingsRoute
-  LayoutAuthenticatedKeysKeyRoute: typeof LayoutAuthenticatedKeysKeyRoute
   LayoutAuthenticatedOrganizationsIdRoute: typeof LayoutAuthenticatedOrganizationsIdRoute
   LayoutAuthenticatedOrganizationsNewRoute: typeof LayoutAuthenticatedOrganizationsNewRoute
   LayoutAuthenticatedProjectsIdRoute: typeof LayoutAuthenticatedProjectsIdRoute
   LayoutAuthenticatedProjectsNewRoute: typeof LayoutAuthenticatedProjectsNewRoute
-  LayoutAuthenticatedKeysIndexRoute: typeof LayoutAuthenticatedKeysIndexRoute
   LayoutAuthenticatedOrganizationsIndexRoute: typeof LayoutAuthenticatedOrganizationsIndexRoute
   LayoutAuthenticatedProjectsIndexRoute: typeof LayoutAuthenticatedProjectsIndexRoute
 }
@@ -485,14 +443,12 @@ const LayoutAuthenticatedRouteChildren: LayoutAuthenticatedRouteChildren = {
   LayoutAuthenticatedAdminRoute: LayoutAuthenticatedAdminRouteWithChildren,
   LayoutAuthenticatedHomeRoute: LayoutAuthenticatedHomeRoute,
   LayoutAuthenticatedSettingsRoute: LayoutAuthenticatedSettingsRoute,
-  LayoutAuthenticatedKeysKeyRoute: LayoutAuthenticatedKeysKeyRoute,
   LayoutAuthenticatedOrganizationsIdRoute:
     LayoutAuthenticatedOrganizationsIdRoute,
   LayoutAuthenticatedOrganizationsNewRoute:
     LayoutAuthenticatedOrganizationsNewRoute,
   LayoutAuthenticatedProjectsIdRoute: LayoutAuthenticatedProjectsIdRoute,
   LayoutAuthenticatedProjectsNewRoute: LayoutAuthenticatedProjectsNewRoute,
-  LayoutAuthenticatedKeysIndexRoute: LayoutAuthenticatedKeysIndexRoute,
   LayoutAuthenticatedOrganizationsIndexRoute:
     LayoutAuthenticatedOrganizationsIndexRoute,
   LayoutAuthenticatedProjectsIndexRoute: LayoutAuthenticatedProjectsIndexRoute,

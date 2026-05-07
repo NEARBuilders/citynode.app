@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/new"
 
 function NewOrganization() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
 
@@ -31,6 +32,7 @@ function NewOrganization() {
     onSuccess: async (data) => {
       toast.success(`Organization "${data?.name}" created`);
       if (data?.id) {
+        await queryClient.invalidateQueries({ queryKey: ["organizations"] });
         await router.navigate({
           to: "/organizations/$id",
           params: { id: data.id },

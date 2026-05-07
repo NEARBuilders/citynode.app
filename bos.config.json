@@ -66,8 +66,7 @@
       "integrity": "sha384-0ocd9HVO1sgIADvbccO8eJNS56GzXxFSoaiNPM291+J5NRI+Qq3dQQPWYSS/iSbH",
       "routes": [
         "ui/src/routes/_layout/_authenticated/organizations/**",
-        "ui/src/routes/_layout/_authenticated/projects/**",
-        "ui/src/routes/_layout/_authenticated/keys/**"
+        "ui/src/routes/_layout/_authenticated/projects/**"
       ]
     },
     "opencode": {

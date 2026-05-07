@@ -61,7 +61,7 @@ function updateBosConfig(url, integrity) {
 }
 
 const baseConfig = {
-  externals: [/^@libsql\/.*/],
+  externals: ["pg", "@electric-sql/pglite"],
   devtool: shouldDeploy ? false : "source-map",
   plugins: [
     new EmitPluginManifest(),

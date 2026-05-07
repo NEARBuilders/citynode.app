@@ -1,4 +1,4 @@
-import { UNAUTHORIZED } from "every-plugin/errors";
+import { BAD_REQUEST, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
 import { oc } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 
@@ -20,6 +20,69 @@ export const contract = oc.router({
       }),
     )
     .errors({ UNAUTHORIZED }),
+
+  upvoteThing: oc
+    .route({ method: "POST", path: "/upvotes" })
+    .input(z.object({ thingId: z.string() }))
+    .output(
+      z.object({
+        thingId: z.string(),
+        userId: z.string(),
+        totalCount: z.number().int().nonnegative(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, BAD_REQUEST }),
+
+  downvoteThing: oc
+    .route({ method: "DELETE", path: "/upvotes/{thingId}" })
+    .input(z.object({ thingId: z.string() }))
+    .output(
+      z.object({
+        thingId: z.string(),
+        totalCount: z.number().int().nonnegative(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, NOT_FOUND }),
+
+  getUpvoteCount: oc
+    .route({ method: "GET", path: "/upvotes/{thingId}/count" })
+    .input(z.object({ thingId: z.string() }))
+    .output(
+      z.object({
+        thingId: z.string(),
+        totalCount: z.number().int().nonnegative(),
+      }),
+    ),
+
+  getUpvoteFeed: oc
+    .route({ method: "GET", path: "/upvotes/feed" })
+    .input(
+      z.object({
+        limit: z.number().int().min(1).max(100).optional(),
+        cursor: z.string().optional(),
+      }),
+    )
+    .output(
+      z.object({
+        data: z.array(
+          z.object({
+            id: z.string(),
+            thingId: z.string(),
+            userId: z.string(),
+            createdAt: z.iso.datetime(),
+          }),
+        ),
+        meta: z.object({
+          total: z.number().int().nonnegative(),
+          hasMore: z.boolean(),
+          nextCursor: z.string().nullable(),
+        }),
+      }),
+    ),
+
+  subscribeUpvotes: oc
+    .route({ method: "GET", path: "/upvotes/stream" })
+    .output(z.unknown()),
 });
 
 export type ContractType = typeof contract;

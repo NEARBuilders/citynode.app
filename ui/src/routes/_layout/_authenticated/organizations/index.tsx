@@ -47,7 +47,7 @@ function OrganizationsList() {
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+      <section>
         <Card>
           <CardContent className="p-6 sm:p-8 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -76,13 +76,6 @@ function OrganizationsList() {
                 <Link to="/home">back to workspace</Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <StatBox label="total" value={String(organizations.length)} />
-            <StatBox label="active" value={activeOrgId ? "yes" : "no"} />
           </CardContent>
         </Card>
       </section>
@@ -171,11 +164,4 @@ function OrganizationsList() {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-muted/10 p-3 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold tracking-tight">{value}</div>
-    </div>
-  );
-}
+

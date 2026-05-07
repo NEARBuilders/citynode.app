@@ -17,10 +17,11 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@libsql/client": "catalog:",
     "@orpc/contract": "^1.13.4",
     "@orpc/server": "^1.13.4",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "@electric-sql/pglite": "catalog:"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
@@ -29,6 +30,7 @@
     "@rspack/cli": "^1.6.8",
     "@rspack/core": "^1.6.8",
     "@types/node": "catalog:",
+    "@types/pg": "catalog:",
     "dotenv": "^17.2.3",
     "drizzle-kit": "catalog:",
     "everything-dev": "workspace:*",

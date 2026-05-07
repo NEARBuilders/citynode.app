@@ -1,1 +1,13 @@
-{ "version": "7", "dialect": "sqlite", "entries": [] }
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1778189697333,
+      "tag": "0000_talented_lake",
+      "breakpoints": true
+    }
+  ]
+}

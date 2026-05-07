@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Badge, Button, Card, CardContent, Input, UnderConstruction } from "@/components";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -49,27 +49,11 @@ function AppsIndex() {
     queryFn: () => apiClient.registry.listRegistryApps({ q: search.q || undefined, limit: 48 }),
   });
 
-  const registryStatusQuery = useQuery({
-    queryKey: ["registry-status"],
-    queryFn: () => apiClient.registry.getRegistryStatus(),
-    staleTime: 60_000,
-  });
-
   const apps = appsQuery.data?.data ?? [];
-  const stats = useMemo(() => {
-    const ready = apps.filter((app) => app.status === "ready").length;
-    const claimed = apps.filter((app) => app.metadata?.claimedBy).length;
-
-    return {
-      total: appsQuery.data?.meta.total ?? 0,
-      ready,
-      claimed,
-    };
-  }, [apps, appsQuery.data?.meta.total]);
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+      <section>
         <Card>
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2">
@@ -113,19 +97,6 @@ function AppsIndex() {
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <StatBox label="apps" value={String(stats.total)} />
-            <StatBox label="ready" value={String(stats.ready)} />
-            <StatBox label="claimed" value={String(stats.claimed)} />
-            {registryStatusQuery.data && (
-              <div className="text-xs text-muted-foreground font-mono pt-2 border-t border-border">
-                relay {registryStatusQuery.data.relayEnabled ? "enabled" : "disabled"}
-              </div>
-            )}
           </CardContent>
         </Card>
       </section>
@@ -220,11 +191,4 @@ function AppsIndex() {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-muted/10 p-3 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tracking-tight">{value}</div>
-    </div>
-  );
-}
+

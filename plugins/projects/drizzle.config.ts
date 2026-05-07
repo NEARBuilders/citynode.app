@@ -3,10 +3,9 @@ import { defineConfig } from "drizzle-kit";
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./src/db/migrations",
-  dialect: "turso",
+  dialect: "postgresql",
   dbCredentials: {
-    url: process.env.PROJECTS_DATABASE_URL || "file:./projects.db",
-    authToken: process.env.PROJECTS_DATABASE_AUTH_TOKEN,
+    url: process.env.PROJECTS_DATABASE_URL || "pglite:.bos/projects/:memory:",
   },
   verbose: true,
   strict: true,

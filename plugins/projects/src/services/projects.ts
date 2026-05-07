@@ -4,6 +4,11 @@ import { ORPCError } from "every-plugin/orpc";
 import { DatabaseTag } from "../db/layer";
 import { projectApps, projects } from "../db/schema";
 
+function toIsoString(value: Date | string | null | undefined): string {
+  if (!value) return "";
+  return typeof value === "string" ? value : value.toISOString();
+}
+
 export interface Project {
   id: string;
   ownerId: string;
@@ -210,8 +215,8 @@ export const ProjectServiceLive = Layer.effect(
             description: p.description,
             status: p.status as "active" | "paused" | "archived",
             visibility: p.visibility as "private" | "unlisted" | "public",
-            createdAt: p.createdAt.toISOString(),
-            updatedAt: p.updatedAt.toISOString(),
+            createdAt: toIsoString(p.createdAt),
+            updatedAt: toIsoString(p.updatedAt),
           }));
 
           return {
@@ -256,8 +261,8 @@ export const ProjectServiceLive = Layer.effect(
             description: project.description,
             status: project.status as "active" | "paused" | "archived",
             visibility: project.visibility as "private" | "unlisted" | "public",
-            createdAt: project.createdAt.toISOString(),
-            updatedAt: project.updatedAt.toISOString(),
+            createdAt: toIsoString(project.createdAt),
+            updatedAt: toIsoString(project.updatedAt),
             apps: apps.map((a: any) => ({
               id: a.id,
               projectId: a.projectId,
@@ -265,7 +270,7 @@ export const ProjectServiceLive = Layer.effect(
               gatewayId: a.gatewayId,
               position: a.position,
               createdByUserId: a.createdByUserId,
-              createdAt: a.createdAt.toISOString(),
+            createdAt: toIsoString(a.createdAt),
             })),
           };
         }),
@@ -315,8 +320,8 @@ export const ProjectServiceLive = Layer.effect(
             description: input.description ?? null,
             status: "active" as const,
             visibility: (input.visibility ?? "private") as "private" | "unlisted" | "public",
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
+            createdAt: toIsoString(now),
+            updatedAt: toIsoString(now),
           };
         }),
 
@@ -358,8 +363,8 @@ export const ProjectServiceLive = Layer.effect(
             description: updates.description ?? existing.description,
             status: updates.status ?? existing.status,
             visibility: updates.visibility ?? existing.visibility,
-            createdAt: existing.createdAt.toISOString(),
-            updatedAt: now.toISOString(),
+            createdAt: toIsoString(existing.createdAt),
+            updatedAt: toIsoString(now),
           };
         }),
 
@@ -396,7 +401,7 @@ export const ProjectServiceLive = Layer.effect(
             gatewayId: a.gatewayId,
             position: a.position,
             createdByUserId: a.createdByUserId,
-            createdAt: a.createdAt.toISOString(),
+            createdAt: toIsoString(a.createdAt),
           }));
         }),
 
@@ -426,15 +431,15 @@ export const ProjectServiceLive = Layer.effect(
           );
 
           if (existing) {
-            return {
-              id: existing.id,
-              projectId: existing.projectId,
-              accountId: existing.accountId,
-              gatewayId: existing.gatewayId,
-              position: existing.position,
-              createdByUserId: existing.createdByUserId,
-              createdAt: existing.createdAt.toISOString(),
-            };
+          return {
+            id: existing.id,
+            projectId: existing.projectId,
+            accountId: existing.accountId,
+            gatewayId: existing.gatewayId,
+            position: existing.position,
+            createdByUserId: existing.createdByUserId,
+            createdAt: toIsoString(existing.createdAt),
+          };
           }
 
           const [maxPos] = yield* Effect.promise(() =>
@@ -467,7 +472,7 @@ export const ProjectServiceLive = Layer.effect(
             gatewayId,
             position,
             createdByUserId: userId,
-            createdAt: now.toISOString(),
+            createdAt: toIsoString(now),
           };
         }),
 
@@ -525,8 +530,8 @@ export const ProjectServiceLive = Layer.effect(
             description: r.project.description,
             status: r.project.status as "active" | "paused" | "archived",
             visibility: r.project.visibility as "private" | "unlisted" | "public",
-            createdAt: r.project.createdAt.toISOString(),
-            updatedAt: r.project.updatedAt.toISOString(),
+            createdAt: toIsoString(r.project.createdAt),
+            updatedAt: toIsoString(r.project.updatedAt),
           }));
         }),
     };

@@ -1,14 +1,22 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
-import { createDatabase, type Database } from "./index";
+import type { ProjectsDatabase } from "./index";
 
-export const DatabaseTag = Context.Tag("projects/Database")<Database, Database>();
-export type DatabaseTag = typeof DatabaseTag;
+export const DatabaseTag = Context.Tag("projects/Database")<ProjectsDatabase, ProjectsDatabase>();
 
-export const DatabaseLive = (url: string, authToken?: string) =>
+export const DatabaseLive = (url: string) =>
   Layer.scoped(
     DatabaseTag,
     Effect.acquireRelease(
-      Effect.sync(() => createDatabase(url, authToken)),
-      (acquired) => Effect.sync(() => acquired.client.close()),
-    ).pipe(Effect.map((acquired) => acquired.db)),
+      Effect.promise(async () => {
+        const { createDatabaseDriver } = await import("./index");
+        const driver = await createDatabaseDriver(url);
+        return driver.db;
+      }),
+      (db) =>
+        Effect.promise(async () => {
+          const { createDatabaseDriver } = await import("./index");
+          const driver = await createDatabaseDriver(url);
+          await driver.close();
+        }).pipe(Effect.catchAll(() => Effect.void)),
+    ),
   );

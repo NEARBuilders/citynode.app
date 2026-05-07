@@ -40,7 +40,7 @@ function Settings() {
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+      <section>
         <Card>
           <CardContent className="p-6 sm:p-8 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -71,15 +71,6 @@ function Settings() {
                 </Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <MiniStat label="email" value={user.email ? "linked" : "missing"} />
-            <MiniStat label="near" value={nearAccountId ? "linked" : "missing"} />
-            <MiniStat label="passkeys" value={String(passkeys.length)} />
-            <MiniStat label="profile" value={user.isAnonymous ? "temporary" : "persistent"} />
           </CardContent>
         </Card>
       </section>
@@ -406,15 +397,6 @@ function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boole
         </div>
       </div>
     </section>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-muted/10 p-3 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold tracking-tight">{value}</div>
-    </div>
   );
 }
 

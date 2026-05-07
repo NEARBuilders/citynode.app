@@ -24,15 +24,16 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
     context: { queryClient: QueryClient; apiClient: ApiClient };
     params: { id: string };
   }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData({
-        queryKey: ["organizations"],
-        queryFn: async () => {
-          const { data } = await getAuthClient().organization.list();
-          return (data || []) as Organization[];
-        },
-        staleTime: 30 * 1000,
-      }),
+    await context.queryClient.ensureQueryData({
+      queryKey: ["organizations"],
+      queryFn: async () => {
+        const { data } = await getAuthClient().organization.list();
+        return (data || []) as Organization[];
+      },
+      staleTime: 30 * 1000,
+    });
+
+    await Promise.allSettled([
       context.queryClient.ensureQueryData({
         queryKey: orgMembersQueryKey(params.id),
         queryFn: async (): Promise<OrgMembersResult> =>
@@ -232,63 +233,49 @@ function OrganizationDetail() {
           <span>{org.slug}</span>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <Card>
-            <CardContent className="p-6 sm:p-8 space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">organization</Badge>
-                {isActive && <Badge variant="outline">active</Badge>}
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{org.name}</h1>
-                <p className="text-sm text-muted-foreground font-mono">@{org.slug}</p>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Manage membership, invitations, and organization-scoped API access from one place.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {!isActive && (
-                  <Button
-                    onClick={() => switchOrgMutation.mutate()}
-                    disabled={switchOrgMutation.isPending}
-                    size="sm"
-                  >
-                    {switchOrgMutation.isPending ? "switching..." : "switch to org"}
-                  </Button>
-                )}
+        <Card>
+          <CardContent className="p-6 sm:p-8 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">organization</Badge>
+              {isActive && <Badge variant="outline">active</Badge>}
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">{org.name}</h1>
+              <p className="text-sm text-muted-foreground font-mono">@{org.slug}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Manage membership, invitations, and organization-scoped API access from one place.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!isActive && (
                 <Button
-                  variant="outline"
+                  onClick={() => switchOrgMutation.mutate()}
+                  disabled={switchOrgMutation.isPending}
                   size="sm"
-                  onClick={() => setShowInviteForm((value) => !value)}
                 >
-                  {showInviteForm ? "close invite" : "invite member"}
+                  {switchOrgMutation.isPending ? "switching..." : "switch to org"}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowApiKeyForm((value) => !value)}
-                >
-                  {showApiKeyForm ? "close key form" : "new api key"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <StatBox label="members" value={String(members.length)} />
-              <StatBox label="invitations" value={String(invitations.length)} />
-              <StatBox label="api keys" value={String(apiKeys.length)} />
-              <StatBox
-                label="created"
-                value={org.createdAt ? new Date(org.createdAt).toLocaleDateString() : "-"}
-              />
-            </CardContent>
-          </Card>
-        </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowInviteForm((value) => !value)}
+              >
+                {showInviteForm ? "close invite" : "invite member"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowApiKeyForm((value) => !value)}
+              >
+                {showApiKeyForm ? "close key form" : "new api key"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+      <section>
         <Card>
           <CardContent className="p-6 space-y-4">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">details</div>
@@ -299,26 +286,6 @@ function OrganizationDetail() {
               label="created"
               value={org.createdAt ? new Date(org.createdAt).toLocaleString() : "-"}
             />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">navigator</div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <NavTile title="workspace" body="return to the workspace overview" to="/home" />
-              <NavTile
-                title="organizations"
-                body="switch back to the org list"
-                to="/organizations"
-              />
-              <NavTile
-                title="settings"
-                body="link auth methods and update identity"
-                to="/settings"
-              />
-              <NavTile title="published apps" body="jump back to runtime discovery" href="/apps" />
-            </div>
           </CardContent>
         </Card>
       </section>
@@ -516,15 +483,6 @@ function OrganizationDetail() {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-muted/10 p-3 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold tracking-tight break-all">{value}</div>
-    </div>
-  );
-}
-
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-sm border border-border bg-muted/10 p-3 grid gap-1 sm:grid-cols-[100px_1fr] sm:gap-4">
@@ -554,29 +512,4 @@ function EmptyCard({ label }: { label: string }) {
   );
 }
 
-function NavTile({
-  title,
-  body,
-  to,
-  href,
-}: {
-  title: string;
-  body: string;
-  to?: "/home" | "/organizations" | "/settings";
-  href?: string;
-}) {
-  const tile = (
-    <Card className="transition-colors hover:bg-muted/20">
-      <CardContent className="p-4 space-y-2">
-        <div className="font-medium">{title}</div>
-        <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-      </CardContent>
-    </Card>
-  );
 
-  if (to) {
-    return <Link to={to}>{tile}</Link>;
-  }
-
-  return <a href={href}>{tile}</a>;
-}

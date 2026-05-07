@@ -77,13 +77,9 @@ function Home() {
     );
   }
 
-  const capabilityCount = [profile.hasEmail, profile.hasNear, profile.hasPasskeys].filter(
-    Boolean,
-  ).length;
-
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+      <section>
         <Card>
           <CardContent className="p-6 sm:p-8 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -111,18 +107,9 @@ function Home() {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <StatBox label="organizations" value={String(organizations.length)} />
-            <StatBox label="linked methods" value={String(capabilityCount)} />
-            <StatBox label="passkeys" value={String(passkeys.length)} />
-            <StatBox label="active org" value={activeOrg ? "yes" : "no"} />
-          </CardContent>
-        </Card>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+      <section>
         <Card>
           <CardContent className="p-6 space-y-4">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -153,19 +140,6 @@ function Home() {
                 durable identity.
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">navigator</div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <WorkspaceTile
-                title="settings"
-                body="profile, linked auth methods, sessions, and sign out"
-                to="/settings"
-              />
-            </div>
           </CardContent>
         </Card>
       </section>
@@ -211,15 +185,6 @@ function Home() {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-muted/10 p-3 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tracking-tight">{value}</div>
-    </div>
-  );
-}
-
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="rounded-sm border border-border bg-muted/10 p-3 grid gap-1 sm:grid-cols-[100px_1fr] sm:gap-4">
@@ -229,19 +194,4 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
   );
 }
 
-function WorkspaceTile({ title, body, to }: { title: string; body: string; to?: "/settings" }) {
-  const tile = (
-    <Card className="transition-colors hover:bg-muted/20">
-      <CardContent className="p-4 space-y-2">
-        <div className="font-medium">{title}</div>
-        <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-      </CardContent>
-    </Card>
-  );
 
-  if (to) {
-    return <Link to={to}>{tile}</Link>;
-  }
-
-  return tile;
-}
