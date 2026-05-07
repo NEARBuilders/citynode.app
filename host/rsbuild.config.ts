@@ -131,7 +131,7 @@ export default defineConfig({
       },
       externals: [/^node:/, /^bun:/],
       resolve: {
-        fallback: { bufferutil: false, "utf-8-validate": false, "@opentelemetry/api": false },
+        fallback: { bufferutil: false, "utf-8-validate": false },
       },
       infrastructureLogging: {
         level: "error",
