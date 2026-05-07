@@ -10,6 +10,14 @@ import {
 } from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[Orchestrator] Unhandled rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[Orchestrator] Uncaught exception:", err);
+});
+
 export interface ProcessCallbacks {
   onStatus: (name: string, status: ProcessStatus, message?: string) => void;
   onLog: (name: string, line: string, isError?: boolean) => void;

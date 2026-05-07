@@ -111,7 +111,9 @@ export function setupPluginMiddleware(
       console.error("❌ Failed to load plugin:", error);
       await performCleanup();
     }
-  })();
+  })().catch((err) => {
+    console.error("❌ Plugin dev server fatal error:", err);
+  });
 
   process.once("SIGINT", async () => {
     const timeout = setTimeout(() => process.exit(0), 3000);

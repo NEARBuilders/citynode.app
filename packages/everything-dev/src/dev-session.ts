@@ -251,6 +251,11 @@ const runApp = (
     Effect.provide(ServiceDescriptorMapLive(services)),
     Effect.provide(DevRuntimeConfigLive(runtimeConfig)),
     Effect.provide(NodeContext.layer),
+    Effect.catchAllDefect((defect) =>
+      Effect.sync(() => {
+        console.error("[Dev] Unhandled defect in orchestrator:", defect);
+      }),
+    ),
   );
 
   const handleSignal = () => {
