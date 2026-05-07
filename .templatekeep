@@ -50,6 +50,8 @@ ui/src/routes/_layout/index.tsx
 ui/src/routes/_layout/login.tsx
 ui/src/routes/_layout/_authenticated.tsx
 ui/src/routes/_layout/_authenticated/home.tsx
+ui/src/routes/_layout/_authenticated/organizations/**
+ui/src/routes/_layout/apps/**
 
 api/package.json
 api/rspack.config.js
@@ -57,6 +59,7 @@ api/plugin.dev.ts
 api/tsconfig.json
 api/tsconfig.contract.json
 api/drizzle.config.ts
+api/tests/types.d.ts
 api/src/contract.ts
 api/src/index.ts
 api/src/db/index.ts

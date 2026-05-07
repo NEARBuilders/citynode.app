@@ -309,6 +309,19 @@ export async function personalizeConfig(
 
     if (isInit && config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
+
+      const authClientPath = join(destination, "ui", "src", "lib", "auth-client.ts");
+      if (existsSync(authClientPath)) {
+        const authClientContent = readFileSync(authClientPath, "utf-8")
+          .split("\n")
+          .filter(
+            (line) =>
+              !line.includes("inferAdditionalFields") && !line.includes("createAuthInstance"),
+          )
+          .join("\n");
+        writeFileSync(authClientPath, authClientContent);
+      }
+
       for (const entryKey of Object.keys(app)) {
         const entry = app[entryKey];
         if (entry && typeof entry === "object") {
@@ -385,14 +398,16 @@ export async function personalizeConfig(
       rewrite("publish", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
       rewrite("start", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
 
-      if (scripts["sync:api-contract"]) {
-        delete scripts["sync:api-contract"];
-      }
       if (scripts.postinstall) {
         delete scripts.postinstall;
       }
-      if (scripts.typecheck?.includes("sync:api-contract")) {
-        scripts.typecheck = scripts.typecheck.replace("bun run sync:api-contract && ", "");
+      if (scripts.typecheck) {
+        scripts.typecheck = scripts.typecheck
+          .replace("bun run sync:api-contract && ", "")
+          .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
+        if (!opts.withHost) {
+          scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
+        }
       }
     }
 
@@ -414,12 +429,49 @@ export async function personalizeConfig(
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
 
+  const apiTsConfigPath = join(destination, "api", "tsconfig.json");
+  if (existsSync(apiTsConfigPath)) {
+    const apiTsConfig = JSON.parse(readFileSync(apiTsConfigPath, "utf-8")) as {
+      files?: string[];
+      [key: string]: unknown;
+    };
+    if (apiTsConfig.files) {
+      const validFiles = apiTsConfig.files.filter((f) => existsSync(join(destination, "api", f)));
+      if (validFiles.length !== apiTsConfig.files.length) {
+        if (validFiles.length === 0) {
+          delete apiTsConfig.files;
+        } else {
+          apiTsConfig.files = validFiles;
+        }
+        writeFileSync(apiTsConfigPath, `${JSON.stringify(apiTsConfig, null, 2)}\n`);
+      }
+    }
+  }
+
   await resolveWorkspaceRefs(destination, opts.workspaceOpts);
 
   const genContractPath = join(destination, "ui", "src", "api-contract.gen.ts");
   if (!existsSync(genContractPath)) {
     mkdirSync(dirname(genContractPath), { recursive: true });
     writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
+  }
+
+  const authClientGenPath = join(destination, "api", "src", "auth-client.gen.ts");
+  if (!existsSync(authClientGenPath)) {
+    mkdirSync(dirname(authClientGenPath), { recursive: true });
+    writeFileSync(
+      authClientGenPath,
+      `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type AuthClient = ClientFactory<any>;\n`,
+    );
+  }
+
+  const pluginsClientGenPath = join(destination, "api", "src", "plugins-client.gen.ts");
+  if (!existsSync(pluginsClientGenPath)) {
+    mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
+    writeFileSync(
+      pluginsClientGenPath,
+      `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type PluginsClient = Record<string, never>;\n`,
+    );
   }
 }
 

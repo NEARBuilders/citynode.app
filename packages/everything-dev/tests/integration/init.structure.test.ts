@@ -45,8 +45,9 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, ".changeset"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/keys"))).toBe(false);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/organizations"))).toBe(
-      false,
+      true,
     );
+    expect(existsSync(join(testDir, "ui/src/routes/_layout/apps"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(false);
   });
 
