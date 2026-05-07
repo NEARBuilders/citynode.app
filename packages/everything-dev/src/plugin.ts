@@ -95,7 +95,7 @@ function ensureEnvFile(configDir: string): void {
     .join("\n");
 
   writeFileSync(envPath, updated);
-  console.log(`[CLI] Created .env from .env.example with generated BETTER_AUTH_SECRET`);
+  p.log.info(`Created .env from .env.example with generated BETTER_AUTH_SECRET`);
 }
 
 const buildCommands: Record<string, { cmd: string; args: string[] }> = {

@@ -46,6 +46,34 @@ function formatTimeAgo(isoTimestamp: string): string {
   return isoTimestamp.split("T")[0] ?? isoTimestamp;
 }
 
+async function warnIfOutdated(client: any, command: string): Promise<void> {
+  if (!["dev", "build", "start"].includes(command)) return;
+
+  try {
+    const status = await client.status();
+    if (status.status === "error" || !status.packages) return;
+
+    const outdated = status.packages.filter(
+      (p: { name: string; installed?: string; latest?: string }) =>
+        p.installed && p.latest && p.installed !== p.latest,
+    );
+
+    if (outdated.length === 0) return;
+
+    console.log();
+    console.log(colors.yellow(`  ! Outdated packages detected:`));
+    for (const pkg of outdated) {
+      console.log(colors.dim(`    ${pkg.name}  ${pkg.installed} → ${pkg.latest}`));
+    }
+    console.log(
+      colors.dim(`    Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`),
+    );
+    console.log();
+  } catch {
+    // silently ignore if status check fails
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -86,6 +114,8 @@ async function main() {
   });
 
   const client = plugin.createClient();
+
+  await warnIfOutdated(client, command);
 
   try {
     const input = parseCommandInput(descriptor, commandArgs);
