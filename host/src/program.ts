@@ -447,13 +447,21 @@ export const createStartServer = (onReady?: () => void) =>
       return c.json({ error: details.message, cause: details.cause }, 500);
     });
 
+    const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((o: string) => o.trim()) ?? [
+      config.host?.url ?? "",
+      ...(uiConfig.url ? [uiConfig.url] : []),
+    ];
+
     app.use(
       "/*",
       cors({
-        origin: process.env.CORS_ORIGIN?.split(",").map((o: string) => o.trim()) ?? [
-          config.host?.url ?? "",
-          ...(uiConfig.url ? [uiConfig.url] : []),
-        ],
+        origin: (origin) => {
+          if (!origin) return "*";
+          if (allowedOrigins.includes(origin)) return origin;
+          if (origin.startsWith("https://")) return origin;
+          if (isDev && origin.startsWith("http://")) return origin;
+          return null;
+        },
         credentials: true,
       }),
     );
@@ -496,6 +504,7 @@ export const createStartServer = (onReady?: () => void) =>
           connectSrc: ["'self'", "https:", ...uniqueOrigins, ...wsOrigins],
           fontSrc: ["'self'", "https:", ...uniqueOrigins],
           manifestSrc: ["'self'", ...(uiConfig.url ? [new URL(uiConfig.url).origin] : [])],
+          frameSrc: ["'self'", "https:", ...uniqueOrigins],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],

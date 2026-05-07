@@ -83,40 +83,45 @@ export function renderStreamingView(
   const columnWidths = getColumnWidths(initialProcesses);
   const lastLogBySource = new Map<string, string>();
 
-  console.log();
-  console.log(colors.cyan(`${"─".repeat(52)}`));
-  console.log(`  ${icons.run} ${colors.cyan(description.toUpperCase())}`);
-  console.log(colors.cyan(`${"─".repeat(52)}`));
-  console.log();
+  const headerLines: string[] = [
+    "",
+    colors.cyan(`${"─".repeat(52)}`),
+    `  ${icons.run} ${colors.cyan(description.toUpperCase())}`,
+    colors.cyan(`${"─".repeat(52)}`),
+    "",
+  ];
 
   if (proxyTarget) {
-    console.log(orange(`  ${icons.arrow} API PROXY → ${proxyTarget}`));
-    console.log();
+    headerLines.push(orange(`  ${icons.arrow} API PROXY → ${proxyTarget}`), "");
   }
 
   for (const section of sectionedProcesses) {
-    console.log(colors.cyan(`  ${section.title}`));
+    headerLines.push(colors.cyan(`  ${section.title}`));
     for (const proc of section.processes) {
       const color = getServiceColor(proc.name);
       const sourceLabel = proc.source ? ` (${proc.source})` : "";
-      console.log(
+      headerLines.push(
         `${colors.dim(`[${getTimestamp()}]`)} ${color(`[${getDisplayName(proc.name).padEnd(columnWidths.name)}]`)}  ${icons.pending} waiting${sourceLabel.padEnd(columnWidths.source)}`,
       );
     }
-    console.log();
+    headerLines.push("");
   }
+  console.log(headerLines.join("\n"));
 
   const checkAllReady = () => {
     if (allReadyPrinted) return;
     const allReady = Array.from(processes.values()).every((p) => p.status === "ready");
     if (allReady) {
       allReadyPrinted = true;
-      console.log();
-      console.log(colors.dim(`${"─".repeat(52)}`));
-      console.log(colors.green(`${icons.ok} All ${processes.size} services ready`));
-      console.log(colors.green(`${icons.arrow} http://localhost:${hostPort}`));
-      console.log(colors.dim(`${"─".repeat(52)}`));
-      console.log();
+      const readyLines = [
+        "",
+        colors.dim(`${"─".repeat(52)}`),
+        colors.green(`${icons.ok} All ${processes.size} services ready`),
+        colors.green(`${icons.arrow} http://localhost:${hostPort}`),
+        colors.dim(`${"─".repeat(52)}`),
+        "",
+      ];
+      console.log(readyLines.join("\n"));
     }
   };
 

@@ -992,30 +992,30 @@ export default createPlugin({
           ? buildRegistryConfigUrl(input.account, input.domain)
           : undefined;
 
-      console.log();
-      console.log(`  ${colors.dim("Config Source:")}  ${configSource}`);
+      const summaryLines: string[] = ["", `  ${colors.dim("Config Source:")}  ${configSource}`];
       if (configSourceHttp) {
-        console.log(`                  ${colors.dim(configSourceHttp)}`);
+        summaryLines.push(`                  ${colors.dim(configSourceHttp)}`);
       }
-      console.log(`  ${colors.dim("Account:")}        ${config.account}`);
-      console.log(`  ${colors.dim("Domain:")}         ${config.domain ?? "not configured"}`);
-      console.log();
-      console.log(`  ${colors.dim("Modules:")}`);
-      console.log(
+      summaryLines.push(
+        `  ${colors.dim("Account:")}        ${config.account}`,
+        `  ${colors.dim("Domain:")}         ${config.domain ?? "not configured"}`,
+        "",
+        `  ${colors.dim("Modules:")}`,
         `    ${colors.dim("HOST")}  → ${runtimeConfig.host.remoteUrl ?? runtimeConfig.host.url ?? "local"}`,
+        `    ${colors.dim("UI")}   → ${runtimeConfig.ui.url ?? "local"}`,
+        `    ${colors.dim("API")}  → ${runtimeConfig.api.url ?? "local"}`,
       );
-      console.log(`    ${colors.dim("UI")}   → ${runtimeConfig.ui.url ?? "local"}`);
-      console.log(`    ${colors.dim("API")}  → ${runtimeConfig.api.url ?? "local"}`);
       if (runtimeConfig.auth) {
-        console.log(`    ${colors.dim("AUTH")}  → ${runtimeConfig.auth.url ?? "local"}`);
+        summaryLines.push(`    ${colors.dim("AUTH")}  → ${runtimeConfig.auth.url ?? "local"}`);
       }
       if (warnings.length > 0) {
-        console.log();
+        summaryLines.push("");
         for (const w of warnings) {
-          console.log(`  ${colors.yellow(w)}`);
+          summaryLines.push(`  ${colors.yellow(w)}`);
         }
       }
-      console.log();
+      summaryLines.push("");
+      console.log(summaryLines.join("\n"));
 
       const orchestrator: AppOrchestrator = {
         packages: ["host"],

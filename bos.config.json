@@ -82,8 +82,8 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-3012-host-everything-dev-nearbuilder-c057f0d12-ze.zephyrcloud.app",
-      "integrity": "sha384-EAbgyTlYgihWTcoeLVPBEfoXoCX3wkrKTH0TiO0RpE0qcsGZAv973OFRIszjWoAr"
+      "production": "https://elliot-braem-3032-host-everything-dev-nearbuilder-dac3244c0-ze.zephyrcloud.app",
+      "integrity": "sha384-AMT2ZD4BwjlCfWQKXq1m6fAwWYYa1/jQ85wXI6BmzRty+0aBy5xAnA3h/35ieI77"
     },
     "ui": {
       "name": "ui",
