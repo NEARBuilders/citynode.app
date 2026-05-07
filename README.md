@@ -218,7 +218,7 @@ All runtime configuration lives in `bos.config.json`:
         "hostUrl": "http://localhost:3000",
         "uiUrl": "http://localhost:3003"
       },
-      "secrets": ["AUTH_DATABASE_URL", "AUTH_DATABASE_AUTH_TOKEN", "BETTER_AUTH_SECRET"]
+      "secrets": ["AUTH_DATABASE_URL", "BETTER_AUTH_SECRET"]
     }
   }
 }
@@ -276,7 +276,7 @@ Biome is configured in `biome.json` at the project root. Generated files (like `
 - Effect-TS for service composition
 
 **Database & Auth:**
-- SQLite (libsql) + Drizzle ORM
+- PostgreSQL + Drizzle ORM
 - Better-Auth with NEAR Protocol support
 
 ## Related Projects

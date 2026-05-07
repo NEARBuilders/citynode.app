@@ -1,40 +1,34 @@
+import type { PgDatabase } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
 
-export type AuthDatabase = any;
+export type AuthDatabase = PgDatabase<any, typeof schema>;
 
 export interface DatabaseDriver {
   readonly db: AuthDatabase;
-  execute(sql: string): Promise<void>;
-  query(sql: string): Promise<unknown[]>;
-  batch?(sqls: string[]): Promise<void>;
-  close(): void;
+  close(): Promise<void>;
 }
 
-export interface DriverOptions {
-  authToken?: string;
-}
+export async function createDatabaseDriver(url: string): Promise<DatabaseDriver> {
+  if (url.startsWith("pglite:") || url === ":memory:") {
+    const { drizzle } = await import("drizzle-orm/pglite");
+    const dataDir = url === ":memory:" ? ":memory:" : url.replace("pglite:", "");
+    const db = drizzle(dataDir, { schema });
+    return {
+      db,
+      close: async () => {},
+    };
+  }
 
-export function createDatabaseDriver(url: string, options?: DriverOptions): DatabaseDriver {
-  const { createClient } = require("@libsql/client") as typeof import("@libsql/client");
-  const { drizzle } = require("drizzle-orm/libsql") as typeof import("drizzle-orm/libsql");
-
-  const client = createClient({ url, authToken: options?.authToken });
-  const db = drizzle(client, { schema });
-
+  const { Pool } = await import("pg");
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const pool = new Pool({
+    connectionString: url,
+    ssl: { rejectUnauthorized: false },
+  });
   return {
-    db,
-    execute: async (sql: string) => {
-      await client.execute(sql);
-    },
-    query: async (sql: string) => {
-      const result = await client.execute(sql);
-      return result.rows;
-    },
-    batch: async (sqls: string[]) => {
-      await client.batch(sqls.map((sql) => ({ sql })));
-    },
-    close: () => {
-      client.close();
+    db: drizzle(pool, { schema }),
+    close: async () => {
+      await pool.end();
     },
   };
 }

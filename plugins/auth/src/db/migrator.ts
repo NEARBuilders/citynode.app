@@ -1,36 +1,47 @@
 import type { Migration } from "virtual:drizzle-migrations.sql";
-import type { DatabaseDriver } from "./driver";
+import { sql } from "drizzle-orm";
+import type { AuthDatabase } from "./driver";
+
+function normalizeRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === "object" && "rows" in result) {
+    return (result as { rows: T[] }).rows;
+  }
+  return [];
+}
 
 /**
- * Run migrations against the libsql database driver.
+ * Run bundled migrations against the PostgreSQL database.
+ * Uses a standard `drizzle_migrations` tracking table compatible with Drizzle Kit.
  */
-export async function migrate(driver: DatabaseDriver, migrations: Migration[]): Promise<void> {
-  await driver.execute(`
-    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      hash TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+export async function migrate(db: AuthDatabase, migrations: Migration[]): Promise<void> {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "drizzle_migrations" (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at bigint
     )
   `);
 
-  const appliedRows = await driver.query("SELECT hash FROM __drizzle_migrations");
-  const appliedHashes = new Set(appliedRows.map((r: any) => r.hash as string));
+  interface MigrationRow {
+    hash: string;
+  }
+
+  const rawResult = await db.execute(sql`SELECT hash FROM "drizzle_migrations"`);
+  const appliedRows = normalizeRows<MigrationRow>(rawResult);
+  const appliedHashes = new Set(appliedRows.map((r) => r.hash));
 
   for (const migration of migrations) {
     if (appliedHashes.has(migration.hash)) continue;
     console.log(`[Auth] Applying migration: ${migration.tag}`);
 
-    const statements = [
-      ...migration.sql,
-      `INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('${migration.hash}', ${Date.now()})`,
-    ];
-
-    if (driver.batch) {
-      await driver.batch(statements);
-    } else {
-      for (const sql of statements) {
-        await driver.execute(sql);
+    await db.transaction(async (tx) => {
+      for (const statement of migration.sql) {
+        await tx.execute(sql.raw(statement));
       }
-    }
+      await tx.execute(
+        sql`INSERT INTO "drizzle_migrations" (hash, created_at) VALUES (${migration.hash}, ${Date.now()})`,
+      );
+    });
   }
 }

@@ -1,12 +1,8 @@
-export type AuthDatabase = any;
+import type { PgDatabase } from "drizzle-orm/pg-core";
+import * as schema from "./schema";
+export type AuthDatabase = PgDatabase<any, typeof schema>;
 export interface DatabaseDriver {
     readonly db: AuthDatabase;
-    execute(sql: string): Promise<void>;
-    query(sql: string): Promise<unknown[]>;
-    batch?(sqls: string[]): Promise<void>;
-    close(): void;
+    close(): Promise<void>;
 }
-export interface DriverOptions {
-    authToken?: string;
-}
-export declare function createDatabaseDriver(url: string, options?: DriverOptions): DatabaseDriver;
+export declare function createDatabaseDriver(url: string): Promise<DatabaseDriver>;

@@ -11,7 +11,7 @@ This plugin exposes a complete **oRPC contract** with endpoints for:
 - **Organization Support**: Members, invitations, roles, and personal organizations (auto-created per user)
 - **API Keys**: Scoped, rate-limited, organization-aware API keys
 - **NEAR SIWN**: Sign-In-With-NEAR — link NEAR accounts to platform users, view profiles, relay transactions via a built-in relayer, and view contract state
-- **libsql Database Driver**: SQLite via `@libsql/client` (supports local files and remote Turso databases)
+- **PostgreSQL Database**: Uses `pg` for production (Railway, etc.) and `@electric-sql/pglite` for local development and tests
 
 It runs inside the **everything-plugin** framework (oRPC + Effect) and is designed to be mounted as a federated module in the Everything workspace.
 
@@ -24,7 +24,8 @@ It runs inside the **everything-plugin** framework (oRPC + Effect) and is design
 | `better-near-auth` | `catalog:` | Yes |
 | `drizzle-orm` | `catalog:` | Yes |
 | `every-plugin` | `workspace:*` | Yes |
-| `@libsql/client` | `catalog:` | Yes |
+| `pg` | `catalog:` | Yes |
+| `@electric-sql/pglite` | `^0.2.0` | Dev only |
 | `@orpc/contract` | `catalog:` | Dev only |
 | `@orpc/server` | `catalog:` | Dev only |
 
@@ -44,8 +45,7 @@ It runs inside the **everything-plugin** framework (oRPC + Effect) and is design
 
 | Secret | Type | Default | Description |
 |--------|------|---------|-------------|
-| `AUTH_DATABASE_URL` | `string` | `file:./auth.db` | SQLite database URL (libsql) |
-| `AUTH_DATABASE_AUTH_TOKEN` | `string` | — | Optional. Auth token for remote libsql databases (Turso) |
+| `AUTH_DATABASE_URL` | `string` | `pglite:./.local/auth.db` | PostgreSQL connection string or pglite path |
 | `BETTER_AUTH_SECRET` | `string` | — | Secret key for Better Auth session signing |
 
 ### Plugin Context
@@ -70,15 +70,14 @@ The plugin also reads these from `process.env` at runtime:
 
 ## Database
 
-The plugin uses `@libsql/client` (libsql) as its only database driver. It supports both local SQLite files and remote Turso databases.
+The plugin uses PostgreSQL via `pg` in production and `@electric-sql/pglite` for local development and tests. `pg` is externalized in the Module Federation bundle and must be provided by the host at runtime.
 
 ```bash
-# Local development
-AUTH_DATABASE_URL=file:./auth.db
+# Local development (zero-config, no Docker needed)
+AUTH_DATABASE_URL=pglite:./auth-local.db
 
-# Remote Turso database
-AUTH_DATABASE_URL=https://my-db.turso.io
-AUTH_DATABASE_AUTH_TOKEN=eyJ...
+# Production (Railway, etc.)
+AUTH_DATABASE_URL=postgres://user:pass@host:5432/dbname
 ```
 
 ## Auth Features
@@ -160,7 +159,7 @@ export default {
       hostUrl: "http://localhost:3000",
     },
     secrets: {
-      AUTH_DATABASE_URL: "file:./auth.db",
+      AUTH_DATABASE_URL: "pglite:./.local/auth.db",
       BETTER_AUTH_SECRET: "dev-only-secret",
     },
   } satisfies PluginConfigInput<typeof Plugin>,

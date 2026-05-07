@@ -1,5 +1,56 @@
 # host
 
+## 1.5.3
+
+### Patch Changes
+
+- Migrate auth plugin from SQLite/libsql to PostgreSQL.
+
+  ### Database
+
+  - Replace `@libsql/client` + `drizzle-orm/libsql` with `pg` (production) and `@electric-sql/pglite` (local dev/tests).
+  - Convert schema from `sqliteTable` to `pgTable` with `timestamp({ mode: "date", withTimezone: true })` and `boolean` columns.
+  - Update `drizzle.config.ts` dialect from `turso` to `postgresql`.
+  - Generate fresh PostgreSQL migration set.
+  - Replace custom SQLite migrator with standard `drizzle_migrations` PostgreSQL migrator with transaction-wrapped migrations.
+
+  ### Auth Instance
+
+  - Switch Better-Auth Drizzle adapter provider from `sqlite` to `pg`.
+  - Fix `.insert().returning().get()` to `.insert().returning()` (PostgreSQL returns arrays).
+
+  ### Plugin Configuration
+
+  - Remove `AUTH_DATABASE_AUTH_TOKEN` secret (PostgreSQL connection strings encode the password).
+  - Default `AUTH_DATABASE_URL` changed to `pglite:./auth-local.db` for zero-config local development.
+  - Add `pg` to dependencies, `@types/pg` and `@electric-sql/pglite` to devDependencies.
+  - Externalize both `pg` and `@electric-sql/pglite` in rspack config for Module Federation.
+
+  ### Tests
+
+  - Update `near.test.ts` to use `:memory:` pglite database.
+  - Remove all `as any` casts; use `@ts-expect-error` for better-near-auth plugin API calls.
+
+  ### Documentation
+
+  - Update `.env.example`, `bos.config.json`, `README.md`, and `LLM.txt` to reflect PostgreSQL.
+
+- a38288d: Fix plugin error handling and shared dependency resolution in production.
+
+  ### Host
+
+  - Use `formatError()` instead of `error.message` when logging plugin initialization failures. Effect's `Data.TaggedError` has an empty `message` by default, so errors were appearing as `[Plugins] Error:` with no detail.
+  - Mount a 503 stub router when the API plugin is unavailable, returning a proper JSON error body instead of an empty `{}` or 404.
+
+  ### every-plugin
+
+  - Re-throw non-ORPC errors from the `onError` interceptor so they propagate to the caller instead of being swallowed, which caused oRPC to serialize `undefined` as `{}`.
+
+  ### Config
+
+  - Move `better-auth` to `shared.ui` only in `bos.config.json`; remove from `shared.plugins`. The auth plugin bundles its own `better-auth` server-side — only the browser Module Federation boundary between host and UI needs it shared.
+  - Remove `drizzle-orm` from shared dependencies; it is an auth plugin implementation detail, not a runtime shared boundary.
+
 ## 1.5.2
 
 ### Patch Changes

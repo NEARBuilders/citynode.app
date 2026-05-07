@@ -30,7 +30,7 @@ let nearKitModules: {
   hex: typeof import("@scure/base").hex;
 } | null = null;
 
-const TEST_DB_URL = "file:./test-auth-sandbox.db";
+const TEST_DB_URL = "pglite:./test-auth.db";
 
 // Set required env var for auth instance
 process.env.BETTER_AUTH_SECRET =
@@ -116,17 +116,17 @@ describe("NEAR SIWN Sandbox Integration", () => {
 
   describe("Plugin Database Driver", () => {
     itIfDeps(
-      "should create auth instance with libsql driver",
+      "should create auth instance with pglite driver",
       async () => {
         if (!pluginModules) return;
 
-        const driver = pluginModules.createDatabaseDriver(TEST_DB_URL);
+        const driver = await pluginModules.createDatabaseDriver(TEST_DB_URL);
 
         // Run migrations
         const migrations = await import("virtual:drizzle-migrations.sql").catch(() => ({
           default: [],
         }));
-        await pluginModules.migrate(driver, migrations.default || []);
+        await pluginModules.migrate(driver.db, migrations.default || []);
 
         const auth = pluginModules.createAuthInstance(
           {
@@ -139,7 +139,7 @@ describe("NEAR SIWN Sandbox Integration", () => {
         expect(auth).toBeDefined();
         expect(auth.api).toBeDefined();
 
-        driver.close();
+        await driver.close();
       },
       30000,
     );
@@ -202,12 +202,12 @@ describe("NEAR SIWN Sandbox Integration", () => {
         process.env.NEAR_RPC_URL = sandbox.rpcUrl;
 
         // Create auth instance
-        const driver = pluginModules.createDatabaseDriver(TEST_DB_URL);
+        const driver = await pluginModules.createDatabaseDriver(TEST_DB_URL);
 
         const migrations = await import("virtual:drizzle-migrations.sql").catch(() => ({
           default: [],
         }));
-        await pluginModules.migrate(driver, migrations.default || []);
+        await pluginModules.migrate(driver.db, migrations.default || []);
 
         const auth = pluginModules.createAuthInstance(
           {
@@ -218,7 +218,8 @@ describe("NEAR SIWN Sandbox Integration", () => {
         );
 
         // Get nonce
-        const nonceRes = await (auth.api as any).getSiwnNonce({
+        // @ts-expect-error better-near-auth plugin API types are not augmented
+        const nonceRes = await auth.api.getSiwnNonce({
           body: { accountId: TEST_ACCOUNT, networkId: "testnet" },
         });
         expect(nonceRes.nonce).toBeDefined();
@@ -238,7 +239,8 @@ describe("NEAR SIWN Sandbox Integration", () => {
         });
 
         // Verify
-        const verifyRes = await (auth.api as any).verifySiwnMessage({
+        // @ts-expect-error better-near-auth plugin API types are not augmented
+        const verifyRes = await auth.api.verifySiwnMessage({
           body: {
             signedMessage,
             message,
@@ -256,12 +258,13 @@ describe("NEAR SIWN Sandbox Integration", () => {
         const headers = new Headers();
         headers.set("Authorization", `Bearer ${verifyRes.token}`);
 
-        const accountsRes = await (auth.api as any).listNearAccounts({ headers });
+        // @ts-expect-error better-near-auth plugin API types are not augmented
+        const accountsRes = await auth.api.listNearAccounts({ headers });
         expect(accountsRes.accounts.length).toBe(1);
         expect(accountsRes.accounts[0].accountId).toBe(TEST_ACCOUNT);
 
         // Cleanup
-        driver.close();
+        await driver.close();
         await sandbox.stop();
       },
       120000,

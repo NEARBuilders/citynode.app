@@ -89,7 +89,7 @@ async function createPersonalOrganization(
     return existingOrg;
   }
 
-  const personalOrg = await database
+  const [personalOrg] = await database
     .insert(schema.organization)
     .values({
       id: crypto.randomUUID(),
@@ -99,8 +99,11 @@ async function createPersonalOrganization(
       metadata: JSON.stringify({ isPersonal: true }),
       createdAt: new Date(),
     })
-    .returning()
-    .get();
+    .returning();
+
+  if (!personalOrg) {
+    throw new Error("Failed to create personal organization");
+  }
 
   await database.insert(schema.member).values({
     id: crypto.randomUUID(),
@@ -134,7 +137,7 @@ export function createAuthInstance(config: AuthConfig, db: AuthDatabase) {
 
   return betterAuth({
     database: drizzleAdapter(db, {
-      provider: "sqlite",
+      provider: "pg",
       schema: schema,
     }),
     trustedOrigins: process.env.CORS_ORIGIN?.split(",").map((o: string) => o.trim()) ?? [

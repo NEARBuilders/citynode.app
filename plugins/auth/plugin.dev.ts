@@ -13,8 +13,7 @@ export default {
       uiUrl: process.env.UI_URL || "http://localhost:3003",
     },
     secrets: {
-      AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || "file:./auth.db",
-      AUTH_DATABASE_AUTH_TOKEN: process.env.AUTH_DATABASE_AUTH_TOKEN || undefined,
+      AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL || "pglite:./auth-local.db",
       BETTER_AUTH_SECRET:
         process.env.BETTER_AUTH_SECRET || "dev-only-secret-do-not-use-in-production",
     },

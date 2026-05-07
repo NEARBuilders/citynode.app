@@ -66,8 +66,7 @@ export default createPlugin({
   }),
 
   secrets: z.object({
-    AUTH_DATABASE_URL: z.string().default("file:./auth.db"),
-    AUTH_DATABASE_AUTH_TOKEN: z.string().optional(),
+    AUTH_DATABASE_URL: z.string().default("pglite:./auth-local.db"),
     BETTER_AUTH_SECRET: z.string(),
   }),
 
@@ -80,19 +79,12 @@ export default createPlugin({
   initialize: (config) =>
     Effect.gen(function* () {
       const driver = yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          createDatabaseDriver(config.secrets.AUTH_DATABASE_URL, {
-            authToken: config.secrets.AUTH_DATABASE_AUTH_TOKEN,
-          }),
-        ),
-        (driver) =>
-          Effect.sync(() => {
-            driver.close();
-          }),
+        Effect.promise(() => createDatabaseDriver(config.secrets.AUTH_DATABASE_URL)),
+        (driver) => Effect.promise(() => driver.close()),
       );
 
       const migrations = yield* Effect.promise(() => import("virtual:drizzle-migrations.sql"));
-      yield* Effect.promise(() => migrate(driver, migrations.default));
+      yield* Effect.promise(() => migrate(driver.db, migrations.default));
       console.log("[Auth] Migrations applied");
 
       const auth = createAuthInstance(
@@ -345,7 +337,17 @@ export default createPlugin({
         return (
           (
             result as {
-              apiKeys?: Array<{ id: string; name: string; prefix: string; createdAt: Date }>;
+              apiKeys?: Array<{
+                id: string;
+                name: string | null;
+                prefix: string | null;
+                start: string | null;
+                expiresAt: Date | null;
+                createdAt: Date;
+                updatedAt: Date;
+                metadata: unknown;
+                permissions: unknown;
+              }>;
             }
           ).apiKeys ?? []
         );
@@ -353,23 +355,30 @@ export default createPlugin({
 
       createApiKey: builder.createApiKey.use(requireAuth).handler(async ({ input, context }) => {
         const result = await safeAuthApi(() =>
-          (
-            services.auth.api.createApiKey as (args: {
-              headers: Headers;
-              body: unknown;
-            }) => Promise<{
-              id: string;
-              name: string;
-              prefix: string;
-              key: string;
-              createdAt: Date;
-            }>
-          )({
+          services.auth.api.createApiKey({
             headers: createHeaders(context.reqHeaders),
-            body: input,
+            body: {
+              ...input,
+              permissions:
+                input.permissions && typeof input.permissions === "object"
+                  ? (input.permissions as Record<string, string[]>)
+                  : undefined,
+            },
           }),
         );
-        return result;
+        const r = result as {
+          id: string;
+          name: string | null;
+          prefix: string | null;
+          start: string | null;
+          expiresAt: Date | null;
+          createdAt: Date;
+          updatedAt: Date;
+          metadata: unknown;
+          permissions: unknown;
+          key: string;
+        };
+        return r;
       }),
 
       deleteApiKey: builder.deleteApiKey.use(requireAuth).handler(async ({ input, context }) => {
@@ -425,16 +434,11 @@ export default createPlugin({
           const headers = createHeaders(context.reqHeaders);
 
           await safeAuthApi(() =>
-            (
-              services.auth.api.createInvitation as (args: {
-                headers: Headers;
-                body: { email: string; role: string; organizationId: string; resend?: boolean };
-              }) => Promise<void>
-            )({
+            services.auth.api.createInvitation({
               headers,
               body: {
                 email: invitation.email,
-                role: invitation.role ?? "member",
+                role: (invitation.role ?? "member") as "member" | "owner" | "admin",
                 organizationId: invitation.organizationId,
                 resend: true,
               },
@@ -448,6 +452,7 @@ export default createPlugin({
 
       nearNonce: builder.nearNonce.handler(async ({ input }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.getSiwnNonce({
             body: { accountId: input.accountId, networkId: input.networkId },
           }),
@@ -457,6 +462,7 @@ export default createPlugin({
 
       nearVerify: builder.nearVerify.handler(async ({ input }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.verifySiwnMessage({
             body: {
               signedMessage: input.signedMessage,
@@ -476,6 +482,7 @@ export default createPlugin({
 
       nearProfile: builder.nearProfile.use(requireAuth).handler(async ({ input, context }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.getSiwnProfile({
             headers: createHeaders(context.reqHeaders),
             body: { accountId: input.accountId },
@@ -494,6 +501,7 @@ export default createPlugin({
         .use(requireAuth)
         .handler(async ({ input, context }) => {
           const result = await safeAuthApi(() =>
+            // @ts-expect-error better-near-auth plugin API types are not augmented
             services.auth.api.linkNearAccount({
               headers: createHeaders(context.reqHeaders),
               body: {
@@ -517,6 +525,7 @@ export default createPlugin({
         .use(requireAuth)
         .handler(async ({ input, context }) => {
           const result = await safeAuthApi(() =>
+            // @ts-expect-error better-near-auth plugin API types are not augmented
             services.auth.api.unlinkNearAccount({
               headers: createHeaders(context.reqHeaders),
               body: { accountId: input.accountId, network: input.network },
@@ -532,6 +541,7 @@ export default createPlugin({
 
       nearListAccounts: builder.nearListAccounts.use(requireAuth).handler(async ({ context }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.listNearAccounts({
             headers: createHeaders(context.reqHeaders),
           }),
@@ -551,6 +561,7 @@ export default createPlugin({
 
       nearRelay: builder.nearRelay.use(requireAuth).handler(async ({ input, context }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.relayNearTransaction({
             headers: createHeaders(context.reqHeaders),
             body: { payload: input.payload },
@@ -563,6 +574,7 @@ export default createPlugin({
         .use(requireAuth)
         .handler(async ({ input, context }) => {
           const result = await safeAuthApi(() =>
+            // @ts-expect-error better-near-auth plugin API types are not augmented
             services.auth.api.getRelayStatus({
               headers: createHeaders(context.reqHeaders),
               params: { txHash: input.txHash },
@@ -577,6 +589,7 @@ export default createPlugin({
 
       nearRelayerInfo: builder.nearRelayerInfo.use(requireAuth).handler(async ({ context }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.getRelayerInfo({
             headers: createHeaders(context.reqHeaders),
           }),
@@ -600,6 +613,7 @@ export default createPlugin({
 
       nearRelayHistory: builder.nearRelayHistory.use(requireAuth).handler(async ({ context }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.getRelayHistory({
             headers: createHeaders(context.reqHeaders),
           }),
@@ -622,6 +636,7 @@ export default createPlugin({
 
       nearView: builder.nearView.use(requireAuth).handler(async ({ input, context }) => {
         const result = await safeAuthApi(() =>
+          // @ts-expect-error better-near-auth plugin API types are not augmented
           services.auth.api.viewContract({
             headers: createHeaders(context.reqHeaders),
             body: { contractId: input.contractId, methodName: input.methodName, args: input.args },
