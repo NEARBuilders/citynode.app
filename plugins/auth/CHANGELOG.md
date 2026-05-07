@@ -1,39 +1,6 @@
 # @everything-dev/auth-plugin
 
-## 1.2.0
-
-### Minor Changes
-
-- Migrate auth plugin from SQLite/libsql to PostgreSQL.
-
-  ### Database
-
-  - Replace `@libsql/client` + `drizzle-orm/libsql` with `pg` (production) and `@electric-sql/pglite` (local dev/tests).
-  - Convert schema from `sqliteTable` to `pgTable` with `timestamp({ mode: "date", withTimezone: true })` and `boolean` columns.
-  - Update `drizzle.config.ts` dialect from `turso` to `postgresql`.
-  - Generate fresh PostgreSQL migration set.
-  - Replace custom SQLite migrator with standard `drizzle_migrations` PostgreSQL migrator with transaction-wrapped migrations.
-
-  ### Auth Instance
-
-  - Switch Better-Auth Drizzle adapter provider from `sqlite` to `pg`.
-  - Fix `.insert().returning().get()` to `.insert().returning()` (PostgreSQL returns arrays).
-
-  ### Plugin Configuration
-
-  - Remove `AUTH_DATABASE_AUTH_TOKEN` secret (PostgreSQL connection strings encode the password).
-  - Default `AUTH_DATABASE_URL` changed to `pglite:./auth-local.db` for zero-config local development.
-  - Add `pg` to dependencies, `@types/pg` and `@electric-sql/pglite` to devDependencies.
-  - Externalize both `pg` and `@electric-sql/pglite` in rspack config for Module Federation.
-
-  ### Tests
-
-  - Update `near.test.ts` to use `:memory:` pglite database.
-  - Remove all `as any` casts; use `@ts-expect-error` for better-near-auth plugin API calls.
-
-  ### Documentation
-
-  - Update `.env.example`, `bos.config.json`, `README.md`, and `LLM.txt` to reflect PostgreSQL.
+## 1.1.5
 
 ### Patch Changes
 

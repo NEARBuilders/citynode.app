@@ -17,7 +17,7 @@
 
   ### Config
 
-  - Move `better-auth` to `shared.ui` only in `bos.config.json`; remove from `shared.plugins`. The auth plugin bundles its own `better-auth` server-side — only the browser Module Federation boundary between host and UI needs it shared.
+  - Move `better-auth` from `shared.plugins` to both `shared.ui` and `shared.plugins` in `bos.config.json` so it is shared correctly across both browser and server Module Federation boundaries.
   - Remove `drizzle-orm` from shared dependencies; it is an auth plugin implementation detail, not a runtime shared boundary.
 
 ## 2.5.1
