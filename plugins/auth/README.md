@@ -68,40 +68,18 @@ The plugin also reads these from `process.env` at runtime:
 | `NEAR_RPC_URL` | Custom NEAR RPC endpoint (e.g. sandbox, private node) |
 | `NODE_ENV` | Enables cookie cache when `production` |
 
-## Database Drivers
+## Database
 
-The plugin supports multiple SQLite backends via a configurable driver:
+The plugin uses `@libsql/client` (libsql) as its only database driver. It supports both local SQLite files and remote Turso databases.
 
-### `libsql` (default)
-Best for Turso, edge runtimes, and remote databases.
 ```bash
-AUTH_DATABASE_DRIVER=libsql
+# Local development
+AUTH_DATABASE_URL=file:./auth.db
+
+# Remote Turso database
 AUTH_DATABASE_URL=https://my-db.turso.io
 AUTH_DATABASE_AUTH_TOKEN=eyJ...
 ```
-
-### `better-sqlite3`
-Fastest for local development (native Node.js).
-```bash
-AUTH_DATABASE_DRIVER=better-sqlite3
-AUTH_DATABASE_URL=file:./auth.db
-```
-
-### `bun`
-Uses Bun's built-in `bun:sqlite`.
-```bash
-AUTH_DATABASE_DRIVER=bun
-AUTH_DATABASE_URL=file:./auth.db
-```
-
-### `node`
-Uses Node.js 22.5+ built-in `node:sqlite`.
-```bash
-AUTH_DATABASE_DRIVER=node
-AUTH_DATABASE_URL=file:./auth.db
-```
-
-Drivers are loaded lazily — only the one you use is imported at runtime.
 
 ## Auth Features
 
@@ -180,11 +158,9 @@ export default {
     variables: {
       account: "myapp.near",
       hostUrl: "http://localhost:3000",
-      uiUrl: "http://localhost:3003",
     },
     secrets: {
       AUTH_DATABASE_URL: "file:./auth.db",
-      AUTH_DATABASE_DRIVER: "better-sqlite3",
       BETTER_AUTH_SECRET: "dev-only-secret",
     },
   } satisfies PluginConfigInput<typeof Plugin>,
@@ -194,27 +170,27 @@ export default {
 ## Dev Mode
 
 ```bash
-# Install dependencies (in mounted workspace)
-pnpm install
+# Install dependencies (in workspace root)
+bun install
 
 # Run migrations
-pnpm db:push
+bun run db:push
 
 # Start dev server
-pnpm dev
+bun run dev
 
 # Run tests
-pnpm test
+bun run test
 ```
 
 ## Build
 
 ```bash
 # Build types + bundle
-pnpm build
+bun run build
 
 # Deploy
-pnpm deploy
+bun run deploy
 ```
 
 ## TODO
