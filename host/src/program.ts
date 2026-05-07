@@ -397,7 +397,13 @@ export function setupApiRoutes(
       const basePath = `/api${mount.suffix}` as const;
       const rpcPath = `/api/rpc${mount.suffix}` as const;
       const handler = (c: Context<HonoEnv>) =>
-        c.json({ error: "Service Unavailable", message: `The ${mount.title} plugin is currently unavailable.` }, 503);
+        c.json(
+          {
+            error: "Service Unavailable",
+            message: `The ${mount.title} plugin is currently unavailable.`,
+          },
+          503,
+        );
       app.all(rpcPath, handler);
       app.all(`${rpcPath}/*`, handler);
       app.all(basePath, handler);
