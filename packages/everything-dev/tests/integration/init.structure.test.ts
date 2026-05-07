@@ -36,13 +36,13 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/auth-client.ts"))).toBe(true);
     expect(existsSync(join(testDir, "plugins/_template/src/index.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/registry/src/index.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/projects/src/index.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/registry/src/index.ts"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/projects/src/index.ts"))).toBe(false);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
     expect(existsSync(join(testDir, "plans"))).toBe(false);
-    expect(existsSync(join(testDir, ".changeset"))).toBe(false);
+    expect(existsSync(join(testDir, ".changeset"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/keys"))).toBe(false);
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/organizations"))).toBe(
       false,

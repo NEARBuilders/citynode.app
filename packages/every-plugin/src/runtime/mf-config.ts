@@ -30,7 +30,7 @@ export const SHARE_CONFIG = {
   eager: false,
 } as const;
 
-export const MF_SHARED_DEPS = {
+export const MF_CORE_SHARED_DEPS = {
   "every-plugin": {
     version: PLUGIN_VERSION,
     shareConfig: SHARE_CONFIG,
@@ -43,14 +43,6 @@ export const MF_SHARED_DEPS = {
     version: getInstalledPackageVersion("zod", "^4.3.6"),
     shareConfig: SHARE_CONFIG,
   },
-  "better-auth": {
-    version: getInstalledPackageVersion("better-auth", "^1.6.9"),
-    shareConfig: SHARE_CONFIG,
-  },
-  "drizzle-orm": {
-    version: getInstalledPackageVersion("drizzle-orm", "^0.45.1"),
-    shareConfig: SHARE_CONFIG,
-  },
   "@orpc/contract": {
     version: getInstalledPackageVersion("@orpc/contract", "^1.13.4"),
     shareConfig: SHARE_CONFIG,
@@ -61,4 +53,39 @@ export const MF_SHARED_DEPS = {
   },
 } as const;
 
-export type SharedDepName = keyof typeof MF_SHARED_DEPS;
+export type CoreSharedDepName = keyof typeof MF_CORE_SHARED_DEPS;
+
+export interface AppSharedDepConfig {
+  version: string;
+  requiredVersion?: string | false;
+  singleton?: boolean;
+  strictVersion?: boolean;
+  eager?: boolean;
+  shareScope?: string;
+}
+
+export type AppSharedDeps = Record<string, AppSharedDepConfig>;
+
+export function buildMergedSharedDeps(appShared?: AppSharedDeps): Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> {
+  const merged: Record<string, { version: string; shareConfig: typeof SHARE_CONFIG }> = {};
+  
+  for (const [name, config] of Object.entries(MF_CORE_SHARED_DEPS)) {
+    merged[name] = { version: config.version, shareConfig: config.shareConfig };
+  }
+  
+  if (appShared) {
+    for (const [name, config] of Object.entries(appShared)) {
+      merged[name] = {
+        version: config.version,
+        shareConfig: {
+          singleton: config.singleton ?? true,
+          requiredVersion: config.requiredVersion ?? false,
+          strictVersion: config.strictVersion ?? false,
+          eager: config.eager ?? false,
+        },
+      };
+    }
+  }
+  
+  return merged;
+}

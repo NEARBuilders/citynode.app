@@ -145,12 +145,9 @@ async function resolveContractSource(opts: {
   generatedSubdir: string;
   localSourceFactory?: (configDir: string) => ContractSource;
 }): Promise<ContractSource> {
-  if (
-    opts.key === "api" &&
-    (!opts.source || !("localPath" in opts.source) || opts.source.localPath)
-  ) {
+  if (opts.key === "api") {
     const localPath = opts.source && "localPath" in opts.source ? opts.source.localPath : undefined;
-    if (localPath) {
+    if (localPath != null && localPath !== "") {
       return {
         key: opts.key,
         importName: "BaseApiContract",
@@ -163,13 +160,9 @@ async function resolveContractSource(opts: {
     }
   }
 
-  if (
-    opts.key === "auth" &&
-    opts.localSourceFactory &&
-    (!opts.source || !("localPath" in opts.source) || opts.source.localPath)
-  ) {
+  if (opts.key === "auth" && opts.localSourceFactory) {
     const localPath = opts.source && "localPath" in opts.source ? opts.source.localPath : undefined;
-    if (localPath) {
+    if (localPath != null && localPath !== "") {
       return {
         key: opts.key,
         importName: "authContract",
@@ -182,7 +175,7 @@ async function resolveContractSource(opts: {
     }
   }
 
-  if (opts.source && "localPath" in opts.source && opts.source.localPath) {
+  if (opts.source && "localPath" in opts.source && opts.source.localPath != null && opts.source.localPath !== "") {
     return {
       key: opts.key,
       importName: `${sanitizeIdentifier(opts.key)}Contract`,

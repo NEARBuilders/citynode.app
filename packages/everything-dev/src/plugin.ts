@@ -1,3 +1,4 @@
+import * as p from "@clack/prompts";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -1193,7 +1194,7 @@ export default createPlugin({
           }
         }
 
-        if (!input.noInteractive && (!domain || !plugins)) {
+        if (!input.noInteractive) {
           const prompted = await promptInitOptions({
             extendsAccount,
             extendsGateway,
@@ -1211,23 +1212,6 @@ export default createPlugin({
           domain = prompted.domain;
           withHost = prompted.withHost;
           plugins = prompted.plugins;
-        }
-
-        if (!domain) {
-          return {
-            status: "error" as const,
-            directory: "",
-            extendsAccount: extendsAccount ?? "",
-            extendsGateway: extendsGateway ?? "",
-            account: input.account,
-            domain: input.domain,
-            extends:
-              extendsAccount && extendsGateway ? `bos://${extendsAccount}/${extendsGateway}` : "",
-            plugins: plugins ?? [],
-            filesCopied: 0,
-            error:
-              "domain is required (use --no-interactive to skip prompts and provide it as a flag)",
-          };
         }
 
         extendsAccount = extendsAccount || "dev.everything.near";
@@ -1284,6 +1268,9 @@ export default createPlugin({
             }
           }
 
+          const s = p.spinner();
+          s.start("Setting up project");
+
           const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns, {
             withHost,
             plugins,
@@ -1311,6 +1298,8 @@ export default createPlugin({
           }
 
           ensureEnvFile(directory);
+
+          s.stop("Project initialized");
 
           return {
             status: "initialized" as const,

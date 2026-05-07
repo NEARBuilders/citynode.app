@@ -1,29 +1,5 @@
-import { createInterface } from "node:readline";
-
-export async function prompt(question: string, defaultValue?: string): Promise<string> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  const suffix = defaultValue ? ` [${defaultValue}]` : "";
-  const fullQuestion = `${question}${suffix}: `;
-
-  return new Promise<string>((resolve) => {
-    rl.question(fullQuestion, (answer) => {
-      rl.close();
-      const trimmed = answer.trim();
-      resolve(trimmed || defaultValue || "");
-    });
-  });
-}
-
-export async function promptYesNo(question: string, defaultVal = false): Promise<boolean> {
-  const hint = defaultVal ? "Y/n" : "y/N";
-  const answer = await prompt(`${question} (${hint})`);
-  if (!answer) return defaultVal;
-  return answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
-}
+import * as p from "@clack/prompts";
+import process from "node:process";
 
 function parseExtendsRef(ref: string): { account: string; gateway: string } | null {
   const match = ref.match(/^(?:bos:\/\/)?([^/]+)\/(.+)$/);
@@ -41,63 +17,9 @@ function deriveAccountFromDomain(domain: string, extendsAccount: string): string
 }
 
 const AVAILABLE_PLUGINS = [
-  {
-    key: "_template",
-    label: "template",
-    description: "Plugin scaffold and boilerplate",
-    default: true,
-  },
-  {
-    key: "registry",
-    label: "registry",
-    description: "FastKV app discovery and metadata",
-    default: false,
-  },
+  { value: "_template", label: "template" },
+  { value: "registry", label: "registry" },
 ];
-
-async function promptPluginSelect(): Promise<string[]> {
-  const selected = new Set<string>(AVAILABLE_PLUGINS.filter((p) => p.default).map((p) => p.key));
-
-  console.log();
-  console.log("  Select plugins (enter number to toggle, enter to confirm):");
-  for (let i = 0; i < AVAILABLE_PLUGINS.length; i++) {
-    const p = AVAILABLE_PLUGINS[i];
-    const marker = selected.has(p.key) ? "●" : "○";
-    console.log(`    ${marker} ${i + 1}. ${p.label} — ${p.description}`);
-  }
-  console.log();
-
-  while (true) {
-    const answer = await prompt(
-      "  Plugins",
-      selected.size > 0 ? Array.from(selected).join(",") : "",
-    );
-    if (!answer) break;
-
-    const num = Number.parseInt(answer, 10);
-    if (num >= 1 && num <= AVAILABLE_PLUGINS.length) {
-      const plugin = AVAILABLE_PLUGINS[num - 1];
-      if (selected.has(plugin.key)) {
-        selected.delete(plugin.key);
-      } else {
-        selected.add(plugin.key);
-      }
-
-      console.log("  Current selection:");
-      for (let i = 0; i < AVAILABLE_PLUGINS.length; i++) {
-        const p = AVAILABLE_PLUGINS[i];
-        const marker = selected.has(p.key) ? "●" : "○";
-        console.log(`    ${marker} ${i + 1}. ${p.label}`);
-      }
-      console.log();
-      continue;
-    }
-
-    break;
-  }
-
-  return Array.from(selected);
-}
 
 export async function promptInitOptions(input: {
   extendsAccount?: string;
@@ -117,9 +39,27 @@ export async function promptInitOptions(input: {
   plugins: string[];
   withHost: boolean;
 }> {
-  const domain = input.domain || (await prompt("Project domain"));
+  p.intro("Let's build an app...");
 
-  const extendsInput = input.extends || (await prompt("Extend from", ""));
+  const domain =
+    input.domain ??
+    ((await p.text({
+      message: "Starting with a domain?",
+      placeholder: "no",
+    })) as string);
+
+  if (p.isCancel(domain)) process.exit(0);
+
+  const extendsPlaceholder = "bos://dev.everything.near/everything.dev";
+  const extendsInput =
+    input.extends ??
+    ((await p.text({
+      message: "Extending an existing app?",
+      placeholder: extendsPlaceholder,
+    })) as string);
+
+  if (p.isCancel(extendsInput)) process.exit(0);
+
   let extendsAccount = input.extendsAccount || "";
   let extendsGateway = input.extendsGateway || "";
 
@@ -135,14 +75,40 @@ export async function promptInitOptions(input: {
   extendsGateway = extendsGateway || "everything.dev";
 
   const accountDefault = domain ? deriveAccountFromDomain(domain, extendsAccount) : "";
-  const account = input.account || (await prompt("Project NEAR account", accountDefault));
+  const account =
+    input.account ??
+    ((await p.text({
+      message: "What NEAR account will you publish from?",
+      placeholder: accountDefault || "skip",
+      defaultValue: accountDefault,
+    })) as string);
 
-  const directory = input.directory || domain || extendsGateway;
+  if (p.isCancel(account)) process.exit(0);
 
-  const plugins = input.plugins || (await promptPluginSelect());
+  const directory = input.directory || (domain || extendsGateway);
 
-  const withHost =
-    input.withHost !== undefined ? input.withHost : await promptYesNo("Include host?", false);
+  const plugins =
+    input.plugins ??
+    ((await p.multiselect({
+      message: "Select plugins:",
+      options: AVAILABLE_PLUGINS,
+      initialValues: ["_template"],
+      required: false,
+    })) as string[]);
+
+  if (p.isCancel(plugins)) process.exit(0);
+
+  const go =
+    input.withHost !== undefined
+      ? true
+      : await p.confirm({
+          message: "GO!",
+          initialValue: true,
+        });
+
+  if (p.isCancel(go) || !go) process.exit(0);
+
+  const withHost = input.withHost ?? false;
 
   return {
     extendsAccount,
