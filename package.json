@@ -43,7 +43,8 @@
       "@module-federation/runtime-core": "^2.3.2",
       "@module-federation/sdk": "^2.3.2",
       "@module-federation/dts-plugin": "^2.3.2",
-      "@tanstack/intent": "^0.0.40"
+      "@tanstack/intent": "^0.0.40",
+      "@opentelemetry/api": "^1.9.0"
     }
   },
   "scripts": {
@@ -101,7 +102,8 @@
     "drizzle-orm": "^0.45.1",
     "effect": "catalog:",
     "zod": "catalog:",
-    "every-plugin": "^2.3.0",
+    "@opentelemetry/api": "catalog:",
+    "every-plugin": "catalog:",
     "everything-dev": "^1.6.0"
   },
   "overrides": {
