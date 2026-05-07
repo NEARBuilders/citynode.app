@@ -62,8 +62,8 @@ const probeHttpOk = (url: string, timeoutMs = 400) =>
         clearTimeout(timer);
       }
     },
-  catch: () => false,
-});
+    catch: () => false,
+  });
 
 const detectStatus = (
   line: string,
