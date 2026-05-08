@@ -1605,9 +1605,6 @@ export default createPlugin({
 
 function extractTransactionHash(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  const match =
-    message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i) ||
-    message.match(/([A-HJ-NP-Za-km-z1-9]{43,44})/);
-
+  const match = message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
   return match?.[1];
 }

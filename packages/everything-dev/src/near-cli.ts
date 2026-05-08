@@ -228,16 +228,20 @@ export const executeTransaction = (
 
           proc.on("close", (code) => {
             const combined = `${stdout}\n${stderr}`;
-            const txHashMatch =
-              combined.match(/Transaction ID:\s*([A-Za-z0-9]+)/i) ||
-              combined.match(/([A-HJ-NP-Za-km-z1-9]{43,44})/);
+            const txHashMatch = combined.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
+            const hasCodeDoesNotExist = /CodeDoesNotExist/i.test(combined);
+            const hasTransactionFailed = /Transaction failed/i.test(combined);
             const softSuccess =
-              Boolean(txHashMatch?.[1]) &&
-              /CodeDoesNotExist/i.test(combined) &&
-              /Transaction failed/i.test(combined);
+              Boolean(txHashMatch?.[1]) && hasCodeDoesNotExist && hasTransactionFailed;
 
-            if (code === 0 || softSuccess) resolve(combined);
-            else reject(new NearTransactionError(stderr || `Transaction failed with code ${code}`));
+            if (code === 0 || softSuccess) {
+              if (softSuccess) {
+                console.log(`  ${txHashMatch?.[1]} — FastDATA CodeDoesNotExist (expected)`);
+              }
+              resolve(combined);
+            } else {
+              reject(new NearTransactionError(stderr || `Transaction failed with code ${code}`));
+            }
           });
 
           proc.on("error", (err) => reject(new NearTransactionError(err.message)));
@@ -246,13 +250,11 @@ export const executeTransaction = (
       catch: (error) => error as Error,
     });
 
-    const txHashMatch =
-      output.match(/Transaction ID:\s*([A-Za-z0-9]+)/i) ||
-      output.match(/([A-HJ-NP-Za-km-z1-9]{43,44})/);
+    const txHashMatch = output.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
 
     return {
       success: true,
-      txHash: txHashMatch?.[1] || "unknown",
+      txHash: txHashMatch?.[1],
     };
   });
 
