@@ -76,8 +76,8 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-3201-host-everything-dev-nearbuilder-63bba3926-ze.zephyrcloud.app",
-      "integrity": "sha384-CrgD+/4aApnpq/fClbiV541MtacqEzTwpbgB7dZ2KhaHMfK7nZl2SuUsFJg7kYwB"
+      "production": "https://elliot-braem-3212-host-everything-dev-nearbuilder-e109b47e7-ze.zephyrcloud.app",
+      "integrity": "sha384-iB6arekTxNTpwcEkl8zDFb1VT9N1UuixV5YYsc34JAWa446ORiBOberSmNlw3LyY"
     },
     "ui": {
       "name": "ui",
@@ -98,7 +98,7 @@
     "auth": {
       "name": "everything-dev_auth-plugin",
       "development": "local:plugins/auth",
-      "production": "https://elliot-braem-3208-everything-dev-auth-plugin-bett-89f365b3f-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-3211-everything-dev-auth-plugin-bett-cb0b26277-ze.zephyrcloud.app",
       "integrity": "sha384-jmrWhl5xocFIk6wdy+VoS9PfIZnb51SHS3zLzVK1rKsFP1Nc3nGBYgf+RdFQTGso",
       "secrets": [
         "AUTH_DATABASE_URL",

@@ -88,9 +88,6 @@ function ensureEnvFile(configDir: string): void {
       if (/^BETTER_AUTH_SECRET=/.test(line)) {
         return `BETTER_AUTH_SECRET=${secret}`;
       }
-      if (/^BETTER_AUTH_URL=/.test(line)) {
-        return `BETTER_AUTH_URL=http://localhost:3000`;
-      }
       return line;
     })
     .join("\n");

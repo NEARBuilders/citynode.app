@@ -67,6 +67,15 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+function normalizeDomain(domain: string | undefined, env: string): string | undefined {
+  if (!domain) return domain;
+  if (/^https?:\/\//.test(domain)) return domain;
+  if (env === "development" && /^(localhost|127\.0\.0\.1)/.test(domain)) {
+    return `http://${domain}`;
+  }
+  return `https://${domain}`;
+}
+
 /**
  * Pre-registers app-specific shared dependencies in the Module Federation runtime.
  * This runs in the host scope where packages like drizzle-orm and better-auth are
@@ -285,9 +294,14 @@ export const initializePlugins = Effect.gen(function* () {
           config: config.auth,
         };
         try {
+          const normalizedDomain = normalizeDomain(
+            config.env === "development" ? "localhost:3000" : config.domain,
+            config.env,
+          );
           const authBaseVariables: Record<string, unknown> = {
             account: config.account,
-            domain: config.domain ?? (config.env === "development" ? "localhost:3000" : ""),
+            domain: normalizedDomain,
+            hostUrl: normalizedDomain,
           };
           authPlugin = await loadPluginEntry(
             runtime,
