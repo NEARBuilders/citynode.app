@@ -142,9 +142,9 @@ function About() {
                 body="task-oriented notes for agents, crawlers, and AI-native clients"
               />
               <BoxLink
-                href="/opencode"
-                title="build with opencode"
-                body="set up an AI dev loop — edit pages, see changes live, use authClient and apiClient"
+                href="/skill.md"
+                title="open the agent guide"
+                body="task-oriented notes for agents, crawlers, and AI-native clients"
               />
             </div>
           </CardContent>
