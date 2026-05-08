@@ -19,9 +19,12 @@ export async function createDatabaseDriver(url: string): Promise<DatabaseDriver>
       mkdirSync(dirname(dataDir), { recursive: true });
     }
     const db = drizzle(dataDir, { schema });
+    const pglite = (db as any).$client;
     return {
       db,
-      close: async () => {},
+      close: async () => {
+        await pglite?.close?.();
+      },
     };
   }
 

@@ -97,7 +97,7 @@ jobs:
         working-directory: ./api
 
       - name: Run integration tests
-        run: bun test
+        run: bun run test
         working-directory: ./api
 
       - name: Upload test artifacts

@@ -1,5 +1,5 @@
 import { createPluginRuntime } from "every-plugin";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { TestPlugin } from "../fixtures/test-plugin/src/index";
 
 const TEST_REGISTRY = {
@@ -83,13 +83,8 @@ describe("Plugin Lifecycle Unit Tests", () => {
     }
   });
 
-  it("should handle runtime shutdown gracefully", { timeout: 4000 }, async () => {
-    const plugin = await runtime.usePlugin("test-plugin", TEST_CONFIG);
-    expect(plugin).toBeDefined();
-
+  afterAll(async () => {
     await runtime.shutdown();
-
-    expect(true).toBe(true);
   });
 
   it("should cache plugins with same config", { timeout: 4000 }, async () => {

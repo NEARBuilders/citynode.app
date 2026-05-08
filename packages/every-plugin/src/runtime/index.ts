@@ -144,7 +144,8 @@ export class PluginRuntime<R = RegisteredPlugins> {
       const pluginService = yield* PluginService;
       yield* pluginService.cleanup();
     });
-    return this.runPromise(effect);
+    await this.runPromise(effect);
+    await this.runtime.dispose();
   }
 
   async evictPlugin<K extends keyof R & string>(
