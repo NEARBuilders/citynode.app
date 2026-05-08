@@ -616,7 +616,30 @@ function mkTmpDir(prefix: string): string {
   }
 }
 
-function execCommand(command: string, args: string[], cwd?: string): Promise<void> {
+export async function generateDatabaseMigrations(destination: string): Promise<void> {
+  const drizzleConfigs = await glob("**/drizzle.config.ts", {
+    cwd: destination,
+    nodir: true,
+    dot: false,
+    absolute: false,
+    ignore: ["**/node_modules/**"],
+  });
+
+  for (const configPath of drizzleConfigs) {
+    const workspaceDir = dirname(configPath);
+    const pkgPath = join(destination, workspaceDir, "package.json");
+    if (!existsSync(pkgPath)) continue;
+
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
+    const scripts = pkg.scripts as Record<string, string> | undefined;
+    if (!scripts?.["db:generate"]) continue;
+
+    const cwd = join(destination, workspaceDir);
+    await execCommand("bun", ["run", "db:generate"], cwd);
+  }
+}
+
+export function execCommand(command: string, args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,

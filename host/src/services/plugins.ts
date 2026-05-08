@@ -185,12 +185,13 @@ async function loadPluginEntry(
   entry: RuntimePluginEntry,
   integrityRegistry: IntegrityRegistry,
   pluginsClient?: Record<string, unknown>,
+  baseVariables?: Record<string, unknown>,
 ): Promise<HostPluginEntry> {
   if (entry.config.integrity) {
     integrityRegistry.registerEntry(entry.config.url, entry.config.integrity);
   }
 
-  const variables: Record<string, unknown> = { ...entry.config.variables };
+  const variables: Record<string, unknown> = { ...baseVariables, ...entry.config.variables };
   const args: [unknown, unknown?] = [{ variables, secrets: collectSecrets(entry.config) }];
   if (pluginsClient) args.push(pluginsClient);
 
@@ -284,7 +285,17 @@ export const initializePlugins = Effect.gen(function* () {
           config: config.auth,
         };
         try {
-          authPlugin = await loadPluginEntry(runtime, authEntry, integrityRegistry);
+          const authBaseVariables: Record<string, unknown> = {
+            account: config.account,
+            domain: config.domain ?? (config.env === "development" ? "localhost:3000" : ""),
+          };
+          authPlugin = await loadPluginEntry(
+            runtime,
+            authEntry,
+            integrityRegistry,
+            undefined,
+            authBaseVariables,
+          );
           authClient = authPlugin.createClient;
           console.log(`[Plugins] Auth plugin loaded: ${authPlugin.name}`);
         } catch (error) {

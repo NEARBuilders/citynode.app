@@ -66,6 +66,9 @@ api/src/index.ts
 api/src/db/index.ts
 api/src/db/layer.ts
 api/src/db/schema.ts
+api/src/db/load-migrations.ts
+api/src/db/migrator.ts
+api/src/global.d.ts
 
 plugins/_template/**
 .github/templates/**

@@ -303,7 +303,10 @@ async function main() {
       console.log();
       console.log(`  ${colors.dim("Packages:")}`);
       for (const pkg of result.packages) {
-        const hasUpdate = pkg.installed && pkg.latest && normalizeVersion(pkg.installed) !== normalizeVersion(pkg.latest);
+        const hasUpdate =
+          pkg.installed &&
+          pkg.latest &&
+          normalizeVersion(pkg.installed) !== normalizeVersion(pkg.latest);
         const versionStr = hasUpdate
           ? `${pkg.installed}  →  ${pkg.latest}`
           : pkg.installed || "not installed";

@@ -371,10 +371,12 @@ function buildRuntimePluginConfig(
   const sourceDevelopment = typeof source.development === "string" ? source.development : undefined;
   const sourceProduction = typeof source.production === "string" ? source.production : undefined;
   const proxy = typeof apiConfig.proxy === "string" ? apiConfig.proxy : undefined;
+  const development = apiDevelopment ?? sourceDevelopment;
+  const production = apiProduction ?? sourceProduction;
   const runtimeTarget =
     env === "development"
-      ? resolveRuntimeTarget(apiDevelopment ?? sourceDevelopment, baseDir)
-      : resolveRuntimeTarget(apiProduction ?? sourceProduction, baseDir, "remote");
+      ? resolveDevelopmentTarget(development, production, baseDir)
+      : resolveRuntimeTarget(production, baseDir, "remote");
   const apiName = resolvePluginRuntimeName(
     typeof apiConfig.name === "string" ? apiConfig.name : undefined,
     runtimeTarget.localPath,
@@ -493,7 +495,7 @@ function resolveRuntimeTarget(
 
     const localPath = resolve(baseDir, localTarget);
     if (!existsSync(localPath)) {
-      return { source: defaultSource, url: "" };
+      return { source: "local", url: "" };
     }
 
     return {

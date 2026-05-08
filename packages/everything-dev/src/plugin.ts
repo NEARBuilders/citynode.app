@@ -8,6 +8,7 @@ import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfi
 import {
   copyFilteredFiles,
   fetchParentConfig,
+  generateDatabaseMigrations,
   personalizeConfig,
   readTemplatekeep,
   resolveSourceDir,
@@ -1386,6 +1387,7 @@ export default createPlugin({
 
           if (!input.noInstall) {
             await runBunInstall(directory);
+            await generateDatabaseMigrations(directory);
           }
 
           ensureEnvFile(directory);

@@ -100,11 +100,6 @@
       "development": "local:plugins/auth",
       "production": "https://elliot-braem-3197-everything-dev-auth-plugin-ever-8440bec48-ze.zephyrcloud.app",
       "integrity": "sha384-Uy4GxVCgE20lX3njzb3L9WKiAYB2FitAY0eCuAz17aB6gCOFB+pssfK4zilL9KSE",
-      "variables": {
-        "account": "dev.everything.near",
-        "hostUrl": "http://localhost:3000",
-        "uiUrl": "http://localhost:3003"
-      },
       "secrets": [
         "AUTH_DATABASE_URL",
         "BETTER_AUTH_SECRET"
