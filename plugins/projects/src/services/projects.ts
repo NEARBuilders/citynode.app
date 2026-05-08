@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { DatabaseTag } from "../db/layer";
@@ -169,6 +169,7 @@ export const ProjectServiceLive = Layer.effect(
       listProjects: (input, userId) =>
         Effect.gen(function* () {
           const limit = Math.min(input.limit ?? 24, 100);
+          const offset = input.cursor ? parseInt(input.cursor, 10) : 0;
           const conditions: any[] = [];
 
           if (input.organizationId) {
@@ -185,6 +186,12 @@ export const ProjectServiceLive = Layer.effect(
 
           if (input.visibility) {
             conditions.push(eq(projects.visibility, input.visibility));
+          } else {
+            const visibleConditions: any[] = [inArray(projects.visibility, ["public", "unlisted"])];
+            if (userId) {
+              visibleConditions.push(eq(projects.ownerId, userId));
+            }
+            conditions.push(or(...visibleConditions));
           }
 
           const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -201,16 +208,11 @@ export const ProjectServiceLive = Layer.effect(
               .from(projects)
               .where(whereClause)
               .orderBy(desc(projects.createdAt))
-              .limit(limit),
+              .limit(limit)
+              .offset(offset),
           );
 
-          const filtered = records.filter((p: any) => {
-            if (p.visibility === "public" || p.visibility === "unlisted") return true;
-            if (userId && p.ownerId === userId) return true;
-            return false;
-          });
-
-          const data: Project[] = filtered.map((p: any) => ({
+          const data: Project[] = records.map((p: any) => ({
             id: p.id,
             ownerId: p.ownerId,
             organizationId: p.organizationId,
@@ -224,12 +226,15 @@ export const ProjectServiceLive = Layer.effect(
             updatedAt: toIsoString(p.updatedAt),
           }));
 
+          const nextOffset = offset + limit;
+          const hasMore = nextOffset < total;
+
           return {
             data,
             meta: {
               total,
-              hasMore: data.length < total,
-              nextCursor: data.length < total ? String(data.length) : null,
+              hasMore,
+              nextCursor: hasMore ? String(nextOffset) : null,
             },
           };
         }),
@@ -310,7 +315,7 @@ export const ProjectServiceLive = Layer.effect(
               title: input.title,
               description: input.description ?? null,
               status: "active",
-              visibility: input.visibility ?? "private",
+              visibility: input.visibility ?? "public",
               repository: input.repository ?? null,
               createdAt: now,
               updatedAt: now,

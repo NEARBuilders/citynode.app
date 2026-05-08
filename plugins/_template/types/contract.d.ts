@@ -47,7 +47,7 @@ export declare const contract: {
             createdAt: string;
         };
         score: number;
-    }, unknown, void>, import("@orpc/contract").AsyncIteratorClass<{
+    }, unknown, void>, import("@orpc/shared").AsyncIteratorClass<{
         item: {
             id: string;
             title: string;
@@ -66,7 +66,7 @@ export declare const contract: {
         id: string;
         index: number;
         timestamp: number;
-    }, unknown, void>, import("@orpc/contract").AsyncIteratorClass<{
+    }, unknown, void>, import("@orpc/shared").AsyncIteratorClass<{
         id: string;
         index: number;
         timestamp: number;

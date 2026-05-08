@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
-import { Route as LayoutOpencodeRouteImport } from './routes/_layout/opencode'
 import { Route as LayoutLoginRouteImport } from './routes/_layout/login'
 import { Route as LayoutConfigRouteImport } from './routes/_layout/config'
 import { Route as LayoutAboutRouteImport } from './routes/_layout/about'
@@ -37,11 +36,6 @@ const LayoutRoute = LayoutRouteImport.update({
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => LayoutRoute,
-} as any)
-const LayoutOpencodeRoute = LayoutOpencodeRouteImport.update({
-  id: '/opencode',
-  path: '/opencode',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutLoginRoute = LayoutLoginRouteImport.update({
@@ -144,7 +138,6 @@ export interface FileRoutesByFullPath {
   '/about': typeof LayoutAboutRoute
   '/config': typeof LayoutConfigRoute
   '/login': typeof LayoutLoginRoute
-  '/opencode': typeof LayoutOpencodeRoute
   '/home': typeof LayoutAuthenticatedHomeRoute
   '/settings': typeof LayoutAuthenticatedSettingsRoute
   '/apps/': typeof LayoutAppsIndexRoute
@@ -163,7 +156,6 @@ export interface FileRoutesByTo {
   '/about': typeof LayoutAboutRoute
   '/config': typeof LayoutConfigRoute
   '/login': typeof LayoutLoginRoute
-  '/opencode': typeof LayoutOpencodeRoute
   '/home': typeof LayoutAuthenticatedHomeRoute
   '/settings': typeof LayoutAuthenticatedSettingsRoute
   '/apps': typeof LayoutAppsIndexRoute
@@ -184,7 +176,6 @@ export interface FileRoutesById {
   '/_layout/about': typeof LayoutAboutRoute
   '/_layout/config': typeof LayoutConfigRoute
   '/_layout/login': typeof LayoutLoginRoute
-  '/_layout/opencode': typeof LayoutOpencodeRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/_authenticated/_admin': typeof LayoutAuthenticatedAdminRouteWithChildren
   '/_layout/_authenticated/home': typeof LayoutAuthenticatedHomeRoute
@@ -207,7 +198,6 @@ export interface FileRouteTypes {
     | '/about'
     | '/config'
     | '/login'
-    | '/opencode'
     | '/home'
     | '/settings'
     | '/apps/'
@@ -226,7 +216,6 @@ export interface FileRouteTypes {
     | '/about'
     | '/config'
     | '/login'
-    | '/opencode'
     | '/home'
     | '/settings'
     | '/apps'
@@ -246,7 +235,6 @@ export interface FileRouteTypes {
     | '/_layout/about'
     | '/_layout/config'
     | '/_layout/login'
-    | '/_layout/opencode'
     | '/_layout/'
     | '/_layout/_authenticated/_admin'
     | '/_layout/_authenticated/home'
@@ -281,13 +269,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
-      parentRoute: typeof LayoutRoute
-    }
-    '/_layout/opencode': {
-      id: '/_layout/opencode'
-      path: '/opencode'
-      fullPath: '/opencode'
-      preLoaderRoute: typeof LayoutOpencodeRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/login': {
@@ -462,7 +443,6 @@ interface LayoutRouteChildren {
   LayoutAboutRoute: typeof LayoutAboutRoute
   LayoutConfigRoute: typeof LayoutConfigRoute
   LayoutLoginRoute: typeof LayoutLoginRoute
-  LayoutOpencodeRoute: typeof LayoutOpencodeRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutAppsIndexRoute: typeof LayoutAppsIndexRoute
   LayoutAppsAccountIdGatewayIdRoute: typeof LayoutAppsAccountIdGatewayIdRoute
@@ -474,7 +454,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAboutRoute: LayoutAboutRoute,
   LayoutConfigRoute: LayoutConfigRoute,
   LayoutLoginRoute: LayoutLoginRoute,
-  LayoutOpencodeRoute: LayoutOpencodeRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutAppsIndexRoute: LayoutAppsIndexRoute,
   LayoutAppsAccountIdGatewayIdRoute: LayoutAppsAccountIdGatewayIdRoute,

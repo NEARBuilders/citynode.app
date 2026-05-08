@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reorder } from "framer-motion";
-import { Eye, Globe, Lock, Plus, TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { ChevronDown, Eye, Globe, Lock, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { getAuthClient, type SessionData } from "@/app";
 import { Badge, Button } from "@/components";
@@ -30,6 +30,8 @@ interface RankedProject {
   upvoteCount: number;
 }
 
+const PAGE_SIZE = 24;
+
 export const Route = createFileRoute("/_layout/_authenticated/projects/")({
   head: () => ({
     meta: [
@@ -44,6 +46,7 @@ function ProjectsList() {
   const apiClient = useApiClient();
   const auth = getAuthClient();
   const queryClient = useQueryClient();
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const { data: session } = useQuery<SessionData | null>({
     queryKey: ["session"],
@@ -56,21 +59,26 @@ function ProjectsList() {
 
   const user = session?.user;
 
-  const walletAddress = (user as { walletAddress?: string | null } | null | undefined)
-    ?.walletAddress;
-  const { data: projectsData, isLoading } = useQuery({
+  const {
+    data: pages,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["projects"],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       apiClient.projects.listProjects({
-        ownerId: walletAddress ?? user?.id,
-        limit: 50,
+        limit: PAGE_SIZE,
+        cursor: pageParam,
       }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => (lastPage.meta.hasMore ? lastPage.meta.nextCursor : undefined),
     enabled: !!user,
   });
 
-  const projects = projectsData?.data ?? [];
+  const projects = useMemo(() => pages?.pages.flatMap((p) => p.data) ?? [], [pages]);
 
-  // Fetch upvote counts
   const upvoteCounts = useQuery({
     queryKey: ["upvoteCounts", projects.map((p) => p.id)],
     queryFn: async () => {
@@ -92,7 +100,6 @@ function ProjectsList() {
 
   const counts = upvoteCounts.data ?? {};
 
-  // Merge projects with upvote counts and sort descending
   const rankedProjects = useMemo<RankedProject[]>(() => {
     return projects
       .map((p) => ({
@@ -136,7 +143,6 @@ function ProjectsList() {
     },
   });
 
-  // SSE subscription for live upvote updates
   useEffect(() => {
     const es = new EventSource("/api/upvotes/stream");
 
@@ -167,6 +173,22 @@ function ProjectsList() {
       es.close();
     };
   }, [queryClient, projects]);
+
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (!node || !hasNextPage || isFetchingNextPage) return;
+
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0]?.isIntersecting) {
+          fetchNextPage();
+        }
+      });
+
+      observerRef.current.observe(node);
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage],
+  );
 
   if (isLoading) {
     return (
@@ -200,39 +222,58 @@ function ProjectsList() {
           <p className="text-sm text-muted-foreground">No projects yet.</p>
         </div>
       ) : (
-        <Reorder.Group
-          as="div"
-          axis="y"
-          values={projectIds}
-          onReorder={() => {}}
-          className="flex flex-col gap-3"
-        >
-          {rankedProjects.map((project, index) => (
-            <Reorder.Item
-              as="div"
-              key={project.id}
-              value={project.id}
-              layout="position"
-              drag={false}
-              dragListener={false}
-              transition={{
-                layout: { type: "spring", stiffness: 300, damping: 30 },
-              }}
-            >
-              <ProjectCard
-                rank={index + 1}
-                project={project}
-                upvoteCount={project.upvoteCount}
-                isUpvoting={upvoteMutation.isPending && upvoteMutation.variables === project.id}
-                isDownvoting={
-                  downvoteMutation.isPending && downvoteMutation.variables === project.id
-                }
-                onUpvote={() => upvoteMutation.mutate(project.id)}
-                onDownvote={() => downvoteMutation.mutate(project.id)}
-              />
-            </Reorder.Item>
-          ))}
-        </Reorder.Group>
+        <>
+          <Reorder.Group
+            as="div"
+            axis="y"
+            values={projectIds}
+            onReorder={() => {}}
+            className="flex flex-col gap-3"
+          >
+            {rankedProjects.map((project, index) => (
+              <Reorder.Item
+                as="div"
+                key={project.id}
+                value={project.id}
+                layout="position"
+                drag={false}
+                dragListener={false}
+                transition={{
+                  layout: { type: "spring", stiffness: 300, damping: 30 },
+                }}
+              >
+                <ProjectCard
+                  rank={index + 1}
+                  project={project}
+                  upvoteCount={project.upvoteCount}
+                  isUpvoting={upvoteMutation.isPending && upvoteMutation.variables === project.id}
+                  isDownvoting={
+                    downvoteMutation.isPending && downvoteMutation.variables === project.id
+                  }
+                  onUpvote={() => upvoteMutation.mutate(project.id)}
+                  onDownvote={() => downvoteMutation.mutate(project.id)}
+                />
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
+
+          <div ref={sentinelRef} className="flex justify-center py-4">
+            {isFetchingNextPage && (
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+            )}
+            {hasNextPage && !isFetchingNextPage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchNextPage()}
+                className="text-muted-foreground"
+              >
+                <ChevronDown className="h-4 w-4 mr-1" />
+                Load more
+              </Button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -257,12 +298,10 @@ function ProjectCard({
 }) {
   return (
     <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-4 pr-5 hover:bg-accent/30 transition-colors">
-      {/* Rank */}
       <div className="flex flex-col items-center justify-center w-10 shrink-0">
         <span className="text-lg font-bold tabular-nums text-muted-foreground">#{rank}</span>
       </div>
 
-      {/* Info */}
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge
@@ -300,7 +339,6 @@ function ProjectCard({
         )}
       </div>
 
-      {/* Vote stack */}
       <div className="flex flex-col items-center gap-0.5 shrink-0">
         <Button
           variant="ghost"

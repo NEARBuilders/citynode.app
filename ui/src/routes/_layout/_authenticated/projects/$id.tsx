@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ExternalLink, Github, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
+import { ExternalLink, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -338,7 +338,7 @@ function ProjectDetailPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                     >
-                      <Github className="h-4 w-4" />
+                      <LinkIcon className="h-4 w-4" />
                       {project.repository.replace(/^https:\/\//, "")}
                     </a>
                   </div>

@@ -64,6 +64,9 @@
       "development": "local:plugins/projects",
       "production": "https://elliot-braem-3129-everything-dev-projects-plugin--02d601474-ze.zephyrcloud.app",
       "integrity": "sha384-0ocd9HVO1sgIADvbccO8eJNS56GzXxFSoaiNPM291+J5NRI+Qq3dQQPWYSS/iSbH",
+      "secrets": [
+        "PROJECTS_DATABASE_URL"
+      ],
       "routes": [
         "ui/src/routes/_layout/_authenticated/organizations/**",
         "ui/src/routes/_layout/_authenticated/projects/**"
@@ -88,7 +91,9 @@
       "development": "local:api",
       "production": "https://elliot-braem-3125-api-everything-dev-nearbuilders-42ae3c0a2-ze.zephyrcloud.app",
       "integrity": "sha384-/0Q+xXP+Ertoz8qLx6ieIvrSyb5otp81z/hwmWMuda+CTGQ6FzZH2Q3iiHjYn4ft",
-      "secrets": []
+      "secrets": [
+        "API_DATABASE_URL"
+      ]
     },
     "auth": {
       "name": "everything-dev_auth-plugin",

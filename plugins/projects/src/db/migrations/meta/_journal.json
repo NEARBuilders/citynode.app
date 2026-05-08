@@ -15,6 +15,13 @@
       "when": 1778192982329,
       "tag": "0001_wise_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778251917340,
+      "tag": "0002_lowly_darkstar",
+      "breakpoints": true
     }
   ]
 }

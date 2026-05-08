@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
 import type { ProjectsDatabase } from "./index";
+import { migrate } from "./migrator";
 
 export const DatabaseTag = Context.Tag("projects/Database")<ProjectsDatabase, ProjectsDatabase>();
 
@@ -10,13 +11,13 @@ export const DatabaseLive = (url: string) =>
       Effect.promise(async () => {
         const { createDatabaseDriver } = await import("./index");
         const driver = await createDatabaseDriver(url);
+
+        const migrations = await import("virtual:drizzle-migrations.sql");
+        await migrate(driver.db, migrations.default);
+        console.log("[Projects] Migrations applied");
+
         return driver.db;
       }),
-      (_db) =>
-        Effect.promise(async () => {
-          const { createDatabaseDriver } = await import("./index");
-          const driver = await createDatabaseDriver(url);
-          await driver.close();
-        }).pipe(Effect.catchAll(() => Effect.void)),
+      () => Effect.void,
     ),
   );

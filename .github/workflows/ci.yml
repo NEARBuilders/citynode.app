@@ -56,8 +56,23 @@ jobs:
     needs: [lint-and-typecheck]
     timeout-minutes: 30
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: everythingdev
+          POSTGRES_PASSWORD: everythingdev
+          POSTGRES_DB: api_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U everythingdev"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 5
+
     env:
-      API_DATABASE_URL: file:./api-test.db
+      API_DATABASE_URL: postgres://everythingdev:everythingdev@localhost:5432/api_db
 
     steps:
       - name: Checkout repository

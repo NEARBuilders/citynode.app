@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Eye, FileText, Github, Globe, Link as LinkIcon, Lock, Type } from "lucide-react";
+import { Eye, FileText, Globe, Link as LinkIcon, Lock, Type } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
@@ -227,7 +227,7 @@ function NewProjectPage() {
                       htmlFor="repository"
                       className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"
                     >
-                      <Github className="h-3.5 w-3.5" />
+                      <LinkIcon className="h-3.5 w-3.5" />
                       Repository URL (optional)
                     </label>
                     <Input

@@ -77,7 +77,10 @@
     "test": "bun run test:api && bun run test:e2e",
     "test:api": "cd api && bun test tests/integration/ tests/unit/",
     "test:integration": "cd api && bun test tests/integration/",
-    "test:e2e": "bun run --cwd host test:e2e"
+    "test:e2e": "bun run --cwd host test:e2e",
+    "dev:postgres": "docker compose up -d --wait && bun run dev",
+    "dev:postgres:down": "docker compose down",
+    "dev:postgres:reset": "docker compose down -v && docker compose up -d --wait"
   },
   "packageManager": "bun@1.2.20",
   "module": "index.ts",

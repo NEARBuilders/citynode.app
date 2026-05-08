@@ -29,7 +29,10 @@ export async function createDatabaseDriver(url: string): Promise<DatabaseDriver>
   const { drizzle } = await import("drizzle-orm/node-postgres");
   const pool = new Pool({
     connectionString: url,
-    ssl: { rejectUnauthorized: false },
+    ssl:
+      url.includes("localhost") || url.includes("127.0.0.1")
+        ? false
+        : { rejectUnauthorized: false },
   });
   return {
     db: drizzle(pool, { schema }),
