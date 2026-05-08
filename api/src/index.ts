@@ -4,6 +4,7 @@ import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
+import { loadMigrations } from "./db/load-migrations";
 import { migrate } from "./db/migrator";
 import { upvotes } from "./db/schema";
 import type { PluginsClient } from "./plugins-client.gen";
@@ -157,8 +158,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
       const { createDatabaseDriver } = await import("./db/index");
       const driver = await createDatabaseDriver(config.secrets.API_DATABASE_URL);
 
-      const migrations = await import("virtual:drizzle-migrations.sql");
-      await migrate(driver.db, migrations.default);
+      const migrations = await loadMigrations();
+      await migrate(driver.db, migrations);
       console.log("[API] Migrations applied");
 
       const { auth, ...restPlugins } = plugins;
