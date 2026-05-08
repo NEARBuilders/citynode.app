@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import type { TransactionBuilder } from "near-kit";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -136,7 +137,7 @@ function AppDetailPage() {
 
       const signedDelegateAction = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
-        (builder) =>
+        (builder: TransactionBuilder) =>
           builder.functionCall(
             prepared.data.contractId,
             prepared.data.methodName,
@@ -175,7 +176,7 @@ function AppDetailPage() {
 
       const signedDelegateAction = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
-        (builder) =>
+        (builder: TransactionBuilder) =>
           builder.functionCall(
             prepared.data.contractId,
             prepared.data.methodName,

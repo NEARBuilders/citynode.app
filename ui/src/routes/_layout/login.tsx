@@ -89,7 +89,7 @@ function LoginPage() {
         setIsPending(false);
         await handleSuccess("Signed in with NEAR");
       },
-      onError: (error) => {
+      onError: (error: { code?: string; message?: string }) => {
         setIsPending(false);
         handleError(error);
       },
@@ -106,7 +106,7 @@ function LoginPage() {
             setIsPending(false);
             await handleSuccess("Signed in with passkey");
           },
-          onError: (ctx) => {
+          onError: (ctx: { error?: { message?: string } }) => {
             setIsPending(false);
             handleError(new Error(ctx.error?.message || "Passkey sign in failed"));
           },
@@ -126,7 +126,7 @@ function LoginPage() {
             setIsPending(false);
             await handleSuccess("Started anonymous session");
           },
-          onError: (ctx) => {
+          onError: (ctx: { error?: { message?: string } }) => {
             setIsPending(false);
             handleError(new Error(ctx.error?.message || "Anonymous sign in failed"));
           },
@@ -152,7 +152,7 @@ function LoginPage() {
             setIsPending(false);
             await handleSuccess("Signed in successfully");
           },
-          onError: (ctx) => {
+          onError: (ctx: { error?: { message?: string } }) => {
             setIsPending(false);
             handleError(new Error(ctx.error?.message || "Sign in failed"));
           },
@@ -183,7 +183,7 @@ function LoginPage() {
             setIsPending(false);
             await handleSuccess("Account created! Check your email to verify.");
           },
-          onError: (ctx) => {
+          onError: (ctx: { error?: { message?: string } }) => {
             setIsPending(false);
             handleError(new Error(ctx.error?.message || "Sign up failed"));
           },
@@ -208,7 +208,8 @@ function LoginPage() {
             setOtpSent(true);
             toast.success("Verification code sent!");
           },
-          onError: (ctx) => handleError(new Error(ctx.error?.message || "Failed to send code")),
+          onError: (ctx: { error?: { message?: string } }) =>
+            handleError(new Error(ctx.error?.message || "Failed to send code")),
         },
       });
     } finally {
@@ -250,7 +251,8 @@ function LoginPage() {
         callbackURL: redirect?.startsWith("/") ? redirect : "/home",
         fetchOptions: {
           onSuccess: () => handleSuccess("Signed in with GitHub"),
-          onError: (ctx) => handleError(new Error(ctx.error?.message || "GitHub sign in failed")),
+          onError: (ctx: { error?: { message?: string } }) =>
+            handleError(new Error(ctx.error?.message || "GitHub sign in failed")),
         },
       });
     } finally {

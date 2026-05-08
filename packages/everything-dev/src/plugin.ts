@@ -1535,7 +1535,6 @@ export default createPlugin({
               "ui/src/api-contract.gen.ts",
               "ui/src/auth-types.gen.ts",
               "api/src/plugins-client.gen.ts",
-              "api/src/auth-client.gen.ts",
             ],
             fetched,
             skipped,
@@ -1550,11 +1549,7 @@ export default createPlugin({
           apiBaseUrl: refreshed.runtime.api.url,
         });
 
-        const generated = [
-          "ui/src/api-contract.gen.ts",
-          "api/src/plugins-client.gen.ts",
-          "api/src/auth-client.gen.ts",
-        ];
+        const generated = ["ui/src/api-contract.gen.ts", "api/src/plugins-client.gen.ts"];
         if (
           refreshed.runtime.auth &&
           (refreshed.runtime.auth.source !== "local" || refreshed.runtime.auth.localPath)
