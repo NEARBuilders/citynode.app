@@ -46,6 +46,10 @@ function formatTimeAgo(isoTimestamp: string): string {
   return isoTimestamp.split("T")[0] ?? isoTimestamp;
 }
 
+function normalizeVersion(v: string): string {
+  return v.replace(/^[\^~>=v]+/, "").trim();
+}
+
 async function warnIfOutdated(client: any, command: string): Promise<void> {
   if (!["dev", "build", "start"].includes(command)) return;
 
@@ -55,7 +59,7 @@ async function warnIfOutdated(client: any, command: string): Promise<void> {
 
     const outdated = status.packages.filter(
       (p: { name: string; installed?: string; latest?: string }) =>
-        p.installed && p.latest && p.installed !== p.latest,
+        p.installed && p.latest && normalizeVersion(p.installed) !== normalizeVersion(p.latest),
     );
 
     if (outdated.length === 0) return;
@@ -299,7 +303,7 @@ async function main() {
       console.log();
       console.log(`  ${colors.dim("Packages:")}`);
       for (const pkg of result.packages) {
-        const hasUpdate = pkg.installed && pkg.latest && pkg.installed !== pkg.latest;
+        const hasUpdate = pkg.installed && pkg.latest && normalizeVersion(pkg.installed) !== normalizeVersion(pkg.latest);
         const versionStr = hasUpdate
           ? `${pkg.installed}  →  ${pkg.latest}`
           : pkg.installed || "not installed";
@@ -328,7 +332,7 @@ async function main() {
       }
       const hasUpdates = result.packages.some(
         (p: { installed?: string; latest?: string }) =>
-          p.installed && p.latest && p.installed !== p.latest,
+          p.installed && p.latest && normalizeVersion(p.installed) !== normalizeVersion(p.latest),
       );
       if (hasUpdates) {
         console.log();

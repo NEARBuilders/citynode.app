@@ -35,7 +35,7 @@ function readInstalledVersion(projectDir: string, packageName: string): string |
   ) {
     return undefined;
   }
-  return version.replace(/^[^^~>=]+/, "");
+  return version.replace(/^[\^~>=]+/, "");
 }
 
 function checkEnvFile(projectDir: string): "found" | "missing" | "example-only" {
