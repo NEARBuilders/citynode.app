@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reorder } from "framer-motion";
 import { ChevronDown, Eye, Globe, Lock, Plus, TrendingDown, TrendingUp } from "lucide-react";
