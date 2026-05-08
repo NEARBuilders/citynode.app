@@ -925,9 +925,11 @@ export default createPlugin({
 
       const port = input.port ?? getHostDevelopmentPort(config.app.host.development);
       const isStaging = input.env === "staging";
-      const runtimePlugins = remoteConfig
-        ? await buildRuntimePluginsForConfig(config, deps.configDir, "production")
-        : deps.runtimeConfig?.plugins;
+      const runtimePlugins = await buildRuntimePluginsForConfig(
+        config,
+        deps.configDir,
+        "production",
+      );
       const runtimeConfig = buildRuntimeConfig(config, {
         uiSource: "remote",
         apiSource: "remote",

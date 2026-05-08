@@ -254,6 +254,11 @@ export const initializePlugins = Effect.gen(function* () {
 
       const integrityRegistry = new IntegrityRegistry();
 
+      const allEntriesWithUrls = allEntries.filter((e) => e.config.url);
+      console.log(
+        `[Plugins] Registry entries: ${allEntriesWithUrls.map((e) => `${e.key}=${e.config.url}`).join(", ") || "none"}`,
+      );
+
       // Pre-register app-specific shared deps in host scope before every-plugin initializes
       await registerAppSharedDeps(config.shared?.plugins);
 

@@ -102,7 +102,17 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
 
   const formatArgs = (args: unknown[]): string => {
     return args
-      .map((arg) => (typeof arg === "object" ? JSON.stringify(arg, null, 2) : String(arg)))
+      .map((arg) => {
+        if (arg instanceof Error) {
+          const parts = [`${arg.name}: ${arg.message}`];
+          if (arg.cause instanceof Error)
+            parts.push(`(cause: ${arg.cause.name}: ${arg.cause.message})`);
+          else if (arg.cause) parts.push(`(cause: ${String(arg.cause)})`);
+          if (arg.stack) parts.push(arg.stack);
+          return parts.join("\n");
+        }
+        return typeof arg === "object" ? JSON.stringify(arg, null, 2) : String(arg);
+      })
       .join(" ");
   };
 
