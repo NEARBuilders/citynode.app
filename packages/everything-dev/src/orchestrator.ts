@@ -100,7 +100,7 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
   const originalWarn = console.warn;
   const originalInfo = console.info;
 
-  const formatArgs = (args: unknown[]): string => {
+  const formatArgs = (args: unknown[], isError = false): string => {
     return args
       .map((arg) => {
         if (arg instanceof Error) {
@@ -108,7 +108,7 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
           if (arg.cause instanceof Error)
             parts.push(`(cause: ${arg.cause.name}: ${arg.cause.message})`);
           else if (arg.cause) parts.push(`(cause: ${String(arg.cause)})`);
-          if (arg.stack) parts.push(arg.stack);
+          if (isError && arg.stack) parts.push(arg.stack);
           return parts.join("\n");
         }
         return typeof arg === "object" ? JSON.stringify(arg, null, 2) : String(arg);
@@ -120,7 +120,7 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
     callbacks.onLog(name, formatArgs(args), false);
   };
   console.error = (...args: unknown[]) => {
-    callbacks.onLog(name, formatArgs(args), true);
+    callbacks.onLog(name, formatArgs(args, true), true);
   };
   console.warn = (...args: unknown[]) => {
     callbacks.onLog(name, formatArgs(args), false);

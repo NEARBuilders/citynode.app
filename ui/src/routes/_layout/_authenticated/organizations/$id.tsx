@@ -21,13 +21,17 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
     context,
     params,
   }: {
-    context: { queryClient: QueryClient; apiClient: ApiClient };
+    context: {
+      queryClient: QueryClient;
+      apiClient: ApiClient;
+      runtimeConfig?: Partial<import("@/app").ClientRuntimeConfig>;
+    };
     params: { id: string };
   }) => {
     await context.queryClient.ensureQueryData({
       queryKey: ["organizations"],
       queryFn: async () => {
-        const { data } = await getAuthClient().organization.list();
+        const { data } = await getAuthClient(context.runtimeConfig).organization.list();
         return (data || []) as Organization[];
       },
       staleTime: 30 * 1000,
