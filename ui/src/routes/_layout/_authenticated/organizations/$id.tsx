@@ -2,7 +2,12 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type Organization, type SessionData } from "@/app";
+import {
+  type ClientRuntimeConfig,
+  getAuthClient,
+  type Organization,
+  type SessionData,
+} from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -24,7 +29,7 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
     context: {
       queryClient: QueryClient;
       apiClient: ApiClient;
-      runtimeConfig?: Partial<import("@/app").ClientRuntimeConfig>;
+      runtimeConfig?: Partial<ClientRuntimeConfig>;
     };
     params: { id: string };
   }) => {
