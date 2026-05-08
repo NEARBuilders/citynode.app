@@ -49,10 +49,10 @@ export function loadManifestNormalizationSpec(sourceRootDir: string): Normalizat
   for (const packageName of FRAMEWORK_PACKAGES) {
     const sourcePackagePath = join(sourceRootDir, "packages", packageName, "package.json");
     const localPackagePath = join(import.meta.dirname, "..", "..", packageName, "package.json");
-    const packageVersion = existsSync(sourcePackagePath)
-      ? readJson<{ version: string }>(sourcePackagePath).version
-      : existsSync(localPackagePath)
-        ? readJson<{ version: string }>(localPackagePath).version
+    const packageVersion = existsSync(localPackagePath)
+      ? readJson<{ version: string }>(localPackagePath).version
+      : existsSync(sourcePackagePath)
+        ? readJson<{ version: string }>(sourcePackagePath).version
         : extractExactVersion(rootCatalog[packageName]);
 
     if (!packageVersion) {

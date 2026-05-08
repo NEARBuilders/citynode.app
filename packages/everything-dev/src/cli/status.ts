@@ -28,7 +28,10 @@ function readInstalledVersion(projectDir: string, packageName: string): string |
   const devDeps = (pkg.devDependencies ?? {}) as Record<string, string>;
   const version = deps[packageName] || devDeps[packageName];
   if (!version) return undefined;
-  return version.replace(/^[\^~>=]+/, "");
+  if (version.startsWith("workspace:") || version.startsWith("catalog:") || version.startsWith("file:")) {
+    return undefined;
+  }
+  return version.replace(/^[^\^~>=]+/, "");
 }
 
 function checkEnvFile(projectDir: string): "found" | "missing" | "example-only" {
