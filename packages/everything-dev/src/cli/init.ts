@@ -472,7 +472,11 @@ export async function personalizeConfig(
 }
 
 export async function runBunInstall(destination: string): Promise<void> {
-  await execCommand("bun", ["install"], destination);
+  await execCommand("bun", ["install", "--ignore-scripts"], destination);
+}
+
+export async function runTypesGen(destination: string): Promise<void> {
+  await execCommand("node_modules/.bin/bos", ["types", "gen"], destination);
 }
 
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {

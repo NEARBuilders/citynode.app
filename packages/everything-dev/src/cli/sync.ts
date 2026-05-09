@@ -10,7 +10,7 @@ import {
 import { dirname, join } from "node:path";
 import { glob } from "glob";
 import type { SyncOptions, SyncResult } from "../contract";
-import { personalizeConfig, readTemplatekeep, resolveSourceDir, runBunInstall } from "./init";
+import { personalizeConfig, readTemplatekeep, resolveSourceDir, runBunInstall, runTypesGen } from "./init";
 import { readSnapshot, writeSnapshot } from "./snapshot";
 
 function readExcludeFile(filePath: string): string[] {
@@ -438,6 +438,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
     if (!options.noInstall) {
       await runBunInstall(projectDir);
+      await runTypesGen(projectDir);
     }
 
     return {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { glob } from "glob";
 import type { UpgradeOptions, UpgradeResult } from "../contract";
-import { runBunInstall } from "./init";
+import { runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
@@ -232,6 +232,7 @@ export async function upgradeTemplate(
 
   if (hasUpdates && !options.noInstall) {
     await runBunInstall(projectDir);
+    await runTypesGen(projectDir);
   }
 
   let syncResult: UpgradeResult["sync"];

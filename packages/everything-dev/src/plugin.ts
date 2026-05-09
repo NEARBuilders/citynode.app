@@ -13,6 +13,7 @@ import {
   readTemplatekeep,
   resolveSourceDir,
   runBunInstall,
+  runTypesGen,
   writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
@@ -70,7 +71,7 @@ import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 import { colors } from "./utils/theme";
 
-function ensureEnvFile(configDir: string): void {
+function ensureEnvFile(configDir: string, opts?: { domain?: string }): void {
   const envPath = join(configDir, ".env");
   const examplePath = join(configDir, ".env.example");
 
@@ -82,11 +83,15 @@ function ensureEnvFile(configDir: string): void {
   const lines = content.split("\n");
 
   const secret = randomBytes(32).toString("base64url");
+  const corsOrigin = opts?.domain ? `http://localhost:3000,https://${opts.domain}` : "http://localhost:3000";
 
   const updated = lines
     .map((line) => {
       if (/^BETTER_AUTH_SECRET=/.test(line)) {
         return `BETTER_AUTH_SECRET=${secret}`;
+      }
+      if (/^CORS_ORIGIN=/.test(line)) {
+        return `CORS_ORIGIN=${corsOrigin}`;
       }
       return line;
     })
@@ -1398,12 +1403,13 @@ export default createPlugin({
             pluginRoutes,
           });
 
+          ensureEnvFile(directory, { domain });
+
           if (!input.noInstall) {
             await runBunInstall(directory);
+            await runTypesGen(directory);
             await generateDatabaseMigrations(directory);
           }
-
-          ensureEnvFile(directory);
 
           s.stop("Project initialized");
 

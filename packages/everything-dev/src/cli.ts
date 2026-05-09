@@ -156,9 +156,11 @@ async function main() {
       console.log(colors.dim("  Next steps:"));
       console.log(colors.dim(`    cd ${result.directory}`));
       if (result.status === "initialized" && !(input as any)?.noInstall) {
+        console.log(colors.dim("    docker compose up -d --wait"));
         console.log(colors.dim("    bun run dev"));
       } else {
         console.log(colors.dim("    bun install"));
+        console.log(colors.dim("    docker compose up -d --wait"));
         console.log(colors.dim("    bun run dev"));
       }
       console.log();
