@@ -901,16 +901,19 @@ export default createPlugin({
     start: builder.start.handler(async ({ input }: { input: StartOptions }) => {
       ensureEnvFile(deps.configDir);
 
+      const account = input.account ?? process.env.BOS_ACCOUNT;
+      const domain = input.domain ?? process.env.BOS_GATEWAY;
+
       let config: BosConfig | null = null;
       let remoteConfig: BosConfig | null = null;
 
-      if (input.account && input.domain) {
-        remoteConfig = await fetchPublishedConfig(input.account, input.domain);
+      if (account && domain) {
+        remoteConfig = await fetchPublishedConfig(account, domain);
         if (remoteConfig) {
           config = remoteConfig;
         } else {
           console.warn(
-            `[Start] Failed to fetch remote config for ${input.account}/${input.domain}, falling back to local bos.config.json`,
+            `[Start] Failed to fetch remote config for ${account}/${domain}, falling back to local bos.config.json`,
           );
         }
       }
@@ -923,15 +926,16 @@ export default createPlugin({
         return {
           status: "error" as const,
           url: "",
+          error: "No configuration found. Set BOS_ACCOUNT and BOS_GATEWAY environment variables, or provide a local bos.config.json.",
         };
       }
 
       // Apply runtime overrides from CLI flags / env vars
-      if (input.account) {
-        config = { ...config, account: input.account };
+      if (account) {
+        config = { ...config, account };
       }
-      if (input.domain) {
-        config = { ...config, domain: input.domain };
+      if (domain) {
+        config = { ...config, domain };
       }
 
       const port = input.port ?? getHostDevelopmentPort(config.app.host.development);
@@ -1001,12 +1005,12 @@ export default createPlugin({
         : {};
 
       const configSource = remoteConfig
-        ? `bos://${input.account}/${input.domain}`
+        ? `bos://${account}/${domain}`
         : (findConfigPath() ?? "bos.config.json");
 
       const configSourceHttp =
-        remoteConfig && input.account && input.domain
-          ? buildRegistryConfigUrl(input.account, input.domain)
+        remoteConfig && account && domain
+          ? buildRegistryConfigUrl(account, domain)
           : undefined;
 
       const summaryLines: string[] = ["", `  ${colors.dim("Config Source:")}  ${configSource}`];

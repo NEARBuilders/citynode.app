@@ -29,6 +29,7 @@ export const StartOptionsSchema = z.object({
 export const StartResultSchema = z.object({
   status: z.enum(["running", "error"]),
   url: z.string(),
+  error: z.string().optional(),
 });
 
 export const BuildOptionsSchema = z.object({
