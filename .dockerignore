@@ -57,6 +57,7 @@ test-results
 api/tests
 host/tests
 packages/every-plugin/tests
+packages/everything-dev/tests
 
 # Docs
 docs

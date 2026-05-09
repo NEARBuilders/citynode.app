@@ -901,24 +901,37 @@ export default createPlugin({
     start: builder.start.handler(async ({ input }: { input: StartOptions }) => {
       ensureEnvFile(deps.configDir);
 
+      let config: BosConfig | null = null;
       let remoteConfig: BosConfig | null = null;
 
       if (input.account && input.domain) {
         remoteConfig = await fetchPublishedConfig(input.account, input.domain);
-        if (!remoteConfig) {
-          return {
-            status: "error" as const,
-            url: "",
-          };
+        if (remoteConfig) {
+          config = remoteConfig;
+        } else {
+          console.warn(
+            `[Start] Failed to fetch remote config for ${input.account}/${input.domain}, falling back to local bos.config.json`,
+          );
         }
       }
 
-      const config = remoteConfig || deps.bosConfig;
+      if (!config) {
+        config = deps.bosConfig;
+      }
+
       if (!config) {
         return {
           status: "error" as const,
           url: "",
         };
+      }
+
+      // Apply runtime overrides from CLI flags / env vars
+      if (input.account) {
+        config = { ...config, account: input.account };
+      }
+      if (input.domain) {
+        config = { ...config, domain: input.domain };
       }
 
       const port = input.port ?? getHostDevelopmentPort(config.app.host.development);
