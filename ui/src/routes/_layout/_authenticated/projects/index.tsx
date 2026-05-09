@@ -4,7 +4,7 @@ import { Reorder } from "framer-motion";
 import { ChevronDown, Eye, Globe, Lock, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type ClientRuntimeConfig, type SessionData } from "@/app";
+import { type ClientRuntimeConfig, getAuthClient, type SessionData } from "@/app";
 import { Badge, Button } from "@/components";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -44,7 +44,9 @@ export const Route = createFileRoute("/_layout/_authenticated/projects/")({
 
 function ProjectsList() {
   const apiClient = useApiClient();
-  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
+  const { runtimeConfig } = Route.useRouteContext() as {
+    runtimeConfig?: Partial<ClientRuntimeConfig>;
+  };
   const auth = getAuthClient(runtimeConfig);
   const queryClient = useQueryClient();
   const observerRef = useRef<IntersectionObserver | null>(null);

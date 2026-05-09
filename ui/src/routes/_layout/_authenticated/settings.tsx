@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type ClientRuntimeConfig, type Passkey, type SessionData } from "@/app";
+import { type ClientRuntimeConfig, getAuthClient, type Passkey, type SessionData } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
 import { sessionQueryOptions } from "@/lib/session";
 
@@ -20,9 +20,13 @@ export const Route = createFileRoute("/_layout/_authenticated/settings")({
 });
 
 function Settings() {
-  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
+  const { runtimeConfig } = Route.useRouteContext() as {
+    runtimeConfig?: Partial<ClientRuntimeConfig>;
+  };
   const auth = getAuthClient(runtimeConfig);
-  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(undefined, runtimeConfig));
+  const { data: session } = useQuery<SessionData | null>(
+    sessionQueryOptions(undefined, runtimeConfig),
+  );
   const { data: passkeys = [] } = useQuery({
     queryKey: ["passkeys"],
     queryFn: async () => {
@@ -77,7 +81,12 @@ function Settings() {
       </section>
 
       <ProfileSection user={user} runtimeConfig={runtimeConfig} />
-      <AuthMethodsSection user={user} passkeys={passkeys} nearAccountId={nearAccountId} runtimeConfig={runtimeConfig} />
+      <AuthMethodsSection
+        user={user}
+        passkeys={passkeys}
+        nearAccountId={nearAccountId}
+        runtimeConfig={runtimeConfig}
+      />
       <SecuritySection user={user} runtimeConfig={runtimeConfig} />
     </div>
   );
@@ -272,7 +281,13 @@ function AuthMethodsSection({
   );
 }
 
-function SecuritySection({ user, runtimeConfig }: { user: { email?: string; isAnonymous?: boolean | null }; runtimeConfig?: Partial<ClientRuntimeConfig> }) {
+function SecuritySection({
+  user,
+  runtimeConfig,
+}: {
+  user: { email?: string; isAnonymous?: boolean | null };
+  runtimeConfig?: Partial<ClientRuntimeConfig>;
+}) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -286,7 +301,10 @@ function SecuritySection({ user, runtimeConfig }: { user: { email?: string; isAn
         throw new Error("Password must be at least 8 characters");
       }
       return (async () => {
-        const { error } = await getAuthClient(runtimeConfig).changePassword({ currentPassword, newPassword });
+        const { error } = await getAuthClient(runtimeConfig).changePassword({
+          currentPassword,
+          newPassword,
+        });
         if (error) throw new Error(error.message);
       })();
     },

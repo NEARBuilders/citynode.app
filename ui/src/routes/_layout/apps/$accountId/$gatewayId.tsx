@@ -4,7 +4,7 @@ import type { TransactionBuilder } from "near-kit";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type ClientRuntimeConfig } from "@/app";
+import { type ClientRuntimeConfig, getAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
 import { sessionQueryOptions } from "@/lib/session";
@@ -29,7 +29,9 @@ function AppDetailPage() {
   const { accountId, gatewayId } = Route.useParams();
   const queryClient = useQueryClient();
   const apiClient = useApiClient();
-  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
+  const { runtimeConfig } = Route.useRouteContext() as {
+    runtimeConfig?: Partial<ClientRuntimeConfig>;
+  };
   const detailQuery = useQuery({
     queryKey: ["registry-app", accountId, gatewayId],
     queryFn: () => apiClient.registry.getRegistryApp({ accountId, gatewayId }),

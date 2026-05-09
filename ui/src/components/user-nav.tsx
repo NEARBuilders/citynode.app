@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { getAuthClient, type Organization, type ClientRuntimeConfig } from "@/app";
+import { type ClientRuntimeConfig, getAuthClient, type Organization } from "@/app";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

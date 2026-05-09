@@ -1,7 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { getAuthClient, type ClientRuntimeConfig, type Organization, type SessionData } from "@/app";
+import {
+  type ClientRuntimeConfig,
+  getAuthClient,
+  type Organization,
+  type SessionData,
+} from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/organizations/")({
@@ -15,7 +20,9 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/")({
 });
 
 function OrganizationsList() {
-  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
+  const { runtimeConfig } = Route.useRouteContext() as {
+    runtimeConfig?: Partial<ClientRuntimeConfig>;
+  };
   const auth = getAuthClient(runtimeConfig);
   const { data: session } = useQuery<SessionData | null>({
     queryKey: ["session"],
