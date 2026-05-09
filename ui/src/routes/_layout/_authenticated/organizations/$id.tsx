@@ -73,8 +73,9 @@ function OrganizationDetail() {
   const queryClient = useQueryClient();
   const { id: orgId } = Route.useParams();
   const apiClient = useApiClient();
+  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
 
-  const auth = getAuthClient();
+  const auth = getAuthClient(runtimeConfig);
   const { data: session } = useQuery<SessionData | null>({
     queryKey: ["session"],
     queryFn: async () => {

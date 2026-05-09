@@ -12,8 +12,15 @@ import { UserNav } from "../components/user-nav";
 export const Route = createFileRoute("/_layout")({
   beforeLoad: async ({ context }) => {
     const { queryClient } = context;
-    const session = await queryClient.ensureQueryData(sessionQueryOptions(context.session));
-    return { session };
+    const session = await queryClient.ensureQueryData(
+      sessionQueryOptions(context.session, context.runtimeConfig),
+    );
+
+    return {
+      assetsUrl: context.assetsUrl || "",
+      runtimeConfig: context.runtimeConfig,
+      session,
+    };
   },
   component: Layout,
 });
@@ -29,7 +36,7 @@ const authenticatedSidebarItems = [
 function Layout() {
   const pathname = useClientValue(() => window.location.pathname, "/");
   const appName = useClientValue(() => getAppName(), "app");
-  const { session } = Route.useRouteContext();
+  const { session, runtimeConfig } = Route.useRouteContext();
   const isAuthenticated = !!session?.user;
 
   const isActive = (item: (typeof authenticatedSidebarItems)[number]) => {
@@ -127,7 +134,7 @@ function Layout() {
                     <ThemeToggle />
                   </div>
                 )}
-                <UserNav />
+                <UserNav runtimeConfig={runtimeConfig} />
               </div>
             </div>
           </header>

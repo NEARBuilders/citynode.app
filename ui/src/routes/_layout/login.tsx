@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient } from "@/app";
+import { getAuthClient, type ClientRuntimeConfig } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UnderConstruction } from "@/components/under-construction";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_layout/login")({
     const { queryClient } = context;
     const initialSession = context.session;
     const session =
-      initialSession ?? queryClient.getQueryData(sessionQueryOptions(initialSession).queryKey);
+      initialSession ?? queryClient.getQueryData(sessionQueryOptions(initialSession, context.runtimeConfig).queryKey);
 
     if (session?.user) {
       const redirectTo = search.redirect?.startsWith("/") ? search.redirect : "/home";
@@ -33,15 +33,16 @@ export const Route = createFileRoute("/_layout/login")({
   loader: ({ context }) => {
     const initialSession = context.session;
 
-    void context.queryClient.prefetchQuery(sessionQueryOptions(initialSession));
+    void context.queryClient.prefetchQuery(sessionQueryOptions(initialSession, context.runtimeConfig));
   },
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
-  const auth = getAuthClient();
-  const { data: session } = useQuery(sessionQueryOptions());
+  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
+  const auth = getAuthClient(runtimeConfig);
+  const { data: session } = useQuery(sessionQueryOptions(undefined, runtimeConfig));
   const { redirect } = Route.useSearch();
   const [authMethod, setAuthMethod] = useState<AuthMethod>("anonymous");
 

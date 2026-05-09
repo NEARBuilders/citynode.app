@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAuthClient, type Passkey, type SessionData } from "@/app";
+import { getAuthClient, type ClientRuntimeConfig, type Passkey, type SessionData } from "@/app";
 import { Badge, Button, Card, CardContent, UnderConstruction } from "@/components";
 import { sessionQueryOptions } from "@/lib/session";
 
@@ -20,12 +20,13 @@ export const Route = createFileRoute("/_layout/_authenticated/settings")({
 });
 
 function Settings() {
-  const auth = getAuthClient();
-  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions());
+  const { runtimeConfig } = Route.useRouteContext() as { runtimeConfig?: Partial<ClientRuntimeConfig> };
+  const auth = getAuthClient(runtimeConfig);
+  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(undefined, runtimeConfig));
   const { data: passkeys = [] } = useQuery({
     queryKey: ["passkeys"],
     queryFn: async () => {
-      const { data } = await getAuthClient().passkey.listUserPasskeys();
+      const { data } = await getAuthClient(runtimeConfig).passkey.listUserPasskeys();
       return (data || []) as Passkey[];
     },
     staleTime: 60 * 1000,
@@ -75,23 +76,25 @@ function Settings() {
         </Card>
       </section>
 
-      <ProfileSection user={user} />
-      <AuthMethodsSection user={user} passkeys={passkeys} nearAccountId={nearAccountId} />
-      <SecuritySection user={user} />
+      <ProfileSection user={user} runtimeConfig={runtimeConfig} />
+      <AuthMethodsSection user={user} passkeys={passkeys} nearAccountId={nearAccountId} runtimeConfig={runtimeConfig} />
+      <SecuritySection user={user} runtimeConfig={runtimeConfig} />
     </div>
   );
 }
 
 function ProfileSection({
   user,
+  runtimeConfig,
 }: {
   user: { id: string; email?: string; name?: string; isAnonymous?: boolean | null };
+  runtimeConfig?: Partial<ClientRuntimeConfig>;
 }) {
   const [name, setName] = useState(user.name || "");
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await getAuthClient().updateUser({ name });
+      const { error } = await getAuthClient(runtimeConfig).updateUser({ name });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => toast.success("Profile updated"),
@@ -163,14 +166,16 @@ function AuthMethodsSection({
   user,
   passkeys,
   nearAccountId,
+  runtimeConfig,
 }: {
   user: { email?: string; isAnonymous?: boolean | null };
   passkeys: Array<{ id: string; name?: string }>;
   nearAccountId: string | null;
+  runtimeConfig?: Partial<ClientRuntimeConfig>;
 }) {
   const addPasskeyMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await getAuthClient().passkey.addPasskey();
+      const { error } = await getAuthClient(runtimeConfig).passkey.addPasskey();
       if (error) throw new Error(error.message);
     },
     onSuccess: () => toast.success("Passkey added"),
@@ -179,7 +184,7 @@ function AuthMethodsSection({
 
   const removePasskeyMutation = useMutation({
     mutationFn: async (passkeyId: string) => {
-      const { error } = await getAuthClient().passkey.deletePasskey({ id: passkeyId });
+      const { error } = await getAuthClient(runtimeConfig).passkey.deletePasskey({ id: passkeyId });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => toast.success("Passkey removed"),
@@ -188,7 +193,7 @@ function AuthMethodsSection({
 
   const linkNearMutation = useMutation({
     mutationFn: async () => {
-      await getAuthClient().signIn.near();
+      await getAuthClient(runtimeConfig).signIn.near();
     },
     onSuccess: () => toast.success("NEAR wallet linked"),
     onError: (err: Error) => toast.error(err.message),
@@ -267,7 +272,7 @@ function AuthMethodsSection({
   );
 }
 
-function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boolean | null } }) {
+function SecuritySection({ user, runtimeConfig }: { user: { email?: string; isAnonymous?: boolean | null }; runtimeConfig?: Partial<ClientRuntimeConfig> }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -281,7 +286,7 @@ function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boole
         throw new Error("Password must be at least 8 characters");
       }
       return (async () => {
-        const { error } = await getAuthClient().changePassword({ currentPassword, newPassword });
+        const { error } = await getAuthClient(runtimeConfig).changePassword({ currentPassword, newPassword });
         if (error) throw new Error(error.message);
       })();
     },
@@ -296,7 +301,7 @@ function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boole
 
   const revokeSessionsMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await getAuthClient().revokeSessions();
+      const { error } = await getAuthClient(runtimeConfig).revokeSessions();
       if (error) throw new Error(error.message);
     },
     onSuccess: () => toast.success("Other sessions revoked"),
@@ -305,8 +310,8 @@ function SecuritySection({ user }: { user: { email?: string; isAnonymous?: boole
 
   const signOutMutation = useMutation({
     mutationFn: async () => {
-      await getAuthClient().signOut();
-      await getAuthClient()
+      await getAuthClient(runtimeConfig).signOut();
+      await getAuthClient(runtimeConfig)
         .near.disconnect()
         .catch(() => {});
     },
