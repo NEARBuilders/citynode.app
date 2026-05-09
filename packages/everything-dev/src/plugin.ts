@@ -83,7 +83,9 @@ function ensureEnvFile(configDir: string, opts?: { domain?: string }): void {
   const lines = content.split("\n");
 
   const secret = randomBytes(32).toString("base64url");
-  const corsOrigin = opts?.domain ? `http://localhost:3000,https://${opts.domain}` : "http://localhost:3000";
+  const corsOrigin = opts?.domain
+    ? `http://localhost:3000,https://${opts.domain}`
+    : "http://localhost:3000";
 
   const updated = lines
     .map((line) => {

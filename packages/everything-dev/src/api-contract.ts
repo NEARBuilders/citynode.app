@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { RuntimeConfig, RuntimePluginConfig } from "./types";
 
@@ -346,6 +346,10 @@ function writeGeneratedFiles(opts: {
   // --- Generate ui/src/auth-types.gen.ts ---
   if (opts.authExportPath) {
     writeAuthTypesGen(opts.configDir, opts.authExportPath);
+  } else if (opts.authSource) {
+    const authTypesPath = join(opts.configDir, "ui", "src", "auth-types.gen.ts");
+    mkdirSync(dirname(authTypesPath), { recursive: true });
+    writeFileIfChanged(authTypesPath, `export type { createAuthInstance } from "better-auth";\n`);
   }
 
   return uiContractPath;
@@ -415,9 +419,16 @@ export async function syncApiContractBridge(opts: {
       }
     }
 
-    // Fallback to local auth export source if remote fetch failed or auth is local
     if (!authExportPath) {
-      authExportPath = join(opts.configDir, "plugins", "auth", "src", "auth-export.ts");
+      const localAuthExport = join(opts.configDir, "plugins", "auth", "src", "auth-export.ts");
+      if (existsSync(localAuthExport)) {
+        authExportPath = localAuthExport;
+      } else {
+        const generatedAuthExport = join(runtimeDir, "auth", "auth-export.d.ts");
+        if (existsSync(generatedAuthExport)) {
+          authExportPath = generatedAuthExport;
+        }
+      }
     }
   }
 
