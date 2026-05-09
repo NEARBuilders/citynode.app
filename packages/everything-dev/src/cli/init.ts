@@ -398,9 +398,8 @@ export async function personalizeConfig(
       rewrite("publish", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
       rewrite("start", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
 
-      if (scripts.postinstall) {
-        scripts.postinstall = "bos types gen";
-      }
+      scripts.postinstall = "node_modules/.bin/bos types gen || true";
+      scripts["types:gen"] = "node_modules/.bin/bos types gen";
       if (scripts.typecheck) {
         scripts.typecheck = scripts.typecheck
           .replace("bun run types:gen && ", "")

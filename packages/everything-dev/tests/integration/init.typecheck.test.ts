@@ -143,10 +143,16 @@ describe("bos init — typecheck with expected route errors", () => {
     expect(existsSync(join(testDir, "api", "src", "plugins-client.gen.ts"))).toBe(true);
   });
 
-  it("sets postinstall to 'bos types gen'", async () => {
+  it("sets postinstall to 'node_modules/.bin/bos types gen || true'", async () => {
     const pkgPath = join(testDir, "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { scripts?: Record<string, string> };
-    expect(pkg.scripts?.postinstall).toBe("bos types gen");
+    expect(pkg.scripts?.postinstall).toBe("node_modules/.bin/bos types gen || true");
+  });
+
+  it("sets types:gen to 'node_modules/.bin/bos types gen'", async () => {
+    const pkgPath = join(testDir, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { scripts?: Record<string, string> };
+    expect(pkg.scripts?.["types:gen"]).toBe("node_modules/.bin/bos types gen");
   });
 
   it("installs dependencies", async () => {
