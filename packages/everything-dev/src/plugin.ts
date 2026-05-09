@@ -926,7 +926,8 @@ export default createPlugin({
         return {
           status: "error" as const,
           url: "",
-          error: "No configuration found. Set BOS_ACCOUNT and BOS_GATEWAY environment variables, or provide a local bos.config.json.",
+          error:
+            "No configuration found. Set BOS_ACCOUNT and BOS_GATEWAY environment variables, or provide a local bos.config.json.",
         };
       }
 
@@ -1009,9 +1010,7 @@ export default createPlugin({
         : (findConfigPath() ?? "bos.config.json");
 
       const configSourceHttp =
-        remoteConfig && account && domain
-          ? buildRegistryConfigUrl(account, domain)
-          : undefined;
+        remoteConfig && account && domain ? buildRegistryConfigUrl(account, domain) : undefined;
 
       const summaryLines: string[] = ["", `  ${colors.dim("Config Source:")}  ${configSource}`];
       if (configSourceHttp) {
