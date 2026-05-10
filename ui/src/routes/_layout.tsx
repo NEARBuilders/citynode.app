@@ -46,46 +46,48 @@ function Layout() {
     <TooltipProvider>
       <div className="min-h-screen w-full flex bg-background text-foreground">
         {isAuthenticated && (
-          <aside className="hidden sm:flex shrink-0 w-16 flex-col items-center border-r border-border bg-card py-4 gap-1.5 overflow-y-auto animate-fade-in">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  to="/"
-                  aria-label={`${appName} home`}
-                  className="mb-3 flex items-center justify-center w-10 h-10 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] bg-card shadow-sm transition-shadow duration-200 hover:shadow-md"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-5 h-5 text-foreground"
-                    aria-label={`${appName} logo`}
+          <aside className="hidden sm:flex sticky top-0 h-screen shrink-0 w-16 flex-col items-center border-r border-border bg-card animate-fade-in">
+            <div className="flex-1 w-full overflow-y-auto flex flex-col items-center gap-1.5 py-4 min-h-0">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    to="/"
+                    aria-label={`${appName} home`}
+                    className="mb-3 flex items-center justify-center w-10 h-10 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] bg-card shadow-sm transition-shadow duration-200 hover:shadow-md"
                   >
-                    <title>{appName}</title>
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">{appName}</TooltipContent>
-            </Tooltip>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="w-5 h-5 text-foreground"
+                      aria-label={`${appName} logo`}
+                    >
+                      <title>{appName}</title>
+                      <circle cx="12" cy="12" r="10" />
+                    </svg>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{appName}</TooltipContent>
+              </Tooltip>
 
-            {authenticatedSidebarItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item);
-              const className = `flex items-center justify-center w-10 h-10 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] shadow-sm transition-all duration-200 ease-out hover:shadow-md ${active ? "bg-foreground text-background" : "bg-card text-foreground hover:bg-muted"}`;
+              {authenticatedSidebarItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item);
+                const className = `flex items-center justify-center w-10 h-10 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] shadow-sm transition-all duration-200 ease-out hover:shadow-md ${active ? "bg-foreground text-background" : "bg-card text-foreground hover:bg-muted"}`;
 
-              return (
-                <Tooltip key={item.label}>
-                  <TooltipTrigger asChild>
-                    <Link to={item.to} className={className}>
-                      <Icon className="w-4 h-4" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
-                </Tooltip>
-              );
-            })}
+                return (
+                  <Tooltip key={item.label}>
+                    <TooltipTrigger asChild>
+                      <Link to={item.to} className={className}>
+                        <Icon className="w-4 h-4" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
 
-            <div className="mt-auto pt-4">
+            <div className="shrink-0 w-full flex justify-center py-3 bg-card border-t border-border z-10">
               <ThemeToggle />
             </div>
           </aside>
@@ -128,11 +130,7 @@ function Layout() {
               )}
 
               <div className="flex items-center gap-2">
-                {!isAuthenticated && (
-                  <div className="sm:hidden">
-                    <ThemeToggle />
-                  </div>
-                )}
+                {!isAuthenticated && <ThemeToggle />}
                 <UserNav />
               </div>
             </div>
@@ -181,6 +179,9 @@ function Layout() {
                     </Link>
                   );
                 })}
+                <div className="flex flex-col items-center justify-center p-1.5">
+                  <ThemeToggle />
+                </div>
               </div>
             </nav>
           )}
