@@ -2,11 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { type ClientRuntimeConfig, getAuthClient } from "@/app";
+import { sessionQueryOptions, useAuthClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UnderConstruction } from "@/components/under-construction";
-import { sessionQueryOptions } from "@/lib/session";
 
 type SearchParams = {
   redirect?: string;
@@ -20,11 +19,11 @@ export const Route = createFileRoute("/_layout/login")({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
   }),
   beforeLoad: ({ context, search }) => {
-    const { queryClient } = context;
+    const { queryClient, authClient } = context;
     const initialSession = context.session;
     const session =
       initialSession ??
-      queryClient.getQueryData(sessionQueryOptions(initialSession, context.runtimeConfig).queryKey);
+      queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
 
     if (session?.user) {
       const redirectTo = search.redirect?.startsWith("/") ? search.redirect : "/home";
@@ -34,20 +33,15 @@ export const Route = createFileRoute("/_layout/login")({
   loader: ({ context }) => {
     const initialSession = context.session;
 
-    void context.queryClient.prefetchQuery(
-      sessionQueryOptions(initialSession, context.runtimeConfig),
-    );
+    void context.queryClient.prefetchQuery(sessionQueryOptions(context.authClient, initialSession));
   },
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { runtimeConfig } = Route.useRouteContext() as {
-    runtimeConfig?: Partial<ClientRuntimeConfig>;
-  };
-  const auth = getAuthClient(runtimeConfig);
-  const { data: session } = useQuery(sessionQueryOptions(undefined, runtimeConfig));
+  const auth = useAuthClient();
+  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
   const { redirect } = Route.useSearch();
   const [authMethod, setAuthMethod] = useState<AuthMethod>("anonymous");
 

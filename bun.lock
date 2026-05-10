@@ -35,7 +35,7 @@
     },
     "api": {
       "name": "api",
-      "version": "2.4.1",
+      "version": "2.4.3",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
@@ -68,7 +68,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.5.5",
+      "version": "1.5.7",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -107,7 +107,7 @@
     },
     "packages/every-plugin": {
       "name": "every-plugin",
-      "version": "2.5.4",
+      "version": "2.5.6",
       "dependencies": {
         "@module-federation/enhanced": "catalog:",
         "@module-federation/node": "catalog:",
@@ -148,7 +148,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.9.5",
+      "version": "1.11.3",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -203,7 +203,7 @@
     },
     "plugins/_template": {
       "name": "@every-plugin/template",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "dependencies": {
         "@orpc/contract": "^1.13.4",
         "@orpc/server": "^1.13.4",
@@ -227,7 +227,7 @@
     },
     "plugins/projects": {
       "name": "@everything-dev/projects-plugin",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "^1.13.4",
@@ -258,7 +258,7 @@
     },
     "plugins/registry": {
       "name": "@everything-dev/registry-plugin",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "dependencies": {
         "@orpc/contract": "^1.13.4",
         "@orpc/server": "^1.13.4",
@@ -284,7 +284,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.3.1",
+      "version": "1.3.4",
       "dependencies": {
         "@hot-labs/near-connect": "0.11.2",
         "@orpc/client": "catalog:",
@@ -396,7 +396,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "better-auth": "1.6.9",
-    "better-near-auth": "^1.1.0",
+    "better-near-auth": "^1.4.0",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.0",
@@ -1504,7 +1504,7 @@
 
     "better-call": ["better-call@1.3.5", "", { "dependencies": { "@better-auth/utils": "^0.4.0", "@better-fetch/fetch": "^1.1.21", "rou3": "^0.7.12", "set-cookie-parser": "^3.0.1" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-kOFJkBP7utAQLEYrobZm3vkTH8mXq5GNgvjc5/XEST1ilVHaxXUXfeDeFlqoETMtyqS4+3/h4ONX2i++ebZrvA=="],
 
-    "better-near-auth": ["better-near-auth@1.1.0", "", { "dependencies": { "@hot-labs/near-connect": "github:azbang/near-connect#v0.11.3", "@scure/base": "^2.2.0", "nanostores": "^1.1.0", "near-kit": "^0.14.0", "zod": "^4.4.3" }, "peerDependencies": { "better-auth": "^1.5.4", "typescript": "^5.9.3" } }, "sha512-vJH5jrinK+7Reb35jwr7Pql3mYYzykT7qzSzrwjJkLKzCVtDJzrHOjL99T2tG5+bJCTdVdK9t2lb3HI+J9L6cg=="],
+    "better-near-auth": ["better-near-auth@1.4.0", "", { "dependencies": { "@hot-labs/near-connect": "github:azbang/near-connect#v0.11.3", "@scure/base": "^2.2.0", "nanostores": "^1.1.0", "near-kit": "^0.14.0", "zod": "^4.4.3" }, "peerDependencies": { "better-auth": "^1.5.4", "typescript": "^5.9.3" } }, "sha512-Recm1hJbwBXKoz2x6keoeG210PwRVezNa9leDKVDdz1BXP36ecMsw9QrG8SztjkqE4qs0jx4RCydZY1xjJEzhw=="],
 
     "better-path-resolve": ["better-path-resolve@1.0.0", "", { "dependencies": { "is-windows": "^1.0.0" } }, "sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g=="],
 

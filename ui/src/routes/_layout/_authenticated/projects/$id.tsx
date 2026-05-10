@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { type ClientRuntimeConfig, getAuthClient, type SessionData } from "@/app";
+import { type SessionData, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -40,9 +40,7 @@ function ProjectDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const apiClient = useApiClient();
-  const { runtimeConfig } = Route.useRouteContext() as {
-    runtimeConfig?: Partial<ClientRuntimeConfig>;
-  };
+  const auth = useAuthClient();
 
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -56,7 +54,7 @@ function ProjectDetailPage() {
   const { data: session } = useQuery<SessionData | null>({
     queryKey: ["session"],
     queryFn: async () => {
-      const { data } = await getAuthClient(runtimeConfig).getSession();
+      const { data } = await auth.getSession();
       return data ?? null;
     },
     staleTime: 60 * 1000,

@@ -1,5 +1,5 @@
 import { createBrowserHistory, createRouter as createTanStackRouter } from "@tanstack/react-router";
-import { getRuntimeBasePath } from "./app";
+import { createAuthClient, getRuntimeBasePath } from "./app";
 import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 import type { CreateRouterOptions } from "./app";
@@ -24,6 +24,7 @@ export function createRouter(opts: CreateRouterOptions) {
       assetsUrl: opts.context.assetsUrl,
       runtimeConfig: opts.context.runtimeConfig,
       apiClient: opts.context.apiClient,
+      authClient: opts.context.authClient ?? createAuthClient(opts.context.runtimeConfig),
       session: opts.context.session,
     },
     defaultPreload: "intent",

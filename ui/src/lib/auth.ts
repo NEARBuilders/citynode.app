@@ -1,5 +1,6 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
 import { passkeyClient } from "@better-auth/passkey/client";
+import { useRouter } from "@tanstack/react-router";
 import {
   adminClient,
   anonymousClient,
@@ -9,11 +10,11 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { siwnClient } from "better-near-auth/client";
-import type { ClientRuntimeConfig } from "@/app";
-import { getAccount, getHostUrl, getNetworkId } from "@/app";
+import type { ClientRuntimeConfig } from "everything-dev/types";
+import { getAccount, getHostUrl, getNetworkId } from "everything-dev/ui/runtime";
 import type { Auth } from "../auth-types.gen";
 
-function createAuthClient(config?: Partial<ClientRuntimeConfig>) {
+export function createAuthClient(config?: Partial<ClientRuntimeConfig>) {
   return createBetterAuthClient({
     baseURL: getHostUrl(config),
     fetchOptions: { credentials: "include" },
@@ -33,18 +34,6 @@ function createAuthClient(config?: Partial<ClientRuntimeConfig>) {
   });
 }
 
-let _authClient: ReturnType<typeof createAuthClient> | undefined;
-
-export function getAuthClient(config?: Partial<ClientRuntimeConfig>) {
-  if (config) {
-    return createAuthClient(config);
-  }
-  if (_authClient === undefined) {
-    _authClient = createAuthClient();
-  }
-  return _authClient;
-}
-
 export type AuthClient = ReturnType<typeof createAuthClient>;
 export type SessionData = AuthClient["$Infer"]["Session"];
 
@@ -61,4 +50,23 @@ export interface Passkey {
   id: string;
   name?: string;
   createdAt?: Date;
+}
+
+export function useAuthClient(): AuthClient {
+  return useRouter().options.context.authClient;
+}
+
+export const sessionQueryKey = ["session"] as const;
+
+export function sessionQueryOptions(authClient: AuthClient, initialSession?: SessionData | null) {
+  return {
+    queryKey: sessionQueryKey,
+    queryFn: async () => {
+      const { data: session } = await authClient.getSession();
+      return session ?? null;
+    },
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    initialData: initialSession,
+  };
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { type ClientRuntimeConfig, getAuthClient, type Organization } from "@/app";
+import { type Organization, sessionQueryOptions, useAuthClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,11 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { sessionQueryOptions } from "@/lib/session";
 
-export function UserNav({ runtimeConfig }: { runtimeConfig?: Partial<ClientRuntimeConfig> }) {
-  const auth = getAuthClient(runtimeConfig);
-  const { data: session } = useQuery(sessionQueryOptions(undefined, runtimeConfig));
+export function UserNav() {
+  const auth = useAuthClient();
+  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
   const user = session?.user;
   const { data: organizations } = useQuery({
     queryKey: ["organizations"],

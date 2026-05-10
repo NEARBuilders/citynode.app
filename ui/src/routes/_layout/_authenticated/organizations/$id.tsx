@@ -2,12 +2,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  type ClientRuntimeConfig,
-  getAuthClient,
-  type Organization,
-  type SessionData,
-} from "@/app";
+import { type Organization, type SessionData, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
 import { useApiClient } from "@/lib/use-api-client";
 
@@ -29,14 +24,14 @@ export const Route = createFileRoute("/_layout/_authenticated/organizations/$id"
     context: {
       queryClient: QueryClient;
       apiClient: ApiClient;
-      runtimeConfig?: Partial<ClientRuntimeConfig>;
+      authClient: import("@/app").AuthClient;
     };
     params: { id: string };
   }) => {
     await context.queryClient.ensureQueryData({
       queryKey: ["organizations"],
       queryFn: async () => {
-        const { data } = await getAuthClient(context.runtimeConfig).organization.list();
+        const { data } = await context.authClient.organization.list();
         return (data || []) as Organization[];
       },
       staleTime: 30 * 1000,
@@ -73,11 +68,8 @@ function OrganizationDetail() {
   const queryClient = useQueryClient();
   const { id: orgId } = Route.useParams();
   const apiClient = useApiClient();
-  const { runtimeConfig } = Route.useRouteContext() as {
-    runtimeConfig?: Partial<ClientRuntimeConfig>;
-  };
+  const auth = useAuthClient();
 
-  const auth = getAuthClient(runtimeConfig);
   const { data: session } = useQuery<SessionData | null>({
     queryKey: ["session"],
     queryFn: async () => {

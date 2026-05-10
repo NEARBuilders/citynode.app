@@ -4,10 +4,9 @@ import type { TransactionBuilder } from "near-kit";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { type ClientRuntimeConfig, getAuthClient } from "@/app";
+import { sessionQueryOptions, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
-import { sessionQueryOptions } from "@/lib/session";
 import { useApiClient } from "@/lib/use-api-client";
 
 export const Route = createFileRoute("/_layout/apps/$accountId/$gatewayId")({
@@ -29,9 +28,7 @@ function AppDetailPage() {
   const { accountId, gatewayId } = Route.useParams();
   const queryClient = useQueryClient();
   const apiClient = useApiClient();
-  const { runtimeConfig } = Route.useRouteContext() as {
-    runtimeConfig?: Partial<ClientRuntimeConfig>;
-  };
+  const auth = useAuthClient();
   const detailQuery = useQuery({
     queryKey: ["registry-app", accountId, gatewayId],
     queryFn: () => apiClient.registry.getRegistryApp({ accountId, gatewayId }),
@@ -45,8 +42,7 @@ function AppDetailPage() {
     queryFn: () => apiClient.registry.getRegistryStatus(),
     staleTime: 60_000,
   });
-  const auth = getAuthClient(runtimeConfig);
-  const { data: session } = useQuery(sessionQueryOptions(undefined, runtimeConfig));
+  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
 
   const nearAccountId = auth.near.getAccountId();
   const [title, setTitle] = useState("");
