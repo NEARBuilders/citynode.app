@@ -181,7 +181,7 @@ async function fetchAuthExportTypes(opts: {
 function writeAuthTypesGen(configDir: string, authExportPath: string) {
   const authTypesPath = join(configDir, "ui", "src", "auth-types.gen.ts");
   const importPath = toImportPath(authTypesPath, authExportPath);
-  const content = `export type { createAuthInstance } from "${importPath}";\n`;
+  const content = `export type { Auth, createAuthInstance } from "${importPath}";\n`;
   mkdirSync(dirname(authTypesPath), { recursive: true });
   writeFileIfChanged(authTypesPath, content);
 }
@@ -349,7 +349,7 @@ function writeGeneratedFiles(opts: {
   } else if (opts.authSource) {
     const authTypesPath = join(opts.configDir, "ui", "src", "auth-types.gen.ts");
     mkdirSync(dirname(authTypesPath), { recursive: true });
-    writeFileIfChanged(authTypesPath, `export type { createAuthInstance } from "better-auth";\n`);
+    writeFileIfChanged(authTypesPath, `export type { Auth, createAuthInstance } from "better-auth";\n`);
   }
 
   return uiContractPath;
