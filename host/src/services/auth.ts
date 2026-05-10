@@ -1,34 +1,37 @@
 import type { Context, Next } from "hono";
+import type {
+  AuthRequestContext,
+  AuthServices as GeneratedAuthServices,
+  AuthSession,
+  AuthSessionData,
+  AuthSessionUser,
+} from "@/lib/auth-types.gen";
 import type { HostPluginEntry, PluginResult } from "./plugins";
 
-interface AuthServices {
-  handler: (req: Request) => Promise<Response>;
-  auth: {
-    api: {
-      getSession: (args: { headers: Headers }) => Promise<{ user?: any; session?: any } | null>;
-    };
-  };
+export type AuthUser = AuthSessionUser;
+
+interface AuthServices extends GeneratedAuthServices {
+  auth: GeneratedAuthServices["auth"];
 }
 
-interface AuthUser {
-  id: string;
-  [key: string]: unknown;
-}
-
-interface AuthSession {
-  activeOrganizationId?: string | null;
-  [key: string]: unknown;
+interface AuthClient {
+  getSession(): Promise<AuthSession | null>;
+  getContext(): Promise<AuthRequestContext>;
 }
 
 export interface AuthVariables {
   user: AuthUser | null;
-  session: AuthSession | null;
+  session: AuthSessionData | null;
   reqHeaders: Headers;
   getRawBody: () => Promise<string>;
   walletAddress: string | null;
 }
 
 export type HonoEnv = { Variables: AuthVariables };
+
+function toAuthClientContext(headers: Headers): Record<string, string> {
+  return Object.fromEntries(headers.entries());
+}
 
 function resolveAuthEntry(plugins: PluginResult): HostPluginEntry | null {
   return plugins.auth ?? plugins.plugins.auth ?? null;
@@ -47,8 +50,7 @@ export function registerAuthHandler(app: { on: (...args: any[]) => any }, plugin
 }
 
 export function createSessionMiddleware(plugins: PluginResult) {
-  const services = getAuthServices(plugins);
-  const authApi = services?.auth?.api ?? null;
+  const authClientFactory = plugins.authClient;
 
   return async (c: Context<HonoEnv>, next: Next) => {
     if (c.req.path.startsWith("/api/auth/")) {
@@ -69,7 +71,7 @@ export function createSessionMiddleware(plugins: PluginResult) {
       return cachedRawBody;
     });
 
-    if (!authApi) {
+    if (!authClientFactory) {
       c.set("user", null);
       c.set("session", null);
       c.set("walletAddress", null);
@@ -78,10 +80,16 @@ export function createSessionMiddleware(plugins: PluginResult) {
     }
 
     try {
-      const sessionResult = await authApi.getSession({ headers: c.get("reqHeaders") });
+      const authClient = authClientFactory({
+        reqHeaders: toAuthClientContext(c.get("reqHeaders")),
+      }) as AuthClient;
+      const [sessionResult, contextResult] = await Promise.all([
+        authClient.getSession(),
+        authClient.getContext(),
+      ]);
       c.set("user", sessionResult?.user ?? null);
       c.set("session", sessionResult?.session ?? null);
-      c.set("walletAddress", sessionResult?.user?.walletAddress ?? null);
+      c.set("walletAddress", contextResult.near.primaryAccountId ?? null);
     } catch (error) {
       console.warn(
         `[Auth] Session resolution failed: ${error instanceof Error ? error.message : String(error)}`,

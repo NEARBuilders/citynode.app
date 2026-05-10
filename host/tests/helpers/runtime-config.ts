@@ -2,7 +2,7 @@ import { loadConfig } from "everything-dev/config";
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import type { RenderOptionsWithApi, RouterContext } from "everything-dev/ui/types";
 import type { RuntimeConfig } from "@/types";
-import type { ApiClient } from "../../../ui/src/lib/api-client";
+import type { ApiClient } from "../../../ui/src/lib/api";
 
 export async function loadTestRuntimeConfig(): Promise<RuntimeConfig> {
   const result = await loadConfig();

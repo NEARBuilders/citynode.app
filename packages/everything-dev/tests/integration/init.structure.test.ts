@@ -21,7 +21,7 @@ describe("bos init — structure", () => {
     const patterns = await readTemplatekeep(REPO_ROOT);
     expect(patterns.length).toBeGreaterThan(0);
     expect(patterns).toContain("bos.config.json");
-    expect(patterns).toContain("ui/src/lib/auth-client.ts");
+    expect(patterns).toContain("ui/src/lib/api.ts");
   });
 
   it("copies only .templatekeep files", async () => {
@@ -34,7 +34,7 @@ describe("bos init — structure", () => {
 
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "ui/src/lib/auth-client.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
     expect(existsSync(join(testDir, "plugins/_template/src/index.ts"))).toBe(true);
     expect(existsSync(join(testDir, "plugins/registry/src/index.ts"))).toBe(false);
     expect(existsSync(join(testDir, "plugins/projects/src/index.ts"))).toBe(false);

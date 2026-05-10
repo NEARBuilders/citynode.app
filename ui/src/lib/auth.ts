@@ -12,7 +12,7 @@ import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import { getAccount, getHostUrl, getNetworkId } from "everything-dev/ui/runtime";
-import type { Auth } from "../auth-types.gen";
+import type { Auth } from "./auth-types.gen";
 
 export function createAuthClient(config?: Partial<ClientRuntimeConfig>) {
   return createBetterAuthClient({
@@ -35,22 +35,12 @@ export function createAuthClient(config?: Partial<ClientRuntimeConfig>) {
 }
 
 export type AuthClient = ReturnType<typeof createAuthClient>;
+type OrganizationListResult = Awaited<ReturnType<AuthClient["organization"]["list"]>>;
+type PasskeyListResult = Awaited<ReturnType<AuthClient["passkey"]["listUserPasskeys"]>>;
+
 export type SessionData = AuthClient["$Infer"]["Session"];
-
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  logo?: string | null;
-  metadata?: Record<string, unknown>;
-  createdAt: Date;
-}
-
-export interface Passkey {
-  id: string;
-  name?: string;
-  createdAt?: Date;
-}
+export type Organization = NonNullable<OrganizationListResult["data"]>[number];
+export type Passkey = NonNullable<PasskeyListResult["data"]>[number];
 
 export function useAuthClient(): AuthClient {
   return useRouter().options.context.authClient;
@@ -59,7 +49,7 @@ export function useAuthClient(): AuthClient {
 export const sessionQueryKey = ["session"] as const;
 
 export function sessionQueryOptions(authClient: AuthClient, initialSession?: SessionData | null) {
-  return {
+  const baseOptions = {
     queryKey: sessionQueryKey,
     queryFn: async () => {
       const { data: session } = await authClient.getSession();
@@ -67,6 +57,9 @@ export function sessionQueryOptions(authClient: AuthClient, initialSession?: Ses
     },
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    initialData: initialSession,
   };
+
+  return initialSession === undefined
+    ? baseOptions
+    : { ...baseOptions, initialData: initialSession };
 }

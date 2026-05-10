@@ -310,18 +310,6 @@ export async function personalizeConfig(
     if (isInit && config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
 
-      const authClientPath = join(destination, "ui", "src", "lib", "auth-client.ts");
-      if (existsSync(authClientPath)) {
-        const authClientContent = readFileSync(authClientPath, "utf-8")
-          .split("\n")
-          .filter(
-            (line) =>
-              !line.includes("inferAdditionalFields") && !line.includes("createAuthInstance"),
-          )
-          .join("\n");
-        writeFileSync(authClientPath, authClientContent);
-      }
-
       for (const entryKey of Object.keys(app)) {
         const entry = app[entryKey];
         if (entry && typeof entry === "object") {
@@ -449,13 +437,13 @@ export async function personalizeConfig(
 
   await resolveWorkspaceRefs(destination, opts.workspaceOpts);
 
-  const genContractPath = join(destination, "ui", "src", "api-contract.gen.ts");
+  const genContractPath = join(destination, "ui", "src", "lib", "api-types.gen.ts");
   if (!existsSync(genContractPath)) {
     mkdirSync(dirname(genContractPath), { recursive: true });
     writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
   }
 
-  const pluginsClientGenPath = join(destination, "api", "src", "plugins-client.gen.ts");
+  const pluginsClientGenPath = join(destination, "api", "src", "lib", "plugins-types.gen.ts");
   if (!existsSync(pluginsClientGenPath)) {
     mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
     writeFileSync(
@@ -464,12 +452,30 @@ export async function personalizeConfig(
     );
   }
 
-  const authTypesGenPath = join(destination, "ui", "src", "auth-types.gen.ts");
+  const authTypesGenPath = join(destination, "ui", "src", "lib", "auth-types.gen.ts");
   if (!existsSync(authTypesGenPath)) {
     mkdirSync(dirname(authTypesGenPath), { recursive: true });
     writeFileSync(
       authTypesGenPath,
-      `export type { Auth, createAuthInstance } from "better-auth";\n`,
+      `import type { Auth } from "better-auth";\nexport type { Auth } from "better-auth";\nexport type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {\n  role?: string | null;\n  isAnonymous?: boolean | null;\n  walletAddress?: string | null;\n  banned?: boolean | null;\n};\nexport type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {\n  activeOrganizationId?: string | null;\n};\nexport type AuthSession = {\n  user: AuthSessionUser | null;\n  session: AuthSessionData | null;\n};\nexport interface AuthOrganizationContext {\n  activeOrganizationId: string | null;\n  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;\n  member: { id: string; role: string } | null;\n  isPersonal: boolean;\n  hasOrganization: boolean;\n}\nexport interface AuthRequestContext {\n  user: AuthSessionUser | null;\n  userId: string | null;\n  isAuthenticated: boolean;\n  authMethod: "session" | "apiKey" | "anonymous" | "none";\n  near: {\n    primaryAccountId: string | null;\n    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;\n    hasNearAccount: boolean;\n  };\n  organization: AuthOrganizationContext;\n  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;\n}\nexport type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };\nexport type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;\nexport type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;\nexport type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];\nexport type AuthBaseSession = Auth["$Infer"]["Session"];\nexport type createAuthInstance = never;\nexport interface AuthServices {\n  auth: Auth;\n  db: unknown;\n  driver: { close(): Promise<void> };\n  handler: (req: Request) => Promise<Response>;\n}\n`,
+    );
+  }
+
+  const apiAuthTypesGenPath = join(destination, "api", "src", "lib", "auth-types.gen.ts");
+  if (!existsSync(apiAuthTypesGenPath)) {
+    mkdirSync(dirname(apiAuthTypesGenPath), { recursive: true });
+    writeFileSync(
+      apiAuthTypesGenPath,
+      `import type { Auth } from "better-auth";\nexport type { Auth } from "better-auth";\nexport type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {\n  role?: string | null;\n  isAnonymous?: boolean | null;\n  walletAddress?: string | null;\n  banned?: boolean | null;\n};\nexport type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {\n  activeOrganizationId?: string | null;\n};\nexport type AuthSession = {\n  user: AuthSessionUser | null;\n  session: AuthSessionData | null;\n};\nexport interface AuthOrganizationContext {\n  activeOrganizationId: string | null;\n  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;\n  member: { id: string; role: string } | null;\n  isPersonal: boolean;\n  hasOrganization: boolean;\n}\nexport interface AuthRequestContext {\n  user: AuthSessionUser | null;\n  userId: string | null;\n  isAuthenticated: boolean;\n  authMethod: "session" | "apiKey" | "anonymous" | "none";\n  near: {\n    primaryAccountId: string | null;\n    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;\n    hasNearAccount: boolean;\n  };\n  organization: AuthOrganizationContext;\n  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;\n}\nexport type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };\nexport type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;\nexport type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;\nexport type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];\nexport type AuthBaseSession = Auth["$Infer"]["Session"];\nexport type createAuthInstance = never;\nexport interface AuthServices {\n  auth: Auth;\n  db: unknown;\n  driver: { close(): Promise<void> };\n  handler: (req: Request) => Promise<Response>;\n}\n`,
+    );
+  }
+
+  const hostAuthTypesGenPath = join(destination, "host", "src", "lib", "auth-types.gen.ts");
+  if (existsSync(join(destination, "host", "src")) && !existsSync(hostAuthTypesGenPath)) {
+    mkdirSync(dirname(hostAuthTypesGenPath), { recursive: true });
+    writeFileSync(
+      hostAuthTypesGenPath,
+      `import type { Auth } from "better-auth";\nexport type { Auth } from "better-auth";\nexport type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {\n  role?: string | null;\n  isAnonymous?: boolean | null;\n  walletAddress?: string | null;\n  banned?: boolean | null;\n};\nexport type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {\n  activeOrganizationId?: string | null;\n};\nexport type AuthSession = {\n  user: AuthSessionUser | null;\n  session: AuthSessionData | null;\n};\nexport interface AuthOrganizationContext {\n  activeOrganizationId: string | null;\n  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;\n  member: { id: string; role: string } | null;\n  isPersonal: boolean;\n  hasOrganization: boolean;\n}\nexport interface AuthRequestContext {\n  user: AuthSessionUser | null;\n  userId: string | null;\n  isAuthenticated: boolean;\n  authMethod: "session" | "apiKey" | "anonymous" | "none";\n  near: {\n    primaryAccountId: string | null;\n    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;\n    hasNearAccount: boolean;\n  };\n  organization: AuthOrganizationContext;\n  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;\n}\nexport type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };\nexport type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;\nexport type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;\nexport type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];\nexport type AuthBaseSession = Auth["$Infer"]["Session"];\nexport type createAuthInstance = never;\nexport interface AuthServices {\n  auth: Auth;\n  db: unknown;\n  driver: { close(): Promise<void> };\n  handler: (req: Request) => Promise<Response>;\n}\n`,
     );
   }
 }

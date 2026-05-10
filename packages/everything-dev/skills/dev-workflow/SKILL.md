@@ -56,7 +56,7 @@ The orchestrator:
 Plugin types are auto-generated from `bos.config.json` via `bos types gen`:
 
 ```bash
-bos types gen   # Regenerate ui/src/api-contract.gen.ts and api/src/plugins-client.gen.ts
+bos types gen   # Regenerate ui/src/lib/api-types.gen.ts and api/src/lib/plugins-types.gen.ts
 ```
 
 **When it auto-runs:**

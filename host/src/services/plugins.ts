@@ -181,14 +181,6 @@ function collectSecrets(config: { secrets?: string[] }): Record<string, string> 
   return secretsFromEnv(config.secrets ?? []);
 }
 
-function createSafeClientFactory(
-  rawFactory: (context?: unknown) => any,
-): (context?: unknown) => any {
-  return (_context?: unknown) => {
-    return rawFactory({});
-  };
-}
-
 async function loadPluginEntry(
   runtime: any,
   entry: RuntimePluginEntry,
@@ -335,7 +327,7 @@ export const initializePlugins = Effect.gen(function* () {
         if (result.status === "fulfilled") {
           loadedPlugins[key] = result.value;
           loadedPluginKeys.push(key);
-          pluginsClient[key] = createSafeClientFactory(result.value.createClient);
+          pluginsClient[key] = result.value.createClient;
         } else {
           const msg = formatError(result.reason);
           errors.push(msg);

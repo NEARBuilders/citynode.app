@@ -178,12 +178,129 @@ async function fetchAuthExportTypes(opts: {
   return generatedPath;
 }
 
-function writeAuthTypesGen(configDir: string, authExportPath: string) {
-  const authTypesPath = join(configDir, "ui", "src", "auth-types.gen.ts");
-  const importPath = toImportPath(authTypesPath, authExportPath);
-  const content = `export type { Auth, createAuthInstance } from "${importPath}";\n`;
-  mkdirSync(dirname(authTypesPath), { recursive: true });
-  writeFileIfChanged(authTypesPath, content);
+function writeAuthTypesGen(targetPath: string, authExportPath: string) {
+  const exportImportPath = toImportPath(targetPath, authExportPath);
+  const content = [
+    `export type {`,
+    `  Auth,`,
+    `  AuthOrganizationContext,`,
+    `  AuthOrganization,`,
+    `  AuthOrganizationSummary,`,
+    `  AuthOrganizationMember,`,
+    `  AuthApiKey,`,
+    `  AuthInvitation,`,
+    `  GetActiveMemberInput,`,
+    `  GetOrganizationInput,`,
+    `  ListMembersInput,`,
+    `  ListInvitationsInput,`,
+    `  ListApiKeysInput,`,
+    `  AuthServices,`,
+    `  createAuthInstance,`,
+    `} from "${exportImportPath}";`,
+    `import type { InferOutput, ContractType as AuthContract } from "${toImportPath(targetPath, join(dirname(authExportPath), "contract.d.ts"))}";`,
+    `import type { Auth as BaseAuth } from "${exportImportPath}";`,
+    "",
+    'type RawAuthSession = InferOutput<"getSession">;',
+    'type RawAuthRequestContext = InferOutput<"getContext">;',
+    'type RawAuthActiveMember = InferOutput<"getActiveMember">;',
+    "",
+    'export type AuthSessionUser = NonNullable<RawAuthSession["user"]> & {',
+    '  role?: string | null;',
+    '  isAnonymous?: boolean | null;',
+    '  walletAddress?: string | null;',
+    '  banned?: boolean | null;',
+    '};',
+    'export type AuthSessionData = NonNullable<RawAuthSession["session"]> & {',
+    '  activeOrganizationId?: string | null;',
+    '};',
+    'export type AuthSession = {',
+    '  user: AuthSessionUser | null;',
+    '  session: AuthSessionData | null;',
+    '};',
+    'export type AuthRequestContext = RawAuthRequestContext;',
+    'export type AuthActiveMember = RawAuthActiveMember;',
+    'export type AuthBaseSession = BaseAuth["$Infer"]["Session"];',
+    'export type AuthContractType = AuthContract;',
+    '',
+  ].join("\n");
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileIfChanged(targetPath, content);
+}
+
+function writeFallbackAuthTypesGen(targetPath: string) {
+  const content = [
+    'import type { Auth } from "better-auth";',
+    'export type { Auth } from "better-auth";',
+    'export type AuthSession = Auth["$Infer"]["Session"];',
+    'export type AuthSessionData = AuthSession;',
+    'export type AuthSessionUser = NonNullable<AuthSession["user"]>;',
+    'export interface AuthOrganizationContext {',
+    '  activeOrganizationId: string | null;',
+    '  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;',
+    '  member: { id: string; role: string } | null;',
+    '  isPersonal: boolean;',
+    '  hasOrganization: boolean;',
+    '}',
+    'export interface AuthRequestContext {',
+    '  user: AuthSessionUser | null;',
+    '  userId: string | null;',
+    '  isAuthenticated: boolean;',
+    '  authMethod: "session" | "apiKey" | "anonymous" | "none";',
+    '  near: {',
+    '    primaryAccountId: string | null;',
+    '    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;',
+    '    hasNearAccount: boolean;',
+    '  };',
+    '  organization: AuthOrganizationContext;',
+    '  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;',
+    '}',
+    'export type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };',
+    'export type AuthOrganization = {',
+    '  id: string;',
+    '  name: string;',
+    '  slug: string;',
+    '  logo?: string | null;',
+    '  metadata?: Record<string, unknown> | null;',
+    '  createdAt: Date;',
+    '};',
+    'export type AuthOrganizationSummary = NonNullable<AuthOrganizationContext["organization"]>;',
+    'export type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;',
+    'export type AuthApiKey = {',
+    '  id: string;',
+    '  name: string | null;',
+    '  prefix: string | null;',
+    '  start: string | null;',
+    '  expiresAt: Date | null;',
+    '  createdAt: Date;',
+    '  updatedAt: Date;',
+    '  metadata: unknown | null;',
+    '  permissions: Record<string, string[]> | null;',
+    '};',
+    'export type AuthInvitation = {',
+    '  id: string;',
+    '  organizationId: string;',
+    '  email: string;',
+    '  role: string | null;',
+    '  status: string;',
+    '  expiresAt: Date;',
+    '  inviterId: string;',
+    '};',
+    'export type GetActiveMemberInput = { organizationId?: string };',
+    'export type GetOrganizationInput = { id: string };',
+    'export type ListMembersInput = { organizationId: string };',
+    'export type ListInvitationsInput = { organizationId: string };',
+    'export type ListApiKeysInput = { organizationId?: string };',
+    'export type createAuthInstance = never;',
+    'export interface AuthServices {',
+    '  auth: Auth;',
+    '  db: unknown;',
+    '  driver: { close(): Promise<void> };',
+    '  handler: (req: Request) => Promise<Response>;',
+    '}',
+    '',
+  ].join("\n");
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileIfChanged(targetPath, content);
 }
 
 async function resolveContractSource(opts: {
@@ -263,8 +380,8 @@ function writeGeneratedFiles(opts: {
     throw new Error("API contract source is required to generate the aggregate contract");
   }
 
-  // --- Generate ui/src/api-contract.gen.ts ---
-  const uiContractPath = join(opts.configDir, "ui", "src", "api-contract.gen.ts");
+  // --- Generate ui/src/lib/api-types.gen.ts ---
+  const uiContractPath = join(opts.configDir, "ui", "src", "lib", "api-types.gen.ts");
   const uiLines: string[] = [];
 
   for (const source of opts.sources) {
@@ -295,9 +412,9 @@ function writeGeneratedFiles(opts: {
   mkdirSync(dirname(uiContractPath), { recursive: true });
   writeFileIfChanged(uiContractPath, `${uiLines.join("\n")}\n`);
 
-  // --- Generate api/src/plugins-client.gen.ts ---
+  // --- Generate api/src/lib/plugins-types.gen.ts ---
   // Includes both plugin contracts AND auth as a unified PluginsClient type
-  const pluginsClientPath = join(opts.configDir, "api", "src", "plugins-client.gen.ts");
+  const pluginsClientPath = join(opts.configDir, "api", "src", "lib", "plugins-types.gen.ts");
   const pluginsClientLines: string[] = [];
 
   for (const source of pluginSources) {
@@ -343,16 +460,25 @@ function writeGeneratedFiles(opts: {
   mkdirSync(dirname(pluginsClientPath), { recursive: true });
   writeFileIfChanged(pluginsClientPath, `${pluginsClientLines.join("\n")}\n`);
 
-  // --- Generate ui/src/auth-types.gen.ts ---
+  // --- Generate */src/lib/auth-types.gen.ts ---
+  const authTypeTargets = [join(opts.configDir, "ui", "src", "lib", "auth-types.gen.ts")];
+  const apiLibDir = join(opts.configDir, "api", "src", "lib");
+  if (existsSync(apiLibDir)) {
+    authTypeTargets.push(join(apiLibDir, "auth-types.gen.ts"));
+  }
+  const hostLibDir = join(opts.configDir, "host", "src", "lib");
+  if (existsSync(join(opts.configDir, "host", "src"))) {
+    authTypeTargets.push(join(hostLibDir, "auth-types.gen.ts"));
+  }
+
   if (opts.authExportPath) {
-    writeAuthTypesGen(opts.configDir, opts.authExportPath);
+    for (const authTypesPath of authTypeTargets) {
+      writeAuthTypesGen(authTypesPath, opts.authExportPath);
+    }
   } else if (opts.authSource) {
-    const authTypesPath = join(opts.configDir, "ui", "src", "auth-types.gen.ts");
-    mkdirSync(dirname(authTypesPath), { recursive: true });
-    writeFileIfChanged(
-      authTypesPath,
-      `export type { Auth, createAuthInstance } from "better-auth";\n`,
-    );
+    for (const authTypesPath of authTypeTargets) {
+      writeFallbackAuthTypesGen(authTypesPath);
+    }
   }
 
   return uiContractPath;
@@ -471,7 +597,7 @@ export async function syncApiContractBridge(opts: {
   }
 
   return {
-    bridgePath: join(opts.configDir, "ui", "src", "api-contract.gen.ts"),
+    bridgePath: join(opts.configDir, "ui", "src", "lib", "api-types.gen.ts"),
     generatedPath,
     manifest,
     source: opts.runtimeConfig.api.source,

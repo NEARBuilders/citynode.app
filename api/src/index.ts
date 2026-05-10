@@ -4,23 +4,11 @@ import { Effect } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
+import { createAuthGuards } from "./lib/auth";
+import type { PluginsClient } from "./lib/plugins-types.gen";
 import { loadMigrations } from "./db/load-migrations";
 import { migrate } from "./db/migrator";
 import { upvotes } from "./db/schema";
-import type { PluginsClient } from "./plugins-client.gen";
-
-export interface AuthContext {
-  userId: string;
-  user: {
-    id: string;
-    role?: string;
-    email?: string;
-    name?: string;
-  };
-  organizationId?: string;
-  reqHeaders?: Headers;
-  getRawBody?: () => Promise<string>;
-}
 
 interface VoteEventDetail {
   type: "upvote" | "downvote";
@@ -182,26 +170,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     }),
 
   createRouter: (services, builder) => {
-    const requireAuth = builder.middleware(async ({ context, next }) => {
-      if (!context.user || !context.userId) {
-        throw new ORPCError("UNAUTHORIZED", {
-          message: "Authentication required",
-          data: {
-            authType: "session",
-            hint: "Sign in with NEAR, passkey, email, phone, or anonymous",
-          },
-        });
-      }
-      return next({
-        context: {
-          userId: context.userId,
-          user: context.user,
-          organizationId: context.organizationId,
-          reqHeaders: context.reqHeaders,
-          getRawBody: context.getRawBody,
-        } as AuthContext,
-      });
-    });
+    const { requireAuth } = createAuthGuards(builder);
 
     return {
       ping: builder.ping.handler(async () => ({
@@ -216,11 +185,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
       })),
 
       upvoteThing: builder.upvoteThing.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.upvoteService.upvoteThing(input.thingId, context.userId);
+        return await services.upvoteService.upvoteThing(input.thingId, context.userId!);
       }),
 
       downvoteThing: builder.downvoteThing.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.upvoteService.downvoteThing(input.thingId, context.userId);
+        return await services.upvoteService.downvoteThing(input.thingId, context.userId!);
       }),
 
       getUpvoteCount: builder.getUpvoteCount.handler(async ({ input }) => {

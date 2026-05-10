@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { type SessionData, useAuthClient } from "@/app";
 import { Badge, Button } from "@/components";
-import { useApiClient } from "@/lib/use-api-client";
+import { useApiClient } from "@/app";
 
 interface VoteEvent {
   type: "upvote" | "downvote";

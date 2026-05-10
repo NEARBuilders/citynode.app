@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { type Organization, type SessionData, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import { useApiClient } from "@/lib/use-api-client";
+import { useApiClient } from "@/app";
 
 type ApiClient = import("@/app").ApiClient;
 type OrgApiKeysResult = Awaited<ReturnType<ApiClient["auth"]["listApiKeys"]>>;

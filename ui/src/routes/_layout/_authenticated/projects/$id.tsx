@@ -8,7 +8,7 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { type SessionData, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import { useApiClient } from "@/lib/use-api-client";
+import { useApiClient } from "@/app";
 
 function rawReadmeUrl(repoUrl: string): string | null {
   try {

@@ -89,13 +89,13 @@ function isUnexpectedError(error: string): boolean {
   // Core infrastructure should never have errors
   const corePaths = [
     "ui/src/lib/",
-    "ui/src/lib/api-client",
-    "ui/src/lib/auth-client",
-    "ui/src/api-contract.gen",
-    "ui/src/auth-types.gen",
+    "ui/src/lib/api",
+    "ui/src/lib/api-types.gen",
+    "ui/src/lib/auth-types.gen",
     "api/src/contract",
     "api/src/index",
-    "api/src/plugins-client.gen",
+    "api/src/lib/plugins-types.gen",
+    "api/src/lib/auth-types.gen",
   ];
   if (corePaths.some((p) => error.includes(p))) return true;
 
@@ -138,9 +138,10 @@ describe("bos init — typecheck with expected route errors", () => {
     });
 
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
-    expect(existsSync(join(testDir, "ui", "src", "api-contract.gen.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "ui", "src", "auth-types.gen.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "api", "src", "plugins-client.gen.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "ui", "src", "lib", "api-types.gen.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "ui", "src", "lib", "auth-types.gen.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "api", "src", "lib", "plugins-types.gen.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "api", "src", "lib", "auth-types.gen.ts"))).toBe(true);
   });
 
   it("sets postinstall to 'node_modules/.bin/bos types gen || true'", async () => {

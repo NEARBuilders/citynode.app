@@ -1,4 +1,4 @@
-import type { ApiClient } from "../../../ui/src/lib/api-client";
+import type { ApiClient } from "../../../ui/src/lib/api";
 
 export function createTestApiClient<TBase extends Record<string, unknown>>(
   baseClient: TBase,

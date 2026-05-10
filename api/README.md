@@ -31,7 +31,7 @@ Built with **every-plugin** framework (Rspack + Module Federation):
 
 - `contract.ts` - oRPC contract definition (routes, schemas)
 - `index.ts` - Plugin initialization + router handlers
-- `plugins-client.gen.ts` - Generated PluginsClient type (auto-generated, gitignored)
+- `src/lib/plugins-types.gen.ts` - Generated PluginsClient type (auto-generated, gitignored)
 - `services/` - Business logic with Effect-TS
 - `db/` - Database schema and migrations
 
@@ -40,7 +40,7 @@ Built with **every-plugin** framework (Rspack + Module Federation):
 The API receives typed client factories for all other plugins via `createPlugin.withPlugins<PluginsClient>()`:
 
 ```typescript
-import type { PluginsClient } from "./plugins-client.gen";
+import type { PluginsClient } from "./lib/plugins-types.gen";
 
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({ demoMessage: z.string().optional() }),

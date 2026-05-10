@@ -370,7 +370,7 @@ as before; client plugin URLs appear in the UI's runtime config.
 |------|--------|
 | `ui/src/lib/client-plugin-runtime.ts` | New: loads client plugin remotes, registers with `BunInBrowser`, creates `pluginsClient` |
 | `ui/src/providers/index.tsx` | Initialize client plugin runtime on app mount |
-| `ui/src/lib/use-api-client.ts` | Extend `useApiClient` to include client plugin routes |
+| `ui/src/lib/api.ts` | Extend `useApiClient` to include client plugin routes |
 
 **Validation:** A client plugin's `fetch` handler is accessible via the proxy URL.
 
@@ -417,7 +417,7 @@ persists across page reloads.
 
 | File | Change |
 |------|--------|
-| `ui/src/lib/use-api-client.ts` | Fallback chain: try server → try client plugin → return error |
+| `ui/src/lib/api.ts` | Fallback chain: try server → try client plugin → return error |
 | `ui/src/lib/offline-detection.ts` | New: detect server availability, switch API routing |
 
 **Validation:** App works offline with client-plugin-served data.

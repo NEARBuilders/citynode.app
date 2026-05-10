@@ -30,7 +30,6 @@ ui/src/router.server.tsx
 ui/src/styles.css
 ui/src/globals.d.ts
 ui/src/app.ts
-ui/src/api-contract.ts
 ui/src/components/index.ts
 ui/src/components/ui/**
 ui/src/components/theme-toggle.tsx
@@ -39,12 +38,9 @@ ui/src/components/user-nav.tsx
 ui/src/providers/index.tsx
 ui/src/hooks/index.ts
 ui/src/hooks/use-client.ts
-ui/src/lib/api-client.ts
+ui/src/lib/api.ts
 ui/src/lib/auth.ts
-ui/src/lib/auth-client.ts
-ui/src/lib/session.ts
 ui/src/lib/utils.ts
-ui/src/lib/use-api-client.ts
 ui/src/integrations/tanstack-query/devtools.tsx
 ui/src/routes/__root.tsx
 ui/src/routes/_layout.tsx
@@ -64,6 +60,8 @@ api/drizzle.config.ts
 api/tests/types.d.ts
 api/src/contract.ts
 api/src/index.ts
+api/src/lib/auth.ts
+api/src/lib/plugins.ts
 api/src/db/index.ts
 api/src/db/layer.ts
 api/src/db/schema.ts

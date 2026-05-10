@@ -1553,13 +1553,19 @@ export default createPlugin({
             }
           }
 
+          const generated = [
+            "ui/src/lib/api-types.gen.ts",
+            "ui/src/lib/auth-types.gen.ts",
+            "api/src/lib/plugins-types.gen.ts",
+            "api/src/lib/auth-types.gen.ts",
+          ];
+          if (existsSync(join(projectDir, "host", "src"))) {
+            generated.push("host/src/lib/auth-types.gen.ts");
+          }
+
           return {
             status: "success" as const,
-            generated: [
-              "ui/src/api-contract.gen.ts",
-              "ui/src/auth-types.gen.ts",
-              "api/src/plugins-client.gen.ts",
-            ],
+            generated,
             fetched,
             skipped,
             failed: [],
@@ -1573,12 +1579,19 @@ export default createPlugin({
           apiBaseUrl: refreshed.runtime.api.url,
         });
 
-        const generated = ["ui/src/api-contract.gen.ts", "api/src/plugins-client.gen.ts"];
+        const generated = [
+          "ui/src/lib/api-types.gen.ts",
+          "api/src/lib/plugins-types.gen.ts",
+          "api/src/lib/auth-types.gen.ts",
+        ];
         if (
           refreshed.runtime.auth &&
           (refreshed.runtime.auth.source !== "local" || refreshed.runtime.auth.localPath)
         ) {
-          generated.push("ui/src/auth-types.gen.ts");
+          generated.push("ui/src/lib/auth-types.gen.ts");
+        }
+        if (existsSync(join(projectDir, "host", "src"))) {
+          generated.push("host/src/lib/auth-types.gen.ts");
         }
 
         return {

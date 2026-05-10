@@ -142,7 +142,7 @@ export default createPlugin({
 When an API plugin needs to call other plugins in-process:
 
 ```typescript
-import type { PluginsClient } from "./plugins-client.gen";
+import type { PluginsClient } from "./lib/plugins-types.gen";
 
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({ demoMessage: z.string().optional() }),

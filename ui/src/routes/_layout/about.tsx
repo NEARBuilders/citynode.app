@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getActiveRuntime, getAppName } from "@/app";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
-import { useApiClient } from "@/lib/use-api-client";
+import { useApiClient } from "@/app";
 import { Route as RootRoute } from "../__root";
 
 export const Route = createFileRoute("/_layout/about")({

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Badge, Button, Card, CardContent, Input, UnderConstruction } from "@/components";
-import { useApiClient } from "@/lib/use-api-client";
+import { useApiClient } from "@/app";
 
 type SearchParams = {
   q?: string;
