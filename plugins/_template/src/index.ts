@@ -37,6 +37,8 @@ export default createPlugin({
   context: z.object({
     userId: z.string().optional(),
     sessionId: z.string().optional(),
+    reqHeaders: z.record(z.string(), z.string()).optional(),
+    getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 
   contract, // START HERE: define your oRPC contract in ./contract

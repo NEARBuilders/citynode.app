@@ -19,6 +19,7 @@ export interface AuthContext {
   };
   organizationId?: string;
   reqHeaders?: Record<string, string>;
+  getRawBody?: () => Promise<string>;
 }
 
 interface VoteEventDetail {
@@ -148,7 +149,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
       })
       .optional(),
     organizationId: z.string().optional(),
-    reqHeaders: z.custom<Record<string, string>>().optional(),
+    reqHeaders: z.record(z.string(), z.string()).optional(),
+    getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 
   contract,
@@ -196,6 +198,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           user: context.user,
           organizationId: context.organizationId,
           reqHeaders: context.reqHeaders,
+          getRawBody: context.getRawBody,
         } as AuthContext,
       });
     });

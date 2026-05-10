@@ -151,6 +151,29 @@ export function setupPluginMiddleware(
     res.status(200).send("OK");
   });
 
+  const buildDevContext = (req: any, webRequest: Request) => {
+    const rawClone = webRequest.method === "GET" || webRequest.method === "HEAD" ? null : webRequest.clone();
+    let cachedRawBody: string | null = null;
+    const reqHeaders: Record<string, string> = {};
+    for (const key of Object.keys(req.headers)) {
+      const val = req.headers[key];
+      if (typeof val === "string") reqHeaders[key] = val;
+      else if (Array.isArray(val)) reqHeaders[key] = val.join(", ");
+    }
+    return {
+      reqHeaders,
+      getRawBody: async (): Promise<string> => {
+        if (cachedRawBody !== null) return cachedRawBody;
+        if (!rawClone) {
+          cachedRawBody = "";
+          return cachedRawBody;
+        }
+        cachedRawBody = await rawClone.text();
+        return cachedRawBody;
+      },
+    };
+  };
+
   const handleApiRequest = async (req: any, res: any) => {
     applyCorsHeaders(res);
     const apiHandler = devServer.app.locals.handlers?.api;
@@ -169,7 +192,7 @@ export function setupPluginMiddleware(
 
       const result = await apiHandler.handle(webRequest, {
         prefix: "/api",
-        context: {},
+        context: buildDevContext(req, webRequest),
       });
 
       if (result.response) {
@@ -206,7 +229,7 @@ export function setupPluginMiddleware(
 
       const result = await rpcHandler.handle(webRequest, {
         prefix: `/api/rpc${rpcPrefix}`,
-        context: {},
+        context: buildDevContext(req, webRequest),
       });
 
       if (result.response) {

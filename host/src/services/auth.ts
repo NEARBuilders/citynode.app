@@ -24,6 +24,7 @@ export interface AuthVariables {
   user: AuthUser | null;
   session: AuthSession | null;
   reqHeaders: Record<string, string>;
+  getRawBody: () => Promise<string>;
   walletAddress: string | null;
 }
 
@@ -56,6 +57,18 @@ export function createSessionMiddleware(plugins: PluginResult) {
 
     const reqHeaders = Object.fromEntries(c.req.raw.headers);
     c.set("reqHeaders", reqHeaders);
+
+    const rawClone = c.req.method === "GET" || c.req.method === "HEAD" ? null : c.req.raw.clone();
+    let cachedRawBody: string | null = null;
+    c.set("getRawBody", async () => {
+      if (cachedRawBody !== null) return cachedRawBody;
+      if (!rawClone) {
+        cachedRawBody = "";
+        return cachedRawBody;
+      }
+      cachedRawBody = await rawClone.text();
+      return cachedRawBody;
+    });
 
     if (!authApi) {
       c.set("user", null);
@@ -95,5 +108,6 @@ export function buildPluginContext(c: Context<HonoEnv>) {
     walletAddress: walletAddress ?? undefined,
     organizationId: session?.activeOrganizationId ?? undefined,
     reqHeaders: c.get("reqHeaders"),
+    getRawBody: c.get("getRawBody"),
   };
 }

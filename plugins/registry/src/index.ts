@@ -27,6 +27,7 @@ export default createPlugin({
     userId: z.string().optional(),
     nearAccountId: z.string().optional(),
     reqHeaders: z.record(z.string(), z.string()).optional(),
+    getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 
   contract,
