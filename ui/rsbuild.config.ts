@@ -80,9 +80,6 @@ function createClientConfig() {
     );
   }
 
-  const productionAssetPrefix = bosConfig.app?.ui?.production ?? "";
-  const isProduction = process.env.NODE_ENV === "production";
-
   return defineConfig({
     plugins,
     source: {
@@ -136,7 +133,7 @@ function createClientConfig() {
     },
     output: {
       distPath: { root: "dist", css: "static/css", js: "static/js" },
-      assetPrefix: isProduction && productionAssetPrefix ? productionAssetPrefix : "auto",
+      assetPrefix: "auto",
       filename: { js: "[name].js", css: "style.css" },
       copy: [{ from: path.resolve(__dirname, "public"), to: "./" }],
     },
