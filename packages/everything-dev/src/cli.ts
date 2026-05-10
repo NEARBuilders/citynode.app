@@ -285,6 +285,10 @@ async function main() {
           console.log(colors.dim("    • Use --force only if you want framework updates"));
         }
       }
+      if (result.migrated && result.migrated.length > 0) {
+        console.log(`  ${colors.yellow("Removed:")} ${result.migrated.length} obsolete file(s)`);
+        for (const f of result.migrated) console.log(`    ${colors.dim(f)}`);
+      }
       console.log();
       return;
     }

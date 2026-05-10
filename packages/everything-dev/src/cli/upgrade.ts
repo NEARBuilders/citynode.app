@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { glob } from "glob";
 import type { UpgradeOptions, UpgradeResult } from "../contract";
@@ -244,6 +244,19 @@ export async function upgradeTemplate(
     });
   }
 
+  const migratedFiles: string[] = [];
+  const obsoleteFiles = [
+    "ui/src/lib/auth-client.ts",
+    "ui/src/lib/session.ts",
+  ];
+  for (const file of obsoleteFiles) {
+    const filePath = join(projectDir, file);
+    if (existsSync(filePath)) {
+      rmSync(filePath);
+      migratedFiles.push(file);
+    }
+  }
+
   let changelogUrl: string | undefined;
   const mainPkg = packages.find((p) => p.name === "everything-dev");
   if (mainPkg?.from && mainPkg.from !== mainPkg.to) {
@@ -261,6 +274,7 @@ export async function upgradeTemplate(
     status: "upgraded",
     packages,
     sync: syncResult,
+    migrated: migratedFiles.length > 0 ? migratedFiles : undefined,
     changelogUrl,
   };
 }

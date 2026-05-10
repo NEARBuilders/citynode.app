@@ -5,9 +5,8 @@
 ui/src/components/**
 ui/src/styles.css
 
-# UI routes are managed dynamically via bos.config.json plugin routes
-# — routes for enabled plugins are synced, others are skipped
-# — locally modified routes are protected by snapshot-based diff
+# UI routes — only __root.tsx is synced after init; the rest are user-owned
+ui/src/routes/_layout/**
 
 # API core business logic — project defines its own API surface and data model
 api/src/contract.ts
