@@ -490,11 +490,11 @@ export const createStartServer = (onReady?: () => void) =>
 
     const CSP_STRICT = false;
 
-    const openapiCdnOrigins = ["https://cdn.jsdelivr.net", "https://unpkg.com"];
+    const cdnOrigins = ["https://cdn.jsdelivr.net", "https://unpkg.com"];
 
     const cspScriptSrc = CSP_STRICT
       ? [NONCE, "'strict-dynamic'", "'unsafe-eval'"]
-      : ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...uniqueOrigins, ...openapiCdnOrigins];
+      : ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...uniqueOrigins, ...cdnOrigins];
 
     app.use(
       "*",
@@ -503,14 +503,14 @@ export const createStartServer = (onReady?: () => void) =>
         contentSecurityPolicy: {
           defaultSrc: ["'self'"],
           scriptSrc: cspScriptSrc,
-          styleSrc: ["'self'", "'unsafe-inline'", "https:", ...uniqueOrigins, ...openapiCdnOrigins],
+          styleSrc: ["'self'", "'unsafe-inline'", "https:", ...uniqueOrigins, ...cdnOrigins],
           imgSrc: [
             "'self'",
             "data:",
             ...(isDev ? ["http:"] : ["https:"]),
             ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
           ],
-          connectSrc: ["'self'", "https:", ...uniqueOrigins, ...wsOrigins],
+          connectSrc: ["'self'", "https:", ...uniqueOrigins, ...wsOrigins, ...cdnOrigins],
           fontSrc: ["'self'", "https:", ...uniqueOrigins],
           manifestSrc: ["'self'", ...(uiConfig.url ? [new URL(uiConfig.url).origin] : [])],
           frameSrc: ["'self'", "https:", ...uniqueOrigins],
@@ -598,17 +598,15 @@ export const createStartServer = (onReady?: () => void) =>
     };
 
     const proxyUiAssetRequest = (c: Context<HonoEnv>) => proxyRequest(c.req.raw, uiConfig.url);
-    const staticAssetPaths = [
+    const uiAssetPaths = [
       "/static/*",
       "/.well-known/*",
       "/favicon.ico",
       "/icon.svg",
       "/manifest.json",
       "/robots.txt",
-      "/README.md",
-      "/skill.md",
-      "/llms.txt",
     ];
+    const hostAssetPaths = ["/README.md", "/skill.md", "/llms.txt"];
 
     const sessionMiddleware = createSessionMiddleware(plugins);
 
@@ -617,12 +615,17 @@ export const createStartServer = (onReady?: () => void) =>
 
     const shouldProxyUiAssets = isDev || uiConfig.source === "remote";
 
+    for (const path of hostAssetPaths) {
+      app.use(path, serveStatic({ root: "./dist" }));
+      app.get(path, (c: Context<HonoEnv>) => c.text("Not Found", 404));
+    }
+
     if (!shouldProxyUiAssets) {
-      for (const path of staticAssetPaths) {
+      for (const path of uiAssetPaths) {
         app.use(path, serveStatic({ root: "./dist" }));
       }
     } else {
-      registerAllPaths(app, staticAssetPaths, proxyUiAssetRequest);
+      registerAllPaths(app, uiAssetPaths, proxyUiAssetRequest);
     }
 
     if (uiConfig.ssrUrl) {
