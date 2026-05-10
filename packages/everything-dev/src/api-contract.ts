@@ -349,7 +349,10 @@ function writeGeneratedFiles(opts: {
   } else if (opts.authSource) {
     const authTypesPath = join(opts.configDir, "ui", "src", "auth-types.gen.ts");
     mkdirSync(dirname(authTypesPath), { recursive: true });
-    writeFileIfChanged(authTypesPath, `export type { Auth, createAuthInstance } from "better-auth";\n`);
+    writeFileIfChanged(
+      authTypesPath,
+      `export type { Auth, createAuthInstance } from "better-auth";\n`,
+    );
   }
 
   return uiContractPath;

@@ -467,7 +467,10 @@ export async function personalizeConfig(
   const authTypesGenPath = join(destination, "ui", "src", "auth-types.gen.ts");
   if (!existsSync(authTypesGenPath)) {
     mkdirSync(dirname(authTypesGenPath), { recursive: true });
-    writeFileSync(authTypesGenPath, `export type { Auth, createAuthInstance } from "better-auth";\n`);
+    writeFileSync(
+      authTypesGenPath,
+      `export type { Auth, createAuthInstance } from "better-auth";\n`,
+    );
   }
 }
 

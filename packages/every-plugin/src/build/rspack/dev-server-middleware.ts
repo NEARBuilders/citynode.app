@@ -152,7 +152,8 @@ export function setupPluginMiddleware(
   });
 
   const buildDevContext = (req: any, webRequest: Request) => {
-    const rawClone = webRequest.method === "GET" || webRequest.method === "HEAD" ? null : webRequest.clone();
+    const rawClone =
+      webRequest.method === "GET" || webRequest.method === "HEAD" ? null : webRequest.clone();
     let cachedRawBody: string | null = null;
     const reqHeaders: Record<string, string> = {};
     for (const key of Object.keys(req.headers)) {
