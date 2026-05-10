@@ -42,9 +42,7 @@
         "singleton": true,
         "strictVersion": false,
         "shareScope": "default"
-      }
-    },
-    "plugins": {
+      },
       "@better-auth/api-key": {
         "version": "1.6.9",
         "requiredVersion": "^1.6.9",
@@ -58,22 +56,9 @@
         "singleton": true,
         "strictVersion": false,
         "shareScope": "default"
-      },
-      "better-auth": {
-        "version": "1.6.9",
-        "requiredVersion": "^1.6.9",
-        "singleton": true,
-        "strictVersion": false,
-        "shareScope": "default"
-      },
-      "better-near-auth": {
-        "version": "1.4.0",
-        "requiredVersion": "^1.4.0",
-        "singleton": true,
-        "strictVersion": false,
-        "shareScope": "default"
       }
-    }
+    },
+    "plugins": {}
   },
   "plugins": {
     "template": {

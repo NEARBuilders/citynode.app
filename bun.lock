@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -286,7 +286,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.4.1",
+      "version": "1.4.4",
       "dependencies": {
         "@better-auth/api-key": "catalog:",
         "@better-auth/passkey": "catalog:",
