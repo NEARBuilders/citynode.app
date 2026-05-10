@@ -42,7 +42,7 @@
   "plugins": {
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-3341-every-plugin-template-everythin-729b14f4f-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-3370-every-plugin-template-everythin-db5cf1297-ze.zephyrcloud.app",
       "integrity": "sha384-mCDDyDvbJVDcrl22GvORig090kXEIk6+aPKCF50+T/HT1Gmq1pib/Am4wLWOU3Qo",
       "routes": [
         "ui/src/routes/_layout/_authenticated/settings.tsx"
@@ -50,7 +50,7 @@
     },
     "registry": {
       "development": "local:plugins/registry",
-      "production": "https://elliot-braem-3342-everything-dev-registry-plugin--6d9c7dc92-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-3371-everything-dev-registry-plugin--33a39f6bb-ze.zephyrcloud.app",
       "integrity": "sha384-7tEiZWtYq0xRsxH259z40K4VcM6bkd7KunFGIQ3PaQC+qfA93JBXFCEtTBcshbSA",
       "variables": {
         "registryNamespace": "dev.everything.near"
@@ -62,7 +62,7 @@
     },
     "projects": {
       "development": "local:plugins/projects",
-      "production": "https://elliot-braem-3343-everything-dev-projects-plugin--1ae76c4af-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-3372-everything-dev-projects-plugin--6f16b8455-ze.zephyrcloud.app",
       "integrity": "sha384-+BdsdbFFIr7R1+YLnqofyNqBawYDwZSjWa63FPfKW1f5m7TfzXMZ+972ZI66ZGyE",
       "secrets": [
         "PROJECTS_DATABASE_URL"
@@ -76,21 +76,19 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-3344-host-everything-dev-nearbuilder-1be267342-ze.zephyrcloud.app",
-      "integrity": "sha384-qHKfLgoLfCdbB1mYJ9YPJDobIJGcqg6N+rtxOBJ9T5CdUmwTZ9RJ8fQs6ar2EV3w"
+      "production": "https://elliot-braem-3373-host-everything-dev-nearbuilder-914c91706-ze.zephyrcloud.app"
     },
     "ui": {
       "name": "ui",
       "development": "local:ui",
-      "production": "https://elliot-braem-3338-ui-everything-dev-nearbuilders-bafe1032d-ze.zephyrcloud.app",
-      "integrity": "sha384-iA0u7opEwKFTSJgBq8VhPvoCt5ejDEVdiLxYdnB19eEHkkVQ9sOI+xgVI9HspSGZ",
-      "ssr": "https://elliot-braem-3339-ui-everything-dev-nearbuilders-1beeb84ed-ze.zephyrcloud.app"
+      "production": "https://elliot-braem-3367-ui-everything-dev-nearbuilders-7b7280736-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-3368-ui-everything-dev-nearbuilders-ac59e901c-ze.zephyrcloud.app"
     },
     "api": {
       "name": "api",
       "development": "local:api",
-      "production": "https://elliot-braem-3340-api-everything-dev-nearbuilders-f82064976-ze.zephyrcloud.app",
-      "integrity": "sha384-1JXB9oahzAyts8wo0jmbyePnEXd+RKDk/EyKVvmczW2IizGpcNxZMD0DQt+jpIWk",
+      "production": "https://elliot-braem-3369-api-everything-dev-nearbuilders-2b0a7fcdb-ze.zephyrcloud.app",
+      "integrity": "sha384-g21/Fw/0O/0lbldqjosQJp/Om99LVx/+dkbg94hR8yz/Bw/mnWVN+lnjBvLu7k9S",
       "secrets": [
         "API_DATABASE_URL"
       ]
