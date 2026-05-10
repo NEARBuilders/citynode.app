@@ -310,6 +310,13 @@ export function setupApiRoutes(
           ? "available"
           : "unavailable"
         : "disabled",
+      auth: plugins.auth
+        ? { mounted: true, name: plugins.auth.name }
+        : { mounted: false, name: null },
+      plugins: {
+        loaded: plugins.status.loadedPlugins,
+        ...(plugins.status.error ? { error: plugins.status.error } : {}),
+      },
       uptime: elapsed,
       milestones: loadingState.milestones,
       ...(loadingState.error ? { error: loadingState.error.message } : {}),
@@ -483,9 +490,11 @@ export const createStartServer = (onReady?: () => void) =>
 
     const CSP_STRICT = false;
 
+    const openapiCdnOrigins = ["https://cdn.jsdelivr.net", "https://unpkg.com"];
+
     const cspScriptSrc = CSP_STRICT
       ? [NONCE, "'strict-dynamic'", "'unsafe-eval'"]
-      : ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...uniqueOrigins];
+      : ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...uniqueOrigins, ...openapiCdnOrigins];
 
     app.use(
       "*",
@@ -494,7 +503,7 @@ export const createStartServer = (onReady?: () => void) =>
         contentSecurityPolicy: {
           defaultSrc: ["'self'"],
           scriptSrc: cspScriptSrc,
-          styleSrc: ["'self'", "'unsafe-inline'", "https:", ...uniqueOrigins],
+          styleSrc: ["'self'", "'unsafe-inline'", "https:", ...uniqueOrigins, ...openapiCdnOrigins],
           imgSrc: [
             "'self'",
             "data:",
