@@ -12,7 +12,10 @@ RUN bun run scripts/resolve-workspace-refs.ts
 
 # Remove source dirs — everything is loaded remotely at runtime
 RUN rm -rf host api ui plugins packages/every-plugin packages/everything-dev
-RUN bun install --ignore-scripts
+
+# Clean broken workspace symlinks and strip workspace entries from package.json
+RUN find node_modules -maxdepth 1 -type l ! -exec test -e {} \; -print -delete 2>/dev/null || true
+RUN node -e "const p=require('./package.json');p.workspaces.packages=p.workspaces.packages.filter(e=>!['api','ui','host'].includes(e)&&e!=='plugins/*');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
 # ── Runtime ──
 FROM oven/bun:1-alpine
