@@ -1,7 +1,7 @@
-import { useRouter } from "@tanstack/react-router";
 import { createORPCClient, onError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
+import { useRouter } from "@tanstack/react-router";
 import type { ApiContract } from "./api-types.gen";
 
 export type { ApiContract };

@@ -4,8 +4,8 @@ import { getEventMeta, MemoryPublisher, ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 
 import { contract } from "./contract";
-import { TemplateService } from "./service";
 import type { PluginsClient } from "./plugins-client.gen";
+import { TemplateService } from "./service";
 
 type BackgroundEvents = {
   "background-updates": {

@@ -245,10 +245,7 @@ export async function upgradeTemplate(
   }
 
   const migratedFiles: string[] = [];
-  const obsoleteFiles = [
-    "ui/src/lib/auth-client.ts",
-    "ui/src/lib/session.ts",
-  ];
+  const obsoleteFiles = ["ui/src/lib/auth-client.ts", "ui/src/lib/session.ts"];
   for (const file of obsoleteFiles) {
     const filePath = join(projectDir, file);
     if (existsSync(filePath)) {

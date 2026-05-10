@@ -1,14 +1,13 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
-import { createAuthGuards } from "./lib/auth";
-import type { PluginsClient } from "./lib/plugins-types.gen";
 import { loadMigrations } from "./db/load-migrations";
 import { migrate } from "./db/migrator";
 import { upvotes } from "./db/schema";
+import { createAuthGuards } from "./lib/auth";
+import type { PluginsClient } from "./lib/plugins-types.gen";
 
 interface VoteEventDetail {
   type: "upvote" | "downvote";

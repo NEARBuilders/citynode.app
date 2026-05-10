@@ -60,7 +60,10 @@ function toAuthContext(context: RequestAuthContext): AuthContext {
 }
 
 export function createAuthGuards(builder: any) {
-  const requireAuthHandler = async ({ context, next }: {
+  const requireAuthHandler = async ({
+    context,
+    next,
+  }: {
     context: RequestAuthContext;
     next: MiddlewareNext<AuthContext>;
   }) => {
@@ -77,8 +80,12 @@ export function createAuthGuards(builder: any) {
     return next({ context: toAuthContext(context) });
   };
 
-  const requireRoleHandler = <TRoles extends readonly string[]>(...roles: TRoles) =>
-    async ({ context, next }: {
+  const requireRoleHandler =
+    <TRoles extends readonly string[]>(...roles: TRoles) =>
+    async ({
+      context,
+      next,
+    }: {
       context: RequestAuthContext;
       next: MiddlewareNext<RoleAuthContext<TRoles[number]>>;
     }) => {
@@ -106,7 +113,10 @@ export function createAuthGuards(builder: any) {
       return next({ context: roleContext });
     };
 
-  const requireOrganizationHandler = async ({ context, next }: {
+  const requireOrganizationHandler = async ({
+    context,
+    next,
+  }: {
     context: RequestAuthContext;
     next: MiddlewareNext<OrganizationContext>;
   }) => {

@@ -2,9 +2,8 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { type Organization, type SessionData, useAuthClient } from "@/app";
+import { type Organization, type SessionData, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import { useApiClient } from "@/app";
 
 type ApiClient = import("@/app").ApiClient;
 type OrgApiKeysResult = Awaited<ReturnType<ApiClient["auth"]["listApiKeys"]>>;

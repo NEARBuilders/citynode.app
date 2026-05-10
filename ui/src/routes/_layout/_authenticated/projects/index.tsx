@@ -4,9 +4,8 @@ import { Reorder } from "framer-motion";
 import { ChevronDown, Eye, Globe, Lock, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { type SessionData, useAuthClient } from "@/app";
+import { type SessionData, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button } from "@/components";
-import { useApiClient } from "@/app";
 
 interface VoteEvent {
   type: "upvote" | "downvote";

@@ -4,10 +4,9 @@ import type { TransactionBuilder } from "near-kit";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { sessionQueryOptions, useAuthClient } from "@/app";
+import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent } from "@/components";
 import { Input } from "@/components/ui/input";
-import { useApiClient } from "@/app";
 
 export const Route = createFileRoute("/_layout/apps/$accountId/$gatewayId")({
   head: ({ params }) => ({

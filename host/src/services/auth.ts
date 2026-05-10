@@ -1,10 +1,10 @@
 import type { Context, Next } from "hono";
 import type {
   AuthRequestContext,
-  AuthServices as GeneratedAuthServices,
   AuthSession,
   AuthSessionData,
   AuthSessionUser,
+  AuthServices as GeneratedAuthServices,
 } from "@/lib/auth-types.gen";
 import type { HostPluginEntry, PluginResult } from "./plugins";
 

@@ -6,9 +6,8 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { type SessionData, useAuthClient } from "@/app";
+import { type SessionData, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input } from "@/components";
-import { useApiClient } from "@/app";
 
 function rawReadmeUrl(repoUrl: string): string | null {
   try {
