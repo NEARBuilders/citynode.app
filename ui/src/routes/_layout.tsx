@@ -130,7 +130,6 @@ function Layout() {
               )}
 
               <div className="flex items-center gap-2">
-                {!isAuthenticated && <ThemeToggle />}
                 <UserNav />
               </div>
             </div>
@@ -163,6 +162,12 @@ function Layout() {
               />
             </a>
           </footer>
+
+          {!isAuthenticated && (
+            <div className="fixed bottom-4 left-4 z-40">
+              <ThemeToggle />
+            </div>
+          )}
 
           {isAuthenticated && (
             <nav className="fixed bottom-0 left-0 right-0 sm:hidden border-t border-border bg-card animate-fade-in z-40">

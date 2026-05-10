@@ -5,15 +5,16 @@
     "": {
       "name": "monorepo",
       "dependencies": {
-        "@better-auth/api-key": "^1.6.9",
-        "@better-auth/passkey": "^1.6.9",
+        "@better-auth/api-key": "catalog:",
+        "@better-auth/passkey": "catalog:",
         "@electric-sql/pglite": "catalog:",
         "@hot-labs/near-connect": "0.11.2",
         "@libsql/client": "^0.17.0",
         "@opentelemetry/api": "catalog:",
         "@orpc/contract": "^1.13.14",
         "@orpc/server": "^1.13.14",
-        "better-auth": "^1.6.9",
+        "better-auth": "catalog:",
+        "better-near-auth": "catalog:",
         "drizzle-orm": "^0.45.1",
         "effect": "catalog:",
         "every-plugin": "workspace:*",
@@ -35,7 +36,7 @@
     },
     "api": {
       "name": "api",
-      "version": "2.4.5",
+      "version": "2.4.6",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
@@ -68,7 +69,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.5.12",
+      "version": "1.5.13",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -81,7 +82,7 @@
         "@orpc/zod": "catalog:",
         "dotenv": "^17.2.3",
         "effect": "catalog:",
-        "every-plugin": "2.5.7",
+        "every-plugin": "2.5.8",
         "hono": "^4.11.4",
         "pg": "catalog:",
         "react": "catalog:",
@@ -96,7 +97,7 @@
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "every-plugin": "2.5.7",
+        "every-plugin": "2.5.8",
         "everything-dev": "workspace:*",
         "tsx": "^4.21.0",
         "typescript": "catalog:",
@@ -107,7 +108,7 @@
     },
     "packages/every-plugin": {
       "name": "every-plugin",
-      "version": "2.5.7",
+      "version": "2.5.8",
       "dependencies": {
         "@module-federation/enhanced": "catalog:",
         "@module-federation/node": "catalog:",
@@ -148,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.11.5",
+      "version": "1.12.0",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -285,8 +286,10 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "dependencies": {
+        "@better-auth/api-key": "catalog:",
+        "@better-auth/passkey": "catalog:",
         "@hot-labs/near-connect": "0.11.2",
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -347,7 +350,7 @@
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "every-plugin": "catalog:",
+        "every-plugin": "2.5.8",
         "everything-dev": "workspace:*",
         "host": "workspace:*",
         "sharp": "^0.34.5",
@@ -372,8 +375,8 @@
     "effect": "3.21.0",
   },
   "catalog": {
-    "@better-auth/api-key": "^1.6.9",
-    "@better-auth/passkey": "^1.6.9",
+    "@better-auth/api-key": "1.6.9",
+    "@better-auth/passkey": "1.6.9",
     "@electric-sql/pglite": "^0.4.5",
     "@libsql/client": "0.17.0",
     "@module-federation/dts-plugin": "^2.3.2",
@@ -397,7 +400,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "better-auth": "1.6.9",
-    "better-near-auth": "^1.4.0",
+    "better-near-auth": "1.4.0",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.0",
