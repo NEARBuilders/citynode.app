@@ -1009,7 +1009,7 @@ export default createPlugin({
       });
 
       const stagingEnvVars: Record<string, string> = isStaging
-        ? { GATEWAY_DOMAIN: config.staging?.domain ?? config.domain ?? "" }
+        ? { BOS_GATEWAY: config.staging?.domain ?? config.domain ?? "" }
         : {};
 
       const configSource = remoteConfig

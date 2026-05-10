@@ -77,10 +77,6 @@ function getFallbackGatewayId(config: RuntimeConfig) {
     return config.domain;
   }
 
-  if (process.env.GATEWAY_DOMAIN) {
-    return process.env.GATEWAY_DOMAIN;
-  }
-
   return normalizeUrl(config.host?.url)?.replace(/^https?:\/\//, "") ?? "runtime";
 }
 
