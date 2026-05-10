@@ -23,7 +23,7 @@ interface AuthSession {
 export interface AuthVariables {
   user: AuthUser | null;
   session: AuthSession | null;
-  reqHeaders: Record<string, string>;
+  reqHeaders: Headers;
   getRawBody: () => Promise<string>;
   walletAddress: string | null;
 }
@@ -55,8 +55,7 @@ export function createSessionMiddleware(plugins: PluginResult) {
       return next();
     }
 
-    const reqHeaders = Object.fromEntries(c.req.raw.headers);
-    c.set("reqHeaders", reqHeaders);
+    c.set("reqHeaders", c.req.raw.headers);
 
     const rawClone = c.req.method === "GET" || c.req.method === "HEAD" ? null : c.req.raw.clone();
     let cachedRawBody: string | null = null;
@@ -79,8 +78,7 @@ export function createSessionMiddleware(plugins: PluginResult) {
     }
 
     try {
-      const headers = new Headers(Object.entries(reqHeaders) as [string, string][]);
-      const sessionResult = await authApi.getSession({ headers });
+      const sessionResult = await authApi.getSession({ headers: c.get("reqHeaders") });
       c.set("user", sessionResult?.user ?? null);
       c.set("session", sessionResult?.session ?? null);
       c.set("walletAddress", sessionResult?.user?.walletAddress ?? null);

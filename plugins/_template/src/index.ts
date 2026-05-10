@@ -37,7 +37,7 @@ export default createPlugin({
   context: z.object({
     userId: z.string().optional(),
     sessionId: z.string().optional(),
-    reqHeaders: z.record(z.string(), z.string()).optional(),
+    reqHeaders: z.custom<Headers>().optional(),
     getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 

@@ -24,7 +24,7 @@ export default createPlugin({
         name: z.string().optional(),
       })
       .optional(),
-    reqHeaders: z.record(z.string(), z.string()).optional(),
+    reqHeaders: z.custom<Headers>().optional(),
     getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 

@@ -9,7 +9,7 @@ import { RegistryService } from "./services/registry";
 interface AuthContext {
   userId: string;
   nearAccountId?: string;
-  reqHeaders?: Record<string, string>;
+  reqHeaders?: Headers;
 }
 
 export default createPlugin({
@@ -26,7 +26,7 @@ export default createPlugin({
   context: z.object({
     userId: z.string().optional(),
     nearAccountId: z.string().optional(),
-    reqHeaders: z.record(z.string(), z.string()).optional(),
+    reqHeaders: z.custom<Headers>().optional(),
     getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 

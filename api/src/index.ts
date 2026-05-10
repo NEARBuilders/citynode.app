@@ -18,7 +18,7 @@ export interface AuthContext {
     name?: string;
   };
   organizationId?: string;
-  reqHeaders?: Record<string, string>;
+  reqHeaders?: Headers;
   getRawBody?: () => Promise<string>;
 }
 
@@ -149,7 +149,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       })
       .optional(),
     organizationId: z.string().optional(),
-    reqHeaders: z.record(z.string(), z.string()).optional(),
+    reqHeaders: z.custom<Headers>().optional(),
     getRawBody: z.custom<() => Promise<string>>().optional(),
   }),
 

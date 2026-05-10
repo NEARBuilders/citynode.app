@@ -155,14 +155,8 @@ export function setupPluginMiddleware(
     const rawClone =
       webRequest.method === "GET" || webRequest.method === "HEAD" ? null : webRequest.clone();
     let cachedRawBody: string | null = null;
-    const reqHeaders: Record<string, string> = {};
-    for (const key of Object.keys(req.headers)) {
-      const val = req.headers[key];
-      if (typeof val === "string") reqHeaders[key] = val;
-      else if (Array.isArray(val)) reqHeaders[key] = val.join(", ");
-    }
     return {
-      reqHeaders,
+      reqHeaders: webRequest.headers,
       getRawBody: async (): Promise<string> => {
         if (cachedRawBody !== null) return cachedRawBody;
         if (!rawClone) {
