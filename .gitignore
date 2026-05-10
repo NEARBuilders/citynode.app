@@ -313,9 +313,6 @@ fabric.properties
 # Module Federation DTS artifacts
 .mf
 node_modules/.federation
-
-# Compiled CLI binary
-bos-cli
 # CSS files (Tailwind - handled by build tools)
 *.css
 .tanstack

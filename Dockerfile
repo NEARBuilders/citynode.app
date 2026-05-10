@@ -10,18 +10,22 @@ RUN bun run --cwd packages/every-plugin build
 RUN bun run postinstall
 RUN bun run scripts/resolve-workspace-refs.ts
 
-# Compile the CLI into a standalone binary
-RUN cd packages/everything-dev && bun run build
-RUN cd packages/everything-dev && bun build --compile src/cli.ts --outfile /app/bos-cli
+# Remove source dirs — everything is loaded remotely at runtime
+RUN rm -rf host api ui plugins packages/every-plugin packages/everything-dev
+RUN bun install --ignore-scripts
 
-FROM alpine:latest
+# ── Runtime ──
+FROM oven/bun:1-alpine
 WORKDIR /app
 
-RUN apk add --no-cache curl ca-certificates
+RUN apk add --no-cache curl
 
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
 
-COPY --from=builder --chown=appuser:appgroup /app/bos-cli /usr/local/bin/bos
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/package.json .
+COPY --from=builder --chown=appuser:appgroup /app/bun.lock .
+COPY --from=builder --chown=appuser:appgroup /app/bunfig.toml .
 COPY --from=builder --chown=appuser:appgroup /app/bos.config.json ./
 
 RUN mkdir -p .bos/generated .bos/logs && \
@@ -37,4 +41,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
 USER appuser
-CMD ["bos", "start", "--port", "3000", "--env", "production", "--no-interactive"]
+CMD ["sh", "-c", "bun run start"]
