@@ -7,11 +7,12 @@ COPY . .
 
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --cwd packages/every-plugin build
+RUN bun run --cwd packages/everything-dev build
 RUN bun run postinstall
 RUN bun run scripts/resolve-workspace-refs.ts
 
 # Remove source dirs — everything is loaded remotely at runtime
-RUN rm -rf host api ui plugins packages/every-plugin packages/everything-dev
+RUN rm -rf host api ui plugins
 
 # Clean broken workspace symlinks and strip workspace entries from package.json
 RUN find node_modules -maxdepth 1 -type l ! -exec test -e {} \; -print -delete 2>/dev/null || true
@@ -30,6 +31,8 @@ COPY --from=builder --chown=appuser:appgroup /app/package.json .
 COPY --from=builder --chown=appuser:appgroup /app/bun.lock .
 COPY --from=builder --chown=appuser:appgroup /app/bunfig.toml .
 COPY --from=builder --chown=appuser:appgroup /app/bos.config.json ./
+COPY --from=builder --chown=appuser:appgroup /app/packages/everything-dev ./packages/everything-dev
+COPY --from=builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
 
 RUN mkdir -p .bos/generated .bos/logs && \
     chown -R appuser:appgroup .bos && \
