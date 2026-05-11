@@ -29,6 +29,9 @@ function extractMonitoredRemotes(config: RuntimeConfig): MonitoredRemote[] {
     if (plugin.integrity && plugin.url) {
       remotes.push({ key, url: plugin.url, integrity: plugin.integrity });
     }
+    if (plugin.ui?.integrity && plugin.ui.url) {
+      remotes.push({ key: `${key}-ui`, url: plugin.ui.url, integrity: plugin.ui.integrity });
+    }
   }
 
   return remotes;

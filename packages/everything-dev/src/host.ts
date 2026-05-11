@@ -63,6 +63,17 @@ function buildClientRuntimeConfig(runtimeConfig: RuntimeConfig): ClientRuntimeCo
               url: plugin.url,
               entry: plugin.entry,
               integrity: plugin.integrity,
+              ...(plugin.ui
+                ? {
+                    ui: {
+                      name: plugin.ui.name,
+                      url: plugin.ui.url,
+                      entry: plugin.ui.entry,
+                      source: plugin.ui.source,
+                      integrity: plugin.ui.integrity,
+                    },
+                  }
+                : {}),
             },
           ]),
         )
@@ -79,6 +90,15 @@ function renderLoadingShell(runtimeConfig: ClientRuntimeConfig, error?: string |
   const uiIntegrity = runtimeConfig.ui?.integrity;
   const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
 
+  const pluginUiScripts = Object.values(runtimeConfig.plugins ?? {})
+    .filter((plugin) => plugin.ui?.url && plugin.ui.source === "remote")
+    .map((plugin) => {
+      const uiIntegrity = plugin.ui!.integrity;
+      const sri = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
+      return `<script src="${plugin.ui!.url}/remoteEntry.js"${sri}></script>`;
+    })
+    .join("\n");
+
   return `
 		<!DOCTYPE html>
 		<html lang="en">
@@ -92,6 +112,7 @@ function renderLoadingShell(runtimeConfig: ClientRuntimeConfig, error?: string |
 					@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 				</style>
 				${runtimeConfig.assetsUrl ? `<script src="${runtimeConfig.assetsUrl}/remoteEntry.js"${sriAttr}></script>` : ""}
+				${pluginUiScripts}
 				<script>${bootstrap}</script>
 			</head>
 			<body>
@@ -452,6 +473,20 @@ async function runHostServer(opts: {
         return response;
       });
     }
+  }
+
+  for (const [pluginKey, pluginConfig] of Object.entries(runtimeConfig.plugins ?? {})) {
+    if (!pluginConfig.ui?.url) continue;
+    const pluginUiUrl = pluginConfig.ui.url;
+    const proxyPrefix = `/__mf/plugin-ui/${pluginKey}`;
+    app.all(`${proxyPrefix}/*`, async (c) => {
+      const targetUrl = `${pluginUiUrl}${c.req.path.replace(proxyPrefix, "")}`;
+      const response = await fetch(targetUrl, {
+        method: c.req.method,
+        headers: c.req.header(),
+      });
+      return response;
+    });
   }
 
   app.get("*", async (c) => {

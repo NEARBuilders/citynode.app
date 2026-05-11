@@ -278,6 +278,15 @@ export const ClientRuntimeConfigSchema = z.object({
         url: z.string(),
         entry: z.string(),
         integrity: z.string().optional(),
+        ui: z
+          .object({
+            name: z.string(),
+            url: z.string(),
+            entry: z.string(),
+            source: SourceModeSchema,
+            integrity: z.string().optional(),
+          })
+          .optional(),
       }),
     )
     .optional(),

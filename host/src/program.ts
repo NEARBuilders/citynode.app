@@ -160,6 +160,17 @@ function buildRuntimeClientConfig(
             url: plugin.url,
             entry: plugin.entry,
             integrity: plugin.integrity,
+            ...(plugin.ui
+              ? {
+                  ui: {
+                    name: plugin.ui.name,
+                    url: plugin.ui.url,
+                    entry: plugin.ui.entry,
+                    source: plugin.ui.source,
+                    integrity: plugin.ui.integrity,
+                  },
+                }
+              : {}),
           },
         ],
       ),
@@ -473,9 +484,12 @@ export const createStartServer = (onReady?: () => void) =>
       ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
       ...(config.api?.url ? [new URL(config.api.url).origin] : []),
       ...(config.auth?.url ? [new URL(config.auth.url).origin] : []),
-      ...Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) =>
-        p.url ? [new URL(p.url).origin] : [],
-      ),
+      ...Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) => {
+        const origins: string[] = [];
+        if (p.url) origins.push(new URL(p.url).origin);
+        if (p.ui?.url) origins.push(new URL(p.ui.url).origin);
+        return origins;
+      }),
     ];
 
     const uniqueOrigins = [...new Set(remoteOrigins)];
@@ -548,6 +562,16 @@ export const createStartServer = (onReady?: () => void) =>
       const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
       const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
 
+      const pluginUiScripts = Object.values(config.plugins ?? {})
+        .filter((p: RuntimePlugin) => p.ui?.url && p.ui.source === "remote")
+        .map((p: RuntimePlugin) => {
+          const uiSri = p.ui!.integrity
+            ? ` integrity="${p.ui!.integrity}" crossorigin="anonymous"`
+            : "";
+          return `<script${nonceAttr} src="${p.ui!.url}/remoteEntry.js"${uiSri}></script>`;
+        })
+        .join("\n");
+
       return ctx.html(
         `<!DOCTYPE html>
           <html lang="en">
@@ -566,6 +590,7 @@ export const createStartServer = (onReady?: () => void) =>
                 .error { color: #fca5a5; }
               </style>
               <script${nonceAttr} src="${clientUrl}/remoteEntry.js"${sriAttr}></script>
+              ${pluginUiScripts}
               <script${nonceAttr}>${themeInitScript}</script>
               <script${nonceAttr}>${hydrateScript}</script>
             </head>
@@ -622,6 +647,15 @@ export const createStartServer = (onReady?: () => void) =>
       }
     } else {
       registerAllPaths(app, uiAssetPaths, proxyUiAssetRequest);
+    }
+
+    for (const [pluginKey, pluginConfig] of Object.entries(config.plugins ?? {}) as Array<
+      [string, RuntimePlugin]
+    >) {
+      if (!pluginConfig.ui?.url) continue;
+      const pluginUiUrl = pluginConfig.ui.url;
+      const proxyPrefix = `/__mf/plugin-ui/${pluginKey}`;
+      app.all(`${proxyPrefix}/*`, (c: Context<HonoEnv>) => proxyRequest(c.req.raw, pluginUiUrl));
     }
 
     if (uiConfig.ssrUrl) {

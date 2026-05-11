@@ -205,6 +205,29 @@ export function buildServiceDescriptorMap(
         defaultPort: resolvedPort,
         readinessPath: "/remoteEntry.js",
       });
+
+      if (pluginConfig.ui?.localPath && pluginConfig.ui.source === "local") {
+        const uiKey = `plugin-ui:${pluginId}`;
+        const uiPort = pluginConfig.ui.port ?? pluginBasePort;
+        pluginBasePort = uiPort + 1;
+
+        map.set(uiKey, {
+          key: uiKey,
+          source: pluginConfig.ui.source,
+          url: pluginConfig.ui.url,
+          entry: pluginConfig.ui.entry,
+          name: pluginConfig.ui.name,
+          localPath: pluginConfig.ui.localPath,
+          port: uiPort,
+          integrity: pluginConfig.ui.integrity,
+          command: "bun",
+          args: ["run", "dev"],
+          readyPatterns: PLUGIN_READY_PATTERNS,
+          errorPatterns: PLUGIN_ERROR_PATTERNS,
+          defaultPort: uiPort,
+          readinessPath: "/remoteEntry.js",
+        });
+      }
     }
   }
 
