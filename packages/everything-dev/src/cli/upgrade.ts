@@ -2,6 +2,7 @@ import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:
 import { join } from "node:path";
 import { glob } from "glob";
 import type { UpgradeOptions, UpgradeResult } from "../contract";
+import { readInstalledFrameworkVersion } from "./framework-version";
 import { runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 
@@ -26,95 +27,71 @@ async function fetchLatestNpmVersion(packageName: string): Promise<string | null
 }
 
 function readInstalledVersion(projectDir: string, packageName: string): string | undefined {
-  const pkgPath = join(projectDir, "package.json");
-  if (!existsSync(pkgPath)) return undefined;
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
-  const deps = (pkg.dependencies ?? {}) as Record<string, string>;
-  const devDeps = (pkg.devDependencies ?? {}) as Record<string, string>;
-  const version = deps[packageName] || devDeps[packageName];
-  if (!version) return undefined;
-  return version.replace(/^[\^~>=]+/, "");
+  return readInstalledFrameworkVersion(projectDir, packageName);
 }
 
-function isBumpedableVersion(value: string | undefined): boolean {
-  if (!value) return false;
-  if (value === "workspace:*") return false;
-  if (value.startsWith("catalog:")) return false;
+function setCatalogRef(field: Record<string, string> | undefined, packageName: string): boolean {
+  if (!field || !(packageName in field)) return false;
+  if (field[packageName] === "catalog:" || field[packageName].startsWith("file:")) return false;
+  field[packageName] = "catalog:";
   return true;
 }
 
-function bumpDepField(
-  field: Record<string, string> | undefined,
-  packageName: string,
-  newVersion: string,
-): boolean {
-  if (!field) return false;
-  if (!(packageName in field)) return false;
-  const current = field[packageName];
-  if (!isBumpedableVersion(current)) return false;
-  field[packageName] = `^${newVersion}`;
-  return true;
-}
-
-function bumpCatalog(
-  catalog: Record<string, string> | undefined,
-  packageName: string,
-  newVersion: string,
-): boolean {
-  if (!catalog) return false;
-  if (!(packageName in catalog)) return false;
-  const current = catalog[packageName];
-  if (!isBumpedableVersion(current)) return false;
-  catalog[packageName] = `^${newVersion}`;
-  return true;
-}
-
-interface BumpResult {
-  modified: boolean;
-  fields: string[];
-}
-
-function bumpPackageJson(
-  pkg: Record<string, unknown>,
-  packageName: string,
-  newVersion: string,
-): BumpResult {
-  const fields: string[] = [];
+function updateWorkspacePackageRefInFile(filePath: string, packageName: string): boolean {
+  const pkg = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
+  let modified = false;
 
   for (const fieldName of ["dependencies", "devDependencies", "peerDependencies"] as const) {
     const field = pkg[fieldName] as Record<string, string> | undefined;
-    if (bumpDepField(field, packageName, newVersion)) {
-      fields.push(fieldName);
+    if (setCatalogRef(field, packageName)) {
+      modified = true;
     }
   }
 
-  const workspaces = pkg.workspaces as { catalog?: Record<string, string> } | undefined;
-  if (workspaces?.catalog && bumpCatalog(workspaces.catalog, packageName, newVersion)) {
-    fields.push("workspaces.catalog");
-  }
-
-  return { modified: fields.length > 0, fields };
-}
-
-function updatePackageVersionInFile(
-  filePath: string,
-  packageName: string,
-  newVersion: string,
-): boolean {
-  const pkg = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
-  const result = bumpPackageJson(pkg, packageName, newVersion);
-  if (result.modified) {
+  if (modified) {
     writeFileSync(filePath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
-  return result.modified;
+  return modified;
 }
 
-function updatePackageVersion(
+function updateRootPackageVersion(
   projectDir: string,
   packageName: string,
   newVersion: string,
 ): boolean {
-  return updatePackageVersionInFile(join(projectDir, "package.json"), packageName, newVersion);
+  const pkgPath = join(projectDir, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
+  let modified = false;
+
+  for (const fieldName of ["dependencies", "devDependencies", "peerDependencies"] as const) {
+    const field = pkg[fieldName] as Record<string, string> | undefined;
+    if (setCatalogRef(field, packageName)) {
+      modified = true;
+    }
+  }
+
+  if (!pkg.workspaces || typeof pkg.workspaces !== "object") {
+    pkg.workspaces = { packages: [], catalog: {} };
+    modified = true;
+  }
+
+  const workspaces = pkg.workspaces as { packages?: string[]; catalog?: Record<string, string> };
+  if (!workspaces.catalog || typeof workspaces.catalog !== "object") {
+    workspaces.catalog = {};
+    modified = true;
+  }
+
+  const nextVersion = `^${newVersion}`;
+  if (workspaces.catalog[packageName] !== nextVersion) {
+    workspaces.catalog[packageName] = nextVersion;
+    modified = true;
+  }
+
+  if (modified) {
+    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  }
+
+  return modified;
 }
 
 async function findWorkspacePackageJsons(projectDir: string): Promise<string[]> {
@@ -217,7 +194,7 @@ export async function upgradeTemplate(
 
   for (const pkg of packages) {
     if (pkg.from !== undefined && pkg.from !== pkg.to) {
-      updatePackageVersion(projectDir, pkg.name, pkg.to);
+      updateRootPackageVersion(projectDir, pkg.name, pkg.to);
     }
   }
 
@@ -225,7 +202,7 @@ export async function upgradeTemplate(
   for (const pkgPath of workspacePkgPaths) {
     for (const pkg of packages) {
       if (pkg.from !== undefined && pkg.from !== pkg.to) {
-        updatePackageVersionInFile(pkgPath, pkg.name, pkg.to);
+        updateWorkspacePackageRefInFile(pkgPath, pkg.name);
       }
     }
   }

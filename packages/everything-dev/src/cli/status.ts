@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { StatusResult } from "../contract";
 import { fetchBosConfigFromFastKv } from "../fastkv";
+import { readInstalledFrameworkVersion } from "./framework-version";
 import { readSnapshot } from "./snapshot";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
@@ -21,21 +22,7 @@ async function fetchLatestNpmVersion(packageName: string): Promise<string | null
 }
 
 function readInstalledVersion(projectDir: string, packageName: string): string | undefined {
-  const pkgPath = join(projectDir, "package.json");
-  if (!existsSync(pkgPath)) return undefined;
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
-  const deps = (pkg.dependencies ?? {}) as Record<string, string>;
-  const devDeps = (pkg.devDependencies ?? {}) as Record<string, string>;
-  const version = deps[packageName] || devDeps[packageName];
-  if (!version) return undefined;
-  if (
-    version.startsWith("workspace:") ||
-    version.startsWith("catalog:") ||
-    version.startsWith("file:")
-  ) {
-    return undefined;
-  }
-  return version.replace(/^[\^~>=]+/, "");
+  return readInstalledFrameworkVersion(projectDir, packageName);
 }
 
 function checkEnvFile(projectDir: string): "found" | "missing" | "example-only" {

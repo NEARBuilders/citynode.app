@@ -21,7 +21,7 @@
     "drizzle-kit": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
-    "every-plugin": "2.5.8",
+    "every-plugin": "catalog:",
     "pg": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "zod": "catalog:"
@@ -35,7 +35,7 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "dotenv": "^17.2.3",
-    "everything-dev": "workspace:*",
+    "everything-dev": "catalog:",
     "host": "workspace:*",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "catalog:",

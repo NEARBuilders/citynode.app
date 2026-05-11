@@ -13,6 +13,7 @@ type NormalizationSpec = {
 
 type NormalizeManifestOptions = {
   resolveCatalogRefs: boolean;
+  preserveCatalogRefs?: boolean;
   excludeFrameworkWorkspaces?: boolean;
   removeWorkspaceDeps?: string[];
   removeWorkspaces?: boolean;
@@ -74,6 +75,17 @@ function normalizeDependencyMap(
   let modified = false;
 
   for (const [name, version] of Object.entries(map)) {
+    if (
+      options.preserveCatalogRefs &&
+      FRAMEWORK_PACKAGES.includes(name as (typeof FRAMEWORK_PACKAGES)[number])
+    ) {
+      if (version !== "catalog:") {
+        map[name] = "catalog:";
+        modified = true;
+      }
+      continue;
+    }
+
     if (version === "workspace:*") {
       const frameworkVersion = spec.frameworkVersions[name];
       if (frameworkVersion) {
@@ -237,6 +249,7 @@ export function stageReleasePackage(opts: {
 
   normalizePackageManifest(pkg, spec, {
     resolveCatalogRefs: true,
+    preserveCatalogRefs: false,
     removeWorkspaces: true,
     removePublishScripts: true,
   });

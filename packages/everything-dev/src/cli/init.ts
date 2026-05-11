@@ -404,14 +404,25 @@ export async function personalizeConfig(
       delete deps["everything-dev"];
     }
 
+    if (!pkg.workspaces || typeof pkg.workspaces !== "object") {
+      pkg.workspaces = { packages: [], catalog: {} };
+    }
+    const workspaces = pkg.workspaces as { packages?: string[]; catalog?: Record<string, string> };
+    if (!workspaces.catalog || typeof workspaces.catalog !== "object") {
+      workspaces.catalog = {};
+    }
+
     if (!pkg.dependencies) pkg.dependencies = {};
     const deps = pkg.dependencies as Record<string, string>;
     const spec = opts.workspaceOpts?.sourceDir
       ? loadManifestNormalizationSpec(opts.workspaceOpts.sourceDir)
       : null;
-    if (!deps["everything-dev"] && spec)
-      deps["everything-dev"] = spec.rootCatalog["everything-dev"];
-    if (!deps["every-plugin"] && spec) deps["every-plugin"] = spec.rootCatalog["every-plugin"];
+    if (spec) {
+      workspaces.catalog["everything-dev"] = spec.rootCatalog["everything-dev"];
+      workspaces.catalog["every-plugin"] = spec.rootCatalog["every-plugin"];
+    }
+    if (!deps["everything-dev"] && spec) deps["everything-dev"] = "catalog:";
+    if (!deps["every-plugin"] && spec) deps["every-plugin"] = "catalog:";
 
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
@@ -500,7 +511,8 @@ async function resolveWorkspaceRefs(
   await normalizePackageManifestsInTree({
     sourceRootDir: options?.sourceDir ?? destination,
     targetDir: destination,
-    resolveCatalogRefs: true,
+    resolveCatalogRefs: false,
+    preserveCatalogRefs: true,
     removeWorkspaceDeps: ["host"],
   });
 

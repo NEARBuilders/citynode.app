@@ -23,7 +23,8 @@
       "@better-auth/api-key": "1.6.9",
       "@better-auth/passkey": "1.6.9",
       "better-near-auth": "1.4.0",
-      "every-plugin": "workspace:*",
+      "every-plugin": "^2.5.8",
+      "everything-dev": "^1.12.1",
       "typescript": "^5.9.3",
       "vitest": "^4.0.17",
       "@libsql/client": "0.17.0",
@@ -111,8 +112,8 @@
     "effect": "catalog:",
     "zod": "catalog:",
     "@opentelemetry/api": "catalog:",
-    "every-plugin": "workspace:*",
-    "everything-dev": "workspace:*"
+    "every-plugin": "catalog:",
+    "everything-dev": "catalog:"
   },
   "overrides": {
     "axios": "1.13.6",
