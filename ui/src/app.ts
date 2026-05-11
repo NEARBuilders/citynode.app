@@ -43,6 +43,34 @@ import {
 
 export { buildPublishedAccountHref, buildPublishedGatewayHref, buildRuntimeHref, getRuntimeConfig };
 
+type RuntimeConfigInput = Partial<import("everything-dev/types").ClientRuntimeConfig> | undefined;
+
+function readRuntimeConfig(config?: RuntimeConfigInput) {
+  if (config) return config;
+  if (typeof window === "undefined") return undefined;
+  try {
+    return getRuntimeConfig();
+  } catch {
+    return undefined;
+  }
+}
+
+export function getActiveRuntime(config?: RuntimeConfigInput) {
+  return readRuntimeConfig(config)?.runtime;
+}
+
+export function getAccount(config?: RuntimeConfigInput): string {
+  return readRuntimeConfig(config)?.account ?? "every.near";
+}
+
+export function getRepository(config?: RuntimeConfigInput): string | undefined {
+  return readRuntimeConfig(config)?.repository;
+}
+
+export function getAppName(config?: RuntimeConfigInput): string {
+  return getActiveRuntime(config)?.title ?? getAccount(config);
+}
+
 import type { ApiClient } from "./lib/api";
 import type { AuthClient as AuthClientType } from "./lib/auth";
 
