@@ -7,7 +7,7 @@
 
 <h1 style="font-size: 4.25rem; font-weight: 800; line-height: 1; margin: 0;">everything.dev</h1>
 
-<img src="ui/public/bos.png" alt="everything.dev" width="380" />
+<img src="ui/src/assets/under-construction.gif" alt="everything.dev" width="380" />
 
 </div>
 
