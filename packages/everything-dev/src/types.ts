@@ -1,34 +1,15 @@
 import { z } from "./sdk";
 
-export interface ExtendsConfig {
-  development?: string;
-  production?: string;
-  staging?: string;
-}
-
-export interface BosConfigInput extends Record<string, unknown> {
-  extends?: string | ExtendsConfig;
-  account?: string;
-  domain?: string;
-  testnet?: string;
-  template?: string;
-  gateway?: {
-    development?: string;
-    production?: string;
-    account?: string;
-  };
-  development?: string;
-  production?: string;
-  integrity?: string;
-  name?: string;
-  version?: string;
-  proxy?: string;
-  variables?: Record<string, string>;
-  secrets?: string[];
-  app?: Record<string, Record<string, unknown>>;
-  shared?: Record<string, Record<string, Record<string, unknown>>>;
-  plugins?: Record<string, BosConfigInput>;
-}
+export const ExtendsSchema = z.union([
+  z.string(),
+  z.object({
+    development: z.string().optional(),
+    production: z.string().optional(),
+    staging: z.string().optional(),
+  }),
+]);
+export type Extends = z.infer<typeof ExtendsSchema>;
+export type ExtendsConfig = Extract<Extends, Record<string, string | undefined>>;
 
 export const SourceModeSchema = z.enum(["local", "remote"]);
 export type SourceMode = z.infer<typeof SourceModeSchema>;
@@ -65,8 +46,16 @@ export const ApiPluginConfigSchema = z.object({
 });
 export type ApiPluginConfig = z.infer<typeof ApiPluginConfigSchema>;
 
+export const PluginUiConfigSchema = z.object({
+  name: z.string(),
+  development: z.string().optional(),
+  production: z.string().optional(),
+  integrity: z.string().optional(),
+});
+export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
+
 export const BosPluginRefSchema = z.object({
-  extends: z.string().optional(),
+  extends: ExtendsSchema.optional(),
   development: z.string().optional(),
   production: z.string().optional(),
   integrity: z.string().optional(),
@@ -79,6 +68,17 @@ export const BosPluginRefSchema = z.object({
 });
 export type BosPluginRef = z.infer<typeof BosPluginRefSchema>;
 
+const PluginRuntimeUiSchema = z.object({
+  name: z.string(),
+  url: z.string(),
+  entry: z.string(),
+  source: SourceModeSchema,
+  localPath: z.string().optional(),
+  port: z.number().optional(),
+  integrity: z.string().optional(),
+});
+export type PluginRuntimeUi = z.infer<typeof PluginRuntimeUiSchema>;
+
 export const RuntimePluginConfigSchema = z.object({
   name: z.string(),
   url: z.string(),
@@ -90,6 +90,7 @@ export const RuntimePluginConfigSchema = z.object({
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
   integrity: z.string().optional(),
+  ui: PluginRuntimeUiSchema.optional(),
 });
 export type RuntimePluginConfig = z.infer<typeof RuntimePluginConfigSchema>;
 
@@ -125,15 +126,60 @@ export const BosStagingSchema = z.object({
 });
 export type BosStaging = z.infer<typeof BosStagingSchema>;
 
-export const ExtendsSchema = z.union([
-  z.string(),
+const BosConfigInputAppEntrySchema = z.record(z.string(), z.unknown());
+export type BosConfigInputAppEntry = z.infer<typeof BosConfigInputAppEntrySchema>;
+
+export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
   z.object({
+    extends: ExtendsSchema.optional(),
+    account: z.string().optional(),
+    domain: z.string().optional(),
+    testnet: z.string().optional(),
+    template: z.string().optional(),
+    gateway: z
+      .object({
+        development: z.string().optional(),
+        production: z.string().optional(),
+        account: z.string().optional(),
+      })
+      .optional(),
     development: z.string().optional(),
     production: z.string().optional(),
-    staging: z.string().optional(),
+    integrity: z.string().optional(),
+    name: z.string().optional(),
+    version: z.string().optional(),
+    proxy: z.string().optional(),
+    variables: z.record(z.string(), z.string()).optional(),
+    secrets: z.array(z.string()).optional(),
+    app: z.record(z.string(), BosConfigInputAppEntrySchema).optional(),
+    shared: z.record(z.string(), z.record(z.string(), SharedConfigSchema)).optional(),
+    plugins: z.record(z.string(), BosConfigInputSchema).optional(),
   }),
-]);
-export type Extends = z.infer<typeof ExtendsSchema>;
+);
+
+export interface BosConfigInput {
+  extends?: string | ExtendsConfig;
+  account?: string;
+  domain?: string;
+  testnet?: string;
+  template?: string;
+  gateway?: {
+    development?: string;
+    production?: string;
+    account?: string;
+  };
+  development?: string;
+  production?: string;
+  integrity?: string;
+  name?: string;
+  version?: string;
+  proxy?: string;
+  variables?: Record<string, string>;
+  secrets?: string[];
+  app?: Record<string, BosConfigInputAppEntry>;
+  shared?: Record<string, Record<string, SharedDepConfig>>;
+  plugins?: Record<string, BosConfigInput>;
+}
 
 export const BosConfigSchema = z.object({
   account: z.string(),

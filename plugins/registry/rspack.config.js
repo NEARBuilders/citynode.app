@@ -14,20 +14,8 @@ const __dirname = path.dirname(__filename);
 
 const shouldDeploy = process.env.DEPLOY === "true";
 
-const resolvedConfigPath = path.resolve(__dirname, "../../.bos/bos.resolved-config.json");
-const bosConfigPath = path.resolve(__dirname, "../../bos.config.json");
-
-function readBosConfig() {
-  const configPath = fs.existsSync(resolvedConfigPath) ? resolvedConfigPath : bosConfigPath;
-  const raw = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  if (raw._resolved) {
-    const { _resolved, ...data } = raw;
-    return data;
-  }
-  return raw;
-}
-
-const bosConfig = readBosConfig();
+const localConfigPath = path.resolve(__dirname, "bos.config.json");
+const rootConfigPath = path.resolve(__dirname, "../../bos.config.json");
 
 function normalizePath(input) {
   return input.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -41,10 +29,31 @@ function resolveLocalTarget(value, configRoot) {
   return normalizePath(path.resolve(configRoot, value.slice("local:".length)));
 }
 
-function updateBosConfig(url, integrity) {
+function updateLocalConfig(url, integrity) {
   try {
-    const configRoot = path.dirname(bosConfigPath);
-    const config = JSON.parse(fs.readFileSync(bosConfigPath, "utf8"));
+    const config = JSON.parse(fs.readFileSync(localConfigPath, "utf8"));
+    if (!config.app?.api) config.app = config.app ?? {};
+    config.app.api = config.app.api ?? {};
+    config.app.api.production = url;
+    if (integrity) {
+      config.app.api.integrity = integrity;
+    } else {
+      delete config.app.api.integrity;
+    }
+    fs.writeFileSync(localConfigPath, `${JSON.stringify(config, null, 2)}\n`);
+    console.log("   ✅ Updated local bos.config.json: app.api.production");
+    if (integrity) {
+      console.log("   ✅ Updated local bos.config.json: app.api.integrity");
+    }
+  } catch (err) {
+    console.error("   ❌ Failed to update local bos.config.json:", err.message);
+  }
+}
+
+function updateRootConfig(url, integrity) {
+  try {
+    const configRoot = path.dirname(rootConfigPath);
+    const config = JSON.parse(fs.readFileSync(rootConfigPath, "utf8"));
     const pluginDir = normalizePath(__dirname);
 
     const match = Object.entries(config.plugins ?? {}).find(([, plugin]) => {
@@ -52,7 +61,7 @@ function updateBosConfig(url, integrity) {
     });
 
     if (!match) {
-      console.warn(`   ⚠️  No matching plugin entry found for ${pluginDir}`);
+      console.warn(`   ⚠️  No matching plugin entry in root config for ${pluginDir}`);
       return;
     }
 
@@ -63,13 +72,13 @@ function updateBosConfig(url, integrity) {
     } else {
       delete config.plugins[key].integrity;
     }
-    fs.writeFileSync(bosConfigPath, `${JSON.stringify(config, null, 2)}\n`);
-    console.log(`   ✅ Updated bos.config.json: plugins.${key}.production`);
+    fs.writeFileSync(rootConfigPath, `${JSON.stringify(config, null, 2)}\n`);
+    console.log(`   ✅ Updated root bos.config.json: plugins.${key}.production`);
     if (integrity) {
-      console.log(`   ✅ Updated bos.config.json: plugins.${key}.integrity`);
+      console.log(`   ✅ Updated root bos.config.json: plugins.${key}.integrity`);
     }
   } catch (err) {
-    console.error("   ❌ Failed to update bos.config.json:", err.message);
+    console.error("   ❌ Failed to update root bos.config.json:", err.message);
   }
 }
 
@@ -92,7 +101,8 @@ export default shouldDeploy
         onDeployComplete: async (info) => {
           console.log("🚀 Registry Plugin Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
-          updateBosConfig(info.url, integrity ?? undefined);
+          updateLocalConfig(info.url, integrity ?? undefined);
+          updateRootConfig(info.url, integrity ?? undefined);
         },
       },
     })(baseConfig)

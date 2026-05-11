@@ -59,7 +59,7 @@ import {
   parsePluginBosUrl,
 } from "./fastkv";
 import { computeSriHashForUrl } from "./integrity";
-import { type BosEnv } from "./merge";
+import type { BosEnv } from "./merge";
 import { addFunctionCallAccessKey, ensureNearCli, executeTransaction } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { createPlugin, z } from "./sdk";
@@ -464,7 +464,7 @@ export default createPlugin({
   }),
   secrets: z.object({}),
   contract: bosContract,
-  initialize: (config: any) =>
+  initialize: (config) =>
     Effect.promise(async () => {
       const configResult = await loadConfig({ path: config.variables.configPath });
       return {
@@ -474,10 +474,10 @@ export default createPlugin({
       } satisfies BosDeps;
     }),
   shutdown: () => Effect.void,
-  createRouter: (deps: BosDeps, builder: any) => ({
+  createRouter: (deps, builder) => ({
     config: builder.config.handler(async () => buildConfigResult(deps.bosConfig)),
 
-    pluginAdd: builder.pluginAdd.handler(async ({ input }: { input: PluginAddOptions }) => {
+    pluginAdd: builder.pluginAdd.handler(async ({ input }) => {
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -589,40 +589,38 @@ export default createPlugin({
       };
     }),
 
-    pluginRemove: builder.pluginRemove.handler(
-      async ({ input }: { input: PluginRemoveOptions }) => {
-        if (!deps.bosConfig) {
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: "No bos.config.json found",
-          };
-        }
-
-        if (!deps.bosConfig.plugins?.[input.key]) {
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: `Plugin '${input.key}' is not configured`,
-          };
-        }
-
-        const nextPlugins = { ...(deps.bosConfig.plugins ?? {}) };
-        delete nextPlugins[input.key];
-        deps.bosConfig = {
-          ...deps.bosConfig,
-          plugins: Object.keys(nextPlugins).length > 0 ? nextPlugins : undefined,
-        };
-
-        await saveBosConfig(deps.configDir, deps.bosConfig);
-        await refreshApiContractBridge(deps.configDir);
-
+    pluginRemove: builder.pluginRemove.handler(async ({ input }) => {
+      if (!deps.bosConfig) {
         return {
-          status: "removed" as const,
+          status: "error" as const,
           key: input.key,
+          error: "No bos.config.json found",
         };
-      },
-    ),
+      }
+
+      if (!deps.bosConfig.plugins?.[input.key]) {
+        return {
+          status: "error" as const,
+          key: input.key,
+          error: `Plugin '${input.key}' is not configured`,
+        };
+      }
+
+      const nextPlugins = { ...(deps.bosConfig.plugins ?? {}) };
+      delete nextPlugins[input.key];
+      deps.bosConfig = {
+        ...deps.bosConfig,
+        plugins: Object.keys(nextPlugins).length > 0 ? nextPlugins : undefined,
+      };
+
+      await saveBosConfig(deps.configDir, deps.bosConfig);
+      await refreshApiContractBridge(deps.configDir);
+
+      return {
+        status: "removed" as const,
+        key: input.key,
+      };
+    }),
 
     pluginList: builder.pluginList.handler(async () => {
       const plugins: PluginListResult["plugins"] = listPluginAttachments(deps.bosConfig);
@@ -632,166 +630,164 @@ export default createPlugin({
       };
     }),
 
-    pluginPublish: builder.pluginPublish.handler(
-      async ({ input }: { input: PluginPublishOptions }) => {
-        if (!deps.bosConfig) {
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: "No bos.config.json found",
-          };
-        }
-
-        const attachment = deps.bosConfig.plugins?.[input.key];
-        if (!attachment) {
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: `Plugin '${input.key}' is not configured`,
-          };
-        }
-
-        const localPath = pluginLocalPath(deps.configDir, attachment);
-        if (!localPath) {
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: `Plugin '${input.key}' does not have a local development path`,
-          };
-        }
-
-        const pkgPath = join(localPath, "package.json");
-        if (!(await Bun.file(pkgPath).exists())) {
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: `Missing package.json at ${localPath}`,
-          };
-        }
-
-        const pkgJson = (await Bun.file(pkgPath).json()) as {
-          scripts?: Record<string, string>;
-          name?: string;
-          version?: string;
+    pluginPublish: builder.pluginPublish.handler(async ({ input }) => {
+      if (!deps.bosConfig) {
+        return {
+          status: "error" as const,
+          key: input.key,
+          error: "No bos.config.json found",
         };
-        const script = pkgJson.scripts?.deploy ? "deploy" : "build";
+      }
 
-        const { stdout, stderr, exitCode } = (await run("bun", ["run", script], {
-          cwd: localPath,
-          capture: true,
-        })) as { stdout: string; stderr: string; exitCode: number };
+      const attachment = deps.bosConfig.plugins?.[input.key];
+      if (!attachment) {
+        return {
+          status: "error" as const,
+          key: input.key,
+          error: `Plugin '${input.key}' is not configured`,
+        };
+      }
 
-        if (exitCode !== 0) {
-          if (stdout.trim()) process.stdout.write(stdout);
-          if (stderr.trim()) process.stderr.write(stderr);
-          return {
-            status: "error" as const,
-            key: input.key,
-            error: `Publish failed with exit code ${exitCode}`,
-          };
-        }
+      const localPath = pluginLocalPath(deps.configDir, attachment);
+      if (!localPath) {
+        return {
+          status: "error" as const,
+          key: input.key,
+          error: `Plugin '${input.key}' does not have a local development path`,
+        };
+      }
 
+      const pkgPath = join(localPath, "package.json");
+      if (!(await Bun.file(pkgPath).exists())) {
+        return {
+          status: "error" as const,
+          key: input.key,
+          error: `Missing package.json at ${localPath}`,
+        };
+      }
+
+      const pkgJson = (await Bun.file(pkgPath).json()) as {
+        scripts?: Record<string, string>;
+        name?: string;
+        version?: string;
+      };
+      const script = pkgJson.scripts?.deploy ? "deploy" : "build";
+
+      const { stdout, stderr, exitCode } = (await run("bun", ["run", script], {
+        cwd: localPath,
+        capture: true,
+      })) as { stdout: string; stderr: string; exitCode: number };
+
+      if (exitCode !== 0) {
         if (stdout.trim()) process.stdout.write(stdout);
         if (stderr.trim()) process.stderr.write(stderr);
-
-        let publishedUrl = extractPublishedUrl(`${stdout}\n${stderr}`);
-
-        let manifest: PluginManifest | null = null;
-        if (publishedUrl) {
-          manifest = await fetchRemotePluginManifest(publishedUrl);
-        } else if (attachment.production) {
-          manifest = await fetchRemotePluginManifest(attachment.production);
-          if (manifest) {
-            publishedUrl = attachment.production;
-          }
-        }
-
-        const integrity = publishedUrl ? await computeSriHashForUrl(publishedUrl) : null;
-        const version = manifest?.plugin.version ?? pkgJson.version;
-
-        if (publishedUrl) {
-          deps.bosConfig = {
-            ...deps.bosConfig,
-            plugins: {
-              ...(deps.bosConfig.plugins ?? {}),
-              [input.key]: {
-                ...(deps.bosConfig.plugins?.[input.key] ?? {}),
-                production: publishedUrl,
-                ...(integrity ? { integrity } : {}),
-                ...(manifest?.plugin.name ? { name: manifest.plugin.name } : {}),
-                ...(version ? { version } : {}),
-              },
-            },
-          };
-          await saveBosConfig(deps.configDir, deps.bosConfig);
-
-          const account = deps.bosConfig.account;
-          const network = getNetworkIdForAccount(account);
-          if (manifest && version) {
-            try {
-              const registryEntries: Record<string, string> = {
-                [`plugins/${account}/${input.key}/manifest.json`]: JSON.stringify(manifest),
-                [`plugins/${account}/${input.key}/metadata`]: JSON.stringify({
-                  title: null,
-                  description: null,
-                  repoUrl: deps.bosConfig.repository ?? null,
-                  version,
-                  publishedAt: new Date().toISOString(),
-                  cdnUrl: publishedUrl,
-                  integrity,
-                }),
-                [`plugins/${account}/${input.key}/versions/${version}/manifest.json`]:
-                  JSON.stringify(manifest),
-              };
-              const payload = JSON.stringify(registryEntries);
-              const argsBase64 = Buffer.from(payload).toString("base64");
-              const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
-
-              await Effect.runPromise(ensureNearCli);
-              try {
-                await Effect.runPromise(
-                  executeTransaction({
-                    account,
-                    contract: getRegistryNamespaceForNetwork(network),
-                    method: "__fastdata_kv",
-                    argsBase64,
-                    network,
-                    privateKey,
-                    gas: "50Tgas",
-                    deposit: "0NEAR",
-                  }),
-                );
-              } catch (registryError) {
-                const txHash = extractTransactionHash(registryError);
-                if (!txHash) {
-                  console.warn(
-                    `[publish] Plugin registry write failed: ${registryError instanceof Error ? registryError.message : registryError}`,
-                  );
-                }
-              }
-            } catch (registryError) {
-              console.warn(
-                `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
-              );
-            }
-          }
-
-          await refreshApiContractBridge(deps.configDir);
-        }
-
         return {
-          status: "published" as const,
+          status: "error" as const,
           key: input.key,
-          path: localPath,
-          script,
-          production: publishedUrl ?? attachment.production,
-          integrity: integrity ?? undefined,
-          version: version ?? undefined,
+          error: `Publish failed with exit code ${exitCode}`,
         };
-      },
-    ),
+      }
 
-    dev: builder.dev.handler(async ({ input }: { input: DevOptions }) => {
+      if (stdout.trim()) process.stdout.write(stdout);
+      if (stderr.trim()) process.stderr.write(stderr);
+
+      let publishedUrl = extractPublishedUrl(`${stdout}\n${stderr}`);
+
+      let manifest: PluginManifest | null = null;
+      if (publishedUrl) {
+        manifest = await fetchRemotePluginManifest(publishedUrl);
+      } else if (attachment.production) {
+        manifest = await fetchRemotePluginManifest(attachment.production);
+        if (manifest) {
+          publishedUrl = attachment.production;
+        }
+      }
+
+      const integrity = publishedUrl ? await computeSriHashForUrl(publishedUrl) : null;
+      const version = manifest?.plugin.version ?? pkgJson.version;
+
+      if (publishedUrl) {
+        deps.bosConfig = {
+          ...deps.bosConfig,
+          plugins: {
+            ...(deps.bosConfig.plugins ?? {}),
+            [input.key]: {
+              ...(deps.bosConfig.plugins?.[input.key] ?? {}),
+              production: publishedUrl,
+              ...(integrity ? { integrity } : {}),
+              ...(manifest?.plugin.name ? { name: manifest.plugin.name } : {}),
+              ...(version ? { version } : {}),
+            },
+          },
+        };
+        await saveBosConfig(deps.configDir, deps.bosConfig);
+
+        const account = deps.bosConfig.account;
+        const network = getNetworkIdForAccount(account);
+        if (manifest && version) {
+          try {
+            const registryEntries: Record<string, string> = {
+              [`plugins/${account}/${input.key}/manifest.json`]: JSON.stringify(manifest),
+              [`plugins/${account}/${input.key}/metadata`]: JSON.stringify({
+                title: null,
+                description: null,
+                repoUrl: deps.bosConfig.repository ?? null,
+                version,
+                publishedAt: new Date().toISOString(),
+                cdnUrl: publishedUrl,
+                integrity,
+              }),
+              [`plugins/${account}/${input.key}/versions/${version}/manifest.json`]:
+                JSON.stringify(manifest),
+            };
+            const payload = JSON.stringify(registryEntries);
+            const argsBase64 = Buffer.from(payload).toString("base64");
+            const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
+
+            await Effect.runPromise(ensureNearCli);
+            try {
+              await Effect.runPromise(
+                executeTransaction({
+                  account,
+                  contract: getRegistryNamespaceForNetwork(network),
+                  method: "__fastdata_kv",
+                  argsBase64,
+                  network,
+                  privateKey,
+                  gas: "50Tgas",
+                  deposit: "0NEAR",
+                }),
+              );
+            } catch (registryError) {
+              const txHash = extractTransactionHash(registryError);
+              if (!txHash) {
+                console.warn(
+                  `[publish] Plugin registry write failed: ${registryError instanceof Error ? registryError.message : registryError}`,
+                );
+              }
+            }
+          } catch (registryError) {
+            console.warn(
+              `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
+            );
+          }
+        }
+
+        await refreshApiContractBridge(deps.configDir);
+      }
+
+      return {
+        status: "published" as const,
+        key: input.key,
+        path: localPath,
+        script,
+        production: publishedUrl ?? attachment.production,
+        integrity: integrity ?? undefined,
+        version: version ?? undefined,
+      };
+    }),
+
+    dev: builder.dev.handler(async ({ input }) => {
       ensureEnvFile(deps.configDir);
 
       const localPackages = detectLocalPackages(
@@ -800,16 +796,16 @@ export default createPlugin({
       );
 
       const hostSource: SourceMode = localPackages.includes("host")
-        ? parseSourceMode(input.host as string, "local")
+        ? parseSourceMode(input.host, "local")
         : "remote";
       const uiSource: SourceMode = localPackages.includes("ui")
-        ? parseSourceMode(input.ui as string, "local")
+        ? parseSourceMode(input.ui, "local")
         : "remote";
       const apiSource: SourceMode = localPackages.includes("api")
-        ? parseSourceMode(input.api as string, "local")
+        ? parseSourceMode(input.api, "local")
         : "remote";
       const authSource: SourceMode = localPackages.includes("auth")
-        ? parseSourceMode(input.auth as string, "local")
+        ? parseSourceMode(input.auth, "local")
         : "remote";
       const ssr = input.ssr ?? false;
       const proxy = input.proxy ?? false;
@@ -907,7 +903,7 @@ export default createPlugin({
       };
     }),
 
-    start: builder.start.handler(async ({ input }: { input: StartOptions }) => {
+    start: builder.start.handler(async ({ input }) => {
       ensureEnvFile(deps.configDir);
 
       const account = input.account ?? process.env.BOS_ACCOUNT;
@@ -1066,7 +1062,7 @@ export default createPlugin({
       };
     }),
 
-    build: builder.build.handler(async ({ input }: { input: BuildOptions }) => {
+    build: builder.build.handler(async ({ input }) => {
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1127,7 +1123,7 @@ export default createPlugin({
       };
     }),
 
-    publish: builder.publish.handler(async ({ input }: { input: PublishOptions }) => {
+    publish: builder.publish.handler(async ({ input }) => {
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1244,7 +1240,7 @@ export default createPlugin({
       }
     }),
 
-    keyPublish: builder.keyPublish.handler(async ({ input }: { input: KeyPublishOptions }) => {
+    keyPublish: builder.keyPublish.handler(async ({ input }) => {
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1293,7 +1289,7 @@ export default createPlugin({
       }
     }),
 
-    init: builder.init.handler(async ({ input }: { input: InitOptions }) => {
+    init: builder.init.handler(async ({ input }) => {
       try {
         let extendsAccount = input.extendsAccount;
         let extendsGateway = input.extendsGateway;
@@ -1454,7 +1450,7 @@ export default createPlugin({
       }
     }),
 
-    sync: builder.sync.handler(async ({ input }: { input: SyncOptions }) => {
+    sync: builder.sync.handler(async ({ input }) => {
       try {
         const configPath = findConfigPath();
         if (!configPath) {
@@ -1480,7 +1476,7 @@ export default createPlugin({
       }
     }),
 
-    upgrade: builder.upgrade.handler(async ({ input }: { input: UpgradeOptions }) => {
+    upgrade: builder.upgrade.handler(async ({ input }) => {
       try {
         const configPath = findConfigPath();
         if (!configPath) {
@@ -1502,7 +1498,7 @@ export default createPlugin({
       }
     }),
 
-    typesGen: builder.typesGen.handler(async ({ input }: { input: TypesGenOptions }) => {
+    typesGen: builder.typesGen.handler(async ({ input }) => {
       try {
         const configPath = findConfigPath();
         if (!configPath) {

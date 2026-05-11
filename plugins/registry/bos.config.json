@@ -1,0 +1,12 @@
+{
+  "extends": "../../bos.config.json",
+  "app": {
+    "api": {
+      "name": "registry",
+      "development": "local:.",
+      "variables": {
+        "registryNamespace": "dev.everything.near"
+      }
+    }
+  }
+}

@@ -5,6 +5,19 @@ import { type BosEnv, type ResolvedConfigMeta, rebuildOrderedConfig } from "./me
 import type { BosConfig, SharedDepConfig } from "./types";
 import { BosConfigSchema } from "./types";
 
+interface PackageJson {
+  name?: string;
+  private?: boolean;
+  version?: string;
+  workspaces?: {
+    packages?: string[];
+    catalog?: Record<string, string>;
+  };
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+}
+
 export interface SharedUiResolvedDep {
   name: string;
   version: string;
@@ -94,9 +107,9 @@ export async function syncAndGenerateSharedUi(opts: {
     const raw = JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<string, unknown>;
     bosConfig = BosConfigSchema.parse(raw);
   }
-  let pkgJson: any = {};
+  let pkgJson: PackageJson = {};
   try {
-    pkgJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+    pkgJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as PackageJson;
   } catch {
     // package.json might not exist
   }
@@ -146,7 +159,7 @@ export async function syncAndGenerateSharedUi(opts: {
       if (!existsSync(resolvedDir)) {
         mkdirSync(resolvedDir, { recursive: true });
       }
-      const ordered = rebuildOrderedConfig(bosConfig as Record<string, unknown>);
+      const ordered = rebuildOrderedConfig(bosConfig);
       const meta: ResolvedConfigMeta = {
         env: opts.env ?? "development",
         resolvedAt: new Date().toISOString(),

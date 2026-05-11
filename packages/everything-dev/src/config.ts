@@ -149,7 +149,8 @@ export function loadResolvedConfig(configDir: string): BosConfig | null {
   const resolvedPath = getResolvedConfigPath(configDir);
   if (!existsSync(resolvedPath)) return null;
   try {
-    const raw = JSON.parse(readFileSync(resolvedPath, "utf-8")) as Record<string, unknown>;
+    const raw = JSON.parse(readFileSync(resolvedPath, "utf-8"));
+    if (!isPlainObject(raw)) return null;
     const { _resolved, ...configData } = raw;
     return BosConfigSchema.parse(configData);
   } catch {
@@ -170,7 +171,7 @@ export function writeResolvedConfig(
     mkdirSync(resolvedDir, { recursive: true });
   }
 
-  const ordered = rebuildOrderedConfig(config as Record<string, unknown>);
+  const ordered = rebuildOrderedConfig(config);
   const meta: ResolvedConfigMeta = {
     env,
     resolvedAt: new Date().toISOString(),
@@ -201,9 +202,11 @@ export function readBosConfigForBuild(configDir: string): Record<string, unknown
   const resolvedPath = getResolvedConfigPath(configDir);
   if (existsSync(resolvedPath)) {
     try {
-      const raw = JSON.parse(readFileSync(resolvedPath, "utf-8")) as Record<string, unknown>;
-      const { _resolved, ...configData } = raw;
-      return configData;
+      const raw = JSON.parse(readFileSync(resolvedPath, "utf-8"));
+      if (isPlainObject(raw)) {
+        const { _resolved, ...configData } = raw;
+        return configData as Record<string, unknown>;
+      }
     } catch {}
   }
   const bosConfigPath = join(configDir, "bos.config.json");
@@ -334,20 +337,21 @@ export function buildRuntimeConfig(
       secrets: apiConfig.secrets,
       integrity: apiIsRemote ? apiConfig.integrity : undefined,
     },
-    auth: authConfig
-      ? {
-          name: resolvePluginRuntimeName(undefined, authRuntime!.localPath, authConfig.name),
-          url: authRuntime!.url,
-          entry: authRuntime!.url ? `${authRuntime!.url}/mf-manifest.json` : "/mf-manifest.json",
-          localPath: authRuntime!.localPath,
-          port: authRuntime!.port,
-          source: authRuntime!.source,
-          proxy: authConfig.proxy,
-          variables: authConfig.variables,
-          secrets: authConfig.secrets,
-          integrity: authRuntime!.source === "remote" ? authConfig.integrity : undefined,
-        }
-      : undefined,
+    auth: (() => {
+      if (!authConfig || !authRuntime) return undefined;
+      return {
+        name: resolvePluginRuntimeName(undefined, authRuntime.localPath, authConfig.name),
+        url: authRuntime.url,
+        entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
+        localPath: authRuntime.localPath,
+        port: authRuntime.port,
+        source: authRuntime.source,
+        proxy: authConfig.proxy,
+        variables: authConfig.variables,
+        secrets: authConfig.secrets,
+        integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
+      };
+    })(),
     plugins:
       options?.plugins && Object.keys(options.plugins).length > 0 ? options.plugins : undefined,
   };
@@ -394,10 +398,7 @@ async function resolveConfigWithExtends(
       : baseDir;
   const parent = await resolveConfigWithExtends(extendsRef, parentBaseDir, nextVisited, chain, env);
 
-  return mergeBosConfigWithExtends(
-    parent as Record<string, unknown>,
-    config as Record<string, unknown>,
-  ) as BosConfigInput;
+  return mergeBosConfigWithExtends(parent, config);
 }
 
 type PluginOverrideValue = BosConfigInput | null | false;
@@ -519,6 +520,17 @@ function buildRuntimePluginConfig(
     pluginId,
   );
 
+  const uiConfig = config.app?.ui;
+  const uiDevelopment =
+    typeof uiConfig?.development === "string" ? uiConfig.development : undefined;
+  const uiProduction = typeof uiConfig?.production === "string" ? uiConfig.production : undefined;
+  const uiRuntime =
+    uiConfig && (uiDevelopment || uiProduction)
+      ? env === "development"
+        ? resolveDevelopmentTarget(uiDevelopment, uiProduction, baseDir)
+        : resolveRuntimeTarget(uiProduction, baseDir, "remote")
+      : undefined;
+
   return {
     name: apiName,
     url: runtimeTarget.url,
@@ -531,6 +543,22 @@ function buildRuntimePluginConfig(
     proxy: proxy ?? (typeof source.proxy === "string" ? source.proxy : undefined),
     variables: normalizeStringRecord(apiConfig.variables ?? source.variables),
     secrets: normalizeStringArray(apiConfig.secrets ?? source.secrets),
+    ui: uiRuntime
+      ? {
+          name: typeof uiConfig?.name === "string" ? uiConfig.name : `${apiName}-ui`,
+          url: uiRuntime.url,
+          entry: uiRuntime.url
+            ? `${uiRuntime.url.replace(/\/$/, "")}/mf-manifest.json`
+            : "/mf-manifest.json",
+          source: uiRuntime.source,
+          localPath: uiRuntime.localPath,
+          port: uiRuntime.port,
+          integrity:
+            uiRuntime.source === "remote" && typeof uiConfig?.integrity === "string"
+              ? uiConfig.integrity
+              : undefined,
+        }
+      : undefined,
   };
 }
 
@@ -577,10 +605,7 @@ async function resolveBosConfigInput(
         : baseDir;
     const config = await resolveConfigWithExtends(extendsRef, parentBaseDir, visited, chain, env);
     return {
-      config: mergeBosConfigWithExtends(
-        config as Record<string, unknown>,
-        input as Record<string, unknown>,
-      ) as BosConfigInput,
+      config: mergeBosConfigWithExtends(config, input),
       baseDir,
     };
   }
@@ -615,7 +640,7 @@ function resolveRuntimeTarget(
   }
 
   if (value.startsWith(LOCAL_PREFIX)) {
-    const localTarget = value.slice(LOCAL_PREFIX.length).trim();
+    const localTarget = value?.slice(LOCAL_PREFIX.length).trim();
     if (!localTarget) {
       throw new Error(`Invalid local development target: ${value}`);
     }
@@ -639,7 +664,9 @@ function resolveRuntimeTarget(
   };
 }
 
-export function isLocalDevelopmentTarget(value: string | undefined): boolean {
+export function isLocalDevelopmentTarget(
+  value: string | undefined,
+): value is `${typeof LOCAL_PREFIX}${string}` {
   return typeof value === "string" && value.startsWith(LOCAL_PREFIX);
 }
 
@@ -651,7 +678,7 @@ export function resolveLocalDevelopmentPath(
     return null;
   }
 
-  const localTarget = value!.slice(LOCAL_PREFIX.length).trim();
+  const localTarget = value.slice(LOCAL_PREFIX.length).trim();
   return localTarget ? resolve(baseDir, localTarget) : null;
 }
 

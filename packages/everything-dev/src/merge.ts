@@ -1,5 +1,5 @@
 import { createDefu } from "defu";
-import type { ExtendsConfig } from "./types";
+import type { BosConfigInput, ExtendsConfig } from "./types";
 
 export const BOS_CONFIG_ORDER = [
   "extends",
@@ -71,7 +71,7 @@ const bosConfigMerger = createDefu((obj: any, key: any, value: any): boolean | u
   }
   if (Array.isArray(obj[key]) && Array.isArray(value)) {
     if (ARRAY_UNION_KEYS.has(key)) {
-      obj[key] = unionArrays(obj[key], value) as any[];
+      obj[key] = unionArrays(obj[key], value);
     } else {
       obj[key] = value;
     }
@@ -90,14 +90,15 @@ export function resolveExtendsRef(
 }
 
 export function mergeBosConfigWithExtends(
-  parent: Record<string, unknown>,
-  child: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged = bosConfigMerger(child, parent) as Record<string, unknown>;
+  parent: BosConfigInput,
+  child: BosConfigInput,
+): BosConfigInput {
+  const merged = bosConfigMerger(child, parent) as BosConfigInput;
 
   if (isPlainObject(parent.plugins) && isPlainObject(child.plugins)) {
     const plugins: Record<string, unknown> = { ...parent.plugins };
-    for (const [key, value] of Object.entries(child.plugins as Record<string, unknown>)) {
+    for (const [key, rawValue] of Object.entries(child.plugins)) {
+      const value = rawValue as unknown;
       if (value === null || value === false) {
         delete plugins[key];
       } else if (isPlainObject(plugins[key]) && isPlainObject(value)) {
@@ -109,50 +110,52 @@ export function mergeBosConfigWithExtends(
         plugins[key] = value;
       }
     }
-    merged.plugins = plugins;
+    (merged as Record<string, unknown>).plugins = plugins;
   } else if (child.plugins !== undefined) {
-    merged.plugins = cleanNullSentinels(child.plugins as Record<string, unknown>);
+    (merged as Record<string, unknown>).plugins = cleanNullSentinels(
+      child.plugins as Record<string, unknown>,
+    );
   }
 
-  if (isPlainObject(merged.app)) {
-    for (const entryVal of Object.values(merged.app as Record<string, unknown>)) {
+  const mergedRecord = merged as Record<string, unknown>;
+
+  if (isPlainObject(mergedRecord.app)) {
+    for (const entryVal of Object.values(mergedRecord.app as Record<string, unknown>)) {
       if (!isPlainObject(entryVal)) continue;
-      const entry = entryVal as Record<string, unknown>;
       for (const secretKey of ARRAY_UNION_KEYS) {
-        if (Array.isArray(entry[secretKey])) {
-          entry[secretKey] =
-            (unionArrays(entry[secretKey] as unknown[], []) as string[] | undefined)?.filter(
+        if (Array.isArray(entryVal[secretKey])) {
+          entryVal[secretKey] =
+            (unionArrays(entryVal[secretKey] as unknown[], []) as string[] | undefined)?.filter(
               Boolean,
-            ) ?? entry[secretKey];
+            ) ?? entryVal[secretKey];
         }
       }
     }
   }
 
-  if (isPlainObject(merged.plugins)) {
-    for (const pluginVal of Object.values(merged.plugins as Record<string, unknown>)) {
+  if (isPlainObject(mergedRecord.plugins)) {
+    for (const pluginVal of Object.values(mergedRecord.plugins as Record<string, unknown>)) {
       if (!isPlainObject(pluginVal)) continue;
-      const plugin = pluginVal as Record<string, unknown>;
       for (const secretKey of ARRAY_UNION_KEYS) {
-        if (Array.isArray(plugin[secretKey])) {
-          plugin[secretKey] =
-            (unionArrays(plugin[secretKey] as unknown[], []) as string[] | undefined)?.filter(
+        if (Array.isArray(pluginVal[secretKey])) {
+          pluginVal[secretKey] =
+            (unionArrays(pluginVal[secretKey] as unknown[], []) as string[] | undefined)?.filter(
               Boolean,
-            ) ?? plugin[secretKey];
+            ) ?? pluginVal[secretKey];
         }
       }
     }
   }
 
-  return rebuildOrderedConfig(merged);
+  return rebuildOrderedConfig(mergedRecord) as BosConfigInput;
 }
 
 export function mergeBosConfigWithTemplate(
-  local: Record<string, unknown>,
-  template: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged = mergeJsonValuesPreservingLocalOrder(local, template) as Record<string, unknown>;
-  return rebuildOrderedConfig(merged);
+  local: BosConfigInput,
+  template: BosConfigInput,
+): BosConfigInput {
+  const merged = mergeJsonValuesPreservingLocalOrder(local, template) as BosConfigInput;
+  return rebuildOrderedConfig(merged as Record<string, unknown>) as BosConfigInput;
 }
 
 function mergeJsonValuesPreservingLocalOrder(local: unknown, template: unknown): unknown {
@@ -174,7 +177,7 @@ function mergeJsonValuesPreservingLocalOrder(local: unknown, template: unknown):
   return local ?? template;
 }
 
-export function rebuildOrderedConfig(config: Record<string, unknown>): Record<string, unknown> {
+export function rebuildOrderedConfig<T extends Record<string, unknown>>(config: T): T {
   const ordered: Record<string, unknown> = {};
 
   for (const key of BOS_CONFIG_ORDER) {
@@ -189,7 +192,7 @@ export function rebuildOrderedConfig(config: Record<string, unknown>): Record<st
     }
   }
 
-  return ordered;
+  return ordered as T;
 }
 
 export { bosConfigMerger };

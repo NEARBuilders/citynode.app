@@ -1,0 +1,10 @@
+{
+  "extends": "../../bos.config.json",
+  "app": {
+    "api": {
+      "name": "projects",
+      "development": "local:.",
+      "secrets": ["PROJECTS_DATABASE_URL"]
+    }
+  }
+}
