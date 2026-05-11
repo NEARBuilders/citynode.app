@@ -11,6 +11,8 @@
 
 </div>
 
+<img src="ui/public/bos.png" alt="everything.dev" width="380" />
+
 Runtime apps that compose, verify, and evolve without rebuilding — built on [Module Federation](https://module-federation.io/), [every-plugin](https://plugin.everything.dev/), and [NEAR Protocol](https://near.dev/).
 
 A published `bos.config.json` defines how host, UI, and API load together. Changing the config changes the composition. No rebuild needed. The configuration lives on-chain — inspectable, verifiable, and extendable by anyone.
@@ -20,8 +22,14 @@ Built with [Tanstack Start](https://tanstack.com/start/latest/docs/framework/rea
 ## Quick Start
 
 ```bash
+bunx everything-dev@latest init
+```
+
+<img src="ui/public/bos.png" alt="everything.dev" width="380" />
+
+```bash
 bun install             # Install dependencies
-bos dev --host remote   # Start development (typical workflow)
+bun run dev             # Start development (typical workflow)
 ```
 
 This will start serving the UI, the API, and mounting it on a universally shared (remote) HOST application's build.
