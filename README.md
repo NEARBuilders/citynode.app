@@ -7,11 +7,9 @@
 
 <h1 style="font-size: 4.25rem; font-weight: 800; line-height: 1; margin: 0;">everything.dev</h1>
 
-<img src="ui/src/assets/under-construction.gif" alt="Under construction" width="380" />
+<img src="ui/public/bos.png" alt="everything.dev" width="380" />
 
 </div>
-
-<img src="ui/public/bos.png" alt="everything.dev" width="380" />
 
 Runtime apps that compose, verify, and evolve without rebuilding — built on [Module Federation](https://module-federation.io/), [every-plugin](https://plugin.everything.dev/), and [NEAR Protocol](https://near.dev/).
 
@@ -25,27 +23,13 @@ Built with [Tanstack Start](https://tanstack.com/start/latest/docs/framework/rea
 bunx everything-dev@latest init
 ```
 
-<img src="ui/public/bos.png" alt="everything.dev" width="380" />
-
-```bash
-bun install             # Install dependencies
-bun run dev             # Start development (typical workflow)
-```
-
-This will start serving the UI, the API, and mounting it on a universally shared (remote) HOST application's build.
-
-- Host: http://localhost:3000
-- API: http://localhost:3000/api
-
-This maintains a flexible, well-typed architecture that connects the entirity of the application, it's operating system, and a cli to interact with it. It is a perpetually in-development model for the [Blockchain Operating System (BOS)](https://near.social/#/)
-
 ## Why
 
-Agents can now build software. But 45% of AI-generated code fails security tests — a rate flat for two years across 150+ models. The JavaScript supply chain saw a 15.3x increase in malicious packages. $1.46B was stolen via runtime JavaScript injection at Bybit. Only 2.8% of scripts on the median web page have integrity protection.
+Agents can build software. They cannot inherit. Every new project starts from zero — auth, routing, database, deployment regenerated from scratch by tools with no memory of what worked yesterday. 45% of AI-generated code fails security tests, a rate flat for two years across 150+ models. The boilerplate is not being maintained. It is being rewritten, badly, on every run.
 
-Build-time bundles have no compositional integrity. You cannot verify what is running matches what was published. You cannot swap a component without redeploying everything. You cannot prove provenance.
+Build-time bundles compound the problem. The artifact is sealed. You cannot inspect what is running. You cannot swap a component without redeploying everything. You cannot prove what the agent built matches what is deployed. Next.js, Vite, plain Rspack — every build-time framework hits the same ceiling.
 
-everything.dev is a composition protocol, not a framework. The `bos.config.json` is a verifiable manifest. every-plugin provides typed contracts for composable APIs. The registry discovers published runtimes on-chain. `extends` and `bos://` let any app compose from any other. better-near-auth gives cryptographic identity and verifiable on-chain actions. Integrity hashes prove what loads matches what was published.
+everything.dev is a composition protocol, not a framework. The `bos.config.json` is a verifiable manifest. every-plugin provides typed contracts for composable APIs across Module Federation boundaries. The registry discovers published runtimes on-chain. `extends` and `bos://` let any app compose from any other. better-near-auth gives cryptographic identity and verifiable on-chain actions. Integrity hashes prove what loads matches what was published.
 
 **Runtime apps that compose, verify, and evolve without rebuilding.**
 
