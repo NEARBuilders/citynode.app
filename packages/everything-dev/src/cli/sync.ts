@@ -235,7 +235,7 @@ export function mergePackageJson(
     "devDependencies",
     "peerDependencies",
     "overrides",
-    ] as const) {
+  ] as const) {
     const localDeps = local[depField] as Record<string, string> | undefined;
     const templateDeps = template[depField] as Record<string, string> | undefined;
 

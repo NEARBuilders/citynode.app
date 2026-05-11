@@ -5,7 +5,10 @@ function stripVersionPrefix(version: string): string {
   return version.replace(/^[\^~>=]+/, "");
 }
 
-export function readRootCatalogVersion(projectDir: string, packageName: string): string | undefined {
+export function readRootCatalogVersion(
+  projectDir: string,
+  packageName: string,
+): string | undefined {
   const pkgPath = join(projectDir, "package.json");
   if (!existsSync(pkgPath)) return undefined;
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
@@ -15,7 +18,10 @@ export function readRootCatalogVersion(projectDir: string, packageName: string):
   return version ? stripVersionPrefix(version) : undefined;
 }
 
-export function readNodeModulesVersion(projectDir: string, packageName: string): string | undefined {
+export function readNodeModulesVersion(
+  projectDir: string,
+  packageName: string,
+): string | undefined {
   const pkgPath = join(projectDir, "node_modules", packageName, "package.json");
   if (!existsSync(pkgPath)) return undefined;
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version?: string };
@@ -34,11 +40,17 @@ export function readInstalledFrameworkVersion(
   const version = deps[packageName] || devDeps[packageName];
 
   if (!version) {
-    return readRootCatalogVersion(projectDir, packageName) ?? readNodeModulesVersion(projectDir, packageName);
+    return (
+      readRootCatalogVersion(projectDir, packageName) ??
+      readNodeModulesVersion(projectDir, packageName)
+    );
   }
 
   if (version.startsWith("catalog:")) {
-    return readRootCatalogVersion(projectDir, packageName) ?? readNodeModulesVersion(projectDir, packageName);
+    return (
+      readRootCatalogVersion(projectDir, packageName) ??
+      readNodeModulesVersion(projectDir, packageName)
+    );
   }
 
   if (version.startsWith("workspace:") || version.startsWith("file:")) {
