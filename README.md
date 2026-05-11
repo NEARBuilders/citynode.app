@@ -25,11 +25,12 @@ bunx everything-dev@latest init
 
 ## Why
 
-Agents can build software. They cannot inherit. Every new project starts from zero — auth, routing, database, deployment regenerated from scratch by tools with no memory of what worked yesterday. 45% of AI-generated code fails security tests, a rate flat for two years across 150+ models. The boilerplate is not being maintained. It is being rewritten, badly, on every run.
+Two main reasons:
 
-Build-time bundles compound the problem. The artifact is sealed. You cannot inspect what is running. You cannot swap a component without redeploying everything. You cannot prove what the agent built matches what is deployed. Next.js, Vite, plain Rspack — every build-time framework hits the same ceiling.
+1. I'm tired of constantly maintaining similiar logic and infrasturcture across multiple projects
+2. While agents are good at creating prototypes, vibe coding typically comes with security issues. This framework provides a type-safe starting point, extended from production ready code, with an incredibly simple deployment flow (publish a JSON and restart a Docker image)
 
-everything.dev is a composition protocol, not a framework. The `bos.config.json` is a verifiable manifest. every-plugin provides typed contracts for composable APIs across Module Federation boundaries. The registry discovers published runtimes on-chain. `extends` and `bos://` let any app compose from any other. better-near-auth gives cryptographic identity and verifiable on-chain actions. Integrity hashes prove what loads matches what was published.
+And when solutions are optimized to solve these two problems, a bi-product is more creativity and possibility, in the era of generative interfaces.
 
 **Runtime apps that compose, verify, and evolve without rebuilding.**
 
