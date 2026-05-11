@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getAppName } from "@/app";
+import { getRuntimeConfig } from "@/app";
 import { useClientValue } from "@/hooks/use-client";
 
 export const Route = createFileRoute("/_layout/_authenticated/_admin/dashboard")({
@@ -7,7 +7,14 @@ export const Route = createFileRoute("/_layout/_authenticated/_admin/dashboard")
 });
 
 function AdminDashboard() {
-  const appName = useClientValue(() => getAppName(), "app");
+  const appName = useClientValue(() => {
+    try {
+      const runtimeConfig = getRuntimeConfig();
+      return runtimeConfig.runtime?.title ?? runtimeConfig.account ?? "app";
+    } catch {
+      return "app";
+    }
+  }, "app");
 
   return (
     <div className="space-y-6">

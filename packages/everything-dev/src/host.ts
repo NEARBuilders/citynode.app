@@ -37,6 +37,7 @@ function buildClientRuntimeConfig(runtimeConfig: RuntimeConfig): ClientRuntimeCo
     apiBase: "/api",
     rpcBase: "/api/rpc",
     authAvailable: !!runtimeConfig.auth,
+    repository: runtimeConfig.repository,
     ui: runtimeConfig.ui
       ? {
           name: runtimeConfig.ui.name,

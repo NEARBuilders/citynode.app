@@ -53,6 +53,16 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(false);
   });
 
+  it("keeps ui build scripts direct", async () => {
+    const pkg = JSON.parse(readFileSync(join(testDir, "ui", "package.json"), "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(pkg.scripts?.["build:client"]).toBe("BUILD_TARGET=client rsbuild build");
+    expect(pkg.scripts?.["generate-metadata"]).toBeUndefined();
+    expect(existsSync(join(testDir, "ui", "scripts", "generate-metadata.ts"))).toBe(false);
+  });
+
   it("personalizes bos.config.json", async () => {
     await personalizeConfig(testDir, {
       extendsAccount: "dev.everything.near",
@@ -124,7 +134,9 @@ describe("bos init — structure", () => {
         workspaceOpts: { sourceDir: REPO_ROOT },
         withHost: true,
       });
-      const hostPkg = JSON.parse(readFileSync(join(hostTestDir, "host", "package.json"), "utf-8")) as {
+      const hostPkg = JSON.parse(
+        readFileSync(join(hostTestDir, "host", "package.json"), "utf-8"),
+      ) as {
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
       };

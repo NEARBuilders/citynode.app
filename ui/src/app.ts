@@ -21,10 +21,10 @@
  *                        handoff. Root boundary between host-rendered
  *                        document and the UI application.
  *
- *   app.ts            — This file. Re-exports runtime helpers from
- *                        everything-dev/ui/runtime and public client surfaces
- *                        from ./lib/api and ./lib/auth. Also re-exports
- *                        router-facing public types.
+ *   app.ts            — This file. Re-exports the minimal shared runtime
+ *                        helpers plus public client surfaces from ./lib/api
+ *                        and ./lib/auth. Also re-exports router-facing
+ *                        public types.
  *
  * Boundary rule: The host loads UI remotely via Module Federation and
  * provides runtime config + auth/API routing. Work within the typed
@@ -38,31 +38,10 @@ import {
   buildPublishedAccountHref,
   buildPublishedGatewayHref,
   buildRuntimeHref,
-  getAccount,
-  getActiveRuntime,
-  getApiBaseUrl,
-  getAssetsUrl,
-  getHostUrl,
-  getNetworkId,
-  getRepository,
-  getRuntimeBasePath,
   getRuntimeConfig,
 } from "everything-dev/ui/runtime";
 
-export {
-  buildPublishedAccountHref,
-  buildPublishedGatewayHref,
-  buildRuntimeHref,
-  getAccount,
-  getActiveRuntime,
-  getApiBaseUrl,
-  getAssetsUrl,
-  getHostUrl,
-  getNetworkId,
-  getRepository,
-  getRuntimeBasePath,
-  getRuntimeConfig,
-};
+export { buildPublishedAccountHref, buildPublishedGatewayHref, buildRuntimeHref, getRuntimeConfig };
 
 import type { ApiClient } from "./lib/api";
 import type { AuthClient as AuthClientType } from "./lib/auth";
@@ -70,11 +49,7 @@ import type { AuthClient as AuthClientType } from "./lib/auth";
 export type { ApiClient } from "./lib/api";
 export { createApiClient, useApiClient } from "./lib/api";
 export type { AuthClient, Organization, Passkey, SessionData } from "./lib/auth";
-export { createAuthClient, sessionQueryOptions, useAuthClient } from "./lib/auth";
-
-export function getAppName(config?: Parameters<typeof getAccount>[0]): string {
-  return getActiveRuntime(config)?.title ?? getAccount(config);
-}
+export { createAuthClient, sessionQueryOptions, useAuthClient, useRelayHistory } from "./lib/auth";
 
 import type {
   CreateRouterOptions as BaseCreateRouterOptions,

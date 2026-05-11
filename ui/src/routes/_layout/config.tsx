@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getActiveRuntime } from "@/app";
 import { Card, CardContent, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components";
 import { Route as RootRoute } from "../__root";
 
@@ -18,7 +17,7 @@ export const Route = createFileRoute("/_layout/config")({
 
 function ConfigPage() {
   const { runtimeConfig } = RootRoute.useLoaderData();
-  const activeRuntime = getActiveRuntime(runtimeConfig);
+  const activeRuntime = runtimeConfig?.runtime;
   const contextualConfig = runtimeConfig ?? null;
   const defaultTab = "runtime-context";
 

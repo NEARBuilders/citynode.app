@@ -19,6 +19,37 @@ import {
 } from "./init";
 import { readSnapshot, writeSnapshot } from "./snapshot";
 
+const FRAMEWORK_OWNED_SYNC_FILES = new Set([
+  ".gitignore",
+  "biome.json",
+  "bos.config.json",
+  "package.json",
+  ".github/workflows/release-sync.yml",
+  "ui/package.json",
+  "ui/postcss.config.mjs",
+  "ui/rsbuild.config.ts",
+  "ui/tsconfig.json",
+  "ui/src/app.ts",
+  "ui/src/hydrate.tsx",
+  "ui/src/lib/api.ts",
+  "ui/src/lib/auth.ts",
+  "ui/src/router.server.tsx",
+  "ui/src/router.tsx",
+  "ui/src/routes/__root.tsx",
+  "api/package.json",
+  "api/plugin.dev.ts",
+  "api/rspack.config.js",
+  "api/tsconfig.contract.json",
+  "api/tsconfig.json",
+  "api/src/lib/auth.ts",
+]);
+
+type PackageJson = Record<string, unknown>;
+
+export function isFrameworkOwnedSyncFile(filePath: string): boolean {
+  return FRAMEWORK_OWNED_SYNC_FILES.has(filePath);
+}
+
 function readExcludeFile(filePath: string): string[] {
   if (!existsSync(filePath)) return [];
   const content = readFileSync(filePath, "utf-8");
@@ -152,43 +183,125 @@ function mergeBosConfig(
   return merged;
 }
 
-function mergePackageJson(
-  local: Record<string, unknown>,
-  template: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged = { ...template };
+function mergeStringMaps(
+  local: Record<string, string> | undefined,
+  template: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!local && !template) return undefined;
+
+  const merged: Record<string, string> = { ...(local ?? {}) };
+  for (const [name, value] of Object.entries(template ?? {})) {
+    merged[name] = value;
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function mergeWorkspacePackages(local: unknown, template: unknown): string[] | undefined {
+  const localPackages = Array.isArray(local) ? local : [];
+  const templatePackages = Array.isArray(template) ? template : [];
+  if (localPackages.length === 0 && templatePackages.length === 0) return undefined;
+
+  const ordered = new Set<string>();
+  for (const entry of templatePackages) {
+    if (typeof entry === "string" && entry.length > 0) ordered.add(entry);
+  }
+  for (const entry of localPackages) {
+    if (typeof entry === "string" && entry.length > 0) ordered.add(entry);
+  }
+
+  return ordered.size > 0 ? [...ordered] : undefined;
+}
+
+export function mergePackageJson(
+  filePath: string,
+  local: PackageJson,
+  template: PackageJson,
+): PackageJson {
+  const merged: PackageJson = { ...local, ...template };
+
+  if (filePath === "package.json") {
+    for (const key of ["name", "private", "version"] as const) {
+      if (key in local) {
+        merged[key] = local[key];
+      }
+    }
+  } else if ("version" in local) {
+    merged.version = local.version;
+  }
 
   for (const depField of [
     "dependencies",
     "devDependencies",
     "peerDependencies",
     "overrides",
-  ] as const) {
+    ] as const) {
     const localDeps = local[depField] as Record<string, string> | undefined;
     const templateDeps = template[depField] as Record<string, string> | undefined;
 
-    if (!localDeps && !templateDeps) continue;
-
-    const mergedDeps: Record<string, string> = { ...(templateDeps ?? {}) };
-
-    if (localDeps) {
-      for (const [name, version] of Object.entries(localDeps)) {
-        if (!(name in mergedDeps)) {
-          mergedDeps[name] = version;
-        }
-      }
-    }
-
-    if (Object.keys(mergedDeps).length > 0) {
+    const mergedDeps = mergeStringMaps(localDeps, templateDeps);
+    if (mergedDeps) {
       merged[depField] = mergedDeps;
+    } else {
+      delete merged[depField];
     }
   }
 
-  if (local.scripts && typeof local.scripts === "object") {
-    merged.scripts = {
-      ...((template.scripts as Record<string, string>) ?? {}),
-      ...(local.scripts as Record<string, string>),
+  if (
+    (local.scripts && typeof local.scripts === "object") ||
+    (template.scripts && typeof template.scripts === "object")
+  ) {
+    const mergedScripts = mergeStringMaps(
+      local.scripts as Record<string, string> | undefined,
+      template.scripts as Record<string, string> | undefined,
+    );
+    if (mergedScripts) {
+      merged.scripts = mergedScripts;
+    } else {
+      delete merged.scripts;
+    }
+  }
+
+  if (
+    (local.workspaces && typeof local.workspaces === "object") ||
+    (template.workspaces && typeof template.workspaces === "object")
+  ) {
+    const localWorkspaces = (local.workspaces ?? {}) as {
+      packages?: string[];
+      catalog?: Record<string, string>;
     };
+    const templateWorkspaces = (template.workspaces ?? {}) as {
+      packages?: string[];
+      catalog?: Record<string, string>;
+    };
+
+    const mergedWorkspaces: { packages?: string[]; catalog?: Record<string, string> } = {
+      ...localWorkspaces,
+      ...templateWorkspaces,
+    };
+
+    const mergedPackages = mergeWorkspacePackages(
+      localWorkspaces.packages,
+      templateWorkspaces.packages,
+    );
+    if (mergedPackages) {
+      mergedWorkspaces.packages = mergedPackages;
+    } else {
+      delete mergedWorkspaces.packages;
+    }
+
+    const mergedCatalog = mergeStringMaps(localWorkspaces.catalog, templateWorkspaces.catalog);
+    if (mergedCatalog) {
+      mergedWorkspaces.catalog = mergedCatalog;
+    } else {
+      delete mergedWorkspaces.catalog;
+    }
+
+    if (Object.keys(mergedWorkspaces).length > 0) {
+      merged.workspaces = mergedWorkspaces;
+    } else {
+      delete merged.workspaces;
+    }
   }
 
   return merged;
@@ -228,7 +341,7 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
     if (localContent) {
       const local = JSON.parse(localContent) as Record<string, unknown>;
       const template = JSON.parse(templateContent) as Record<string, unknown>;
-      const merged = mergePackageJson(local, template);
+      const merged = mergePackageJson(destPath, local, template);
       writeFileSync(dest, `${JSON.stringify(merged, null, 2)}\n`);
       return;
     }
@@ -355,7 +468,8 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
     for (const filePath of filteredFiles) {
       const destPath = toDestPath(filePath);
-      if (isExcluded(destPath, excludePatterns)) continue;
+      const frameworkOwned = isFrameworkOwnedSyncFile(destPath);
+      if (isExcluded(destPath, excludePatterns) && !frameworkOwned) continue;
 
       const localHash = computeLocalHash(projectDir, destPath);
       const sourceContent = readFileSync(join(sourceDir, filePath));
@@ -367,6 +481,11 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       }
 
       if (localHash === sourceHash) continue;
+
+      if (frameworkOwned) {
+        updated.push(destPath);
+        continue;
+      }
 
       const snapshotHash = snapshot?.files[destPath];
 
@@ -395,7 +514,9 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       };
     }
 
-    const filesToWrite = [...updated, ...added].filter((f) => !isExcluded(f, excludePatterns));
+    const filesToWrite = [...updated, ...added].filter(
+      (f) => isFrameworkOwnedSyncFile(f) || !isExcluded(f, excludePatterns),
+    );
 
     const destToSource = new Map<string, string>();
     for (const filePath of filteredFiles) {

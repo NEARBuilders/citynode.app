@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { Building2, FolderKanban, Globe, Home, Settings } from "lucide-react";
-import { getAppName, sessionQueryOptions } from "@/app";
+import { getRuntimeConfig, sessionQueryOptions } from "@/app";
 import builtOn from "@/assets/built_on.png";
 import builtOnRev from "@/assets/built_on_rev.png";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,7 +34,14 @@ const authenticatedSidebarItems = [
 
 function Layout() {
   const pathname = useClientValue(() => window.location.pathname, "/");
-  const appName = useClientValue(() => getAppName(), "app");
+  const appName = useClientValue(() => {
+    try {
+      const runtimeConfig = getRuntimeConfig();
+      return runtimeConfig.runtime?.title ?? runtimeConfig.account ?? "app";
+    } catch {
+      return "app";
+    }
+  }, "app");
   const { session } = Route.useRouteContext();
   const isAuthenticated = !!session?.user;
 

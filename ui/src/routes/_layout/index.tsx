@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { buildRuntimeHref, getActiveRuntime, getAppName } from "@/app";
+import { buildRuntimeHref } from "@/app";
 import { Button } from "@/components";
 import { Route as RootRoute } from "../__root";
 
@@ -31,9 +31,9 @@ const subtitles = [
 
 function Landing() {
   const { runtimeConfig } = RootRoute.useLoaderData();
-  const appName = getAppName(runtimeConfig);
+  const appName = runtimeConfig?.runtime?.title ?? runtimeConfig?.account ?? "every.near";
   const [subtitleIndex, setSubtitleIndex] = useState(0);
-  const activeRuntime = getActiveRuntime(runtimeConfig);
+  const activeRuntime = runtimeConfig?.runtime;
   const runtimeLabel = activeRuntime
     ? `${activeRuntime.accountId} / ${activeRuntime.gatewayId}`
     : runtimeConfig?.account

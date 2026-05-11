@@ -68,6 +68,7 @@ for (const scenario of scenarios) {
       expect(response.status).toBe(200);
       expect(html).toContain("window.__RUNTIME_CONFIG__");
       expect(html).toContain("remoteEntry.js");
+      expect(html).toContain('"repository"');
 
       if (scenario.ssr) {
         expect(html).toContain('<div id="root">');

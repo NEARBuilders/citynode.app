@@ -42,6 +42,7 @@ export function buildTestClientRuntimeConfig(config: RuntimeConfig): Partial<Cli
     assetsUrl: config.ui.url,
     apiBase: "/api",
     rpcBase: "/api/rpc",
+    repository: config.repository,
     ui: {
       name: config.ui.name,
       url: config.ui.url,

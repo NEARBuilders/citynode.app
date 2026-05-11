@@ -85,7 +85,7 @@ for (const scenario of scenarios) {
       const state = await page.evaluate(() => {
         const runtimeConfig = (
           window as Window & {
-            __RUNTIME_CONFIG__?: { apiBase?: string; rpcBase?: string };
+            __RUNTIME_CONFIG__?: { apiBase?: string; rpcBase?: string; repository?: string };
           }
         ).__RUNTIME_CONFIG__;
 
@@ -97,6 +97,7 @@ for (const scenario of scenarios) {
           hasRuntimeConfig: Boolean(runtimeConfig),
           apiBase: runtimeConfig?.apiBase,
           rpcBase: runtimeConfig?.rpcBase,
+          repository: runtimeConfig?.repository,
           hasRoot: Boolean(root),
           childCount: root?.childElementCount ?? 0,
           hasRemoteEntry: Boolean(remoteEntry),
@@ -108,6 +109,7 @@ for (const scenario of scenarios) {
         hasRuntimeConfig: true,
         apiBase: "/api",
         rpcBase: "/api/rpc",
+        repository: expect.any(String),
         hasRoot: true,
         hasRemoteEntry: true,
         hasManifest: true,

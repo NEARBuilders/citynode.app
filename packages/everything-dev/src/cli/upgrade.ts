@@ -7,6 +7,25 @@ import { runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
+const LEGACY_UI_IMPORT_REWRITES = [
+  ['from "@/auth"', 'from "@/app"'],
+  ["from '@/auth'", "from '@/app'"],
+  ['from "@/lib/use-api-client"', 'from "@/app"'],
+  ["from '@/lib/use-api-client'", "from '@/app'"],
+  ['from "@/lib/api-client"', 'from "@/app"'],
+  ["from '@/lib/api-client'", "from '@/app'"],
+] as const;
+const OBSOLETE_FILES = [
+  "ui/src/auth.ts",
+  "ui/src/auth-types.gen.ts",
+  "ui/src/lib/api-client.ts",
+  "ui/src/lib/use-api-client.ts",
+  "ui/src/api-contract.ts",
+  "ui/src/api-contract.gen.ts",
+  "ui/src/lib/auth-client.ts",
+  "ui/src/lib/session.ts",
+  "ui/scripts/generate-metadata.ts",
+];
 
 interface NpmPackageInfo {
   version: string;
@@ -140,6 +159,33 @@ function buildChangelogUrl(
   return `https://github.com/${owner}/${repo}/compare/v${oldVersion}...v${newVersion}`;
 }
 
+async function rewriteLegacyUiImports(projectDir: string): Promise<string[]> {
+  const files = await glob("ui/src/**/*.{ts,tsx}", {
+    cwd: projectDir,
+    nodir: true,
+    dot: false,
+    absolute: false,
+  });
+  const migrated: string[] = [];
+
+  for (const file of files) {
+    const filePath = join(projectDir, file);
+    const original = readFileSync(filePath, "utf-8");
+    let next = original;
+
+    for (const [from, to] of LEGACY_UI_IMPORT_REWRITES) {
+      next = next.replaceAll(from, to);
+    }
+
+    if (next !== original) {
+      writeFileSync(filePath, next);
+      migrated.push(file);
+    }
+  }
+
+  return migrated;
+}
+
 export async function upgradeTemplate(
   projectDir: string,
   options: UpgradeOptions,
@@ -221,9 +267,8 @@ export async function upgradeTemplate(
     });
   }
 
-  const migratedFiles: string[] = [];
-  const obsoleteFiles = ["ui/src/lib/auth-client.ts", "ui/src/lib/session.ts"];
-  for (const file of obsoleteFiles) {
+  const migratedFiles = await rewriteLegacyUiImports(projectDir);
+  for (const file of OBSOLETE_FILES) {
     const filePath = join(projectDir, file);
     if (existsSync(filePath)) {
       rmSync(filePath);

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getActiveRuntime, getAppName, useApiClient } from "@/app";
+import { useApiClient } from "@/app";
 import { Badge, Card, CardContent, UnderConstruction } from "@/components";
 import { Route as RootRoute } from "../__root";
 
@@ -21,8 +21,8 @@ export const Route = createFileRoute("/_layout/about")({
 function About() {
   const apiClient = useApiClient();
   const { runtimeConfig } = RootRoute.useLoaderData();
-  const appName = getAppName(runtimeConfig);
-  const activeRuntime = getActiveRuntime(runtimeConfig);
+  const appName = runtimeConfig?.runtime?.title ?? runtimeConfig?.account ?? "every.near";
+  const activeRuntime = runtimeConfig?.runtime;
   const registryAccountId = activeRuntime?.accountId ?? "every.near";
   const registryGatewayId = activeRuntime?.gatewayId ?? "everything.dev";
   const configQuery = useQuery({
