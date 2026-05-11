@@ -86,6 +86,14 @@ On page refresh:
 
 This means a new deployment requires a host restart to pick up new URLs.
 
+### Resolved Config (`.bos/bos.resolved-config.json`)
+
+`bos dev` and `bos build` write the fully-merged config to `.bos/bos.resolved-config.json` (gitignored). This file includes `_resolved` metadata with env, timestamp, and extends chain.
+
+**`bos.config.json` is NOT modified during dev.** Only `bos publish --deploy`, `bos plugin publish/add/remove`, and `bos sync` write to `bos.config.json`.
+
+Build configs (rsbuild/rspack) read from `.bos/bos.resolved-config.json` first, falling back to `bos.config.json`. This allows slim child configs with `extends` to work correctly — the merged parent+child config is what the build sees.
+
 ## Debugging
 
 ```bash

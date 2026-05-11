@@ -27,6 +27,7 @@ import {
   getProjectRoot,
   loadConfig,
   resolveLocalDevelopmentPath,
+  writeResolvedConfig,
 } from "./config";
 import {
   type BosConfigResult,
@@ -58,6 +59,7 @@ import {
   parsePluginBosUrl,
 } from "./fastkv";
 import { computeSriHashForUrl } from "./integrity";
+import { type BosEnv } from "./merge";
 import { addFunctionCallAccessKey, ensureNearCli, executeTransaction } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { createPlugin, z } from "./sdk";
@@ -69,6 +71,7 @@ import {
 import { syncAndGenerateSharedUi } from "./shared";
 import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
+import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
 
 function ensureEnvFile(configDir: string, opts?: { domain?: string }): void {
@@ -229,18 +232,6 @@ function pluginLocalPath(configDir: string, attachment: PluginAttachmentConfig):
   }
 
   return join(configDir, source.slice("local:".length));
-}
-
-async function saveBosConfig(configDir: string, config: BosConfig): Promise<void> {
-  const filePath = join(configDir, "bos.config.json");
-  const next = `${JSON.stringify(config, null, 2)}\n`;
-  try {
-    if (readFileSync(filePath, "utf8") === next) return;
-  } catch {
-    // file does not exist yet
-  }
-
-  writeFileSync(filePath, next);
 }
 
 function listPluginAttachments(config: BosConfig | null) {
@@ -417,6 +408,7 @@ async function buildWorkspaceTargets(opts: {
     configDir: opts.configDir,
     hostMode: "local",
     bosConfig: opts.bosConfig ?? undefined,
+    extendsChain: [],
   });
   if (sharedSync.catalogChanged) {
     await run("bun", ["install"], { cwd: opts.configDir });
@@ -826,6 +818,7 @@ export default createPlugin({
         configDir: deps.configDir,
         hostMode: hostSource,
         bosConfig: deps.bosConfig ?? undefined,
+        extendsChain: [],
       });
       if (sharedSync.catalogChanged) {
         await run("bun", ["install"], { cwd: deps.configDir });
@@ -842,6 +835,15 @@ export default createPlugin({
       const refreshed = await loadConfig({ cwd: deps.configDir });
       deps.bosConfig = refreshed?.config ?? deps.bosConfig;
       deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
+
+      if (deps.bosConfig) {
+        writeResolvedConfig(
+          deps.configDir,
+          deps.bosConfig,
+          "development",
+          refreshed?.source.extended,
+        );
+      }
 
       if (!deps.bosConfig) {
         return {
@@ -1073,6 +1075,10 @@ export default createPlugin({
         };
       }
 
+      const buildEnv: BosEnv = input.deploy ? "production" : "development";
+
+      writeResolvedConfig(deps.configDir, deps.bosConfig, buildEnv);
+
       const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
       if (targets.length === 0) {
         return {
@@ -1087,7 +1093,7 @@ export default createPlugin({
         apiSource: deps.bosConfig.app.api?.development ? "local" : "remote",
         authSource: deps.bosConfig.app.auth?.development ? "local" : "remote",
         hostSource: deps.bosConfig.app.host?.development ? "local" : "remote",
-        env: "development",
+        env: buildEnv,
         plugins: deps.runtimeConfig?.plugins,
       });
 

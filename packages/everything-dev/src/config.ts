@@ -1,12 +1,27 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fetchBosConfigFromFastKv } from "./fastkv";
+import {
+  type BosEnv,
+  isPlainObject,
+  mergeBosConfigWithExtends,
+  type ResolvedConfigMeta,
+  rebuildOrderedConfig,
+  resolveExtendsRef,
+} from "./merge";
 import { getNetworkIdForAccount } from "./network";
-import type { BosConfig, BosConfigInput, RuntimeConfig, RuntimePluginConfig } from "./types";
+import type {
+  BosConfig,
+  BosConfigInput,
+  ExtendsConfig,
+  RuntimeConfig,
+  RuntimePluginConfig,
+} from "./types";
 import { BosConfigSchema } from "./types";
 
 const LOCAL_PREFIX = "local:";
 const DEFAULT_HOST_PORT = 3000;
+const RESOLVED_CONFIG_FILENAME = "bos.resolved-config.json";
 
 interface RuntimeTarget {
   source: "local" | "remote";
@@ -59,7 +74,7 @@ export interface ConfigResult {
 export async function loadConfig(options?: {
   cwd?: string;
   path?: string;
-  env?: "development" | "production";
+  env?: BosEnv;
 }): Promise<ConfigResult | null> {
   const configPath = options?.path ?? findConfigPath(options?.cwd);
   if (!configPath) {
@@ -68,21 +83,25 @@ export async function loadConfig(options?: {
   }
 
   const baseDir = dirname(configPath);
+  const env = options?.env ?? "development";
+  const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
 
   try {
     const extendedChain: string[] = [];
-    const parsed = await resolveConfigWithExtends(configPath, baseDir, new Set(), extendedChain);
+    const parsed = await resolveConfigWithExtends(
+      configPath,
+      baseDir,
+      new Set(),
+      extendedChain,
+      env,
+    );
     const config = BosConfigSchema.parse(parsed);
 
     cachedConfig = config;
     projectRoot = baseDir;
 
-    const pluginRuntime = await resolveRuntimePlugins(
-      config.plugins ?? {},
-      baseDir,
-      options?.env ?? "development",
-    );
-    const runtime = buildRuntimeConfig(config, baseDir, options?.env ?? "development", {
+    const pluginRuntime = await resolveRuntimePlugins(config.plugins ?? {}, baseDir, runtimeEnv);
+    const runtime = buildRuntimeConfig(config, baseDir, runtimeEnv, {
       plugins: pluginRuntime,
     });
 
@@ -103,7 +122,7 @@ export async function loadConfig(options?: {
 export async function loadBosConfig(options?: {
   cwd?: string;
   path?: string;
-  env?: "development" | "production";
+  env?: BosEnv;
 }): Promise<RuntimeConfig> {
   const result = await loadConfig(options);
   if (!result) {
@@ -116,10 +135,79 @@ export async function loadBosConfig(options?: {
 export async function buildRuntimePluginsForConfig(
   config: BosConfig,
   baseDir: string,
-  env: "development" | "production",
+  env: BosEnv,
 ): Promise<Record<string, RuntimePluginConfig> | undefined> {
   const plugins = await resolveRuntimePlugins(config.plugins ?? {}, baseDir, env);
   return Object.keys(plugins).length > 0 ? plugins : undefined;
+}
+
+export function getResolvedConfigPath(configDir: string): string {
+  return join(configDir, ".bos", RESOLVED_CONFIG_FILENAME);
+}
+
+export function loadResolvedConfig(configDir: string): BosConfig | null {
+  const resolvedPath = getResolvedConfigPath(configDir);
+  if (!existsSync(resolvedPath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(resolvedPath, "utf-8")) as Record<string, unknown>;
+    const { _resolved, ...configData } = raw;
+    return BosConfigSchema.parse(configData);
+  } catch {
+    return null;
+  }
+}
+
+export function writeResolvedConfig(
+  configDir: string,
+  config: BosConfig,
+  env: BosEnv,
+  extendsChain?: string[],
+  source?: string,
+): void {
+  const resolvedPath = getResolvedConfigPath(configDir);
+  const resolvedDir = dirname(resolvedPath);
+  if (!existsSync(resolvedDir)) {
+    mkdirSync(resolvedDir, { recursive: true });
+  }
+
+  const ordered = rebuildOrderedConfig(config as Record<string, unknown>);
+  const meta: ResolvedConfigMeta = {
+    env,
+    resolvedAt: new Date().toISOString(),
+    extendsChain: extendsChain ?? [],
+    ...(source ? { source } : {}),
+  };
+  const output = {
+    _resolved: meta,
+    ...ordered,
+  };
+
+  const content = `${JSON.stringify(output, null, 2)}\n`;
+  try {
+    if (readFileSync(resolvedPath, "utf-8") === content) return;
+  } catch {
+    // file doesn't exist yet
+  }
+  writeFileSync(resolvedPath, content);
+}
+
+export function resolveBosConfigPath(configDir: string): string {
+  const resolvedPath = getResolvedConfigPath(configDir);
+  if (existsSync(resolvedPath)) return resolvedPath;
+  return join(configDir, "bos.config.json");
+}
+
+export function readBosConfigForBuild(configDir: string): Record<string, unknown> {
+  const resolvedPath = getResolvedConfigPath(configDir);
+  if (existsSync(resolvedPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(resolvedPath, "utf-8")) as Record<string, unknown>;
+      const { _resolved, ...configData } = raw;
+      return configData;
+    } catch {}
+  }
+  const bosConfigPath = join(configDir, "bos.config.json");
+  return JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<string, unknown>;
 }
 
 function resolveDevelopmentTarget(
@@ -150,7 +238,7 @@ export interface BuildRuntimeConfigOptions {
 export function buildRuntimeConfig(
   config: BosConfig,
   baseDir: string,
-  env: "development" | "production",
+  env: BosEnv,
   options?: BuildRuntimeConfigOptions,
 ): RuntimeConfig {
   const uiConfig = config.app.ui;
@@ -196,7 +284,10 @@ export function buildRuntimeConfig(
         )
       : resolveRuntimeTarget(hostConfig.production, baseDir, "remote");
 
-  const hostListeningUrl = resolveDevelopmentHostUrl(hostConfig.development);
+  const hostListeningUrl =
+    env === "development"
+      ? resolveDevelopmentHostUrl(hostConfig.development)
+      : `http://localhost:${hostRuntime.port ?? DEFAULT_HOST_PORT}`;
 
   const hostIsRemote = hostRuntime.source === "remote";
   const uiIsRemote = uiRuntime.source === "remote";
@@ -276,56 +367,58 @@ async function resolveConfigWithExtends(
   baseDir: string,
   visited: Set<string>,
   chain: string[],
+  env: BosEnv = "development",
 ): Promise<BosConfigInput> {
   if (visited.has(configPath)) {
     throw new Error(`Circular extends detected: ${[...visited, configPath].join(" -> ")}`);
   }
 
   const config = await loadConfigFile(configPath, baseDir);
-  if (configPath.startsWith("bos://")) {
-    chain.push(configPath);
-  }
+  chain.push(configPath);
 
   if (!config.extends) {
     return config;
   }
 
+  const extendsRef = resolveExtendsRef(config.extends as string | ExtendsConfig, env);
+  if (!extendsRef) {
+    return config;
+  }
+
   const nextVisited = new Set(visited);
   nextVisited.add(configPath);
-  const parentPath = config.extends;
-  const parentBaseDir = parentPath.startsWith("bos://")
+  const parentBaseDir = extendsRef.startsWith("bos://")
     ? baseDir
-    : isAbsolute(parentPath)
-      ? dirname(parentPath)
+    : isAbsolute(extendsRef)
+      ? dirname(extendsRef)
       : baseDir;
-  const parent = await resolveConfigWithExtends(parentPath, parentBaseDir, nextVisited, chain);
+  const parent = await resolveConfigWithExtends(extendsRef, parentBaseDir, nextVisited, chain, env);
 
-  return mergeConfigs(parent, config);
+  return mergeBosConfigWithExtends(
+    parent as Record<string, unknown>,
+    config as Record<string, unknown>,
+  ) as BosConfigInput;
 }
 
-function mergeConfigs(parent: BosConfigInput, child: BosConfigInput): BosConfigInput {
-  const result = mergeValues(parent, child) as BosConfigInput;
-  if (child.plugins !== undefined) {
-    result.plugins = child.plugins;
-  }
-  return result;
-}
+type PluginOverrideValue = BosConfigInput | null | false;
 
 async function resolveRuntimePlugins(
-  plugins: Record<string, BosConfigInput>,
+  plugins: Record<string, PluginOverrideValue>,
   baseDir: string,
-  env: "development" | "production",
+  env: BosEnv,
   prefix: string[] = [],
 ): Promise<Record<string, RuntimePluginConfig>> {
   const out: Record<string, RuntimePluginConfig> = {};
 
   for (const [pluginId, pluginInput] of Object.entries(plugins)) {
+    if (pluginInput === null || pluginInput === false) continue;
     const runtimeKey = [...prefix, pluginId].join("/");
     const { config: resolvedConfig, baseDir: pluginBaseDir } = await resolveBosConfigInput(
       pluginInput,
       baseDir,
       new Set(),
       [],
+      env,
     );
 
     const pluginRuntime = buildRuntimePluginConfig(
@@ -377,7 +470,13 @@ async function resolveRuntimePlugins(
 
 async function resolveRemotePluginRuntimeName(baseUrl: string, fallback: string): Promise<string> {
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/plugin.manifest.json`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/plugin.manifest.json`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
     if (!response.ok) {
       return fallback;
     }
@@ -398,7 +497,7 @@ function buildRuntimePluginConfig(
   pluginId: string,
   config: BosConfigInput,
   baseDir: string,
-  env: "development" | "production",
+  env: BosEnv,
   source: BosConfigInput,
 ): RuntimePluginConfig {
   const apiConfig = config.app?.api ?? {};
@@ -464,38 +563,29 @@ async function resolveBosConfigInput(
   baseDir: string,
   visited: Set<string>,
   chain: string[],
+  env: BosEnv = "development",
 ): Promise<{ config: BosConfigInput; baseDir: string }> {
   if (input.extends) {
-    const parentBaseDir = input.extends.startsWith("bos://")
+    const extendsRef = resolveExtendsRef(input.extends as string | ExtendsConfig, env);
+    if (!extendsRef) {
+      return { config: input, baseDir };
+    }
+    const parentBaseDir = extendsRef.startsWith("bos://")
       ? baseDir
-      : isAbsolute(input.extends)
-        ? dirname(input.extends)
+      : isAbsolute(extendsRef)
+        ? dirname(extendsRef)
         : baseDir;
-    const config = await resolveConfigWithExtends(input.extends, parentBaseDir, visited, chain);
-    return { config: mergeConfigs(config, input), baseDir: parentBaseDir };
+    const config = await resolveConfigWithExtends(extendsRef, parentBaseDir, visited, chain, env);
+    return {
+      config: mergeBosConfigWithExtends(
+        config as Record<string, unknown>,
+        input as Record<string, unknown>,
+      ) as BosConfigInput,
+      baseDir,
+    };
   }
 
   return { config: input, baseDir };
-}
-
-function mergeValues(parent: unknown, child: unknown): unknown {
-  if (Array.isArray(parent) && Array.isArray(child)) {
-    return child;
-  }
-
-  if (isPlainObject(parent) && isPlainObject(child)) {
-    const merged: Record<string, unknown> = { ...parent };
-    for (const [key, value] of Object.entries(child)) {
-      merged[key] = key in merged ? mergeValues(merged[key], value) : value;
-    }
-    return merged;
-  }
-
-  return child ?? parent;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeStringRecord(value: unknown): Record<string, string> | undefined {
@@ -586,5 +676,6 @@ export function parsePort(url: string): number {
   }
 }
 
+export { BOS_CONFIG_ORDER, rebuildOrderedConfig } from "./merge";
 export type { BosConfig, RuntimeConfig } from "./types";
 export { BosConfigSchema } from "./types";

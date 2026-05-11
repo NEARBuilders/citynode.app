@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.12.2",
+      "version": "1.12.4",
       "bin": {
         "everything-dev": "./cli.js",
         "bos": "./cli.js",
@@ -167,6 +167,7 @@
         "@orpc/server": "^1.13.4",
         "@orpc/zod": "^1.13.4",
         "chalk": "^5.6.2",
+        "defu": "^6.1.7",
         "effect": "^3.21.0",
         "every-plugin": "workspace:*",
         "glob": "^13.0.6",
@@ -286,7 +287,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.4.5",
+      "version": "1.4.7",
       "dependencies": {
         "@better-auth/api-key": "catalog:",
         "@better-auth/passkey": "catalog:",

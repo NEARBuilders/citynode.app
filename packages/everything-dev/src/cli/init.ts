@@ -5,6 +5,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -20,39 +21,11 @@ import {
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
 import type { BosConfig } from "../types";
+import { isPathExcluded } from "../utils/path-match";
+import { saveBosConfig } from "../utils/save-config";
 import { writeSnapshot } from "./snapshot";
 
 const require = createRequire(import.meta.url);
-
-const BOS_CONFIG_ORDER = [
-  "extends",
-  "account",
-  "domain",
-  "testnet",
-  "staging",
-  "repository",
-  "app",
-  "plugins",
-  "shared",
-];
-
-function rebuildOrderedConfig(config: Record<string, unknown>): Record<string, unknown> {
-  const ordered: Record<string, unknown> = {};
-
-  for (const key of BOS_CONFIG_ORDER) {
-    if (key in config) {
-      ordered[key] = config[key];
-    }
-  }
-
-  for (const key of Object.keys(config)) {
-    if (!BOS_CONFIG_ORDER.includes(key)) {
-      ordered[key] = config[key];
-    }
-  }
-
-  return ordered;
-}
 
 interface SourceResult {
   sourceDir: string;
@@ -84,6 +57,19 @@ export async function resolveSourceDir(opts: {
 
   const { dir: sourceDir, cleanup } = await downloadTarball(parentConfig.repository);
   return { sourceDir, parentConfig, cleanup };
+}
+
+export async function readTemplatekeep(sourceDir: string): Promise<string[]> {
+  const keepFile = join(sourceDir, ".templatekeep");
+  if (!existsSync(keepFile)) {
+    return [];
+  }
+
+  const content = readFileSync(keepFile, "utf-8");
+  return content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
 }
 
 export async function fetchParentConfig(
@@ -161,19 +147,6 @@ function parseGitHubUrl(url: string): { owner: string; repo: string; branch: str
   return null;
 }
 
-export async function readTemplatekeep(sourceDir: string): Promise<string[]> {
-  const keepFile = join(sourceDir, ".templatekeep");
-  if (!existsSync(keepFile)) {
-    return [];
-  }
-
-  const content = readFileSync(keepFile, "utf-8");
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
-}
-
 export async function copyFilteredFiles(
   sourceDir: string,
   destination: string,
@@ -218,7 +191,7 @@ export async function copyFilteredFiles(
         const pluginName = pluginMatch[1];
         if (!(options.plugins?.includes(pluginName) ?? true)) continue;
       }
-      if (isRouteExcluded(match, excludedRoutePatterns)) continue;
+      if (isPathExcluded(match, excludedRoutePatterns)) continue;
       allFiles.add(match);
     }
   }
@@ -235,7 +208,7 @@ export async function copyFilteredFiles(
           absolute: false,
         });
         for (const match of matches) {
-          if (!isRouteExcluded(match, excludedRoutePatterns)) {
+          if (!isPathExcluded(match, excludedRoutePatterns)) {
             routeFiles.add(match);
           }
         }
@@ -264,19 +237,6 @@ export async function copyFilteredFiles(
   }
 
   return count;
-}
-
-function isRouteExcluded(filePath: string, excludedPatterns: string[]): boolean {
-  if (excludedPatterns.length === 0) return false;
-  for (const pattern of excludedPatterns) {
-    if (pattern.endsWith("/**")) {
-      const prefix = pattern.slice(0, -3);
-      if (filePath.startsWith(`${prefix}/`) || filePath === prefix) return true;
-    } else if (filePath === pattern || filePath.startsWith(`${pattern}/`)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export async function personalizeConfig(
@@ -349,7 +309,7 @@ export async function personalizeConfig(
       }
     }
 
-    writeFileSync(configPath, `${JSON.stringify(rebuildOrderedConfig(config), null, 2)}\n`);
+    await saveBosConfig(destination, config);
   }
 
   const pkgPath = join(destination, "package.json");
@@ -463,32 +423,71 @@ export async function personalizeConfig(
     );
   }
 
-  const authTypesGenPath = join(destination, "ui", "src", "lib", "auth-types.gen.ts");
-  if (!existsSync(authTypesGenPath)) {
-    mkdirSync(dirname(authTypesGenPath), { recursive: true });
-    writeFileSync(
-      authTypesGenPath,
-      `import type { Auth } from "better-auth";\nexport type { Auth } from "better-auth";\nexport type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {\n  role?: string | null;\n  isAnonymous?: boolean | null;\n  walletAddress?: string | null;\n  banned?: boolean | null;\n};\nexport type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {\n  activeOrganizationId?: string | null;\n};\nexport type AuthSession = {\n  user: AuthSessionUser | null;\n  session: AuthSessionData | null;\n};\nexport interface AuthOrganizationContext {\n  activeOrganizationId: string | null;\n  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;\n  member: { id: string; role: string } | null;\n  isPersonal: boolean;\n  hasOrganization: boolean;\n}\nexport interface AuthRequestContext {\n  user: AuthSessionUser | null;\n  userId: string | null;\n  isAuthenticated: boolean;\n  authMethod: "session" | "apiKey" | "anonymous" | "none";\n  near: {\n    primaryAccountId: string | null;\n    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;\n    hasNearAccount: boolean;\n  };\n  organization: AuthOrganizationContext;\n  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;\n}\nexport type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };\nexport type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;\nexport type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;\nexport type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];\nexport type AuthBaseSession = Auth["$Infer"]["Session"];\nexport type createAuthInstance = never;\nexport interface AuthServices {\n  auth: Auth;\n  db: unknown;\n  driver: { close(): Promise<void> };\n  handler: (req: Request) => Promise<Response>;\n}\n`,
-    );
+  const authTypesContent = generateAuthTypesTemplate();
+  const authTypesPaths = [
+    join(destination, "ui", "src", "lib", "auth-types.gen.ts"),
+    join(destination, "api", "src", "lib", "auth-types.gen.ts"),
+  ];
+  if (existsSync(join(destination, "host", "src"))) {
+    authTypesPaths.push(join(destination, "host", "src", "lib", "auth-types.gen.ts"));
   }
+  for (const authTypesGenPath of authTypesPaths) {
+    if (!existsSync(authTypesGenPath)) {
+      mkdirSync(dirname(authTypesGenPath), { recursive: true });
+      writeFileSync(authTypesGenPath, authTypesContent);
+    }
+  }
+}
 
-  const apiAuthTypesGenPath = join(destination, "api", "src", "lib", "auth-types.gen.ts");
-  if (!existsSync(apiAuthTypesGenPath)) {
-    mkdirSync(dirname(apiAuthTypesGenPath), { recursive: true });
-    writeFileSync(
-      apiAuthTypesGenPath,
-      `import type { Auth } from "better-auth";\nexport type { Auth } from "better-auth";\nexport type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {\n  role?: string | null;\n  isAnonymous?: boolean | null;\n  walletAddress?: string | null;\n  banned?: boolean | null;\n};\nexport type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {\n  activeOrganizationId?: string | null;\n};\nexport type AuthSession = {\n  user: AuthSessionUser | null;\n  session: AuthSessionData | null;\n};\nexport interface AuthOrganizationContext {\n  activeOrganizationId: string | null;\n  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;\n  member: { id: string; role: string } | null;\n  isPersonal: boolean;\n  hasOrganization: boolean;\n}\nexport interface AuthRequestContext {\n  user: AuthSessionUser | null;\n  userId: string | null;\n  isAuthenticated: boolean;\n  authMethod: "session" | "apiKey" | "anonymous" | "none";\n  near: {\n    primaryAccountId: string | null;\n    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;\n    hasNearAccount: boolean;\n  };\n  organization: AuthOrganizationContext;\n  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;\n}\nexport type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };\nexport type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;\nexport type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;\nexport type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];\nexport type AuthBaseSession = Auth["$Infer"]["Session"];\nexport type createAuthInstance = never;\nexport interface AuthServices {\n  auth: Auth;\n  db: unknown;\n  driver: { close(): Promise<void> };\n  handler: (req: Request) => Promise<Response>;\n}\n`,
-    );
-  }
-
-  const hostAuthTypesGenPath = join(destination, "host", "src", "lib", "auth-types.gen.ts");
-  if (existsSync(join(destination, "host", "src")) && !existsSync(hostAuthTypesGenPath)) {
-    mkdirSync(dirname(hostAuthTypesGenPath), { recursive: true });
-    writeFileSync(
-      hostAuthTypesGenPath,
-      `import type { Auth } from "better-auth";\nexport type { Auth } from "better-auth";\nexport type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {\n  role?: string | null;\n  isAnonymous?: boolean | null;\n  walletAddress?: string | null;\n  banned?: boolean | null;\n};\nexport type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {\n  activeOrganizationId?: string | null;\n};\nexport type AuthSession = {\n  user: AuthSessionUser | null;\n  session: AuthSessionData | null;\n};\nexport interface AuthOrganizationContext {\n  activeOrganizationId: string | null;\n  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;\n  member: { id: string; role: string } | null;\n  isPersonal: boolean;\n  hasOrganization: boolean;\n}\nexport interface AuthRequestContext {\n  user: AuthSessionUser | null;\n  userId: string | null;\n  isAuthenticated: boolean;\n  authMethod: "session" | "apiKey" | "anonymous" | "none";\n  near: {\n    primaryAccountId: string | null;\n    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;\n    hasNearAccount: boolean;\n  };\n  organization: AuthOrganizationContext;\n  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;\n}\nexport type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };\nexport type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;\nexport type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;\nexport type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];\nexport type AuthBaseSession = Auth["$Infer"]["Session"];\nexport type createAuthInstance = never;\nexport interface AuthServices {\n  auth: Auth;\n  db: unknown;\n  driver: { close(): Promise<void> };\n  handler: (req: Request) => Promise<Response>;\n}\n`,
-    );
-  }
+function generateAuthTypesTemplate(): string {
+  return `import type { Auth } from "better-auth";
+export type { Auth } from "better-auth";
+export type AuthSessionUser = NonNullable<Auth["$Infer"]["Session"]["user"]> & {
+  role?: string | null;
+  isAnonymous?: boolean | null;
+  walletAddress?: string | null;
+  banned?: boolean | null;
+};
+export type AuthSessionData = NonNullable<Auth["$Infer"]["Session"]["session"]> & {
+  activeOrganizationId?: string | null;
+};
+export type AuthSession = {
+  user: AuthSessionUser | null;
+  session: AuthSessionData | null;
+};
+export interface AuthOrganizationContext {
+  activeOrganizationId: string | null;
+  organization: { id: string; name: string; slug: string; logo?: string | null; metadata?: Record<string, unknown> } | null;
+  member: { id: string; role: string } | null;
+  isPersonal: boolean;
+  hasOrganization: boolean;
+}
+export interface AuthRequestContext {
+  user: AuthSessionUser | null;
+  userId: string | null;
+  isAuthenticated: boolean;
+  authMethod: "session" | "apiKey" | "anonymous" | "none";
+  near: {
+    primaryAccountId: string | null;
+    linkedAccounts: Array<{ accountId: string; network: string; publicKey: string; isPrimary: boolean }>;
+    hasNearAccount: boolean;
+  };
+  organization: AuthOrganizationContext;
+  organizations?: Array<{ id: string; role: string; name?: string; slug?: string }>;
+}
+export type AuthActiveMember = { id: string | null; role: string | null; organizationId: string | null };
+export type AuthOrganization = NonNullable<AuthOrganizationContext["organization"]>;
+export type AuthOrganizationMember = NonNullable<AuthOrganizationContext["member"]>;
+export type AuthOrganizationSummary = NonNullable<AuthRequestContext["organizations"]>[number];
+export type AuthBaseSession = Auth["$Infer"]["Session"];
+export type createAuthInstance = never;
+export interface AuthServices {
+  auth: Auth;
+  db: unknown;
+  driver: { close(): Promise<void> };
+  handler: (req: Request) => Promise<Response>;
+}
+`;
 }
 
 export async function runBunInstall(destination: string): Promise<void> {
@@ -579,7 +578,7 @@ export async function writeInitSnapshot(
     for (const match of matches) {
       const pluginMatch = match.match(/^plugins\/([^/]+)/);
       if (pluginMatch && !(options.plugins?.includes(pluginMatch[1]) ?? true)) continue;
-      if (isRouteExcluded(match, excludedRoutePatterns)) continue;
+      if (isPathExcluded(match, excludedRoutePatterns)) continue;
       allFiles.add(match);
     }
   }
@@ -595,7 +594,7 @@ export async function writeInitSnapshot(
           absolute: false,
         });
         for (const match of matches) {
-          if (!isRouteExcluded(match, excludedRoutePatterns)) {
+          if (!isPathExcluded(match, excludedRoutePatterns)) {
             allFiles.add(match);
           }
         }
@@ -626,18 +625,7 @@ function computeHash(data: Uint8Array): string {
 }
 
 function mkTmpDir(prefix: string): string {
-  const base = join(tmpdir(), prefix);
-  let attempt = 0;
-  while (true) {
-    const dir = `${base}-${Date.now()}-${attempt}`;
-    try {
-      mkdirSync(dir, { recursive: true });
-      return dir;
-    } catch {
-      attempt++;
-      if (attempt > 10) throw new Error("Failed to create temp directory");
-    }
-  }
+  return mkdtempSync(join(tmpdir(), `${prefix}-`));
 }
 
 export async function generateDatabaseMigrations(destination: string): Promise<void> {

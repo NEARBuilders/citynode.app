@@ -12,9 +12,20 @@ const require = createRequire(import.meta.url);
 const __dirname = import.meta.dirname;
 const shouldDeploy = process.env.DEPLOY === "true";
 
-const configPath = process.env.BOS_CONFIG_PATH ?? path.resolve(__dirname, "../bos.config.json");
+const resolvedConfigPath = path.resolve(__dirname, "../.bos/bos.resolved-config.json");
+const configPath =
+  process.env.BOS_CONFIG_PATH ??
+  (fs.existsSync(resolvedConfigPath)
+    ? resolvedConfigPath
+    : path.resolve(__dirname, "../bos.config.json"));
 
-const bosConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+const bosConfigRaw = JSON.parse(fs.readFileSync(configPath, "utf8"));
+const bosConfig = bosConfigRaw._resolved
+  ? (() => {
+      const { _resolved, ...data } = bosConfigRaw;
+      return data;
+    })()
+  : bosConfigRaw;
 const sharedUi = bosConfig.shared?.ui ?? {};
 const sharedPlugins = bosConfig.shared?.plugins ?? {};
 

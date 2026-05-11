@@ -11,6 +11,12 @@ import { dirname, join } from "node:path";
 import { glob } from "glob";
 import type { SyncOptions, SyncResult } from "../contract";
 import {
+  isPlainObject as isPlainObjectFromMerge,
+  mergeBosConfigWithTemplate,
+  resolveExtendsRef,
+} from "../merge";
+import { isPathExcluded } from "../utils/path-match";
+import {
   personalizeConfig,
   readTemplatekeep,
   resolveSourceDir,
@@ -67,22 +73,6 @@ export function readLocalSyncExcludes(projectDir: string): string[] {
   return readExcludeFile(join(projectDir, ".bos", "sync-local-exclude"));
 }
 
-function isExcluded(filePath: string, excludePatterns: string[]): boolean {
-  for (const pattern of excludePatterns) {
-    if (pattern.endsWith("/**")) {
-      const prefix = pattern.slice(0, -3);
-      if (filePath.startsWith(`${prefix}/`) || filePath === prefix) return true;
-    } else if (pattern.endsWith("/*")) {
-      const prefix = pattern.slice(0, -2);
-      const slashIdx = filePath.indexOf("/", prefix.length + 1);
-      if (filePath.startsWith(`${prefix}/`) && slashIdx === -1) return true;
-    } else if (filePath === pattern || filePath.startsWith(`${pattern}/`)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function computeLocalHash(projectDir: string, filePath: string): string | null {
   const fullPath = join(projectDir, filePath);
   if (!existsSync(fullPath)) return null;
@@ -109,78 +99,6 @@ function backupFiles(projectDir: string, filePaths: string[]): string | null {
   }
 
   return backupDir;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function mergeJsonValues(local: unknown, template: unknown): unknown {
-  if (isPlainObject(local) && isPlainObject(template)) {
-    const merged: Record<string, unknown> = {};
-    // Preserve local key order first
-    for (const key of Object.keys(local)) {
-      merged[key] = mergeJsonValues(local[key], template[key]);
-    }
-    // Append any new template keys at the end
-    for (const key of Object.keys(template)) {
-      if (!(key in merged)) {
-        merged[key] = template[key];
-      }
-    }
-    return merged;
-  }
-  // For arrays and primitives, local always wins
-  return local ?? template;
-}
-
-function mergeBosConfig(
-  local: Record<string, unknown>,
-  template: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = {};
-
-  // 1. extends always first
-  if (local.extends !== undefined) merged.extends = local.extends;
-  else if (template.extends !== undefined) merged.extends = template.extends;
-
-  // 2. Fixed trailing group: app, plugins, shared
-  const TRAIL_GROUP = ["app", "plugins", "shared"];
-
-  const localKeys = Object.keys(local).filter((k) => k !== "extends");
-  const templateKeys = Object.keys(template).filter(
-    (k) => k !== "extends" && !localKeys.includes(k),
-  );
-
-  // Find the first trailing-group key present locally ("app" comes first in the group)
-  const firstTrailIndex = localKeys.findIndex((k) => TRAIL_GROUP.includes(k));
-
-  const orderedKeys: string[] = [];
-
-  if (firstTrailIndex >= 0) {
-    // Keys before the trail group stay in local order
-    orderedKeys.push(...localKeys.slice(0, firstTrailIndex));
-    // New template keys inserted right before the trail group
-    orderedKeys.push(...templateKeys);
-    // Trail group keys (app, plugins, shared) in canonical order, preserving local if present
-    for (const trailKey of TRAIL_GROUP) {
-      if (localKeys.includes(trailKey)) orderedKeys.push(trailKey);
-    }
-  } else {
-    // No trail group found locally — keep local order then append new keys and trail group
-    orderedKeys.push(...localKeys);
-    orderedKeys.push(...templateKeys);
-    for (const trailKey of TRAIL_GROUP) {
-      if (templateKeys.includes(trailKey)) orderedKeys.push(trailKey);
-    }
-  }
-
-  // 3. Merge values for each key
-  for (const key of orderedKeys) {
-    merged[key] = mergeJsonValues(local[key], template[key]);
-  }
-
-  return merged;
 }
 
 function mergeStringMaps(
@@ -328,7 +246,7 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
     if (localContent) {
       const local = JSON.parse(localContent) as Record<string, unknown>;
       const template = JSON.parse(templateContent) as Record<string, unknown>;
-      const merged = mergeBosConfig(local, template);
+      const merged = mergeBosConfigWithTemplate(local, template);
       writeFileSync(dest, `${JSON.stringify(merged, null, 2)}\n`);
       return;
     }
@@ -351,11 +269,20 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
 }
 
 export async function syncTemplate(projectDir: string, options: SyncOptions): Promise<SyncResult> {
+  // Sync reads the raw bos.config.json (not the resolved config) because it needs
+  // the user's explicit local settings: their extends ref, selected plugins, etc.
+  // The resolved config is the merged result and would include inherited parent
+  // values that the user didn't explicitly choose, which would break sync filtering.
   const localConfig = JSON.parse(
     readFileSync(join(projectDir, "bos.config.json"), "utf-8"),
   ) as Record<string, unknown>;
 
-  const extendsRef = localConfig.extends as string | undefined;
+  let extendsRef: string | undefined;
+  if (typeof localConfig.extends === "string") {
+    extendsRef = localConfig.extends;
+  } else if (isPlainObjectFromMerge(localConfig.extends)) {
+    extendsRef = resolveExtendsRef(localConfig.extends as Record<string, string>, "production");
+  }
   if (!extendsRef?.startsWith("bos://")) {
     return {
       status: "error",
@@ -439,7 +366,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     for (const filePath of allTemplateFiles) {
       const pluginMatch = filePath.match(/^plugins\/([^/]+)/);
       if (pluginMatch && !childPlugins.includes(pluginMatch[1])) continue;
-      if (isExcluded(filePath, excludedRoutePatterns)) continue;
+      if (isPathExcluded(filePath, excludedRoutePatterns)) continue;
       filteredFiles.add(filePath);
     }
 
@@ -453,7 +380,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
           absolute: false,
         });
         for (const match of matches) {
-          if (!isExcluded(match, excludedRoutePatterns)) {
+          if (!isPathExcluded(match, excludedRoutePatterns)) {
             filteredFiles.add(match);
           }
         }
@@ -469,7 +396,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     for (const filePath of filteredFiles) {
       const destPath = toDestPath(filePath);
       const frameworkOwned = isFrameworkOwnedSyncFile(destPath);
-      if (isExcluded(destPath, excludePatterns) && !frameworkOwned) continue;
+      if (isPathExcluded(destPath, excludePatterns) && !frameworkOwned) continue;
 
       const localHash = computeLocalHash(projectDir, destPath);
       const sourceContent = readFileSync(join(sourceDir, filePath));
@@ -515,7 +442,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     }
 
     const filesToWrite = [...updated, ...added].filter(
-      (f) => isFrameworkOwnedSyncFile(f) || !isExcluded(f, excludePatterns),
+      (f) => isFrameworkOwnedSyncFile(f) || !isPathExcluded(f, excludePatterns),
     );
 
     const destToSource = new Map<string, string>();

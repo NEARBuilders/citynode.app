@@ -114,6 +114,36 @@ All runtime config lives in `bos.config.json`. Key sections:
 - `plugins.{key}` — Plugin configs with variables, secrets, routes
 - `shared.ui`, `shared.api` — Module Federation shared dependency versions
 
+### extends
+
+Config can inherit from a parent via `extends`:
+```json
+{ "extends": "bos://dev.everything.near/everything.dev" }
+```
+
+Or per-environment:
+```json
+{
+  "extends": {
+    "development": "bos://dev.everything.near/everything.dev",
+    "production": "bos://dev.everything.near/everything.dev",
+    "staging": "bos://staging.everything.near/everything.dev"
+  }
+}
+```
+
+Deep merge: child overrides parent. Plugins are deep-merged (set to `null` to remove). `secrets` arrays are unioned. See the `extends-config` skill for full details.
+
+### What bos dev writes vs bos publish writes
+
+| Mode | Writes to | File |
+|------|-----------|------|
+| `bos dev` | `.bos/bos.resolved-config.json` | Full merged config (gitignored) |
+| `bos build` | `.bos/bos.resolved-config.json` | Full merged config |
+| `bos publish --deploy` | `bos.config.json` | Snapshot with pinned production URLs |
+| `bos plugin publish` | `bos.config.json` | Records production URL + integrity |
+| `bos sync` | `bos.config.json` | Merges template updates |
+
 ## Troubleshooting
 
 ```bash

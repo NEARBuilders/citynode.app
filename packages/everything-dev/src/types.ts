@@ -1,7 +1,13 @@
 import { z } from "./sdk";
 
+export interface ExtendsConfig {
+  development?: string;
+  production?: string;
+  staging?: string;
+}
+
 export interface BosConfigInput extends Record<string, unknown> {
-  extends?: string;
+  extends?: string | ExtendsConfig;
   account?: string;
   domain?: string;
   testnet?: string;
@@ -119,9 +125,19 @@ export const BosStagingSchema = z.object({
 });
 export type BosStaging = z.infer<typeof BosStagingSchema>;
 
+export const ExtendsSchema = z.union([
+  z.string(),
+  z.object({
+    development: z.string().optional(),
+    production: z.string().optional(),
+    staging: z.string().optional(),
+  }),
+]);
+export type Extends = z.infer<typeof ExtendsSchema>;
+
 export const BosConfigSchema = z.object({
   account: z.string(),
-  extends: z.string().optional(),
+  extends: ExtendsSchema.optional(),
   domain: z.string().optional(),
   testnet: z.string().optional(),
   staging: BosStagingSchema.optional(),
@@ -138,7 +154,7 @@ export const BosConfigSchema = z.object({
 export type BosConfig = z.infer<typeof BosConfigSchema>;
 
 export const RuntimeConfigSchema = z.object({
-  env: z.enum(["development", "production"]),
+  env: z.enum(["development", "production", "staging"]),
   account: z.string(),
   domain: z.string().optional(),
   networkId: z.enum(["mainnet", "testnet"]),
@@ -182,7 +198,7 @@ export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
 
 export const ClientRuntimeConfigSchema = z.object({
   cspNonce: z.string().optional(),
-  env: z.enum(["development", "production"]),
+  env: z.enum(["development", "production", "staging"]),
   account: z.string(),
   networkId: z.enum(["mainnet", "testnet"]),
   hostUrl: z.string().optional(),

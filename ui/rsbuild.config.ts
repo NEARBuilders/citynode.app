@@ -17,8 +17,15 @@ const shouldDeploy = process.env.DEPLOY === "true";
 const buildTarget = process.env.BUILD_TARGET as "client" | "server" | undefined;
 const isServerBuild = buildTarget === "server";
 
+const resolvedConfigPath = path.resolve(__dirname, "../.bos/bos.resolved-config.json");
 const bosConfigPath = path.resolve(__dirname, "../bos.config.json");
-const bosConfig = JSON.parse(fs.readFileSync(bosConfigPath, "utf8"));
+const bosConfig = fs.existsSync(resolvedConfigPath)
+  ? (() => {
+      const raw = JSON.parse(fs.readFileSync(resolvedConfigPath, "utf8"));
+      const { _resolved, ...data } = raw;
+      return data;
+    })()
+  : JSON.parse(fs.readFileSync(bosConfigPath, "utf8"));
 const uiSharedDeps = bosConfig.shared?.ui ?? {};
 
 function updateBosConfig(field: "production" | "ssr", url: string, integrity?: string) {

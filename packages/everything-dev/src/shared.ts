@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { type BosEnv, type ResolvedConfigMeta, rebuildOrderedConfig } from "./merge";
 import type { BosConfig, SharedDepConfig } from "./types";
+import { BosConfigSchema } from "./types";
 
 export interface SharedUiResolvedDep {
   name: string;
@@ -77,12 +79,21 @@ export async function syncAndGenerateSharedUi(opts: {
   configDir: string;
   hostMode: "local" | "remote";
   bosConfig?: BosConfig;
+  env?: BosEnv;
+  extendsChain?: string[];
 }): Promise<SharedSyncResult> {
   const bosConfigPath = join(opts.configDir, "bos.config.json");
+  const resolvedConfigPath = join(opts.configDir, ".bos", "bos.resolved-config.json");
   const packageJsonPath = join(opts.configDir, "package.json");
   const generatedPath = join(opts.configDir, ".bos", "generated", "shared-ui.json");
 
-  const bosConfig: BosConfig = opts.bosConfig ?? JSON.parse(readFileSync(bosConfigPath, "utf-8"));
+  let bosConfig: BosConfig;
+  if (opts.bosConfig) {
+    bosConfig = opts.bosConfig;
+  } else {
+    const raw = JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<string, unknown>;
+    bosConfig = BosConfigSchema.parse(raw);
+  }
   let pkgJson: any = {};
   try {
     pkgJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
@@ -130,7 +141,26 @@ export async function syncAndGenerateSharedUi(opts: {
   const catalogChanged = nextPkg !== originalPkg;
 
   if (bosConfigChanged) {
-    writeFileIfChanged(bosConfigPath, `${JSON.stringify(bosConfig, null, 2)}\n`);
+    if (mode === "catalog->bos") {
+      const resolvedDir = dirname(resolvedConfigPath);
+      if (!existsSync(resolvedDir)) {
+        mkdirSync(resolvedDir, { recursive: true });
+      }
+      const ordered = rebuildOrderedConfig(bosConfig as Record<string, unknown>);
+      const meta: ResolvedConfigMeta = {
+        env: opts.env ?? "development",
+        resolvedAt: new Date().toISOString(),
+        extendsChain: opts.extendsChain ?? [],
+        source: "shared-sync",
+      };
+      const resolvedOutput = {
+        _resolved: meta,
+        ...ordered,
+      };
+      writeFileIfChanged(resolvedConfigPath, `${JSON.stringify(resolvedOutput, null, 2)}\n`);
+    } else {
+      writeFileIfChanged(bosConfigPath, `${JSON.stringify(bosConfig, null, 2)}\n`);
+    }
   }
   if (catalogChanged) {
     writeFileIfChanged(packageJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`);

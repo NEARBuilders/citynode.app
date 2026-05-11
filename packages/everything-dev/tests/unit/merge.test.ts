@@ -1,0 +1,436 @@
+import { describe, expect, it } from "vitest";
+import {
+  BOS_CONFIG_ORDER,
+  mergeBosConfigWithExtends,
+  mergeBosConfigWithTemplate,
+  rebuildOrderedConfig,
+  resolveExtendsRef,
+} from "../../src/merge";
+
+describe("mergeBosConfigWithExtends", () => {
+  it("child scalars override parent scalars", () => {
+    const parent = {
+      account: "parent.near",
+      domain: "parent.dev",
+      repository: "https://github.com/parent",
+    };
+    const child = { account: "child.near", domain: "child.dev" };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    expect(merged.account).toBe("child.near");
+    expect(merged.domain).toBe("child.dev");
+    expect(merged.repository).toBe("https://github.com/parent");
+  });
+
+  it("child inherits parent repository when not specified", () => {
+    const parent = { account: "parent.near", repository: "https://github.com/parent" };
+    const child = { account: "child.near" };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    expect(merged.repository).toBe("https://github.com/parent");
+  });
+
+  it("child inherits parent domain when not specified", () => {
+    const parent = { account: "parent.near", domain: "parent.dev" };
+    const child = { account: "child.near" };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    expect(merged.domain).toBe("parent.dev");
+  });
+
+  it("deep merges shared.ui deps", () => {
+    const parent = {
+      shared: {
+        ui: {
+          effect: { version: "3.20.0", singleton: true, strictVersion: false },
+          zod: { version: "4.2.0", singleton: true },
+        },
+      },
+    };
+    const child = {
+      shared: {
+        ui: {
+          effect: { version: "3.21.0" },
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const ui = (merged.shared as Record<string, unknown>).ui as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(ui.effect.version).toBe("3.21.0");
+    expect(ui.effect.singleton).toBe(true);
+    expect(ui.effect.strictVersion).toBe(false);
+    expect(ui.zod.version).toBe("4.2.0");
+    expect(ui.zod.singleton).toBe(true);
+  });
+
+  it("preserves parent deps not in child", () => {
+    const parent = {
+      shared: {
+        ui: {
+          effect: { version: "3.20.0", singleton: true },
+          zod: { version: "4.2.0", singleton: true },
+          react: { version: "19.0.0", singleton: true },
+        },
+      },
+    };
+    const child = {
+      shared: {
+        ui: {
+          effect: { version: "3.21.0" },
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const ui = (merged.shared as Record<string, unknown>).ui as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(ui.effect.version).toBe("3.21.0");
+    expect(ui.zod.version).toBe("4.2.0");
+    expect(ui.react.version).toBe("19.0.0");
+  });
+
+  it("child can add new deps not in parent", () => {
+    const parent = {
+      shared: {
+        ui: {
+          effect: { version: "3.20.0" },
+        },
+      },
+    };
+    const child = {
+      shared: {
+        ui: {
+          "better-auth": { version: "1.6.9", singleton: true },
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const ui = (merged.shared as Record<string, unknown>).ui as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(ui.effect.version).toBe("3.20.0");
+    expect(ui["better-auth"].version).toBe("1.6.9");
+  });
+
+  it("deep merges plugins — child overrides parent with same key", () => {
+    const parent = {
+      plugins: {
+        registry: {
+          development: "local:plugins/registry",
+          production: "https://cdn.example.com/registry",
+          variables: { namespace: "parent.near" },
+        },
+      },
+    };
+    const child = {
+      plugins: {
+        registry: {
+          variables: { namespace: "child.near" },
+          secrets: ["REGISTRY_SECRET"],
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, Record<string, unknown>>;
+    expect(plugins.registry.variables).toEqual({ namespace: "child.near" });
+    expect(plugins.registry.production).toBe("https://cdn.example.com/registry");
+    expect(plugins.registry.development).toBe("local:plugins/registry");
+    expect(plugins.registry.secrets).toEqual(["REGISTRY_SECRET"]);
+  });
+
+  it("preserves parent plugins not in child", () => {
+    const parent = {
+      plugins: {
+        registry: { development: "local:plugins/registry" },
+        projects: { development: "local:plugins/projects" },
+      },
+    };
+    const child = {
+      plugins: {
+        registry: { variables: { namespace: "child.near" } },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, Record<string, unknown>>;
+    expect(plugins.registry).toBeDefined();
+    expect(plugins.projects).toBeDefined();
+    expect(plugins.projects.development).toBe("local:plugins/projects");
+  });
+
+  it("child can set plugin to null to remove inherited plugin", () => {
+    const parent = {
+      plugins: {
+        registry: { development: "local:plugins/registry" },
+        projects: { development: "local:plugins/projects" },
+      },
+    };
+    const child = {
+      plugins: {
+        projects: null,
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, unknown>;
+    expect(plugins.registry).toBeDefined();
+    expect(plugins.projects).toBeUndefined();
+  });
+
+  it("child can add new plugins not in parent", () => {
+    const parent = {
+      plugins: {
+        registry: { development: "local:plugins/registry" },
+      },
+    };
+    const child = {
+      plugins: {
+        myplugin: { development: "local:plugins/myplugin" },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, Record<string, unknown>>;
+    expect(plugins.registry).toBeDefined();
+    expect(plugins.myplugin).toBeDefined();
+    expect(plugins.myplugin.development).toBe("local:plugins/myplugin");
+  });
+
+  it("secrets arrays are unioned", () => {
+    const parent = {
+      app: {
+        api: {
+          secrets: ["DB_URL", "DB_TOKEN"],
+        },
+      },
+    };
+    const child = {
+      app: {
+        api: {
+          secrets: ["DB_URL", "EXTRA_SECRET"],
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const api = (merged.app as Record<string, Record<string, unknown>>).api as Record<
+      string,
+      unknown
+    >;
+    expect(api.secrets).toContain("DB_URL");
+    expect(api.secrets).toContain("DB_TOKEN");
+    expect(api.secrets).toContain("EXTRA_SECRET");
+  });
+
+  it("routes arrays are replaced (not unioned)", () => {
+    const parent = {
+      plugins: {
+        myplugin: {
+          routes: ["ui/src/routes/old/**"],
+        },
+      },
+    };
+    const child = {
+      plugins: {
+        myplugin: {
+          routes: ["ui/src/routes/new/**"],
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const myplugin = (merged.plugins as Record<string, Record<string, unknown>>).myplugin as Record<
+      string,
+      unknown
+    >;
+    expect(myplugin.routes).toEqual(["ui/src/routes/new/**"]);
+  });
+
+  it("plugin variables are deep-merged", () => {
+    const parent = {
+      plugins: {
+        myplugin: {
+          variables: { namespace: "parent.near", region: "us-east" },
+        },
+      },
+    };
+    const child = {
+      plugins: {
+        myplugin: {
+          variables: { namespace: "child.near" },
+        },
+      },
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const myplugin = (merged.plugins as Record<string, Record<string, unknown>>).myplugin as Record<
+      string,
+      unknown
+    >;
+    expect(myplugin.variables).toEqual({ namespace: "child.near", region: "us-east" });
+  });
+
+  it("applies canonical ordering", () => {
+    const parent = {
+      shared: {},
+      plugins: {},
+      app: {},
+      repository: "https://github.com/parent",
+      account: "parent.near",
+      domain: "parent.dev",
+    };
+    const child = { account: "child.near" };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const keys = Object.keys(merged);
+    expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("repository"));
+    expect(keys.indexOf("repository")).toBeLessThan(keys.indexOf("app"));
+    expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("plugins"));
+    expect(keys.indexOf("plugins")).toBeLessThan(keys.indexOf("shared"));
+  });
+});
+
+describe("mergeBosConfigWithTemplate", () => {
+  it("local values win over template values", () => {
+    const local = { account: "local.near", domain: "local.dev" };
+    const template = {
+      account: "template.near",
+      domain: "template.dev",
+      repository: "https://github.com/template",
+    };
+    const merged = mergeBosConfigWithTemplate(local, template);
+    expect(merged.account).toBe("local.near");
+    expect(merged.domain).toBe("local.dev");
+    expect(merged.repository).toBe("https://github.com/template");
+  });
+
+  it("new template keys are appended", () => {
+    const local = { account: "local.near" };
+    const template = { account: "template.near", domain: "template.dev" };
+    const merged = mergeBosConfigWithTemplate(local, template);
+    expect(merged.account).toBe("local.near");
+    expect(merged.domain).toBe("template.dev");
+  });
+
+  it("applies canonical ordering", () => {
+    const local = { shared: {}, plugins: {}, domain: "local.dev", account: "local.near" };
+    const template = { app: {} };
+    const merged = mergeBosConfigWithTemplate(local, template);
+    const keys = Object.keys(merged);
+    expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("domain"));
+    expect(keys.indexOf("domain")).toBeLessThan(keys.indexOf("app"));
+  });
+
+  it("deep merges app sections", () => {
+    const local = { app: { api: { secrets: ["MY_SECRET"] } } };
+    const template = { app: { api: { development: "local:api", secrets: ["TEMPLATE_SECRET"] } } };
+    const merged = mergeBosConfigWithTemplate(local, template);
+    const api = (merged.app as Record<string, Record<string, unknown>>).api as Record<
+      string,
+      unknown
+    >;
+    expect(api.development).toBe("local:api");
+    expect(api.secrets).toEqual(["MY_SECRET"]);
+  });
+});
+
+describe("resolveExtendsRef", () => {
+  it("returns string extends directly for any env", () => {
+    expect(resolveExtendsRef("bos://dev.everything.near/everything.dev", "development")).toBe(
+      "bos://dev.everything.near/everything.dev",
+    );
+    expect(resolveExtendsRef("bos://dev.everything.near/everything.dev", "production")).toBe(
+      "bos://dev.everything.near/everything.dev",
+    );
+  });
+
+  it("selects development URL for development env", () => {
+    const extendsObj = { development: "bos://dev.near/dev", production: "bos://dev.near/prod" };
+    expect(resolveExtendsRef(extendsObj, "development")).toBe("bos://dev.near/dev");
+  });
+
+  it("selects production URL for production env", () => {
+    const extendsObj = { development: "bos://dev.near/dev", production: "bos://dev.near/prod" };
+    expect(resolveExtendsRef(extendsObj, "production")).toBe("bos://dev.near/prod");
+  });
+
+  it("selects staging URL for staging env", () => {
+    const extendsObj = {
+      development: "bos://dev.near/dev",
+      production: "bos://dev.near/prod",
+      staging: "bos://dev.near/stage",
+    };
+    expect(resolveExtendsRef(extendsObj, "staging")).toBe("bos://dev.near/stage");
+  });
+
+  it("falls back to production when requested env missing", () => {
+    const extendsObj = { production: "bos://dev.near/prod" };
+    expect(resolveExtendsRef(extendsObj, "development")).toBe("bos://dev.near/prod");
+  });
+
+  it("falls back to first defined value when production also missing", () => {
+    const extendsObj = { development: "bos://dev.near/dev" };
+    expect(resolveExtendsRef(extendsObj, "production")).toBe("bos://dev.near/dev");
+  });
+
+  it("returns undefined for undefined extends", () => {
+    expect(resolveExtendsRef(undefined, "development")).toBeUndefined();
+  });
+
+  it("returns undefined for empty object", () => {
+    expect(resolveExtendsRef({}, "development")).toBeUndefined();
+  });
+});
+
+describe("rebuildOrderedConfig", () => {
+  it("places extends first, then scalars, then app/plugins/shared", () => {
+    const config = {
+      shared: {},
+      plugins: {},
+      domain: "test.dev",
+      app: {},
+      account: "test.near",
+      extends: "bos://test/test",
+    };
+    const ordered = rebuildOrderedConfig(config);
+    const keys = Object.keys(ordered);
+    expect(keys[0]).toBe("extends");
+    expect(keys[1]).toBe("account");
+    expect(keys[2]).toBe("domain");
+    expect(keys[keys.length - 1]).toBe("shared");
+  });
+
+  it("handles missing sections", () => {
+    const config = { account: "test.near" };
+    const ordered = rebuildOrderedConfig(config);
+    expect(Object.keys(ordered)).toEqual(["account"]);
+  });
+
+  it("unknown keys go after known keys", () => {
+    const config = { custom: true, account: "test.near", app: {} };
+    const ordered = rebuildOrderedConfig(config);
+    const keys = Object.keys(ordered);
+    expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("custom"));
+    expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("custom"));
+  });
+});
+
+describe("BOS_CONFIG_ORDER", () => {
+  it("has extends first", () => {
+    expect(BOS_CONFIG_ORDER[0]).toBe("extends");
+  });
+
+  it("has app, plugins, shared at end in order", () => {
+    const len = BOS_CONFIG_ORDER.length;
+    expect(BOS_CONFIG_ORDER[len - 3]).toBe("app");
+    expect(BOS_CONFIG_ORDER[len - 2]).toBe("plugins");
+    expect(BOS_CONFIG_ORDER[len - 1]).toBe("shared");
+  });
+
+  it("includes all expected fields", () => {
+    expect(BOS_CONFIG_ORDER).toContain("extends");
+    expect(BOS_CONFIG_ORDER).toContain("account");
+    expect(BOS_CONFIG_ORDER).toContain("domain");
+    expect(BOS_CONFIG_ORDER).toContain("testnet");
+    expect(BOS_CONFIG_ORDER).toContain("staging");
+    expect(BOS_CONFIG_ORDER).toContain("repository");
+    expect(BOS_CONFIG_ORDER).toContain("app");
+    expect(BOS_CONFIG_ORDER).toContain("plugins");
+    expect(BOS_CONFIG_ORDER).toContain("shared");
+  });
+});
