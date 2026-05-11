@@ -126,7 +126,11 @@ function resolveDevelopmentTarget(
   development: string | undefined,
   production: string | undefined,
   baseDir: string,
+  forceSource?: "local" | "remote",
 ): RuntimeTarget {
+  if (forceSource === "remote") {
+    return resolveRuntimeTarget(production, baseDir, "remote");
+  }
   const devTarget = resolveRuntimeTarget(development, baseDir);
   if (devTarget.source === "local" && (!devTarget.localPath || !existsSync(devTarget.localPath))) {
     return resolveRuntimeTarget(production, baseDir, "remote");
@@ -134,36 +138,69 @@ function resolveDevelopmentTarget(
   return devTarget;
 }
 
-function buildRuntimeConfig(
+export interface BuildRuntimeConfigOptions {
+  plugins?: Record<string, RuntimePluginConfig>;
+  hostSource?: "local" | "remote";
+  uiSource?: "local" | "remote";
+  apiSource?: "local" | "remote";
+  authSource?: "local" | "remote";
+  proxy?: string;
+}
+
+export function buildRuntimeConfig(
   config: BosConfig,
   baseDir: string,
   env: "development" | "production",
-  options?: { plugins?: Record<string, RuntimePluginConfig> },
+  options?: BuildRuntimeConfigOptions,
 ): RuntimeConfig {
   const uiConfig = config.app.ui;
   const apiConfig = config.app.api;
   const authConfig = config.app.auth;
   const uiRuntime =
     env === "development"
-      ? resolveDevelopmentTarget(uiConfig.development, uiConfig.production, baseDir)
+      ? resolveDevelopmentTarget(
+          uiConfig.development,
+          uiConfig.production,
+          baseDir,
+          options?.uiSource,
+        )
       : resolveRuntimeTarget(uiConfig.production, baseDir, "remote");
   const apiRuntime =
     env === "development"
-      ? resolveDevelopmentTarget(apiConfig.development, apiConfig.production, baseDir)
+      ? resolveDevelopmentTarget(
+          apiConfig.development,
+          apiConfig.production,
+          baseDir,
+          options?.apiSource,
+        )
       : resolveRuntimeTarget(apiConfig.production, baseDir, "remote");
   const authRuntime = authConfig
     ? env === "development"
-      ? resolveDevelopmentTarget(authConfig.development, authConfig.production, baseDir)
+      ? resolveDevelopmentTarget(
+          authConfig.development,
+          authConfig.production,
+          baseDir,
+          options?.authSource,
+        )
       : resolveRuntimeTarget(authConfig.production, baseDir, "remote")
     : undefined;
 
   const hostConfig = config.app.host;
   const hostRuntime =
     env === "development"
-      ? resolveDevelopmentTarget(hostConfig.development, hostConfig.production, baseDir)
+      ? resolveDevelopmentTarget(
+          hostConfig.development,
+          hostConfig.production,
+          baseDir,
+          options?.hostSource,
+        )
       : resolveRuntimeTarget(hostConfig.production, baseDir, "remote");
 
   const hostListeningUrl = resolveDevelopmentHostUrl(hostConfig.development);
+
+  const hostIsRemote = hostRuntime.source === "remote";
+  const uiIsRemote = uiRuntime.source === "remote";
+  const apiIsRemote = apiRuntime.source === "remote";
 
   return {
     env,
@@ -178,9 +215,9 @@ function buildRuntimeConfig(
       localPath: hostRuntime.localPath,
       port: hostRuntime.port ?? DEFAULT_HOST_PORT,
       secrets: hostConfig.secrets,
-      integrity: env === "production" ? hostConfig.integrity : undefined,
+      integrity: hostIsRemote ? hostConfig.integrity : undefined,
       source: hostRuntime.source,
-      remoteUrl: hostRuntime.source === "remote" ? hostRuntime.url : undefined,
+      remoteUrl: hostIsRemote ? hostRuntime.url : undefined,
     },
     shared: config.shared,
     ui: {
@@ -189,9 +226,9 @@ function buildRuntimeConfig(
       entry: uiRuntime.url ? `${uiRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
       localPath: uiRuntime.localPath,
       port: uiRuntime.port,
-      ssrUrl: uiConfig.ssr,
-      ssrIntegrity: env === "production" ? uiConfig.ssrIntegrity : undefined,
-      integrity: env === "production" ? uiConfig.integrity : undefined,
+      ssrUrl: uiIsRemote ? uiConfig.ssr : undefined,
+      ssrIntegrity: uiIsRemote ? uiConfig.ssrIntegrity : undefined,
+      integrity: uiIsRemote ? uiConfig.integrity : undefined,
       source: uiRuntime.source,
     },
     api: {
@@ -201,10 +238,10 @@ function buildRuntimeConfig(
       localPath: apiRuntime.localPath,
       port: apiRuntime.port,
       source: apiRuntime.source,
-      proxy: apiConfig.proxy,
+      proxy: options?.proxy ?? apiConfig.proxy,
       variables: apiConfig.variables,
       secrets: apiConfig.secrets,
-      integrity: env === "production" ? apiConfig.integrity : undefined,
+      integrity: apiIsRemote ? apiConfig.integrity : undefined,
     },
     auth: authConfig
       ? {
@@ -217,7 +254,7 @@ function buildRuntimeConfig(
           proxy: authConfig.proxy,
           variables: authConfig.variables,
           secrets: authConfig.secrets,
-          integrity: env === "production" ? authConfig.integrity : undefined,
+          integrity: authRuntime!.source === "remote" ? authConfig.integrity : undefined,
         }
       : undefined,
     plugins:
