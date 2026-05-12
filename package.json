@@ -70,7 +70,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "start": "NODE_ENV=production bos start --port ${PORT:-3000} --env ${APP_ENV:-production} --no-interactive ${BOS_ACCOUNT:+--account $BOS_ACCOUNT}",
+    "start": "NODE_ENV=production bun ./node_modules/everything-dev/dist/cli.mjs start --port ${PORT:-3000} --env ${APP_ENV:-production} --no-interactive ${BOS_ACCOUNT:+--account $BOS_ACCOUNT}",
     "changeset": "changeset",
     "postinstall": "bun run types:gen",
     "version": "changeset version",

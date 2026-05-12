@@ -5,6 +5,11 @@
 ### Patch Changes
 
 - 8d2a27e: Consolidate code generation into `generateCodeArtifacts` — single function replaces scattered `writeResolvedConfig`, `writePluginSidebarGen`, and `syncApiContractBridge` calls across all CLI handlers (dev, start, build, publish, init, sync, typesGen, pluginAdd, pluginRemove, pluginPublish). Fixes CI build failure where `publish --deploy` skipped sidebar generation.
+- Fix Docker container `bos: not found` — use explicit path in start script
+
+  The Docker build runs `bun install` before `dist/cli.mjs` exists, so `node_modules/.bin/bos` symlinks are broken. The `start` script now uses `bun ./node_modules/everything-dev/dist/cli.mjs start` directly — no bin symlink dependency.
+
+  Also adds `packages/everything-dev/cli.js` to `OBSOLETE_FILES` so `bos upgrade` cleans it up in child projects.
 
 ## 1.14.0
 

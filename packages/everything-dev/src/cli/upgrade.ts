@@ -40,6 +40,7 @@ const OBSOLETE_FILES = [
   "ui/scripts/generate-metadata.ts",
   ".github/dependabot.yml",
   ".github/templates/dependabot.yml",
+  "packages/everything-dev/cli.js",
 ];
 
 interface NpmPackageInfo {

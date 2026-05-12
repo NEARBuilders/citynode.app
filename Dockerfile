@@ -11,7 +11,6 @@ RUN bun run --cwd packages/everything-dev build
 RUN bun run postinstall
 RUN bun run scripts/resolve-workspace-refs.ts
 
-# Remove source dirs — everything is loaded remotely at runtime
 RUN rm -rf host api ui plugins
 
 # Clean broken workspace symlinks and strip workspace entries from package.json
