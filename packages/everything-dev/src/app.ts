@@ -51,6 +51,9 @@ export function detectLocalPackages(
     if (pluginConfig.localPath && existsSync(join(pluginConfig.localPath, "package.json"))) {
       packages.push(`plugin:${pluginId}`);
     }
+    if (pluginConfig.ui?.localPath && existsSync(join(pluginConfig.ui.localPath, "package.json"))) {
+      packages.push(`plugin-ui:${pluginId}`);
+    }
   }
 
   const authLocalPath =
@@ -169,13 +172,20 @@ export async function prepareDevelopmentRuntimeConfig(
     let pluginBasePort = DEFAULT_PLUGIN_PORT_START;
 
     for (const [pluginId, plugin] of entries) {
-      if (plugin.source !== "local" || !plugin.localPath) {
-        continue;
+      if (plugin.source === "local" && plugin.localPath) {
+        const pluginPort = await pickAvailablePort(plugin.port ?? pluginBasePort, usedPorts);
+        next.plugins[pluginId] = withLocalRuntimeUrl(plugin, pluginPort);
+        pluginBasePort = pluginPort + 1;
       }
 
-      const pluginPort = await pickAvailablePort(plugin.port ?? pluginBasePort, usedPorts);
-      next.plugins[pluginId] = withLocalRuntimeUrl(plugin, pluginPort);
-      pluginBasePort = pluginPort + 1;
+      if (plugin.ui?.source === "local" && plugin.ui.localPath) {
+        const uiPort = await pickAvailablePort(plugin.ui.port ?? pluginBasePort, usedPorts);
+        next.plugins[pluginId] = {
+          ...next.plugins[pluginId]!,
+          ui: withLocalRuntimeUrl(plugin.ui, uiPort),
+        };
+        pluginBasePort = uiPort + 1;
+      }
     }
   }
 

@@ -35,6 +35,17 @@ export const FederationEntrySchema = z.object({
 });
 export type FederationEntry = z.infer<typeof FederationEntrySchema>;
 
+export const SidebarRoleSchema = z.enum(["anon", "member", "admin"]);
+export type SidebarRole = z.infer<typeof SidebarRoleSchema>;
+
+export const SidebarItemSchema = z.object({
+  icon: z.string(),
+  label: z.string(),
+  to: z.string().optional(),
+  roleRequired: SidebarRoleSchema.optional(),
+});
+export type SidebarItem = z.infer<typeof SidebarItemSchema>;
+
 export const ApiPluginConfigSchema = z.object({
   name: z.string(),
   development: z.string().optional(),
@@ -43,6 +54,7 @@ export const ApiPluginConfigSchema = z.object({
   proxy: z.string().optional(),
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
+  sidebar: z.array(SidebarItemSchema).optional(),
 });
 export type ApiPluginConfig = z.infer<typeof ApiPluginConfigSchema>;
 
@@ -65,8 +77,14 @@ export const BosPluginRefSchema = z.object({
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
   routes: z.array(z.string()).optional(),
+  sidebar: z.array(SidebarItemSchema).optional(),
+  app: z.record(z.string(), z.unknown()).optional(),
+  shared: z.record(z.string(), z.record(z.string(), SharedConfigSchema)).optional(),
+  plugins: z.record(z.string(), z.unknown()).optional(),
 });
 export type BosPluginRef = z.infer<typeof BosPluginRefSchema>;
+export type PluginEntryValue = string | BosPluginRef;
+export type PluginEntries = Record<string, PluginEntryValue>;
 
 const PluginRuntimeUiSchema = z.object({
   name: z.string(),
@@ -91,6 +109,8 @@ export const RuntimePluginConfigSchema = z.object({
   secrets: z.array(z.string()).optional(),
   integrity: z.string().optional(),
   ui: PluginRuntimeUiSchema.optional(),
+  sidebar: z.array(SidebarItemSchema).optional(),
+  routes: z.array(z.string()).optional(),
 });
 export type RuntimePluginConfig = z.infer<typeof RuntimePluginConfigSchema>;
 
@@ -151,9 +171,11 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     proxy: z.string().optional(),
     variables: z.record(z.string(), z.string()).optional(),
     secrets: z.array(z.string()).optional(),
+    routes: z.array(z.string()).optional(),
+    sidebar: z.array(SidebarItemSchema).optional(),
     app: z.record(z.string(), BosConfigInputAppEntrySchema).optional(),
     shared: z.record(z.string(), z.record(z.string(), SharedConfigSchema)).optional(),
-    plugins: z.record(z.string(), BosConfigInputSchema).optional(),
+    plugins: z.record(z.string(), z.union([z.string(), BosConfigInputSchema])).optional(),
   }),
 );
 
@@ -176,9 +198,11 @@ export interface BosConfigInput {
   proxy?: string;
   variables?: Record<string, string>;
   secrets?: string[];
+  routes?: string[];
+  sidebar?: SidebarItem[];
   app?: Record<string, BosConfigInputAppEntry>;
   shared?: Record<string, Record<string, SharedDepConfig>>;
-  plugins?: Record<string, BosConfigInput>;
+  plugins?: Record<string, string | BosConfigInput>;
 }
 
 export const BosConfigSchema = z.object({
@@ -189,7 +213,7 @@ export const BosConfigSchema = z.object({
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
   shared: z.record(z.string(), z.record(z.string(), SharedConfigSchema)).optional(),
-  plugins: z.record(z.string(), BosPluginRefSchema).optional(),
+  plugins: z.record(z.string(), z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,
     ui: UiConfigSchema,
@@ -237,6 +261,7 @@ export const RuntimeConfigSchema = z.object({
     proxy: z.string().optional(),
     variables: z.record(z.string(), z.string()).optional(),
     secrets: z.array(z.string()).optional(),
+    sidebar: z.array(SidebarItemSchema).optional(),
   }).optional(),
   plugins: z.record(z.string(), RuntimePluginConfigSchema).optional(),
 });
@@ -270,6 +295,15 @@ export const ClientRuntimeConfigSchema = z.object({
       integrity: z.string().optional(),
     })
     .optional(),
+  auth: z
+    .object({
+      name: z.string(),
+      url: z.string(),
+      entry: z.string(),
+      integrity: z.string().optional(),
+      sidebar: z.array(SidebarItemSchema).optional(),
+    })
+    .optional(),
   plugins: z
     .record(
       z.string(),
@@ -287,6 +321,7 @@ export const ClientRuntimeConfigSchema = z.object({
             integrity: z.string().optional(),
           })
           .optional(),
+        sidebar: z.array(SidebarItemSchema).optional(),
       }),
     )
     .optional(),

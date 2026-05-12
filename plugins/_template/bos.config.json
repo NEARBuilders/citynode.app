@@ -1,9 +1,0 @@
-{
-  "extends": "../../bos.config.json",
-  "app": {
-    "api": {
-      "name": "template",
-      "development": "local:."
-    }
-  }
-}

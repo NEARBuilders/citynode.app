@@ -19,11 +19,11 @@ export const Route = createFileRoute("/_layout/apps/$accountId/")({
 function AccountAppsPage() {
   const { accountId } = Route.useParams();
   const apiClient = useApiClient();
-  type RegistryAppsResult = Awaited<ReturnType<typeof apiClient.registry.getRegistryAppsByAccount>>;
+  type RegistryAppsResult = Awaited<ReturnType<typeof apiClient.apps.getRegistryAppsByAccount>>;
 
   const accountQuery = useQuery<RegistryAppsResult>({
     queryKey: ["registry-account", accountId],
-    queryFn: () => apiClient.registry.getRegistryAppsByAccount({ accountId }),
+    queryFn: () => apiClient.apps.getRegistryAppsByAccount({ accountId }),
   });
 
   const apps = accountQuery.data?.data ?? [];

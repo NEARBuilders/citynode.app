@@ -1,0 +1,10 @@
+{
+  "domain": "settings.everything.dev",
+  "app": {
+    "api": {
+      "development": "local:."
+    }
+  },
+  "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"],
+  "sidebar": [{ "icon": "Settings", "label": "settings" }]
+}

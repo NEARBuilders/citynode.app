@@ -117,44 +117,44 @@ describe("mergeBosConfigWithExtends", () => {
   it("deep merges plugins — child overrides parent with same key", () => {
     const parent = {
       plugins: {
-        registry: {
-          development: "local:plugins/registry",
-          production: "https://cdn.example.com/registry",
+        apps: {
+          development: "local:plugins/apps",
+          production: "https://cdn.example.com/apps",
           variables: { namespace: "parent.near" },
         },
       },
     };
     const child = {
       plugins: {
-        registry: {
+        apps: {
           variables: { namespace: "child.near" },
-          secrets: ["REGISTRY_SECRET"],
+          secrets: ["APPS_SECRET"],
         },
       },
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
-    expect(plugins.registry.variables).toEqual({ namespace: "child.near" });
-    expect(plugins.registry.production).toBe("https://cdn.example.com/registry");
-    expect(plugins.registry.development).toBe("local:plugins/registry");
-    expect(plugins.registry.secrets).toEqual(["REGISTRY_SECRET"]);
+    expect(plugins.apps.variables).toEqual({ namespace: "child.near" });
+    expect(plugins.apps.production).toBe("https://cdn.example.com/apps");
+    expect(plugins.apps.development).toBe("local:plugins/apps");
+    expect(plugins.apps.secrets).toEqual(["APPS_SECRET"]);
   });
 
   it("preserves parent plugins not in child", () => {
     const parent = {
       plugins: {
-        registry: { development: "local:plugins/registry" },
+        apps: { development: "local:plugins/apps" },
         projects: { development: "local:plugins/projects" },
       },
     };
     const child = {
       plugins: {
-        registry: { variables: { namespace: "child.near" } },
+        apps: { variables: { namespace: "child.near" } },
       },
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.projects).toBeDefined();
     expect(plugins.projects.development).toBe("local:plugins/projects");
   });
@@ -162,7 +162,7 @@ describe("mergeBosConfigWithExtends", () => {
   it("child can set plugin to null to remove inherited plugin", () => {
     const parent = {
       plugins: {
-        registry: { development: "local:plugins/registry" },
+        apps: { development: "local:plugins/apps" },
         projects: { development: "local:plugins/projects" },
       },
     };
@@ -173,14 +173,14 @@ describe("mergeBosConfigWithExtends", () => {
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.projects).toBeUndefined();
   });
 
   it("child can add new plugins not in parent", () => {
     const parent = {
       plugins: {
-        registry: { development: "local:plugins/registry" },
+        apps: { development: "local:plugins/apps" },
       },
     };
     const child = {
@@ -190,7 +190,7 @@ describe("mergeBosConfigWithExtends", () => {
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.myplugin).toBeDefined();
     expect(plugins.myplugin.development).toBe("local:plugins/myplugin");
   });

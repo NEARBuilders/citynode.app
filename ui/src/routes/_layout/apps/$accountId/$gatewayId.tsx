@@ -30,7 +30,7 @@ function AppDetailPage() {
   const auth = useAuthClient();
   const detailQuery = useQuery({
     queryKey: ["registry-app", accountId, gatewayId],
-    queryFn: () => apiClient.registry.getRegistryApp({ accountId, gatewayId }),
+    queryFn: () => apiClient.apps.getRegistryApp({ accountId, gatewayId }),
   });
   const projectsQuery = useQuery({
     queryKey: ["app-projects", accountId, gatewayId],
@@ -38,7 +38,7 @@ function AppDetailPage() {
   });
   const registryStatusQuery = useQuery({
     queryKey: ["registry-status"],
-    queryFn: () => apiClient.registry.getRegistryStatus(),
+    queryFn: () => apiClient.apps.getRegistryStatus(),
     staleTime: 60_000,
   });
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
@@ -103,7 +103,7 @@ function AppDetailPage() {
         throw new Error("Connect a NEAR wallet to publish registry metadata.");
       }
 
-      return apiClient.registry.prepareRegistryMetadataWrite({
+      return apiClient.apps.prepareRegistryMetadataWrite({
         accountId,
         gatewayId,
         claimedBy: nearAccountId,

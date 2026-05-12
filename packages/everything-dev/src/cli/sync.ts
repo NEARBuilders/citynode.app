@@ -15,6 +15,7 @@ import {
   mergeBosConfigWithTemplate,
   resolveExtendsRef,
 } from "../merge";
+import type { BosPluginRef } from "../types";
 import { isPathExcluded } from "../utils/path-match";
 import {
   personalizeConfig,
@@ -348,8 +349,9 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
     const pluginRoutes: Record<string, string[]> = {};
     if (parentConfig.plugins) {
-      for (const [key, ref] of Object.entries(parentConfig.plugins)) {
-        if (ref.routes && ref.routes.length > 0) {
+      for (const [key, entry] of Object.entries(parentConfig.plugins)) {
+        const ref: BosPluginRef | null = entry && typeof entry !== "string" ? entry : null;
+        if (ref?.routes && ref.routes.length > 0) {
           pluginRoutes[key] = ref.routes;
         }
       }

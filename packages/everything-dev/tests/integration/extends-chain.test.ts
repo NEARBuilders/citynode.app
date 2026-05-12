@@ -1,13 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  clearConfigCache,
-  getResolvedConfigPath,
-  loadConfig,
-  writeResolvedConfig,
-} from "../../src/config";
+import { clearConfigCache, loadConfig } from "../../src/config";
 import { mergeBosConfigWithExtends, rebuildOrderedConfig } from "../../src/merge";
 
 const BASE_CONFIG = {
@@ -54,7 +49,7 @@ describe("extends chain", () => {
           ...BASE_CONFIG,
           repository: "https://github.com/parent",
           plugins: {
-            registry: { development: "local:plugins/registry" },
+            apps: { development: "local:plugins/apps" },
             projects: { development: "local:plugins/projects" },
           },
           shared: {
@@ -74,7 +69,7 @@ describe("extends chain", () => {
         rebuildOrderedConfig({
           ...CHILD_CONFIG,
           plugins: {
-            registry: { variables: { namespace: "child.near" } },
+            apps: { variables: { namespace: "child.near" } },
             projects: null,
           },
           shared: {
@@ -111,7 +106,7 @@ describe("extends chain", () => {
   it("null-sentinel removes inherited plugin", () => {
     const parent = {
       plugins: {
-        registry: { development: "local:plugins/registry" },
+        apps: { development: "local:plugins/apps" },
         projects: { development: "local:plugins/projects" },
       },
     };
@@ -122,14 +117,14 @@ describe("extends chain", () => {
     };
     const merged = mergeBosConfigWithExtends(parent as any, child as any);
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.projects).toBeUndefined();
   });
 
   it("false-sentinel removes inherited plugin", () => {
     const parent = {
       plugins: {
-        registry: { development: "local:plugins/registry" },
+        apps: { development: "local:plugins/apps" },
         projects: { development: "local:plugins/projects" },
       },
     };
@@ -140,7 +135,7 @@ describe("extends chain", () => {
     };
     const merged = mergeBosConfigWithExtends(parent as any, child as any);
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.projects).toBeUndefined();
   });
 
@@ -276,7 +271,7 @@ describe("multi-level extends chain", () => {
         },
       },
       plugins: {
-        registry: { development: "local:plugins/registry" },
+        apps: { development: "local:plugins/apps" },
         projects: { development: "local:plugins/projects" },
         analytics: { development: "local:plugins/analytics" },
       },
@@ -313,7 +308,7 @@ describe("multi-level extends chain", () => {
     expect(ui.effect.strictVersion).toBe(false);
 
     const plugins = secondMerge.plugins as Record<string, unknown>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.projects).toBeDefined();
     expect(plugins.analytics).toBeUndefined();
   });

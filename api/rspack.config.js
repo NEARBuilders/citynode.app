@@ -32,7 +32,7 @@ function readBosConfig() {
   return raw;
 }
 
-const bosConfig = readBosConfig();
+const _bosConfig = readBosConfig();
 
 function updateHostConfig(name, url, integrity) {
   try {

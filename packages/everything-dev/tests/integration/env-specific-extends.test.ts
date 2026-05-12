@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  mergeBosConfigWithExtends,
-  rebuildOrderedConfig,
-  resolveExtendsRef,
-} from "../../src/merge";
+import { mergeBosConfigWithExtends, resolveExtendsRef } from "../../src/merge";
 import type { ExtendsConfig } from "../../src/types";
 
 describe("env-specific extends resolution", () => {
@@ -83,9 +79,9 @@ describe("env-specific extends in merge scenario", () => {
       },
     },
     plugins: {
-      registry: {
-        development: "local:plugins/registry",
-        production: "https://cdn.parent.dev/registry",
+      apps: {
+        development: "local:plugins/apps",
+        production: "https://cdn.parent.dev/apps",
       },
     },
     shared: {
@@ -123,7 +119,7 @@ describe("env-specific extends in merge scenario", () => {
     });
 
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.registry).toBeDefined();
+    expect(plugins.apps).toBeDefined();
     expect(plugins.myplugin).toBeDefined();
 
     const ui = (merged.shared as Record<string, unknown>).ui as Record<

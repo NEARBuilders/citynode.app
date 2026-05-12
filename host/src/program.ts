@@ -151,6 +151,15 @@ function buildRuntimeClientConfig(
           integrity: config.api.integrity,
         }
       : undefined,
+    auth: config.auth
+      ? {
+          name: config.auth.name,
+          url: config.auth.url,
+          entry: config.auth.entry,
+          integrity: config.auth.integrity,
+          sidebar: config.auth.sidebar,
+        }
+      : undefined,
     plugins: Object.fromEntries(
       (Object.entries(config.plugins ?? {}) as Array<[string, RuntimePlugin]>).map(
         ([key, plugin]) => [
@@ -171,6 +180,7 @@ function buildRuntimeClientConfig(
                   },
                 }
               : {}),
+            ...(plugin.sidebar ? { sidebar: plugin.sidebar } : {}),
           },
         ],
       ),

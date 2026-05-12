@@ -1,10 +1,11 @@
 {
-  "extends": "../../bos.config.json",
+  "domain": "projects.everything.dev",
   "app": {
     "api": {
-      "name": "projects",
       "development": "local:.",
       "secrets": ["PROJECTS_DATABASE_URL"]
     }
-  }
+  },
+  "routes": ["ui/src/routes/_layout/_authenticated/projects/**"],
+  "sidebar": [{ "icon": "FolderKanban", "label": "projects" }]
 }

@@ -29,34 +29,16 @@ import {
   resolveLocalDevelopmentPath,
   writeResolvedConfig,
 } from "./config";
-import {
-  type BosConfigResult,
-  type BuildOptions,
-  bosContract,
-  type DevOptions,
-  type InitOptions,
-  type KeyPublishOptions,
-  type PluginAddOptions,
-  type PluginListResult,
-  type PluginPublishOptions,
-  type PluginRemoveOptions,
-  type PublishOptions,
-  type StartOptions,
-  type SyncOptions,
-  type TypesGenOptions,
-  type UpgradeOptions,
-} from "./contract";
+import { type BosConfigResult, bosContract, type PluginListResult } from "./contract";
 import { devApp, startApp } from "./dev-session";
 import {
   buildRegistryConfigUrl,
   buildRegistryConfigUrlForNetwork,
   fetchBosConfigFromFastKv,
-  fetchPluginFromRegistry,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
   getRegistryNamespaceForNetwork,
   type PluginManifest,
-  parsePluginBosUrl,
 } from "./fastkv";
 import { computeSriHashForUrl } from "./integrity";
 import type { BosEnv } from "./merge";
@@ -69,7 +51,8 @@ import {
   buildServiceDescriptorMap,
 } from "./service-descriptor";
 import { syncAndGenerateSharedUi } from "./shared";
-import type { BosConfig, RuntimeConfig, SourceMode } from "./types";
+import { writePluginSidebarGen } from "./sidebar";
+import type { BosConfig, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
@@ -122,6 +105,11 @@ type BosDeps = {
 
 type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
 
+function getPluginRef(entry: string | BosPluginRef | undefined | null): BosPluginRef | null {
+  if (!entry || typeof entry === "string") return null;
+  return entry;
+}
+
 function parseSourceMode(value: string | undefined, defaultValue: SourceMode): SourceMode {
   if (value === "local" || value === "remote") return value;
   return defaultValue;
@@ -170,7 +158,7 @@ function resolveWorkspaceTarget(
   const runtimePlugin = runtimeConfig?.plugins?.[key];
   const pluginPath =
     runtimePlugin?.localPath ??
-    resolveLocalDevelopmentPath(bosConfig?.plugins?.[key]?.development, configDir);
+    resolveLocalDevelopmentPath(getPluginRef(bosConfig?.plugins?.[key])?.development, configDir);
   if (pluginPath) {
     return {
       key,
@@ -226,7 +214,8 @@ function defaultPluginKey(source: string): string {
 }
 
 function pluginLocalPath(configDir: string, attachment: PluginAttachmentConfig): string | null {
-  const source = attachment.development ?? attachment.production;
+  const ref = getPluginRef(attachment);
+  const source = ref?.development ?? ref?.production;
   if (!source?.startsWith("local:")) {
     return null;
   }
@@ -236,20 +225,21 @@ function pluginLocalPath(configDir: string, attachment: PluginAttachmentConfig):
 
 function listPluginAttachments(config: BosConfig | null) {
   return (Object.entries(config?.plugins ?? {}) as Array<[string, PluginAttachmentConfig]>)
-    .map(([key, attachment]) => ({
-      key,
-      development: attachment.development,
-      production: attachment.production,
-      localPath: attachment.development?.startsWith("local:")
-        ? attachment.development.slice("local:".length)
-        : undefined,
-      source: attachment.development?.startsWith("local:")
-        ? ("local" as const)
-        : ("remote" as const),
-      integrity: attachment.integrity,
-      version: attachment.version,
-      name: attachment.name,
-    }))
+    .map(([key, attachment]) => {
+      const ref = getPluginRef(attachment);
+      return {
+        key,
+        development: ref?.development,
+        production: ref?.production,
+        localPath: ref?.development?.startsWith("local:")
+          ? ref.development.slice("local:".length)
+          : undefined,
+        source: ref?.development?.startsWith("local:") ? ("local" as const) : ("remote" as const),
+        integrity: ref?.integrity,
+        version: ref?.version,
+        name: ref?.name,
+      };
+    })
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
@@ -265,6 +255,8 @@ async function refreshApiContractBridge(
     runtimeConfig: refreshed.runtime,
     apiBaseUrl: refreshed.runtime.api.url,
   });
+
+  writePluginSidebarGen(configDir, refreshed.config);
 }
 
 function extractPublishedUrl(output: string): string | null {
@@ -486,90 +478,33 @@ export default createPlugin({
         };
       }
 
-      const pluginRef = parsePluginBosUrl(input.source);
-      let production = input.production ?? input.source;
-      let integrity: string | undefined;
-      let version: string | undefined;
-      let name: string | undefined;
-
-      if (pluginRef) {
-        try {
-          const entry = await fetchPluginFromRegistry(pluginRef.accountId, pluginRef.pluginName);
-          if (!entry) {
-            return {
-              status: "error" as const,
-              key: "",
-              error: `Plugin not found in registry: bos://${pluginRef.accountId}/plugins/${pluginRef.pluginName}`,
-            };
-          }
-
-          const manifest = entry.manifest;
-          if (
-            manifest.schemaVersion !== 1 ||
-            manifest.kind !== "every-plugin/manifest" ||
-            !manifest.plugin?.name ||
-            !manifest.plugin?.version ||
-            !manifest.runtime?.remoteEntry
-          ) {
-            return {
-              status: "error" as const,
-              key: "",
-              error: `Invalid plugin manifest for bos://${pluginRef.accountId}/plugins/${pluginRef.pluginName}`,
-            };
-          }
-
-          production = entry.metadata.cdnUrl || input.production || input.source;
-          name = manifest.plugin.name;
-          version = manifest.plugin.version;
-        } catch (error) {
-          return {
-            status: "error" as const,
-            key: "",
-            error: `Failed to resolve plugin from registry: ${error instanceof Error ? error.message : error}`,
-          };
-        }
-      }
-
-      if (!input.source.startsWith("local:") && !pluginRef && production.startsWith("https://")) {
-        try {
-          const manifest = await fetchRemotePluginManifest(production);
-          if (manifest) {
-            name = manifest.plugin.name;
-            version = manifest.plugin.version;
-          }
-        } catch {
-          console.warn(`[plugin add] Could not fetch manifest from ${production}`);
-        }
-      }
-
-      if (!input.source.startsWith("local:") && production.startsWith("https://")) {
-        try {
-          const computed = await computeSriHashForUrl(production);
-          if (computed) integrity = computed;
-        } catch {
-          console.warn(`[plugin add] Could not compute integrity for ${production}`);
-        }
-      }
-
+      const isBosRef = input.source.startsWith("bos://");
+      const isLocal = input.source.startsWith("local:");
       const key = sanitizePluginKey(
-        input.as ?? (pluginRef ? pluginRef.pluginName : defaultPluginKey(input.source)),
+        input.as ??
+          (isBosRef ? (input.source.split("/").pop() ?? "plugin") : defaultPluginKey(input.source)),
       );
       const existing = deps.bosConfig.plugins?.[key];
+      const existingEntry = existing && typeof existing === "object" ? existing : {};
       const nextPlugins = { ...(deps.bosConfig.plugins ?? {}) };
 
-      nextPlugins[key] = input.source.startsWith("local:")
-        ? {
-            ...(existing ?? {}),
-            development: input.source,
-            production: input.production ?? existing?.production,
-          }
-        : {
-            ...(existing ?? {}),
-            production,
-            ...(integrity ? { integrity } : {}),
-            ...(name ? { name } : {}),
-            ...(version ? { version } : {}),
-          };
+      if (isBosRef) {
+        nextPlugins[key] = {
+          ...existingEntry,
+          extends: input.source,
+        };
+      } else if (isLocal) {
+        nextPlugins[key] = {
+          ...existingEntry,
+          development: input.source,
+          ...(existingEntry.extends ? {} : {}),
+        };
+      } else {
+        nextPlugins[key] = {
+          ...existingEntry,
+          production: input.production ?? input.source,
+        };
+      }
 
       deps.bosConfig = {
         ...deps.bosConfig,
@@ -579,13 +514,16 @@ export default createPlugin({
       await saveBosConfig(deps.configDir, deps.bosConfig);
       await refreshApiContractBridge(deps.configDir);
 
+      const stored = deps.bosConfig.plugins?.[key];
+      const storedObj = stored && typeof stored === "object" ? stored : {};
+
       return {
         status: "added" as const,
         key,
-        development: deps.bosConfig.plugins?.[key]?.development,
-        production: deps.bosConfig.plugins?.[key]?.production,
-        integrity,
-        version,
+        development: storedObj.development,
+        production: storedObj.production,
+        integrity: storedObj.integrity,
+        version: storedObj.version,
       };
     }),
 
@@ -648,6 +586,8 @@ export default createPlugin({
         };
       }
 
+      const attachmentRef = getPluginRef(attachment);
+
       const localPath = pluginLocalPath(deps.configDir, attachment);
       if (!localPath) {
         return {
@@ -696,10 +636,10 @@ export default createPlugin({
       let manifest: PluginManifest | null = null;
       if (publishedUrl) {
         manifest = await fetchRemotePluginManifest(publishedUrl);
-      } else if (attachment.production) {
-        manifest = await fetchRemotePluginManifest(attachment.production);
+      } else if (attachmentRef?.production) {
+        manifest = await fetchRemotePluginManifest(attachmentRef.production);
         if (manifest) {
-          publishedUrl = attachment.production;
+          publishedUrl = attachmentRef.production;
         }
       }
 
@@ -707,23 +647,49 @@ export default createPlugin({
       const version = manifest?.plugin.version ?? pkgJson.version;
 
       if (publishedUrl) {
-        deps.bosConfig = {
-          ...deps.bosConfig,
-          plugins: {
-            ...(deps.bosConfig.plugins ?? {}),
-            [input.key]: {
-              ...(deps.bosConfig.plugins?.[input.key] ?? {}),
-              production: publishedUrl,
-              ...(integrity ? { integrity } : {}),
-              ...(manifest?.plugin.name ? { name: manifest.plugin.name } : {}),
-              ...(version ? { version } : {}),
-            },
-          },
-        };
-        await saveBosConfig(deps.configDir, deps.bosConfig);
+        const pluginConfigPath = join(localPath, "bos.config.json");
+        if (existsSync(pluginConfigPath)) {
+          try {
+            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
+              string,
+              unknown
+            >;
+            if (!pluginConfig.app) pluginConfig.app = {};
+            const app = pluginConfig.app as Record<string, unknown>;
+            if (!app.api) app.api = {};
+            const api = app.api as Record<string, unknown>;
+            api.production = publishedUrl;
+            if (integrity) {
+              api.integrity = integrity;
+            } else {
+              delete api.integrity;
+            }
+            writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
+            console.log(`   ✅ Updated ${pluginConfigPath}: app.api.production`);
+          } catch (err) {
+            console.error(
+              `   ❌ Failed to update plugin bos.config.json:`,
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }
 
         const account = deps.bosConfig.account;
         const network = getNetworkIdForAccount(account);
+
+        let pluginDomain: string | undefined;
+        if (existsSync(pluginConfigPath)) {
+          try {
+            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
+            if (typeof pluginConfig.domain === "string") {
+              pluginDomain = pluginConfig.domain;
+            }
+          } catch {}
+        }
+        if (!pluginDomain) {
+          pluginDomain = `${input.key}.${deps.bosConfig.domain ?? "everything.dev"}`;
+        }
+
         if (manifest && version) {
           try {
             const registryEntries: Record<string, string> = {
@@ -740,6 +706,16 @@ export default createPlugin({
               [`plugins/${account}/${input.key}/versions/${version}/manifest.json`]:
                 JSON.stringify(manifest),
             };
+
+            if (existsSync(pluginConfigPath)) {
+              try {
+                const publishedPluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
+                delete publishedPluginConfig.development;
+                registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
+                  JSON.stringify(publishedPluginConfig);
+              } catch {}
+            }
+
             const payload = JSON.stringify(registryEntries);
             const argsBase64 = Buffer.from(payload).toString("base64");
             const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
@@ -781,7 +757,7 @@ export default createPlugin({
         key: input.key,
         path: localPath,
         script,
-        production: publishedUrl ?? attachment.production,
+        production: publishedUrl ?? attachmentRef?.production,
         integrity: integrity ?? undefined,
         version: version ?? undefined,
       };
@@ -839,6 +815,7 @@ export default createPlugin({
           "development",
           refreshed?.source.extended,
         );
+        writePluginSidebarGen(deps.configDir, deps.bosConfig);
       }
 
       if (!deps.bosConfig) {
@@ -960,6 +937,8 @@ export default createPlugin({
         plugins: runtimePlugins,
       });
 
+      writePluginSidebarGen(deps.configDir, config);
+
       // ── Production Readiness Validation ──
       const productionEnv: Record<string, string> = {};
       const warnings: string[] = [];
@@ -1074,6 +1053,7 @@ export default createPlugin({
       const buildEnv: BosEnv = input.deploy ? "production" : "development";
 
       writeResolvedConfig(deps.configDir, deps.bosConfig, buildEnv);
+      writePluginSidebarGen(deps.configDir, deps.bosConfig);
 
       const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
       if (targets.length === 0) {
@@ -1179,9 +1159,34 @@ export default createPlugin({
         }
       }
 
-      const payload = JSON.stringify({
+      const registryEntries: Record<string, string> = {
         [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishConfig),
-      });
+      };
+
+      for (const [pluginKey, pluginEntry] of Object.entries(publishConfig.plugins ?? {})) {
+        const pluginRef = getPluginRef(pluginEntry);
+        if (!pluginRef?.development?.startsWith("local:")) continue;
+
+        const localPath = join(deps.configDir, pluginRef.development.slice("local:".length));
+        const pluginConfigPath = join(localPath, "bos.config.json");
+        if (!existsSync(pluginConfigPath)) continue;
+
+        try {
+          const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
+            string,
+            unknown
+          >;
+          const pluginDomain =
+            typeof pluginConfig.domain === "string"
+              ? pluginConfig.domain
+              : `${pluginKey}.${gateway}`;
+          delete pluginConfig.development;
+          registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
+            JSON.stringify(pluginConfig);
+        } catch {}
+      }
+
+      const payload = JSON.stringify(registryEntries);
       const argsBase64 = Buffer.from(payload).toString("base64");
       const privateKey =
         input.privateKey || process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
@@ -1330,7 +1335,7 @@ export default createPlugin({
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
         directory = directory || domain || extendsGateway;
-        plugins = plugins?.length ? plugins : ["_template"];
+        plugins = plugins?.length ? plugins : ["settings"];
 
         try {
           await fetchParentConfig(extendsAccount, extendsGateway);
@@ -1374,9 +1379,10 @@ export default createPlugin({
 
           const pluginRoutes: Record<string, string[]> = {};
           if (parentConfig.plugins) {
-            for (const [key, ref] of Object.entries(parentConfig.plugins)) {
-              if (ref.routes && ref.routes.length > 0) {
-                pluginRoutes[key] = ref.routes;
+            for (const [key, entry] of Object.entries(parentConfig.plugins)) {
+              const entryRef = getPluginRef(entry);
+              if (entryRef?.routes && entryRef.routes.length > 0) {
+                pluginRoutes[key] = entryRef.routes;
               }
             }
           }
@@ -1413,6 +1419,11 @@ export default createPlugin({
             await runBunInstall(directory);
             await runTypesGen(directory);
             await generateDatabaseMigrations(directory);
+          }
+
+          const initConfig = await loadConfig({ cwd: directory });
+          if (initConfig?.config) {
+            writePluginSidebarGen(directory, initConfig.config);
           }
 
           s.stop("Project initialized");
@@ -1464,7 +1475,16 @@ export default createPlugin({
         }
 
         const projectDir = resolve(dirname(configPath));
-        return await syncTemplate(projectDir, input);
+        const result = await syncTemplate(projectDir, input);
+
+        if (result.status === "synced" || result.status === "dry-run") {
+          const syncedConfig = await loadConfig({ cwd: projectDir });
+          if (syncedConfig?.config) {
+            writePluginSidebarGen(projectDir, syncedConfig.config);
+          }
+        }
+
+        return result;
       } catch (error) {
         return {
           status: "error" as const,

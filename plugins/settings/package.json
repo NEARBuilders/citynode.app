@@ -1,7 +1,7 @@
 {
-  "name": "@everything-dev/registry-plugin",
-  "version": "1.2.4",
-  "description": "Registry plugin for discovering and publishing apps via NEAR FastKV",
+  "name": "@every-plugin/settings",
+  "version": "1.0.4",
+  "description": "Settings plugin for every-plugin framework",
   "type": "module",
   "exports": {
     ".": {
@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "@orpc/contract": "^1.13.4",
-    "@orpc/server": "^1.13.4",
-    "near-kit": "catalog:"
+    "@orpc/server": "^1.13.4"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
@@ -28,9 +27,8 @@
     "@rspack/core": "^1.6.8",
     "@types/node": "catalog:",
     "dotenv": "^17.2.3",
-    "everything-dev": "workspace:*",
-    "every-plugin": "workspace:*",
-    "host": "workspace:*",
+    "everything-dev": "catalog:",
+    "every-plugin": "catalog:",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "catalog:",
     "zephyr-rspack-plugin": "^1.1.0"

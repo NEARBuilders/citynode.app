@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fetchBosConfigFromFastKv } from "./fastkv";
+import { fetchBosConfigFromFastKv, fetchPluginFromRegistry, parsePluginBosUrl } from "./fastkv";
 import {
   type BosEnv,
   isPlainObject,
@@ -13,9 +13,12 @@ import { getNetworkIdForAccount } from "./network";
 import type {
   BosConfig,
   BosConfigInput,
+  BosPluginRef,
   ExtendsConfig,
+  PluginEntryValue,
   RuntimeConfig,
   RuntimePluginConfig,
+  SharedDepConfig,
 } from "./types";
 import { BosConfigSchema } from "./types";
 
@@ -350,6 +353,11 @@ export function buildRuntimeConfig(
         variables: authConfig.variables,
         secrets: authConfig.secrets,
         integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
+        sidebar: authConfig.sidebar?.map((item) => ({
+          ...item,
+          to: item.to ?? "/auth",
+          roleRequired: item.roleRequired ?? ("member" as const),
+        })),
       };
     })(),
     plugins:
@@ -401,43 +409,93 @@ async function resolveConfigWithExtends(
   return mergeBosConfigWithExtends(parent, config);
 }
 
-type PluginOverrideValue = BosConfigInput | null | false;
+type PluginOverrideValue = PluginEntryValue | null | false;
+
+function normalizePluginEntry(raw: PluginOverrideValue): BosPluginRef | null | false {
+  if (raw === null || raw === false) return raw;
+  if (typeof raw === "string") {
+    return { extends: raw };
+  }
+  return raw;
+}
 
 async function resolveRuntimePlugins(
   plugins: Record<string, PluginOverrideValue>,
   baseDir: string,
   env: BosEnv,
-  prefix: string[] = [],
 ): Promise<Record<string, RuntimePluginConfig>> {
   const out: Record<string, RuntimePluginConfig> = {};
 
-  for (const [pluginId, pluginInput] of Object.entries(plugins)) {
-    if (pluginInput === null || pluginInput === false) continue;
-    const runtimeKey = [...prefix, pluginId].join("/");
-    const { config: resolvedConfig, baseDir: pluginBaseDir } = await resolveBosConfigInput(
-      pluginInput,
-      baseDir,
-      new Set(),
-      [],
-      env,
-    );
+  for (const [pluginId, rawInput] of Object.entries(plugins)) {
+    const normalized = normalizePluginEntry(rawInput);
+    if (normalized === null || normalized === false) continue;
 
-    const pluginRuntime = buildRuntimePluginConfig(
-      runtimeKey,
+    let resolvedConfig: BosConfigInput = {};
+    let pluginBaseDir = baseDir;
+
+    if (normalized.extends) {
+      try {
+        const extendsUrl = resolveExtendsRef(normalized.extends, env);
+        if (extendsUrl) {
+          const remoteConfig = await fetchBosConfigFromFastKv<BosConfigInput>(extendsUrl);
+          resolvedConfig = remoteConfig;
+        }
+      } catch {
+        resolvedConfig = {};
+      }
+    }
+
+    if (normalized.development?.startsWith(LOCAL_PREFIX)) {
+      const localPath = resolve(baseDir, normalized.development.slice(LOCAL_PREFIX.length).trim());
+      if (existsSync(localPath)) {
+        const localConfigPath = join(localPath, "bos.config.json");
+        if (existsSync(localConfigPath)) {
+          try {
+            const localRaw = JSON.parse(readFileSync(localConfigPath, "utf-8")) as BosConfigInput;
+            resolvedConfig = mergeBosConfigWithExtends(resolvedConfig, localRaw);
+            pluginBaseDir = localPath;
+          } catch {}
+        }
+      }
+    }
+
+    if (normalized.app && isPlainObject(normalized.app)) {
+      const mergedApp: Record<string, unknown> = {
+        ...((resolvedConfig.app as Record<string, unknown>) ?? {}),
+        ...(normalized.app as Record<string, unknown>),
+      };
+      resolvedConfig = { ...resolvedConfig, app: mergedApp as BosConfigInput["app"] };
+    }
+    if (normalized.shared && isPlainObject(normalized.shared)) {
+      const mergedShared: Record<string, Record<string, SharedDepConfig>> = {
+        ...(resolvedConfig.shared ?? {}),
+        ...(normalized.shared as Record<string, Record<string, SharedDepConfig>>),
+      };
+      resolvedConfig = { ...resolvedConfig, shared: mergedShared };
+    }
+    if (normalized.sidebar) {
+      resolvedConfig = { ...resolvedConfig, sidebar: normalized.sidebar };
+    }
+    if (normalized.routes) {
+      resolvedConfig = { ...resolvedConfig, routes: normalized.routes };
+    }
+
+    const pluginRuntime = await buildRuntimePluginConfig(
+      pluginId,
       resolvedConfig,
       pluginBaseDir,
       env,
-      pluginInput,
+      normalized,
     );
     if (
-      pluginInput.name &&
-      typeof pluginInput.name === "string" &&
+      normalized.name &&
+      typeof normalized.name === "string" &&
       !pluginRuntime.name.includes("/")
     ) {
-      pluginRuntime.name = pluginInput.name;
+      pluginRuntime.name = normalized.name;
     }
 
-    const integrity = pluginInput.integrity;
+    const integrity = normalized.integrity;
     if (env === "production" && integrity) {
       pluginRuntime.integrity = integrity;
     }
@@ -447,7 +505,7 @@ async function resolveRuntimePlugins(
       pluginRuntime.url &&
       !pluginRuntime.localPath &&
       typeof resolvedConfig.app?.api?.name !== "string" &&
-      !pluginInput.name
+      !normalized.name
     ) {
       pluginRuntime.name = await resolveRemotePluginRuntimeName(
         pluginRuntime.url,
@@ -455,15 +513,7 @@ async function resolveRuntimePlugins(
       );
     }
 
-    out[runtimeKey] = pluginRuntime;
-
-    if (resolvedConfig.plugins && Object.keys(resolvedConfig.plugins).length > 0) {
-      const nested = await resolveRuntimePlugins(resolvedConfig.plugins, pluginBaseDir, env, [
-        ...prefix,
-        pluginId,
-      ]);
-      Object.assign(out, nested);
-    }
+    out[pluginId] = pluginRuntime;
   }
 
   return out;
@@ -494,13 +544,38 @@ async function resolveRemotePluginRuntimeName(baseUrl: string, fallback: string)
   }
 }
 
-function buildRuntimePluginConfig(
+interface ResolvedBosPlugin {
+  url: string;
+  integrity?: string;
+}
+
+async function resolveBosPluginUrl(bosUrl: string): Promise<ResolvedBosPlugin | null> {
+  const parsed = parsePluginBosUrl(bosUrl);
+  if (!parsed) return null;
+
+  try {
+    const entry = await fetchPluginFromRegistry(parsed.accountId, parsed.pluginName);
+    if (!entry) return null;
+
+    const cdnUrl = entry.metadata.cdnUrl;
+    if (!cdnUrl) return null;
+
+    return {
+      url: cdnUrl,
+      integrity: entry.metadata.integrity ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function buildRuntimePluginConfig(
   pluginId: string,
   config: BosConfigInput,
   baseDir: string,
   env: BosEnv,
-  source: BosConfigInput,
-): RuntimePluginConfig {
+  source: BosPluginRef,
+): Promise<RuntimePluginConfig> {
   const apiConfig = config.app?.api ?? {};
   const apiDevelopment =
     typeof apiConfig.development === "string" ? apiConfig.development : undefined;
@@ -509,7 +584,18 @@ function buildRuntimePluginConfig(
   const sourceProduction = typeof source.production === "string" ? source.production : undefined;
   const proxy = typeof apiConfig.proxy === "string" ? apiConfig.proxy : undefined;
   const development = apiDevelopment ?? sourceDevelopment;
-  const production = apiProduction ?? sourceProduction;
+  let production = apiProduction ?? sourceProduction;
+
+  if (production?.startsWith("bos://")) {
+    const resolved = await resolveBosPluginUrl(production);
+    if (resolved) {
+      production = resolved.url;
+      if (resolved.integrity && env === "production") {
+        source.integrity = resolved.integrity;
+      }
+    }
+  }
+
   const runtimeTarget =
     env === "development"
       ? resolveDevelopmentTarget(development, production, baseDir)
@@ -530,6 +616,14 @@ function buildRuntimePluginConfig(
         ? resolveDevelopmentTarget(uiDevelopment, uiProduction, baseDir)
         : resolveRuntimeTarget(uiProduction, baseDir, "remote")
       : undefined;
+
+  const sidebar = (config.sidebar ?? source.sidebar)?.map((item) => ({
+    ...item,
+    to: item.to ?? `/${pluginId}`,
+    roleRequired: item.roleRequired ?? ("member" as const),
+  }));
+
+  const routes = config.routes ?? source.routes;
 
   return {
     name: apiName,
@@ -559,6 +653,8 @@ function buildRuntimePluginConfig(
               : undefined,
         }
       : undefined,
+    sidebar,
+    routes,
   };
 }
 
@@ -584,33 +680,6 @@ export function resolvePluginRuntimeName(
   } catch {}
 
   return fallback;
-}
-
-async function resolveBosConfigInput(
-  input: BosConfigInput,
-  baseDir: string,
-  visited: Set<string>,
-  chain: string[],
-  env: BosEnv = "development",
-): Promise<{ config: BosConfigInput; baseDir: string }> {
-  if (input.extends) {
-    const extendsRef = resolveExtendsRef(input.extends as string | ExtendsConfig, env);
-    if (!extendsRef) {
-      return { config: input, baseDir };
-    }
-    const parentBaseDir = extendsRef.startsWith("bos://")
-      ? baseDir
-      : isAbsolute(extendsRef)
-        ? dirname(extendsRef)
-        : baseDir;
-    const config = await resolveConfigWithExtends(extendsRef, parentBaseDir, visited, chain, env);
-    return {
-      config: mergeBosConfigWithExtends(config, input),
-      baseDir,
-    };
-  }
-
-  return { config: input, baseDir };
 }
 
 function normalizeStringRecord(value: unknown): Record<string, string> | undefined {

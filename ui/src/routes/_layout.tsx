@@ -1,10 +1,10 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Building2, FolderKanban, Globe, Home, Settings } from "lucide-react";
 import { getRuntimeConfig, sessionQueryOptions } from "@/app";
 import builtOn from "@/assets/built_on.png";
 import builtOnRev from "@/assets/built_on_rev.png";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useClientValue } from "@/hooks/use-client";
+import { pluginSidebarItems, type SidebarItem, type SidebarRole } from "@/lib/plugin-sidebar.gen";
 import { ThemeToggle } from "../components/theme-toggle";
 import { UserNav } from "../components/user-nav";
 
@@ -24,13 +24,20 @@ export const Route = createFileRoute("/_layout")({
   component: Layout,
 });
 
-const authenticatedSidebarItems = [
-  { icon: Home, label: "home", to: "/" as const },
-  { icon: Globe, label: "apps", to: "/apps" as const },
-  { icon: FolderKanban, label: "projects", to: "/projects" as const },
-  { icon: Building2, label: "organizations", to: "/organizations" as const },
-  { icon: Settings, label: "settings", to: "/settings" as const },
-];
+function filterSidebarByRole(items: SidebarItem[], userRole: SidebarRole): SidebarItem[] {
+  return items.filter((item) => {
+    if (item.roleRequired === "anon") return true;
+    if (item.roleRequired === "member" && userRole !== "anon") return true;
+    if (item.roleRequired === "admin" && userRole === "admin") return true;
+    return false;
+  });
+}
+
+function getUserRole(isAuthenticated: boolean, isAdmin: boolean): SidebarRole {
+  if (isAdmin) return "admin";
+  if (isAuthenticated) return "member";
+  return "anon";
+}
 
 function Layout() {
   const pathname = useClientValue(() => window.location.pathname, "/");
@@ -44,8 +51,11 @@ function Layout() {
   }, "app");
   const { session } = Route.useRouteContext();
   const isAuthenticated = !!session?.user;
+  const isAdmin = isAuthenticated && (session?.user as Record<string, unknown>)?.role === "admin";
+  const userRole = getUserRole(isAuthenticated, isAdmin);
+  const visibleItems = filterSidebarByRole(pluginSidebarItems, userRole);
 
-  const isActive = (item: (typeof authenticatedSidebarItems)[number]) => {
+  const isActive = (item: SidebarItem) => {
     return pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to));
   };
 
@@ -76,7 +86,7 @@ function Layout() {
                 <TooltipContent side="right">{appName}</TooltipContent>
               </Tooltip>
 
-              {authenticatedSidebarItems.map((item) => {
+              {visibleItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item);
                 const className = `flex items-center justify-center w-10 h-10 border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] shadow-sm transition-all duration-200 ease-out hover:shadow-md ${active ? "bg-foreground text-background" : "bg-card text-foreground hover:bg-muted"}`;
@@ -179,7 +189,7 @@ function Layout() {
           {isAuthenticated && (
             <nav className="fixed bottom-0 left-0 right-0 sm:hidden border-t border-border bg-card animate-fade-in z-40">
               <div className="flex items-center justify-around px-2 py-2 safe-area-inset-bottom">
-                {authenticatedSidebarItems.map((item) => {
+                {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const active = isActive(item);
                   const className = `flex flex-col items-center justify-center gap-0.5 p-1.5 transition-colors duration-200 ${active ? "text-foreground" : "text-muted-foreground"}`;

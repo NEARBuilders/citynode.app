@@ -294,13 +294,124 @@ export async function personalizeConfig(
       }
 
       if (isInit) {
+        const parentDomain = opts.extendsGateway;
+
         for (const pluginKey of Object.keys(plugins)) {
           const plugin = plugins[pluginKey];
-          if (plugin && typeof plugin === "object") {
-            const p = plugin as Record<string, unknown>;
-            delete p.production;
-            delete p.integrity;
+          let pluginObj: Record<string, unknown>;
+
+          if (typeof plugin === "string") {
+            pluginObj = { extends: plugin };
+            plugins[pluginKey] = pluginObj;
+          } else if (plugin && typeof plugin === "object") {
+            pluginObj = { ...(plugin as Record<string, unknown>) };
+          } else {
+            continue;
           }
+
+          if (
+            pluginObj.development &&
+            typeof pluginObj.development === "string" &&
+            pluginObj.development.startsWith("local:")
+          ) {
+            const pluginDir = join(destination, pluginObj.development.slice("local:".length));
+            const pluginConfigPath = join(pluginDir, "bos.config.json");
+
+            if (existsSync(pluginConfigPath)) {
+              try {
+                const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
+                  string,
+                  unknown
+                >;
+                delete pluginConfig.extends;
+                if (pluginConfig.app && typeof pluginConfig.app === "object") {
+                  const app = pluginConfig.app as Record<string, unknown>;
+                  for (const entryKey of Object.keys(app)) {
+                    const entry = app[entryKey];
+                    if (entry && typeof entry === "object") {
+                      const e = entry as Record<string, unknown>;
+                      delete e.production;
+                      delete e.integrity;
+                    }
+                  }
+                }
+                writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
+              } catch {}
+            } else if (existsSync(pluginDir)) {
+              const pluginConfig: Record<string, unknown> = {};
+              pluginConfig.domain = `${pluginKey}.${opts.domain ?? parentDomain}`;
+              pluginConfig.app = { api: { development: "local:." } };
+
+              if (opts.pluginRoutes?.[pluginKey]) {
+                pluginConfig.routes = opts.pluginRoutes[pluginKey];
+              }
+              if (pluginObj.sidebar) {
+                pluginConfig.sidebar = pluginObj.sidebar;
+              }
+
+              mkdirSync(pluginDir, { recursive: true });
+              writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
+            }
+
+            const cleanEntry: Record<string, unknown> = { development: pluginObj.development };
+            if (pluginObj.extends) {
+              cleanEntry.extends = pluginObj.extends;
+            }
+            if (pluginObj.secrets) {
+              cleanEntry.secrets = pluginObj.secrets;
+            }
+            if (pluginObj.variables) {
+              cleanEntry.variables = pluginObj.variables;
+            }
+            plugins[pluginKey] = cleanEntry;
+          } else {
+            delete pluginObj.production;
+            delete pluginObj.integrity;
+            delete pluginObj.sidebar;
+            delete pluginObj.routes;
+          }
+        }
+      } else {
+        for (const pluginKey of Object.keys(plugins)) {
+          const pluginDir = resolve(
+            destination,
+            (plugins[pluginKey] as Record<string, unknown>)?.development
+              ?.toString()
+              ?.slice("local:".length) ?? "",
+          );
+          const pluginConfigPath = join(pluginDir, "bos.config.json");
+          if (!existsSync(pluginConfigPath)) continue;
+
+          try {
+            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
+              string,
+              unknown
+            >;
+            let changed = false;
+
+            if ("extends" in pluginConfig) {
+              delete pluginConfig.extends;
+              changed = true;
+            }
+            if (pluginConfig.app && typeof pluginConfig.app === "object") {
+              const app = pluginConfig.app as Record<string, unknown>;
+              for (const entryKey of Object.keys(app)) {
+                const entry = app[entryKey];
+                if (entry && typeof entry === "object") {
+                  const e = entry as Record<string, unknown>;
+                  if ("production" in e || "integrity" in e) {
+                    delete e.production;
+                    delete e.integrity;
+                    changed = true;
+                  }
+                }
+              }
+            }
+
+            if (changed) {
+              writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
+            }
+          } catch {}
         }
       }
 

@@ -1,0 +1,13 @@
+{
+  "domain": "apps.everything.dev",
+  "app": {
+    "api": {
+      "development": "local:.",
+      "variables": {
+        "registryNamespace": "dev.everything.near"
+      }
+    }
+  },
+  "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"],
+  "sidebar": [{ "icon": "Globe", "label": "apps", "roleRequired": "anon" }]
+}

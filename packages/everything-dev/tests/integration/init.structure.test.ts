@@ -37,8 +37,8 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/_template/src/index.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/registry/src/index.ts"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/settings/src/index.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/apps/src/index.ts"))).toBe(false);
     expect(existsSync(join(testDir, "plugins/projects/src/index.ts"))).toBe(false);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
@@ -91,7 +91,7 @@ describe("bos init — structure", () => {
       devDependencies?: Record<string, string>;
     };
     const pluginPkg = JSON.parse(
-      readFileSync(join(testDir, "plugins", "_template", "package.json"), "utf-8"),
+      readFileSync(join(testDir, "plugins", "settings", "package.json"), "utf-8"),
     ) as {
       devDependencies?: Record<string, string>;
     };

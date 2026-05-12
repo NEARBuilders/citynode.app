@@ -61,37 +61,17 @@
     "plugins": {}
   },
   "plugins": {
-    "template": {
-      "development": "local:plugins/_template",
-      "production": "https://elliot-braem-3598-every-plugin-template-everythin-87b127439-ze.zephyrcloud.app",
-      "integrity": "sha384-2h1px6DIx1xv3rSeg1MTi+HMHRwgXgCmCk7qwtnoy04EeqVxzGXBQGCw6cmidNTn",
-      "routes": [
-        "ui/src/routes/_layout/_authenticated/settings.tsx"
-      ]
-    },
-    "registry": {
-      "development": "local:plugins/registry",
-      "production": "https://elliot-braem-3599-everything-dev-registry-plugin--eeb031df0-ze.zephyrcloud.app",
-      "integrity": "sha384-CVIUbz+YppH93cO30F3OO/WG7YE9PYjOvxY0U9mmUZxTRHG1So4/XwIJ7KQ1oyUs",
-      "variables": {
-        "registryNamespace": "dev.everything.near"
-      },
-      "routes": [
-        "ui/src/routes/_layout/apps/**",
-        "ui/src/routes/_layout/about.tsx"
-      ]
+    "apps": {
+      "extends": "bos://dev.everything.near/apps.everything.dev",
+      "development": "local:plugins/apps"
     },
     "projects": {
-      "development": "local:plugins/projects",
-      "production": "https://elliot-braem-3600-everything-dev-projects-plugin--166e63d7b-ze.zephyrcloud.app",
-      "integrity": "sha384-Fq3b3KS1D0nt3hIgvJ8cu/JzDJj/F+rKLJEOauT3hHY4DocvDavZYaitERjD7mPU",
-      "secrets": [
-        "PROJECTS_DATABASE_URL"
-      ],
-      "routes": [
-        "ui/src/routes/_layout/_authenticated/organizations/**",
-        "ui/src/routes/_layout/_authenticated/projects/**"
-      ]
+      "extends": "bos://dev.everything.near/projects.everything.dev",
+      "development": "local:plugins/projects"
+    },
+    "settings": {
+      "extends": "bos://dev.everything.near/settings.everything.dev",
+      "development": "local:plugins/settings"
     }
   },
   "app": {
@@ -125,6 +105,9 @@
         "AUTH_DATABASE_URL",
         "BETTER_AUTH_SECRET",
         "CORS_ORIGIN"
+      ],
+      "sidebar": [
+        { "icon": "Building2", "label": "organizations", "to": "/organizations" }
       ]
     }
   }

@@ -54,6 +54,15 @@ function buildClientRuntimeConfig(runtimeConfig: RuntimeConfig): ClientRuntimeCo
           integrity: runtimeConfig.api.integrity,
         }
       : undefined,
+    auth: runtimeConfig.auth
+      ? {
+          name: runtimeConfig.auth.name,
+          url: runtimeConfig.auth.url,
+          entry: runtimeConfig.auth.entry,
+          integrity: runtimeConfig.auth.integrity,
+          sidebar: runtimeConfig.auth.sidebar,
+        }
+      : undefined,
     plugins: runtimeConfig.plugins
       ? Object.fromEntries(
           Object.entries(runtimeConfig.plugins).map(([key, plugin]) => [
@@ -74,6 +83,7 @@ function buildClientRuntimeConfig(runtimeConfig: RuntimeConfig): ClientRuntimeCo
                     },
                   }
                 : {}),
+              ...(plugin.sidebar ? { sidebar: plugin.sidebar } : {}),
             },
           ]),
         )

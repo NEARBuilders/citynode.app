@@ -16,7 +16,7 @@ function deriveAccountFromDomain(domain: string, extendsAccount: string): string
   return `${firstSegment}.${suffix}`;
 }
 
-const AVAILABLE_PLUGINS = [{ value: "_template", label: "template" }];
+const AVAILABLE_PLUGINS = [{ value: "settings", label: "settings" }];
 
 export async function promptInitOptions(input: {
   extendsAccount?: string;
@@ -89,7 +89,7 @@ export async function promptInitOptions(input: {
     ((await p.multiselect({
       message: "Select plugins:",
       options: AVAILABLE_PLUGINS,
-      initialValues: ["_template"],
+      initialValues: ["settings"],
       required: false,
     })) as string[]);
 

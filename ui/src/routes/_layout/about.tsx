@@ -28,7 +28,7 @@ function About() {
   const configQuery = useQuery({
     queryKey: ["registry-app", registryAccountId, registryGatewayId],
     queryFn: () =>
-      apiClient.registry.getRegistryApp({
+      apiClient.apps.getRegistryApp({
         accountId: registryAccountId,
         gatewayId: registryGatewayId,
       }),

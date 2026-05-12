@@ -32,76 +32,84 @@ describe("plugin UI runtime config", () => {
   it("resolves plugin without ui", async () => {
     const config = makeBosConfig({
       plugins: {
-        registry: {
-          development: "local:plugins/registry",
-          production: "https://registry.test.dev",
-          name: "registry",
+        apps: {
+          development: "local:plugins/apps",
+          production: "https://apps.test.dev",
+          name: "apps",
         } as any,
       },
     });
 
-    const pluginRuntime = await buildRuntimePluginsForConfig(config, baseDir, "production" as BosEnv);
+    const pluginRuntime = await buildRuntimePluginsForConfig(
+      config,
+      baseDir,
+      "production" as BosEnv,
+    );
     const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
       plugins: pluginRuntime,
     });
 
-    expect(runtime.plugins?.registry).toBeDefined();
-    expect(runtime.plugins?.registry.name).toBe("registry");
-    expect(runtime.plugins?.registry.url).toContain("registry.test.dev");
-    expect(runtime.plugins?.registry.ui).toBeUndefined();
+    expect(runtime.plugins?.apps).toBeDefined();
+    expect(runtime.plugins?.apps.name).toBe("apps");
+    expect(runtime.plugins?.apps.url).toContain("apps.test.dev");
+    expect(runtime.plugins?.apps.ui).toBeUndefined();
   });
 
   it("populates plugin ui when app.ui is present in plugin config", async () => {
     const config = makeBosConfig({
       plugins: {
-        registry: {
-          development: "local:plugins/registry",
-          production: "https://registry.test.dev",
-          name: "registry",
+        apps: {
+          development: "local:plugins/apps",
+          production: "https://apps.test.dev",
+          name: "apps",
           app: {
             api: {
-              name: "registry",
+              name: "apps",
               development: "local:.",
-              production: "https://registry.test.dev",
+              production: "https://apps.test.dev",
             },
             ui: {
-              name: "registry-ui",
+              name: "apps-ui",
               development: "local:./ui",
-              production: "https://registry-ui.test.dev",
+              production: "https://apps-ui.test.dev",
             },
           },
         } as any,
       },
     });
 
-    const pluginRuntime = await buildRuntimePluginsForConfig(config, baseDir, "production" as BosEnv);
+    const pluginRuntime = await buildRuntimePluginsForConfig(
+      config,
+      baseDir,
+      "production" as BosEnv,
+    );
     const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
       plugins: pluginRuntime,
     });
 
-    expect(runtime.plugins?.registry.ui).toBeDefined();
-    expect(runtime.plugins?.registry.ui?.name).toBe("registry-ui");
-    expect(runtime.plugins?.registry.ui?.url).toContain("registry-ui.test.dev");
-    expect(runtime.plugins?.registry.ui?.source).toBe("remote");
-    expect(runtime.plugins?.registry.ui?.entry).toContain("mf-manifest.json");
+    expect(runtime.plugins?.apps.ui).toBeDefined();
+    expect(runtime.plugins?.apps.ui?.name).toBe("apps-ui");
+    expect(runtime.plugins?.apps.ui?.url).toContain("apps-ui.test.dev");
+    expect(runtime.plugins?.apps.ui?.source).toBe("remote");
+    expect(runtime.plugins?.apps.ui?.entry).toContain("mf-manifest.json");
   });
 
   it("includes plugin ui with integrity when configured", async () => {
     const config = makeBosConfig({
       plugins: {
-        registry: {
-          development: "local:plugins/registry",
-          production: "https://registry.test.dev",
-          name: "registry",
+        apps: {
+          development: "local:plugins/apps",
+          production: "https://apps.test.dev",
+          name: "apps",
           integrity: "sha384-abc",
           app: {
             api: {
-              name: "registry",
-              production: "https://registry.test.dev",
+              name: "apps",
+              production: "https://apps.test.dev",
             },
             ui: {
-              name: "registry-ui",
-              production: "https://registry-ui.test.dev",
+              name: "apps-ui",
+              production: "https://apps-ui.test.dev",
               integrity: "sha384-xyz",
             },
           },
@@ -109,30 +117,34 @@ describe("plugin UI runtime config", () => {
       },
     });
 
-    const pluginRuntime = await buildRuntimePluginsForConfig(config, baseDir, "production" as BosEnv);
+    const pluginRuntime = await buildRuntimePluginsForConfig(
+      config,
+      baseDir,
+      "production" as BosEnv,
+    );
     const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
       plugins: pluginRuntime,
     });
 
-    expect(runtime.plugins?.registry.ui).toBeDefined();
-    expect(runtime.plugins?.registry.ui?.integrity).toBe("sha384-xyz");
-    expect(runtime.plugins?.registry.integrity).toBe("sha384-abc");
+    expect(runtime.plugins?.apps.ui).toBeDefined();
+    expect(runtime.plugins?.apps.ui?.integrity).toBe("sha384-xyz");
+    expect(runtime.plugins?.apps.integrity).toBe("sha384-abc");
   });
 
   it("resolves plugin ui in development mode with local path", async () => {
     const config = makeBosConfig({
       plugins: {
-        registry: {
-          development: "local:plugins/registry",
-          production: "https://registry.test.dev",
-          name: "registry",
+        apps: {
+          development: "local:plugins/apps",
+          production: "https://apps.test.dev",
+          name: "apps",
           app: {
             api: {
-              name: "registry",
+              name: "apps",
               development: "local:.",
             },
             ui: {
-              name: "registry-ui",
+              name: "apps-ui",
               development: "local:./ui",
             },
           },
@@ -140,31 +152,39 @@ describe("plugin UI runtime config", () => {
       },
     });
 
-    const pluginRuntime = await buildRuntimePluginsForConfig(config, baseDir, "development" as BosEnv);
+    const pluginRuntime = await buildRuntimePluginsForConfig(
+      config,
+      baseDir,
+      "development" as BosEnv,
+    );
     const runtime = buildRuntimeConfig(config, baseDir, "development" as BosEnv, {
       plugins: pluginRuntime,
     });
 
-    expect(runtime.plugins?.registry.ui).toBeDefined();
-    expect(runtime.plugins?.registry.ui?.name).toBe("registry-ui");
+    expect(runtime.plugins?.apps.ui).toBeDefined();
+    expect(runtime.plugins?.apps.ui?.name).toBe("apps-ui");
   });
 
   it("does not populate plugin ui when app.ui is absent", async () => {
     const config = makeBosConfig({
       plugins: {
-        registry: {
-          development: "local:plugins/registry",
-          production: "https://registry.test.dev",
-          name: "registry",
+        apps: {
+          development: "local:plugins/apps",
+          production: "https://apps.test.dev",
+          name: "apps",
         } as any,
       },
     });
 
-    const pluginRuntime = await buildRuntimePluginsForConfig(config, baseDir, "production" as BosEnv);
+    const pluginRuntime = await buildRuntimePluginsForConfig(
+      config,
+      baseDir,
+      "production" as BosEnv,
+    );
     const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
       plugins: pluginRuntime,
     });
 
-    expect(runtime.plugins?.registry.ui).toBeUndefined();
+    expect(runtime.plugins?.apps.ui).toBeUndefined();
   });
 });
