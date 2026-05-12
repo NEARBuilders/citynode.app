@@ -2,9 +2,7 @@ name: Preview Deploy
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-  pull_request_target:
-    types: [closed]
+    types: [opened, synchronize, reopened, closed]
 
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
@@ -17,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Read config
         id: config
@@ -28,7 +26,7 @@ jobs:
           echo "domain=${DOMAIN}" >> $GITHUB_OUTPUT
 
       - name: Comment preview URL
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
@@ -58,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Comment preview cleanup
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const prNumber = context.payload.pull_request.number;

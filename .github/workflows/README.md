@@ -60,6 +60,8 @@ This repository uses four workflows: release, staging, preview, and CI. The rele
 
 **Purpose:** Comment config context on PRs. Railway's built-in PR environments handle the actual build and deploy.
 
+**Security note:** Uses `pull_request` only (not `pull_request_target`) to prevent the "Pwn Request" cache-poisoning attack pattern. Fork PRs require maintainer approval before workflows run.
+
 **Behavior:** On PR open/update, reads `account` and `domain` from `bos.config.json` and comments them on the PR. Railway automatically creates an environment, builds from the PR branch using the Dockerfile, and assigns a `*.up.railway.app` URL. On PR close, comments that the preview is cleaned up.
 
 **Note:** Preview deployments currently serve production UI/API from CDN URLs (the host loads remotes from `bos.config.json` production fields). Host and Docker changes are tested against the PR branch. Full PR code testing for UI/API/plugins requires a future "preview" environment mode with Zephyr deploy per-PR.
@@ -68,7 +70,13 @@ This repository uses four workflows: release, staging, preview, and CI. The rele
 
 **Trigger:** Push to `main` or pull requests.
 
-**Purpose:** Lint, typecheck, and test. Also builds and pushes a `:latest` Docker image on main push.
+**Purpose:** Lint, typecheck, dependency review, and test. Also builds and pushes a `:latest` Docker image on main push.
+
+**Security features:**
+- `dependency-review-action` runs on every PR to flag known vulnerabilities
+- `bun audit` fails on critical/high findings
+- All actions pinned to commit SHAs
+- `--ignore-scripts` on all installs
 
 ### Docker Build (`docker.yml`)
 
@@ -106,25 +114,25 @@ Final stage:
 npm packages are published using **Trusted Publishing** (OpenID Connect), which eliminates the need for long-lived `NPM_TOKEN` secrets. Instead, GitHub Actions generates short-lived OIDC tokens that npm verifies against the configured trusted publisher.
 
 **How it works:**
-1. The release workflow has `permissions: id-token: write` to generate OIDC tokens
+1. The release workflow provisions OIDC tokens only during the npm publish steps (not at job level — `id-token: write` is removed from job-level permissions as a security hardening measure)
 2. `actions/setup-node@v6` provisions Node 24 with npm 11 support and configures the npm registry
 3. Release staging writes normalized package manifests into `.release/` before publish
-4. `npm publish --provenance` authenticates via OIDC instead of a stored token
+4. `npm publish --provenance` authenticates via OIDC using `NODE_AUTH_TOKEN` from `secrets.NPM_TOKEN`
 5. Provenance attestations are automatically generated, linking the published package to the exact commit and workflow
 
 **Setup (already done):**
 - Trusted publisher configured on npm for both `every-plugin` and `everything-dev` at `https://www.npmjs.com/package/<name>/access`
-- Publisher points to `NEARBuilders/everything-dev` repo, `release.yml` workflow filename
-- No `NPM_TOKEN` secret is needed
+- Publisher points to the repository, `release.yml` workflow filename
+- `NPM_TOKEN` secret is used for `NODE_AUTH_TOKEN` during publish (scoped to publish steps only, not job-level env)
 
 ## Environment Variables
 
 | Variable | Where | Purpose |
 |----------|-------|---------|
-| `ZE_SECRET_TOKEN` | Release | Zephyr Cloud auth for CDN deploy |
-| `ZE_SERVER_TOKEN` | Release | Zephyr Cloud server auth |
-| `ZE_USER_EMAIL` | Release | Zephyr Cloud user email |
-| `NEAR_PRIVATE_KEY` | Release | NEAR key for FastKV publish |
+| `ZE_SECRET_TOKEN` | Release (build step) | Zephyr Cloud auth for CDN deploy |
+| `ZE_SERVER_TOKEN` | Release (build step) | Zephyr Cloud server auth |
+| `ZE_USER_EMAIL` | Release (build step) | Zephyr Cloud user email |
+| `NEAR_PRIVATE_KEY` | Release (publish step), Publish | NEAR key for FastKV publish |
 | `BOS_INSTALL_NEAR_CLI` | Release | Ensures NEAR CLI is available |
 | `APP_ENV` | Docker runtime | `production` or `staging` |
 | `PORT` | Docker runtime | HTTP port (default 3000) |

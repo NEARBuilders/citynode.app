@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { getRuntimeConfig, sessionQueryOptions } from "@/app";
 import builtOn from "@/assets/built_on.png";
 import builtOnRev from "@/assets/built_on_rev.png";
@@ -40,7 +40,8 @@ function getUserRole(isAuthenticated: boolean, isAdmin: boolean): SidebarRole {
 }
 
 function Layout() {
-  const pathname = useClientValue(() => window.location.pathname, "/");
+  const location = useLocation();
+  const pathname = location.pathname;
   const appName = useClientValue(() => {
     try {
       const runtimeConfig = getRuntimeConfig();
@@ -56,7 +57,7 @@ function Layout() {
   const visibleItems = filterSidebarByRole(pluginSidebarItems, userRole);
 
   const isActive = (item: SidebarItem) => {
-    return pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to));
+    return pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to + "/"));
   };
 
   return (
