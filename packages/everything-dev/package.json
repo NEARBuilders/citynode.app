@@ -51,15 +51,6 @@
       "import": "./dist/contract.meta.mjs",
       "require": "./dist/contract.meta.cjs"
     },
-    "./shared": {
-      "development": {
-        "types": "./src/shared.ts",
-        "import": "./src/shared.ts"
-      },
-      "types": "./dist/shared.d.mts",
-      "import": "./dist/shared.mjs",
-      "require": "./dist/shared.cjs"
-    },
     "./mf": {
       "development": {
         "types": "./src/mf.ts",
@@ -95,15 +86,6 @@
       "types": "./dist/sdk.d.mts",
       "import": "./dist/sdk.mjs",
       "require": "./dist/sdk.cjs"
-    },
-    "./orchestrator": {
-      "development": {
-        "types": "./src/orchestrator.ts",
-        "import": "./src/orchestrator.ts"
-      },
-      "types": "./dist/orchestrator.d.mts",
-      "import": "./dist/orchestrator.mjs",
-      "require": "./dist/orchestrator.cjs"
     },
     "./cli": {
       "development": {
