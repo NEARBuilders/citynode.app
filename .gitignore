@@ -282,6 +282,7 @@ fabric.properties
 
 # documentation
 .docs
+/content
 
 # dependencies
 .npmrc
