@@ -151,7 +151,7 @@ jobs:
           ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
           ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
           NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-        run: bun packages/everything-dev/cli.js publish --deploy
+        run: bun packages/everything-dev/src/cli.ts publish --deploy
 
       - name: Commit bos.config.json updates
         if: steps.changesets.outputs.hasChangesets == 'false'

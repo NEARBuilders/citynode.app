@@ -200,13 +200,12 @@
   "files": [
     "dist",
     "src",
-    "cli.js",
     "skills",
     "!skills/_artifacts"
   ],
   "bin": {
-    "everything-dev": "./cli.js",
-    "bos": "./cli.js"
+    "everything-dev": "./dist/cli.mjs",
+    "bos": "./dist/cli.mjs"
   },
   "keywords": [
     "tanstack-intent"

@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { findCommandDescriptor } from "./cli/catalog";
 import { printHelp } from "./cli/help";
 import { parseCommandInput } from "./cli/parse";

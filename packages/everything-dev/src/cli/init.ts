@@ -448,14 +448,14 @@ export async function personalizeConfig(
           scripts[key] = scripts[key].replaceAll(from, to);
         }
       };
-      rewrite("dev", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("dev:ui", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("dev:api", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("dev:proxy", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("build", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("deploy", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("publish", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
-      rewrite("start", "packages/everything-dev/cli.js", "node_modules/.bin/bos");
+      rewrite("dev", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("dev:ui", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("dev:api", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("dev:proxy", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("build", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("deploy", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("publish", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
+      rewrite("start", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
 
       scripts.postinstall = "node_modules/.bin/bos types gen || true";
       scripts["types:gen"] = "node_modules/.bin/bos types gen";

@@ -45,7 +45,7 @@ jobs:
           NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.deploy }}" = "true" ]; then
-            bun packages/everything-dev/cli.js publish --deploy
+            bun packages/everything-dev/src/cli.ts publish --deploy
           else
-            bun packages/everything-dev/cli.js publish
+            bun packages/everything-dev/src/cli.ts publish
           fi
