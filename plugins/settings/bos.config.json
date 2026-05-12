@@ -2,9 +2,18 @@
   "domain": "settings.everything.dev",
   "app": {
     "api": {
-      "development": "local:."
+      "development": "local:.",
+      "production": "https://elliot-braem-3674-every-plugin-settings-everythin-7e61a06ec-ze.zephyrcloud.app",
+      "integrity": "sha384-OnTcoTfD2qm1ECTtvCMNLTSmbvjzwf/8lr+88XI2xZOCc5LEPpLSJt6et18ZUJ/x"
     }
   },
-  "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"],
-  "sidebar": [{ "icon": "Settings", "label": "settings" }]
+  "routes": [
+    "ui/src/routes/_layout/_authenticated/settings.tsx"
+  ],
+  "sidebar": [
+    {
+      "icon": "Settings",
+      "label": "settings"
+    }
+  ]
 }
