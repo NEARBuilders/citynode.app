@@ -1,6 +1,8 @@
 {
   "account": "dev.everything.near",
   "domain": "everything.dev",
+  "title": "everything.dev",
+  "description": "Open runtime for apps on NEAR, composed from published config and loaded through a shared host, UI, and API runtime.",
   "testnet": "dev.allthethings.testnet",
   "staging": {
     "domain": "staging.dev.everything.dev"

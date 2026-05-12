@@ -90,6 +90,7 @@ async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
       gatewayId: override.gatewayId,
       runtimeBasePath: override.runtimeBasePath,
       title: `${override.accountId}/${override.gatewayId}`,
+      description: null,
       hostUrl: url.origin,
     } satisfies ActiveRuntimeState;
   }
@@ -99,7 +100,8 @@ async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
     accountId: config.account,
     gatewayId: fallbackGatewayId,
     runtimeBasePath: "/",
-    title: config.account,
+    title: config.title ?? config.account,
+    description: config.description ?? null,
     hostUrl: url.origin,
   } satisfies ActiveRuntimeState;
 }

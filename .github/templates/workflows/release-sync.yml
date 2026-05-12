@@ -57,6 +57,7 @@ jobs:
 
       - name: Publish config to FastKV
         env:
+          # To create a scoped FCAK, run `bos key publish`
           NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
         run: bos publish
 

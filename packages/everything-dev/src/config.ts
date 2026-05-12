@@ -303,6 +303,8 @@ export function buildRuntimeConfig(
     env,
     account: config.account,
     domain: config.domain,
+    title: config.title,
+    description: config.description,
     networkId: getNetworkIdForAccount(config.account),
     repository: config.repository,
     host: {

@@ -137,6 +137,7 @@ export const ClientRuntimeInfoSchema = z.object({
   gatewayId: z.string(),
   runtimeBasePath: z.string(),
   title: z.string().nullable(),
+  description: z.string().nullable(),
   hostUrl: z.string().nullable(),
 });
 export type ClientRuntimeInfo = z.infer<typeof ClientRuntimeInfoSchema>;
@@ -183,6 +184,8 @@ export interface BosConfigInput {
   extends?: string | ExtendsConfig;
   account?: string;
   domain?: string;
+  title?: string;
+  description?: string;
   testnet?: string;
   template?: string;
   gateway?: {
@@ -209,6 +212,8 @@ export const BosConfigSchema = z.object({
   account: z.string(),
   extends: ExtendsSchema.optional(),
   domain: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
   testnet: z.string().optional(),
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
@@ -229,6 +234,7 @@ export const RuntimeConfigSchema = z.object({
   domain: z.string().optional(),
   networkId: z.enum(["mainnet", "testnet"]),
   title: z.string().optional(),
+  description: z.string().optional(),
   repository: z.string().optional(),
   host: FederationEntrySchema.extend({
     localPath: z.string().optional(),
