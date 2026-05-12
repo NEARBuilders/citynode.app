@@ -148,7 +148,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@rspack/core": "^1.7.4",
+    "@rspack/core": "catalog:",
     "typescript": "^5.9.3",
     "effect": "^3.21.0",
     "zod": "^4.3.6",

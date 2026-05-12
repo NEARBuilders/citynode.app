@@ -24,7 +24,7 @@
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "dotenv": "^17.2.3",
-    "every-plugin": "2.5.9",
+    "every-plugin": "catalog:",
     "pg": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "hono": "^4.12.18",
