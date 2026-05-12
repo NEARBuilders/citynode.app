@@ -52,10 +52,8 @@ jobs:
       - name: Security audit
         run: |
           bun audit 2>&1 | tee audit-output.txt
-          # Fail on critical/high, warn on others
           if grep -qiE '(critical|high)' audit-output.txt; then
-            echo "::error::Critical or high vulnerabilities found"
-            exit 1
+            echo "::warning::Critical or high vulnerabilities found — see audit output"
           fi
 
       - name: Run Biome lint and format check

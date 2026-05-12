@@ -83,7 +83,7 @@
         "dotenv": "^17.2.3",
         "effect": "catalog:",
         "every-plugin": "2.5.8",
-        "hono": "^4.11.4",
+        "hono": "^4.12.18",
         "pg": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
@@ -172,7 +172,7 @@
         "every-plugin": "workspace:*",
         "glob": "^13.0.6",
         "gradient-string": "^3.0.0",
-        "hono": "^4.7.11",
+        "hono": "^4.12.18",
         "ink": "^6.8.0",
         "tar": "^7.4.3",
       },
@@ -1922,7 +1922,7 @@
 
     "homedir-polyfill": ["homedir-polyfill@1.0.3", "", { "dependencies": { "parse-passwd": "^1.0.0" } }, "sha512-eSmmWE5bZTK2Nou4g0AI3zZ9rswp7GRKoKXS1BLUkvPviOqs4YTN1djQIqrXy9k5gEtdLPy86JjRwsNM9tnDcA=="],
 
-    "hono": ["hono@4.12.12", "", {}, "sha512-p1JfQMKaceuCbpJKAPKVqyqviZdS0eUxH9v82oWo1kb9xjQ5wA6iP3FNVAPDFlz5/p7d45lO+BpSk1tuSZMF4Q=="],
+    "hono": ["hono@4.12.18", "", {}, "sha512-RWzP96k/yv0PQfyXnWjs6zot20TqfpfsNXhOnev8d1InAxubW93L11/oNUc3tQqn2G0bSdAOBpX+2uDFHV7kdQ=="],
 
     "hookable": ["hookable@6.1.0", "", {}, "sha512-ZoKZSJgu8voGK2geJS+6YtYjvIzu9AOM/KZXsBxr83uhLL++e9pEv/dlgwgy3dvHg06kTz6JOh1hk3C8Ceiymw=="],
 

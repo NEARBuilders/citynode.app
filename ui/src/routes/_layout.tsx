@@ -57,7 +57,7 @@ function Layout() {
   const visibleItems = filterSidebarByRole(pluginSidebarItems, userRole);
 
   const isActive = (item: SidebarItem) => {
-    return pathname === item.to || (item.to !== "/" && pathname.startsWith(item.to + "/"));
+    return pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`));
   };
 
   return (

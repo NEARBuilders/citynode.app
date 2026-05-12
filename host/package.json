@@ -27,7 +27,7 @@
     "every-plugin": "2.5.8",
     "pg": "catalog:",
     "@electric-sql/pglite": "catalog:",
-    "hono": "^4.11.4",
+    "hono": "^4.12.18",
     "react": "catalog:",
     "react-dom": "catalog:",
     "effect": "catalog:",
