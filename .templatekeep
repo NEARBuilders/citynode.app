@@ -69,6 +69,5 @@ api/src/db/load-migrations.ts
 api/src/db/migrator.ts
 api/src/global.d.ts
 
-plugins/settings/**
 plugins/*/bos.config.json
 .github/templates/**

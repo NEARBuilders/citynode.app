@@ -37,9 +37,9 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/settings/src/index.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/apps/src/index.ts"))).toBe(false);
-    expect(existsSync(join(testDir, "plugins/projects/src/index.ts"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/settings/bos.config.json"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/apps/bos.config.json"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/projects/bos.config.json"))).toBe(true);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
@@ -90,11 +90,6 @@ describe("bos init — structure", () => {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    const pluginPkg = JSON.parse(
-      readFileSync(join(testDir, "plugins", "settings", "package.json"), "utf-8"),
-    ) as {
-      devDependencies?: Record<string, string>;
-    };
 
     expect(rootPkg.dependencies?.["everything-dev"]).toBe("catalog:");
     expect(rootPkg.dependencies?.["every-plugin"]).toBe("catalog:");
@@ -108,8 +103,6 @@ describe("bos init — structure", () => {
     expect(uiPkg.devDependencies?.["everything-dev"]).toBe("catalog:");
     expect(apiPkg.dependencies?.["every-plugin"]).toBe("catalog:");
     expect(apiPkg.devDependencies?.["everything-dev"]).toBe("catalog:");
-    expect(pluginPkg.devDependencies?.["everything-dev"]).toBe("catalog:");
-    expect(pluginPkg.devDependencies?.["every-plugin"]).toBe("catalog:");
   });
 
   it("removes production URLs", () => {

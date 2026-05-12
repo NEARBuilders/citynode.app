@@ -1321,6 +1321,18 @@ export default createPlugin({
           }
         }
 
+        extendsAccount = extendsAccount || "dev.everything.near";
+        extendsGateway = extendsGateway || "everything.dev";
+
+        let parentPluginKeys: string[] = [];
+        let parentConfig: BosConfig | null = null;
+        try {
+          parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+          if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
+            parentPluginKeys = Object.keys(parentConfig.plugins);
+          }
+        } catch {}
+
         if (!input.noInteractive) {
           const prompted = await promptInitOptions({
             extendsAccount,
@@ -1331,6 +1343,7 @@ export default createPlugin({
             domain,
             plugins,
             withHost,
+            parentPluginKeys,
           });
           extendsAccount = prompted.extendsAccount;
           extendsGateway = prompted.extendsGateway;
@@ -1341,33 +1354,39 @@ export default createPlugin({
           plugins = prompted.plugins;
         }
 
-        extendsAccount = extendsAccount || "dev.everything.near";
-        extendsGateway = extendsGateway || "everything.dev";
         directory = directory || domain || extendsGateway;
-        plugins = plugins?.length ? plugins : ["settings"];
+        plugins = plugins ?? [];
 
-        try {
-          await fetchParentConfig(extendsAccount, extendsGateway);
-        } catch {
-          return {
-            status: "error" as const,
-            directory,
-            extendsAccount,
-            extendsGateway,
-            account,
-            domain,
-            extends: `bos://${extendsAccount}/${extendsGateway}`,
-            plugins: plugins ?? [],
-            filesCopied: 0,
-            error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
-          };
+        if (!parentConfig) {
+          try {
+            parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+          } catch {
+            return {
+              status: "error" as const,
+              directory,
+              extendsAccount,
+              extendsGateway,
+              account,
+              domain,
+              extends: `bos://${extendsAccount}/${extendsGateway}`,
+              plugins: plugins ?? [],
+              filesCopied: 0,
+              error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
+            };
+          }
         }
 
-        const { sourceDir, parentConfig, cleanup } = await resolveSourceDir({
+        const {
+          sourceDir,
+          parentConfig: resolvedParentConfig,
+          cleanup,
+        } = await resolveSourceDir({
           extendsAccount,
           extendsGateway,
           source: input.source,
         });
+
+        parentConfig = resolvedParentConfig;
 
         try {
           const patterns = await readTemplatekeep(sourceDir);

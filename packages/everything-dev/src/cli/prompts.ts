@@ -16,8 +16,6 @@ function deriveAccountFromDomain(domain: string, extendsAccount: string): string
   return `${firstSegment}.${suffix}`;
 }
 
-const AVAILABLE_PLUGINS = [{ value: "settings", label: "settings" }];
-
 export async function promptInitOptions(input: {
   extendsAccount?: string;
   extendsGateway?: string;
@@ -27,6 +25,7 @@ export async function promptInitOptions(input: {
   domain?: string;
   plugins?: string[];
   withHost?: boolean;
+  parentPluginKeys?: string[];
 }): Promise<{
   extendsAccount: string;
   extendsGateway: string;
@@ -84,14 +83,19 @@ export async function promptInitOptions(input: {
 
   const directory = input.directory || domain || extendsGateway;
 
+  const parentPlugins = input.parentPluginKeys ?? [];
+  const pluginOptions =
+    parentPlugins.length > 0 ? parentPlugins.map((key) => ({ value: key, label: key })) : [];
+
   const plugins =
     input.plugins ??
-    ((await p.multiselect({
-      message: "Select plugins:",
-      options: AVAILABLE_PLUGINS,
-      initialValues: ["settings"],
-      required: false,
-    })) as string[]);
+    (pluginOptions.length > 0
+      ? ((await p.multiselect({
+          message: "Select plugins:",
+          options: pluginOptions,
+          required: false,
+        })) as string[])
+      : []);
 
   if (p.isCancel(plugins)) process.exit(0);
 

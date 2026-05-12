@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import { Effect } from "effect";
+import { execa } from "execa";
 
 export interface NearTransactionConfig {
   account: string;
@@ -112,49 +112,34 @@ export function generateNearKeyPair(): NearKeyPair {
 
 const checkNearCliInstalled = Effect.tryPromise({
   try: async () => {
-    return await new Promise<boolean>((resolve) => {
-      const proc = spawn("near", ["--version"], { stdio: "pipe" });
-      proc.on("close", (code) => resolve(code === 0));
-      proc.on("error", () => resolve(false));
-    });
+    try {
+      await execa("near", ["--version"], { stdio: "pipe" });
+      return true;
+    } catch {
+      return false;
+    }
   },
   catch: () => new Error("Failed to check NEAR CLI"),
 });
 
 const installNearCli = Effect.tryPromise({
   try: async () => {
-    return await new Promise<void>((resolve, reject) => {
-      const proc = spawn(
-        "sh",
-        ["-c", `curl --proto '=https' --tlsv1.2 -LsSf ${INSTALLER_URL} | sh`],
-        {
-          stdio: "inherit",
-        },
-      );
-
-      proc.on("close", (code) => {
-        if (code === 0) resolve();
-        else reject(new NearCliInstallError(`Installer exited with code ${code}`));
-      });
-      proc.on("error", (err) => reject(new NearCliInstallError(err.message)));
+    await execa("sh", ["-c", `curl --proto '=https' --tlsv1.2 -LsSf ${INSTALLER_URL} | sh`], {
+      stdio: "inherit",
     });
   },
-  catch: (error) => error as Error,
+  catch: (error) => {
+    if (error instanceof Error && "exitCode" in error) {
+      return new NearCliInstallError(
+        `Installer exited with code ${(error as { exitCode: number }).exitCode}`,
+      );
+    }
+    return new NearCliInstallError(error instanceof Error ? error.message : String(error));
+  },
 });
 
 async function runNearCommand(args: string[]): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn("near", args, {
-      stdio: "inherit",
-    });
-
-    proc.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`near ${args.join(" ")} failed with exit code ${code}`));
-    });
-
-    proc.on("error", (err) => reject(new Error(err.message)));
-  });
+  await execa("near", args, { stdio: "inherit" });
 }
 
 export const ensureNearCli = Effect.gen(function* () {
@@ -209,43 +194,31 @@ export const executeTransaction = (
 
     const output = yield* Effect.tryPromise({
       try: async () => {
-        return await new Promise<string>((resolve, reject) => {
-          const proc = spawn("near", args, { stdio: ["inherit", "pipe", "pipe"] });
-
-          let stdout = "";
-          let stderr = "";
-
-          proc.stdout?.on("data", (data) => {
-            const text = data.toString();
-            stdout += text;
-            process.stdout.write(text);
-          });
-
-          proc.stderr?.on("data", (data) => {
-            const text = data.toString();
-            stderr += text;
-          });
-
-          proc.on("close", (code) => {
-            const combined = `${stdout}\n${stderr}`;
-            const txHashMatch = combined.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
-            const hasCodeDoesNotExist = /CodeDoesNotExist/i.test(combined);
-            const hasTransactionFailed = /Transaction failed/i.test(combined);
-            const softSuccess =
-              Boolean(txHashMatch?.[1]) && hasCodeDoesNotExist && hasTransactionFailed;
-
-            if (code === 0 || softSuccess) {
-              if (softSuccess) {
-                console.log(`  ${txHashMatch?.[1]} — FastDATA CodeDoesNotExist (expected)`);
-              }
-              resolve(combined);
-            } else {
-              reject(new NearTransactionError(stderr || `Transaction failed with code ${code}`));
-            }
-          });
-
-          proc.on("error", (err) => reject(new NearTransactionError(err.message)));
+        const result = await execa("near", args, {
+          stdin: "inherit",
+          stdout: "pipe",
+          stderr: "pipe",
+          reject: false,
         });
+
+        process.stdout.write(result.stdout);
+        const combined = `${result.stdout}\n${result.stderr}`;
+        const txHashMatch = combined.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
+        const hasCodeDoesNotExist = /CodeDoesNotExist/i.test(combined);
+        const hasTransactionFailed = /Transaction failed/i.test(combined);
+        const softSuccess =
+          Boolean(txHashMatch?.[1]) && hasCodeDoesNotExist && hasTransactionFailed;
+
+        if (result.exitCode === 0 || softSuccess) {
+          if (softSuccess) {
+            console.log(`  ${txHashMatch?.[1]} — FastDATA CodeDoesNotExist (expected)`);
+          }
+          return combined;
+        }
+
+        throw new NearTransactionError(
+          result.stderr || `Transaction failed with code ${result.exitCode}`,
+        );
       },
       catch: (error) => error as Error,
     });

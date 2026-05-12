@@ -5,6 +5,8 @@ export const BOS_CONFIG_ORDER = [
   "extends",
   "account",
   "domain",
+  "title",
+  "description",
   "testnet",
   "staging",
   "repository",

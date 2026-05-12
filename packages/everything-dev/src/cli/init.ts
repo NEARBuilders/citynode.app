@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   createWriteStream,
@@ -14,6 +13,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { execa } from "execa";
 import { glob } from "glob";
 import { fetchBosConfigFromFastKv } from "../fastkv";
 import {
@@ -285,7 +285,7 @@ export async function personalizeConfig(
     if (config.plugins && typeof config.plugins === "object") {
       const plugins = config.plugins as Record<string, unknown>;
 
-      if (opts.plugins && opts.plugins.length > 0) {
+      if (opts.plugins !== undefined) {
         for (const pluginKey of Object.keys(plugins)) {
           if (!opts.plugins.includes(pluginKey)) {
             delete plugins[pluginKey];
@@ -762,26 +762,6 @@ export async function generateDatabaseMigrations(destination: string): Promise<v
   }
 }
 
-export function execCommand(command: string, args: string[], cwd?: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      stdio: "pipe",
-      shell: true,
-    });
-    let stderr = "";
-    child.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-    child.on("close", (code) => {
-      if (code === 0) resolve();
-      else
-        reject(
-          new Error(
-            `Command '${command} ${args.join(" ")}' failed with exit code ${code}: ${stderr}`,
-          ),
-        );
-    });
-    child.on("error", reject);
-  });
+export async function execCommand(command: string, args: string[], cwd?: string): Promise<void> {
+  await execa(command, args, { cwd, stdio: "pipe" });
 }
