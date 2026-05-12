@@ -47,6 +47,10 @@
       "@module-federation/runtime-core": "^2.3.2",
       "@module-federation/sdk": "^2.3.2",
       "@module-federation/dts-plugin": "^2.3.2",
+      "@rspack/core": "^1.7.11",
+      "@rspack/cli": "^1.7.11",
+      "@rsbuild/core": "^1.7.5",
+      "@rsbuild/plugin-react": "^1.4.6",
       "@tanstack/intent": "^0.0.40",
       "@opentelemetry/api": "^1.9.0"
     }

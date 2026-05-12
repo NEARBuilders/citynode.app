@@ -4,6 +4,19 @@ import { glob } from "glob";
 
 const FRAMEWORK_PACKAGES = ["every-plugin", "everything-dev"] as const;
 
+const CATALOG_TOOL_PACKAGES = [
+  "@rspack/core",
+  "@rspack/cli",
+  "@rsbuild/core",
+  "@rsbuild/plugin-react",
+  "@module-federation/enhanced",
+  "@module-federation/node",
+  "@module-federation/rsbuild-plugin",
+  "@module-federation/runtime-core",
+  "@module-federation/sdk",
+  "@module-federation/dts-plugin",
+] as const;
+
 type PackageJson = Record<string, unknown>;
 
 type NormalizationSpec = {
@@ -72,13 +85,12 @@ function normalizeDependencyMap(
   spec: NormalizationSpec,
   options: NormalizeManifestOptions,
 ) {
+  const catalogPackages = new Set<string>([...FRAMEWORK_PACKAGES, ...CATALOG_TOOL_PACKAGES]);
+
   let modified = false;
 
   for (const [name, version] of Object.entries(map)) {
-    if (
-      options.preserveCatalogRefs &&
-      FRAMEWORK_PACKAGES.includes(name as (typeof FRAMEWORK_PACKAGES)[number])
-    ) {
+    if (options.preserveCatalogRefs && catalogPackages.has(name)) {
       if (version !== "catalog:") {
         map[name] = "catalog:";
         modified = true;

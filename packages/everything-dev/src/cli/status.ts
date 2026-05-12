@@ -7,6 +7,19 @@ import { readSnapshot } from "./snapshot";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
 
+const CATALOG_TOOL_PACKAGES = [
+  "@rspack/core",
+  "@rspack/cli",
+  "@rsbuild/core",
+  "@rsbuild/plugin-react",
+  "@module-federation/enhanced",
+  "@module-federation/node",
+  "@module-federation/rsbuild-plugin",
+  "@module-federation/runtime-core",
+  "@module-federation/sdk",
+  "@module-federation/dts-plugin",
+] as const;
+
 async function fetchLatestNpmVersion(packageName: string): Promise<string | null> {
   try {
     const response = await fetch(`https://registry.npmjs.org/${packageName}/latest`, {
@@ -57,6 +70,13 @@ export async function getStatus(projectDir: string): Promise<StatusResult> {
   const packages = [];
   for (const name of FRAMEWORK_PACKAGES) {
     const installed = readInstalledVersion(projectDir, name);
+    const latest = await fetchLatestNpmVersion(name);
+    packages.push({ name, installed, latest: latest ?? undefined });
+  }
+
+  for (const name of CATALOG_TOOL_PACKAGES) {
+    const installed = readInstalledVersion(projectDir, name);
+    if (!installed) continue;
     const latest = await fetchLatestNpmVersion(name);
     packages.push({ name, installed, latest: latest ?? undefined });
   }

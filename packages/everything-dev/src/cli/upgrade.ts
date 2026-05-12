@@ -7,6 +7,19 @@ import { runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
+
+const CATALOG_TOOL_PACKAGES = [
+  "@rspack/core",
+  "@rspack/cli",
+  "@rsbuild/core",
+  "@rsbuild/plugin-react",
+  "@module-federation/enhanced",
+  "@module-federation/node",
+  "@module-federation/rsbuild-plugin",
+  "@module-federation/runtime-core",
+  "@module-federation/sdk",
+  "@module-federation/dts-plugin",
+] as const;
 const LEGACY_UI_IMPORT_REWRITES = [
   ['from "@/auth"', 'from "@/app"'],
   ["from '@/auth'", "from '@/app'"],
@@ -115,6 +128,28 @@ function updateRootPackageVersion(
   return modified;
 }
 
+function updateRootCatalogVersion(
+  projectDir: string,
+  packageName: string,
+  newVersion: string,
+): boolean {
+  const pkgPath = join(projectDir, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
+
+  if (!pkg.workspaces || typeof pkg.workspaces !== "object") return false;
+  const workspaces = pkg.workspaces as { catalog?: Record<string, string> };
+  if (!workspaces.catalog || typeof workspaces.catalog !== "object") return false;
+
+  if (!(packageName in workspaces.catalog)) return false;
+
+  const nextVersion = `^${newVersion}`;
+  if (workspaces.catalog[packageName] === nextVersion) return false;
+
+  workspaces.catalog[packageName] = nextVersion;
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  return true;
+}
+
 async function findWorkspacePackageJsons(projectDir: string): Promise<string[]> {
   const rootPkgPath = join(projectDir, "package.json");
   if (!existsSync(rootPkgPath)) return [];
@@ -215,7 +250,19 @@ export async function upgradeTemplate(
     packages.push({ name, from: installed, to: latest });
   }
 
-  const hasUpdates = packages.some((p) => p.from !== p.to && p.from !== undefined);
+  const catalogVersionUpdates: Array<{ name: string; from: string | undefined; to: string }> = [];
+  for (const name of CATALOG_TOOL_PACKAGES) {
+    const installed = readInstalledVersion(projectDir, name);
+    if (!installed) continue;
+    const latest = await fetchLatestNpmVersion(name);
+    if (!latest) continue;
+    if (installed === latest) continue;
+    catalogVersionUpdates.push({ name, from: installed, to: latest });
+  }
+
+  const hasFrameworkUpdates = packages.some((p) => p.from !== p.to && p.from !== undefined);
+  const hasCatalogUpdates = catalogVersionUpdates.length > 0;
+  const hasUpdates = hasFrameworkUpdates || hasCatalogUpdates;
 
   if (options.dryRun) {
     let changelogUrl: string | undefined;
@@ -235,7 +282,10 @@ export async function upgradeTemplate(
 
     return {
       status: "dry-run",
-      packages,
+      packages: [
+        ...packages,
+        ...catalogVersionUpdates.map((u) => ({ name: u.name, from: u.from, to: u.to })),
+      ],
       changelogUrl,
     };
   }
@@ -246,12 +296,19 @@ export async function upgradeTemplate(
     }
   }
 
+  for (const update of catalogVersionUpdates) {
+    updateRootCatalogVersion(projectDir, update.name, update.to);
+  }
+
   const workspacePkgPaths = await findWorkspacePackageJsons(projectDir);
   for (const pkgPath of workspacePkgPaths) {
     for (const pkg of packages) {
       if (pkg.from !== undefined && pkg.from !== pkg.to) {
         updateWorkspacePackageRefInFile(pkgPath, pkg.name);
       }
+    }
+    for (const update of catalogVersionUpdates) {
+      updateWorkspacePackageRefInFile(pkgPath, update.name);
     }
   }
 
@@ -293,7 +350,10 @@ export async function upgradeTemplate(
 
   return {
     status: "upgraded",
-    packages,
+    packages: [
+      ...packages,
+      ...catalogVersionUpdates.map((u) => ({ name: u.name, from: u.from, to: u.to })),
+    ],
     sync: syncResult,
     migrated: migratedFiles.length > 0 ? migratedFiles : undefined,
     changelogUrl,
