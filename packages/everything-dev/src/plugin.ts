@@ -243,20 +243,41 @@ function listPluginAttachments(config: BosConfig | null) {
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
-async function refreshApiContractBridge(
-  configDir: string,
-  env: "development" | "production" = "development",
-): Promise<void> {
-  const refreshed = await loadConfig({ cwd: configDir, env });
-  if (!refreshed) return;
+interface GeneratedArtifacts {
+  sidebarPath: string;
+  resolvedConfigPath?: string;
+  contractBridgePath: string;
+}
 
-  await syncApiContractBridge({
+async function generateCodeArtifacts(
+  configDir: string,
+  config: BosConfig,
+  opts?: {
+    env?: BosEnv;
+    extendsChain?: string[];
+    runtimeConfig?: RuntimeConfig;
+  },
+): Promise<GeneratedArtifacts | null> {
+  writePluginSidebarGen(configDir, config);
+
+  if (opts?.env) {
+    writeResolvedConfig(configDir, config, opts.env, opts.extendsChain);
+  }
+
+  const runtimeConfig = opts?.runtimeConfig ?? (await loadConfig({ cwd: configDir }))?.runtime;
+  if (!runtimeConfig) return null;
+
+  const bridge = await syncApiContractBridge({
     configDir,
-    runtimeConfig: refreshed.runtime,
-    apiBaseUrl: refreshed.runtime.api.url,
+    runtimeConfig,
+    apiBaseUrl: runtimeConfig.api.url,
   });
 
-  writePluginSidebarGen(configDir, refreshed.config);
+  return {
+    sidebarPath: join(configDir, "ui/src/lib/plugin-sidebar.gen.ts"),
+    resolvedConfigPath: opts?.env ? join(configDir, ".bos/bos.resolved-config.json") : undefined,
+    contractBridgePath: bridge.bridgePath,
+  };
 }
 
 function extractPublishedUrl(output: string): string | null {
@@ -512,7 +533,7 @@ export default createPlugin({
       };
 
       await saveBosConfig(deps.configDir, deps.bosConfig);
-      await refreshApiContractBridge(deps.configDir);
+      await generateCodeArtifacts(deps.configDir, deps.bosConfig);
 
       const stored = deps.bosConfig.plugins?.[key];
       const storedObj = stored && typeof stored === "object" ? stored : {};
@@ -552,7 +573,7 @@ export default createPlugin({
       };
 
       await saveBosConfig(deps.configDir, deps.bosConfig);
-      await refreshApiContractBridge(deps.configDir);
+      await generateCodeArtifacts(deps.configDir, deps.bosConfig);
 
       return {
         status: "removed" as const,
@@ -749,7 +770,7 @@ export default createPlugin({
           }
         }
 
-        await refreshApiContractBridge(deps.configDir);
+        await generateCodeArtifacts(deps.configDir, deps.bosConfig);
       }
 
       return {
@@ -808,16 +829,6 @@ export default createPlugin({
       deps.bosConfig = refreshed?.config ?? deps.bosConfig;
       deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
 
-      if (deps.bosConfig) {
-        writeResolvedConfig(
-          deps.configDir,
-          deps.bosConfig,
-          "development",
-          refreshed?.source.extended,
-        );
-        writePluginSidebarGen(deps.configDir, deps.bosConfig);
-      }
-
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -848,6 +859,12 @@ export default createPlugin({
         ssr,
       });
 
+      await generateCodeArtifacts(deps.configDir, deps.bosConfig, {
+        env: "development",
+        extendsChain: refreshed?.source.extended,
+        runtimeConfig,
+      });
+
       const services = buildServiceDescriptorMap(runtimeConfig, { ssr, proxy });
       const packages = [...services.keys()];
       const displayEnv: Record<string, string> = {};
@@ -856,12 +873,6 @@ export default createPlugin({
         const proxyUrl = resolveProxyUrl(deps.bosConfig);
         if (proxyUrl) displayEnv.API_PROXY = proxyUrl;
       }
-
-      await syncApiContractBridge({
-        configDir: deps.configDir,
-        runtimeConfig: runtimeConfig,
-        apiBaseUrl: runtimeConfig.api.url,
-      });
 
       const orchestrator: AppOrchestrator = {
         packages,
@@ -937,7 +948,10 @@ export default createPlugin({
         plugins: runtimePlugins,
       });
 
-      writePluginSidebarGen(deps.configDir, config);
+      await generateCodeArtifacts(deps.configDir, config, {
+        env: "production",
+        runtimeConfig,
+      });
 
       // ── Production Readiness Validation ──
       const productionEnv: Record<string, string> = {};
@@ -978,12 +992,6 @@ export default createPlugin({
       }
 
       const services = buildServiceDescriptorMap(runtimeConfig);
-
-      await syncApiContractBridge({
-        configDir: deps.configDir,
-        runtimeConfig: runtimeConfig,
-        apiBaseUrl: runtimeConfig.api.url,
-      });
 
       const stagingEnvVars: Record<string, string> = isStaging
         ? { BOS_GATEWAY: config.staging?.domain ?? config.domain ?? "" }
@@ -1052,9 +1060,6 @@ export default createPlugin({
 
       const buildEnv: BosEnv = input.deploy ? "production" : "development";
 
-      writeResolvedConfig(deps.configDir, deps.bosConfig, buildEnv);
-      writePluginSidebarGen(deps.configDir, deps.bosConfig);
-
       const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
       if (targets.length === 0) {
         return {
@@ -1073,10 +1078,9 @@ export default createPlugin({
         plugins: deps.runtimeConfig?.plugins,
       });
 
-      await syncApiContractBridge({
-        configDir: deps.configDir,
+      await generateCodeArtifacts(deps.configDir, deps.bosConfig, {
+        env: buildEnv,
         runtimeConfig,
-        apiBaseUrl: runtimeConfig.api.url,
       });
 
       const { built, skipped } = await buildWorkspaceTargets({
@@ -1141,6 +1145,11 @@ export default createPlugin({
       }
 
       if (input.deploy) {
+        await generateCodeArtifacts(deps.configDir, deps.bosConfig, {
+          env: "production",
+          runtimeConfig: deps.runtimeConfig ?? undefined,
+        });
+
         const result = await buildWorkspaceTargets({
           configDir: deps.configDir,
           bosConfig: deps.bosConfig,
@@ -1423,7 +1432,7 @@ export default createPlugin({
 
           const initConfig = await loadConfig({ cwd: directory });
           if (initConfig?.config) {
-            writePluginSidebarGen(directory, initConfig.config);
+            await generateCodeArtifacts(directory, initConfig.config);
           }
 
           s.stop("Project initialized");
@@ -1480,7 +1489,7 @@ export default createPlugin({
         if (result.status === "synced" || result.status === "dry-run") {
           const syncedConfig = await loadConfig({ cwd: projectDir });
           if (syncedConfig?.config) {
-            writePluginSidebarGen(projectDir, syncedConfig.config);
+            await generateCodeArtifacts(projectDir, syncedConfig.config);
           }
         }
 
@@ -1595,13 +1604,12 @@ export default createPlugin({
           };
         }
 
-        const result = await syncApiContractBridge({
-          configDir: projectDir,
+        await generateCodeArtifacts(projectDir, refreshed.config, {
           runtimeConfig: refreshed.runtime,
-          apiBaseUrl: refreshed.runtime.api.url,
         });
 
         const generated = [
+          "ui/src/lib/plugin-sidebar.gen.ts",
           "ui/src/lib/api-types.gen.ts",
           "api/src/lib/plugins-types.gen.ts",
           "api/src/lib/auth-types.gen.ts",
@@ -1619,10 +1627,10 @@ export default createPlugin({
         return {
           status: "success" as const,
           generated,
-          fetched: result.source === "remote" ? [refreshed.runtime.api.url] : [],
-          skipped: result.source === "local" ? ["api (local)"] : [],
+          fetched: refreshed.runtime.api.source === "remote" ? [refreshed.runtime.api.url] : [],
+          skipped: refreshed.runtime.api.source === "local" ? ["api (local)"] : [],
           failed: [],
-          source: result.source,
+          source: refreshed.runtime.api.source,
         };
       } catch (error) {
         return {
