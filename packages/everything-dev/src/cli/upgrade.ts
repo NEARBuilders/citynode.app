@@ -137,11 +137,13 @@ function updateRootCatalogVersion(
   const pkgPath = join(projectDir, "package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
 
-  if (!pkg.workspaces || typeof pkg.workspaces !== "object") return false;
-  const workspaces = pkg.workspaces as { catalog?: Record<string, string> };
-  if (!workspaces.catalog || typeof workspaces.catalog !== "object") return false;
-
-  if (!(packageName in workspaces.catalog)) return false;
+  if (!pkg.workspaces || typeof pkg.workspaces !== "object") {
+    pkg.workspaces = { packages: [], catalog: {} };
+  }
+  const workspaces = pkg.workspaces as { packages?: string[]; catalog?: Record<string, string> };
+  if (!workspaces.catalog || typeof workspaces.catalog !== "object") {
+    workspaces.catalog = {};
+  }
 
   const nextVersion = `^${newVersion}`;
   if (workspaces.catalog[packageName] === nextVersion) return false;
