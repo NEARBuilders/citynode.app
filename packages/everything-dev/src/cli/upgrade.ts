@@ -25,6 +25,8 @@ const OBSOLETE_FILES = [
   "ui/src/lib/auth-client.ts",
   "ui/src/lib/session.ts",
   "ui/scripts/generate-metadata.ts",
+  ".github/dependabot.yml",
+  ".github/templates/dependabot.yml",
 ];
 
 interface NpmPackageInfo {

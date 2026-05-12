@@ -31,6 +31,8 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "biome.json",
   "bos.config.json",
   "package.json",
+  ".github/renovate.json",
+  ".github/workflows/ci.yml",
   ".github/workflows/release-sync.yml",
   "ui/package.json",
   "ui/postcss.config.mjs",
