@@ -3,11 +3,13 @@
   "app": {
     "api": {
       "development": "local:.",
-      "production": "https://elliot-braem-3674-every-plugin-settings-everythin-7e61a06ec-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-3688-every-plugin-settings-everythin-0ec3b08cb-ze.zephyrcloud.app",
       "integrity": "sha384-OnTcoTfD2qm1ECTtvCMNLTSmbvjzwf/8lr+88XI2xZOCc5LEPpLSJt6et18ZUJ/x"
     }
   },
-  "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"],
+  "routes": [
+    "ui/src/routes/_layout/_authenticated/settings.tsx"
+  ],
   "sidebar": [
     {
       "icon": "Settings",
