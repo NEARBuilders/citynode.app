@@ -3,16 +3,12 @@
   "app": {
     "api": {
       "development": "local:.",
-      "secrets": [
-        "PROJECTS_DATABASE_URL"
-      ],
+      "secrets": ["PROJECTS_DATABASE_URL"],
       "production": "https://elliot-braem-3687-everything-dev-projects-plugin--397688fff-ze.zephyrcloud.app",
       "integrity": "sha384-wcPPqUH87tQ8ooF0GUZIRfWDe1VQtn/UbjmH74MxJ37awWCND6+MUoFfpjL79/av"
     }
   },
-  "routes": [
-    "ui/src/routes/_layout/_authenticated/projects/**"
-  ],
+  "routes": ["ui/src/routes/_layout/_authenticated/projects/**"],
   "sidebar": [
     {
       "icon": "FolderKanban",
