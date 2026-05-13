@@ -2,12 +2,13 @@ import process from "node:process";
 import * as p from "@clack/prompts";
 
 function parseExtendsRef(ref: string): { account: string; gateway: string } | null {
-  const match = ref.match(/^(?:bos:\/\/)?([^/]+)\/(.+)$/);
+  const normalized = ref.startsWith("bos://") ? ref : `bos://${ref}`;
+  const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
   if (!match) return null;
   return { account: match[1], gateway: match[2] };
 }
 
-function deriveAccountFromDomain(domain: string, extendsAccount: string): string {
+function deriveAccountFromExtends(domain: string, extendsAccount: string): string {
   const firstSegment = domain.split(".")[0];
   if (!firstSegment) return "";
   const suffix = extendsAccount.includes(".")
@@ -17,8 +18,6 @@ function deriveAccountFromDomain(domain: string, extendsAccount: string): string
 }
 
 export async function promptInitOptions(input: {
-  extendsAccount?: string;
-  extendsGateway?: string;
   extends?: string;
   directory?: string;
   account?: string;
@@ -37,6 +36,26 @@ export async function promptInitOptions(input: {
 }> {
   p.intro("Let's build an app...");
 
+  const extendsInput =
+    input.extends ??
+    ((await p.text({
+      message: "Extending an existing app?",
+      placeholder: "bos://dev.everything.near/everything.dev",
+    })) as string);
+
+  if (p.isCancel(extendsInput)) process.exit(0);
+
+  let extendsAccount = "dev.everything.near";
+  let extendsGateway = "everything.dev";
+
+  if (extendsInput) {
+    const parsed = parseExtendsRef(extendsInput);
+    if (parsed) {
+      extendsAccount = parsed.account;
+      extendsGateway = parsed.gateway;
+    }
+  }
+
   const domain =
     input.domain ??
     ((await p.text({
@@ -46,31 +65,7 @@ export async function promptInitOptions(input: {
 
   if (p.isCancel(domain)) process.exit(0);
 
-  const extendsPlaceholder = "bos://dev.everything.near/everything.dev";
-  const extendsInput =
-    input.extends ??
-    ((await p.text({
-      message: "Extending an existing app?",
-      placeholder: extendsPlaceholder,
-    })) as string);
-
-  if (p.isCancel(extendsInput)) process.exit(0);
-
-  let extendsAccount = input.extendsAccount || "";
-  let extendsGateway = input.extendsGateway || "";
-
-  if (extendsInput) {
-    const parsed = parseExtendsRef(extendsInput);
-    if (parsed) {
-      extendsAccount = extendsAccount || parsed.account;
-      extendsGateway = extendsGateway || parsed.gateway;
-    }
-  }
-
-  extendsAccount = extendsAccount || "dev.everything.near";
-  extendsGateway = extendsGateway || "everything.dev";
-
-  const accountDefault = domain ? deriveAccountFromDomain(domain, extendsAccount) : "";
+  const accountDefault = domain ? deriveAccountFromExtends(domain, extendsAccount) : "";
   const account =
     input.account ??
     ((await p.text({

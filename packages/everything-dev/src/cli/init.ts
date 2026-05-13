@@ -20,7 +20,7 @@ import {
   loadManifestNormalizationSpec,
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
-import type { BosConfig } from "../types";
+import type { BosConfig, BosConfigInput } from "../types";
 import { isPathExcluded } from "../utils/path-match";
 import { saveBosConfig } from "../utils/save-config";
 import { writeSnapshot } from "./snapshot";
@@ -51,12 +51,25 @@ export async function resolveSourceDir(opts: {
 
   const parentConfig = await fetchParentConfig(opts.extendsAccount, opts.extendsGateway);
 
-  if (!parentConfig.repository) {
-    throw new Error("Parent config has no repository field — cannot locate template source");
+  if (parentConfig.repository) {
+    const { dir: sourceDir, cleanup } = await downloadTarball(parentConfig.repository);
+    return { sourceDir, parentConfig, cleanup };
   }
 
-  const { dir: sourceDir, cleanup } = await downloadTarball(parentConfig.repository);
-  return { sourceDir, parentConfig, cleanup };
+  const chainResult = await resolveRepositoryViaExtendsChain(
+    opts.extendsAccount,
+    opts.extendsGateway,
+  );
+  if (chainResult?.repository) {
+    const { dir: sourceDir, cleanup } = await downloadTarball(chainResult.repository);
+    return { sourceDir, parentConfig: chainResult.config, cleanup };
+  }
+
+  return {
+    sourceDir: "",
+    parentConfig,
+    cleanup: async () => {},
+  };
 }
 
 export async function readTemplatekeep(sourceDir: string): Promise<string[]> {
@@ -78,6 +91,37 @@ export async function fetchParentConfig(
 ): Promise<BosConfig> {
   const bosUrl = `bos://${extendsAccount}/${extendsGateway}`;
   return fetchBosConfigFromFastKv<BosConfig>(bosUrl);
+}
+
+export async function resolveRepositoryViaExtendsChain(
+  extendsAccount: string,
+  extendsGateway: string,
+  visited = new Set<string>(),
+): Promise<{ repository: string; config: BosConfig } | null> {
+  const key = `bos://${extendsAccount}/${extendsGateway}`;
+  if (visited.has(key)) return null;
+  visited.add(key);
+
+  try {
+    const config = await fetchParentConfig(extendsAccount, extendsGateway);
+    if (config.repository) {
+      return { repository: config.repository, config };
+    }
+
+    const extendsRef = config.extends;
+    if (extendsRef && typeof extendsRef === "string") {
+      const normalized = extendsRef.startsWith("bos://") ? extendsRef : `bos://${extendsRef}`;
+      const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
+      if (match) {
+        const result = await resolveRepositoryViaExtendsChain(match[1], match[2], visited);
+        if (result) return result;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function downloadTarball(
@@ -506,6 +550,121 @@ const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
   "every-plugin": "packages/every-plugin",
 };
 
+export async function scaffoldMinimalProject(
+  destination: string,
+  parentConfig: BosConfigInput,
+  opts: {
+    extendsAccount: string;
+    extendsGateway: string;
+    account?: string;
+    domain?: string;
+    plugins?: string[];
+    withHost?: boolean;
+  },
+): Promise<number> {
+  mkdirSync(destination, { recursive: true });
+
+  const config: Record<string, unknown> = {
+    extends: `bos://${opts.extendsAccount}/${opts.extendsGateway}`,
+    account: opts.account || opts.extendsAccount,
+    ...(opts.domain ? { domain: opts.domain } : {}),
+  };
+
+  if (parentConfig.app && typeof parentConfig.app === "object") {
+    const app: Record<string, unknown> = {};
+    const parentApp = parentConfig.app as Record<string, Record<string, unknown>>;
+
+    if (parentApp.host) {
+      app.host = { ...parentApp.host };
+      const host = app.host as Record<string, unknown>;
+      delete host.production;
+      delete host.integrity;
+    }
+
+    if (parentApp.ui) {
+      app.ui = { ...parentApp.ui };
+      const ui = app.ui as Record<string, unknown>;
+      delete ui.production;
+      delete ui.integrity;
+      delete ui.ssr;
+      delete ui.ssrIntegrity;
+    }
+
+    if (parentApp.api) {
+      app.api = { ...parentApp.api };
+      const api = app.api as Record<string, unknown>;
+      delete api.production;
+      delete api.integrity;
+    }
+
+    if (parentApp.auth) {
+      app.auth = { ...parentApp.auth };
+      const auth = app.auth as Record<string, unknown>;
+      delete auth.production;
+      delete auth.integrity;
+    }
+
+    config.app = app;
+  }
+
+  if (opts.plugins && opts.plugins.length > 0 && parentConfig.plugins) {
+    const plugins: Record<string, unknown> = {};
+    for (const key of opts.plugins) {
+      const parentPlugin = (parentConfig.plugins as Record<string, unknown>)?.[key];
+      if (parentPlugin) {
+        if (typeof parentPlugin === "string") {
+          plugins[key] = { extends: parentPlugin };
+        } else {
+          const pluginCopy = { ...(parentPlugin as Record<string, unknown>) };
+          delete pluginCopy.production;
+          delete pluginCopy.integrity;
+          plugins[key] = pluginCopy;
+        }
+      }
+    }
+    config.plugins = plugins;
+  }
+
+  await saveBosConfig(destination, config);
+
+  const pkg: Record<string, unknown> = {
+    name: opts.domain || opts.extendsGateway,
+    private: true,
+    type: "module",
+    scripts: {
+      dev: "node_modules/.bin/bos dev --host remote",
+      "dev:ui": "node_modules/.bin/bos dev --ui local --api remote",
+      "dev:api": "node_modules/.bin/bos dev --ui remote --api local",
+      build: "node_modules/.bin/bos build",
+      deploy: "node_modules/.bin/bos build --deploy",
+      publish: "node_modules/.bin/bos publish",
+      start: "node_modules/.bin/bos start",
+      typecheck: "node_modules/.bin/bos types gen && tsc --noEmit",
+      postinstall: "node_modules/.bin/bos types gen || true",
+      "types:gen": "node_modules/.bin/bos types gen",
+    },
+    dependencies: {
+      "everything-dev": "catalog:",
+      "every-plugin": "catalog:",
+    },
+    devDependencies: {},
+    workspaces: {
+      packages: [],
+      catalog: {},
+    },
+  };
+  writeFileSync(join(destination, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
+
+  const envExample = generateEnvExample(parentConfig);
+  if (envExample) {
+    writeFileSync(join(destination, ".env.example"), envExample);
+  }
+
+  writeFileSync(join(destination, ".gitignore"), generateGitignore());
+
+  return 4;
+}
+
 async function resolveWorkspaceRefs(
   destination: string,
   options?: { localOverrides?: boolean; sourceDir?: string },
@@ -656,4 +815,51 @@ export async function generateDatabaseMigrations(destination: string): Promise<v
 
 export async function execCommand(command: string, args: string[], cwd?: string): Promise<void> {
   await execa(command, args, { cwd, stdio: "pipe" });
+}
+
+function generateEnvExample(config: BosConfigInput): string {
+  const lines: string[] = ["# Environment variables"];
+  const collectSecrets = (obj: Record<string, unknown>, prefix = ""): void => {
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === "secrets" && Array.isArray(value)) {
+        for (const secret of value) {
+          if (typeof secret === "string") {
+            lines.push(`${secret}=`);
+          }
+        }
+      } else if (key === "variables" && isPlainObject(value)) {
+        for (const [varKey, varVal] of Object.entries(value as Record<string, unknown>)) {
+          if (typeof varVal === "string") {
+            lines.push(`${varKey}=${varVal}`);
+          }
+        }
+      } else if (isPlainObject(value) && key !== "extends") {
+        collectSecrets(value as Record<string, unknown>, `${prefix}${key}.`);
+      }
+    }
+  };
+
+  if (config.app && typeof config.app === "object") {
+    collectSecrets(config.app as Record<string, unknown>);
+  }
+  if (config.plugins && typeof config.plugins === "object") {
+    collectSecrets(config.plugins as Record<string, unknown>);
+  }
+
+  lines.push("BETTER_AUTH_SECRET=generate-a-secret-here");
+  return `${lines.join("\n")}\n`;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function generateGitignore(): string {
+  return `node_modules/
+dist/
+.env
+.bos/
+*.gen.ts
+*.gen.tsx
+`;
 }

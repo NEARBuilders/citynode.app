@@ -15,6 +15,7 @@ import {
   runBunInstall,
   runDockerComposeUp,
   runTypesGen,
+  scaffoldMinimalProject,
   writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
@@ -58,7 +59,7 @@ import {
 } from "./service-descriptor";
 import { syncAndGenerateSharedUi } from "./shared";
 import { writePluginSidebarGen } from "./sidebar";
-import type { BosConfig, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
+import type { BosConfig, BosConfigInput, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
@@ -1190,8 +1191,8 @@ export default createPlugin({
     init: builder.init.handler(async ({ input }) => {
       try {
         const timings: PhaseTiming[] = [];
-        let extendsAccount = input.extendsAccount;
-        let extendsGateway = input.extendsGateway;
+        let extendsAccount = "";
+        let extendsGateway = "";
         let directory = input.directory;
         let account = input.account;
         let domain = input.domain;
@@ -1199,10 +1200,13 @@ export default createPlugin({
         let plugins = input.plugins;
 
         if (input.extends) {
-          const match = input.extends.match(/^(?:bos:\/\/)?([^/]+)\/(.+)$/);
+          const normalized = input.extends.startsWith("bos://")
+            ? input.extends
+            : `bos://${input.extends}`;
+          const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
           if (match) {
-            if (!extendsAccount) extendsAccount = match[1];
-            if (!extendsGateway) extendsGateway = match[2];
+            extendsAccount = match[1];
+            extendsGateway = match[2];
           }
         }
 
@@ -1213,7 +1217,7 @@ export default createPlugin({
         let parentConfig: BosConfig | null = null;
         try {
           parentConfig = await timePhase(timings, "parent config", () =>
-            fetchParentConfig(extendsAccount!, extendsGateway!),
+            fetchParentConfig(extendsAccount, extendsGateway),
           );
           if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
             parentPluginKeys = Object.keys(parentConfig.plugins);
@@ -1222,9 +1226,7 @@ export default createPlugin({
 
         if (!input.noInteractive) {
           const prompted = await promptInitOptions({
-            extendsAccount,
-            extendsGateway,
-            extends: input.extends,
+            extends: `bos://${extendsAccount}/${extendsGateway}`,
             directory,
             account,
             domain,
@@ -1244,25 +1246,25 @@ export default createPlugin({
         directory = directory || domain || extendsGateway;
         const targetDir = resolve(directory);
         plugins = plugins ?? [];
+        const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
 
         if (!parentConfig) {
           try {
             parentConfig = await timePhase(timings, "parent config", () =>
-              fetchParentConfig(extendsAccount!, extendsGateway!),
+              fetchParentConfig(extendsAccount, extendsGateway),
             );
           } catch {
             return {
               status: "error" as const,
               directory,
-              extendsAccount,
-              extendsGateway,
+              extendsRef,
               account,
               domain,
-              extends: `bos://${extendsAccount}/${extendsGateway}`,
+              extends: extendsRef,
               plugins: plugins ?? [],
               filesCopied: 0,
               timings,
-              error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
+              error: `No config found at ${extendsRef} — are you sure this is the right parent?`,
             };
           }
         }
@@ -1281,66 +1283,82 @@ export default createPlugin({
 
         parentConfig = resolvedParentConfig;
 
+        const isMinimalScaffold = sourceDir === "";
+
         try {
-          const patterns = await readTemplatekeep(sourceDir);
-          if (patterns.length === 0) {
-            return {
-              status: "error" as const,
-              directory,
-              extendsAccount,
-              extendsGateway,
-              account,
-              domain,
-              extends: `bos://${extendsAccount}/${extendsGateway}`,
-              plugins: plugins ?? [],
-              filesCopied: 0,
-              error: "No .templatekeep found in template source",
-            };
-          }
-
-          const pluginRoutes: Record<string, string[]> = {};
-          const parentRuntimePlugins = await buildRuntimePluginsForConfig(
-            parentConfig as BosConfig,
-            sourceDir,
-            "production",
-          );
-          for (const [key, plugin] of Object.entries(parentRuntimePlugins ?? {})) {
-            if (plugin.routes && plugin.routes.length > 0) {
-              pluginRoutes[key] = plugin.routes;
-            }
-          }
-
           const s = p.spinner();
           s.start("Setting up project");
 
-          const filesCopied = await timePhase(timings, "copy files", () =>
-            copyFilteredFiles(sourceDir, targetDir, patterns, {
-              withHost,
-              plugins,
-              pluginRoutes,
-            }),
-          );
+          let filesCopied: number;
 
-          await timePhase(timings, "personalize config", () =>
-            personalizeConfig(targetDir, {
-              extendsAccount,
-              extendsGateway,
-              account: account || extendsAccount,
-              domain: domain || extendsGateway,
-              plugins,
-              pluginRoutes,
-              workspaceOpts: { sourceDir },
-              withHost,
-            }),
-          );
+          if (isMinimalScaffold) {
+            filesCopied = await timePhase(timings, "scaffold project", () =>
+              scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain,
+                plugins,
+                withHost,
+              }),
+            );
+          } else {
+            const patterns = await readTemplatekeep(sourceDir);
+            if (patterns.length === 0) {
+              return {
+                status: "error" as const,
+                directory,
+                extendsRef,
+                account,
+                domain,
+                extends: extendsRef,
+                plugins: plugins ?? [],
+                filesCopied: 0,
+                error: "No .templatekeep found in template source",
+              };
+            }
 
-          await timePhase(timings, "write snapshot", () =>
-            writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
-              withHost,
-              plugins,
-              pluginRoutes,
-            }),
-          );
+            const pluginRoutes: Record<string, string[]> = {};
+            const parentRuntimePlugins = await buildRuntimePluginsForConfig(
+              parentConfig as BosConfig,
+              sourceDir,
+              "production",
+            );
+            for (const [key, plugin] of Object.entries(parentRuntimePlugins ?? {})) {
+              if (plugin.routes && plugin.routes.length > 0) {
+                pluginRoutes[key] = plugin.routes;
+              }
+            }
+
+            filesCopied = await timePhase(timings, "copy files", () =>
+              copyFilteredFiles(sourceDir, targetDir, patterns, {
+                withHost,
+                plugins,
+                pluginRoutes,
+              }),
+            );
+
+            await timePhase(timings, "personalize config", () =>
+              personalizeConfig(targetDir, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain: domain || extendsGateway,
+                plugins,
+                pluginRoutes,
+                workspaceOpts: { sourceDir },
+                withHost,
+              }),
+            );
+
+            await timePhase(timings, "write snapshot", () =>
+              writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
+                withHost,
+                plugins,
+                pluginRoutes,
+              }),
+            );
+          }
 
           const initConfig = await timePhase(timings, "resolve config", () =>
             loadConfig({ cwd: targetDir }),
@@ -1394,11 +1412,10 @@ export default createPlugin({
           return {
             status: "initialized" as const,
             directory,
-            extendsAccount,
-            extendsGateway,
+            extendsRef,
             account,
             domain,
-            extends: `bos://${extendsAccount}/${extendsGateway}`,
+            extends: extendsRef,
             plugins,
             filesCopied,
             timings,
@@ -1407,17 +1424,18 @@ export default createPlugin({
           await cleanup();
         }
       } catch (error) {
+        const extendsRef = input.extends
+          ? input.extends.startsWith("bos://")
+            ? input.extends
+            : `bos://${input.extends}`
+          : "bos://dev.everything.near/everything.dev";
         return {
           status: "error" as const,
           directory: input.directory ?? "",
-          extendsAccount: input.extendsAccount ?? "",
-          extendsGateway: input.extendsGateway ?? "",
+          extendsRef,
           account: input.account,
           domain: input.domain,
-          extends:
-            input.extendsAccount && input.extendsGateway
-              ? `bos://${input.extendsAccount}/${input.extendsGateway}`
-              : "",
+          extends: extendsRef,
           plugins: input.plugins ?? [],
           filesCopied: 0,
           timings: [],

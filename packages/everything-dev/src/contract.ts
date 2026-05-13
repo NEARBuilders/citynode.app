@@ -144,8 +144,6 @@ export const KeyPublishResultSchema = z.object({
 
 export const InitOptionsSchema = z.object({
   extends: z.string().optional(),
-  extendsAccount: z.string().optional(),
-  extendsGateway: z.string().optional(),
   directory: z.string().optional(),
   account: z.string().optional(),
   domain: z.string().optional(),
@@ -164,8 +162,7 @@ export const PhaseTimingSchema = z.object({
 export const InitResultSchema = z.object({
   status: z.enum(["initialized", "error"]),
   directory: z.string(),
-  extendsAccount: z.string(),
-  extendsGateway: z.string(),
+  extendsRef: z.string(),
   account: z.string().optional(),
   domain: z.string().optional(),
   extends: z.string(),
