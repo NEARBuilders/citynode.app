@@ -70,6 +70,197 @@ function parseBosRef(ref: string): { account: string; gateway: string } | null {
   return { account: match[1], gateway: match[2] };
 }
 
+function parseTargetedRef(ref: string): { configRef: string; targetPath?: string } {
+  const hashIndex = ref.indexOf("#");
+  if (hashIndex === -1) {
+    return { configRef: ref };
+  }
+  return {
+    configRef: ref.slice(0, hashIndex),
+    targetPath: ref.slice(hashIndex + 1) || undefined,
+  };
+}
+
+function ensureTargetedRef(ref: string, targetPath: string): string {
+  const parsed = parseTargetedRef(ref);
+  if (parsed.targetPath) return ref;
+  return `${parsed.configRef}#${targetPath}`;
+}
+
+function rewriteExtendsTarget(
+  entry: Record<string, unknown> | undefined,
+  targetPath: string,
+): boolean {
+  if (!entry?.extends) return false;
+
+  if (typeof entry.extends === "string") {
+    const next = ensureTargetedRef(entry.extends, targetPath);
+    if (next === entry.extends) return false;
+    entry.extends = next;
+    return true;
+  }
+
+  if (typeof entry.extends === "object") {
+    let changed = false;
+    for (const [key, value] of Object.entries(entry.extends as Record<string, unknown>)) {
+      if (typeof value !== "string") continue;
+      const next = ensureTargetedRef(value, targetPath);
+      if (next !== value) {
+        (entry.extends as Record<string, unknown>)[key] = next;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  return false;
+}
+
+function migrateRootConfigTargets(config: Record<string, unknown>): boolean {
+  let changed = false;
+  const app =
+    config.app && typeof config.app === "object"
+      ? (config.app as Record<string, unknown>)
+      : undefined;
+
+  if (app?.api && typeof app.api === "object") {
+    changed = rewriteExtendsTarget(app.api as Record<string, unknown>, "app.api") || changed;
+  }
+  if (app?.auth && typeof app.auth === "object") {
+    changed = rewriteExtendsTarget(app.auth as Record<string, unknown>, "app.auth") || changed;
+  }
+
+  if (config.plugins && typeof config.plugins === "object") {
+    for (const [pluginKey, pluginValue] of Object.entries(
+      config.plugins as Record<string, unknown>,
+    )) {
+      if (typeof pluginValue === "string") {
+        const next = ensureTargetedRef(pluginValue, `plugins.${pluginKey}`);
+        if (next !== pluginValue) {
+          (config.plugins as Record<string, unknown>)[pluginKey] = next;
+          changed = true;
+        }
+        continue;
+      }
+      if (!pluginValue || typeof pluginValue !== "object") continue;
+      changed =
+        rewriteExtendsTarget(pluginValue as Record<string, unknown>, `plugins.${pluginKey}`) ||
+        changed;
+    }
+  }
+
+  return changed;
+}
+
+function migratePluginProviderConfig(config: Record<string, unknown>, pluginKey: string): boolean {
+  let changed = false;
+  if (!config.plugins || typeof config.plugins !== "object") {
+    config.plugins = {};
+    changed = true;
+  }
+
+  const plugins = config.plugins as Record<string, unknown>;
+  if (!plugins[pluginKey] || typeof plugins[pluginKey] !== "object") {
+    plugins[pluginKey] = { name: pluginKey };
+    changed = true;
+  }
+
+  const pluginEntry = plugins[pluginKey] as Record<string, unknown>;
+  if (typeof pluginEntry.name !== "string" || pluginEntry.name.length === 0) {
+    pluginEntry.name = pluginKey;
+    changed = true;
+  }
+
+  const app =
+    config.app && typeof config.app === "object"
+      ? (config.app as Record<string, unknown>)
+      : undefined;
+  const apiEntry =
+    app?.api && typeof app.api === "object" ? (app.api as Record<string, unknown>) : undefined;
+
+  if (apiEntry) {
+    for (const key of [
+      "extends",
+      "name",
+      "development",
+      "production",
+      "integrity",
+      "proxy",
+      "variables",
+      "secrets",
+      "sidebar",
+      "routes",
+    ] as const) {
+      if (pluginEntry[key] === undefined && apiEntry[key] !== undefined) {
+        pluginEntry[key] = apiEntry[key];
+        changed = true;
+      }
+    }
+
+    delete app!.api;
+    changed = true;
+    if (Object.keys(app!).length === 0) {
+      delete config.app;
+    }
+  }
+
+  if (config.sidebar !== undefined && pluginEntry.sidebar === undefined) {
+    pluginEntry.sidebar = config.sidebar;
+    changed = true;
+  }
+  if (config.routes !== undefined && pluginEntry.routes === undefined) {
+    pluginEntry.routes = config.routes;
+    changed = true;
+  }
+  if (config.sidebar !== undefined) {
+    delete config.sidebar;
+    changed = true;
+  }
+  if (config.routes !== undefined) {
+    delete config.routes;
+    changed = true;
+  }
+
+  changed = rewriteExtendsTarget(pluginEntry, `plugins.${pluginKey}`) || changed;
+
+  return changed;
+}
+
+export async function migrateBosConfigFiles(projectDir: string): Promise<string[]> {
+  const migrated: string[] = [];
+  const rootConfigPath = join(projectDir, "bos.config.json");
+
+  if (existsSync(rootConfigPath)) {
+    const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<string, unknown>;
+    if (migrateRootConfigTargets(rootConfig)) {
+      await saveBosConfig(projectDir, rootConfig);
+      migrated.push("bos.config.json");
+    }
+  }
+
+  const pluginConfigPaths = await glob("plugins/*/bos.config.json", {
+    cwd: projectDir,
+    nodir: true,
+    dot: false,
+    absolute: false,
+  });
+
+  for (const relativePath of pluginConfigPaths) {
+    const match = relativePath.match(/^plugins\/([^/]+)\/bos\.config\.json$/);
+    const pluginKey = match?.[1];
+    if (!pluginKey) continue;
+
+    const filePath = join(projectDir, relativePath);
+    const pluginConfig = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
+    if (!migratePluginProviderConfig(pluginConfig, pluginKey)) continue;
+
+    writeFileSync(filePath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
+    migrated.push(relativePath);
+  }
+
+  return migrated;
+}
+
 async function loadParentPluginOptions(projectDir: string): Promise<{
   localConfig: Record<string, unknown>;
   parentPlugins: Record<string, unknown>;
@@ -142,7 +333,16 @@ async function addSelectedParentPlugins(projectDir: string): Promise<string[]> {
       : {};
   const nextPlugins = { ...localPlugins };
   for (const key of selected) {
-    nextPlugins[key] = pluginOptions.parentPlugins[key];
+    const parentPlugin = pluginOptions.parentPlugins[key];
+    if (parentPlugin && typeof parentPlugin === "object") {
+      const nextPlugin = structuredClone(parentPlugin as Record<string, unknown>);
+      rewriteExtendsTarget(nextPlugin, `plugins.${key}`);
+      nextPlugins[key] = nextPlugin;
+    } else if (typeof parentPlugin === "string") {
+      nextPlugins[key] = ensureTargetedRef(parentPlugin, `plugins.${key}`);
+    } else {
+      nextPlugins[key] = parentPlugin;
+    }
   }
 
   pluginOptions.localConfig.plugins = nextPlugins;
@@ -442,6 +642,10 @@ export async function upgradeTemplate(
     }
   });
 
+  const migratedBosConfigs = await timePhase(timings, "migrate bos configs", () =>
+    migrateBosConfigFiles(projectDir),
+  );
+
   let syncResult: UpgradeResult["sync"];
   let addedPlugins: string[] = [];
   if (!options.noSync) {
@@ -465,7 +669,10 @@ export async function upgradeTemplate(
   }
 
   const migratedFiles = await timePhase(timings, "clean obsolete files", async () => {
-    const nextMigratedFiles = await rewriteLegacyUiImports(projectDir);
+    const nextMigratedFiles = [
+      ...migratedBosConfigs,
+      ...(await rewriteLegacyUiImports(projectDir)),
+    ];
     for (const file of OBSOLETE_FILES) {
       const filePath = join(projectDir, file);
       if (existsSync(filePath)) {

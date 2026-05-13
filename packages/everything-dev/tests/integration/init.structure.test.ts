@@ -53,6 +53,69 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(false);
   });
 
+  it("copies selected plugin provider configs when plugins are chosen", async () => {
+    const selectedDir = mkdtempSync(join(tmpdir(), "bos-init-selected-plugins-"));
+    try {
+      const parent = JSON.parse(readFileSync(join(REPO_ROOT, "bos.config.json"), "utf-8"));
+      const pluginRoutes = Object.fromEntries(
+        Object.entries(parent.plugins as Record<string, { routes?: string[] }>).map(
+          ([key, value]) => [key, value.routes ?? []],
+        ),
+      );
+      const patterns = await readTemplatekeep(REPO_ROOT);
+      await copyFilteredFiles(REPO_ROOT, selectedDir, patterns, {
+        withHost: false,
+        plugins: ["apps", "projects"],
+        pluginRoutes,
+      });
+
+      expect(existsSync(join(selectedDir, "plugins", "apps", "bos.config.json"))).toBe(true);
+      expect(existsSync(join(selectedDir, "plugins", "projects", "bos.config.json"))).toBe(true);
+      expect(existsSync(join(selectedDir, "plugins", "settings", "bos.config.json"))).toBe(false);
+    } finally {
+      rmSync(selectedDir, { recursive: true, force: true });
+    }
+  });
+
+  it("completes init cleanly when no plugins are selected", async () => {
+    const noPluginsDir = mkdtempSync(join(tmpdir(), "bos-init-no-plugins-"));
+    try {
+      const parent = JSON.parse(readFileSync(join(REPO_ROOT, "bos.config.json"), "utf-8"));
+      const pluginRoutes = Object.fromEntries(
+        Object.entries(parent.plugins as Record<string, { routes?: string[] }>).map(
+          ([key, value]) => [key, value.routes ?? []],
+        ),
+      );
+      const patterns = await readTemplatekeep(REPO_ROOT);
+      await copyFilteredFiles(REPO_ROOT, noPluginsDir, patterns, {
+        withHost: false,
+        plugins: [],
+        pluginRoutes,
+      });
+      await personalizeConfig(noPluginsDir, {
+        extendsAccount: "dev.everything.near",
+        extendsGateway: "everything.dev",
+        account: "test.near",
+        domain: "test.dev",
+        plugins: [],
+        pluginRoutes,
+        workspaceOpts: { sourceDir: REPO_ROOT },
+      });
+
+      expect(existsSync(join(noPluginsDir, "plugins"))).toBe(false);
+
+      const config = JSON.parse(readFileSync(join(noPluginsDir, "bos.config.json"), "utf-8"));
+      expect(config.plugins).toEqual({});
+
+      const pkg = JSON.parse(readFileSync(join(noPluginsDir, "package.json"), "utf-8")) as {
+        workspaces?: { packages?: string[] };
+      };
+      expect(pkg.workspaces?.packages).not.toContain("plugins/*");
+    } finally {
+      rmSync(noPluginsDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps ui build scripts direct", async () => {
     const pkg = JSON.parse(readFileSync(join(testDir, "ui", "package.json"), "utf-8")) as {
       scripts?: Record<string, string>;

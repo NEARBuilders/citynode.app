@@ -46,8 +46,9 @@ export const SidebarItemSchema = z.object({
 });
 export type SidebarItem = z.infer<typeof SidebarItemSchema>;
 
-export const ApiPluginConfigSchema = z.object({
-  name: z.string(),
+export const ComposableAppEntrySchema = z.object({
+  extends: ExtendsSchema.optional(),
+  name: z.string().optional(),
   development: z.string().optional(),
   production: z.string().optional(),
   integrity: z.string().optional(),
@@ -55,7 +56,11 @@ export const ApiPluginConfigSchema = z.object({
   variables: z.record(z.string(), z.string()).optional(),
   secrets: z.array(z.string()).optional(),
   sidebar: z.array(SidebarItemSchema).optional(),
+  routes: z.array(z.string()).optional(),
 });
+export type ComposableAppEntry = z.infer<typeof ComposableAppEntrySchema>;
+
+export const ApiPluginConfigSchema = ComposableAppEntrySchema;
 export type ApiPluginConfig = z.infer<typeof ApiPluginConfigSchema>;
 
 export const PluginUiConfigSchema = z.object({
@@ -66,18 +71,8 @@ export const PluginUiConfigSchema = z.object({
 });
 export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
-export const BosPluginRefSchema = z.object({
-  extends: ExtendsSchema.optional(),
-  development: z.string().optional(),
-  production: z.string().optional(),
-  integrity: z.string().optional(),
-  name: z.string().optional(),
+export const BosPluginRefSchema = ComposableAppEntrySchema.extend({
   version: z.string().optional(),
-  proxy: z.string().optional(),
-  variables: z.record(z.string(), z.string()).optional(),
-  secrets: z.array(z.string()).optional(),
-  routes: z.array(z.string()).optional(),
-  sidebar: z.array(SidebarItemSchema).optional(),
   app: z.record(z.string(), z.unknown()).optional(),
   shared: z.record(z.string(), z.record(z.string(), SharedConfigSchema)).optional(),
   plugins: z.record(z.string(), z.unknown()).optional(),
@@ -222,8 +217,8 @@ export const BosConfigSchema = z.object({
   app: z.object({
     host: HostConfigSchema,
     ui: UiConfigSchema,
-    api: ApiPluginConfigSchema,
-    auth: ApiPluginConfigSchema.optional(),
+    api: ComposableAppEntrySchema,
+    auth: ComposableAppEntrySchema.optional(),
   }),
 });
 export type BosConfig = z.infer<typeof BosConfigSchema>;

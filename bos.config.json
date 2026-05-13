@@ -64,15 +64,15 @@
   },
   "plugins": {
     "apps": {
-      "extends": "bos://dev.everything.near/apps.everything.dev",
+      "extends": "bos://dev.everything.near/apps.everything.dev#plugins.apps",
       "development": "local:plugins/apps"
     },
     "projects": {
-      "extends": "bos://dev.everything.near/projects.everything.dev",
+      "extends": "bos://dev.everything.near/projects.everything.dev#plugins.projects",
       "development": "local:plugins/projects"
     },
     "settings": {
-      "extends": "bos://dev.everything.near/settings.everything.dev",
+      "extends": "bos://dev.everything.near/settings.everything.dev#plugins.settings",
       "development": "local:plugins/settings"
     }
   },

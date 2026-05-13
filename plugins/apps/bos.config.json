@@ -1,24 +1,22 @@
 {
   "domain": "apps.everything.dev",
-  "app": {
-    "api": {
+  "plugins": {
+    "apps": {
+      "name": "apps",
       "development": "local:.",
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
       "production": "https://elliot-braem-3749-everything-dev-apps-plugin-ever-23fc667ce-ze.zephyrcloud.app",
-      "integrity": "sha384-aLxzIq4w+mfjVeW4WYVteMNncUnN6fBSm5PNPuoiw3wL+8GFm2KvBeeisQ2Cb94b"
+      "integrity": "sha384-aLxzIq4w+mfjVeW4WYVteMNncUnN6fBSm5PNPuoiw3wL+8GFm2KvBeeisQ2Cb94b",
+      "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"],
+      "sidebar": [
+        {
+          "icon": "Globe",
+          "label": "apps",
+          "roleRequired": "anon"
+        }
+      ]
     }
-  },
-  "routes": [
-    "ui/src/routes/_layout/apps/**",
-    "ui/src/routes/_layout/about.tsx"
-  ],
-  "sidebar": [
-    {
-      "icon": "Globe",
-      "label": "apps",
-      "roleRequired": "anon"
-    }
-  ]
+  }
 }

@@ -161,13 +161,6 @@ export async function copyFilteredFiles(
     ? [...patterns, "host/**"]
     : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
 
-  const filteredPatterns = effectivePatterns.filter((p) => {
-    const pluginMatch = p.match(/^plugins\/([^/]+)/);
-    if (!pluginMatch) return true;
-    const pluginName = pluginMatch[1];
-    return options.plugins?.includes(pluginName) ?? true;
-  });
-
   const excludedRoutePatterns: string[] = [];
   if (options.pluginRoutes) {
     for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
@@ -178,7 +171,7 @@ export async function copyFilteredFiles(
   }
 
   const allFiles = new Set<string>();
-  for (const pattern of filteredPatterns) {
+  for (const pattern of effectivePatterns) {
     const matches = await glob(pattern, {
       cwd: sourceDir,
       nodir: true,
@@ -323,47 +316,31 @@ export async function personalizeConfig(
                   string,
                   unknown
                 >;
-                delete pluginConfig.extends;
-                if (pluginConfig.app && typeof pluginConfig.app === "object") {
-                  const app = pluginConfig.app as Record<string, unknown>;
-                  for (const entryKey of Object.keys(app)) {
-                    const entry = app[entryKey];
-                    if (entry && typeof entry === "object") {
-                      const e = entry as Record<string, unknown>;
-                      delete e.production;
-                      delete e.integrity;
-                    }
-                  }
+                const normalizedConfig = ensureLocalPluginProviderConfig(
+                  pluginConfig,
+                  pluginKey,
+                  `${pluginKey}.${opts.domain ?? parentDomain}`,
+                  pluginObj,
+                  opts.pluginRoutes,
+                );
+                if (stripProviderProductionFields(normalizedConfig)) {
+                  writeFileSync(pluginConfigPath, `${JSON.stringify(normalizedConfig, null, 2)}\n`);
                 }
-                writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
               } catch {}
             } else if (existsSync(pluginDir)) {
-              const pluginConfig: Record<string, unknown> = {};
-              pluginConfig.domain = `${pluginKey}.${opts.domain ?? parentDomain}`;
-              pluginConfig.app = { api: { development: "local:." } };
-
-              if (opts.pluginRoutes?.[pluginKey]) {
-                pluginConfig.routes = opts.pluginRoutes[pluginKey];
-              }
-              if (pluginObj.sidebar) {
-                pluginConfig.sidebar = pluginObj.sidebar;
-              }
+              const pluginConfig = ensureLocalPluginProviderConfig(
+                {},
+                pluginKey,
+                `${pluginKey}.${opts.domain ?? parentDomain}`,
+                pluginObj,
+                opts.pluginRoutes,
+              );
 
               mkdirSync(pluginDir, { recursive: true });
               writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
             }
 
-            const cleanEntry: Record<string, unknown> = { development: pluginObj.development };
-            if (pluginObj.extends) {
-              cleanEntry.extends = pluginObj.extends;
-            }
-            if (pluginObj.secrets) {
-              cleanEntry.secrets = pluginObj.secrets;
-            }
-            if (pluginObj.variables) {
-              cleanEntry.variables = pluginObj.variables;
-            }
-            plugins[pluginKey] = cleanEntry;
+            plugins[pluginKey] = buildCleanPluginEntry(pluginObj);
           } else {
             delete pluginObj.production;
             delete pluginObj.integrity;
@@ -387,28 +364,7 @@ export async function personalizeConfig(
               string,
               unknown
             >;
-            let changed = false;
-
-            if ("extends" in pluginConfig) {
-              delete pluginConfig.extends;
-              changed = true;
-            }
-            if (pluginConfig.app && typeof pluginConfig.app === "object") {
-              const app = pluginConfig.app as Record<string, unknown>;
-              for (const entryKey of Object.keys(app)) {
-                const entry = app[entryKey];
-                if (entry && typeof entry === "object") {
-                  const e = entry as Record<string, unknown>;
-                  if ("production" in e || "integrity" in e) {
-                    delete e.production;
-                    delete e.integrity;
-                    changed = true;
-                  }
-                }
-              }
-            }
-
-            if (changed) {
+            if (stripProviderProductionFields(pluginConfig)) {
               writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
             }
           } catch {}
@@ -548,6 +504,82 @@ export async function personalizeConfig(
       writeFileSync(authTypesGenPath, authTypesContent);
     }
   }
+}
+
+function stripProviderProductionFields(config: Record<string, unknown>): boolean {
+  let changed = false;
+
+  if ("extends" in config) {
+    delete config.extends;
+    changed = true;
+  }
+
+  if (config.plugins && typeof config.plugins === "object") {
+    const pluginEntries = config.plugins as Record<string, unknown>;
+    for (const entryKey of Object.keys(pluginEntries)) {
+      const entry = pluginEntries[entryKey];
+      if (!entry || typeof entry !== "object") continue;
+      const normalizedEntry = entry as Record<string, unknown>;
+      if ("production" in normalizedEntry) {
+        delete normalizedEntry.production;
+        changed = true;
+      }
+      if ("integrity" in normalizedEntry) {
+        delete normalizedEntry.integrity;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+function ensureLocalPluginProviderConfig(
+  pluginConfig: Record<string, unknown>,
+  pluginKey: string,
+  domain: string,
+  pluginObj: Record<string, unknown>,
+  pluginRoutes?: Record<string, string[]>,
+): Record<string, unknown> {
+  pluginConfig.domain = domain;
+  if (!pluginConfig.plugins || typeof pluginConfig.plugins !== "object") {
+    pluginConfig.plugins = {};
+  }
+
+  const plugins = pluginConfig.plugins as Record<string, unknown>;
+  if (!plugins[pluginKey] || typeof plugins[pluginKey] !== "object") {
+    plugins[pluginKey] = {};
+  }
+
+  const pluginEntry = plugins[pluginKey] as Record<string, unknown>;
+  if (!pluginEntry.name) {
+    pluginEntry.name = pluginKey;
+  }
+  if (!pluginEntry.development) {
+    pluginEntry.development = "local:.";
+  }
+  if (pluginRoutes?.[pluginKey]) {
+    pluginEntry.routes = pluginRoutes[pluginKey];
+  }
+  if (pluginObj.sidebar) {
+    pluginEntry.sidebar = pluginObj.sidebar;
+  }
+
+  return pluginConfig;
+}
+
+function buildCleanPluginEntry(pluginObj: Record<string, unknown>): Record<string, unknown> {
+  const cleanEntry: Record<string, unknown> = { development: pluginObj.development };
+  if (pluginObj.extends) {
+    cleanEntry.extends = pluginObj.extends;
+  }
+  if (pluginObj.secrets) {
+    cleanEntry.secrets = pluginObj.secrets;
+  }
+  if (pluginObj.variables) {
+    cleanEntry.variables = pluginObj.variables;
+  }
+  return cleanEntry;
 }
 
 function generateAuthTypesTemplate(): string {

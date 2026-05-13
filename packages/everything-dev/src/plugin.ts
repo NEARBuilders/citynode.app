@@ -236,14 +236,14 @@ async function generateCodeArtifacts(
     runtimeConfig?: RuntimeConfig;
   },
 ): Promise<GeneratedArtifacts | null> {
-  writePluginSidebarGen(configDir, config);
-
   if (opts?.env) {
     writeResolvedConfig(configDir, config, opts.env, opts.extendsChain);
   }
 
   const runtimeConfig = opts?.runtimeConfig ?? (await loadConfig({ cwd: configDir }))?.runtime;
   if (!runtimeConfig) return null;
+
+  writePluginSidebarGen(configDir, runtimeConfig);
 
   const bridge = await syncApiContractBridge({
     configDir,
@@ -653,18 +653,22 @@ export default createPlugin({
               string,
               unknown
             >;
-            if (!pluginConfig.app) pluginConfig.app = {};
-            const app = pluginConfig.app as Record<string, unknown>;
-            if (!app.api) app.api = {};
-            const api = app.api as Record<string, unknown>;
-            api.production = publishedUrl;
+            if (!pluginConfig.plugins || typeof pluginConfig.plugins !== "object") {
+              pluginConfig.plugins = {};
+            }
+            const plugins = pluginConfig.plugins as Record<string, unknown>;
+            if (!plugins[input.key] || typeof plugins[input.key] !== "object") {
+              plugins[input.key] = {};
+            }
+            const entry = plugins[input.key] as Record<string, unknown>;
+            entry.production = publishedUrl;
             if (integrity) {
-              api.integrity = integrity;
+              entry.integrity = integrity;
             } else {
-              delete api.integrity;
+              delete entry.integrity;
             }
             writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
-            console.log(`   ✅ Updated ${pluginConfigPath}: app.api.production`);
+            console.log(`   ✅ Updated ${pluginConfigPath}: plugins.${input.key}.production`);
           } catch (err) {
             console.error(
               `   ❌ Failed to update plugin bos.config.json:`,
@@ -1382,12 +1386,14 @@ export default createPlugin({
           }
 
           const pluginRoutes: Record<string, string[]> = {};
-          if (parentConfig.plugins) {
-            for (const [key, entry] of Object.entries(parentConfig.plugins)) {
-              const entryRef = getPluginRef(entry);
-              if (entryRef?.routes && entryRef.routes.length > 0) {
-                pluginRoutes[key] = entryRef.routes;
-              }
+          const parentRuntimePlugins = await buildRuntimePluginsForConfig(
+            parentConfig as BosConfig,
+            sourceDir,
+            "production",
+          );
+          for (const [key, plugin] of Object.entries(parentRuntimePlugins ?? {})) {
+            if (plugin.routes && plugin.routes.length > 0) {
+              pluginRoutes[key] = plugin.routes;
             }
           }
 

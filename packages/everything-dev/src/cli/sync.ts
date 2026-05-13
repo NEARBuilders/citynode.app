@@ -16,7 +16,6 @@ import {
   mergeBosConfigWithTemplate,
   resolveExtendsRef,
 } from "../merge";
-import type { BosPluginRef } from "../types";
 import { isPathExcluded } from "../utils/path-match";
 import { writeGeneratedInfra } from "./infra";
 import {
@@ -314,7 +313,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
   const extendsAccount = extendsMatch[1];
   const extendsGateway = extendsMatch[2];
 
-  const { sourceDir, parentConfig, cleanup } = await resolveSourceDir({
+  const { sourceDir, cleanup } = await resolveSourceDir({
     extendsAccount,
     extendsGateway,
   });
@@ -354,12 +353,10 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
         : [];
 
     const pluginRoutes: Record<string, string[]> = {};
-    if (parentConfig.plugins) {
-      for (const [key, entry] of Object.entries(parentConfig.plugins)) {
-        const ref: BosPluginRef | null = entry && typeof entry !== "string" ? entry : null;
-        if (ref?.routes && ref.routes.length > 0) {
-          pluginRoutes[key] = ref.routes;
-        }
+    const parentRuntime = await loadConfig({ cwd: sourceDir });
+    for (const [key, plugin] of Object.entries(parentRuntime?.runtime.plugins ?? {})) {
+      if (plugin.routes && plugin.routes.length > 0) {
+        pluginRoutes[key] = plugin.routes;
       }
     }
 

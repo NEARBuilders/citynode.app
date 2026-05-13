@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildRuntimeConfig, buildRuntimePluginsForConfig } from "../../src/config";
 import type { BosConfig, BosEnv } from "../../src/types";
+
+function writeJson(filePath: string, value: unknown) {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
 
 function makeBosConfig(overrides: Partial<BosConfig> = {}): BosConfig {
   return {
@@ -27,127 +35,47 @@ function makeBosConfig(overrides: Partial<BosConfig> = {}): BosConfig {
 }
 
 describe("plugin UI runtime config", () => {
-  const baseDir = "/test/project";
+  const tempDirs: string[] = [];
 
-  it("resolves plugin without ui", async () => {
-    const config = makeBosConfig({
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function makeProjectDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), "plugin-ui-runtime-"));
+    tempDirs.push(dir);
+    mkdirSync(join(dir, "host"), { recursive: true });
+    mkdirSync(join(dir, "ui"), { recursive: true });
+    mkdirSync(join(dir, "api"), { recursive: true });
+    return dir;
+  }
+
+  it("resolves plugin metadata from a local provider config", async () => {
+    const baseDir = makeProjectDir();
+    mkdirSync(join(baseDir, "plugins/apps/ui"), { recursive: true });
+    writeJson(join(baseDir, "plugins/apps/bos.config.json"), {
       plugins: {
         apps: {
-          development: "local:plugins/apps",
-          production: "https://apps.test.dev",
           name: "apps",
-        } as any,
+          development: "local:.",
+          production: "https://apps.test.dev",
+        },
+      },
+      app: {
+        ui: {
+          name: "apps-ui",
+          development: "local:./ui",
+          production: "https://apps-ui.test.dev",
+        },
       },
     });
 
-    const pluginRuntime = await buildRuntimePluginsForConfig(
-      config,
-      baseDir,
-      "production" as BosEnv,
-    );
-    const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
-      plugins: pluginRuntime,
-    });
-
-    expect(runtime.plugins?.apps).toBeDefined();
-    expect(runtime.plugins?.apps.name).toBe("apps");
-    expect(runtime.plugins?.apps.url).toContain("apps.test.dev");
-    expect(runtime.plugins?.apps.ui).toBeUndefined();
-  });
-
-  it("populates plugin ui when app.ui is present in plugin config", async () => {
     const config = makeBosConfig({
       plugins: {
         apps: {
           development: "local:plugins/apps",
-          production: "https://apps.test.dev",
-          name: "apps",
-          app: {
-            api: {
-              name: "apps",
-              development: "local:.",
-              production: "https://apps.test.dev",
-            },
-            ui: {
-              name: "apps-ui",
-              development: "local:./ui",
-              production: "https://apps-ui.test.dev",
-            },
-          },
-        } as any,
-      },
-    });
-
-    const pluginRuntime = await buildRuntimePluginsForConfig(
-      config,
-      baseDir,
-      "production" as BosEnv,
-    );
-    const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
-      plugins: pluginRuntime,
-    });
-
-    expect(runtime.plugins?.apps.ui).toBeDefined();
-    expect(runtime.plugins?.apps.ui?.name).toBe("apps-ui");
-    expect(runtime.plugins?.apps.ui?.url).toContain("apps-ui.test.dev");
-    expect(runtime.plugins?.apps.ui?.source).toBe("remote");
-    expect(runtime.plugins?.apps.ui?.entry).toContain("mf-manifest.json");
-  });
-
-  it("includes plugin ui with integrity when configured", async () => {
-    const config = makeBosConfig({
-      plugins: {
-        apps: {
-          development: "local:plugins/apps",
-          production: "https://apps.test.dev",
-          name: "apps",
-          integrity: "sha384-abc",
-          app: {
-            api: {
-              name: "apps",
-              production: "https://apps.test.dev",
-            },
-            ui: {
-              name: "apps-ui",
-              production: "https://apps-ui.test.dev",
-              integrity: "sha384-xyz",
-            },
-          },
-        } as any,
-      },
-    });
-
-    const pluginRuntime = await buildRuntimePluginsForConfig(
-      config,
-      baseDir,
-      "production" as BosEnv,
-    );
-    const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
-      plugins: pluginRuntime,
-    });
-
-    expect(runtime.plugins?.apps.ui).toBeDefined();
-    expect(runtime.plugins?.apps.ui?.integrity).toBe("sha384-xyz");
-    expect(runtime.plugins?.apps.integrity).toBe("sha384-abc");
-  });
-
-  it("resolves plugin ui in development mode with local path", async () => {
-    const config = makeBosConfig({
-      plugins: {
-        apps: {
-          development: "local:plugins/apps",
-          production: "https://apps.test.dev",
-          name: "apps",
-          app: {
-            api: {
-              name: "apps",
-              development: "local:.",
-            },
-            ui: {
-              name: "apps-ui",
-              development: "local:./ui",
-            },
-          },
         } as any,
       },
     });
@@ -161,17 +89,35 @@ describe("plugin UI runtime config", () => {
       plugins: pluginRuntime,
     });
 
-    expect(runtime.plugins?.apps.ui).toBeDefined();
+    expect(runtime.plugins?.apps).toBeDefined();
+    expect(runtime.plugins?.apps.name).toBe("apps");
     expect(runtime.plugins?.apps.ui?.name).toBe("apps-ui");
+    expect(runtime.plugins?.apps.ui?.source).toBe("local");
   });
 
-  it("does not populate plugin ui when app.ui is absent", async () => {
+  it("resolves targeted extends paths strictly", async () => {
+    const baseDir = makeProjectDir();
+    const providerConfigPath = join(baseDir, "providers/projects.bos.config.json");
+    writeJson(providerConfigPath, {
+      app: {
+        api: {
+          name: "demo-api",
+          production: "https://demo-api.test.dev",
+        },
+      },
+      plugins: {
+        apps: {
+          name: "isolated-apps",
+          production: "https://isolated-apps.test.dev",
+          routes: ["ui/src/routes/_layout/apps/**"],
+        },
+      },
+    });
+
     const config = makeBosConfig({
       plugins: {
         apps: {
-          development: "local:plugins/apps",
-          production: "https://apps.test.dev",
-          name: "apps",
+          extends: `${providerConfigPath}#plugins.apps`,
         } as any,
       },
     });
@@ -181,10 +127,41 @@ describe("plugin UI runtime config", () => {
       baseDir,
       "production" as BosEnv,
     );
-    const runtime = buildRuntimeConfig(config, baseDir, "production" as BosEnv, {
-      plugins: pluginRuntime,
+
+    expect(pluginRuntime?.apps.name).toBe("isolated-apps");
+    expect(pluginRuntime?.apps.url).toBe("https://isolated-apps.test.dev");
+    expect(pluginRuntime?.apps.routes).toEqual(["ui/src/routes/_layout/apps/**"]);
+  });
+
+  it("does not resolve remote local targets against the consumer root", async () => {
+    const baseDir = makeProjectDir();
+    const providerConfigPath = join(baseDir, "providers/projects.bos.config.json");
+    writeJson(providerConfigPath, {
+      plugins: {
+        apps: {
+          name: "apps",
+          development: "local:.",
+          production: "https://apps.test.dev",
+        },
+      },
     });
 
-    expect(runtime.plugins?.apps.ui).toBeUndefined();
+    const config = makeBosConfig({
+      plugins: {
+        apps: {
+          extends: `${providerConfigPath}#plugins.apps`,
+        } as any,
+      },
+    });
+
+    const pluginRuntime = await buildRuntimePluginsForConfig(
+      config,
+      baseDir,
+      "development" as BosEnv,
+    );
+
+    expect(pluginRuntime?.apps.source).toBe("remote");
+    expect(pluginRuntime?.apps.url).toBe("https://apps.test.dev");
+    expect(pluginRuntime?.apps.localPath).toBeUndefined();
   });
 });
