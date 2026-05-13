@@ -7,9 +7,7 @@
       "integrity": "sha384-uBzZAJKdEZESEsUv/zS/ZYKGNlefjRgBoUo7QKwSf6meu1XHl2GB3lsc7AECJh0y"
     }
   },
-  "routes": [
-    "ui/src/routes/_layout/_authenticated/settings.tsx"
-  ],
+  "routes": ["ui/src/routes/_layout/_authenticated/settings.tsx"],
   "sidebar": [
     {
       "icon": "Settings",
