@@ -1336,6 +1336,23 @@ export default createPlugin({
                 }),
               s,
             );
+
+            await timePhase(
+              timings,
+              "personalize config",
+              () =>
+                personalizeConfig(targetDir, {
+                  extendsAccount,
+                  extendsGateway,
+                  account: account || extendsAccount,
+                  domain: domain || extendsGateway,
+                  plugins,
+                  overrides,
+                  mode: "init",
+                  repository,
+                }),
+              s,
+            );
           } else {
             const patterns = await readTemplatekeep(sourceDir);
             if (patterns.length === 0) {

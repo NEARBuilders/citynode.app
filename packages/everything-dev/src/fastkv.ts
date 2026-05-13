@@ -141,8 +141,13 @@ export interface PluginManifest {
 
 export async function fetchRemotePluginManifest(cdnUrl: string): Promise<PluginManifest | null> {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FASTKV_TIMEOUT_MS);
     const baseUrl = cdnUrl.replace(/\/$/, "");
-    const response = await fetch(`${baseUrl}/plugin.manifest.json`);
+    const response = await fetch(`${baseUrl}/plugin.manifest.json`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
     if (!response.ok) return null;
     return (await response.json()) as PluginManifest;
   } catch {

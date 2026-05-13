@@ -28,6 +28,8 @@ import { writeSnapshot } from "./snapshot";
 
 const require = createRequire(import.meta.url);
 
+const FRAMEWORK_PACKAGES = ["every-plugin", "everything-dev"] as const;
+
 const _DEFAULT_OVERRIDES: OverrideSection[] = ["ui", "api"];
 
 const OVERRIDE_WORKSPACE_MAP: Record<OverrideSection, string[]> = {
@@ -629,21 +631,35 @@ export interface AuthServices {
 }
 
 export async function runBunInstall(destination: string): Promise<void> {
-  await execCommand("bun", ["install", "--ignore-scripts"], destination);
+  await execCommand("bun", ["install", "--ignore-scripts"], destination, { stdio: "inherit" });
 }
 
 export async function runTypesGen(destination: string): Promise<void> {
-  await execCommand("node_modules/.bin/bos", ["types", "gen"], destination);
+  await execCommand("node_modules/.bin/bos", ["types", "gen"], destination, { stdio: "inherit" });
 }
 
 export async function runDockerComposeUp(destination: string): Promise<void> {
-  await execCommand("docker", ["compose", "up", "-d", "--wait"], destination);
+  await execCommand("docker", ["compose", "up", "-d", "--wait"], destination, { stdio: "inherit" });
 }
 
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
   "everything-dev": "packages/everything-dev",
   "every-plugin": "packages/every-plugin",
 };
+
+function resolveFrameworkCatalog(): Record<string, string> {
+  const catalog: Record<string, string> = {};
+  for (const packageName of FRAMEWORK_PACKAGES) {
+    try {
+      const resolved = require.resolve(`${packageName}/package.json`);
+      const pkg = JSON.parse(readFileSync(resolved, "utf-8")) as { version?: string };
+      if (pkg.version) {
+        catalog[packageName] = `^${pkg.version}`;
+      }
+    } catch {}
+  }
+  return catalog;
+}
 
 export async function scaffoldMinimalProject(
   destination: string,
@@ -727,6 +743,8 @@ export async function scaffoldMinimalProject(
     }
   }
 
+  const catalog = resolveFrameworkCatalog();
+
   const pkg: Record<string, unknown> = {
     name: opts.domain || opts.extendsGateway,
     private: true,
@@ -750,7 +768,7 @@ export async function scaffoldMinimalProject(
     devDependencies: {},
     workspaces: {
       packages: workspacePackages,
-      catalog: {},
+      catalog,
     },
   };
   writeFileSync(join(destination, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
@@ -920,8 +938,21 @@ export async function generateDatabaseMigrations(destination: string): Promise<v
   }
 }
 
-export async function execCommand(command: string, args: string[], cwd?: string): Promise<void> {
-  await execa(command, args, { cwd, stdio: "pipe" });
+const COMMAND_TIMEOUTS: Record<string, number> = {
+  bun: 5 * 60_000,
+  docker: 5 * 60_000,
+  node_modules: 2 * 60_000,
+  tar: 60_000,
+};
+
+export async function execCommand(
+  command: string,
+  args: string[],
+  cwd?: string,
+  options?: { stdio?: "pipe" | "inherit" },
+): Promise<void> {
+  const timeout = COMMAND_TIMEOUTS[command] ?? 2 * 60_000;
+  await execa(command, args, { cwd, stdio: options?.stdio ?? "pipe", timeout });
 }
 
 function generateEnvExample(config: BosConfigInput, overrides: OverrideSection[]): string {
