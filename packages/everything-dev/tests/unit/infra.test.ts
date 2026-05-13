@@ -59,8 +59,12 @@ describe("generated infra", () => {
     expect(secrets).toContain("PROJECTS_DATABASE_URL");
     expect(secrets).toContain("PAYMENT_API_URL");
 
-    expect(envExample).toContain("API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db");
-    expect(envExample).toContain("AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db");
+    expect(envExample).toContain(
+      "API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
+    );
+    expect(envExample).toContain(
+      "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db",
+    );
     expect(envExample).toContain(
       "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
     );
@@ -89,8 +93,12 @@ describe("generated infra", () => {
 
     const env = readFileSync(join(dir, ".env"), "utf-8");
 
-    expect(env).toContain("API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db");
-    expect(env).toContain("AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db");
+    expect(env).toContain(
+      "API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
+    );
+    expect(env).toContain(
+      "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db",
+    );
     expect(env).toContain(
       "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
     );
