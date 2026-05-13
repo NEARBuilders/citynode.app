@@ -634,7 +634,13 @@ export async function runBunInstall(
   destination: string,
   spinner?: { message: (msg: string) => void },
 ): Promise<void> {
-  await runWithProgress("bun", ["install", "--ignore-scripts"], destination, spinner, "Installing dependencies");
+  await runWithProgress(
+    "bun",
+    ["install", "--ignore-scripts"],
+    destination,
+    spinner,
+    "Installing dependencies",
+  );
 }
 
 export async function runTypesGen(
