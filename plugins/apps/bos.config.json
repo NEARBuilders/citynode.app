@@ -6,11 +6,14 @@
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
-      "production": "https://elliot-braem-3728-everything-dev-apps-plugin-ever-81df2b472-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-3735-everything-dev-apps-plugin-ever-f0a451406-ze.zephyrcloud.app",
       "integrity": "sha384-aLxzIq4w+mfjVeW4WYVteMNncUnN6fBSm5PNPuoiw3wL+8GFm2KvBeeisQ2Cb94b"
     }
   },
-  "routes": ["ui/src/routes/_layout/apps/**", "ui/src/routes/_layout/about.tsx"],
+  "routes": [
+    "ui/src/routes/_layout/apps/**",
+    "ui/src/routes/_layout/about.tsx"
+  ],
   "sidebar": [
     {
       "icon": "Globe",
