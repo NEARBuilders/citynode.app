@@ -70,9 +70,14 @@ async function warnIfOutdated(client: any, command: string): Promise<void> {
     const status = await client.status();
     if (status.status === "error" || !status.packages) return;
 
+    const frameworkPackages = ["everything-dev", "every-plugin"];
+
     const outdated = status.packages.filter(
       (p: { name: string; installed?: string; latest?: string }) =>
-        p.installed && p.latest && normalizeVersion(p.installed) !== normalizeVersion(p.latest),
+        p.installed &&
+        p.latest &&
+        normalizeVersion(p.installed) !== normalizeVersion(p.latest) &&
+        frameworkPackages.includes(p.name),
     );
 
     if (outdated.length === 0) return;
@@ -162,6 +167,8 @@ async function main() {
       console.log(`  ${colors.dim("Directory:")} ${result.directory}`);
       if (result.account) console.log(`  ${colors.dim("Account:")} ${result.account}`);
       if (result.domain) console.log(`  ${colors.dim("Domain:")} ${result.domain}`);
+      if (result.overrides && result.overrides.length > 0)
+        console.log(`  ${colors.dim("Overrides:")} ${result.overrides.join(", ")}`);
       if (result.plugins && result.plugins.length > 0)
         console.log(`  ${colors.dim("Plugins:")} ${result.plugins.join(", ")}`);
       console.log(`  ${colors.dim("Files copied:")} ${result.filesCopied}`);

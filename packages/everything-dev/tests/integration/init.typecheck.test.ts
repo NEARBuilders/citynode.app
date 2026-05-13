@@ -86,7 +86,6 @@ function isExpectedRouteError(line: string): boolean {
 function isUnexpectedError(error: string): boolean {
   if (isExpectedRouteError(error)) return false;
 
-  // Core infrastructure should never have errors
   const corePaths = [
     "ui/src/lib/",
     "ui/src/lib/api",
@@ -99,7 +98,6 @@ function isUnexpectedError(error: string): boolean {
   ];
   if (corePaths.some((p) => error.includes(p))) return true;
 
-  // Any error in generated contract files is unexpected
   if (error.includes(".gen.ts") && !isExpectedRouteError(error)) return true;
 
   return false;
@@ -118,7 +116,9 @@ describe("bos init — typecheck with expected route errors", () => {
 
   it("scaffolds project with template files", async () => {
     const patterns = await readTemplatekeep(REPO_ROOT);
-    await copyFilteredFiles(REPO_ROOT, testDir, patterns, { withHost: false });
+    await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
+      overrides: ["ui", "api", "host"],
+    });
 
     cpSync(join(REPO_ROOT, "packages/everything-dev"), join(testDir, "packages/everything-dev"), {
       recursive: true,
@@ -135,6 +135,7 @@ describe("bos init — typecheck with expected route errors", () => {
       account: "test.near",
       domain: "test.dev",
       workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
+      overrides: ["ui", "api", "host"],
     });
 
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);

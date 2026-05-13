@@ -92,8 +92,12 @@ export const cliCommandMeta = {
       account: { description: "New project NEAR account (auto-derived from extends)" },
       directory: { description: "Target directory (auto-derived from domain)" },
       source: { description: "Local source dir (skips GitHub download)" },
-      plugins: { description: "Comma-separated plugin keys to include" },
-      withHost: { description: "Include host/ in template output" },
+      plugins: {
+        description: "Comma-separated plugin keys to include (requires --overrides=plugins)",
+      },
+      overrides: {
+        description: "Comma-separated sections to override locally: ui,api,host,plugins",
+      },
       noInteractive: { description: "Skip prompts, use flags only" },
       noInstall: { description: "Skip bun install" },
     },

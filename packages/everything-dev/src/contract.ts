@@ -142,6 +142,8 @@ export const KeyPublishResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const OverrideSectionSchema = z.enum(["ui", "api", "host", "plugins"]);
+
 export const InitOptionsSchema = z.object({
   extends: z.string().optional(),
   directory: z.string().optional(),
@@ -149,7 +151,7 @@ export const InitOptionsSchema = z.object({
   domain: z.string().optional(),
   source: z.string().optional(),
   plugins: z.array(z.string()).optional(),
-  withHost: z.boolean().default(false),
+  overrides: z.array(OverrideSectionSchema).optional(),
   noInteractive: z.boolean().default(false),
   noInstall: z.boolean().default(false),
 });
@@ -167,6 +169,7 @@ export const InitResultSchema = z.object({
   domain: z.string().optional(),
   extends: z.string(),
   plugins: z.array(z.string()).optional(),
+  overrides: z.array(OverrideSectionSchema).optional(),
   filesCopied: z.number(),
   timings: z.array(PhaseTimingSchema).optional(),
   error: z.string().optional(),
@@ -311,6 +314,7 @@ export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
 export type InitOptions = z.infer<typeof InitOptionsSchema>;
 export type InitResult = z.infer<typeof InitResultSchema>;
+export type OverrideSection = z.infer<typeof OverrideSectionSchema>;
 export type PhaseTiming = z.infer<typeof PhaseTimingSchema>;
 export type SyncOptions = z.infer<typeof SyncOptionsSchema>;
 export type SyncResult = z.infer<typeof SyncResultSchema>;

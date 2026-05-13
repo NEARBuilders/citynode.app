@@ -7,6 +7,7 @@ import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfi
 import { ensureEnvFile, writeGeneratedInfra } from "./cli/infra";
 import {
   copyFilteredFiles,
+  detectGitRemoteUrl,
   fetchParentConfig,
   generateDatabaseMigrations,
   personalizeConfig,
@@ -35,6 +36,7 @@ import {
 import {
   type BosConfigResult,
   bosContract,
+  type OverrideSection,
   type PhaseTiming,
   type PluginListResult,
 } from "./contract";
@@ -1196,7 +1198,7 @@ export default createPlugin({
         let directory = input.directory;
         let account = input.account;
         let domain = input.domain;
-        let withHost = input.withHost;
+        let overrides = input.overrides as OverrideSection[] | undefined;
         let plugins = input.plugins;
 
         if (input.extends) {
@@ -1238,7 +1240,7 @@ export default createPlugin({
             account,
             domain,
             plugins,
-            withHost,
+            overrides,
             parentPluginKeys,
           });
           extendsAccount = prompted.extendsAccount;
@@ -1246,15 +1248,28 @@ export default createPlugin({
           directory = prompted.directory;
           account = prompted.account;
           domain = prompted.domain;
-          withHost = prompted.withHost;
           plugins = prompted.plugins;
+          overrides = prompted.overrides;
           s.start("Setting up project");
         }
 
+        overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
+        if (overrides.includes("plugins") && !plugins?.length) {
+          plugins = parentPluginKeys;
+        }
+        plugins = plugins ?? [];
+
         directory = directory || domain || extendsGateway;
         const targetDir = resolve(directory);
-        plugins = plugins ?? [];
         const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
+
+        if (overrides.includes("plugins") && !plugins.length) {
+          // explicitly selected plugins override with none selected — back out of all inherited plugins
+        }
+
+        const repository =
+          (await detectGitRemoteUrl(process.cwd()).catch(() => undefined)) ??
+          parentConfig?.repository;
 
         if (!parentConfig) {
           try {
@@ -1273,7 +1288,8 @@ export default createPlugin({
               account,
               domain,
               extends: extendsRef,
-              plugins: plugins ?? [],
+              plugins,
+              overrides,
               filesCopied: 0,
               timings,
               error: `No config found at ${extendsRef} — are you sure this is the right parent?`,
@@ -1315,7 +1331,8 @@ export default createPlugin({
                   account: account || extendsAccount,
                   domain,
                   plugins,
-                  withHost,
+                  overrides,
+                  repository,
                 }),
               s,
             );
@@ -1330,21 +1347,24 @@ export default createPlugin({
                 account,
                 domain,
                 extends: extendsRef,
-                plugins: plugins ?? [],
+                plugins,
+                overrides,
                 filesCopied: 0,
                 error: "No .templatekeep found in template source",
               };
             }
 
             const pluginRoutes: Record<string, string[]> = {};
-            const parentRuntimePlugins = await buildRuntimePluginsForConfig(
-              parentConfig as BosConfig,
-              sourceDir,
-              "production",
-            );
-            for (const [key, plugin] of Object.entries(parentRuntimePlugins ?? {})) {
-              if (plugin.routes && plugin.routes.length > 0) {
-                pluginRoutes[key] = plugin.routes;
+            if (overrides.includes("plugins")) {
+              const parentRuntimePlugins = await buildRuntimePluginsForConfig(
+                parentConfig as BosConfig,
+                sourceDir,
+                "production",
+              );
+              for (const [key, plugin] of Object.entries(parentRuntimePlugins ?? {})) {
+                if (plugin.routes && plugin.routes.length > 0) {
+                  pluginRoutes[key] = plugin.routes;
+                }
               }
             }
 
@@ -1353,7 +1373,7 @@ export default createPlugin({
               "copy files",
               () =>
                 copyFilteredFiles(sourceDir, targetDir, patterns, {
-                  withHost,
+                  overrides,
                   plugins,
                   pluginRoutes,
                 }),
@@ -1370,9 +1390,10 @@ export default createPlugin({
                   account: account || extendsAccount,
                   domain: domain || extendsGateway,
                   plugins,
+                  overrides,
                   pluginRoutes,
                   workspaceOpts: { sourceDir },
-                  withHost,
+                  repository,
                 }),
               s,
             );
@@ -1382,7 +1403,7 @@ export default createPlugin({
               "write snapshot",
               () =>
                 writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
-                  withHost,
+                  overrides,
                   plugins,
                   pluginRoutes,
                 }),
@@ -1466,6 +1487,7 @@ export default createPlugin({
             domain,
             extends: extendsRef,
             plugins,
+            overrides,
             filesCopied,
             timings,
           };
@@ -1486,6 +1508,7 @@ export default createPlugin({
           domain: input.domain,
           extends: extendsRef,
           plugins: input.plugins ?? [],
+          overrides: input.overrides,
           filesCopied: 0,
           timings: [],
           error: error instanceof Error ? error.message : "Unknown error",

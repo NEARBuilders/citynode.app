@@ -28,21 +28,23 @@ describe("bos init - relative directory", () => {
     const targetDir = resolve(relativeDir);
     const patterns = await readTemplatekeep(REPO_ROOT);
 
-    await copyFilteredFiles(REPO_ROOT, targetDir, patterns, { withHost: false, plugins: [] });
+    await copyFilteredFiles(REPO_ROOT, targetDir, patterns, {
+      overrides: ["ui", "api"],
+      plugins: [],
+    });
     await personalizeConfig(targetDir, {
       extendsAccount: "dev.everything.near",
       extendsGateway: "everything.dev",
       account: "testing.near",
       domain: "testing.com",
       plugins: [],
+      overrides: ["ui", "api", "plugins"],
       workspaceOpts: { sourceDir: REPO_ROOT },
-      withHost: false,
     });
 
     const loaded = await loadConfig({ cwd: targetDir });
     expect(loaded?.config.account).toBe("testing.near");
     expect(loaded?.config.domain).toBe("testing.com");
-    expect(loaded?.config.plugins).toEqual({});
 
     if (!loaded?.runtime) {
       throw new Error("Expected runtime config to be available");

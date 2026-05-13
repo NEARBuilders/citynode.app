@@ -1,5 +1,6 @@
 import process from "node:process";
 import * as p from "@clack/prompts";
+import type { OverrideSection } from "../contract";
 
 function parseExtendsRef(ref: string): { account: string; gateway: string } | null {
   const normalized = ref.startsWith("bos://") ? ref : `bos://${ref}`;
@@ -17,13 +18,20 @@ function deriveAccountFromExtends(domain: string, extendsAccount: string): strin
   return `${firstSegment}.${suffix}`;
 }
 
+const OVERRIDE_OPTIONS: { value: OverrideSection; label: string; hint: string }[] = [
+  { value: "ui", label: "ui", hint: "Override UI with local source" },
+  { value: "api", label: "api", hint: "Override API with local source" },
+  { value: "host", label: "host", hint: "Override host with local source" },
+  { value: "plugins", label: "plugins", hint: "Override selected plugins with local source" },
+];
+
 export async function promptInitOptions(input: {
   extends?: string;
   directory?: string;
   account?: string;
   domain?: string;
   plugins?: string[];
-  withHost?: boolean;
+  overrides?: OverrideSection[];
   parentPluginKeys?: string[];
 }): Promise<{
   extendsAccount: string;
@@ -32,7 +40,7 @@ export async function promptInitOptions(input: {
   account?: string;
   domain?: string;
   plugins: string[];
-  withHost: boolean;
+  overrides: OverrideSection[];
 }> {
   p.intro("Let's build an app...");
 
@@ -78,33 +86,42 @@ export async function promptInitOptions(input: {
 
   const directory = input.directory || domain || extendsGateway;
 
-  const parentPlugins = input.parentPluginKeys ?? [];
-  const pluginOptions =
-    parentPlugins.length > 0 ? parentPlugins.map((key) => ({ value: key, label: key })) : [];
+  const overrides =
+    input.overrides ??
+    ((await p.multiselect({
+      message: "Which sections to override locally?",
+      options: OVERRIDE_OPTIONS,
+      initialValues: ["ui", "api"] as OverrideSection[],
+      required: false,
+    })) as OverrideSection[]);
 
-  const plugins =
-    input.plugins ??
-    (pluginOptions.length > 0
-      ? ((await p.multiselect({
-          message: "Select plugins:",
-          options: pluginOptions,
-          required: false,
-        })) as string[])
-      : []);
+  if (p.isCancel(overrides)) process.exit(0);
 
-  if (p.isCancel(plugins)) process.exit(0);
+  let plugins: string[] = [];
+  if (overrides.includes("plugins")) {
+    const parentPlugins = input.parentPluginKeys ?? [];
+    const pluginOptions =
+      parentPlugins.length > 0 ? parentPlugins.map((key) => ({ value: key, label: key })) : [];
 
-  const go =
-    input.withHost !== undefined
-      ? true
-      : await p.confirm({
-          message: "GO!",
-          initialValue: true,
-        });
+    plugins =
+      input.plugins ??
+      (pluginOptions.length > 0
+        ? ((await p.multiselect({
+            message: "Select plugins to include:",
+            options: pluginOptions,
+            required: false,
+          })) as string[])
+        : []);
+
+    if (p.isCancel(plugins)) process.exit(0);
+  }
+
+  const go = await p.confirm({
+    message: "GO!",
+    initialValue: true,
+  });
 
   if (p.isCancel(go) || !go) process.exit(0);
-
-  const withHost = input.withHost ?? false;
 
   return {
     extendsAccount,
@@ -113,6 +130,6 @@ export async function promptInitOptions(input: {
     account: account || undefined,
     domain: domain || undefined,
     plugins,
-    withHost,
+    overrides,
   };
 }

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -648,14 +649,24 @@ export const createStartServer = (onReady?: () => void) =>
 
     const shouldProxyUiAssets = isDev || uiConfig.source === "remote";
 
+    const staticRoot = "./dist";
+    const distExists = existsSync(staticRoot);
+    const staticMiddleware = distExists
+      ? serveStatic({ root: staticRoot })
+      : serveStatic({ root: "" });
+
     for (const path of hostAssetPaths) {
-      app.use(path, serveStatic({ root: "./dist" }));
+      if (distExists) {
+        app.use(path, staticMiddleware);
+      }
       app.get(path, (c: Context<HonoEnv>) => c.text("Not Found", 404));
     }
 
     if (!shouldProxyUiAssets) {
-      for (const path of uiAssetPaths) {
-        app.use(path, serveStatic({ root: "./dist" }));
+      if (distExists) {
+        for (const path of uiAssetPaths) {
+          app.use(path, staticMiddleware);
+        }
       }
     } else {
       registerAllPaths(app, uiAssetPaths, proxyUiAssetRequest);

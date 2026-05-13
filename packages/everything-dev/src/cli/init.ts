@@ -15,6 +15,7 @@ import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { execa } from "execa";
 import { glob } from "glob";
+import type { OverrideSection } from "../contract";
 import { fetchBosConfigFromFastKv } from "../fastkv";
 import {
   loadManifestNormalizationSpec,
@@ -26,6 +27,15 @@ import { saveBosConfig } from "../utils/save-config";
 import { writeSnapshot } from "./snapshot";
 
 const require = createRequire(import.meta.url);
+
+const _DEFAULT_OVERRIDES: OverrideSection[] = ["ui", "api"];
+
+const OVERRIDE_WORKSPACE_MAP: Record<OverrideSection, string[]> = {
+  ui: ["ui"],
+  api: ["api"],
+  host: ["host"],
+  plugins: [],
+};
 
 interface SourceResult {
   sourceDir: string;
@@ -124,6 +134,32 @@ export async function resolveRepositoryViaExtendsChain(
   }
 }
 
+export async function detectGitRemoteUrl(directory: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execa("git", ["remote", "get-url", "origin"], {
+      cwd: directory,
+      stdio: "pipe",
+    });
+    const url = stdout.trim();
+    if (!url) return undefined;
+    return normalizeGitUrl(url);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeGitUrl(url: string): string | undefined {
+  const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (sshMatch) {
+    return `https://github.com/${sshMatch[1]}/${sshMatch[2]}`;
+  }
+  const httpsMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/);
+  if (httpsMatch) {
+    return `https://github.com/${httpsMatch[1]}/${httpsMatch[2]}`;
+  }
+  return url.endsWith(".git") ? url.slice(0, -4) : url;
+}
+
 export async function downloadTarball(
   repoUrl: string,
 ): Promise<{ dir: string; cleanup: () => Promise<void> }> {
@@ -191,19 +227,51 @@ function parseGitHubUrl(url: string): { owner: string; repo: string; branch: str
   return null;
 }
 
+function filterPatternsByOverrides(
+  patterns: string[],
+  overrides: OverrideSection[],
+  _plugins?: string[],
+): string[] {
+  const has = (section: OverrideSection) => overrides.includes(section);
+  let filtered = [...patterns];
+
+  if (!has("host")) {
+    filtered = filtered.filter((p) => !p.startsWith("host/") && p !== "host/**");
+  }
+  if (!has("ui")) {
+    filtered = filtered.filter((p) => !p.startsWith("ui/") && p !== "ui/**");
+  }
+  if (!has("api")) {
+    filtered = filtered.filter((p) => !p.startsWith("api/") && p !== "api/**");
+  }
+  if (!has("plugins")) {
+    filtered = filtered.filter((p) => !p.startsWith("plugins/") && p !== "plugins/**");
+  }
+
+  return filtered;
+}
+
 export async function copyFilteredFiles(
   sourceDir: string,
   destination: string,
   patterns: string[],
-  options: { withHost: boolean; plugins?: string[]; pluginRoutes?: Record<string, string[]> },
+  options: {
+    overrides: OverrideSection[];
+    plugins?: string[];
+    pluginRoutes?: Record<string, string[]>;
+  },
 ): Promise<number> {
   if (patterns.length === 0) {
     return 0;
   }
 
-  const effectivePatterns = options.withHost
-    ? [...patterns, "host/**"]
-    : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
+  const has = (section: OverrideSection) => options.overrides.includes(section);
+
+  const effectivePatterns = filterPatternsByOverrides(patterns, options.overrides, options.plugins);
+
+  if (has("host") && !effectivePatterns.some((p) => p.startsWith("host/") || p === "host/**")) {
+    effectivePatterns.push("host/**");
+  }
 
   const excludedRoutePatterns: string[] = [];
   if (options.pluginRoutes) {
@@ -276,6 +344,13 @@ export async function copyFilteredFiles(
   return count;
 }
 
+function stripProductionFields(entry: Record<string, unknown>): void {
+  delete entry.production;
+  delete entry.integrity;
+  delete entry.ssr;
+  delete entry.ssrIntegrity;
+}
+
 export async function personalizeConfig(
   destination: string,
   opts: {
@@ -284,13 +359,16 @@ export async function personalizeConfig(
     account?: string;
     domain?: string;
     plugins?: string[];
+    overrides: OverrideSection[];
     pluginRoutes?: Record<string, string[]>;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
     mode?: "init" | "sync";
-    withHost?: boolean;
+    repository?: string;
   },
 ): Promise<void> {
   const isInit = opts.mode !== "sync";
+  const has = (section: OverrideSection) => opts.overrides.includes(section);
+
   const configPath = join(destination, "bos.config.json");
   if (existsSync(configPath)) {
     const config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
@@ -303,53 +381,62 @@ export async function personalizeConfig(
     if (opts.domain) {
       config.domain = opts.domain;
     }
+    if (opts.repository) {
+      config.repository = opts.repository;
+    }
 
     if (isInit && config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
 
       for (const entryKey of Object.keys(app)) {
+        if (
+          !has(entryKey as OverrideSection) &&
+          (entryKey === "host" || entryKey === "ui" || entryKey === "api" || entryKey === "auth")
+        ) {
+          delete app[entryKey];
+          continue;
+        }
         const entry = app[entryKey];
         if (entry && typeof entry === "object") {
-          const e = entry as Record<string, unknown>;
-          delete e.production;
-          delete e.integrity;
-          delete e.ssr;
-          delete e.ssrIntegrity;
+          stripProductionFields(entry as Record<string, unknown>);
         }
       }
     }
 
-    if (config.plugins && typeof config.plugins === "object") {
-      const plugins = config.plugins as Record<string, unknown>;
+    if (has("plugins")) {
+      if (config.plugins && typeof config.plugins === "object") {
+        const plugins = config.plugins as Record<string, unknown>;
 
-      if (opts.plugins !== undefined) {
-        for (const pluginKey of Object.keys(plugins)) {
-          if (!opts.plugins.includes(pluginKey)) {
-            delete plugins[pluginKey];
+        if (opts.plugins !== undefined) {
+          for (const pluginKey of Object.keys(plugins)) {
+            if (!opts.plugins.includes(pluginKey)) {
+              delete plugins[pluginKey];
+            }
           }
         }
-      }
 
-      for (const pluginKey of Object.keys(plugins)) {
-        const plugin = plugins[pluginKey];
-        let pluginObj: Record<string, unknown>;
+        for (const pluginKey of Object.keys(plugins)) {
+          const plugin = plugins[pluginKey];
+          let pluginObj: Record<string, unknown>;
 
-        if (typeof plugin === "string") {
-          pluginObj = { extends: plugin };
-          plugins[pluginKey] = pluginObj;
-        } else if (plugin && typeof plugin === "object") {
-          pluginObj = { ...(plugin as Record<string, unknown>) };
-        } else {
-          continue;
+          if (typeof plugin === "string") {
+            pluginObj = { extends: plugin };
+            plugins[pluginKey] = pluginObj;
+          } else if (plugin && typeof plugin === "object") {
+            pluginObj = { ...(plugin as Record<string, unknown>) };
+          } else {
+            continue;
+          }
+
+          stripProductionFields(pluginObj);
         }
 
-        delete pluginObj.production;
-        delete pluginObj.integrity;
+        if (Object.keys(plugins).length === 0) {
+          config.plugins = {};
+        }
       }
-
-      if (Object.keys(plugins).length === 0) {
-        config.plugins = {};
-      }
+    } else {
+      delete config.plugins;
     }
 
     await saveBosConfig(destination, config);
@@ -364,10 +451,11 @@ export async function personalizeConfig(
       if (Array.isArray(ws.packages)) {
         ws.packages = ws.packages.filter((p: string) => {
           if (p.startsWith("packages/")) return false;
-          if (p === "host") return opts.withHost ?? false;
-          if (p === "plugins/*") return (opts.plugins?.length ?? 0) > 0;
+          if (p === "host") return has("host");
+          if (p === "plugins/*") return has("plugins") && (opts.plugins?.length ?? 0) > 0;
           const pluginMatch = p.match(/^plugins\/([^/]+)/);
-          if (pluginMatch) return opts.plugins?.includes(pluginMatch[1]) ?? true;
+          if (pluginMatch)
+            return has("plugins") && (opts.plugins?.includes(pluginMatch[1]) ?? true);
           return true;
         });
       }
@@ -395,7 +483,7 @@ export async function personalizeConfig(
         scripts.typecheck = scripts.typecheck
           .replace("bun run types:gen && ", "")
           .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
-        if (!opts.withHost) {
+        if (!has("host")) {
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
         }
       }
@@ -451,27 +539,34 @@ export async function personalizeConfig(
 
   await resolveWorkspaceRefs(destination, opts.workspaceOpts);
 
-  const genContractPath = join(destination, "ui", "src", "lib", "api-types.gen.ts");
-  if (!existsSync(genContractPath)) {
-    mkdirSync(dirname(genContractPath), { recursive: true });
-    writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
+  if (has("ui")) {
+    const genContractPath = join(destination, "ui", "src", "lib", "api-types.gen.ts");
+    if (!existsSync(genContractPath)) {
+      mkdirSync(dirname(genContractPath), { recursive: true });
+      writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
+    }
   }
 
-  const pluginsClientGenPath = join(destination, "api", "src", "lib", "plugins-types.gen.ts");
-  if (!existsSync(pluginsClientGenPath)) {
-    mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
-    writeFileSync(
-      pluginsClientGenPath,
-      `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type PluginsClient = Record<string, never>;\n`,
-    );
+  if (has("api")) {
+    const pluginsClientGenPath = join(destination, "api", "src", "lib", "plugins-types.gen.ts");
+    if (!existsSync(pluginsClientGenPath)) {
+      mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
+      writeFileSync(
+        pluginsClientGenPath,
+        `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type PluginsClient = Record<string, never>;\n`,
+      );
+    }
   }
 
   const authTypesContent = generateAuthTypesTemplate();
-  const authTypesPaths = [
-    join(destination, "ui", "src", "lib", "auth-types.gen.ts"),
-    join(destination, "api", "src", "lib", "auth-types.gen.ts"),
-  ];
-  if (existsSync(join(destination, "host", "src"))) {
+  const authTypesPaths: string[] = [];
+  if (has("ui")) {
+    authTypesPaths.push(join(destination, "ui", "src", "lib", "auth-types.gen.ts"));
+  }
+  if (has("api")) {
+    authTypesPaths.push(join(destination, "api", "src", "lib", "auth-types.gen.ts"));
+  }
+  if (has("host") && existsSync(join(destination, "host", "src"))) {
     authTypesPaths.push(join(destination, "host", "src", "lib", "auth-types.gen.ts"));
   }
   for (const authTypesGenPath of authTypesPaths) {
@@ -559,55 +654,51 @@ export async function scaffoldMinimalProject(
     account?: string;
     domain?: string;
     plugins?: string[];
-    withHost?: boolean;
+    overrides: OverrideSection[];
+    repository?: string;
   },
 ): Promise<number> {
   mkdirSync(destination, { recursive: true });
+
+  const has = (section: OverrideSection) => opts.overrides.includes(section);
 
   const config: Record<string, unknown> = {
     extends: `bos://${opts.extendsAccount}/${opts.extendsGateway}`,
     account: opts.account || opts.extendsAccount,
     ...(opts.domain ? { domain: opts.domain } : {}),
+    ...(opts.repository ? { repository: opts.repository } : {}),
   };
 
   if (parentConfig.app && typeof parentConfig.app === "object") {
     const app: Record<string, unknown> = {};
     const parentApp = parentConfig.app as Record<string, Record<string, unknown>>;
 
-    if (parentApp.host) {
+    if (has("host") && parentApp.host) {
       app.host = { ...parentApp.host };
-      const host = app.host as Record<string, unknown>;
-      delete host.production;
-      delete host.integrity;
+      stripProductionFields(app.host as Record<string, unknown>);
     }
 
-    if (parentApp.ui) {
+    if (has("ui") && parentApp.ui) {
       app.ui = { ...parentApp.ui };
-      const ui = app.ui as Record<string, unknown>;
-      delete ui.production;
-      delete ui.integrity;
-      delete ui.ssr;
-      delete ui.ssrIntegrity;
+      stripProductionFields(app.ui as Record<string, unknown>);
     }
 
-    if (parentApp.api) {
+    if (has("api") && parentApp.api) {
       app.api = { ...parentApp.api };
-      const api = app.api as Record<string, unknown>;
-      delete api.production;
-      delete api.integrity;
+      stripProductionFields(app.api as Record<string, unknown>);
     }
 
-    if (parentApp.auth) {
+    if (has("plugins") && parentApp.auth) {
       app.auth = { ...parentApp.auth };
-      const auth = app.auth as Record<string, unknown>;
-      delete auth.production;
-      delete auth.integrity;
+      stripProductionFields(app.auth as Record<string, unknown>);
     }
 
-    config.app = app;
+    if (Object.keys(app).length > 0) {
+      config.app = app;
+    }
   }
 
-  if (opts.plugins && opts.plugins.length > 0 && parentConfig.plugins) {
+  if (has("plugins") && opts.plugins && opts.plugins.length > 0 && parentConfig.plugins) {
     const plugins: Record<string, unknown> = {};
     for (const key of opts.plugins) {
       const parentPlugin = (parentConfig.plugins as Record<string, unknown>)?.[key];
@@ -616,8 +707,7 @@ export async function scaffoldMinimalProject(
           plugins[key] = { extends: parentPlugin };
         } else {
           const pluginCopy = { ...(parentPlugin as Record<string, unknown>) };
-          delete pluginCopy.production;
-          delete pluginCopy.integrity;
+          stripProductionFields(pluginCopy);
           plugins[key] = pluginCopy;
         }
       }
@@ -626,6 +716,16 @@ export async function scaffoldMinimalProject(
   }
 
   await saveBosConfig(destination, config);
+
+  const workspacePackages: string[] = [];
+  for (const section of opts.overrides) {
+    workspacePackages.push(...OVERRIDE_WORKSPACE_MAP[section]);
+  }
+  if (has("plugins") && opts.plugins) {
+    for (const plugin of opts.plugins) {
+      workspacePackages.push(`plugins/${plugin}`);
+    }
+  }
 
   const pkg: Record<string, unknown> = {
     name: opts.domain || opts.extendsGateway,
@@ -649,13 +749,13 @@ export async function scaffoldMinimalProject(
     },
     devDependencies: {},
     workspaces: {
-      packages: [],
+      packages: workspacePackages,
       catalog: {},
     },
   };
   writeFileSync(join(destination, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
 
-  const envExample = generateEnvExample(parentConfig);
+  const envExample = generateEnvExample(parentConfig, opts.overrides);
   if (envExample) {
     writeFileSync(join(destination, ".env.example"), envExample);
   }
@@ -714,11 +814,18 @@ export async function writeInitSnapshot(
   extendsGateway: string,
   sourceDir: string,
   patterns: string[],
-  options: { withHost: boolean; plugins?: string[]; pluginRoutes?: Record<string, string[]> },
+  options: {
+    overrides: OverrideSection[];
+    plugins?: string[];
+    pluginRoutes?: Record<string, string[]>;
+  },
 ): Promise<void> {
-  const effectivePatterns = options.withHost
-    ? [...patterns, "host/**"]
-    : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
+  const effectivePatterns = filterPatternsByOverrides(patterns, options.overrides, options.plugins);
+
+  const has = (section: OverrideSection) => options.overrides.includes(section);
+  if (has("host") && !effectivePatterns.some((p) => p.startsWith("host/") || p === "host/**")) {
+    effectivePatterns.push("host/**");
+  }
 
   const excludedRoutePatterns: string[] = [];
   if (options.pluginRoutes) {
@@ -817,10 +924,17 @@ export async function execCommand(command: string, args: string[], cwd?: string)
   await execa(command, args, { cwd, stdio: "pipe" });
 }
 
-function generateEnvExample(config: BosConfigInput): string {
+function generateEnvExample(config: BosConfigInput, overrides: OverrideSection[]): string {
+  const has = (section: OverrideSection) => overrides.includes(section);
+
   const lines: string[] = ["# Environment variables"];
-  const collectSecrets = (obj: Record<string, unknown>, prefix = ""): void => {
+  const collectSecrets = (
+    obj: Record<string, unknown>,
+    includeSection: boolean,
+    prefix = "",
+  ): void => {
     for (const [key, value] of Object.entries(obj)) {
+      if (!includeSection) continue;
       if (key === "secrets" && Array.isArray(value)) {
         for (const secret of value) {
           if (typeof secret === "string") {
@@ -834,16 +948,28 @@ function generateEnvExample(config: BosConfigInput): string {
           }
         }
       } else if (isPlainObject(value) && key !== "extends") {
-        collectSecrets(value as Record<string, unknown>, `${prefix}${key}.`);
+        collectSecrets(value as Record<string, unknown>, includeSection, `${prefix}${key}.`);
       }
     }
   };
 
   if (config.app && typeof config.app === "object") {
-    collectSecrets(config.app as Record<string, unknown>);
+    const app = config.app as Record<string, unknown>;
+    collectSecrets(app, has("host"), "host.");
+    collectSecrets(app, has("ui"), "ui.");
+    collectSecrets(app, has("api"), "api.");
+    collectSecrets(app, has("plugins"), "auth.");
   }
-  if (config.plugins && typeof config.plugins === "object") {
-    collectSecrets(config.plugins as Record<string, unknown>);
+  if (has("plugins") && config.plugins && typeof config.plugins === "object") {
+    for (const [pluginKey, pluginVal] of Object.entries(
+      config.plugins as Record<string, unknown>,
+    )) {
+      if (isPlainObject(pluginVal)) {
+        collectSecrets(pluginVal as Record<string, unknown>, true);
+      } else if (typeof pluginVal === "string") {
+        lines.push(`# Plugin '${pluginKey}' extends ${pluginVal}`);
+      }
+    }
   }
 
   lines.push("BETTER_AUTH_SECRET=generate-a-secret-here");

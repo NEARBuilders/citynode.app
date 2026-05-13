@@ -29,6 +29,10 @@ function isBooleanSchema(schema: SchemaLike): boolean {
   return unwrap(schema)._def?.type === "boolean";
 }
 
+function isArraySchema(schema: SchemaLike): boolean {
+  return unwrap(schema)._def?.type === "array";
+}
+
 function coerceValue(raw: string, schema: SchemaLike): unknown {
   const inner = unwrap(schema);
   switch (inner._def?.type) {
@@ -100,6 +104,19 @@ export function parseCommandInput(descriptor: CommandDescriptor, argv: string[])
       }
 
       const next = inline ?? argv[i + 1];
+
+      if (isArraySchema(fieldSchema)) {
+        if (next === undefined || next.startsWith("--")) {
+          throw new Error(`Missing value for ${flag}`);
+        }
+        input[fieldName] = next
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        if (!inline) i += 1;
+        continue;
+      }
+
       if (next === undefined || next.startsWith("--")) {
         throw new Error(`Missing value for ${flag}`);
       }

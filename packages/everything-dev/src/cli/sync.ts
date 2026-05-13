@@ -491,6 +491,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       domain,
       plugins: childPlugins,
       pluginRoutes,
+      overrides: ["ui", "api", "host", "plugins"],
       workspaceOpts: { sourceDir },
       mode: "sync",
     });
