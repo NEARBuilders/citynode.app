@@ -17,6 +17,7 @@ import {
   runDockerComposeUp,
   runTypesGen,
   scaffoldMinimalProject,
+  stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
@@ -1428,6 +1429,10 @@ export default createPlugin({
             );
           }
 
+          const lockfilePath = join(targetDir, "bun.lock");
+          const allowedWorkspaces = computeAllowedWorkspaces(overrides, plugins);
+          stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
+
           const initConfig = await timePhase(
             timings,
             "resolve config",
@@ -1454,8 +1459,12 @@ export default createPlugin({
           );
 
           if (!input.noInstall) {
-            await timePhase(timings, "install dependencies", () => runBunInstall(targetDir), s);
-            await timePhase(timings, "generate types", () => runTypesGen(targetDir), s);
+            await timePhase(timings, "install dependencies", () =>
+              runBunInstall(targetDir, s ?? undefined),
+            );
+            await timePhase(timings, "generate types", () =>
+              runTypesGen(targetDir, s ?? undefined),
+            );
             await timePhase(
               timings,
               "generate migrations",
@@ -1737,4 +1746,24 @@ function extractTransactionHash(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const match = message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
   return match?.[1];
+}
+
+const OVERRIDE_WORKSPACE_MAP: Record<string, string[]> = {
+  ui: ["ui"],
+  api: ["api"],
+  host: ["host"],
+  plugins: [],
+};
+
+function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): string[] {
+  const workspaces: string[] = [];
+  for (const section of overrides) {
+    workspaces.push(...(OVERRIDE_WORKSPACE_MAP[section] ?? []));
+  }
+  if (plugins) {
+    for (const plugin of plugins) {
+      workspaces.push(`plugins/${plugin}`);
+    }
+  }
+  return workspaces;
 }

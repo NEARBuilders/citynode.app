@@ -1,5 +1,6 @@
 bos.config.json
 package.json
+bun.lock
 .env.example
 .gitignore
 .templatesync-exclude

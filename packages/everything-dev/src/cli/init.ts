@@ -630,16 +630,88 @@ export interface AuthServices {
 `;
 }
 
-export async function runBunInstall(destination: string): Promise<void> {
-  await execCommand("bun", ["install", "--ignore-scripts"], destination, { stdio: "inherit" });
+export async function runBunInstall(
+  destination: string,
+  spinner?: { message: (msg: string) => void },
+): Promise<void> {
+  await runWithProgress("bun", ["install", "--ignore-scripts"], destination, spinner, "Installing dependencies");
 }
 
-export async function runTypesGen(destination: string): Promise<void> {
-  await execCommand("node_modules/.bin/bos", ["types", "gen"], destination, { stdio: "inherit" });
+export async function runTypesGen(
+  destination: string,
+  spinner?: { message: (msg: string) => void },
+): Promise<void> {
+  await runWithProgress(
+    "node_modules/.bin/bos",
+    ["types", "gen"],
+    destination,
+    spinner,
+    "Generating types",
+  );
 }
 
 export async function runDockerComposeUp(destination: string): Promise<void> {
   await execCommand("docker", ["compose", "up", "-d", "--wait"], destination, { stdio: "inherit" });
+}
+
+async function runWithProgress(
+  command: string,
+  args: string[],
+  cwd: string,
+  spinner: { message: (msg: string) => void } | undefined,
+  label: string,
+): Promise<void> {
+  const timeout = COMMAND_TIMEOUTS[command] ?? 2 * 60_000;
+  const child = execa(command, args, { cwd, stdio: "inherit", timeout });
+
+  if (spinner) {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Math.round((Date.now() - start) / 1000);
+      spinner.message(`${label}... (${elapsed}s)`);
+    }, 2000);
+    try {
+      await child;
+    } finally {
+      clearInterval(interval);
+    }
+  } else {
+    await child;
+  }
+}
+
+export function stripOrphanedWorkspacesFromLockfile(
+  lockfilePath: string,
+  allowedWorkspaces: string[],
+): void {
+  if (!existsSync(lockfilePath)) return;
+
+  const content = readFileSync(lockfilePath, "utf-8");
+  let lockfile: Record<string, unknown>;
+  try {
+    lockfile = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  const workspaces = lockfile.workspaces;
+  if (!workspaces || typeof workspaces !== "object") return;
+
+  const workspaceMap = workspaces as Record<string, unknown>;
+  const allowed = new Set(["", ...allowedWorkspaces]);
+
+  const keys = Object.keys(workspaceMap);
+  let changed = false;
+  for (const key of keys) {
+    if (!allowed.has(key)) {
+      delete workspaceMap[key];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    writeFileSync(lockfilePath, `${JSON.stringify(lockfile, null, 2)}\n`);
+  }
 }
 
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
@@ -649,6 +721,49 @@ const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
 
 function resolveFrameworkCatalog(): Record<string, string> {
   const catalog: Record<string, string> = {};
+
+  try {
+    const selfPkgPath = require.resolve("everything-dev/package.json");
+    const selfPkgDir = dirname(selfPkgPath);
+    const monorepoPkgPath = join(selfPkgDir, "..", "..", "package.json");
+    if (existsSync(monorepoPkgPath)) {
+      const monorepoPkg = JSON.parse(readFileSync(monorepoPkgPath, "utf-8")) as {
+        workspaces?: { catalog?: Record<string, string> };
+      };
+      const sourceCatalog = monorepoPkg.workspaces?.catalog;
+      if (sourceCatalog && typeof sourceCatalog === "object") {
+        for (const [name, version] of Object.entries(sourceCatalog)) {
+          if (typeof version === "string") {
+            catalog[name] = version;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const selfPkgPath = require.resolve("everything-dev/package.json");
+    const selfPkg = JSON.parse(readFileSync(selfPkgPath, "utf-8")) as {
+      version?: string;
+      workspaces?: { catalog?: Record<string, string> };
+    };
+    if (selfPkg.version && !catalog["everything-dev"]) {
+      catalog["everything-dev"] = `^${selfPkg.version}`;
+    }
+    const sourceCatalog = selfPkg.workspaces?.catalog;
+    if (sourceCatalog && typeof sourceCatalog === "object") {
+      for (const [name, version] of Object.entries(sourceCatalog)) {
+        if (typeof version === "string" && !catalog[name]) {
+          catalog[name] = version;
+        }
+      }
+    }
+  } catch {}
+
+  if (Object.keys(catalog).length > 0) {
+    return catalog;
+  }
+
   for (const packageName of FRAMEWORK_PACKAGES) {
     try {
       const resolved = require.resolve(`${packageName}/package.json`);
