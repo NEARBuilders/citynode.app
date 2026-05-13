@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,7 +20,7 @@ describe("upgrade bos config migration", () => {
     return dir;
   }
 
-  it("rewrites extends targets and migrates plugin provider metadata", async () => {
+  it("rewrites extends targets with #path and merges plugin config into root", async () => {
     const projectDir = makeProjectDir();
     writeFileSync(
       join(projectDir, "bos.config.json"),
@@ -69,46 +69,236 @@ describe("upgrade bos config migration", () => {
 
     expect(migrated).toContain("bos.config.json");
     expect(migrated).toContain("plugins/projects/bos.config.json");
+    expect(existsSync(join(projectDir, "plugins/projects/bos.config.json"))).toBe(false);
 
     const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
       app: { auth: { extends: string } };
-      plugins: { projects: { extends: string } };
-    };
-    expect(rootConfig.app.auth.extends).toBe(
-      "bos://auth.everything.near/auth.everything.dev#app.auth",
-    );
-    expect(rootConfig.plugins.projects.extends).toBe(
-      "bos://dev.everything.near/projects.everything.dev#plugins.projects",
-    );
-
-    const providerConfig = JSON.parse(
-      readFileSync(join(projectDir, "plugins/projects/bos.config.json"), "utf-8"),
-    ) as {
-      app?: unknown;
-      sidebar?: unknown;
-      routes?: unknown;
       plugins: {
         projects: {
+          extends?: string;
           development: string;
-          production: string;
-          secrets: string[];
-          sidebar: Array<{ icon: string; label: string }>;
-          routes: string[];
+          production?: string;
+          secrets?: string[];
+          sidebar?: Array<{ icon: string; label: string }>;
+          routes?: string[];
         };
       };
     };
 
-    expect(providerConfig.app).toBeUndefined();
-    expect(providerConfig.sidebar).toBeUndefined();
-    expect(providerConfig.routes).toBeUndefined();
-    expect(providerConfig.plugins.projects.development).toBe("local:.");
-    expect(providerConfig.plugins.projects.production).toBe("https://projects.test.dev");
-    expect(providerConfig.plugins.projects.secrets).toEqual(["PROJECTS_DATABASE_URL"]);
-    expect(providerConfig.plugins.projects.sidebar).toEqual([
+    expect(rootConfig.app.auth.extends).toBe(
+      "bos://auth.everything.near/auth.everything.dev#app.auth",
+    );
+
+    expect(rootConfig.plugins.projects.development).toBe("local:plugins/projects");
+    expect(rootConfig.plugins.projects.production).toBe("https://projects.test.dev");
+    expect(rootConfig.plugins.projects.secrets).toEqual(["PROJECTS_DATABASE_URL"]);
+    expect(rootConfig.plugins.projects.sidebar).toEqual([
       { icon: "FolderKanban", label: "projects" },
     ]);
-    expect(providerConfig.plugins.projects.routes).toEqual([
+    expect(rootConfig.plugins.projects.routes).toEqual([
       "ui/src/routes/_layout/_authenticated/projects/**",
     ]);
+  });
+
+  it("removes extends from self-owned local plugins", async () => {
+    const projectDir = makeProjectDir();
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          account: "test.near",
+          app: {
+            host: { development: "local:host", production: "https://host.test.dev" },
+            ui: { name: "ui", development: "local:ui", production: "https://ui.test.dev" },
+            api: { name: "api", development: "local:api", production: "https://api.test.dev" },
+          },
+          plugins: {
+            projects: {
+              extends: "bos://dev.everything.near/projects.everything.dev#plugins.projects",
+              development: "local:plugins/projects",
+              secrets: ["PROJECTS_DATABASE_URL"],
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    mkdirSync(join(projectDir, "plugins/projects"), { recursive: true });
+    writeFileSync(
+      join(projectDir, "plugins/projects/bos.config.json"),
+      `${JSON.stringify(
+        {
+          domain: "projects.everything.dev",
+          plugins: {
+            projects: {
+              name: "projects",
+              development: "local:.",
+              production: "https://projects.test.dev",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    await migrateBosConfigFiles(projectDir);
+
+    const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
+      plugins: {
+        projects: {
+          extends?: string;
+          name?: string;
+          development: string;
+          production?: string;
+        };
+      };
+    };
+
+    expect(rootConfig.plugins.projects.extends).toBeUndefined();
+    expect(rootConfig.plugins.projects.name).toBeUndefined();
+    expect(rootConfig.plugins.projects.development).toBe("local:plugins/projects");
+    expect(rootConfig.plugins.projects.production).toBe("https://projects.test.dev");
+  });
+
+  it("removes name from plugin entries", async () => {
+    const projectDir = makeProjectDir();
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          account: "test.near",
+          app: {
+            host: { development: "local:host" },
+            ui: { name: "ui", development: "local:ui" },
+            api: { name: "api", development: "local:api" },
+          },
+          plugins: {
+            projects: {
+              name: "projects",
+              development: "local:plugins/projects",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    await migrateBosConfigFiles(projectDir);
+
+    const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
+      plugins: { projects: { name?: string; development: string } };
+    };
+
+    expect(rootConfig.plugins.projects.name).toBeUndefined();
+    expect(rootConfig.plugins.projects.development).toBe("local:plugins/projects");
+  });
+
+  it("merges top-level sidebar and routes from plugin config into root entry", async () => {
+    const projectDir = makeProjectDir();
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          account: "test.near",
+          app: {
+            host: { development: "local:host" },
+            ui: { name: "ui", development: "local:ui" },
+            api: { name: "api", development: "local:api" },
+          },
+          plugins: {
+            apps: {
+              development: "local:plugins/apps",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    mkdirSync(join(projectDir, "plugins/apps"), { recursive: true });
+    writeFileSync(
+      join(projectDir, "plugins/apps/bos.config.json"),
+      `${JSON.stringify(
+        {
+          domain: "apps.everything.dev",
+          sidebar: [{ icon: "Globe", label: "apps", roleRequired: "anon" }],
+          routes: ["ui/src/routes/_layout/apps/**"],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    await migrateBosConfigFiles(projectDir);
+
+    expect(existsSync(join(projectDir, "plugins/apps/bos.config.json"))).toBe(false);
+
+    const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
+      plugins: {
+        apps: {
+          development: string;
+          sidebar?: unknown;
+          routes?: unknown;
+        };
+      };
+    };
+
+    expect(rootConfig.plugins.apps.sidebar).toEqual([
+      { icon: "Globe", label: "apps", roleRequired: "anon" },
+    ]);
+    expect(rootConfig.plugins.apps.routes).toEqual(["ui/src/routes/_layout/apps/**"]);
+  });
+
+  it("deletes plugin bos.config.json files even when no metadata to merge", async () => {
+    const projectDir = makeProjectDir();
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          account: "test.near",
+          app: {
+            host: { development: "local:host" },
+            ui: { name: "ui", development: "local:ui" },
+            api: { name: "api", development: "local:api" },
+          },
+          plugins: {
+            projects: {
+              development: "local:plugins/projects",
+              secrets: ["PROJECTS_DATABASE_URL"],
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    mkdirSync(join(projectDir, "plugins/projects"), { recursive: true });
+    writeFileSync(
+      join(projectDir, "plugins/projects/bos.config.json"),
+      `${JSON.stringify(
+        {
+          domain: "projects.everything.dev",
+          plugins: {
+            projects: {
+              name: "projects",
+              development: "local:.",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const migrated = await migrateBosConfigFiles(projectDir);
+
+    expect(migrated).toContain("plugins/projects/bos.config.json");
+    expect(existsSync(join(projectDir, "plugins/projects/bos.config.json"))).toBe(false);
   });
 });

@@ -37,9 +37,9 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/settings/bos.config.json"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/apps/bos.config.json"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/projects/bos.config.json"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/settings"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/apps"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/projects"))).toBe(true);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
@@ -53,7 +53,7 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(false);
   });
 
-  it("copies selected plugin provider configs when plugins are chosen", async () => {
+  it("copies selected plugin directories when plugins are chosen", async () => {
     const selectedDir = mkdtempSync(join(tmpdir(), "bos-init-selected-plugins-"));
     try {
       const parent = JSON.parse(readFileSync(join(REPO_ROOT, "bos.config.json"), "utf-8"));
@@ -69,9 +69,9 @@ describe("bos init — structure", () => {
         pluginRoutes,
       });
 
-      expect(existsSync(join(selectedDir, "plugins", "apps", "bos.config.json"))).toBe(true);
-      expect(existsSync(join(selectedDir, "plugins", "projects", "bos.config.json"))).toBe(true);
-      expect(existsSync(join(selectedDir, "plugins", "settings", "bos.config.json"))).toBe(false);
+      expect(existsSync(join(selectedDir, "plugins", "apps"))).toBe(true);
+      expect(existsSync(join(selectedDir, "plugins", "projects"))).toBe(true);
+      expect(existsSync(join(selectedDir, "plugins", "settings"))).toBe(false);
     } finally {
       rmSync(selectedDir, { recursive: true, force: true });
     }

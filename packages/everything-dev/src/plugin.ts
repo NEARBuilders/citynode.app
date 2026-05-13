@@ -646,96 +646,32 @@ export default createPlugin({
       const version = manifest?.plugin.version ?? pkgJson.version;
 
       if (publishedUrl) {
-        const pluginConfigPath = join(localPath, "bos.config.json");
-        if (existsSync(pluginConfigPath)) {
-          try {
-            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
-              string,
-              unknown
-            >;
-            if (!pluginConfig.plugins || typeof pluginConfig.plugins !== "object") {
-              pluginConfig.plugins = {};
-            }
-            const plugins = pluginConfig.plugins as Record<string, unknown>;
-            if (!plugins[input.key] || typeof plugins[input.key] !== "object") {
-              plugins[input.key] = {};
-            }
-            const entry = plugins[input.key] as Record<string, unknown>;
-            entry.production = publishedUrl;
-            if (integrity) {
-              entry.integrity = integrity;
-            } else {
-              delete entry.integrity;
-            }
-            writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
-            console.log(`   ✅ Updated ${pluginConfigPath}: plugins.${input.key}.production`);
-          } catch (err) {
-            console.error(
-              `   ❌ Failed to update plugin bos.config.json:`,
-              err instanceof Error ? err.message : err,
-            );
-          }
-        }
-
-        const account = deps.bosConfig.account;
-        const network = getNetworkIdForAccount(account);
-
-        let pluginDomain: string | undefined;
-        if (existsSync(pluginConfigPath)) {
-          try {
-            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
-            if (typeof pluginConfig.domain === "string") {
-              pluginDomain = pluginConfig.domain;
-            }
-          } catch {}
-        }
-        if (!pluginDomain) {
-          pluginDomain = `${input.key}.${deps.bosConfig.domain ?? "everything.dev"}`;
-        }
-
+        const rootConfigPath = join(deps.configDir, "bos.config.json");
         try {
-          const registryEntries: Record<string, string> = {};
-
-          if (existsSync(pluginConfigPath)) {
-            try {
-              const publishedPluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
-              delete publishedPluginConfig.development;
-              registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
-                JSON.stringify(publishedPluginConfig);
-            } catch {}
+          const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<
+            string,
+            unknown
+          >;
+          if (!rootConfig.plugins || typeof rootConfig.plugins !== "object") {
+            rootConfig.plugins = {};
           }
-
-          if (Object.keys(registryEntries).length > 0) {
-            const payload = JSON.stringify(registryEntries);
-            const argsBase64 = Buffer.from(payload).toString("base64");
-            const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
-
-            await Effect.runPromise(ensureNearCli);
-            try {
-              await Effect.runPromise(
-                executeTransaction({
-                  account,
-                  contract: getRegistryNamespaceForNetwork(network),
-                  method: "__fastdata_kv",
-                  argsBase64,
-                  network,
-                  privateKey,
-                  gas: "50Tgas",
-                  deposit: "0NEAR",
-                }),
-              );
-            } catch (registryError) {
-              const txHash = extractTransactionHash(registryError);
-              if (!txHash) {
-                console.warn(
-                  `[publish] Plugin registry write failed: ${registryError instanceof Error ? registryError.message : registryError}`,
-                );
-              }
-            }
+          const plugins = rootConfig.plugins as Record<string, unknown>;
+          if (!plugins[input.key] || typeof plugins[input.key] !== "object") {
+            plugins[input.key] = {};
           }
-        } catch (registryError) {
-          console.warn(
-            `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
+          const entry = plugins[input.key] as Record<string, unknown>;
+          entry.production = publishedUrl;
+          if (integrity) {
+            entry.integrity = integrity;
+          } else {
+            delete entry.integrity;
+          }
+          writeFileSync(rootConfigPath, `${JSON.stringify(rootConfig, null, 2)}\n`);
+          console.log(`   ✅ Updated bos.config.json: plugins.${input.key}.production`);
+        } catch (err) {
+          console.error(
+            `   ❌ Failed to update bos.config.json:`,
+            err instanceof Error ? err.message : err,
           );
         }
 
@@ -1142,29 +1078,6 @@ export default createPlugin({
       const registryEntries: Record<string, string> = {
         [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishConfig),
       };
-
-      for (const [pluginKey, pluginEntry] of Object.entries(publishConfig.plugins ?? {})) {
-        const pluginRef = getPluginRef(pluginEntry);
-        if (!pluginRef?.development?.startsWith("local:")) continue;
-
-        const localPath = join(deps.configDir, pluginRef.development.slice("local:".length));
-        const pluginConfigPath = join(localPath, "bos.config.json");
-        if (!existsSync(pluginConfigPath)) continue;
-
-        try {
-          const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
-            string,
-            unknown
-          >;
-          const pluginDomain =
-            typeof pluginConfig.domain === "string"
-              ? pluginConfig.domain
-              : `${pluginKey}.${gateway}`;
-          delete pluginConfig.development;
-          registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
-            JSON.stringify(pluginConfig);
-        } catch {}
-      }
 
       const payload = JSON.stringify(registryEntries);
       const argsBase64 = Buffer.from(payload).toString("base64");
