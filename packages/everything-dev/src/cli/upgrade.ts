@@ -1,9 +1,13 @@
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import process from "node:process";
+import * as p from "@clack/prompts";
 import { glob } from "glob";
 import type { UpgradeOptions, UpgradeResult } from "../contract";
+import { resolveExtendsRef } from "../merge";
+import { saveBosConfig } from "../utils/save-config";
 import { readInstalledFrameworkVersion } from "./framework-version";
-import { runBunInstall, runTypesGen } from "./init";
+import { fetchParentConfig, runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
@@ -45,6 +49,105 @@ const OBSOLETE_FILES = [
 
 interface NpmPackageInfo {
   version: string;
+}
+
+function getExtendsRef(config: Record<string, unknown>): string | undefined {
+  if (typeof config.extends === "string") {
+    return config.extends;
+  }
+
+  if (config.extends && typeof config.extends === "object") {
+    return resolveExtendsRef(config.extends as Record<string, string>, "production");
+  }
+
+  return undefined;
+}
+
+function parseBosRef(ref: string): { account: string; gateway: string } | null {
+  const match = ref.match(/^bos:\/\/([^/]+)\/(.+)$/);
+  if (!match?.[1] || !match[2]) return null;
+  return { account: match[1], gateway: match[2] };
+}
+
+async function loadParentPluginOptions(projectDir: string): Promise<{
+  localConfig: Record<string, unknown>;
+  parentPlugins: Record<string, unknown>;
+  newPluginKeys: string[];
+} | null> {
+  const configPath = join(projectDir, "bos.config.json");
+  if (!existsSync(configPath)) {
+    return null;
+  }
+
+  const localConfig = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+  const extendsRef = getExtendsRef(localConfig);
+  if (!extendsRef?.startsWith("bos://")) {
+    return null;
+  }
+
+  const parsed = parseBosRef(extendsRef);
+  if (!parsed) {
+    return null;
+  }
+
+  let parentConfig: Record<string, unknown>;
+  try {
+    parentConfig = await fetchParentConfig(parsed.account, parsed.gateway);
+  } catch {
+    return null;
+  }
+
+  const parentPlugins =
+    parentConfig.plugins && typeof parentConfig.plugins === "object"
+      ? (parentConfig.plugins as Record<string, unknown>)
+      : {};
+  const localPlugins =
+    localConfig.plugins && typeof localConfig.plugins === "object"
+      ? (localConfig.plugins as Record<string, unknown>)
+      : {};
+
+  const newPluginKeys = Object.keys(parentPlugins).filter((key) => !(key in localPlugins));
+  return { localConfig, parentPlugins, newPluginKeys };
+}
+
+async function addSelectedParentPlugins(projectDir: string): Promise<string[]> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return [];
+  }
+
+  const pluginOptions = await loadParentPluginOptions(projectDir);
+  if (!pluginOptions || pluginOptions.newPluginKeys.length === 0) {
+    return [];
+  }
+
+  const selectedValue = await p.multiselect({
+    message: "Select new plugins from parent:",
+    options: pluginOptions.newPluginKeys.map((key) => ({ value: key, label: key })),
+    required: false,
+  });
+
+  if (p.isCancel(selectedValue)) {
+    process.exit(0);
+  }
+
+  const selected = selectedValue as string[];
+  if (selected.length === 0) {
+    return [];
+  }
+
+  const localPlugins =
+    pluginOptions.localConfig.plugins && typeof pluginOptions.localConfig.plugins === "object"
+      ? (pluginOptions.localConfig.plugins as Record<string, unknown>)
+      : {};
+  const nextPlugins = { ...localPlugins };
+  for (const key of selected) {
+    nextPlugins[key] = pluginOptions.parentPlugins[key];
+  }
+
+  pluginOptions.localConfig.plugins = nextPlugins;
+  await saveBosConfig(projectDir, pluginOptions.localConfig);
+
+  return selected;
 }
 
 async function fetchLatestNpmVersion(packageName: string): Promise<string | null> {
@@ -269,6 +372,7 @@ export async function upgradeTemplate(
 
   if (options.dryRun) {
     let changelogUrl: string | undefined;
+    const pluginOptions = options.noSync ? null : await loadParentPluginOptions(projectDir);
     if (hasUpdates) {
       const configPath = join(projectDir, "bos.config.json");
       let parentConfig: Record<string, unknown> | null = null;
@@ -289,6 +393,7 @@ export async function upgradeTemplate(
         ...packages,
         ...catalogVersionUpdates.map((u) => ({ name: u.name, from: u.from, to: u.to })),
       ],
+      availablePlugins: pluginOptions?.newPluginKeys,
       changelogUrl,
     };
   }
@@ -315,18 +420,23 @@ export async function upgradeTemplate(
     }
   }
 
-  if (hasUpdates && !options.noInstall) {
-    await runBunInstall(projectDir);
-    await runTypesGen(projectDir);
-  }
-
   let syncResult: UpgradeResult["sync"];
+  let addedPlugins: string[] = [];
   if (!options.noSync) {
+    if (!options.dryRun) {
+      addedPlugins = await addSelectedParentPlugins(projectDir);
+    }
+
     syncResult = await syncTemplate(projectDir, {
       dryRun: false,
       force: options.force,
       noInstall: true,
     });
+  }
+
+  if ((hasUpdates || addedPlugins.length > 0) && !options.noInstall) {
+    await runBunInstall(projectDir);
+    await runTypesGen(projectDir);
   }
 
   const migratedFiles = await rewriteLegacyUiImports(projectDir);
@@ -359,6 +469,7 @@ export async function upgradeTemplate(
     ],
     sync: syncResult,
     migrated: migratedFiles.length > 0 ? migratedFiles : undefined,
+    selectedPlugins: addedPlugins.length > 0 ? addedPlugins : undefined,
     changelogUrl,
   };
 }

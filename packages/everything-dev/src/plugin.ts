@@ -711,32 +711,19 @@ export default createPlugin({
           pluginDomain = `${input.key}.${deps.bosConfig.domain ?? "everything.dev"}`;
         }
 
-        if (manifest && version) {
-          try {
-            const registryEntries: Record<string, string> = {
-              [`plugins/${account}/${input.key}/manifest.json`]: JSON.stringify(manifest),
-              [`plugins/${account}/${input.key}/metadata`]: JSON.stringify({
-                title: null,
-                description: null,
-                repoUrl: deps.bosConfig.repository ?? null,
-                version,
-                publishedAt: new Date().toISOString(),
-                cdnUrl: publishedUrl,
-                integrity,
-              }),
-              [`plugins/${account}/${input.key}/versions/${version}/manifest.json`]:
-                JSON.stringify(manifest),
-            };
+        try {
+          const registryEntries: Record<string, string> = {};
 
-            if (existsSync(pluginConfigPath)) {
-              try {
-                const publishedPluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
-                delete publishedPluginConfig.development;
-                registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
-                  JSON.stringify(publishedPluginConfig);
-              } catch {}
-            }
+          if (existsSync(pluginConfigPath)) {
+            try {
+              const publishedPluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
+              delete publishedPluginConfig.development;
+              registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
+                JSON.stringify(publishedPluginConfig);
+            } catch {}
+          }
 
+          if (Object.keys(registryEntries).length > 0) {
             const payload = JSON.stringify(registryEntries);
             const argsBase64 = Buffer.from(payload).toString("base64");
             const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
@@ -763,11 +750,11 @@ export default createPlugin({
                 );
               }
             }
-          } catch (registryError) {
-            console.warn(
-              `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
-            );
           }
+        } catch (registryError) {
+          console.warn(
+            `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
+          );
         }
 
         await generateCodeArtifacts(deps.configDir, deps.bosConfig);

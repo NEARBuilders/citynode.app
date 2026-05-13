@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.15.0",
+      "version": "1.16.0",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",

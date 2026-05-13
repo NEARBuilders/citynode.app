@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fetchBosConfigFromFastKv, fetchPluginFromRegistry, parsePluginBosUrl } from "./fastkv";
+import { fetchBosConfigFromFastKv } from "./fastkv";
 import {
   type BosEnv,
   isPlainObject,
@@ -546,31 +546,6 @@ async function resolveRemotePluginRuntimeName(baseUrl: string, fallback: string)
   }
 }
 
-interface ResolvedBosPlugin {
-  url: string;
-  integrity?: string;
-}
-
-async function resolveBosPluginUrl(bosUrl: string): Promise<ResolvedBosPlugin | null> {
-  const parsed = parsePluginBosUrl(bosUrl);
-  if (!parsed) return null;
-
-  try {
-    const entry = await fetchPluginFromRegistry(parsed.accountId, parsed.pluginName);
-    if (!entry) return null;
-
-    const cdnUrl = entry.metadata.cdnUrl;
-    if (!cdnUrl) return null;
-
-    return {
-      url: cdnUrl,
-      integrity: entry.metadata.integrity ?? undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function buildRuntimePluginConfig(
   pluginId: string,
   config: BosConfigInput,
@@ -586,16 +561,12 @@ async function buildRuntimePluginConfig(
   const sourceProduction = typeof source.production === "string" ? source.production : undefined;
   const proxy = typeof apiConfig.proxy === "string" ? apiConfig.proxy : undefined;
   const development = apiDevelopment ?? sourceDevelopment;
-  let production = apiProduction ?? sourceProduction;
+  const production = apiProduction ?? sourceProduction;
 
   if (production?.startsWith("bos://")) {
-    const resolved = await resolveBosPluginUrl(production);
-    if (resolved) {
-      production = resolved.url;
-      if (resolved.integrity && env === "production") {
-        source.integrity = resolved.integrity;
-      }
-    }
+    throw new Error(
+      `Plugin "${pluginId}" has unsupported production target "${production}". Use extends: "bos://account/domain" for plugin configs or a CDN URL for production.`,
+    );
   }
 
   const runtimeTarget =

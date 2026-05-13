@@ -201,6 +201,8 @@ export const UpgradeResultSchema = z.object({
   ),
   sync: SyncResultSchema.optional(),
   migrated: z.array(z.string()).optional(),
+  availablePlugins: z.array(z.string()).optional(),
+  selectedPlugins: z.array(z.string()).optional(),
   changelogUrl: z.string().optional(),
   error: z.string().optional(),
 });

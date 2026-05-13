@@ -44,7 +44,7 @@ export const cliCommandMeta = {
     fields: {
       source: {
         positional: true,
-        description: "Plugin source (local:path, bos://account/plugins/name, or URL)",
+        description: "Plugin source (local:path, bos://account/domain, or URL)",
       },
       as: { description: "Plugin alias" },
       production: { description: "Production URL override" },
@@ -113,7 +113,7 @@ export const cliCommandMeta = {
   upgrade: {
     commandPath: ["upgrade"],
     summary: "Upgrade framework packages and sync template files",
-    interactive: false,
+    interactive: true,
     fields: {
       dryRun: { description: "Preview changes without writing" },
       force: { description: "Overwrite user-modified files during sync" },

@@ -240,6 +240,12 @@ async function main() {
       if (result.changelogUrl) {
         console.log(`  ${colors.dim("Changelog:")} ${result.changelogUrl}`);
       }
+      if (result.availablePlugins && result.availablePlugins.length > 0) {
+        console.log(`  ${colors.dim("New parent plugins:")} ${result.availablePlugins.join(", ")}`);
+      }
+      if (result.selectedPlugins && result.selectedPlugins.length > 0) {
+        console.log(`  ${colors.dim("Added plugins:")} ${result.selectedPlugins.join(", ")}`);
+      }
       if (result.sync) {
         const sync = result.sync;
         if (sync.updated.length > 0) {
