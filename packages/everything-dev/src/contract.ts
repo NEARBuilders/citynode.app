@@ -156,6 +156,11 @@ export const InitOptionsSchema = z.object({
   noInstall: z.boolean().default(false),
 });
 
+export const PhaseTimingSchema = z.object({
+  name: z.string(),
+  durationMs: z.number(),
+});
+
 export const InitResultSchema = z.object({
   status: z.enum(["initialized", "error"]),
   directory: z.string(),
@@ -166,6 +171,7 @@ export const InitResultSchema = z.object({
   extends: z.string(),
   plugins: z.array(z.string()).optional(),
   filesCopied: z.number(),
+  timings: z.array(PhaseTimingSchema).optional(),
   error: z.string().optional(),
 });
 
@@ -203,6 +209,7 @@ export const UpgradeResultSchema = z.object({
   migrated: z.array(z.string()).optional(),
   availablePlugins: z.array(z.string()).optional(),
   selectedPlugins: z.array(z.string()).optional(),
+  timings: z.array(PhaseTimingSchema).optional(),
   changelogUrl: z.string().optional(),
   error: z.string().optional(),
 });
@@ -307,6 +314,7 @@ export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
 export type InitOptions = z.infer<typeof InitOptionsSchema>;
 export type InitResult = z.infer<typeof InitResultSchema>;
+export type PhaseTiming = z.infer<typeof PhaseTimingSchema>;
 export type SyncOptions = z.infer<typeof SyncOptionsSchema>;
 export type SyncResult = z.infer<typeof SyncResultSchema>;
 export type UpgradeOptions = z.infer<typeof UpgradeOptionsSchema>;

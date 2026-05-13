@@ -20,6 +20,7 @@ import {
 import { promptInitOptions } from "./cli/prompts";
 import { getStatus } from "./cli/status";
 import { syncTemplate } from "./cli/sync";
+import { timePhase } from "./cli/timing";
 import { upgradeTemplate } from "./cli/upgrade";
 import {
   buildRuntimePluginsForConfig,
@@ -30,8 +31,12 @@ import {
   resolveLocalDevelopmentPath,
   writeResolvedConfig,
 } from "./config";
-import { type BosConfigResult, bosContract, type PluginListResult } from "./contract";
-import { devApp, startApp } from "./dev-session";
+import {
+  type BosConfigResult,
+  bosContract,
+  type PhaseTiming,
+  type PluginListResult,
+} from "./contract";
 import {
   buildRegistryConfigUrl,
   buildRegistryConfigUrlForNetwork,
@@ -57,6 +62,10 @@ import type { BosConfig, BosPluginRef, RuntimeConfig, SourceMode } from "./types
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
+
+async function loadDevSession() {
+  return import("./dev-session");
+}
 
 const buildCommands: Record<string, { cmd: string; args: string[] }> = {
   host: { cmd: "bun", args: ["run", "build"] },
@@ -838,6 +847,7 @@ export default createPlugin({
         interactive: input.interactive,
       };
 
+      const { devApp } = await loadDevSession();
       devApp(orchestrator, services, runtimeConfig);
 
       return {
@@ -998,6 +1008,7 @@ export default createPlugin({
         noLogs: true,
       };
 
+      const { startApp } = await loadDevSession();
       startApp(orchestrator, services, runtimeConfig);
       return {
         status: "running" as const,
@@ -1261,6 +1272,7 @@ export default createPlugin({
 
     init: builder.init.handler(async ({ input }) => {
       try {
+        const timings: PhaseTiming[] = [];
         let extendsAccount = input.extendsAccount;
         let extendsGateway = input.extendsGateway;
         let directory = input.directory;
@@ -1283,7 +1295,9 @@ export default createPlugin({
         let parentPluginKeys: string[] = [];
         let parentConfig: BosConfig | null = null;
         try {
-          parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+          parentConfig = await timePhase(timings, "parent config", () =>
+            fetchParentConfig(extendsAccount!, extendsGateway!),
+          );
           if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
             parentPluginKeys = Object.keys(parentConfig.plugins);
           }
@@ -1316,7 +1330,9 @@ export default createPlugin({
 
         if (!parentConfig) {
           try {
-            parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+            parentConfig = await timePhase(timings, "parent config", () =>
+              fetchParentConfig(extendsAccount!, extendsGateway!),
+            );
           } catch {
             return {
               status: "error" as const,
@@ -1328,6 +1344,7 @@ export default createPlugin({
               extends: `bos://${extendsAccount}/${extendsGateway}`,
               plugins: plugins ?? [],
               filesCopied: 0,
+              timings,
               error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
             };
           }
@@ -1337,11 +1354,13 @@ export default createPlugin({
           sourceDir,
           parentConfig: resolvedParentConfig,
           cleanup,
-        } = await resolveSourceDir({
-          extendsAccount,
-          extendsGateway,
-          source: input.source,
-        });
+        } = await timePhase(timings, "template source", () =>
+          resolveSourceDir({
+            extendsAccount,
+            extendsGateway,
+            source: input.source,
+          }),
+        );
 
         parentConfig = resolvedParentConfig;
 
@@ -1375,43 +1394,59 @@ export default createPlugin({
           const s = p.spinner();
           s.start("Setting up project");
 
-          const filesCopied = await copyFilteredFiles(sourceDir, targetDir, patterns, {
-            withHost,
-            plugins,
-            pluginRoutes,
-          });
+          const filesCopied = await timePhase(timings, "copy files", () =>
+            copyFilteredFiles(sourceDir, targetDir, patterns, {
+              withHost,
+              plugins,
+              pluginRoutes,
+            }),
+          );
 
-          await personalizeConfig(targetDir, {
-            extendsAccount,
-            extendsGateway,
-            account: account || extendsAccount,
-            domain: domain || extendsGateway,
-            plugins,
-            pluginRoutes,
-            workspaceOpts: { sourceDir },
-            withHost,
-          });
+          await timePhase(timings, "personalize config", () =>
+            personalizeConfig(targetDir, {
+              extendsAccount,
+              extendsGateway,
+              account: account || extendsAccount,
+              domain: domain || extendsGateway,
+              plugins,
+              pluginRoutes,
+              workspaceOpts: { sourceDir },
+              withHost,
+            }),
+          );
 
-          await writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
-            withHost,
-            plugins,
-            pluginRoutes,
-          });
+          await timePhase(timings, "write snapshot", () =>
+            writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
+              withHost,
+              plugins,
+              pluginRoutes,
+            }),
+          );
 
-          const initConfig = await loadConfig({ cwd: targetDir });
+          const initConfig = await timePhase(timings, "resolve config", () =>
+            loadConfig({ cwd: targetDir }),
+          );
           if (initConfig?.runtime) {
-            writeGeneratedInfra(targetDir, initConfig.runtime);
+            await timePhase(timings, "generate env/docker", async () => {
+              writeGeneratedInfra(targetDir, initConfig.runtime);
+            });
           }
-          ensureEnvFile(targetDir);
+          await timePhase(timings, "create env file", async () => {
+            ensureEnvFile(targetDir);
+          });
 
           if (!input.noInstall) {
-            await runBunInstall(targetDir);
-            await runTypesGen(targetDir);
-            await generateDatabaseMigrations(targetDir);
+            await timePhase(timings, "install dependencies", () => runBunInstall(targetDir));
+            await timePhase(timings, "generate types", () => runTypesGen(targetDir));
+            await timePhase(timings, "generate migrations", () =>
+              generateDatabaseMigrations(targetDir),
+            );
           }
 
-          if (initConfig?.config) {
-            await generateCodeArtifacts(targetDir, initConfig.config);
+          if (input.noInstall && initConfig?.config) {
+            await timePhase(timings, "generate code artifacts", () =>
+              generateCodeArtifacts(targetDir, initConfig.config),
+            );
           }
 
           s.stop("Project initialized");
@@ -1426,7 +1461,7 @@ export default createPlugin({
               const dockerSpinner = p.spinner();
               dockerSpinner.start("Starting Docker services");
               try {
-                await runDockerComposeUp(targetDir);
+                await timePhase(timings, "docker compose up", () => runDockerComposeUp(targetDir));
                 dockerSpinner.stop("Docker services ready");
               } catch (error) {
                 dockerSpinner.stop("Docker services not started");
@@ -1447,6 +1482,7 @@ export default createPlugin({
             extends: `bos://${extendsAccount}/${extendsGateway}`,
             plugins,
             filesCopied,
+            timings,
           };
         } finally {
           await cleanup();
@@ -1465,6 +1501,7 @@ export default createPlugin({
               : "",
           plugins: input.plugins ?? [],
           filesCopied: 0,
+          timings: [],
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }

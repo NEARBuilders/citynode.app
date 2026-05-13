@@ -114,7 +114,7 @@ describe("bos init — typecheck with expected route errors", () => {
 
   afterAll(() => {
     rmSync(testDir, { recursive: true, force: true });
-  });
+  }, 30000);
 
   it("scaffolds project with template files", async () => {
     const patterns = await readTemplatekeep(REPO_ROOT);
@@ -159,6 +159,37 @@ describe("bos init — typecheck with expected route errors", () => {
   it("installs dependencies", async () => {
     await runBunInstall(testDir);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
+  }, 120000);
+
+  it("runs bos types gen after install", async () => {
+    const everyPluginBuild = await runCommand(
+      "bun",
+      ["run", "build"],
+      join(testDir, "packages", "every-plugin"),
+      120000,
+    );
+    expect(everyPluginBuild.code).toBe(0);
+
+    const everythingDevBuild = await runCommand(
+      "bun",
+      ["run", "build"],
+      join(testDir, "packages", "everything-dev"),
+      120000,
+    );
+    expect(everythingDevBuild.code).toBe(0);
+
+    const result = await runCommand(
+      "node",
+      ["dist/cli.mjs", "types", "gen", "--dry-run"],
+      join(testDir, "packages", "everything-dev"),
+      120000,
+    );
+
+    if (result.code !== 0) {
+      console.error(`\nbos types gen failed:\n${result.stdout}${result.stderr}`);
+    }
+
+    expect(result.code).toBe(0);
   }, 120000);
 
   it("typechecks api with zero unexpected errors", async () => {

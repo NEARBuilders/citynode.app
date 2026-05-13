@@ -3,12 +3,13 @@ import { join } from "node:path";
 import process from "node:process";
 import * as p from "@clack/prompts";
 import { glob } from "glob";
-import type { UpgradeOptions, UpgradeResult } from "../contract";
+import type { PhaseTiming, UpgradeOptions, UpgradeResult } from "../contract";
 import { resolveExtendsRef } from "../merge";
 import { saveBosConfig } from "../utils/save-config";
 import { readInstalledFrameworkVersion } from "./framework-version";
 import { fetchParentConfig, runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
+import { timePhase } from "./timing";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
 
@@ -333,38 +334,52 @@ export async function upgradeTemplate(
   projectDir: string,
   options: UpgradeOptions,
 ): Promise<UpgradeResult> {
+  const timings: PhaseTiming[] = [];
   const pkgPath = join(projectDir, "package.json");
   if (!existsSync(pkgPath)) {
     return {
       status: "error",
       packages: [],
+      timings,
       error: "No package.json found in current directory",
     };
   }
 
-  const packages: UpgradeResult["packages"] = [];
+  const { packages, catalogVersionUpdates } = await timePhase(
+    timings,
+    "check package versions",
+    async () => {
+      const nextPackages: UpgradeResult["packages"] = [];
 
-  for (const name of FRAMEWORK_PACKAGES) {
-    const installed = readInstalledVersion(projectDir, name);
-    const latest = await fetchLatestNpmVersion(name);
+      for (const name of FRAMEWORK_PACKAGES) {
+        const installed = readInstalledVersion(projectDir, name);
+        const latest = await fetchLatestNpmVersion(name);
 
-    if (!latest) {
-      packages.push({ name, from: installed, to: installed ?? "unknown" });
-      continue;
-    }
+        if (!latest) {
+          nextPackages.push({ name, from: installed, to: installed ?? "unknown" });
+          continue;
+        }
 
-    packages.push({ name, from: installed, to: latest });
-  }
+        nextPackages.push({ name, from: installed, to: latest });
+      }
 
-  const catalogVersionUpdates: Array<{ name: string; from: string | undefined; to: string }> = [];
-  for (const name of CATALOG_TOOL_PACKAGES) {
-    const installed = readInstalledVersion(projectDir, name);
-    if (!installed) continue;
-    const latest = await fetchLatestNpmVersion(name);
-    if (!latest) continue;
-    if (installed === latest) continue;
-    catalogVersionUpdates.push({ name, from: installed, to: latest });
-  }
+      const nextCatalogVersionUpdates: Array<{
+        name: string;
+        from: string | undefined;
+        to: string;
+      }> = [];
+      for (const name of CATALOG_TOOL_PACKAGES) {
+        const installed = readInstalledVersion(projectDir, name);
+        if (!installed) continue;
+        const latest = await fetchLatestNpmVersion(name);
+        if (!latest) continue;
+        if (installed === latest) continue;
+        nextCatalogVersionUpdates.push({ name, from: installed, to: latest });
+      }
+
+      return { packages: nextPackages, catalogVersionUpdates: nextCatalogVersionUpdates };
+    },
+  );
 
   const hasFrameworkUpdates = packages.some((p) => p.from !== p.to && p.from !== undefined);
   const hasCatalogUpdates = catalogVersionUpdates.length > 0;
@@ -372,7 +387,11 @@ export async function upgradeTemplate(
 
   if (options.dryRun) {
     let changelogUrl: string | undefined;
-    const pluginOptions = options.noSync ? null : await loadParentPluginOptions(projectDir);
+    const pluginOptions = options.noSync
+      ? null
+      : await timePhase(timings, "discover parent plugins", () =>
+          loadParentPluginOptions(projectDir),
+        );
     if (hasUpdates) {
       const configPath = join(projectDir, "bos.config.json");
       let parentConfig: Record<string, unknown> | null = null;
@@ -394,59 +413,68 @@ export async function upgradeTemplate(
         ...catalogVersionUpdates.map((u) => ({ name: u.name, from: u.from, to: u.to })),
       ],
       availablePlugins: pluginOptions?.newPluginKeys,
+      timings,
       changelogUrl,
     };
   }
 
-  for (const pkg of packages) {
-    if (pkg.from !== undefined && pkg.from !== pkg.to) {
-      updateRootPackageVersion(projectDir, pkg.name, pkg.to);
-    }
-  }
-
-  for (const update of catalogVersionUpdates) {
-    updateRootCatalogVersion(projectDir, update.name, update.to);
-  }
-
-  const workspacePkgPaths = await findWorkspacePackageJsons(projectDir);
-  for (const pkgPath of workspacePkgPaths) {
+  await timePhase(timings, "apply package updates", async () => {
     for (const pkg of packages) {
       if (pkg.from !== undefined && pkg.from !== pkg.to) {
-        updateWorkspacePackageRefInFile(pkgPath, pkg.name);
+        updateRootPackageVersion(projectDir, pkg.name, pkg.to);
       }
     }
+
     for (const update of catalogVersionUpdates) {
-      updateWorkspacePackageRefInFile(pkgPath, update.name);
+      updateRootCatalogVersion(projectDir, update.name, update.to);
     }
-  }
+
+    const workspacePkgPaths = await findWorkspacePackageJsons(projectDir);
+    for (const pkgPath of workspacePkgPaths) {
+      for (const pkg of packages) {
+        if (pkg.from !== undefined && pkg.from !== pkg.to) {
+          updateWorkspacePackageRefInFile(pkgPath, pkg.name);
+        }
+      }
+      for (const update of catalogVersionUpdates) {
+        updateWorkspacePackageRefInFile(pkgPath, update.name);
+      }
+    }
+  });
 
   let syncResult: UpgradeResult["sync"];
   let addedPlugins: string[] = [];
   if (!options.noSync) {
-    if (!options.dryRun) {
-      addedPlugins = await addSelectedParentPlugins(projectDir);
-    }
-
-    syncResult = await syncTemplate(projectDir, {
-      dryRun: false,
-      force: options.force,
-      noInstall: true,
+    addedPlugins = await timePhase(timings, "discover parent plugins", async () => {
+      if (options.dryRun) return [];
+      return addSelectedParentPlugins(projectDir);
     });
+
+    syncResult = await timePhase(timings, "sync template", () =>
+      syncTemplate(projectDir, {
+        dryRun: false,
+        force: options.force,
+        noInstall: true,
+      }),
+    );
   }
 
   if ((hasUpdates || addedPlugins.length > 0) && !options.noInstall) {
-    await runBunInstall(projectDir);
-    await runTypesGen(projectDir);
+    await timePhase(timings, "install dependencies", () => runBunInstall(projectDir));
+    await timePhase(timings, "generate types", () => runTypesGen(projectDir));
   }
 
-  const migratedFiles = await rewriteLegacyUiImports(projectDir);
-  for (const file of OBSOLETE_FILES) {
-    const filePath = join(projectDir, file);
-    if (existsSync(filePath)) {
-      rmSync(filePath);
-      migratedFiles.push(file);
+  const migratedFiles = await timePhase(timings, "clean obsolete files", async () => {
+    const nextMigratedFiles = await rewriteLegacyUiImports(projectDir);
+    for (const file of OBSOLETE_FILES) {
+      const filePath = join(projectDir, file);
+      if (existsSync(filePath)) {
+        rmSync(filePath);
+        nextMigratedFiles.push(file);
+      }
     }
-  }
+    return nextMigratedFiles;
+  });
 
   let changelogUrl: string | undefined;
   const mainPkg = packages.find((p) => p.name === "everything-dev");
@@ -470,6 +498,7 @@ export async function upgradeTemplate(
     sync: syncResult,
     migrated: migratedFiles.length > 0 ? migratedFiles : undefined,
     selectedPlugins: addedPlugins.length > 0 ? addedPlugins : undefined,
+    timings,
     changelogUrl,
   };
 }

@@ -2,6 +2,7 @@
 import { findCommandDescriptor } from "./cli/catalog";
 import { printHelp } from "./cli/help";
 import { parseCommandInput } from "./cli/parse";
+import { formatDuration, sumPhaseDurations } from "./cli/timing";
 import { findConfigPath } from "./config";
 import bosPlugin from "./plugin";
 import { createPluginRuntime } from "./sdk";
@@ -48,6 +49,18 @@ function formatTimeAgo(isoTimestamp: string): string {
 
 function normalizeVersion(v: string): string {
   return v.replace(/^[\^~>=v]+/, "").trim();
+}
+
+function printTimingSummary(timings: Array<{ name: string; durationMs: number }> | undefined) {
+  if (!timings || timings.length === 0) return;
+
+  console.log(`  ${colors.dim("Timings:")}`);
+  for (const timing of timings) {
+    console.log(`    ${colors.dim(timing.name.padEnd(22))} ${formatDuration(timing.durationMs)}`);
+  }
+  console.log(
+    `    ${colors.dim("total".padEnd(22))} ${formatDuration(sumPhaseDurations(timings))}`,
+  );
 }
 
 async function warnIfOutdated(client: any, command: string): Promise<void> {
@@ -152,6 +165,7 @@ async function main() {
       if (result.plugins && result.plugins.length > 0)
         console.log(`  ${colors.dim("Plugins:")} ${result.plugins.join(", ")}`);
       console.log(`  ${colors.dim("Files copied:")} ${result.filesCopied}`);
+      printTimingSummary(result.timings);
       console.log();
       console.log(colors.dim("  Next steps:"));
       console.log(colors.dim(`    cd ${result.directory}`));
@@ -246,6 +260,7 @@ async function main() {
       if (result.selectedPlugins && result.selectedPlugins.length > 0) {
         console.log(`  ${colors.dim("Added plugins:")} ${result.selectedPlugins.join(", ")}`);
       }
+      printTimingSummary(result.timings);
       if (result.sync) {
         const sync = result.sync;
         if (sync.updated.length > 0) {
