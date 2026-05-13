@@ -1213,11 +1213,17 @@ export default createPlugin({
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
 
+        const s = p.spinner();
+        s.start("Initializing project");
+
         let parentPluginKeys: string[] = [];
         let parentConfig: BosConfig | null = null;
         try {
-          parentConfig = await timePhase(timings, "parent config", () =>
-            fetchParentConfig(extendsAccount, extendsGateway),
+          parentConfig = await timePhase(
+            timings,
+            "parent config",
+            () => fetchParentConfig(extendsAccount, extendsGateway),
+            s,
           );
           if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
             parentPluginKeys = Object.keys(parentConfig.plugins);
@@ -1225,6 +1231,7 @@ export default createPlugin({
         } catch {}
 
         if (!input.noInteractive) {
+          s.stop("Config fetched");
           const prompted = await promptInitOptions({
             extends: `bos://${extendsAccount}/${extendsGateway}`,
             directory,
@@ -1241,6 +1248,7 @@ export default createPlugin({
           domain = prompted.domain;
           withHost = prompted.withHost;
           plugins = prompted.plugins;
+          s.start("Setting up project");
         }
 
         directory = directory || domain || extendsGateway;
@@ -1250,10 +1258,14 @@ export default createPlugin({
 
         if (!parentConfig) {
           try {
-            parentConfig = await timePhase(timings, "parent config", () =>
-              fetchParentConfig(extendsAccount, extendsGateway),
+            parentConfig = await timePhase(
+              timings,
+              "parent config",
+              () => fetchParentConfig(extendsAccount, extendsGateway),
+              s,
             );
           } catch {
+            s.stop("Failed");
             return {
               status: "error" as const,
               directory,
@@ -1273,12 +1285,16 @@ export default createPlugin({
           sourceDir,
           parentConfig: resolvedParentConfig,
           cleanup,
-        } = await timePhase(timings, "template source", () =>
-          resolveSourceDir({
-            extendsAccount,
-            extendsGateway,
-            source: input.source,
-          }),
+        } = await timePhase(
+          timings,
+          "template source",
+          () =>
+            resolveSourceDir({
+              extendsAccount,
+              extendsGateway,
+              source: input.source,
+            }),
+          s,
         );
 
         parentConfig = resolvedParentConfig;
@@ -1286,25 +1302,27 @@ export default createPlugin({
         const isMinimalScaffold = sourceDir === "";
 
         try {
-          const s = p.spinner();
-          s.start("Setting up project");
-
           let filesCopied: number;
 
           if (isMinimalScaffold) {
-            filesCopied = await timePhase(timings, "scaffold project", () =>
-              scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
-                extendsAccount,
-                extendsGateway,
-                account: account || extendsAccount,
-                domain,
-                plugins,
-                withHost,
-              }),
+            filesCopied = await timePhase(
+              timings,
+              "scaffold project",
+              () =>
+                scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
+                  extendsAccount,
+                  extendsGateway,
+                  account: account || extendsAccount,
+                  domain,
+                  plugins,
+                  withHost,
+                }),
+              s,
             );
           } else {
             const patterns = await readTemplatekeep(sourceDir);
             if (patterns.length === 0) {
+              s.stop("Failed");
               return {
                 status: "error" as const,
                 directory,
@@ -1330,59 +1348,90 @@ export default createPlugin({
               }
             }
 
-            filesCopied = await timePhase(timings, "copy files", () =>
-              copyFilteredFiles(sourceDir, targetDir, patterns, {
-                withHost,
-                plugins,
-                pluginRoutes,
-              }),
+            filesCopied = await timePhase(
+              timings,
+              "copy files",
+              () =>
+                copyFilteredFiles(sourceDir, targetDir, patterns, {
+                  withHost,
+                  plugins,
+                  pluginRoutes,
+                }),
+              s,
             );
 
-            await timePhase(timings, "personalize config", () =>
-              personalizeConfig(targetDir, {
-                extendsAccount,
-                extendsGateway,
-                account: account || extendsAccount,
-                domain: domain || extendsGateway,
-                plugins,
-                pluginRoutes,
-                workspaceOpts: { sourceDir },
-                withHost,
-              }),
+            await timePhase(
+              timings,
+              "personalize config",
+              () =>
+                personalizeConfig(targetDir, {
+                  extendsAccount,
+                  extendsGateway,
+                  account: account || extendsAccount,
+                  domain: domain || extendsGateway,
+                  plugins,
+                  pluginRoutes,
+                  workspaceOpts: { sourceDir },
+                  withHost,
+                }),
+              s,
             );
 
-            await timePhase(timings, "write snapshot", () =>
-              writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
-                withHost,
-                plugins,
-                pluginRoutes,
-              }),
+            await timePhase(
+              timings,
+              "write snapshot",
+              () =>
+                writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
+                  withHost,
+                  plugins,
+                  pluginRoutes,
+                }),
+              s,
             );
           }
 
-          const initConfig = await timePhase(timings, "resolve config", () =>
-            loadConfig({ cwd: targetDir }),
+          const initConfig = await timePhase(
+            timings,
+            "resolve config",
+            () => loadConfig({ cwd: targetDir }),
+            s,
           );
           if (initConfig?.runtime) {
-            await timePhase(timings, "generate env/docker", async () => {
-              writeGeneratedInfra(targetDir, initConfig.runtime);
-            });
+            await timePhase(
+              timings,
+              "generate env/docker",
+              async () => {
+                writeGeneratedInfra(targetDir, initConfig.runtime);
+              },
+              s,
+            );
           }
-          await timePhase(timings, "create env file", async () => {
-            ensureEnvFile(targetDir);
-          });
+          await timePhase(
+            timings,
+            "create env file",
+            async () => {
+              ensureEnvFile(targetDir);
+            },
+            s,
+          );
 
           if (!input.noInstall) {
-            await timePhase(timings, "install dependencies", () => runBunInstall(targetDir));
-            await timePhase(timings, "generate types", () => runTypesGen(targetDir));
-            await timePhase(timings, "generate migrations", () =>
-              generateDatabaseMigrations(targetDir),
+            await timePhase(timings, "install dependencies", () => runBunInstall(targetDir), s);
+            await timePhase(timings, "generate types", () => runTypesGen(targetDir), s);
+            await timePhase(
+              timings,
+              "generate migrations",
+              () => generateDatabaseMigrations(targetDir),
+              s,
             );
           }
 
           if (input.noInstall && initConfig?.config) {
-            await timePhase(timings, "generate code artifacts", () =>
-              generateCodeArtifacts(targetDir, initConfig.config),
+            await timePhase(
+              timings,
+              "generate code artifacts",
+              () => generateCodeArtifacts(targetDir, initConfig.config),
+              s,
             );
           }
 
