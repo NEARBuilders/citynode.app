@@ -103,7 +103,7 @@ describe("extends chain", () => {
     expect(merged.repository).toBe("https://github.com/parent");
   });
 
-  it("null-sentinel removes inherited plugin", () => {
+  it("null-sentinel does not inherit parent plugins", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
@@ -117,11 +117,11 @@ describe("extends chain", () => {
     };
     const merged = mergeBosConfigWithExtends(parent as any, child as any);
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.apps).toBeDefined();
+    expect(plugins.apps).toBeUndefined();
     expect(plugins.projects).toBeUndefined();
   });
 
-  it("false-sentinel removes inherited plugin", () => {
+  it("false-sentinel does not inherit parent plugins", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
@@ -135,8 +135,8 @@ describe("extends chain", () => {
     };
     const merged = mergeBosConfigWithExtends(parent as any, child as any);
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.apps).toBeDefined();
-    expect(plugins.projects).toBeUndefined();
+    expect(plugins.apps).toBeUndefined();
+    expect(plugins.projects).toBe(false);
   });
 
   it("deep merges shared.ui — child version overrides, parent singleton preserved", () => {
@@ -192,7 +192,7 @@ describe("extends chain", () => {
     expect(api.secrets).toContain("EXTRA_SECRET");
   });
 
-  it("plugin variables are deep-merged across extends", () => {
+  it("plugin config comes only from the child across extends", () => {
     const parent = {
       plugins: {
         myplugin: {
@@ -212,7 +212,15 @@ describe("extends chain", () => {
       string,
       unknown
     >;
-    expect(myplugin.variables).toEqual({ namespace: "child.near", region: "us-east" });
+    expect(myplugin.variables).toEqual({ namespace: "child.near" });
+  });
+
+  it("resolved config does not inherit parent plugins through extends", async () => {
+    clearConfigCache();
+    const loaded = await loadConfig({ cwd: childDir });
+    expect(loaded?.config.plugins).toEqual({
+      apps: { variables: { namespace: "child.near" } },
+    });
   });
 
   it("canonical ordering is preserved after merge", () => {
@@ -229,8 +237,8 @@ describe("extends chain", () => {
     const keys = Object.keys(merged);
     expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("repository"));
     expect(keys.indexOf("repository")).toBeLessThan(keys.indexOf("app"));
-    expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("plugins"));
-    expect(keys.indexOf("plugins")).toBeLessThan(keys.indexOf("shared"));
+    expect(keys.includes("plugins")).toBe(false);
+    expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("shared"));
   });
 });
 
@@ -260,7 +268,7 @@ describe("circular extends detection", () => {
 });
 
 describe("multi-level extends chain", () => {
-  it("grandchild inherits from grandparent through parent", () => {
+  it("grandchild inherits shared config but not parent plugins through parent", () => {
     const grandparent = {
       account: "gp.near",
       domain: "gp.dev",
@@ -307,9 +315,6 @@ describe("multi-level extends chain", () => {
     expect(ui.effect.singleton).toBe(true);
     expect(ui.effect.strictVersion).toBe(false);
 
-    const plugins = secondMerge.plugins as Record<string, unknown>;
-    expect(plugins.apps).toBeDefined();
-    expect(plugins.projects).toBeDefined();
-    expect(plugins.analytics).toBeUndefined();
+    expect(secondMerge.plugins).toBeUndefined();
   });
 });

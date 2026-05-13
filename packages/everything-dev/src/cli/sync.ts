@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { glob } from "glob";
+import { loadConfig } from "../config";
 import type { SyncOptions, SyncResult } from "../contract";
 import {
   isPlainObject as isPlainObjectFromMerge,
@@ -17,6 +18,7 @@ import {
 } from "../merge";
 import type { BosPluginRef } from "../types";
 import { isPathExcluded } from "../utils/path-match";
+import { writeGeneratedInfra } from "./infra";
 import {
   personalizeConfig,
   readTemplatekeep,
@@ -27,10 +29,12 @@ import {
 import { readSnapshot, writeSnapshot } from "./snapshot";
 
 const FRAMEWORK_OWNED_SYNC_FILES = new Set([
+  ".env.example",
   ".gitignore",
   "biome.json",
   "bos.config.json",
   "package.json",
+  "docker-compose.yml",
   ".github/renovate.json",
   ".github/workflows/ci.yml",
   ".github/workflows/release-sync.yml",
@@ -493,6 +497,11 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       workspaceOpts: { sourceDir },
       mode: "sync",
     });
+
+    const syncedConfig = await loadConfig({ cwd: projectDir });
+    if (syncedConfig?.runtime) {
+      writeGeneratedInfra(projectDir, syncedConfig.runtime);
+    }
 
     if (!options.noInstall) {
       await runBunInstall(projectDir);

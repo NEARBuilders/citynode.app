@@ -609,6 +609,10 @@ export async function runTypesGen(destination: string): Promise<void> {
   await execCommand("node_modules/.bin/bos", ["types", "gen"], destination);
 }
 
+export async function runDockerComposeUp(destination: string): Promise<void> {
+  await execCommand("docker", ["compose", "up", "-d", "--wait"], destination);
+}
+
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
   "everything-dev": "packages/everything-dev",
   "every-plugin": "packages/every-plugin",

@@ -1,10 +1,10 @@
-import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
+import { ensureEnvFile, writeGeneratedInfra } from "./cli/infra";
 import {
   copyFilteredFiles,
   fetchParentConfig,
@@ -13,6 +13,7 @@ import {
   readTemplatekeep,
   resolveSourceDir,
   runBunInstall,
+  runDockerComposeUp,
   runTypesGen,
   writeInitSnapshot,
 } from "./cli/init";
@@ -56,38 +57,6 @@ import type { BosConfig, BosPluginRef, RuntimeConfig, SourceMode } from "./types
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
-
-function ensureEnvFile(configDir: string, opts?: { domain?: string }): void {
-  const envPath = join(configDir, ".env");
-  const examplePath = join(configDir, ".env.example");
-
-  if (existsSync(envPath)) return;
-
-  if (!existsSync(examplePath)) return;
-
-  const content = readFileSync(examplePath, "utf-8");
-  const lines = content.split("\n");
-
-  const secret = randomBytes(32).toString("base64url");
-  const corsOrigin = opts?.domain
-    ? `http://localhost:3000,https://${opts.domain}`
-    : "http://localhost:3000";
-
-  const updated = lines
-    .map((line) => {
-      if (/^BETTER_AUTH_SECRET=/.test(line)) {
-        return `BETTER_AUTH_SECRET=${secret}`;
-      }
-      if (/^CORS_ORIGIN=/.test(line)) {
-        return `CORS_ORIGIN=${corsOrigin}`;
-      }
-      return line;
-    })
-    .join("\n");
-
-  writeFileSync(envPath, updated);
-  p.log.info(`Created .env from .env.example with generated BETTER_AUTH_SECRET`);
-}
 
 const buildCommands: Record<string, { cmd: string; args: string[] }> = {
   host: { cmd: "bun", args: ["run", "build"] },
@@ -1342,6 +1311,7 @@ export default createPlugin({
         }
 
         directory = directory || domain || extendsGateway;
+        const targetDir = resolve(directory);
         plugins = plugins ?? [];
 
         if (!parentConfig) {
@@ -1405,13 +1375,13 @@ export default createPlugin({
           const s = p.spinner();
           s.start("Setting up project");
 
-          const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns, {
+          const filesCopied = await copyFilteredFiles(sourceDir, targetDir, patterns, {
             withHost,
             plugins,
             pluginRoutes,
           });
 
-          await personalizeConfig(directory, {
+          await personalizeConfig(targetDir, {
             extendsAccount,
             extendsGateway,
             account: account || extendsAccount,
@@ -1422,26 +1392,50 @@ export default createPlugin({
             withHost,
           });
 
-          await writeInitSnapshot(directory, extendsAccount, extendsGateway, sourceDir, patterns, {
+          await writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
             withHost,
             plugins,
             pluginRoutes,
           });
 
-          ensureEnvFile(directory, { domain });
+          const initConfig = await loadConfig({ cwd: targetDir });
+          if (initConfig?.runtime) {
+            writeGeneratedInfra(targetDir, initConfig.runtime);
+          }
+          ensureEnvFile(targetDir);
 
           if (!input.noInstall) {
-            await runBunInstall(directory);
-            await runTypesGen(directory);
-            await generateDatabaseMigrations(directory);
+            await runBunInstall(targetDir);
+            await runTypesGen(targetDir);
+            await generateDatabaseMigrations(targetDir);
           }
 
-          const initConfig = await loadConfig({ cwd: directory });
           if (initConfig?.config) {
-            await generateCodeArtifacts(directory, initConfig.config);
+            await generateCodeArtifacts(targetDir, initConfig.config);
           }
 
           s.stop("Project initialized");
+
+          if (!input.noInteractive) {
+            const shouldStartDocker = await p.confirm({
+              message: "Run docker compose up -d --wait?",
+              initialValue: true,
+            });
+
+            if (shouldStartDocker === true) {
+              const dockerSpinner = p.spinner();
+              dockerSpinner.start("Starting Docker services");
+              try {
+                await runDockerComposeUp(targetDir);
+                dockerSpinner.stop("Docker services ready");
+              } catch (error) {
+                dockerSpinner.stop("Docker services not started");
+                p.log.warn(
+                  `docker compose up -d --wait failed: ${error instanceof Error ? error.message : error}`,
+                );
+              }
+            }
+          }
 
           return {
             status: "initialized" as const,
