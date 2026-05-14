@@ -676,12 +676,13 @@ export async function runBunInstallForUpgrade(
   destination: string,
   spinner?: { message: (msg: string) => void },
 ): Promise<void> {
-  const lockfilePath = join(destination, "bun.lock");
-  if (existsSync(lockfilePath)) {
-    rmSync(lockfilePath, { force: true });
-  }
-
-  await runWithProgress("bun", ["install"], destination, spinner, "Installing dependencies");
+  await runWithProgress(
+    "bun",
+    ["install", "--force"],
+    destination,
+    spinner,
+    "Installing dependencies",
+  );
 }
 
 export async function runTypesGen(
