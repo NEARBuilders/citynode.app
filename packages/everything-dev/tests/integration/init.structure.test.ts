@@ -103,7 +103,7 @@ describe("bos init — structure", () => {
       expect(existsSync(join(noPluginsDir, "plugins"))).toBe(false);
 
       const config = JSON.parse(readFileSync(join(noPluginsDir, "bos.config.json"), "utf-8"));
-      expect(config.plugins).toEqual({});
+      expect(config.plugins).toBeUndefined();
 
       const pkg = JSON.parse(readFileSync(join(noPluginsDir, "package.json"), "utf-8")) as {
         workspaces?: { packages?: string[] };

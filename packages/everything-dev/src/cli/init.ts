@@ -444,6 +444,7 @@ export async function personalizeConfig(
             plugins[pluginKey] = pluginObj;
           } else if (plugin && typeof plugin === "object") {
             pluginObj = { ...(plugin as Record<string, unknown>) };
+            plugins[pluginKey] = pluginObj;
           } else {
             continue;
           }
@@ -472,12 +473,21 @@ export async function personalizeConfig(
         ws.packages = ws.packages.filter((p: string) => {
           if (p.startsWith("packages/")) return false;
           if (p === "host") return has("host");
-          if (p === "plugins/*") return has("plugins") && (opts.plugins?.length ?? 0) > 0;
+          if (p === "plugins/*") return false;
           const pluginMatch = p.match(/^plugins\/([^/]+)/);
           if (pluginMatch)
             return has("plugins") && (opts.plugins?.includes(pluginMatch[1]) ?? true);
           return true;
         });
+
+        if (has("plugins") && (opts.plugins?.length ?? 0) > 0) {
+          for (const plugin of opts.plugins ?? []) {
+            const pluginWorkspace = `plugins/${plugin}`;
+            if (!ws.packages.includes(pluginWorkspace)) {
+              ws.packages.push(pluginWorkspace);
+            }
+          }
+        }
       }
     }
 
