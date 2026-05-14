@@ -1747,23 +1747,3 @@ function extractTransactionHash(error: unknown) {
   const match = message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
   return match?.[1];
 }
-
-const OVERRIDE_WORKSPACE_MAP: Record<string, string[]> = {
-  ui: ["ui"],
-  api: ["api"],
-  host: ["host"],
-  plugins: [],
-};
-
-function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): string[] {
-  const workspaces: string[] = [];
-  for (const section of overrides) {
-    workspaces.push(...(OVERRIDE_WORKSPACE_MAP[section] ?? []));
-  }
-  if (plugins) {
-    for (const plugin of plugins) {
-      workspaces.push(`plugins/${plugin}`);
-    }
-  }
-  return workspaces;
-}

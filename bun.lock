@@ -69,7 +69,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -108,7 +108,7 @@
     },
     "packages/every-plugin": {
       "name": "every-plugin",
-      "version": "2.5.9",
+      "version": "2.5.10",
       "dependencies": {
         "@module-federation/enhanced": "catalog:",
         "@module-federation/node": "catalog:",
@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.18.0",
+      "version": "1.22.0",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
