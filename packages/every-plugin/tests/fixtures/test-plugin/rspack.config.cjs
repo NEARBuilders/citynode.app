@@ -1,4 +1,4 @@
-const { EveryPluginDevServer } = require("every-plugin/build/rspack");
+const { EveryPluginDevServer, FixMfDataUriPlugin } = require("every-plugin/build/rspack");
 const { withZephyr } = require("zephyr-rspack-plugin");
 
 module.exports = withZephyr({
@@ -17,5 +17,5 @@ module.exports = withZephyr({
     },
   },
 })({
-  plugins: [new EveryPluginDevServer()], // TODO: write test that this works
+  plugins: [new EveryPluginDevServer({ dts: false }), new FixMfDataUriPlugin()],
 });

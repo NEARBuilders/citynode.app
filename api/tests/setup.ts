@@ -1,16 +1,16 @@
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createPluginRuntime } from "every-plugin";
 import Plugin from "@/index";
 import pluginDevConfig from "../plugin.dev";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const testDbDir = mkdtempSync(join(tmpdir(), "everything-dev-api-test-"));
 
 const TEST_CONFIG = {
   variables: pluginDevConfig.config.variables,
   secrets: {
-    API_DATABASE_URL: "pglite:.bos/api-test/:memory:",
+    API_DATABASE_URL: `pglite:${testDbDir}`,
   },
 };
 
@@ -49,4 +49,6 @@ export async function teardown() {
     await _runtime.shutdown();
     _runtime = null;
   }
+
+  rmSync(testDbDir, { recursive: true, force: true });
 }

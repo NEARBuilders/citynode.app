@@ -1,6 +1,4 @@
-import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { RPCHandler } from "@orpc/server/fetch";
@@ -107,14 +105,22 @@ async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
   } satisfies ActiveRuntimeState;
 }
 
-function registerAllPaths(
-  app: Hono<HonoEnv>,
-  paths: string[],
-  handler: (c: Context<HonoEnv>) => Response | Promise<Response>,
-) {
-  for (const path of paths) {
-    app.all(path, handler);
+function isUiPublicAssetPath(pathname: string) {
+  if (pathname === "/") return false;
+  if (
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/__mf/") ||
+    pathname.startsWith("/_runtime/")
+  ) {
+    return false;
   }
+
+  if (["/health", "/remoteEntry.js", "/mf-manifest.json", "/mf-stats.json"].includes(pathname)) {
+    return false;
+  }
+
+  const lastSegment = pathname.split("/").pop() ?? "";
+  return /\.[A-Za-z0-9]+$/.test(lastSegment);
 }
 
 function buildRuntimeClientConfig(
@@ -632,45 +638,19 @@ export const createStartServer = (onReady?: () => void) =>
     };
 
     const proxyUiAssetRequest = (c: Context<HonoEnv>) => proxyRequest(c.req.raw, uiConfig.url);
-    const uiAssetPaths = [
-      "/static/*",
-      "/.well-known/*",
-      "/favicon.ico",
-      "/icon.svg",
-      "/manifest.json",
-      "/robots.txt",
-    ];
-    const hostAssetPaths = ["/README.md", "/skill.md", "/llms.txt"];
 
     const sessionMiddleware = createSessionMiddleware(plugins);
 
     registerAuthHandler(app, plugins);
     setupApiRoutes(app, config, plugins, sessionMiddleware, loadingState);
 
-    const shouldProxyUiAssets = isDev || uiConfig.source === "remote";
-
-    const staticRoot = "./dist";
-    const distExists = existsSync(staticRoot);
-    const staticMiddleware = distExists
-      ? serveStatic({ root: staticRoot })
-      : serveStatic({ root: "" });
-
-    for (const path of hostAssetPaths) {
-      if (distExists) {
-        app.use(path, staticMiddleware);
+    app.on(["GET", "HEAD"], "*", async (c: Context<HonoEnv>, next) => {
+      if (!isUiPublicAssetPath(c.req.path)) {
+        return next();
       }
-      app.get(path, (c: Context<HonoEnv>) => c.text("Not Found", 404));
-    }
 
-    if (!shouldProxyUiAssets) {
-      if (distExists) {
-        for (const path of uiAssetPaths) {
-          app.use(path, staticMiddleware);
-        }
-      }
-    } else {
-      registerAllPaths(app, uiAssetPaths, proxyUiAssetRequest);
-    }
+      return proxyUiAssetRequest(c);
+    });
 
     for (const [pluginKey, pluginConfig] of Object.entries(config.plugins ?? {}) as Array<
       [string, RuntimePlugin]

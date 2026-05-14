@@ -105,8 +105,8 @@ function handlerFactory(distDir: string) {
 }
 
 export default async function globalSetup() {
-  const repoRoot = path.resolve(__dirname, "../../..");
-  const uiDir = path.join(repoRoot, "demo", "ui");
+  const repoRoot = path.resolve(__dirname, "../..");
+  const uiDir = path.join(repoRoot, "ui");
   const distDir = path.join(uiDir, "dist");
 
   ensureUiBuild(uiDir);

@@ -1,2 +1,3 @@
-export * from "zod";
-export { z } from "zod";
+import * as z from "zod";
+
+export { z };

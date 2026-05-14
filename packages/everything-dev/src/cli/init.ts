@@ -752,60 +752,72 @@ const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
   "every-plugin": "packages/every-plugin",
 };
 
+function readJsonFile<T>(filePath: string): T {
+  return JSON.parse(readFileSync(filePath, "utf-8")) as T;
+}
+
+function tryResolvePackageJson(packageName: string): string | null {
+  try {
+    return require.resolve(`${packageName}/package.json`);
+  } catch {
+    return null;
+  }
+}
+
 function resolveFrameworkCatalog(): Record<string, string> {
   const catalog: Record<string, string> = {};
+  const everythingDevPackageJson = tryResolvePackageJson("everything-dev");
 
-  try {
-    const selfPkgPath = require.resolve("everything-dev/package.json");
-    const selfPkgDir = dirname(selfPkgPath);
-    const monorepoPkgPath = join(selfPkgDir, "..", "..", "package.json");
-    if (existsSync(monorepoPkgPath)) {
-      const monorepoPkg = JSON.parse(readFileSync(monorepoPkgPath, "utf-8")) as {
+  if (everythingDevPackageJson) {
+    try {
+      const selfPkgDir = dirname(everythingDevPackageJson);
+      const monorepoPkgPath = join(selfPkgDir, "..", "..", "package.json");
+      if (existsSync(monorepoPkgPath)) {
+        const monorepoPkg = readJsonFile<{
+          workspaces?: { catalog?: Record<string, string> };
+        }>(monorepoPkgPath);
+        const sourceCatalog = monorepoPkg.workspaces?.catalog;
+        if (sourceCatalog && typeof sourceCatalog === "object") {
+          for (const [name, version] of Object.entries(sourceCatalog)) {
+            if (typeof version === "string") {
+              catalog[name] = version;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    try {
+      const selfPkg = readJsonFile<{
+        version?: string;
         workspaces?: { catalog?: Record<string, string> };
-      };
-      const sourceCatalog = monorepoPkg.workspaces?.catalog;
+      }>(everythingDevPackageJson);
+      if (selfPkg.version && !catalog["everything-dev"]) {
+        catalog["everything-dev"] = `^${selfPkg.version}`;
+      }
+      const sourceCatalog = selfPkg.workspaces?.catalog;
       if (sourceCatalog && typeof sourceCatalog === "object") {
         for (const [name, version] of Object.entries(sourceCatalog)) {
-          if (typeof version === "string") {
+          if (typeof version === "string" && !catalog[name]) {
             catalog[name] = version;
           }
         }
       }
-    }
-  } catch {}
-
-  try {
-    const selfPkgPath = require.resolve("everything-dev/package.json");
-    const selfPkg = JSON.parse(readFileSync(selfPkgPath, "utf-8")) as {
-      version?: string;
-      workspaces?: { catalog?: Record<string, string> };
-    };
-    if (selfPkg.version && !catalog["everything-dev"]) {
-      catalog["everything-dev"] = `^${selfPkg.version}`;
-    }
-    const sourceCatalog = selfPkg.workspaces?.catalog;
-    if (sourceCatalog && typeof sourceCatalog === "object") {
-      for (const [name, version] of Object.entries(sourceCatalog)) {
-        if (typeof version === "string" && !catalog[name]) {
-          catalog[name] = version;
-        }
-      }
-    }
-  } catch {}
-
-  if (Object.keys(catalog).length > 0) {
-    return catalog;
+    } catch {}
   }
 
   for (const packageName of FRAMEWORK_PACKAGES) {
+    const resolved = tryResolvePackageJson(packageName);
+    if (!resolved) continue;
+
     try {
-      const resolved = require.resolve(`${packageName}/package.json`);
-      const pkg = JSON.parse(readFileSync(resolved, "utf-8")) as { version?: string };
+      const pkg = readJsonFile<{ version?: string }>(resolved);
       if (pkg.version) {
         catalog[packageName] = `^${pkg.version}`;
       }
     } catch {}
   }
+
   return catalog;
 }
 

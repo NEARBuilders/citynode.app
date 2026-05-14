@@ -95,6 +95,7 @@ export class MyService {
 ```typescript
 import { createPlugin } from "every-plugin";
 import { Effect } from "every-plugin/effect";
+import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
 import { MyService } from "./service";
@@ -186,23 +187,30 @@ Port assignments: host=3000, api=3001, auth=3002, ui=3003, ui-ssr=3004, plugins=
 
 ## Build Config (rspack.config.js)
 
-every-plugin provides rspack defaults via `EveryPluginDevServer`:
+every-plugin provides rspack helpers as plugins:
 
 ```javascript
-const { EveryPluginDevServer } = require("every-plugin/build/rspack");
+import {
+  EmitPluginManifest,
+  EveryPluginDevServer,
+  FixMfDataUriPlugin,
+} from "every-plugin/build/rspack";
 
-module.exports = EveryPluginDevServer.configure(__dirname, {
-  pluginId: "my-plugin",
-  port: 3010,
-});
+export default {
+  plugins: [
+    new EmitPluginManifest(),
+    new EveryPluginDevServer({ dts: false }),
+    new FixMfDataUriPlugin(),
+  ],
+};
 ```
 
-No manual rspack configuration needed — the helper handles Module Federation, shared deps, and dev server setup.
+`EveryPluginDevServer` configures the Module Federation dev server defaults. Add the manifest/fix plugins the same way the package templates do.
 
 ## Common Mistakes
 
 - Importing `oc` from `@orpc/contract` instead of `every-plugin/orpc` — will cause version mismatches in Module Federation
-- Importing `z` from `zod` instead of `every-plugin/zod` — same singleton issue
+- Importing `z` from `zod` instead of `every-plugin/zod` — may cause Vitest CJS/ESM interop issues; always use `every-plugin/zod`
 - Forgetting `.errors(Errors)` on routes that can throw ORPCError — untyped errors
 - Using `Effect.runPromise` inside `Effect.gen` — use `yield*` instead for proper error channel
 - Putting business logic in `createRouter` — keep it in the service class, router is just glue

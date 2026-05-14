@@ -1,6 +1,6 @@
 ---
 name: init-upgrade
-description: bos init, bos sync, and bos upgrade workflows — template download, snapshot-based conflict detection, package version bumps, and what .templatekeep/.templatesync-exclude control. Use when scaffolding new projects, syncing upstream changes, or upgrading framework packages.
+description: bos init, bos sync, and bos upgrade workflows — template download, snapshot-based conflict detection, package version bumps, and how init/sync select and own files. Use when scaffolding new projects, syncing upstream changes, or upgrading framework packages.
 metadata:
   sources: "src/cli/init.ts,src/cli/sync.ts,src/cli/upgrade.ts,src/cli/snapshot.ts"
 ---
@@ -12,38 +12,44 @@ metadata:
 Creates a new project from a published template:
 
 ```bash
-bos init                              # Interactive
-bos init -a my.near --domain my.dev   # Skip prompts
-bos init --with-host                  # Include host in workspace
+bos init                                                  # Interactive
+bos init -a my.near --domain my.dev --noInteractive       # Skip prompts
+bos init --overrides ui,api,host                          # Include host locally
 ```
 
 ### Flow
 1. Fetch parent config from FastKV (`bos://account/gateway`)
 2. Download template tarball from parent's `repository` URL
-3. Copy files matching `.templatekeep` patterns
+3. Build the file list with `buildInitPatterns(overrides, plugins)`
 4. Filter plugins: only included plugins + their routes are copied
 5. `personalizeConfig()` — sets `extends`, `account`, `domain`, removes production URLs
 6. `resolveWorkspaceRefs()` — normalizes package manifests, sets catalog refs
 7. Write initial snapshot (`.bos/sync-snapshot.json`)
 8. `bun install` + `bos types gen`
 
-### .templatekeep
+### Init File Selection
 
-Lists glob patterns for files that should be copied from template:
+`buildInitPatterns(overrides, plugins)` chooses what init copies from the template source:
 - Scaffold runtime files (bos.config.json, package.json, biome.json, rsbuild configs)
 - UI structure (routes/__root.tsx, components/index.ts, providers, hooks, lib)
 - API structure (contract.ts, index.ts, db/, drizzle.config.ts)
-- Plugin template (`plugins/_template/**`)
+- Selected plugin workspaces (`plugins/<selected-plugin>/**`)
 - GitHub workflows (`.github/templates/**` → `.github/`)
 
-### .templatesync-exclude
+### Sync Ownership Model
 
-Files copied on init but **never overwritten** on sync:
-- `ui/src/components/**` — user-owned after init
-- `ui/src/styles.css` — user-owned
-- `ui/src/routes/_layout/**` — user-owned routes
-- `api/src/contract.ts`, `api/src/index.ts`, `api/src/db/schema.ts` — user-owned business logic
-- Generated files (`*.gen.ts`) — always regenerated
+`bos sync` uses the init snapshot plus `FRAMEWORK_OWNED_SYNC_FILES` to decide what it may overwrite.
+
+Framework-owned files are updated when the template changes, for example build configs, generated wiring, and shared runtime scaffolding.
+
+App-owned files are left alone unless the local file still matches the recorded snapshot or you pass `--force`, for example:
+- `ui/src/components/**`
+- `ui/src/routes/**`
+- `api/src/contract.ts`
+- `api/src/index.ts`
+- `api/src/db/schema.ts`
+
+Generated files are regenerated separately and are not the source of truth for sync decisions.
 
 ## bos sync
 
@@ -52,7 +58,7 @@ Pulls updates from the parent template:
 ```bash
 bos sync                 # Sync from extends reference
 bos sync --force         # Overwrite even locally modified files
-bos sync --files         # Also sync template files
+bos sync --dry-run       # Preview without writing changes
 ```
 
 ### Snapshot-based conflict detection

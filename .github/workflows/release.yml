@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Run publish/deploy steps even without pending changesets"
+        required: false
+        type: boolean
+        default: false
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -40,6 +46,18 @@ jobs:
       - name: Run postinstall
         run: bun run postinstall
 
+      - name: Typecheck every-plugin
+        run: bun run --cwd packages/every-plugin typecheck
+
+      - name: Test every-plugin
+        run: bun run --cwd packages/every-plugin test:all
+
+      - name: Typecheck everything-dev
+        run: bun run --cwd packages/everything-dev typecheck
+
+      - name: Test everything-dev
+        run: bun run --cwd packages/everything-dev test
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
@@ -52,11 +70,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Everything below only runs when the Version Packages PR is merged ---
-      # (hasChangesets === 'false' means changesets were consumed, versions bumped)
+      - name: Determine release mode
+        id: release_mode
+        env:
+          HAS_CHANGESETS: ${{ steps.changesets.outputs.hasChangesets }}
+          FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_release }}
+        run: |
+          if [ "$HAS_CHANGESETS" = "false" ] || [ "$FORCE_RELEASE" = "true" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --- Everything below runs when changesets were consumed or a manual retry is forced ---
 
       - name: Setup Node
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24"
@@ -64,7 +93,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Build packages for staging
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         env:
           ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
           ZE_SERVER_TOKEN: ${{ secrets.ZEPHYR_SERVER_AUTH_TOKEN }}
@@ -74,11 +103,11 @@ jobs:
           bun run --cwd packages/everything-dev build
 
       - name: Stage release packages
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         run: bun run scripts/stage-release-packages.ts
 
       - name: Publish every-plugin to npm
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ""
         run: |
@@ -90,7 +119,7 @@ jobs:
           fi
 
       - name: Publish everything-dev to npm
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ""
         run: |
@@ -102,7 +131,7 @@ jobs:
           fi
 
       - name: Create GitHub Releases
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         run: |
           APP_KEYS=$(jq -r '.app | keys[]' bos.config.json)
           PLUGIN_KEYS=$(jq -r '.plugins | keys[]' bos.config.json 2>/dev/null || true)
@@ -150,7 +179,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish runtime config
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         env:
           ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
           ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
@@ -158,22 +187,22 @@ jobs:
         run: bun packages/everything-dev/src/cli.ts publish --deploy
 
       - name: Commit bos.config.json updates
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5.2.0
         with:
           commit_message: "chore: update deployment URLs [skip ci]"
           file_pattern: "**/bos.config.json"
 
       - name: Lowercase repository name
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         run: echo "REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
 
       - name: Log in to GitHub Container Registry
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
@@ -181,7 +210,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         id: meta
         uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
         with:
@@ -191,7 +220,7 @@ jobs:
             type=sha
 
       - name: Build and push Docker image
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
         with:
           context: .
@@ -203,7 +232,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Deployment summary
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.release_mode.outputs.should_publish == 'true'
         run: |
           echo "## Release Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

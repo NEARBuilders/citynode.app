@@ -18,7 +18,7 @@ rspack  Zephyr   FastKV   bos sync
 
 ## Publish
 
-Publish `bos.config.json` to the temporary `dev.everything.near` FastKV registry:
+Publish `bos.config.json` to the configured FastKV registry path for the app account/domain:
 
 ```bash
 bos publish                  # Publish config only
@@ -35,22 +35,19 @@ After `bos publish --deploy`:
 
 ## Sync
 
-Pull updates from a published config:
+Pull template updates from the parent referenced by local `bos.config.json`:
 
 ```bash
-bos sync                                    # From every.near/everything.dev (default)
-bos sync --account foo.near --gateway bar.com
-bos sync --network testnet
+bos sync
 bos sync --force
-bos sync --files                            # Also sync template files (rsbuild.config.ts, etc.)
+bos sync --dry-run
 ```
 
-What gets synced from remote:
+What gets synced from the parent template:
 - `app.*.production` — Zephyr URLs
 - `app.*.ssr` — SSR URLs
-- `app.*.template`, `app.*.files`, `app.*.sync` — scaffolding config
 - `shared` — shared dependency versions
-- `gateway` — gateway URLs
+- framework-owned files like build configs, router wiring, and shared runtime scaffolding
 
 What stays local:
 - `account`, `testnet` — your NEAR accounts
@@ -97,13 +94,6 @@ bos build --force        # Force rebuild
 
 These are auto-generated during `bos publish --deploy` and verified at runtime by the host.
 
-## Project Creation
-
-```bash
-bos create project my-app                           # Interactive
-bos create project my-app -a my.near --testnet my.testnet  # Skip prompts
-```
-
 ## Configuration
 
 All runtime config lives in `bos.config.json`. Key sections:
@@ -148,8 +138,7 @@ Deep merge: child overrides parent. Plugins are deep-merged (set to `null` to re
 
 ```bash
 bos info              # Show current configuration
-bos status             # Check remote health
-bos clean              # Clean build artifacts
+bos status            # Check remote health
 ```
 
 Process issues:

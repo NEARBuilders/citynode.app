@@ -23,7 +23,7 @@ Test the service class directly without the plugin runtime:
 
 ```typescript
 import { describe, expect, it } from "vitest";
-import { Effect } from "effect";
+import { Effect } from "every-plugin/effect";
 import { MyService } from "../service";
 
 describe("MyService", () => {
@@ -51,15 +51,19 @@ Test the full plugin lifecycle — initialization, router execution, shutdown:
 
 ```typescript
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { createPluginRuntime } from "every-plugin/runtime";
+import { createPluginRuntime } from "every-plugin";
 import Plugin from "../index";
 
 describe("MyPlugin integration", () => {
-  let runtime: Awaited<ReturnType<typeof createPluginRuntime>>;
+  let runtime: ReturnType<typeof createPluginRuntime>;
   let client: any;
 
   beforeAll(async () => {
-    runtime = createPluginRuntime();
+    runtime = createPluginRuntime({
+      registry: {
+        "my-plugin": { module: Plugin },
+      },
+    });
     const result = await runtime.usePlugin("my-plugin", {
       variables: { baseUrl: "https://api.example.com" },
       secrets: { apiKey: "test-key" },
@@ -68,7 +72,7 @@ describe("MyPlugin integration", () => {
   });
 
   afterAll(async () => {
-    await runtime.dispose();
+    await runtime.shutdown();
   });
 
   it("ping responds", async () => {
@@ -92,7 +96,8 @@ describe("MyPlugin integration", () => {
 When testing an API plugin that uses `withPlugins`, mock the `pluginsClient`:
 
 ```typescript
-import { createPluginRuntime } from "every-plugin/runtime";
+import { createPluginRuntime } from "every-plugin";
+import ApiPlugin from "../index";
 
 const mockRegistryClient = {
   getRegistryStatus: vi.fn().mockResolvedValue({ status: "ok" }),
@@ -101,7 +106,11 @@ const mockRegistryClient = {
 
 describe("API with mock registry", () => {
   it("pluginDemo returns composed data", async () => {
-    const runtime = createPluginRuntime();
+    const runtime = createPluginRuntime({
+      registry: {
+        api: { module: ApiPlugin },
+      },
+    });
     const result = await runtime.usePlugin(
       "api",
       { variables: {}, secrets: {} },
@@ -110,7 +119,7 @@ describe("API with mock registry", () => {
     const client = result.createClient();
     const data = await client.pluginDemo();
     expect(data.registryStatus.status).toBe("ok");
-    await runtime.dispose();
+    await runtime.shutdown();
   });
 });
 ```
@@ -146,7 +155,8 @@ export default defineConfig({
 
 ## Common Mistakes
 
-- Not calling `runtime.dispose()` in `afterAll` — leaves processes/resources running
+- Not calling `runtime.shutdown()` in `afterAll` — leaves plugin scopes/resources running
 - Using `vi.fn()` without `.mockResolvedValue()` — unhandled promise rejections
 - Forgetting `vite-tsconfig-paths` plugin — path aliases like `every-plugin/orpc` won't resolve
+- Omitting the `registry` object when calling `createPluginRuntime(...)` — the runtime requires explicit plugin entries
 - Testing only happy paths — always test error channels (Effect failures, ORPCError throws)

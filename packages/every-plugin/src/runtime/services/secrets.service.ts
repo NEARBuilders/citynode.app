@@ -1,5 +1,5 @@
 import { Context, Effect } from "effect";
-import { z } from "zod";
+import * as z from "zod";
 import type { SecretsConfig } from "../../types";
 import { PluginRuntimeError } from "../errors";
 

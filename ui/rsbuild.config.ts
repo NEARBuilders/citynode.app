@@ -6,6 +6,7 @@ import { pluginModuleFederation } from "@module-federation/rsbuild-plugin";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
+import { FixMfDataUriPlugin } from "every-plugin/build/rspack";
 import { computeSriHashForUrl } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rsbuild-plugin";
 import pkg from "./package.json";
@@ -135,6 +136,7 @@ function createClientConfig() {
             target: "react",
             autoCodeSplitting: true,
           }),
+          new FixMfDataUriPlugin(),
         ],
       },
     },
@@ -203,6 +205,7 @@ function createServerConfig() {
         stats: "errors-warnings",
         plugins: [
           TanStackRouterRspack({ target: "react", autoCodeSplitting: false }),
+          new FixMfDataUriPlugin(),
           new ModuleFederationPlugin({
             name: normalizedName,
             filename: "remoteEntry.server.js",

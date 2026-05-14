@@ -1,4 +1,4 @@
-import * as z from "zod";
+import { z } from "./zod";
 
 /**
  * Error pattern constants for categorizing infrastructure errors

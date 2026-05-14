@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as infraModule from "../../src/cli/infra";
 import * as initModule from "../../src/cli/init";
 import {
+  buildInitPatterns,
   copyFilteredFiles,
   personalizeConfig,
-  readTemplatekeep,
   writeInitSnapshot,
 } from "../../src/cli/init";
 import { syncTemplate } from "../../src/cli/sync";
@@ -38,7 +38,7 @@ async function scaffoldProject(
   plugins?: string[],
 ): Promise<string> {
   const projectDir = mkdtempSync(join(tmpdir(), "bos-sync-template-"));
-  const patterns = await readTemplatekeep(REPO_ROOT);
+  const patterns = buildInitPatterns(overrides, plugins);
   const pluginRoutes = pluginRoutesFromRoot();
 
   await copyFilteredFiles(REPO_ROOT, projectDir, patterns, {
@@ -104,7 +104,7 @@ describe("syncTemplate", () => {
     }
   });
 
-  it("updates framework-owned files, skips locally modified sync-owned files, and leaves app-owned files alone", async () => {
+  it("updates framework-owned files and leaves non-framework files alone", async () => {
     const projectDir = await scaffoldProject(["ui", "api", "plugins"], ["apps"]);
     tempDirs.push(projectDir);
 
@@ -124,7 +124,8 @@ describe("syncTemplate", () => {
 
     expect(result.status).toBe("synced");
     expect(result.updated).toContain("ui/src/lib/api.ts");
-    expect(result.skipped).toContain("ui/src/providers/index.tsx");
+    expect(result.updated).not.toContain("ui/src/providers/index.tsx");
+    expect(result.skipped).not.toContain("ui/src/providers/index.tsx");
     expect(result.updated).not.toContain("ui/src/components/user-nav.tsx");
     expect(result.skipped).not.toContain("ui/src/components/user-nav.tsx");
     expect(readFileSync(frameworkOwnedPath, "utf-8")).toBe(
@@ -135,7 +136,7 @@ describe("syncTemplate", () => {
     expect(existsSync(join(projectDir, ".bos", "sync-backup"))).toBe(true);
   });
 
-  it("force sync overwrites locally modified sync-owned files", async () => {
+  it("force sync still only updates framework-owned files", async () => {
     const projectDir = await scaffoldProject(["ui", "api"], []);
     tempDirs.push(projectDir);
 
@@ -149,13 +150,12 @@ describe("syncTemplate", () => {
     });
 
     expect(result.status).toBe("synced");
-    expect(result.updated).toContain("ui/src/providers/index.tsx");
-    expect(readFileSync(syncOwnedPath, "utf-8")).toBe(
-      readFileSync(join(REPO_ROOT, "ui", "src", "providers", "index.tsx"), "utf-8"),
-    );
+    expect(result.updated).not.toContain("ui/src/providers/index.tsx");
+    expect(result.skipped).not.toContain("ui/src/providers/index.tsx");
+    expect(readFileSync(syncOwnedPath, "utf-8")).toBe("provider override\n");
   });
 
-  it("sync only re-adds files for selected plugin workspaces", async () => {
+  it("sync does not re-add plugin workspaces because it only manages framework-owned files", async () => {
     const projectDir = await scaffoldProject(["ui", "api", "plugins"], ["apps"]);
     tempDirs.push(projectDir);
 
@@ -169,7 +169,7 @@ describe("syncTemplate", () => {
     });
 
     expect(result.status).toBe("dry-run");
-    expect(result.added).toContain("plugins/apps/package.json");
+    expect(result.added).not.toContain("plugins/apps/package.json");
     expect(result.added).not.toContain("plugins/settings/package.json");
   });
 });

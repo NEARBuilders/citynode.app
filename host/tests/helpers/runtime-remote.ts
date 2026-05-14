@@ -1,29 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BosConfig } from "everything-dev/types";
 import { runServer } from "../../src/program";
 import type { RuntimeConfig } from "../../src/services/config";
-
-type RawBosConfig = {
-  account?: string;
-  domain?: string;
-  shared?: RuntimeConfig["shared"];
-  app?: {
-    ui?: {
-      name?: string;
-      production?: string;
-      ssr?: string;
-    };
-    api?: {
-      name?: string;
-      production?: string;
-      proxy?: string;
-      variables?: Record<string, string>;
-      secrets?: string[];
-    };
-  };
-};
+import { startJsonProxyTarget } from "./json-proxy-target";
+import { getAvailablePort } from "./ports";
+import { loadHostTestEnv } from "./test-env";
 
 export type RuntimeRemoteScenarioName = "remote-client" | "remote-ssr" | "remote-proxy";
 
@@ -46,6 +29,8 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(currentDir, "../../..");
 const bosConfigPath = path.join(workspaceRoot, "bos.config.json");
 
+loadHostTestEnv(workspaceRoot);
+
 function normalizeUrl(url: string) {
   return url.replace(/\/$/, "");
 }
@@ -54,36 +39,15 @@ function toMfEntry(url: string) {
   return `${normalizeUrl(url)}/mf-manifest.json`;
 }
 
-async function loadRawBosConfig(): Promise<RawBosConfig> {
+async function loadRawBosConfig(): Promise<BosConfig> {
   const raw = await readFile(bosConfigPath, "utf8");
-  return JSON.parse(raw) as RawBosConfig;
+  return JSON.parse(raw) as BosConfig;
 }
 
-async function getAvailablePort(): Promise<number> {
-  return await new Promise<number>((resolve, reject) => {
-    const server = createServer();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Failed to allocate test port")));
-        return;
-      }
-      const { port } = address;
-      server.close((error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(port);
-      });
-    });
-  });
-}
-
-function getScenarioSkipReason(config: RawBosConfig, scenario: RuntimeRemoteScenarioName) {
+function getScenarioSkipReason(config: BosConfig, scenario: RuntimeRemoteScenarioName) {
   const uiProduction = config.app?.ui?.production;
   const uiSsr = config.app?.ui?.ssr;
+  const apiProduction = config.app?.api?.production;
 
   if (!config.account) {
     return "Missing account in bos.config.json";
@@ -91,6 +55,12 @@ function getScenarioSkipReason(config: RawBosConfig, scenario: RuntimeRemoteScen
 
   if (!uiProduction) {
     return "Missing app.ui.production in bos.config.json";
+  }
+
+  if (scenario !== "remote-proxy") {
+    if (!apiProduction) {
+      return "Missing app.api.production in bos.config.json";
+    }
   }
 
   if (scenario === "remote-ssr") {
@@ -104,6 +74,9 @@ function getScenarioSkipReason(config: RawBosConfig, scenario: RuntimeRemoteScen
 
 export async function getRuntimeRemoteScenarios(): Promise<RuntimeRemoteScenario[]> {
   const config = await loadRawBosConfig();
+  const remoteClientSkipReason = getScenarioSkipReason(config, "remote-client");
+  const remoteSsrSkipReason = getScenarioSkipReason(config, "remote-ssr");
+  const remoteProxySkipReason = getScenarioSkipReason(config, "remote-proxy");
 
   return [
     {
@@ -111,37 +84,36 @@ export async function getRuntimeRemoteScenarios(): Promise<RuntimeRemoteScenario
       title: "remote ui + remote api without ssr",
       ssr: false,
       proxy: false,
-      skipReason: getScenarioSkipReason(config, "remote-client"),
-      available: !getScenarioSkipReason(config, "remote-client"),
+      skipReason: remoteClientSkipReason,
+      available: !remoteClientSkipReason,
     },
     {
       name: "remote-ssr",
       title: "remote ui + remote api with ssr",
       ssr: true,
       proxy: false,
-      skipReason: getScenarioSkipReason(config, "remote-ssr"),
-      available: !getScenarioSkipReason(config, "remote-ssr"),
+      skipReason: remoteSsrSkipReason,
+      available: !remoteSsrSkipReason,
     },
     {
       name: "remote-proxy",
       title: "remote ui + proxy api without ssr",
       ssr: false,
       proxy: true,
-      skipReason: getScenarioSkipReason(config, "remote-proxy"),
-      available: !getScenarioSkipReason(config, "remote-proxy"),
+      skipReason: remoteProxySkipReason,
+      available: !remoteProxySkipReason,
     },
   ];
 }
 
 function buildRuntimeConfig(
-  config: RawBosConfig,
+  config: BosConfig,
   scenario: RuntimeRemoteScenario,
   hostUrl: string,
+  proxyTargetUrl?: string,
 ): RuntimeConfig {
   const uiUrl = config.app?.ui?.production;
-  const apiUrl = scenario.proxy
-    ? (config.app?.api?.proxy ?? (config.domain ? `https://${config.domain}` : undefined))
-    : (config.app?.api?.production ?? "");
+  const apiUrl = scenario.proxy ? proxyTargetUrl : (config.app?.api?.production ?? "");
 
   if (!config.account || !uiUrl) {
     throw new Error(`Scenario ${scenario.name} is missing required remote config`);
@@ -151,6 +123,7 @@ function buildRuntimeConfig(
     env: "development",
     account: config.account,
     title: config.account,
+    repository: config.repository,
     host: {
       name: "host",
       url: hostUrl,
@@ -170,9 +143,7 @@ function buildRuntimeConfig(
       url: apiUrl ? normalizeUrl(apiUrl) : "",
       entry: apiUrl ? toMfEntry(apiUrl) : "",
       source: "remote",
-      proxy: scenario.proxy
-        ? normalizeUrl(config.app?.api?.proxy ?? `https://${config.domain}`)
-        : undefined,
+      proxy: scenario.proxy && proxyTargetUrl ? normalizeUrl(proxyTargetUrl) : undefined,
       variables: config.app?.api?.variables,
       secrets: config.app?.api?.secrets,
     },
@@ -189,7 +160,8 @@ export async function startRuntimeRemoteHost(
   const rawConfig = await loadRawBosConfig();
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const runtimeConfig = buildRuntimeConfig(rawConfig, scenario, baseUrl);
+  const proxyTarget = scenario.proxy ? await startJsonProxyTarget() : null;
+  const runtimeConfig = buildRuntimeConfig(rawConfig, scenario, baseUrl, proxyTarget?.baseUrl);
 
   const previousNodeEnv = process.env.NODE_ENV;
   const previousHost = process.env.HOST;
@@ -204,6 +176,7 @@ export async function startRuntimeRemoteHost(
     await handle.ready;
   } catch (error) {
     await handle.shutdown().catch(() => undefined);
+    await proxyTarget?.stop().catch(() => undefined);
     process.env.NODE_ENV = previousNodeEnv;
     process.env.HOST = previousHost;
     process.env.PORT = previousPort;
@@ -215,6 +188,7 @@ export async function startRuntimeRemoteHost(
     config: runtimeConfig,
     stop: async () => {
       await handle.shutdown();
+      await proxyTarget?.stop();
       process.env.NODE_ENV = previousNodeEnv;
       process.env.HOST = previousHost;
       process.env.PORT = previousPort;

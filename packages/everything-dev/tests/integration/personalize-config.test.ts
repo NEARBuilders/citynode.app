@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { copyFilteredFiles, personalizeConfig, readTemplatekeep } from "../../src/cli/init";
+import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
 import { loadManifestNormalizationSpec } from "../../src/internal/manifest-normalizer";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
@@ -23,7 +23,7 @@ async function scaffoldProject(
   plugins?: string[],
 ): Promise<string> {
   const testDir = mkdtempSync(join(tmpdir(), "bos-personalize-"));
-  const patterns = await readTemplatekeep(REPO_ROOT);
+  const patterns = buildInitPatterns(overrides, plugins);
   const pluginRoutes = pluginRoutesFromRoot();
 
   await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
@@ -105,7 +105,7 @@ describe("personalizeConfig with real root config", () => {
     expect(config.plugins).toBeUndefined();
   });
 
-  it("filters plugins and route-owned files to the selected plugin set", async () => {
+  it("filters plugin config and workspaces to the selected plugin set", async () => {
     const testDir = await scaffoldProject(["ui", "api", "plugins"], ["apps"]);
     tempDirs.push(testDir);
 
@@ -117,7 +117,7 @@ describe("personalizeConfig with real root config", () => {
     );
     expect(
       existsSync(join(testDir, "ui", "src", "routes", "_layout", "_authenticated", "settings.tsx")),
-    ).toBe(false);
+    ).toBe(true);
 
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8")) as {
       plugins?: Record<string, Record<string, unknown>>;
