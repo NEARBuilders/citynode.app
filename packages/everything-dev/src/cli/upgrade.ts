@@ -56,10 +56,6 @@ const OBSOLETE_FILES = [
   "packages/everything-dev/cli.js",
 ];
 
-interface NpmPackageInfo {
-  version: string;
-}
-
 function extractVersion(value: string | undefined): string | null {
   if (!value) return null;
   const match = value.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
@@ -521,20 +517,6 @@ async function addSelectedParentPlugins(projectDir: string): Promise<string[]> {
   return selected;
 }
 
-async function fetchLatestNpmVersion(packageName: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://registry.npmjs.org/${packageName}/latest`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as NpmPackageInfo;
-    return data.version;
-  } catch {
-    return null;
-  }
-}
-
 function readInstalledVersion(projectDir: string, packageName: string): string | undefined {
   return readInstalledFrameworkVersion(projectDir, packageName);
 }
@@ -725,8 +707,7 @@ export async function upgradeTemplate(
 
       for (const name of FRAMEWORK_PACKAGES) {
         const installed = readInstalledVersion(projectDir, name);
-        const latest =
-          extractVersion(sourceRootCatalog[name]) ?? (await fetchLatestNpmVersion(name));
+        const latest = extractVersion(sourceRootCatalog[name]);
 
         if (!latest) {
           nextPackages.push({ name, from: installed, to: installed ?? "unknown" });

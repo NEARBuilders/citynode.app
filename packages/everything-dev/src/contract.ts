@@ -1,4 +1,5 @@
-import { oc, z } from "./sdk";
+import * as z from "zod";
+import { oc } from "./sdk";
 import { BosConfigSchema, SourceModeSchema } from "./types";
 
 export const DevOptionsSchema = z.object({

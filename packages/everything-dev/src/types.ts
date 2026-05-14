@@ -1,4 +1,4 @@
-import { z } from "./sdk";
+import * as z from "zod";
 
 export const ExtendsSchema = z.union([
   z.string(),
