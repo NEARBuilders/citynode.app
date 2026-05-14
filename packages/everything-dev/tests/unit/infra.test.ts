@@ -1,8 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ensureEnvFile, writeGeneratedInfra } from "../../src/cli/infra";
+import { ensureEnvFile, loadProjectEnv, writeGeneratedInfra } from "../../src/cli/infra";
 import type { RuntimeConfig } from "../../src/types";
 
 function buildRuntimeConfig(): RuntimeConfig {
@@ -105,5 +105,44 @@ describe("generated infra", () => {
     expect(env).toContain("PAYMENT_API_URL=");
     expect(env).toContain("CORS_ORIGIN=http://localhost:3000");
     expect(env).toMatch(/BETTER_AUTH_SECRET=.+/);
+  });
+
+  it("loads .env into the bos process without overriding exported values", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bos-load-env-"));
+    tempDirs.push(dir);
+
+    const originalApi = process.env.API_DATABASE_URL;
+    const originalAuth = process.env.AUTH_DATABASE_URL;
+    const originalSecret = process.env.BETTER_AUTH_SECRET;
+
+    try {
+      process.env.API_DATABASE_URL = "postgres://already-exported";
+      delete process.env.AUTH_DATABASE_URL;
+      delete process.env.BETTER_AUTH_SECRET;
+
+      writeFileSync(
+        join(dir, ".env"),
+        [
+          "API_DATABASE_URL=postgres://from-dotenv",
+          "AUTH_DATABASE_URL=postgres://auth-from-dotenv",
+          "BETTER_AUTH_SECRET=test-secret",
+        ].join("\n"),
+      );
+
+      loadProjectEnv(dir);
+
+      expect(process.env.API_DATABASE_URL).toBe("postgres://already-exported");
+      expect(process.env.AUTH_DATABASE_URL).toBe("postgres://auth-from-dotenv");
+      expect(process.env.BETTER_AUTH_SECRET).toBe("test-secret");
+    } finally {
+      if (originalApi === undefined) delete process.env.API_DATABASE_URL;
+      else process.env.API_DATABASE_URL = originalApi;
+
+      if (originalAuth === undefined) delete process.env.AUTH_DATABASE_URL;
+      else process.env.AUTH_DATABASE_URL = originalAuth;
+
+      if (originalSecret === undefined) delete process.env.BETTER_AUTH_SECRET;
+      else process.env.BETTER_AUTH_SECRET = originalSecret;
+    }
   });
 });

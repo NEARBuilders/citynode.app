@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as p from "@clack/prompts";
+import { config as loadDotenv } from "dotenv";
 import type { RuntimeConfig } from "../types";
 
 const POSTGRES_USER = "everythingdev";
@@ -187,4 +188,11 @@ export function ensureEnvFile(configDir: string): void {
 
   writeFileSync(envPath, updated);
   p.log.info("Created .env from generated .env.example with generated BETTER_AUTH_SECRET");
+}
+
+export function loadProjectEnv(configDir: string): void {
+  const envPath = join(configDir, ".env");
+  if (!existsSync(envPath)) return;
+
+  loadDotenv({ path: envPath, processEnv: process.env, quiet: true });
 }

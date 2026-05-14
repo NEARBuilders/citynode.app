@@ -101,6 +101,11 @@ function printStartSummary(summary: StartSummary) {
   console.log();
 }
 
+function clearSpinnerStopLine() {
+  if (!process.stdout.isTTY) return;
+  process.stdout.write("\u001B[1A\u001B[2K\u001B[1G");
+}
+
 async function warnIfOutdated(client: any, command: string): Promise<void> {
   if (!["dev", "build", "start"].includes(command)) return;
 
@@ -214,7 +219,8 @@ async function main() {
         process.exit(1);
       }
 
-      devSpinner.stop(result.description || "Started");
+      devSpinner.stop();
+      clearSpinnerStopLine();
 
       const session = consumeDevSession();
       if (session) {

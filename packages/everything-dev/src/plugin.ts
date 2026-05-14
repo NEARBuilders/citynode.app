@@ -6,7 +6,7 @@ import process from "node:process";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
-import { ensureEnvFile, writeGeneratedInfra } from "./cli/infra";
+import { ensureEnvFile, loadProjectEnv, writeGeneratedInfra } from "./cli/infra";
 import {
   buildInitPatterns,
   copyFilteredFiles,
@@ -766,6 +766,7 @@ export default createPlugin({
 
     dev: builder.dev.handler(async ({ input }) => {
       ensureEnvFile(deps.configDir);
+      loadProjectEnv(deps.configDir);
 
       pluginEvents.emit("progress", { phase: "config", status: "running" } satisfies ProgressEvent);
 
@@ -892,6 +893,7 @@ export default createPlugin({
 
     start: builder.start.handler(async ({ input }) => {
       ensureEnvFile(deps.configDir);
+      loadProjectEnv(deps.configDir);
 
       pluginEvents.emit("progress", { phase: "config", status: "running" } satisfies ProgressEvent);
 
