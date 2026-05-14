@@ -91,10 +91,16 @@ export async function readTemplatekeep(sourceDir: string): Promise<string[]> {
   }
 
   const content = readFileSync(keepFile, "utf-8");
-  return content
+  const patterns = content
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+  if (!patterns.includes(".templatekeep")) {
+    patterns.unshift(".templatekeep");
+  }
+
+  return patterns;
 }
 
 export async function fetchParentConfig(
@@ -366,6 +372,10 @@ export async function personalizeConfig(
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
     mode?: "init" | "sync";
     repository?: string;
+    title?: string;
+    description?: string;
+    testnet?: string;
+    staging?: unknown;
   },
 ): Promise<void> {
   const isInit = opts.mode !== "sync";
@@ -385,6 +395,17 @@ export async function personalizeConfig(
     }
     if (opts.repository) {
       config.repository = opts.repository;
+    } else if (isInit) {
+      delete config.repository;
+    }
+
+    if (isInit) {
+      const inheritableFields = ["title", "description", "testnet", "staging"] as const;
+      for (const field of inheritableFields) {
+        if (!(field in opts)) {
+          delete config[field];
+        }
+      }
     }
 
     if (isInit && config.app && typeof config.app === "object") {
@@ -489,6 +510,10 @@ export async function personalizeConfig(
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
         }
       }
+
+      if (!scripts.bos) {
+        scripts.bos = "node_modules/.bin/bos";
+      }
     }
 
     if (pkg.devDependencies && typeof pkg.devDependencies === "object") {
@@ -514,8 +539,12 @@ export async function personalizeConfig(
       workspaces.catalog["everything-dev"] = spec.rootCatalog["everything-dev"];
       workspaces.catalog["every-plugin"] = spec.rootCatalog["every-plugin"];
     }
-    if (!deps["everything-dev"] && spec) deps["everything-dev"] = "catalog:";
-    if (!deps["every-plugin"] && spec) deps["every-plugin"] = "catalog:";
+    const frameworkCatalog = resolveFrameworkCatalog();
+    for (const [name, version] of Object.entries(frameworkCatalog)) {
+      workspaces.catalog[name] = version;
+    }
+    if (!deps["everything-dev"]) deps["everything-dev"] = "catalog:";
+    if (!deps["every-plugin"]) deps["every-plugin"] = "catalog:";
 
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
@@ -641,6 +670,18 @@ export async function runBunInstall(
     spinner,
     "Installing dependencies",
   );
+}
+
+export async function runBunInstallForUpgrade(
+  destination: string,
+  spinner?: { message: (msg: string) => void },
+): Promise<void> {
+  const lockfilePath = join(destination, "bun.lock");
+  if (existsSync(lockfilePath)) {
+    rmSync(lockfilePath, { force: true });
+  }
+
+  await runWithProgress("bun", ["install"], destination, spinner, "Installing dependencies");
 }
 
 export async function runTypesGen(
@@ -793,6 +834,8 @@ export async function scaffoldMinimalProject(
     plugins?: string[];
     overrides: OverrideSection[];
     repository?: string;
+    title?: string;
+    description?: string;
   },
 ): Promise<number> {
   mkdirSync(destination, { recursive: true });
@@ -804,6 +847,8 @@ export async function scaffoldMinimalProject(
     account: opts.account || opts.extendsAccount,
     ...(opts.domain ? { domain: opts.domain } : {}),
     ...(opts.repository ? { repository: opts.repository } : {}),
+    ...(opts.title ? { title: opts.title } : {}),
+    ...(opts.description ? { description: opts.description } : {}),
   };
 
   if (parentConfig.app && typeof parentConfig.app === "object") {
@@ -881,6 +926,7 @@ export async function scaffoldMinimalProject(
       typecheck: "node_modules/.bin/bos types gen && tsc --noEmit",
       postinstall: "node_modules/.bin/bos types gen || true",
       "types:gen": "node_modules/.bin/bos types gen",
+      bos: "node_modules/.bin/bos",
     },
     dependencies: {
       "everything-dev": "catalog:",

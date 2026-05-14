@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { Effect } from "effect";
@@ -17,7 +17,6 @@ import {
   runDockerComposeUp,
   runTypesGen,
   scaffoldMinimalProject,
-  stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
@@ -1430,8 +1429,9 @@ export default createPlugin({
           }
 
           const lockfilePath = join(targetDir, "bun.lock");
-          const allowedWorkspaces = computeAllowedWorkspaces(overrides, plugins);
-          stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
+          if (existsSync(lockfilePath)) {
+            rmSync(lockfilePath, { force: true });
+          }
 
           const initConfig = await timePhase(
             timings,

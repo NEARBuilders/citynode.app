@@ -7,7 +7,7 @@ import type { PhaseTiming, UpgradeOptions, UpgradeResult } from "../contract";
 import { resolveExtendsRef } from "../merge";
 import { saveBosConfig } from "../utils/save-config";
 import { readInstalledFrameworkVersion } from "./framework-version";
-import { fetchParentConfig, runBunInstall, runTypesGen } from "./init";
+import { fetchParentConfig, runBunInstallForUpgrade, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 import { timePhase } from "./timing";
 
@@ -781,7 +781,7 @@ export async function upgradeTemplate(
   }
 
   if ((hasUpdates || addedPlugins.length > 0) && !options.noInstall) {
-    await timePhase(timings, "install dependencies", () => runBunInstall(projectDir));
+    await timePhase(timings, "install dependencies", () => runBunInstallForUpgrade(projectDir));
     await timePhase(timings, "generate types", () => runTypesGen(projectDir));
   }
 
