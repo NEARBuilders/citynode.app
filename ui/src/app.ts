@@ -113,4 +113,5 @@ export interface CreateRouterOptions
 export interface RenderOptions extends Omit<BaseRenderOptions<SessionData>, "runtimeConfig"> {
   runtimeConfig: BaseRenderOptions<SessionData>["runtimeConfig"];
   apiClient: ApiClient;
+  authClient?: AuthClientType;
 }

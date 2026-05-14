@@ -29,7 +29,7 @@ export interface AuthVariables {
 
 export type HonoEnv = { Variables: AuthVariables };
 
-function toAuthClientContext(headers: Headers): Record<string, string> {
+export function toAuthClientContext(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries());
 }
 

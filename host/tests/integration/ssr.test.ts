@@ -6,6 +6,7 @@ import { createTestApiClient } from "../helpers/api-client";
 import {
   buildTestRenderOptions,
   buildTestRouteHeadContext,
+  createMockAuthClient,
   loadTestRuntimeConfig,
 } from "../helpers/runtime-config";
 
@@ -23,6 +24,7 @@ async function consumeStream(stream: ReadableStream): Promise<string> {
 }
 
 const mockApiClient = createTestApiClient({});
+const mockAuthClient = createMockAuthClient();
 
 describe("SSR Stream Lifecycle", () => {
   let routerModule: RouterModule;
@@ -69,7 +71,7 @@ describe("SSR Stream Lifecycle", () => {
 
       const result = await routerModule.renderToStream(
         request,
-        buildTestRenderOptions(config, mockApiClient),
+        buildTestRenderOptions(config, mockApiClient, mockAuthClient),
       );
 
       const html = await consumeStream(result.stream);
@@ -79,7 +81,7 @@ describe("SSR Stream Lifecycle", () => {
       expect(result.statusCode).toBe(200);
       expect(html).toContain("<!DOCTYPE html>");
       expect(html).toContain("</html>");
-      expect(html).toContain("everything.dev");
+      expect(html).toContain(config.account);
     });
   });
 
@@ -92,7 +94,7 @@ describe("SSR Stream Lifecycle", () => {
 
       const result = await routerModule.renderToStream(
         request,
-        buildTestRenderOptions(config, mockApiClient),
+        buildTestRenderOptions(config, mockApiClient, mockAuthClient),
       );
 
       const html = await consumeStream(result.stream);

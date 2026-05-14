@@ -40,6 +40,7 @@ export interface RenderOptions<TSession = unknown> {
 export interface RenderOptionsWithApi<TApiClient = unknown, TSession = unknown>
   extends RenderOptions<TSession> {
   apiClient: TApiClient;
+  authClient?: unknown;
 }
 
 export interface RenderResult {

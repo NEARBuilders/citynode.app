@@ -13,7 +13,7 @@ import type {
   RenderResult,
   RouterContext,
 } from "./app";
-import { createApiClient, createAuthClient } from "./app";
+import { type AuthClient, createApiClient, createAuthClient } from "./app";
 import { routeTree } from "./routeTree.gen";
 
 export type { CreateRouterOptions, HeadData, RenderOptions, RenderResult, RouterContext };
@@ -148,7 +148,9 @@ const renderToStream = async (request: Request, renderOptions: RenderOptions) =>
           assetsUrl: renderOptions.assetsUrl,
           runtimeConfig: renderOptions.runtimeConfig,
           apiClient: renderOptions.apiClient,
-          authClient: createAuthClient(renderOptions.runtimeConfig),
+          authClient:
+            (renderOptions as RenderOptions & { authClient?: AuthClient }).authClient ??
+            createAuthClient(renderOptions.runtimeConfig),
           session: renderOptions.session,
         },
       });

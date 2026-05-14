@@ -3,6 +3,7 @@ import type { ClientRuntimeConfig } from "everything-dev/types";
 import type { RenderOptionsWithApi, RouterContext } from "everything-dev/ui/types";
 import type { RuntimeConfig } from "@/types";
 import type { ApiClient } from "../../../ui/src/lib/api";
+import type { AuthClient } from "../../../ui/src/lib/auth";
 
 export async function loadTestRuntimeConfig(): Promise<RuntimeConfig> {
   const result = await loadConfig();
@@ -12,13 +13,99 @@ export async function loadTestRuntimeConfig(): Promise<RuntimeConfig> {
   }
 
   const config = result.runtime;
-  const uiUrl = process.env.BOS_UI_URL;
-  const uiSsrUrl = process.env.BOS_UI_SSR_URL ?? uiUrl;
+  const rawUi = result.config.app.ui;
 
-  if (uiUrl) config.ui.url = uiUrl;
-  if (uiSsrUrl) config.ui.ssrUrl = uiSsrUrl;
+  if (!config.ui.url && rawUi.production) {
+    config.ui.url = rawUi.production.replace(/\/$/, "");
+  }
+  if (!config.ui.ssrUrl && rawUi.ssr) {
+    config.ui.ssrUrl = rawUi.ssr.replace(/\/$/, "");
+  }
 
   return config;
+}
+
+export function createMockAuthClient(): AuthClient {
+  return {
+    getSession: () => Promise.resolve({ data: null, error: null }),
+    useSession: () => ({ data: null, error: null }),
+    signIn: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+      near: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+        nonce: () => Promise.resolve({ data: null, error: null }),
+        verify: () => Promise.resolve({ data: null, error: null }),
+      }),
+      email: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+        verification: { sendEmail: () => Promise.resolve({ data: null, error: null }) },
+      }),
+      password: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+        signUp: () => Promise.resolve({ data: null, error: null }),
+      }),
+      anonymous: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+        linkAccount: () => Promise.resolve({ data: null, error: null }),
+      }),
+      passkey: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+        storeRegistrar: () => Promise.resolve({ data: null, error: null }),
+      }),
+    }),
+    signUp: Object.assign(() => Promise.resolve({ data: null, error: null }), {
+      email: () => Promise.resolve({ data: null, error: null }),
+    }),
+    signOut: () => Promise.resolve({ data: null, error: null }),
+    getHeaders: () => ({}),
+    $_fetch: () => Promise.resolve(null),
+    $Infer: {
+      Session: null as any,
+      Account: null as any,
+    },
+    admin: Object.assign({}, { banUser: () => Promise.resolve({ data: null, error: null }) }),
+    organization: Object.assign(
+      {},
+      {
+        list: () => Promise.resolve({ data: null, error: null }),
+        create: () => Promise.resolve({ data: null, error: null }),
+        setActive: () => Promise.resolve({ data: null, error: null }),
+        invite: () => Promise.resolve({ data: null, error: null }),
+        getFullOrganization: () => Promise.resolve({ data: null, error: null }),
+      },
+    ),
+    near: Object.assign(
+      {},
+      {
+        profile: Object.assign(
+          {},
+          {
+            get: () => Promise.resolve({ data: null, error: null }),
+          },
+        ),
+        relay: Object.assign(
+          {},
+          {
+            prepare: () => Promise.resolve({ data: null, error: null }),
+          },
+        ),
+        relayHistory: () => Promise.resolve({ data: null, error: null }),
+      },
+    ),
+    passkey: Object.assign(
+      {},
+      {
+        listUserPasskeys: () => Promise.resolve({ data: null, error: null }),
+      },
+    ),
+    apiKey: Object.assign(
+      {},
+      {
+        list: () => Promise.resolve({ data: null, error: null }),
+        create: () => Promise.resolve({ data: null, error: null }),
+      },
+    ),
+    phoneNumber: Object.assign(
+      {},
+      {
+        sendVerification: () => Promise.resolve({ data: null, error: null }),
+      },
+    ),
+  } as unknown as AuthClient;
 }
 
 export function buildTestClientRuntimeConfig(config: RuntimeConfig): Partial<ClientRuntimeConfig> {
@@ -67,10 +154,13 @@ export function buildTestRouteHeadContext(config: RuntimeConfig): Partial<Router
 export function buildTestRenderOptions(
   config: RuntimeConfig,
   apiClient: ApiClient,
+  authClient?: AuthClient,
 ): RenderOptionsWithApi<ApiClient> {
   return {
     assetsUrl: config.ui.url,
     runtimeConfig: buildTestClientRuntimeConfig(config),
     apiClient,
-  };
+    session: null,
+    authClient,
+  } as RenderOptionsWithApi<ApiClient>;
 }
