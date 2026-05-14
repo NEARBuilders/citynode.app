@@ -79,6 +79,8 @@ jobs:
 
       - name: Publish every-plugin to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
+        env:
+          NODE_AUTH_TOKEN: ""
         run: |
           VERSION=$(jq -r .version .release/every-plugin/package.json)
           if npm view every-plugin@"$VERSION" version 2>/dev/null; then
@@ -89,6 +91,8 @@ jobs:
 
       - name: Publish everything-dev to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
+        env:
+          NODE_AUTH_TOKEN: ""
         run: |
           VERSION=$(jq -r .version .release/everything-dev/package.json)
           if npm view everything-dev@"$VERSION" version 2>/dev/null; then

@@ -91,7 +91,7 @@ describe("env-specific extends in merge scenario", () => {
     },
   };
 
-  it("child with env-specific extends can override parent while inheriting", () => {
+  it("child with env-specific extends can override parent plugin selection while inheriting shared config", () => {
     const child = {
       account: "child.near",
       domain: "child.dev",
@@ -119,7 +119,7 @@ describe("env-specific extends in merge scenario", () => {
     });
 
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.apps).toBeDefined();
+    expect(plugins.apps).toBeUndefined();
     expect(plugins.myplugin).toBeDefined();
 
     const ui = (merged.shared as Record<string, unknown>).ui as Record<

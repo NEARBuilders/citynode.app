@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { BosConfig, SidebarItem } from "./types";
+import type { RuntimeConfig, SidebarItem } from "./types";
 
 const ICON_IMPORTS: Record<string, string> = {
   Home: "lucide-react",
@@ -51,11 +51,11 @@ function collectIconImports(items: SidebarItem[]): Map<string, Set<string>> {
   return moduleMap;
 }
 
-export function generatePluginSidebarContent(config: BosConfig, configDir?: string): string {
+export function generatePluginSidebarContent(runtimeConfig: RuntimeConfig): string {
   const coreItems: SidebarItem[] = [{ icon: "Home", label: "home", to: "/", roleRequired: "anon" }];
 
-  if (config.app.auth?.sidebar) {
-    for (const item of config.app.auth.sidebar) {
+  if (runtimeConfig.auth?.sidebar) {
+    for (const item of runtimeConfig.auth.sidebar) {
       coreItems.push({
         ...item,
         to: item.to ?? "/auth",
@@ -65,31 +65,9 @@ export function generatePluginSidebarContent(config: BosConfig, configDir?: stri
   }
 
   const pluginItems: SidebarItem[] = [];
-  if (config.plugins) {
-    for (const [key, entry] of Object.entries(config.plugins)) {
-      let sidebar: SidebarItem[] | undefined;
-
-      if (typeof entry === "object" && entry.sidebar) {
-        sidebar = entry.sidebar;
-      } else if (
-        typeof entry === "object" &&
-        entry.development?.startsWith("local:") &&
-        configDir
-      ) {
-        const localPath = join(configDir, entry.development.slice("local:".length).trim());
-        const pluginConfigPath = join(localPath, "bos.config.json");
-        if (existsSync(pluginConfigPath)) {
-          try {
-            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as {
-              sidebar?: SidebarItem[];
-            };
-            if (pluginConfig.sidebar) {
-              sidebar = pluginConfig.sidebar;
-            }
-          } catch {}
-        }
-      }
-
+  if (runtimeConfig.plugins) {
+    for (const [key, entry] of Object.entries(runtimeConfig.plugins)) {
+      const sidebar = entry.sidebar;
       if (!sidebar) continue;
       for (const item of sidebar) {
         pluginItems.push({
@@ -135,10 +113,10 @@ ${itemsCode}
 `;
 }
 
-export function writePluginSidebarGen(configDir: string, config: BosConfig): string {
+export function writePluginSidebarGen(configDir: string, runtimeConfig: RuntimeConfig): string {
   const outputPath = join(configDir, "ui/src/lib/plugin-sidebar.gen.ts");
 
-  const content = generatePluginSidebarContent(config, configDir);
+  const content = generatePluginSidebarContent(runtimeConfig);
 
   const outputDir = dirname(outputPath);
   if (!existsSync(outputDir)) {

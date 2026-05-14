@@ -114,7 +114,7 @@ describe("mergeBosConfigWithExtends", () => {
     expect(ui["better-auth"].version).toBe("1.6.9");
   });
 
-  it("deep merges plugins — child overrides parent with same key", () => {
+  it("uses only child plugin config when child declares same key", () => {
     const parent = {
       plugins: {
         apps: {
@@ -135,12 +135,12 @@ describe("mergeBosConfigWithExtends", () => {
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
     expect(plugins.apps.variables).toEqual({ namespace: "child.near" });
-    expect(plugins.apps.production).toBe("https://cdn.example.com/apps");
-    expect(plugins.apps.development).toBe("local:plugins/apps");
     expect(plugins.apps.secrets).toEqual(["APPS_SECRET"]);
+    expect(plugins.apps.production).toBeUndefined();
+    expect(plugins.apps.development).toBeUndefined();
   });
 
-  it("preserves parent plugins not in child", () => {
+  it("does not inherit parent plugins not declared by child", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
@@ -155,11 +155,10 @@ describe("mergeBosConfigWithExtends", () => {
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
     expect(plugins.apps).toBeDefined();
-    expect(plugins.projects).toBeDefined();
-    expect(plugins.projects.development).toBe("local:plugins/projects");
+    expect(plugins.projects).toBeUndefined();
   });
 
-  it("child can set plugin to null to remove inherited plugin", () => {
+  it("drops null plugin sentinels without inheriting parent plugins", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
@@ -173,7 +172,7 @@ describe("mergeBosConfigWithExtends", () => {
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, unknown>;
-    expect(plugins.apps).toBeDefined();
+    expect(plugins.apps).toBeUndefined();
     expect(plugins.projects).toBeUndefined();
   });
 
@@ -190,7 +189,7 @@ describe("mergeBosConfigWithExtends", () => {
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
-    expect(plugins.apps).toBeDefined();
+    expect(plugins.apps).toBeUndefined();
     expect(plugins.myplugin).toBeDefined();
     expect(plugins.myplugin.development).toBe("local:plugins/myplugin");
   });
@@ -220,7 +219,7 @@ describe("mergeBosConfigWithExtends", () => {
     expect(api.secrets).toContain("EXTRA_SECRET");
   });
 
-  it("routes arrays are replaced (not unioned)", () => {
+  it("routes arrays come only from the child plugin config", () => {
     const parent = {
       plugins: {
         myplugin: {
@@ -243,7 +242,7 @@ describe("mergeBosConfigWithExtends", () => {
     expect(myplugin.routes).toEqual(["ui/src/routes/new/**"]);
   });
 
-  it("plugin variables are deep-merged", () => {
+  it("plugin variables come only from the child plugin config", () => {
     const parent = {
       plugins: {
         myplugin: {
@@ -263,7 +262,7 @@ describe("mergeBosConfigWithExtends", () => {
       string,
       unknown
     >;
-    expect(myplugin.variables).toEqual({ namespace: "child.near", region: "us-east" });
+    expect(myplugin.variables).toEqual({ namespace: "child.near" });
   });
 
   it("applies canonical ordering", () => {
@@ -280,8 +279,8 @@ describe("mergeBosConfigWithExtends", () => {
     const keys = Object.keys(merged);
     expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("repository"));
     expect(keys.indexOf("repository")).toBeLessThan(keys.indexOf("app"));
-    expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("plugins"));
-    expect(keys.indexOf("plugins")).toBeLessThan(keys.indexOf("shared"));
+    expect(keys.includes("plugins")).toBe(false);
+    expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("shared"));
   });
 });
 

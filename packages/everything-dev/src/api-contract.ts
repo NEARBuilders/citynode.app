@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { RuntimeConfig, RuntimePluginConfig } from "./types";
 
+const REMOTE_FETCH_TIMEOUT_MS = 10_000;
+
 export interface ApiPluginManifest {
   schemaVersion: 1;
   kind: "every-plugin/manifest";
@@ -68,8 +70,24 @@ function getApiPluginManifestUrl(apiBaseUrl: string): string {
   return `${trimTrailingSlash(apiBaseUrl)}/plugin.manifest.json`;
 }
 
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Timed out fetching ${url} after ${REMOTE_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchApiPluginManifest(apiBaseUrl: string): Promise<ApiPluginManifest> {
-  const response = await fetch(getApiPluginManifestUrl(apiBaseUrl));
+  const response = await fetchWithTimeout(getApiPluginManifestUrl(apiBaseUrl));
   if (!response.ok) {
     throw new Error(
       `Failed to fetch API plugin manifest: ${response.status} ${response.statusText}`,
@@ -117,7 +135,7 @@ async function remoteContractSource(opts: {
   }
 
   const contractUrl = `${trimTrailingSlash(opts.baseUrl)}/${manifest.contract.types.path.replace(/^\.\//, "")}`;
-  const contractResponse = await fetch(contractUrl);
+  const contractResponse = await fetchWithTimeout(contractUrl);
   if (!contractResponse.ok) {
     throw new Error(
       `Failed to fetch contract types: ${contractResponse.status} ${contractResponse.statusText}`,
@@ -159,7 +177,7 @@ async function fetchAuthExportTypes(opts: {
   }
 
   const exportUrl = `${trimTrailingSlash(opts.baseUrl)}/${authExportEntry.path.replace(/^\.\//, "")}`;
-  const response = await fetch(exportUrl);
+  const response = await fetchWithTimeout(exportUrl);
   if (!response.ok) {
     console.warn(`[API Contract] Failed to fetch auth export types: ${response.status}`);
     return null;

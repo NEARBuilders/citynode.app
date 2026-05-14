@@ -95,28 +95,15 @@ export function mergeBosConfigWithExtends(
   parent: BosConfigInput,
   child: BosConfigInput,
 ): BosConfigInput {
-  const merged = bosConfigMerger(child, parent) as BosConfigInput;
+  const { plugins: _ignoredParentPlugins, ...parentWithoutPlugins } = parent;
+  const merged = bosConfigMerger(child, parentWithoutPlugins) as BosConfigInput;
 
-  if (isPlainObject(parent.plugins) && isPlainObject(child.plugins)) {
-    const plugins: Record<string, unknown> = { ...parent.plugins };
-    for (const [key, rawValue] of Object.entries(child.plugins)) {
-      const value = rawValue as unknown;
-      if (value === null || value === false) {
-        delete plugins[key];
-      } else if (isPlainObject(plugins[key]) && isPlainObject(value)) {
-        plugins[key] = bosConfigMerger(
-          value as Record<string, unknown>,
-          plugins[key] as Record<string, unknown>,
-        );
-      } else {
-        plugins[key] = value;
-      }
-    }
-    (merged as Record<string, unknown>).plugins = plugins;
-  } else if (child.plugins !== undefined) {
+  if (child.plugins !== undefined && isPlainObject(child.plugins)) {
     (merged as Record<string, unknown>).plugins = cleanNullSentinels(
       child.plugins as Record<string, unknown>,
     );
+  } else {
+    delete (merged as Record<string, unknown>).plugins;
   }
 
   const mergedRecord = merged as Record<string, unknown>;

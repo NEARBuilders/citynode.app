@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { loadConfig } from "../config";
 import type { SyncOptions, SyncResult } from "../contract";
 import {
   isPlainObject as isPlainObjectFromMerge,
   mergeBosConfigWithTemplate,
   resolveExtendsRef,
 } from "../merge";
+import { writeGeneratedInfra } from "./infra";
 import {
   personalizeConfig,
   resolveSourceDir,
@@ -27,6 +29,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "package.json",
   ".changeset/config.json",
   ".changeset/README.md",
+  "docker-compose.yml",
   ".github/renovate.json",
   ".github/workflows/ci.yml",
   ".github/workflows/release-sync.yml",
@@ -387,19 +390,27 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
     const account = (localConfig.account as string) || extendsAccount;
     const domain = (localConfig.domain as string) || extendsGateway;
+    const overrides: Array<"ui" | "api" | "host" | "plugins"> = [];
+    if (withUi) overrides.push("ui");
+    if (withApi) overrides.push("api");
+    if (withHost) overrides.push("host");
+    if (childPlugins.length > 0) overrides.push("plugins");
 
     await personalizeConfig(projectDir, {
       extendsAccount,
       extendsGateway,
       account,
       domain,
-      withUi,
-      withApi,
-      withHost,
+      overrides,
       plugins: childPlugins,
       workspaceOpts: { sourceDir },
       mode: "sync",
     });
+
+    const syncedConfig = await loadConfig({ cwd: projectDir });
+    if (syncedConfig?.runtime) {
+      writeGeneratedInfra(projectDir, syncedConfig.runtime);
+    }
 
     if (!options.noInstall) {
       await runBunInstall(projectDir);

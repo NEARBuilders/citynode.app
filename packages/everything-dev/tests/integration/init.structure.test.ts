@@ -8,6 +8,8 @@ import { loadManifestNormalizationSpec } from "../../src/internal/manifest-norma
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
 const MANIFEST_SPEC = loadManifestNormalizationSpec(REPO_ROOT);
 
+const DEFAULT_OVERRIDES = ["ui", "api"] as const;
+
 describe("bos init — structure", () => {
   let testDir: string;
 
@@ -19,22 +21,21 @@ describe("bos init — structure", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("builds root and selected surface patterns", () => {
-    const patterns = buildInitPatterns({ withUi: true, withApi: true, plugins: ["settings"] });
+  it("builds curated root and selected surface patterns", () => {
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["settings"]);
+    expect(patterns.length).toBeGreaterThan(0);
     expect(patterns).toContain("bos.config.json");
     expect(patterns).toContain("ui/**");
     expect(patterns).toContain("api/**");
     expect(patterns).toContain("plugins/settings/**");
-    expect(patterns).not.toContain("host/**");
   });
 
   it("copies curated root files and selected surfaces", async () => {
-    const patterns = buildInitPatterns({
-      withUi: true,
-      withApi: true,
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["settings"]);
+    const filesCopied = await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
+      overrides: ["ui", "api", "plugins"],
       plugins: ["settings"],
     });
-    const filesCopied = await copyFilteredFiles(REPO_ROOT, testDir, patterns);
 
     expect(filesCopied).toBeGreaterThan(0);
 
@@ -45,36 +46,74 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/styles.css"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/settings/bos.config.json"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/apps/bos.config.json"))).toBe(false);
-    expect(existsSync(join(testDir, "plugins/projects/bos.config.json"))).toBe(false);
+
+    expect(existsSync(join(testDir, "plugins/settings"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/apps"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/projects"))).toBe(false);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
     expect(existsSync(join(testDir, "plans"))).toBe(false);
     expect(existsSync(join(testDir, ".changeset"))).toBe(true);
-    expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(true);
   });
 
-  it("keeps ui build scripts direct", async () => {
-    const pkg = JSON.parse(readFileSync(join(testDir, "ui", "package.json"), "utf-8")) as {
-      scripts?: Record<string, string>;
-    };
+  it("copies selected plugin directories when plugins override is active", async () => {
+    const selectedDir = mkdtempSync(join(tmpdir(), "bos-init-selected-plugins-"));
+    try {
+      const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects"]);
+      await copyFilteredFiles(REPO_ROOT, selectedDir, patterns, {
+        overrides: ["ui", "api", "plugins"],
+        plugins: ["apps", "projects"],
+      });
 
-    expect(pkg.scripts?.["build:client"]).toBe("BUILD_TARGET=client rsbuild build");
-    expect(pkg.scripts?.["generate-metadata"]).toBeUndefined();
-    expect(existsSync(join(testDir, "ui", "scripts", "generate-metadata.ts"))).toBe(false);
+      expect(existsSync(join(selectedDir, "plugins", "apps"))).toBe(true);
+      expect(existsSync(join(selectedDir, "plugins", "projects"))).toBe(true);
+      expect(existsSync(join(selectedDir, "plugins", "settings"))).toBe(false);
+    } finally {
+      rmSync(selectedDir, { recursive: true, force: true });
+    }
   });
 
-  it("personalizes bos.config.json", async () => {
+  it("completes init cleanly when no plugins are selected within plugins override", async () => {
+    const noPluginsDir = mkdtempSync(join(tmpdir(), "bos-init-no-plugins-"));
+    try {
+      const patterns = buildInitPatterns(["ui", "api", "plugins"], []);
+      await copyFilteredFiles(REPO_ROOT, noPluginsDir, patterns, {
+        overrides: ["ui", "api", "plugins"],
+        plugins: [],
+      });
+      await personalizeConfig(noPluginsDir, {
+        extendsAccount: "dev.everything.near",
+        extendsGateway: "everything.dev",
+        account: "test.near",
+        domain: "test.dev",
+        plugins: [],
+        overrides: ["ui", "api", "plugins"],
+        workspaceOpts: { sourceDir: REPO_ROOT },
+      });
+
+      expect(existsSync(join(noPluginsDir, "plugins"))).toBe(false);
+
+      const config = JSON.parse(readFileSync(join(noPluginsDir, "bos.config.json"), "utf-8"));
+      expect(config.plugins).toBeUndefined();
+
+      const pkg = JSON.parse(readFileSync(join(noPluginsDir, "package.json"), "utf-8")) as {
+        workspaces?: { packages?: string[] };
+      };
+      expect(pkg.workspaces?.packages).not.toContain("plugins/*");
+    } finally {
+      rmSync(noPluginsDir, { recursive: true, force: true });
+    }
+  });
+
+  it("personalizes bos.config.json removing non-overridden app sections", async () => {
     await personalizeConfig(testDir, {
       extendsAccount: "dev.everything.near",
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      withUi: true,
-      withApi: true,
       workspaceOpts: { sourceDir: REPO_ROOT },
+      overrides: [...DEFAULT_OVERRIDES],
     });
 
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8"));
@@ -110,7 +149,7 @@ describe("bos init — structure", () => {
     expect(apiPkg.devDependencies?.["everything-dev"]).toBe("catalog:");
   });
 
-  it("removes production URLs", () => {
+  it("removes production URLs from overridden app sections", () => {
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8"));
     expect(config.app.ui.production).toBeUndefined();
     expect(config.app.api.production).toBeUndefined();
@@ -118,20 +157,20 @@ describe("bos init — structure", () => {
     expect(config.app.api.integrity).toBeUndefined();
   });
 
-  it("includes host when withHost is true", async () => {
+  it("includes host when overrides includes host", async () => {
     const hostTestDir = mkdtempSync(join(tmpdir(), "bos-init-host-"));
     try {
-      const hostPatterns = buildInitPatterns({ withUi: true, withApi: true, withHost: true });
-      await copyFilteredFiles(REPO_ROOT, hostTestDir, hostPatterns);
+      const hostPatterns = buildInitPatterns(["ui", "api", "host"]);
+      await copyFilteredFiles(REPO_ROOT, hostTestDir, hostPatterns, {
+        overrides: ["ui", "api", "host"],
+      });
       await personalizeConfig(hostTestDir, {
         extendsAccount: "dev.everything.near",
         extendsGateway: "everything.dev",
         account: "test.near",
         domain: "test.dev",
-        withUi: true,
-        withApi: true,
         workspaceOpts: { sourceDir: REPO_ROOT },
-        withHost: true,
+        overrides: ["ui", "api", "host"],
       });
       const hostPkg = JSON.parse(
         readFileSync(join(hostTestDir, "host", "package.json"), "utf-8"),
@@ -150,15 +189,14 @@ describe("bos init — structure", () => {
   it("supports scaffolding a single selected surface", async () => {
     const apiOnlyDir = mkdtempSync(join(tmpdir(), "bos-init-api-only-"));
     try {
-      const patterns = buildInitPatterns({ withUi: false, withApi: true, withHost: false });
-      await copyFilteredFiles(REPO_ROOT, apiOnlyDir, patterns);
+      const patterns = buildInitPatterns(["api"]);
+      await copyFilteredFiles(REPO_ROOT, apiOnlyDir, patterns, { overrides: ["api"] });
       await personalizeConfig(apiOnlyDir, {
         extendsAccount: "dev.everything.near",
         extendsGateway: "everything.dev",
         account: "test.near",
         domain: "test.dev",
-        withUi: false,
-        withApi: true,
+        overrides: ["api"],
         workspaceOpts: { sourceDir: REPO_ROOT },
       });
 

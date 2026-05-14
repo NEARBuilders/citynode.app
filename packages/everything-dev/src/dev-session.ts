@@ -1,4 +1,4 @@
-import { NodeContext } from "@effect/platform-node";
+import * as NodeContext from "@effect/platform-node/NodeContext";
 import { Deferred, Effect, Exit } from "effect";
 import {
   type DevViewHandle,

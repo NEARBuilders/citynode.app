@@ -11,4 +11,4 @@ export {
   type AnySchema,
   oc,
 } from "every-plugin/orpc";
-export { z } from "every-plugin/zod";
+export { z } from "zod";

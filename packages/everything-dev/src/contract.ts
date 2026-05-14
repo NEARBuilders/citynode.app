@@ -142,32 +142,36 @@ export const KeyPublishResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const OverrideSectionSchema = z.enum(["ui", "api", "host", "plugins"]);
+
 export const InitOptionsSchema = z.object({
   extends: z.string().optional(),
-  extendsAccount: z.string().optional(),
-  extendsGateway: z.string().optional(),
   directory: z.string().optional(),
   account: z.string().optional(),
   domain: z.string().optional(),
   source: z.string().optional(),
-  withUi: z.boolean().optional(),
-  withApi: z.boolean().optional(),
   plugins: z.array(z.string()).optional(),
-  withHost: z.boolean().default(false),
+  overrides: z.array(OverrideSectionSchema).optional(),
   noInteractive: z.boolean().default(false),
   noInstall: z.boolean().default(false),
+});
+
+export const PhaseTimingSchema = z.object({
+  name: z.string(),
+  durationMs: z.number(),
 });
 
 export const InitResultSchema = z.object({
   status: z.enum(["initialized", "error"]),
   directory: z.string(),
-  extendsAccount: z.string(),
-  extendsGateway: z.string(),
+  extendsRef: z.string(),
   account: z.string().optional(),
   domain: z.string().optional(),
   extends: z.string(),
   plugins: z.array(z.string()).optional(),
+  overrides: z.array(OverrideSectionSchema).optional(),
   filesCopied: z.number(),
+  timings: z.array(PhaseTimingSchema).optional(),
   error: z.string().optional(),
 });
 
@@ -203,6 +207,9 @@ export const UpgradeResultSchema = z.object({
   ),
   sync: SyncResultSchema.optional(),
   migrated: z.array(z.string()).optional(),
+  availablePlugins: z.array(z.string()).optional(),
+  selectedPlugins: z.array(z.string()).optional(),
+  timings: z.array(PhaseTimingSchema).optional(),
   changelogUrl: z.string().optional(),
   error: z.string().optional(),
 });
@@ -307,6 +314,8 @@ export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
 export type InitOptions = z.infer<typeof InitOptionsSchema>;
 export type InitResult = z.infer<typeof InitResultSchema>;
+export type OverrideSection = z.infer<typeof OverrideSectionSchema>;
+export type PhaseTiming = z.infer<typeof PhaseTimingSchema>;
 export type SyncOptions = z.infer<typeof SyncOptionsSchema>;
 export type SyncResult = z.infer<typeof SyncResultSchema>;
 export type UpgradeOptions = z.infer<typeof UpgradeOptionsSchema>;

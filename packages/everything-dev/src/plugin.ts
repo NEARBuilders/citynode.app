@@ -1,24 +1,31 @@
-import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import process from "node:process";
 import * as p from "@clack/prompts";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
+import { ensureEnvFile, writeGeneratedInfra } from "./cli/infra";
 import {
   buildInitPatterns,
   copyFilteredFiles,
+  detectGitRemoteUrl,
   fetchParentConfig,
   generateDatabaseMigrations,
   personalizeConfig,
+  removeInitLockfile,
   resolveSourceDir,
   runBunInstall,
+  runDockerComposeUp,
   runTypesGen,
+  scaffoldMinimalProject,
+  stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
 import { getStatus } from "./cli/status";
 import { syncTemplate } from "./cli/sync";
+import { timePhase } from "./cli/timing";
 import { upgradeTemplate } from "./cli/upgrade";
 import {
   buildRuntimePluginsForConfig,
@@ -29,8 +36,13 @@ import {
   resolveLocalDevelopmentPath,
   writeResolvedConfig,
 } from "./config";
-import { type BosConfigResult, bosContract, type PluginListResult } from "./contract";
-import { devApp, startApp } from "./dev-session";
+import {
+  type BosConfigResult,
+  bosContract,
+  type OverrideSection,
+  type PhaseTiming,
+  type PluginListResult,
+} from "./contract";
 import {
   buildRegistryConfigUrl,
   buildRegistryConfigUrlForNetwork,
@@ -52,41 +64,13 @@ import {
 } from "./service-descriptor";
 import { syncAndGenerateSharedUi } from "./shared";
 import { writePluginSidebarGen } from "./sidebar";
-import type { BosConfig, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
+import type { BosConfig, BosConfigInput, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
 
-function ensureEnvFile(configDir: string, opts?: { domain?: string }): void {
-  const envPath = join(configDir, ".env");
-  const examplePath = join(configDir, ".env.example");
-
-  if (existsSync(envPath)) return;
-
-  if (!existsSync(examplePath)) return;
-
-  const content = readFileSync(examplePath, "utf-8");
-  const lines = content.split("\n");
-
-  const secret = randomBytes(32).toString("base64url");
-  const corsOrigin = opts?.domain
-    ? `http://localhost:3000,https://${opts.domain}`
-    : "http://localhost:3000";
-
-  const updated = lines
-    .map((line) => {
-      if (/^BETTER_AUTH_SECRET=/.test(line)) {
-        return `BETTER_AUTH_SECRET=${secret}`;
-      }
-      if (/^CORS_ORIGIN=/.test(line)) {
-        return `CORS_ORIGIN=${corsOrigin}`;
-      }
-      return line;
-    })
-    .join("\n");
-
-  writeFileSync(envPath, updated);
-  p.log.info(`Created .env from .env.example with generated BETTER_AUTH_SECRET`);
+async function loadDevSession() {
+  return import("./dev-session");
 }
 
 const buildCommands: Record<string, { cmd: string; args: string[] }> = {
@@ -258,14 +242,14 @@ async function generateCodeArtifacts(
     runtimeConfig?: RuntimeConfig;
   },
 ): Promise<GeneratedArtifacts | null> {
-  writePluginSidebarGen(configDir, config);
-
   if (opts?.env) {
     writeResolvedConfig(configDir, config, opts.env, opts.extendsChain);
   }
 
   const runtimeConfig = opts?.runtimeConfig ?? (await loadConfig({ cwd: configDir }))?.runtime;
   if (!runtimeConfig) return null;
+
+  writePluginSidebarGen(configDir, runtimeConfig);
 
   const bridge = await syncApiContractBridge({
     configDir,
@@ -668,106 +652,33 @@ export default createPlugin({
       const version = manifest?.plugin.version ?? pkgJson.version;
 
       if (publishedUrl) {
-        const pluginConfigPath = join(localPath, "bos.config.json");
-        if (existsSync(pluginConfigPath)) {
-          try {
-            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
-              string,
-              unknown
-            >;
-            if (!pluginConfig.app) pluginConfig.app = {};
-            const app = pluginConfig.app as Record<string, unknown>;
-            if (!app.api) app.api = {};
-            const api = app.api as Record<string, unknown>;
-            api.production = publishedUrl;
-            if (integrity) {
-              api.integrity = integrity;
-            } else {
-              delete api.integrity;
-            }
-            writeFileSync(pluginConfigPath, `${JSON.stringify(pluginConfig, null, 2)}\n`);
-            console.log(`   ✅ Updated ${pluginConfigPath}: app.api.production`);
-          } catch (err) {
-            console.error(
-              `   ❌ Failed to update plugin bos.config.json:`,
-              err instanceof Error ? err.message : err,
-            );
+        const rootConfigPath = join(deps.configDir, "bos.config.json");
+        try {
+          const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<
+            string,
+            unknown
+          >;
+          if (!rootConfig.plugins || typeof rootConfig.plugins !== "object") {
+            rootConfig.plugins = {};
           }
-        }
-
-        const account = deps.bosConfig.account;
-        const network = getNetworkIdForAccount(account);
-
-        let pluginDomain: string | undefined;
-        if (existsSync(pluginConfigPath)) {
-          try {
-            const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
-            if (typeof pluginConfig.domain === "string") {
-              pluginDomain = pluginConfig.domain;
-            }
-          } catch {}
-        }
-        if (!pluginDomain) {
-          pluginDomain = `${input.key}.${deps.bosConfig.domain ?? "everything.dev"}`;
-        }
-
-        if (manifest && version) {
-          try {
-            const registryEntries: Record<string, string> = {
-              [`plugins/${account}/${input.key}/manifest.json`]: JSON.stringify(manifest),
-              [`plugins/${account}/${input.key}/metadata`]: JSON.stringify({
-                title: null,
-                description: null,
-                repoUrl: deps.bosConfig.repository ?? null,
-                version,
-                publishedAt: new Date().toISOString(),
-                cdnUrl: publishedUrl,
-                integrity,
-              }),
-              [`plugins/${account}/${input.key}/versions/${version}/manifest.json`]:
-                JSON.stringify(manifest),
-            };
-
-            if (existsSync(pluginConfigPath)) {
-              try {
-                const publishedPluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8"));
-                delete publishedPluginConfig.development;
-                registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
-                  JSON.stringify(publishedPluginConfig);
-              } catch {}
-            }
-
-            const payload = JSON.stringify(registryEntries);
-            const argsBase64 = Buffer.from(payload).toString("base64");
-            const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
-
-            await Effect.runPromise(ensureNearCli);
-            try {
-              await Effect.runPromise(
-                executeTransaction({
-                  account,
-                  contract: getRegistryNamespaceForNetwork(network),
-                  method: "__fastdata_kv",
-                  argsBase64,
-                  network,
-                  privateKey,
-                  gas: "50Tgas",
-                  deposit: "0NEAR",
-                }),
-              );
-            } catch (registryError) {
-              const txHash = extractTransactionHash(registryError);
-              if (!txHash) {
-                console.warn(
-                  `[publish] Plugin registry write failed: ${registryError instanceof Error ? registryError.message : registryError}`,
-                );
-              }
-            }
-          } catch (registryError) {
-            console.warn(
-              `[publish] Plugin registry write skipped: ${registryError instanceof Error ? registryError.message : registryError}`,
-            );
+          const plugins = rootConfig.plugins as Record<string, unknown>;
+          if (!plugins[input.key] || typeof plugins[input.key] !== "object") {
+            plugins[input.key] = {};
           }
+          const entry = plugins[input.key] as Record<string, unknown>;
+          entry.production = publishedUrl;
+          if (integrity) {
+            entry.integrity = integrity;
+          } else {
+            delete entry.integrity;
+          }
+          writeFileSync(rootConfigPath, `${JSON.stringify(rootConfig, null, 2)}\n`);
+          console.log(`   ✅ Updated bos.config.json: plugins.${input.key}.production`);
+        } catch (err) {
+          console.error(
+            `   ❌ Failed to update bos.config.json:`,
+            err instanceof Error ? err.message : err,
+          );
         }
 
         await generateCodeArtifacts(deps.configDir, deps.bosConfig);
@@ -882,6 +793,7 @@ export default createPlugin({
         interactive: input.interactive,
       };
 
+      const { devApp } = await loadDevSession();
       devApp(orchestrator, services, runtimeConfig);
 
       return {
@@ -1042,6 +954,7 @@ export default createPlugin({
         noLogs: true,
       };
 
+      const { startApp } = await loadDevSession();
       startApp(orchestrator, services, runtimeConfig);
       return {
         status: "running" as const,
@@ -1172,29 +1085,6 @@ export default createPlugin({
         [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishConfig),
       };
 
-      for (const [pluginKey, pluginEntry] of Object.entries(publishConfig.plugins ?? {})) {
-        const pluginRef = getPluginRef(pluginEntry);
-        if (!pluginRef?.development?.startsWith("local:")) continue;
-
-        const localPath = join(deps.configDir, pluginRef.development.slice("local:".length));
-        const pluginConfigPath = join(localPath, "bos.config.json");
-        if (!existsSync(pluginConfigPath)) continue;
-
-        try {
-          const pluginConfig = JSON.parse(readFileSync(pluginConfigPath, "utf-8")) as Record<
-            string,
-            unknown
-          >;
-          const pluginDomain =
-            typeof pluginConfig.domain === "string"
-              ? pluginConfig.domain
-              : `${pluginKey}.${gateway}`;
-          delete pluginConfig.development;
-          registryEntries[`apps/${account}/${pluginDomain}/bos.config.json`] =
-            JSON.stringify(pluginConfig);
-        } catch {}
-      }
-
       const payload = JSON.stringify(registryEntries);
       const argsBase64 = Buffer.from(payload).toString("base64");
       const privateKey =
@@ -1305,48 +1195,57 @@ export default createPlugin({
 
     init: builder.init.handler(async ({ input }) => {
       try {
-        let extendsAccount = input.extendsAccount;
-        let extendsGateway = input.extendsGateway;
+        const timings: PhaseTiming[] = [];
+        let extendsAccount = "";
+        let extendsGateway = "";
         let directory = input.directory;
         let account = input.account;
         let domain = input.domain;
-        let withUi = input.withUi;
-        let withApi = input.withApi;
-        let withHost = input.withHost;
+        let overrides = input.overrides as OverrideSection[] | undefined;
         let plugins = input.plugins;
 
         if (input.extends) {
-          const match = input.extends.match(/^(?:bos:\/\/)?([^/]+)\/(.+)$/);
+          const normalized = input.extends.startsWith("bos://")
+            ? input.extends
+            : `bos://${input.extends}`;
+          const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
           if (match) {
-            if (!extendsAccount) extendsAccount = match[1];
-            if (!extendsGateway) extendsGateway = match[2];
+            extendsAccount = match[1];
+            extendsGateway = match[2];
           }
         }
 
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
 
+        const s = p.spinner();
+        s.start("Initializing project");
+
         let parentPluginKeys: string[] = [];
         let parentConfig: BosConfig | null = null;
         try {
-          parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+          parentConfig = await timePhase(
+            timings,
+            "parent config",
+            () => fetchParentConfig(extendsAccount, extendsGateway),
+            s,
+          );
           if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
             parentPluginKeys = Object.keys(parentConfig.plugins);
           }
         } catch {}
 
         if (!input.noInteractive) {
+          s.stop("Config fetched");
+          const initialExtendsAccount = extendsAccount;
+          const initialExtendsGateway = extendsGateway;
           const prompted = await promptInitOptions({
-            extendsAccount,
-            extendsGateway,
-            extends: input.extends,
+            extends: `bos://${extendsAccount}/${extendsGateway}`,
             directory,
             account,
             domain,
-            withUi,
-            withApi,
             plugins,
-            withHost,
+            overrides,
             parentPluginKeys,
           });
           extendsAccount = prompted.extendsAccount;
@@ -1354,117 +1253,325 @@ export default createPlugin({
           directory = prompted.directory;
           account = prompted.account;
           domain = prompted.domain;
-          withUi = prompted.withUi;
-          withApi = prompted.withApi;
-          withHost = prompted.withHost;
           plugins = prompted.plugins;
+          overrides = prompted.overrides;
+
+          if (
+            !parentConfig ||
+            prompted.extendsAccount !== initialExtendsAccount ||
+            prompted.extendsGateway !== initialExtendsGateway
+          ) {
+            try {
+              parentConfig = await timePhase(
+                timings,
+                "parent config",
+                () => fetchParentConfig(prompted.extendsAccount, prompted.extendsGateway),
+                s,
+              );
+              if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
+                parentPluginKeys = Object.keys(parentConfig.plugins);
+              } else {
+                parentPluginKeys = [];
+              }
+            } catch {
+              return {
+                status: "error" as const,
+                directory,
+                extendsRef: `bos://${prompted.extendsAccount}/${prompted.extendsGateway}`,
+                account,
+                domain,
+                extends: `bos://${prompted.extendsAccount}/${prompted.extendsGateway}`,
+                plugins,
+                overrides,
+                filesCopied: 0,
+                timings,
+                error: `No config found at bos://${prompted.extendsAccount}/${prompted.extendsGateway} — are you sure this is the right parent?`,
+              };
+            }
+            s.stop("Config fetched");
+          }
+
+          if (
+            typeof parentConfig?.title === "string" &&
+            parentConfig.title.trim() &&
+            typeof parentConfig.description === "string" &&
+            parentConfig.description.trim()
+          ) {
+            const shouldContinue = await p.confirm({
+              message: `You will be extending ${parentConfig.title} - ${parentConfig.description}. Continue?`,
+              initialValue: true,
+            });
+
+            if (p.isCancel(shouldContinue) || !shouldContinue) {
+              process.exit(0);
+            }
+          }
+
+          s.start("Setting up project");
         }
 
-        directory = directory || domain || extendsGateway;
-        withUi = withUi ?? true;
-        withApi = withApi ?? true;
+        overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
+        if (overrides.includes("plugins") && !plugins?.length) {
+          plugins = parentPluginKeys;
+        }
         plugins = plugins ?? [];
+
+        directory = directory || domain || extendsGateway;
+        const targetDir = resolve(directory);
+        const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
+
+        if (overrides.includes("plugins") && !plugins.length) {
+          // explicitly selected plugins override with none selected — back out of all inherited plugins
+        }
+
+        const repository =
+          (await detectGitRemoteUrl(process.cwd()).catch(() => undefined)) ??
+          parentConfig?.repository;
 
         if (!parentConfig) {
           try {
-            parentConfig = await fetchParentConfig(extendsAccount, extendsGateway);
+            parentConfig = await timePhase(
+              timings,
+              "parent config",
+              () => fetchParentConfig(extendsAccount, extendsGateway),
+              s,
+            );
           } catch {
+            s.stop("Failed");
             return {
               status: "error" as const,
               directory,
-              extendsAccount,
-              extendsGateway,
+              extendsRef,
               account,
               domain,
-              extends: `bos://${extendsAccount}/${extendsGateway}`,
-              plugins: plugins ?? [],
+              extends: extendsRef,
+              plugins,
+              overrides,
               filesCopied: 0,
-              error: `No config found at bos://${extendsAccount}/${extendsGateway} — are you sure this is the right parent?`,
+              timings,
+              error: `No config found at ${extendsRef} — are you sure this is the right parent?`,
             };
           }
         }
 
-        const { sourceDir, cleanup } = await resolveSourceDir({
-          extendsAccount,
-          extendsGateway,
-          source: input.source,
-        });
+        const {
+          sourceDir,
+          parentConfig: resolvedParentConfig,
+          cleanup,
+        } = await timePhase(
+          timings,
+          "template source",
+          () =>
+            resolveSourceDir({
+              extendsAccount,
+              extendsGateway,
+              source: input.source,
+            }),
+          s,
+        );
+
+        parentConfig = resolvedParentConfig;
+
+        const isMinimalScaffold = sourceDir === "";
 
         try {
-          const patterns = buildInitPatterns({
-            withUi,
-            withApi,
-            withHost,
-            plugins,
-          });
+          let filesCopied: number;
 
-          const s = p.spinner();
-          s.start("Setting up project");
+          if (isMinimalScaffold) {
+            filesCopied = await timePhase(
+              timings,
+              "scaffold project",
+              () =>
+                scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
+                  extendsAccount,
+                  extendsGateway,
+                  account: account || extendsAccount,
+                  domain,
+                  plugins,
+                  overrides,
+                  repository,
+                  title: parentConfig?.title,
+                  description: parentConfig?.description,
+                }),
+              s,
+            );
 
-          const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns);
+            await timePhase(
+              timings,
+              "personalize config",
+              () =>
+                personalizeConfig(targetDir, {
+                  extendsAccount,
+                  extendsGateway,
+                  account: account || extendsAccount,
+                  domain: domain || extendsGateway,
+                  plugins,
+                  overrides,
+                  mode: "init",
+                  repository,
+                  title: parentConfig?.title,
+                  description: parentConfig?.description,
+                  testnet: parentConfig?.testnet,
+                  staging: parentConfig?.staging,
+                }),
+              s,
+            );
+          } else {
+            const patterns = buildInitPatterns(overrides, plugins);
 
-          await personalizeConfig(directory, {
-            extendsAccount,
-            extendsGateway,
-            account: account || extendsAccount,
-            domain: domain || extendsGateway,
-            withUi,
-            withApi,
-            plugins,
-            workspaceOpts: { sourceDir },
-            withHost,
-          });
+            filesCopied = await timePhase(
+              timings,
+              "copy files",
+              () =>
+                copyFilteredFiles(sourceDir, targetDir, patterns, {
+                  overrides,
+                  plugins,
+                }),
+              s,
+            );
 
-          await writeInitSnapshot(directory, extendsAccount, extendsGateway, sourceDir, patterns, {
-            withUi,
-            withApi,
-            withHost,
-            plugins,
-          });
+            await timePhase(
+              timings,
+              "personalize config",
+              () =>
+                personalizeConfig(targetDir, {
+                  extendsAccount,
+                  extendsGateway,
+                  account: account || extendsAccount,
+                  domain: domain || extendsGateway,
+                  plugins,
+                  overrides,
+                  workspaceOpts: { sourceDir },
+                  repository,
+                  title: parentConfig?.title,
+                  description: parentConfig?.description,
+                  testnet: parentConfig?.testnet,
+                  staging: parentConfig?.staging,
+                }),
+              s,
+            );
 
-          ensureEnvFile(directory, { domain });
-
-          if (!input.noInstall) {
-            await runBunInstall(directory);
-            await runTypesGen(directory);
-            await generateDatabaseMigrations(directory);
+            await timePhase(
+              timings,
+              "write snapshot",
+              () =>
+                writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
+                  overrides,
+                  plugins,
+                }),
+              s,
+            );
           }
 
-          const initConfig = await loadConfig({ cwd: directory });
-          if (initConfig?.config) {
-            await generateCodeArtifacts(directory, initConfig.config);
+          const lockfilePath = join(targetDir, "bun.lock");
+          const allowedWorkspaces = computeAllowedWorkspaces(overrides, plugins);
+          stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
+          removeInitLockfile(lockfilePath);
+
+          const initConfig = await timePhase(
+            timings,
+            "resolve config",
+            () => loadConfig({ cwd: targetDir }),
+            s,
+          );
+          if (initConfig?.runtime) {
+            await timePhase(
+              timings,
+              "generate env/docker",
+              async () => {
+                writeGeneratedInfra(targetDir, initConfig.runtime);
+              },
+              s,
+            );
+          }
+          await timePhase(
+            timings,
+            "create env file",
+            async () => {
+              ensureEnvFile(targetDir);
+            },
+            s,
+          );
+
+          if (!input.noInstall) {
+            await timePhase(timings, "install dependencies", () =>
+              runBunInstall(targetDir, s ?? undefined),
+            );
+            await timePhase(timings, "generate types", () =>
+              runTypesGen(targetDir, s ?? undefined),
+            );
+            await timePhase(
+              timings,
+              "generate migrations",
+              () => generateDatabaseMigrations(targetDir),
+              s,
+            );
+          }
+
+          if (input.noInstall && initConfig?.config) {
+            await timePhase(
+              timings,
+              "generate code artifacts",
+              () => generateCodeArtifacts(targetDir, initConfig.config),
+              s,
+            );
           }
 
           s.stop("Project initialized");
 
+          if (!input.noInteractive) {
+            const shouldStartDocker = await p.confirm({
+              message: "Run docker compose up -d --wait?",
+              initialValue: true,
+            });
+
+            if (shouldStartDocker === true) {
+              const dockerSpinner = p.spinner();
+              dockerSpinner.start("Starting Docker services");
+              try {
+                await timePhase(timings, "docker compose up", () => runDockerComposeUp(targetDir));
+                dockerSpinner.stop("Docker services ready");
+              } catch (error) {
+                dockerSpinner.stop("Docker services not started");
+                p.log.warn(
+                  `docker compose up -d --wait failed: ${error instanceof Error ? error.message : error}`,
+                );
+              }
+            }
+          }
+
           return {
             status: "initialized" as const,
             directory,
-            extendsAccount,
-            extendsGateway,
+            extendsRef,
             account,
             domain,
-            extends: `bos://${extendsAccount}/${extendsGateway}`,
+            extends: extendsRef,
             plugins,
+            overrides,
             filesCopied,
+            timings,
           };
         } finally {
           await cleanup();
         }
       } catch (error) {
+        const extendsRef = input.extends
+          ? input.extends.startsWith("bos://")
+            ? input.extends
+            : `bos://${input.extends}`
+          : "bos://dev.everything.near/everything.dev";
         return {
           status: "error" as const,
           directory: input.directory ?? "",
-          extendsAccount: input.extendsAccount ?? "",
-          extendsGateway: input.extendsGateway ?? "",
+          extendsRef,
           account: input.account,
           domain: input.domain,
-          extends:
-            input.extendsAccount && input.extendsGateway
-              ? `bos://${input.extendsAccount}/${input.extendsGateway}`
-              : "",
+          extends: extendsRef,
           plugins: input.plugins ?? [],
+          overrides: input.overrides,
           filesCopied: 0,
+          timings: [],
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
@@ -1674,4 +1781,19 @@ function extractTransactionHash(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const match = message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
   return match?.[1];
+}
+
+function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): string[] {
+  const workspaces: string[] = [];
+  for (const section of overrides) {
+    if (section === "host") workspaces.push("host");
+    if (section === "ui") workspaces.push("ui");
+    if (section === "api") workspaces.push("api");
+  }
+  if (plugins) {
+    for (const plugin of plugins) {
+      workspaces.push(`plugins/${plugin}`);
+    }
+  }
+  return workspaces;
 }

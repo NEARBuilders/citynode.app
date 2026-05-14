@@ -76,12 +76,11 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
   });
 
   it("installs dependencies", async () => {
-    const patterns = buildInitPatterns({
-      withUi: true,
-      withApi: true,
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects", "settings"]);
+    await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
+      overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
-    await copyFilteredFiles(REPO_ROOT, testDir, patterns);
 
     cpSync(join(REPO_ROOT, "packages/everything-dev"), join(testDir, "packages/everything-dev"), {
       recursive: true,
@@ -97,10 +96,9 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      withUi: true,
-      withApi: true,
-      plugins: ["apps", "projects", "settings"],
       workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
+      overrides: ["ui", "api", "plugins"],
+      plugins: ["apps", "projects", "settings"],
     });
 
     await runBunInstall(testDir);

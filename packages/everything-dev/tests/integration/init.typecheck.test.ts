@@ -79,10 +79,6 @@ function parseTypeErrors(output: string): string[] {
   return errors;
 }
 
-function isExpectedUiScaffoldError(error: string): boolean {
-  return error.includes("src/routes/_layout/_authenticated/organizations/$id.tsx");
-}
-
 function writeGeneratedAuthStubs(projectDir: string) {
   const authDir = join(projectDir, ".bos", "generated", "auth");
   mkdirSync(authDir, { recursive: true });
@@ -113,7 +109,6 @@ export type InferOutput<_TRoute extends string> = any;
 }
 
 function isUnexpectedError(error: string): boolean {
-  // Core infrastructure should never have errors
   const corePaths = [
     "ui/src/lib/",
     "ui/src/lib/api",
@@ -126,10 +121,13 @@ function isUnexpectedError(error: string): boolean {
   ];
   if (corePaths.some((p) => error.includes(p))) return true;
 
-  // Any error in generated contract files is unexpected
   if (error.includes(".gen.ts")) return true;
 
   return true;
+}
+
+function isExpectedUiScaffoldError(error: string): boolean {
+  return error.includes("src/routes/_layout/_authenticated/organizations/$id.tsx");
 }
 
 describe("bos init — typecheck", () => {
@@ -141,15 +139,14 @@ describe("bos init — typecheck", () => {
 
   afterAll(() => {
     rmSync(testDir, { recursive: true, force: true });
-  });
+  }, 30000);
 
   it("scaffolds project with template files", async () => {
-    const patterns = buildInitPatterns({
-      withUi: true,
-      withApi: true,
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects", "settings"]);
+    await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
+      overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
-    await copyFilteredFiles(REPO_ROOT, testDir, patterns);
 
     cpSync(join(REPO_ROOT, "packages/everything-dev"), join(testDir, "packages/everything-dev"), {
       recursive: true,
@@ -165,10 +162,9 @@ describe("bos init — typecheck", () => {
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      withUi: true,
-      withApi: true,
-      plugins: ["apps", "projects", "settings"],
       workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
+      overrides: ["ui", "api", "plugins"],
+      plugins: ["apps", "projects", "settings"],
     });
 
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);

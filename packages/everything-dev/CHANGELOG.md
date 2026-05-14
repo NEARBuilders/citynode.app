@@ -1,5 +1,179 @@
 # everything-dev
 
+## 1.26.1
+
+### Patch Changes
+
+- 6475dc4: Improve `bos init` prompt copy by renaming the local override question to customization language and adding a confirmation step that shows the parent app title and description when both are available.
+
+  Fix framework install resolution so `bos init` removes copied `bun.lock` files before install and `bos upgrade` uses `bun install --force`, preventing stale lockfile entries from downgrading `everything-dev` away from the intended version.
+
+## 1.26.0
+
+### Minor Changes
+
+- ab62a37: - **Strip inheritable config fields in init and sync**: `bos init` and `bos sync` now strip `title`, `description`, `testnet`, `staging`, and `repository` from the child `bos.config.json`. These are inherited via `extends` — including them caused child projects to show stale parent metadata.
+  - **Strip non-overridden app sections and production fields in sync**: Previously `app.host` and `app.auth` leaked into child configs during sync unless explicitly overridden. Now non-overridden sections are removed, and `production`/`integrity`/`ssr` fields are stripped from overridden entries in both init and sync modes.
+  - **Remove empty `plugins: {}`**: Empty plugins objects are now deleted instead of preserved, keeping the config clean.
+  - **Fix stale catalog versions**: `personalizeConfig` now merges `resolveFrameworkCatalog()` over the copied `package.json` catalog, so all versions match the currently-running CLI instead of the parent template's versions.
+  - **Fix upgrade not applying new versions**: `bos upgrade` uses plain `bun install` (without `--ignore-scripts` or `--force`) instead of `bun install --force`. This avoids bumping unrelated transitive dependencies while correctly resolving changed catalog entries.
+  - **Restore lockfile-aware init**: Init uses `stripOrphanedWorkspacesFromLockfile` instead of deleting `bun.lock`, preserving dependency resolutions and making installs fast (~seconds instead of minutes).
+  - **Carry `.templatekeep` forward**: `readTemplatekeep` always includes `.templatekeep` itself in returned patterns, and `.templatekeep` was added to the root template. Child projects can now run `bos sync` without "No .templatekeep found" errors.
+  - **Add convenience `bos` script**: Both `personalizeConfig` and `scaffoldMinimalProject` add `"bos": "node_modules/.bin/bos"` to `package.json` scripts for `bun run bos <command>`.
+
+### Patch Changes
+
+- fb7e711: Fix child plugin workspace selection during init and sync by replacing `plugins/*` with the concrete selected plugin workspaces and ensuring stripped plugin config is written back to `bos.config.json`.
+
+  Add integration coverage for real parent config personalization, plugin-owned file selection, and sync ownership rules so init/sync reliably preserve app-owned files while keeping framework-owned files in sync.
+
+## 1.25.0
+
+### Minor Changes
+
+- b84cfaa: - **Strip inheritable config fields**: `bos init` no longer duplicates `title`, `description`, `testnet`, `staging`, or `repository` from the parent config into the child project. These are inherited via `extends` — including them caused child projects to show stale parent metadata.
+  - **Fix stale catalog versions**: `personalizeConfig` now merges `resolveFrameworkCatalog()` over the copied `package.json` catalog, so all package versions (react, better-auth, @orpc/\*, etc.) match the currently-running CLI instead of the parent template's versions.
+  - **Fix upgrade not applying new versions**: `bos upgrade` now uses `bun install --force` (without `--ignore-scripts`) instead of deleting `bun.lock`. This forces Bun to re-resolve changed packages from the registry while preserving the lockfile structure, fixing the bug where `everything-dev v1.15.0` persisted after upgrade to `v1.23.0` — without the slow full-lockfile regeneration that caused upgrades to stall.
+  - **Carry `.templatekeep` forward**: `readTemplatekeep` now always includes `.templatekeep` itself in returned patterns, and `.templatekeep` was added to the root template. Child projects can now run `bos sync` without "No .templatekeep found" errors.
+  - **Add convenience `bos` script**: Both `personalizeConfig` and `scaffoldMinimalProject` now add `"bos": "node_modules/.bin/bos"` to `package.json` scripts, so `bun run bos <command>` works for ad-hoc CLI calls like `bun run bos status`.
+  - **Delete stale lockfile during init**: The init flow now deletes `bun.lock` before `bun install`, ensuring a fresh resolution that matches the updated catalog.
+
+## 1.24.0
+
+### Minor Changes
+
+- e018b05: - **Strip inheritable config fields**: `bos init` no longer duplicates `title`, `description`, `testnet`, `staging`, or `repository` from the parent config into the child project. These are inherited via `extends` — including them caused child projects to show stale parent metadata.
+  - **Fix stale catalog versions**: `personalizeConfig` now merges `resolveFrameworkCatalog()` over the copied `package.json` catalog, so all package versions (react, better-auth, @orpc/\*, etc.) match the currently-running CLI instead of the parent template's versions.
+  - **Fix upgrade not applying new versions**: `bos upgrade` now deletes `bun.lock` before running `bun install` and runs install without `--ignore-scripts`. This forces Bun to re-resolve dependencies instead of reusing stale lockfile entries, fixing the bug where `everything-dev v1.15.0` persisted after upgrade.
+  - **Carry `.templatekeep` forward**: `readTemplatekeep` now always includes `.templatekeep` itself in returned patterns, and `.templatekeep` was added to the root template. Child projects can now run `bos sync` without "No .templatekeep found" errors.
+  - **Add convenience `bos` script**: Both `personalizeConfig` and `scaffoldMinimalProject` now add `"bos": "node_modules/.bin/bos"` to `package.json` scripts, so `bun run bos <command>` works for ad-hoc CLI calls like `bun run bos status`.
+  - **Delete stale lockfile during init**: The init flow now deletes `bun.lock` before `bun install`, ensuring a fresh resolution that matches the updated catalog.
+
+## 1.23.0
+
+### Minor Changes
+
+- 24314cc: Fix `bos init` hanging during "Installing dependencies...":
+
+  - **Populate full catalog**: Read `workspaces.catalog` from the running CLI's monorepo root and include all 42 entries, so workspace `catalog:` references resolve. Previously the minimal scaffold wrote an empty catalog, causing Bun to hang on resolve.
+  - **Seed lockfile**: Add `bun.lock` to `.templatekeep` so the template lockfile is copied during init, giving Bun a warm start instead of resolving everything from scratch.
+  - **Strip orphaned workspaces from lockfile**: New `stripOrphanedWorkspacesFromLockfile` removes workspace entries (e.g. `host`, `packages/*`, `plugins/*`) that don't exist in the scaffolded project, preventing resolution errors.
+  - **Call `personalizeConfig` in minimal scaffold path**: The minimal scaffold was skipping config personalization, leaving `postinstall` and `types:gen` scripts pointing at the monorepo paths instead of `node_modules/.bin/bos`.
+  - **Elapsed-time spinner**: `runBunInstall` and `runTypesGen` now update the spinner with elapsed seconds (e.g. "Installing dependencies... (8s)") while running.
+  - **Stream command output**: `bun install`, `bos types gen`, and `docker compose up` now stream their output via `stdio: "inherit"` instead of swallowing it.
+  - **Command timeouts**: `execCommand` now applies timeouts (5 min for bun/docker, 1 min for tar, 2 min default) so a hung process can't block the CLI forever.
+  - **`fetchRemotePluginManifest` timeout**: Added 10s `AbortController` timeout matching the existing `fetchJson` pattern.
+  - **Tests**: New `init.install-progress.test.ts` validates catalog population and lockfile workspace stripping.
+
+## 1.22.0
+
+### Minor Changes
+
+- b0b7b8b: Fix `bos init` hanging during "Installing dependencies..." on minimal scaffolds (no template repository):
+
+  - Populate `workspaces.catalog` with resolved framework versions so `catalog:` deps can be resolved by Bun. Previously the catalog was empty, causing `bun install` to hang or fail silently.
+  - Call `personalizeConfig` in the minimal scaffold path so scripts, workspace refs, and gen-file stubs are created — matching the behavior of the full template path.
+  - Stream output from `bun install`, `bos types gen`, and `docker compose up` instead of piping to `/dev/null`, so install progress and errors are visible.
+  - Add timeouts to `execCommand` calls (5 min for bun/docker, 2 min default) so a hung command can't block the CLI forever.
+  - Add a 10s timeout to `fetchRemotePluginManifest` to match the existing `fetchJson` timeout pattern.
+
+## 1.21.0
+
+### Minor Changes
+
+- 52bb6cd: Add `bos init` support for extending any deployed app. The `--extends` flag now accepts `bos://account/gateway` or `account/gateway` shorthand to extend any published app. When the parent config has no `repository`, `bos init` walks the `extends` chain to find one, then falls back to a minimal scaffold inheriting the parent runtime config. Removed `--extends-account` and `--extends-gateway` in favor of the single `--extends` flag. Init now shows progress labels for each phase (fetching config, resolving source, copying files, installing deps, etc.) instead of a single stalled spinner. Outdated package warnings now only show for `everything-dev` and `every-plugin` (framework packages), not transitive deps like rspack or module-federation.
+- 52bb6cd: Replace `--withHost` with `--overrides` flag for `bos init`. The new `--overrides` flag accepts a comma-separated list of sections to include locally: `ui`, `api`, `host`, `plugins`. Default is `ui,api` — a minimal config that inherits everything else from the parent at runtime. Use `--overrides=ui,api,host,plugins` to match the old `--withHost` behavior. Specifying `--overrides=plugins` (with or without `--plugins`) controls which plugins get local source. Plugin inheritance via `extends` works without local overrides — `--overrides=plugins` is only needed for local plugin development. Also adds automatic `repository` detection from git remote and produces a minimal `bos.config.json` by default.
+
+## 1.20.0
+
+### Minor Changes
+
+- ebbbffa: Add `bos init` support for extending any deployed app. The `--extends` flag now accepts `bos://account/gateway` or `account/gateway` shorthand to extend any published app. When the parent config has no `repository`, `bos init` walks the `extends` chain to find one, then falls back to a minimal scaffold inheriting the parent runtime config. Removed `--extends-account` and `--extends-gateway` in favor of the single `--extends` flag. Init now shows progress labels for each phase (fetching config, resolving source, copying files, installing deps, etc.) instead of a single stalled spinner.
+
+### Patch Changes
+
+- ebbbffa: Reverted catalog dependencies to stable versions:
+
+  - @rspack/core: 2.0.3 → 1.7.11
+  - @rspack/cli: 2.0.3 → 1.7.11
+  - @rsbuild/core: 2.0.6 → 1.7.5
+  - @rsbuild/plugin-react: 2.0.0 → 1.4.6
+  - @module-federation/enhanced: 2.4.0 → 2.3.2
+  - @module-federation/node: 2.7.42 → 2.7.40
+  - @module-federation/rsbuild-plugin: 2.4.0 → 2.3.2
+  - @module-federation/runtime-core: 2.4.0 → 2.3.2
+  - @module-federation/sdk: 2.4.0 → 2.3.2
+  - @module-federation/dts-plugin: 2.4.0 → 2.3.2
+
+  The 2.0 rspack/rsbuild and 2.4 module-federation upgrades introduced breaking
+  dev-server middleware API changes that broke plugin hot-reload. Reverting to
+  the last known-good 1.7.x / 2.3.2 line until the ecosystem stabilizes.
+
+## 1.19.0
+
+### Minor Changes
+
+- 2047ace: Add `bos init` support for extending any deployed app. The `--extends` flag now accepts `bos://account/gateway` or `account/gateway` to extend any published app, not just the default template. When the parent config has no `repository` field, `bos init` walks the `extends` chain to find one, then falls back to a minimal scaffold (just `bos.config.json`, `package.json`, `.env.example`, `.gitignore`) inheriting the parent's runtime config. Removed `--extends-account` and `--extends-gateway` in favor of the single `--extends` flag.
+
+### Patch Changes
+
+- 27bfb06: fix(ci): restore empty `NODE_AUTH_TOKEN` env var for npm provenance publishing
+
+  Commit `4c72604` removed `NODE_AUTH_TOKEN` from the npm publish steps when switching to OIDC trusted publishing. However, `actions/setup-node` with `registry-url` generates an `.npmrc` containing `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}`. When this env var is completely absent, npm fails with `OIDC publish authorize: Invalid token` because the `.npmrc` placeholder is unresolved.
+
+  Restoring `NODE_AUTH_TOKEN: ""` satisfies the `.npmrc` syntax while allowing npm to fall through to the GitHub OIDC token for `--provenance` authentication.
+
+## 1.18.0
+
+### Minor Changes
+
+- faa99d6: Eliminate per-plugin `bos.config.json` files. All plugin metadata (secrets, variables, routes, sidebar, production URLs) now lives directly in root `bos.config.json` under `plugins.<key>`. Plugin rspack configs write deployment URLs to root config. `extends` support remains for cross-app composition. `bos upgrade` migrates plugin configs into root and deletes them.
+
+## 1.17.0
+
+### Minor Changes
+
+- e4e6e3a: Add targeted `extends#path` support for composable app entries, move plugin provider metadata onto `plugins.<id>` entries, and migrate `bos init`/`bos upgrade` to the new plugin config shape. This also fixes local plugin path resolution during scaffolding so selected plugins are copied and wired correctly, including the no-plugins init path.
+
+## 1.16.3
+
+### Patch Changes
+
+- d5b4f00: Lazy-load the dev runtime so `bos types gen` does not pull in `@effect/platform-node` during CLI startup, and add regression coverage for init-generated projects running type generation after install.
+- d5b4f00: Stop inheriting parent plugins through `extends`, remove the fake plugin registry path, make `bos upgrade` offer new parent plugins as an explicit opt-in, and fix `bos init` to generate `.env.example`, `.env`, and `docker-compose.yml` from resolved secrets. Also speed up `bos init` by removing duplicate codegen, add timeouts to remote contract fetches, and print per-phase timing summaries for `bos init` and `bos upgrade`.
+
+## 1.16.2
+
+### Patch Changes
+
+- 33bd84e: Stop inheriting parent plugins through `extends`, remove the fake plugin registry path, make `bos upgrade` offer new parent plugins as an explicit opt-in, and fix `bos init` to generate `.env.example`, `.env`, and `docker-compose.yml` from resolved secrets.
+
+## 1.16.1
+
+### Patch Changes
+
+- 0e1c067: Stop inheriting parent plugins through `extends`, remove the fake plugin registry path, and make `bos upgrade` offer new parent plugins as an explicit opt-in.
+
+## 1.16.0
+
+### Minor Changes
+
+- 4bd76f7: Remove hardcoded plugin list and fix bos.config.json field ordering
+
+  - **Dynamic plugin discovery**: The `AVAILABLE_PLUGINS` hardcoded array (containing only "settings") is gone. Plugin options are now discovered from the parent config's `plugins` key, so `bos init` shows whatever plugins the parent template actually offers.
+
+  - **Removed `["settings"]` fallback**: `bos init` no longer defaults to `["settings"]` when no plugins are specified. The user selects plugins or gets none.
+
+  - **Fixed config field ordering**: `title` and `description` are now placed after `domain` in `bos.config.json` (was: after `shared`), matching the intended order: `extends → account → domain → title → description`.
+
+  - **Fixed plugin leakage during sync/upgrade**: `personalizeConfig` now correctly filters out unwanted plugins when `opts.plugins` is an empty array (previously skipped filtering, letting all parent plugins through).
+
+  - **Removed `plugins/settings/**`from`.templatekeep`**: Plugin source files are no longer hard-coded into the template; only `plugins/\*/bos.config.json` is included so init/sync can set up plugin configs for selected plugins.
+
+### Patch Changes
+
+- 4bd76f7: Replace `node:child_process` spawn with `shell: true` by `execa` for cross-platform command execution, eliminating the DEP0190 deprecation warning
+
 ## 1.15.0
 
 ### Minor Changes
