@@ -442,20 +442,22 @@ export async function personalizeConfig(
 
     if (pkg.scripts && typeof pkg.scripts === "object") {
       const scripts = pkg.scripts as Record<string, string>;
-      const rewrite = (key: string, from: string, to: string) => {
-        if (scripts[key]?.includes(from)) {
-          scripts[key] = scripts[key].replaceAll(from, to);
+      const FROM = "bun packages/everything-dev/src/cli.ts";
+      const TO = "node_modules/.bin/bos";
+      const rewrite = (key: string) => {
+        if (scripts[key]?.includes(FROM)) {
+          scripts[key] = scripts[key].replaceAll(FROM, TO);
         }
       };
-      rewrite("dev", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("dev:ui", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("dev:api", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("dev:proxy", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("build", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("deploy", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("publish", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-      rewrite("start", "packages/everything-dev/src/cli.ts", "node_modules/.bin/bos");
-
+      rewrite("dev");
+      rewrite("dev:ui");
+      rewrite("dev:api");
+      rewrite("dev:proxy");
+      rewrite("build");
+      rewrite("deploy");
+      rewrite("publish");
+      rewrite("start");
+      rewrite("bos");
       scripts.postinstall = "node_modules/.bin/bos types gen || true";
       scripts["types:gen"] = "node_modules/.bin/bos types gen";
       if (scripts.typecheck) {
@@ -471,10 +473,6 @@ export async function personalizeConfig(
         if (!has("host")) {
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
         }
-      }
-
-      if (!scripts.bos) {
-        scripts.bos = "node_modules/.bin/bos";
       }
     }
 
