@@ -172,4 +172,47 @@ describe("syncTemplate", () => {
     expect(result.added).not.toContain("plugins/apps/package.json");
     expect(result.added).not.toContain("plugins/settings/package.json");
   });
+
+  it("preserves child root metadata and prunes stale local plugin entries during sync", async () => {
+    const projectDir = await scaffoldProject(["ui", "api", "plugins"], ["apps"]);
+    tempDirs.push(projectDir);
+
+    const configPath = join(projectDir, "bos.config.json");
+    const config = JSON.parse(readFileSync(configPath, "utf-8")) as {
+      title?: string;
+      repository?: string;
+      description?: string;
+      plugins?: Record<string, Record<string, unknown>>;
+    };
+
+    config.title = "child app";
+    config.repository = "https://github.com/example/child-app";
+    config.plugins = {
+      ...(config.plugins ?? {}),
+      settings: {
+        development: "local:plugins/settings",
+      },
+    };
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    const result = await syncTemplate(projectDir, {
+      dryRun: false,
+      force: false,
+      noInstall: true,
+    });
+
+    expect(result.status).toBe("synced");
+
+    const syncedConfig = JSON.parse(readFileSync(configPath, "utf-8")) as {
+      title?: string;
+      repository?: string;
+      description?: string;
+      plugins?: Record<string, Record<string, unknown>>;
+    };
+
+    expect(syncedConfig.title).toBe("child app");
+    expect(syncedConfig.repository).toBe("https://github.com/example/child-app");
+    expect(syncedConfig.description).toBeUndefined();
+    expect(Object.keys(syncedConfig.plugins ?? {})).toEqual(["apps"]);
+  });
 });

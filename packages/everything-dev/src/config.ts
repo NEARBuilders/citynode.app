@@ -657,6 +657,10 @@ async function resolveRuntimePlugins(
 
     const pluginRuntime = buildRuntimePluginConfig(pluginId, env, resolvedReference);
 
+    if (!pluginRuntime.localPath && !pluginRuntime.url) {
+      continue;
+    }
+
     if (
       pluginRuntime.source === "remote" &&
       pluginRuntime.url &&

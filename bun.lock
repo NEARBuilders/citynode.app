@@ -69,7 +69,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -108,7 +108,7 @@
     },
     "packages/every-plugin": {
       "name": "every-plugin",
-      "version": "2.5.10",
+      "version": "2.5.11",
       "dependencies": {
         "@module-federation/enhanced": "catalog:",
         "@module-federation/node": "catalog:",
@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.26.1",
+      "version": "1.27.0",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -282,7 +282,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "dependencies": {
         "@better-auth/api-key": "catalog:",
         "@better-auth/passkey": "catalog:",
@@ -404,8 +404,8 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.0",
-    "every-plugin": "^2.5.9",
-    "everything-dev": "^1.14.1",
+    "every-plugin": "^2.5.11",
+    "everything-dev": "^1.27.0",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",

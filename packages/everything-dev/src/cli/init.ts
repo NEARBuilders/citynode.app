@@ -319,6 +319,7 @@ export async function personalizeConfig(
     pluginRoutes?: Record<string, string[]>;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
     mode?: "init" | "sync";
+    existingConfig?: Record<string, unknown>;
     repository?: string;
     title?: string;
     description?: string;
@@ -327,6 +328,25 @@ export async function personalizeConfig(
   },
 ): Promise<void> {
   const has = (section: OverrideSection) => opts.overrides.includes(section);
+
+  const explicitRootKeys = new Set(
+    Object.entries(opts)
+      .filter(
+        ([key, value]) =>
+          value !== undefined &&
+          ![
+            "extendsAccount",
+            "extendsGateway",
+            "plugins",
+            "overrides",
+            "pluginRoutes",
+            "workspaceOpts",
+            "mode",
+            "existingConfig",
+          ].includes(key),
+      )
+      .map(([key]) => key),
+  );
 
   const configPath = join(destination, "bos.config.json");
   if (existsSync(configPath)) {
@@ -406,6 +426,27 @@ export async function personalizeConfig(
       }
     } else {
       delete config.plugins;
+    }
+
+    if (opts.mode === "sync" && opts.existingConfig) {
+      const managedRootKeys = new Set(["extends", "account", "domain", "app", "plugins", "shared"]);
+      const preservedRootKeys = new Set([
+        ...managedRootKeys,
+        ...Object.keys(opts.existingConfig),
+        ...explicitRootKeys,
+      ]);
+
+      for (const key of Object.keys(config)) {
+        if (!preservedRootKeys.has(key)) {
+          delete config[key];
+        }
+      }
+
+      for (const [key, value] of Object.entries(opts.existingConfig)) {
+        if (!(key in config) && !managedRootKeys.has(key) && !explicitRootKeys.has(key)) {
+          config[key] = value;
+        }
+      }
     }
 
     await saveBosConfig(destination, config);

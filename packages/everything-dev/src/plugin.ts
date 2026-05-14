@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { access, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { Effect } from "effect";
@@ -171,6 +172,19 @@ type WorkspaceTarget = {
   path: string;
 };
 
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readJsonFile<T>(path: string): Promise<T> {
+  return JSON.parse(await readFile(path, "utf8")) as T;
+}
+
 function resolveWorkspaceTarget(
   key: string,
   bosConfig: BosConfig | null,
@@ -327,13 +341,13 @@ function extractPublishedUrl(output: string): string | null {
 
 async function buildEveryPluginQuietly(cwd: string) {
   const packageDir = `${cwd}/packages/every-plugin`;
-  const packageExists = await Bun.file(`${packageDir}/package.json`).exists();
+  const packageExists = await fileExists(`${packageDir}/package.json`);
   if (!packageExists) {
     return;
   }
 
   const distPath = `${cwd}/packages/every-plugin/dist/build/rspack/plugin.mjs`;
-  const distExists = await Bun.file(distPath).exists();
+  const distExists = await fileExists(distPath);
 
   if (distExists) {
     return;
@@ -364,13 +378,13 @@ async function buildEveryPluginQuietly(cwd: string) {
 
 async function buildEverythingDevQuietly(cwd: string) {
   const packageDir = `${cwd}/packages/everything-dev`;
-  const packageExists = await Bun.file(`${packageDir}/package.json`).exists();
+  const packageExists = await fileExists(`${packageDir}/package.json`);
   if (!packageExists) {
     return;
   }
 
   const distPath = `${cwd}/packages/everything-dev/dist/index.mjs`;
-  const distExists = await Bun.file(distPath).exists();
+  const distExists = await fileExists(distPath);
 
   if (distExists) {
     return;
@@ -447,7 +461,7 @@ async function buildWorkspaceTargets(opts: {
       continue;
     }
 
-    const exists = await Bun.file(`${resolved.path}/package.json`).exists();
+    const exists = await fileExists(`${resolved.path}/package.json`);
     if (exists) existing.push(resolved);
     else skipped.push(target);
   }
@@ -492,9 +506,9 @@ async function buildWorkspaceTargets(opts: {
   const built: string[] = [];
 
   for (const resolved of orderedExisting) {
-    const pkgJson = JSON.parse(await Bun.file(`${resolved.path}/package.json`).text()) as {
+    const pkgJson = await readJsonFile<{
       scripts?: Record<string, string>;
-    };
+    }>(`${resolved.path}/package.json`);
     const shouldDeployScript = opts.deploy && pkgJson.scripts?.deploy;
     const buildConfig = shouldDeployScript
       ? { cmd: "bun", args: ["run", "deploy"] }
@@ -658,7 +672,7 @@ export default createPlugin({
       }
 
       const pkgPath = join(localPath, "package.json");
-      if (!(await Bun.file(pkgPath).exists())) {
+      if (!(await fileExists(pkgPath))) {
         return {
           status: "error" as const,
           key: input.key,
@@ -666,11 +680,11 @@ export default createPlugin({
         };
       }
 
-      const pkgJson = (await Bun.file(pkgPath).json()) as {
+      const pkgJson = await readJsonFile<{
         scripts?: Record<string, string>;
         name?: string;
         version?: string;
-      };
+      }>(pkgPath);
       const script = pkgJson.scripts?.deploy ? "deploy" : "build";
 
       const { stdout, stderr, exitCode } = (await run("bun", ["run", script], {

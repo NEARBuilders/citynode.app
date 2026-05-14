@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   getResolvedConfigPath,
+  loadConfig,
   loadResolvedConfig,
   readBosConfigForBuild,
   resolveBosConfigPath,
@@ -176,6 +177,54 @@ describe("readBosConfigForBuild", () => {
       expect(result.account).toBe("fallback.near");
     } finally {
       rmSync(emptyDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("loadConfig plugin runtime filtering", () => {
+  it("omits plugin entries that resolve to neither a local path nor a production URL", async () => {
+    const testDir = mkdtempSync(join(tmpdir(), "bos-config-runtime-"));
+
+    try {
+      writeFileSync(
+        join(testDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "test.near",
+            domain: "test.dev",
+            plugins: {
+              settings: {
+                development: "local:plugins/settings",
+              },
+            },
+            app: {
+              host: {
+                development: "http://localhost:3000",
+                production: "https://host.example.com",
+              },
+              ui: {
+                name: "ui",
+                development: "http://localhost:3003",
+                production: "https://ui.example.com",
+              },
+              api: {
+                name: "api",
+                development: "http://localhost:3001",
+                production: "https://api.example.com",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const loaded = await loadConfig({ cwd: testDir });
+
+      expect(loaded).not.toBeNull();
+      expect(loaded?.runtime.plugins).toBeUndefined();
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
     }
   });
 });

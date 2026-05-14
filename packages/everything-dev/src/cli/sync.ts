@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { glob } from "glob";
 import { loadConfig } from "../config";
 import type { SyncOptions, SyncResult } from "../contract";
 import {
@@ -278,6 +279,65 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
   writeFileSync(dest, readFileSync(src));
 }
 
+async function getSelectedChildPlugins(
+  projectDir: string,
+  localConfig: Record<string, unknown>,
+): Promise<string[]> {
+  if (!localConfig.plugins || typeof localConfig.plugins !== "object") {
+    return [];
+  }
+
+  const pluginDirs = new Set(
+    (
+      await glob("plugins/*/package.json", {
+        cwd: projectDir,
+        nodir: true,
+        dot: false,
+        absolute: false,
+      })
+    )
+      .map((file) => file.match(/^plugins\/([^/]+)\/package\.json$/)?.[1])
+      .filter((key): key is string => Boolean(key)),
+  );
+
+  const selected: string[] = [];
+  for (const [pluginKey, rawEntry] of Object.entries(
+    localConfig.plugins as Record<string, unknown>,
+  )) {
+    if (typeof rawEntry === "string") {
+      if (!rawEntry.startsWith("local:")) {
+        selected.push(pluginKey);
+        continue;
+      }
+
+      const localPath = join(projectDir, rawEntry.slice("local:".length).trim());
+      if (existsSync(localPath) || pluginDirs.has(pluginKey)) {
+        selected.push(pluginKey);
+      }
+      continue;
+    }
+
+    if (!rawEntry || typeof rawEntry !== "object") {
+      selected.push(pluginKey);
+      continue;
+    }
+
+    const entry = rawEntry as Record<string, unknown>;
+    const development = typeof entry.development === "string" ? entry.development : undefined;
+    if (!development?.startsWith("local:")) {
+      selected.push(pluginKey);
+      continue;
+    }
+
+    const localPath = join(projectDir, development.slice("local:".length).trim());
+    if (existsSync(localPath) || pluginDirs.has(pluginKey)) {
+      selected.push(pluginKey);
+    }
+  }
+
+  return selected;
+}
+
 export async function syncTemplate(projectDir: string, options: SyncOptions): Promise<SyncResult> {
   // Sync reads the raw bos.config.json (not the resolved config) because it needs
   // the user's explicit local settings: their extends ref, selected plugins, etc.
@@ -323,10 +383,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
   });
 
   try {
-    const childPlugins =
-      localConfig.plugins && typeof localConfig.plugins === "object"
-        ? Object.keys(localConfig.plugins as Record<string, unknown>)
-        : [];
+    const childPlugins = await getSelectedChildPlugins(projectDir, localConfig);
     const withUi = existsSync(join(projectDir, "ui", "package.json"));
     const withApi = existsSync(join(projectDir, "api", "package.json"));
     const withHost = existsSync(join(projectDir, "host", "package.json"));
@@ -414,6 +471,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       plugins: childPlugins,
       workspaceOpts: { sourceDir },
       mode: "sync",
+      existingConfig: localConfig,
     });
 
     const syncedConfig = await loadConfig({ cwd: projectDir });
