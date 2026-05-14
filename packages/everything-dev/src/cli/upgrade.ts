@@ -726,8 +726,8 @@ export async function upgradeTemplate(
         const installed = readInstalledVersion(projectDir, name);
         if (!installed) continue;
         const targetVersion =
-          extractVersion(sourceRootCatalog[name]) ??
           PINNED_CATALOG_TOOL_VERSIONS[name] ??
+          extractVersion(sourceRootCatalog[name]) ??
           installed;
         if (installed === targetVersion) continue;
         nextCatalogVersionUpdates.push({ name, from: installed, to: targetVersion });

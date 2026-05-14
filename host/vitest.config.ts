@@ -7,7 +7,6 @@ export default defineConfig({
     testTimeout: 30000,
     include: ["tests/**/*.test.ts"],
     globalSetup: ["./tests/global-setup.ts"],
-    setupFiles: ["./tests/vitest.setup.ts"],
   },
   plugins: [
     tsconfigPaths({
