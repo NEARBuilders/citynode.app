@@ -1,10 +1,23 @@
 #!/usr/bin/env node
+import * as p from "@clack/prompts";
 import { findCommandDescriptor } from "./cli/catalog";
 import { printHelp } from "./cli/help";
+import { fetchParentConfig, runDockerComposeUp } from "./cli/init";
 import { parseCommandInput } from "./cli/parse";
+import { promptInitBasic, promptInitOverrides } from "./cli/prompts";
 import { formatDuration, sumPhaseDurations } from "./cli/timing";
 import { findConfigPath } from "./config";
-import bosPlugin from "./plugin";
+import type {
+  DevOptions,
+  DevResult,
+  InitOptions,
+  InitResult,
+  OverrideSection,
+  StartOptions,
+  StartResult,
+} from "./contract";
+import type { ProgressEvent, StartSummary } from "./plugin";
+import bosPlugin, { consumeDevSession, pluginEvents } from "./plugin";
 import { createPluginRuntime } from "./sdk";
 import { printBanner } from "./utils/banner";
 import { colors, frames, gradients, icons } from "./utils/theme";
@@ -61,6 +74,31 @@ function printTimingSummary(timings: Array<{ name: string; durationMs: number }>
   console.log(
     `    ${colors.dim("total".padEnd(22))} ${formatDuration(sumPhaseDurations(timings))}`,
   );
+}
+
+function printStartSummary(summary: StartSummary) {
+  console.log();
+  console.log(`  ${colors.dim("Config Source:")}  ${summary.configSource}`);
+  if (summary.configSourceHttp) {
+    console.log(`                  ${colors.dim(summary.configSourceHttp)}`);
+  }
+  console.log(`  ${colors.dim("Account:")}        ${summary.account}`);
+  console.log(`  ${colors.dim("Domain:")}         ${summary.domain ?? "not configured"}`);
+  console.log();
+  console.log(`  ${colors.dim("Modules:")}`);
+  console.log(`    ${colors.dim("HOST")}  → ${summary.modules.host ?? "local"}`);
+  console.log(`    ${colors.dim("UI")}   → ${summary.modules.ui ?? "local"}`);
+  console.log(`    ${colors.dim("API")}  → ${summary.modules.api ?? "local"}`);
+  if (summary.modules.auth) {
+    console.log(`    ${colors.dim("AUTH")}  → ${summary.modules.auth}`);
+  }
+  if (summary.warnings.length > 0) {
+    console.log();
+    for (const w of summary.warnings) {
+      console.log(`  ${colors.yellow(w)}`);
+    }
+  }
+  console.log();
 }
 
 async function warnIfOutdated(client: any, command: string): Promise<void> {
@@ -143,26 +181,204 @@ async function main() {
 
   try {
     const input = parseCommandInput(descriptor, commandArgs);
-    const result = await (client as any)[descriptor.key](input);
 
-    if (descriptor.key === "config") {
-      if (!result.config) {
-        console.error("No bos.config.json found");
+    if (descriptor.key === "dev") {
+      const devSpinner = p.spinner();
+      devSpinner.start("Starting dev environment");
+
+      const devPhaseLabels: Record<string, string> = {
+        config: "Preparing config...",
+        install: "Installing dependencies...",
+        "build plugin": "Building plugin...",
+        build: "Building everything-dev...",
+      };
+
+      const onDevProgress = (event: ProgressEvent) => {
+        const label = devPhaseLabels[event.phase] ?? event.phase;
+        if (event.status === "running") {
+          devSpinner.message(label);
+        }
+      };
+      pluginEvents.on("progress", onDevProgress);
+
+      let result: DevResult;
+      try {
+        result = await client.dev(input as DevOptions);
+      } finally {
+        pluginEvents.off("progress", onDevProgress);
+      }
+
+      if (result.status === "error") {
+        devSpinner.stop("Failed");
+        console.error(`[CLI] ${result.description}`);
         process.exit(1);
       }
 
-      printConfigView(result.config);
-      process.stdout.write(`${JSON.stringify(result.config, null, 2)}\n`);
+      devSpinner.stop(result.description || "Started");
+
+      const session = consumeDevSession();
+      if (session) {
+        const { devApp } = await import("./dev-session");
+        devApp(session.orchestrator, session.services, session.runtimeConfig);
+      }
+      return;
+    }
+
+    if (descriptor.key === "start") {
+      const startSpinner = p.spinner();
+      startSpinner.start("Starting production environment");
+
+      const startPhaseLabels: Record<string, string> = {
+        config: "Preparing config...",
+        "generate artifacts": "Generating code artifacts...",
+      };
+
+      const onStartProgress = (event: ProgressEvent) => {
+        const label = startPhaseLabels[event.phase] ?? event.phase;
+        if (event.status === "running") {
+          startSpinner.message(label);
+        }
+      };
+      pluginEvents.on("progress", onStartProgress);
+
+      let result: StartResult;
+      try {
+        result = await client.start(input as StartOptions);
+      } finally {
+        pluginEvents.off("progress", onStartProgress);
+      }
+
+      if (result.status === "error") {
+        startSpinner.stop("Failed");
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
+
+      startSpinner.stop("Ready");
+
+      const session = consumeDevSession();
+      if (session) {
+        const summary = session.summary;
+        if (summary) {
+          printStartSummary(summary);
+        }
+        const { startApp } = await import("./dev-session");
+        startApp(session.orchestrator, session.services, session.runtimeConfig);
+      }
       return;
     }
 
     if (descriptor.key === "init") {
-      console.log();
+      let initInput: InitOptions = { ...(input as InitOptions) };
+
+      if (!initInput.noInteractive) {
+        const basic = await promptInitBasic({
+          extends: initInput.extends,
+          account: initInput.account,
+          domain: initInput.domain,
+        });
+
+        let parentPluginKeys: string[] = [];
+        let parentConfig: {
+          title?: string;
+          description?: string;
+          plugins?: Record<string, unknown>;
+        } | null = null;
+
+        const fetchSpinner = p.spinner();
+        fetchSpinner.start("Fetching parent config");
+        try {
+          parentConfig = await fetchParentConfig(basic.extendsAccount, basic.extendsGateway);
+          if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
+            parentPluginKeys = Object.keys(parentConfig.plugins);
+          }
+        } catch {
+          fetchSpinner.stop("Config not found");
+          console.error(
+            `[CLI] No config found at bos://${basic.extendsAccount}/${basic.extendsGateway}`,
+          );
+          process.exit(1);
+        }
+        fetchSpinner.stop("Config fetched");
+
+        if (
+          typeof parentConfig?.title === "string" &&
+          parentConfig.title.trim() &&
+          typeof parentConfig?.description === "string" &&
+          parentConfig.description.trim()
+        ) {
+          const shouldContinue = await p.confirm({
+            message: `You will be extending ${parentConfig.title} - ${parentConfig.description}. Continue?`,
+            initialValue: true,
+          });
+
+          if (p.isCancel(shouldContinue) || !shouldContinue) {
+            process.exit(0);
+          }
+        }
+
+        const overrides = await promptInitOverrides({
+          parentPluginKeys,
+          plugins: initInput.plugins,
+          overrides: initInput.overrides as OverrideSection[] | undefined,
+        });
+
+        const directory = initInput.directory || basic.domain || basic.extendsGateway;
+
+        initInput = {
+          ...initInput,
+          extends: `bos://${basic.extendsAccount}/${basic.extendsGateway}`,
+          directory,
+          account: basic.account,
+          domain: basic.domain || undefined,
+          plugins: overrides.plugins,
+          overrides: overrides.overrides,
+          noInteractive: true,
+        };
+      }
+
+      const initSpinner = p.spinner();
+      initSpinner.start("Initializing project");
+
+      const phaseLabels: Record<string, string> = {
+        "parent config": "Fetching parent config...",
+        "template source": "Resolving template source...",
+        "scaffold project": "Creating project scaffold...",
+        "copy files": "Copying template files...",
+        "personalize config": "Personalizing config...",
+        "write snapshot": "Writing snapshot...",
+        "resolve config": "Resolving config...",
+        "generate env/docker": "Generating environment config...",
+        "create env file": "Creating .env file...",
+        "install dependencies": "Installing dependencies...",
+        "generate types": "Generating types...",
+        "generate migrations": "Generating database migrations...",
+        "generate code artifacts": "Generating code artifacts...",
+      };
+
+      const onProgress = (event: ProgressEvent) => {
+        const label = phaseLabels[event.phase] ?? event.phase;
+        if (event.status === "running") {
+          initSpinner.message(label);
+        }
+      };
+      pluginEvents.on("progress", onProgress);
+
+      let result: InitResult;
+      try {
+        result = await client.init(initInput);
+      } finally {
+        pluginEvents.off("progress", onProgress);
+      }
+
       if (result.status === "error") {
+        initSpinner.stop("Failed");
         console.error(`[CLI] ${result.error || "Unknown error"}`);
         process.exit(1);
       }
-      console.log(colors.green(`${icons.ok} Project initialized`));
+
+      initSpinner.stop("Project initialized");
+
       console.log(`  ${colors.dim("Extends:")} ${result.extends}`);
       console.log(`  ${colors.dim("Directory:")} ${result.directory}`);
       if (result.account) console.log(`  ${colors.dim("Account:")} ${result.account}`);
@@ -176,7 +392,7 @@ async function main() {
       console.log();
       console.log(colors.dim("  Next steps:"));
       console.log(colors.dim(`    cd ${result.directory}`));
-      if (result.status === "initialized" && !(input as any)?.noInstall) {
+      if (!initInput.noInstall) {
         console.log(colors.dim("    docker compose up -d --wait"));
         console.log(colors.dim("    bun run dev"));
       } else {
@@ -185,6 +401,41 @@ async function main() {
         console.log(colors.dim("    bun run dev"));
       }
       console.log();
+
+      if (initInput.noInteractive !== true && !initInput.noInstall && result.targetDir) {
+        const shouldStartDocker = await p.confirm({
+          message: "Run docker compose up -d --wait?",
+          initialValue: true,
+        });
+
+        if (shouldStartDocker === true) {
+          const dockerSpinner = p.spinner();
+          dockerSpinner.start("Starting Docker services");
+          try {
+            await runDockerComposeUp(result.targetDir);
+            dockerSpinner.stop("Docker services ready");
+          } catch (error) {
+            dockerSpinner.stop("Docker services not started");
+            p.log.warn(
+              `docker compose up -d --wait failed: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+        }
+      }
+
+      return;
+    }
+
+    const result = await (client as any)[descriptor.key](input);
+
+    if (descriptor.key === "config") {
+      if (!result.config) {
+        console.error("No bos.config.json found");
+        process.exit(1);
+      }
+
+      printConfigView(result.config);
+      process.stdout.write(`${JSON.stringify(result.config, null, 2)}\n`);
       return;
     }
 

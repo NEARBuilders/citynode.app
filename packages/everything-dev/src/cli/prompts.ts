@@ -25,44 +25,17 @@ const OVERRIDE_OPTIONS: { value: OverrideSection; label: string; hint: string }[
   { value: "plugins", label: "plugins", hint: "Override selected plugins with local source" },
 ];
 
-export async function promptInitOptions(input: {
-  extends?: string;
-  directory?: string;
-  account?: string;
+export async function promptInitBasic(input: {
   domain?: string;
-  plugins?: string[];
-  overrides?: OverrideSection[];
-  parentPluginKeys?: string[];
+  account?: string;
+  extends?: string;
 }): Promise<{
   extendsAccount: string;
   extendsGateway: string;
-  directory: string;
+  domain: string;
   account?: string;
-  domain?: string;
-  plugins: string[];
-  overrides: OverrideSection[];
 }> {
   p.intro("Let's build an app...");
-
-  const extendsInput =
-    input.extends ??
-    ((await p.text({
-      message: "Extending an existing app?",
-      placeholder: "bos://dev.everything.near/everything.dev",
-    })) as string);
-
-  if (p.isCancel(extendsInput)) process.exit(0);
-
-  let extendsAccount = "dev.everything.near";
-  let extendsGateway = "everything.dev";
-
-  if (extendsInput) {
-    const parsed = parseExtendsRef(extendsInput);
-    if (parsed) {
-      extendsAccount = parsed.account;
-      extendsGateway = parsed.gateway;
-    }
-  }
 
   const domain =
     input.domain ??
@@ -72,6 +45,9 @@ export async function promptInitOptions(input: {
     })) as string);
 
   if (p.isCancel(domain)) process.exit(0);
+
+  let extendsAccount = "dev.everything.near";
+  let extendsGateway = "everything.dev";
 
   const accountDefault = domain ? deriveAccountFromExtends(domain, extendsAccount) : "";
   const account =
@@ -84,8 +60,40 @@ export async function promptInitOptions(input: {
 
   if (p.isCancel(account)) process.exit(0);
 
-  const directory = input.directory || domain || extendsGateway;
+  const resolvedAccount = account || accountDefault;
+  const extendsInput =
+    input.extends ??
+    ((await p.text({
+      message: "Extending an existing app?",
+      placeholder: "bos://dev.everything.near/everything.dev",
+    })) as string);
 
+  if (p.isCancel(extendsInput)) process.exit(0);
+
+  if (extendsInput) {
+    const parsed = parseExtendsRef(extendsInput);
+    if (parsed) {
+      extendsAccount = parsed.account;
+      extendsGateway = parsed.gateway;
+    }
+  }
+
+  return {
+    extendsAccount,
+    extendsGateway,
+    domain: domain || "",
+    account: resolvedAccount || undefined,
+  };
+}
+
+export async function promptInitOverrides(input: {
+  parentPluginKeys?: string[];
+  overrides?: OverrideSection[];
+  plugins?: string[];
+}): Promise<{
+  overrides: OverrideSection[];
+  plugins: string[];
+}> {
   const overrides =
     input.overrides ??
     ((await p.multiselect({
@@ -123,13 +131,5 @@ export async function promptInitOptions(input: {
 
   if (p.isCancel(go) || !go) process.exit(0);
 
-  return {
-    extendsAccount,
-    extendsGateway,
-    directory,
-    account: account || undefined,
-    domain: domain || undefined,
-    plugins,
-    overrides,
-  };
+  return { overrides, plugins };
 }

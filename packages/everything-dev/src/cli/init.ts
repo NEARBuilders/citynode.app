@@ -35,7 +35,6 @@ export const INIT_ROOT_PATTERNS = [
   "biome.json",
   "bunfig.toml",
   "Dockerfile",
-  "docker-compose.yml",
   "railway.json",
   ".agent/**",
   "AGENTS.md",
@@ -422,19 +421,13 @@ export async function personalizeConfig(
         ws.packages = ws.packages.filter((p: string) => {
           if (p.startsWith("packages/")) return false;
           if (p === "host") return has("host");
-          if (p === "plugins/*") return false;
-          const pluginMatch = p.match(/^plugins\/([^/]+)/);
-          if (pluginMatch)
-            return has("plugins") && (opts.plugins?.includes(pluginMatch[1]) ?? true);
+          if (p.startsWith("plugins/")) return false;
           return true;
         });
 
-        if (has("plugins") && (opts.plugins?.length ?? 0) > 0) {
-          for (const plugin of opts.plugins ?? []) {
-            const pluginWorkspace = `plugins/${plugin}`;
-            if (!ws.packages.includes(pluginWorkspace)) {
-              ws.packages.push(pluginWorkspace);
-            }
+        if (has("plugins")) {
+          if (!ws.packages.includes("plugins/*")) {
+            ws.packages.push("plugins/*");
           }
         }
       }
@@ -729,10 +722,15 @@ export function stripOrphanedWorkspacesFromLockfile(
   const keys = Object.keys(workspaceMap);
   let changed = false;
   for (const key of keys) {
-    if (!allowed.has(key)) {
-      delete workspaceMap[key];
-      changed = true;
-    }
+    if (allowed.has(key)) continue;
+    if (
+      allowedWorkspaces.some(
+        (pattern) => pattern.endsWith("/*") && key.startsWith(pattern.slice(0, -1)),
+      )
+    )
+      continue;
+    delete workspaceMap[key];
+    changed = true;
   }
 
   if (changed) {
@@ -899,10 +897,8 @@ export async function scaffoldMinimalProject(
   for (const section of opts.overrides) {
     workspacePackages.push(...OVERRIDE_WORKSPACE_MAP[section]);
   }
-  if (has("plugins") && opts.plugins) {
-    for (const plugin of opts.plugins) {
-      workspacePackages.push(`plugins/${plugin}`);
-    }
+  if (has("plugins")) {
+    workspacePackages.push("plugins/*");
   }
 
   const catalog = resolveFrameworkCatalog();

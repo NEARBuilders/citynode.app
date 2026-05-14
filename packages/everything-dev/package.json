@@ -163,10 +163,10 @@
   },
   "files": [
     "dist",
-    "src",
     "skills",
     "!skills/_artifacts"
   ],
+  "sideEffects": false,
   "bin": {
     "everything-dev": "./dist/cli.mjs",
     "bos": "./dist/cli.mjs"

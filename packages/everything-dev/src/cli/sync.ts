@@ -29,7 +29,6 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "package.json",
   ".changeset/config.json",
   ".changeset/README.md",
-  "docker-compose.yml",
   ".github/renovate.json",
   ".github/workflows/ci.yml",
   ".github/workflows/release-sync.yml",
@@ -113,6 +112,16 @@ function mergeWorkspacePackages(local: unknown, template: unknown): string[] | u
   }
   for (const entry of localPackages) {
     if (typeof entry === "string" && entry.length > 0) ordered.add(entry);
+  }
+
+  const hasPluginEntry = [...ordered].some((e) => e.startsWith("plugins/") && e !== "plugins/*");
+  if (hasPluginEntry) {
+    for (const entry of [...ordered]) {
+      if (entry.startsWith("plugins/") && entry !== "plugins/*") {
+        ordered.delete(entry);
+      }
+    }
+    ordered.add("plugins/*");
   }
 
   return ordered.size > 0 ? [...ordered] : undefined;

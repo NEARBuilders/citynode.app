@@ -1,7 +1,7 @@
+import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
-import * as p from "@clack/prompts";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
@@ -16,16 +16,13 @@ import {
   removeInitLockfile,
   resolveSourceDir,
   runBunInstall,
-  runDockerComposeUp,
   runTypesGen,
   scaffoldMinimalProject,
   stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
-import { promptInitOptions } from "./cli/prompts";
 import { getStatus } from "./cli/status";
 import { syncTemplate } from "./cli/sync";
-import { timePhase } from "./cli/timing";
 import { upgradeTemplate } from "./cli/upgrade";
 import {
   buildRuntimePluginsForConfig,
@@ -61,16 +58,74 @@ import {
   type AppOrchestrator,
   buildDescription,
   buildServiceDescriptorMap,
+  type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncAndGenerateSharedUi } from "./shared";
 import { writePluginSidebarGen } from "./sidebar";
 import type { BosConfig, BosConfigInput, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
-import { colors } from "./utils/theme";
 
-async function loadDevSession() {
-  return import("./dev-session");
+export interface DevSessionData {
+  orchestrator: AppOrchestrator;
+  services: Map<string, ServiceDescriptor>;
+  runtimeConfig: RuntimeConfig;
+}
+
+export interface StartSummary {
+  configSource: string;
+  configSourceHttp?: string;
+  account: string;
+  domain?: string;
+  modules: { host?: string; ui?: string; api?: string; auth?: string };
+  warnings: string[];
+}
+
+export type ProgressEvent = {
+  phase: string;
+  status: "running" | "done" | "error";
+  durationMs?: number;
+  message?: string;
+};
+
+export const pluginEvents = new EventEmitter();
+
+let pendingSession: DevSessionData | null = null;
+let pendingStartSummary: StartSummary | null = null;
+
+export function consumeDevSession(): (DevSessionData & { summary?: StartSummary }) | null {
+  const data = pendingSession;
+  const summary = pendingStartSummary;
+  pendingSession = null;
+  pendingStartSummary = null;
+  if (!data) return null;
+  return summary ? { ...data, summary } : data;
+}
+
+async function timePhase<T>(
+  timings: PhaseTiming[],
+  name: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  pluginEvents.emit("progress", { phase: name, status: "running" } satisfies ProgressEvent);
+  const startedAt = Date.now();
+  try {
+    const result = await fn();
+    timings.push({ name, durationMs: Date.now() - startedAt });
+    pluginEvents.emit("progress", {
+      phase: name,
+      status: "done",
+      durationMs: Date.now() - startedAt,
+    } satisfies ProgressEvent);
+    return result;
+  } catch (error) {
+    pluginEvents.emit("progress", {
+      phase: name,
+      status: "error",
+      durationMs: Date.now() - startedAt,
+    } satisfies ProgressEvent);
+    throw error;
+  }
 }
 
 const buildCommands: Record<string, { cmd: string; args: string[] }> = {
@@ -698,6 +753,8 @@ export default createPlugin({
     dev: builder.dev.handler(async ({ input }) => {
       ensureEnvFile(deps.configDir);
 
+      pluginEvents.emit("progress", { phase: "config", status: "running" } satisfies ProgressEvent);
+
       const localPackages = detectLocalPackages(
         deps.bosConfig ?? undefined,
         deps.runtimeConfig ?? undefined,
@@ -725,16 +782,33 @@ export default createPlugin({
         extendsChain: [],
       });
       if (sharedSync.catalogChanged) {
+        pluginEvents.emit("progress", {
+          phase: "install",
+          status: "running",
+        } satisfies ProgressEvent);
         await run("bun", ["install"], { cwd: deps.configDir });
+        pluginEvents.emit("progress", { phase: "install", status: "done" } satisfies ProgressEvent);
       }
       if (
         (apiSource === "local" && !proxy) ||
         localPackages.some((pkg) => pkg.startsWith("plugin:"))
       ) {
+        pluginEvents.emit("progress", {
+          phase: "build plugin",
+          status: "running",
+        } satisfies ProgressEvent);
         await buildEveryPluginQuietly(deps.configDir);
+        pluginEvents.emit("progress", {
+          phase: "build plugin",
+          status: "done",
+        } satisfies ProgressEvent);
       }
 
+      pluginEvents.emit("progress", { phase: "build", status: "running" } satisfies ProgressEvent);
       await buildEverythingDevQuietly(deps.configDir);
+      pluginEvents.emit("progress", { phase: "build", status: "done" } satisfies ProgressEvent);
+
+      pluginEvents.emit("progress", { phase: "config", status: "done" } satisfies ProgressEvent);
 
       const refreshed = await loadConfig({ cwd: deps.configDir });
       deps.bosConfig = refreshed?.config ?? deps.bosConfig;
@@ -793,8 +867,7 @@ export default createPlugin({
         interactive: input.interactive,
       };
 
-      const { devApp } = await loadDevSession();
-      devApp(orchestrator, services, runtimeConfig);
+      pendingSession = { orchestrator, services, runtimeConfig };
 
       return {
         status: "started" as const,
@@ -805,6 +878,8 @@ export default createPlugin({
 
     start: builder.start.handler(async ({ input }) => {
       ensureEnvFile(deps.configDir);
+
+      pluginEvents.emit("progress", { phase: "config", status: "running" } satisfies ProgressEvent);
 
       const account = input.account ?? process.env.BOS_ACCOUNT;
       const domain = input.domain ?? process.env.BOS_GATEWAY;
@@ -860,10 +935,18 @@ export default createPlugin({
         plugins: runtimePlugins,
       });
 
+      pluginEvents.emit("progress", {
+        phase: "generate artifacts",
+        status: "running",
+      } satisfies ProgressEvent);
       await generateCodeArtifacts(deps.configDir, config, {
         env: "production",
         runtimeConfig,
       });
+      pluginEvents.emit("progress", {
+        phase: "generate artifacts",
+        status: "done",
+      } satisfies ProgressEvent);
 
       // ── Production Readiness Validation ──
       const productionEnv: Record<string, string> = {};
@@ -916,30 +999,19 @@ export default createPlugin({
       const configSourceHttp =
         remoteConfig && account && domain ? buildRegistryConfigUrl(account, domain) : undefined;
 
-      const summaryLines: string[] = ["", `  ${colors.dim("Config Source:")}  ${configSource}`];
-      if (configSourceHttp) {
-        summaryLines.push(`                  ${colors.dim(configSourceHttp)}`);
-      }
-      summaryLines.push(
-        `  ${colors.dim("Account:")}        ${config.account}`,
-        `  ${colors.dim("Domain:")}         ${config.domain ?? "not configured"}`,
-        "",
-        `  ${colors.dim("Modules:")}`,
-        `    ${colors.dim("HOST")}  → ${runtimeConfig.host.remoteUrl ?? runtimeConfig.host.url ?? "local"}`,
-        `    ${colors.dim("UI")}   → ${runtimeConfig.ui.url ?? "local"}`,
-        `    ${colors.dim("API")}  → ${runtimeConfig.api.url ?? "local"}`,
-      );
-      if (runtimeConfig.auth) {
-        summaryLines.push(`    ${colors.dim("AUTH")}  → ${runtimeConfig.auth.url ?? "local"}`);
-      }
-      if (warnings.length > 0) {
-        summaryLines.push("");
-        for (const w of warnings) {
-          summaryLines.push(`  ${colors.yellow(w)}`);
-        }
-      }
-      summaryLines.push("");
-      console.log(summaryLines.join("\n"));
+      const summary: StartSummary = {
+        configSource,
+        configSourceHttp,
+        account: config.account,
+        domain: config.domain ?? undefined,
+        modules: {
+          host: runtimeConfig.host.remoteUrl ?? runtimeConfig.host.url ?? "local",
+          ui: runtimeConfig.ui.url ?? "local",
+          api: runtimeConfig.api.url ?? "local",
+          auth: runtimeConfig.auth?.url ?? undefined,
+        },
+        warnings,
+      };
 
       const orchestrator: AppOrchestrator = {
         packages: ["host"],
@@ -954,8 +1026,11 @@ export default createPlugin({
         noLogs: true,
       };
 
-      const { startApp } = await loadDevSession();
-      startApp(orchestrator, services, runtimeConfig);
+      pendingSession = { orchestrator, services, runtimeConfig };
+      pendingStartSummary = summary;
+
+      pluginEvents.emit("progress", { phase: "config", status: "done" } satisfies ProgressEvent);
+
       return {
         status: "running" as const,
         url: `http://localhost:${port}`,
@@ -1199,8 +1274,8 @@ export default createPlugin({
         let extendsAccount = "";
         let extendsGateway = "";
         let directory = input.directory;
-        let account = input.account;
-        let domain = input.domain;
+        const account = input.account;
+        const domain = input.domain;
         let overrides = input.overrides as OverrideSection[] | undefined;
         let plugins = input.plugins;
 
@@ -1218,100 +1293,19 @@ export default createPlugin({
         extendsAccount = extendsAccount || "dev.everything.near";
         extendsGateway = extendsGateway || "everything.dev";
 
-        const s = p.spinner();
-        s.start("Initializing project");
-
         let parentPluginKeys: string[] = [];
         let parentConfig: BosConfig | null = null;
         try {
-          parentConfig = await timePhase(
-            timings,
-            "parent config",
-            () => fetchParentConfig(extendsAccount, extendsGateway),
-            s,
+          parentConfig = await timePhase(timings, "parent config", () =>
+            fetchParentConfig(extendsAccount, extendsGateway),
           );
           if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
             parentPluginKeys = Object.keys(parentConfig.plugins);
           }
         } catch {}
 
-        if (!input.noInteractive) {
-          s.stop("Config fetched");
-          const initialExtendsAccount = extendsAccount;
-          const initialExtendsGateway = extendsGateway;
-          const prompted = await promptInitOptions({
-            extends: `bos://${extendsAccount}/${extendsGateway}`,
-            directory,
-            account,
-            domain,
-            plugins,
-            overrides,
-            parentPluginKeys,
-          });
-          extendsAccount = prompted.extendsAccount;
-          extendsGateway = prompted.extendsGateway;
-          directory = prompted.directory;
-          account = prompted.account;
-          domain = prompted.domain;
-          plugins = prompted.plugins;
-          overrides = prompted.overrides;
-
-          if (
-            !parentConfig ||
-            prompted.extendsAccount !== initialExtendsAccount ||
-            prompted.extendsGateway !== initialExtendsGateway
-          ) {
-            try {
-              parentConfig = await timePhase(
-                timings,
-                "parent config",
-                () => fetchParentConfig(prompted.extendsAccount, prompted.extendsGateway),
-                s,
-              );
-              if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
-                parentPluginKeys = Object.keys(parentConfig.plugins);
-              } else {
-                parentPluginKeys = [];
-              }
-            } catch {
-              return {
-                status: "error" as const,
-                directory,
-                extendsRef: `bos://${prompted.extendsAccount}/${prompted.extendsGateway}`,
-                account,
-                domain,
-                extends: `bos://${prompted.extendsAccount}/${prompted.extendsGateway}`,
-                plugins,
-                overrides,
-                filesCopied: 0,
-                timings,
-                error: `No config found at bos://${prompted.extendsAccount}/${prompted.extendsGateway} — are you sure this is the right parent?`,
-              };
-            }
-            s.stop("Config fetched");
-          }
-
-          if (
-            typeof parentConfig?.title === "string" &&
-            parentConfig.title.trim() &&
-            typeof parentConfig.description === "string" &&
-            parentConfig.description.trim()
-          ) {
-            const shouldContinue = await p.confirm({
-              message: `You will be extending ${parentConfig.title} - ${parentConfig.description}. Continue?`,
-              initialValue: true,
-            });
-
-            if (p.isCancel(shouldContinue) || !shouldContinue) {
-              process.exit(0);
-            }
-          }
-
-          s.start("Setting up project");
-        }
-
         overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
-        if (overrides.includes("plugins") && !plugins?.length) {
+        if (overrides.includes("plugins") && plugins === undefined) {
           plugins = parentPluginKeys;
         }
         plugins = plugins ?? [];
@@ -1320,24 +1314,16 @@ export default createPlugin({
         const targetDir = resolve(directory);
         const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
 
-        if (overrides.includes("plugins") && !plugins.length) {
-          // explicitly selected plugins override with none selected — back out of all inherited plugins
-        }
-
         const repository =
           (await detectGitRemoteUrl(process.cwd()).catch(() => undefined)) ??
           parentConfig?.repository;
 
         if (!parentConfig) {
           try {
-            parentConfig = await timePhase(
-              timings,
-              "parent config",
-              () => fetchParentConfig(extendsAccount, extendsGateway),
-              s,
+            parentConfig = await timePhase(timings, "parent config", () =>
+              fetchParentConfig(extendsAccount, extendsGateway),
             );
           } catch {
-            s.stop("Failed");
             return {
               status: "error" as const,
               directory,
@@ -1358,16 +1344,12 @@ export default createPlugin({
           sourceDir,
           parentConfig: resolvedParentConfig,
           cleanup,
-        } = await timePhase(
-          timings,
-          "template source",
-          () =>
-            resolveSourceDir({
-              extendsAccount,
-              extendsGateway,
-              source: input.source,
-            }),
-          s,
+        } = await timePhase(timings, "template source", () =>
+          resolveSourceDir({
+            extendsAccount,
+            extendsGateway,
+            source: input.source,
+          }),
         );
 
         parentConfig = resolvedParentConfig;
@@ -1378,88 +1360,68 @@ export default createPlugin({
           let filesCopied: number;
 
           if (isMinimalScaffold) {
-            filesCopied = await timePhase(
-              timings,
-              "scaffold project",
-              () =>
-                scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
-                  extendsAccount,
-                  extendsGateway,
-                  account: account || extendsAccount,
-                  domain,
-                  plugins,
-                  overrides,
-                  repository,
-                  title: parentConfig?.title,
-                  description: parentConfig?.description,
-                }),
-              s,
+            filesCopied = await timePhase(timings, "scaffold project", () =>
+              scaffoldMinimalProject(targetDir, parentConfig as unknown as BosConfigInput, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain,
+                plugins,
+                overrides,
+                repository,
+                title: parentConfig?.title,
+                description: parentConfig?.description,
+              }),
             );
 
-            await timePhase(
-              timings,
-              "personalize config",
-              () =>
-                personalizeConfig(targetDir, {
-                  extendsAccount,
-                  extendsGateway,
-                  account: account || extendsAccount,
-                  domain: domain || extendsGateway,
-                  plugins,
-                  overrides,
-                  mode: "init",
-                  repository,
-                  title: parentConfig?.title,
-                  description: parentConfig?.description,
-                  testnet: parentConfig?.testnet,
-                  staging: parentConfig?.staging,
-                }),
-              s,
+            await timePhase(timings, "personalize config", () =>
+              personalizeConfig(targetDir, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain: domain || extendsGateway,
+                plugins,
+                overrides,
+                mode: "init",
+                repository,
+                title: parentConfig?.title,
+                description: parentConfig?.description,
+                testnet: parentConfig?.testnet,
+                staging: parentConfig?.staging,
+              }),
             );
           } else {
             const patterns = buildInitPatterns(overrides, plugins);
 
-            filesCopied = await timePhase(
-              timings,
-              "copy files",
-              () =>
-                copyFilteredFiles(sourceDir, targetDir, patterns, {
-                  overrides,
-                  plugins,
-                }),
-              s,
+            filesCopied = await timePhase(timings, "copy files", () =>
+              copyFilteredFiles(sourceDir, targetDir, patterns, {
+                overrides,
+                plugins,
+              }),
             );
 
-            await timePhase(
-              timings,
-              "personalize config",
-              () =>
-                personalizeConfig(targetDir, {
-                  extendsAccount,
-                  extendsGateway,
-                  account: account || extendsAccount,
-                  domain: domain || extendsGateway,
-                  plugins,
-                  overrides,
-                  workspaceOpts: { sourceDir },
-                  repository,
-                  title: parentConfig?.title,
-                  description: parentConfig?.description,
-                  testnet: parentConfig?.testnet,
-                  staging: parentConfig?.staging,
-                }),
-              s,
+            await timePhase(timings, "personalize config", () =>
+              personalizeConfig(targetDir, {
+                extendsAccount,
+                extendsGateway,
+                account: account || extendsAccount,
+                domain: domain || extendsGateway,
+                plugins,
+                overrides,
+                workspaceOpts: { sourceDir },
+                repository,
+                title: parentConfig?.title,
+                description: parentConfig?.description,
+                testnet: parentConfig?.testnet,
+                staging: parentConfig?.staging,
+              }),
             );
 
-            await timePhase(
-              timings,
-              "write snapshot",
-              () =>
-                writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
-                  overrides,
-                  plugins,
-                }),
-              s,
+            await timePhase(timings, "write snapshot", () =>
+              writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
+                overrides,
+                plugins,
+              }),
             );
           }
 
@@ -1468,76 +1430,30 @@ export default createPlugin({
           stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
           removeInitLockfile(lockfilePath);
 
-          const initConfig = await timePhase(
-            timings,
-            "resolve config",
-            () => loadConfig({ cwd: targetDir }),
-            s,
+          const initConfig = await timePhase(timings, "resolve config", () =>
+            loadConfig({ cwd: targetDir }),
           );
           if (initConfig?.runtime) {
-            await timePhase(
-              timings,
-              "generate env/docker",
-              async () => {
-                writeGeneratedInfra(targetDir, initConfig.runtime);
-              },
-              s,
-            );
+            await timePhase(timings, "generate env/docker", async () => {
+              writeGeneratedInfra(targetDir, initConfig.runtime);
+            });
           }
-          await timePhase(
-            timings,
-            "create env file",
-            async () => {
-              ensureEnvFile(targetDir);
-            },
-            s,
-          );
+          await timePhase(timings, "create env file", async () => {
+            ensureEnvFile(targetDir);
+          });
 
           if (!input.noInstall) {
-            await timePhase(timings, "install dependencies", () =>
-              runBunInstall(targetDir, s ?? undefined),
-            );
-            await timePhase(timings, "generate types", () =>
-              runTypesGen(targetDir, s ?? undefined),
-            );
-            await timePhase(
-              timings,
-              "generate migrations",
-              () => generateDatabaseMigrations(targetDir),
-              s,
+            await timePhase(timings, "install dependencies", () => runBunInstall(targetDir));
+            await timePhase(timings, "generate types", () => runTypesGen(targetDir));
+            await timePhase(timings, "generate migrations", () =>
+              generateDatabaseMigrations(targetDir),
             );
           }
 
           if (input.noInstall && initConfig?.config) {
-            await timePhase(
-              timings,
-              "generate code artifacts",
-              () => generateCodeArtifacts(targetDir, initConfig.config),
-              s,
+            await timePhase(timings, "generate code artifacts", () =>
+              generateCodeArtifacts(targetDir, initConfig.config),
             );
-          }
-
-          s.stop("Project initialized");
-
-          if (!input.noInteractive) {
-            const shouldStartDocker = await p.confirm({
-              message: "Run docker compose up -d --wait?",
-              initialValue: true,
-            });
-
-            if (shouldStartDocker === true) {
-              const dockerSpinner = p.spinner();
-              dockerSpinner.start("Starting Docker services");
-              try {
-                await timePhase(timings, "docker compose up", () => runDockerComposeUp(targetDir));
-                dockerSpinner.stop("Docker services ready");
-              } catch (error) {
-                dockerSpinner.stop("Docker services not started");
-                p.log.warn(
-                  `docker compose up -d --wait failed: ${error instanceof Error ? error.message : error}`,
-                );
-              }
-            }
           }
 
           return {
@@ -1551,6 +1467,7 @@ export default createPlugin({
             overrides,
             filesCopied,
             timings,
+            targetDir,
           };
         } finally {
           await cleanup();
@@ -1790,10 +1707,8 @@ function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): stri
     if (section === "ui") workspaces.push("ui");
     if (section === "api") workspaces.push("api");
   }
-  if (plugins) {
-    for (const plugin of plugins) {
-      workspaces.push(`plugins/${plugin}`);
-    }
+  if (plugins && plugins.length > 0) {
+    workspaces.push("plugins/*");
   }
   return workspaces;
 }

@@ -100,7 +100,7 @@ describe("bos init — structure", () => {
       const pkg = JSON.parse(readFileSync(join(noPluginsDir, "package.json"), "utf-8")) as {
         workspaces?: { packages?: string[] };
       };
-      expect(pkg.workspaces?.packages).not.toContain("plugins/*");
+      expect(pkg.workspaces?.packages).toContain("plugins/*");
     } finally {
       rmSync(noPluginsDir, { recursive: true, force: true });
     }

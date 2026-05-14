@@ -173,6 +173,7 @@ export const InitResultSchema = z.object({
   overrides: z.array(OverrideSectionSchema).optional(),
   filesCopied: z.number(),
   timings: z.array(PhaseTimingSchema).optional(),
+  targetDir: z.string().optional(),
   error: z.string().optional(),
 });
 
@@ -300,7 +301,9 @@ export const bosContract = oc.router({
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
+export type DevResult = z.infer<typeof DevResultSchema>;
 export type StartOptions = z.infer<typeof StartOptionsSchema>;
+export type StartResult = z.infer<typeof StartResultSchema>;
 export type BuildOptions = z.infer<typeof BuildOptionsSchema>;
 export type BosConfigResult = z.infer<typeof ConfigResultSchema>;
 export type PluginAddOptions = z.infer<typeof PluginAddOptionsSchema>;
