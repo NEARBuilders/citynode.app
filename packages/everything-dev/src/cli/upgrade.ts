@@ -54,6 +54,8 @@ const OBSOLETE_FILES = [
   ".github/dependabot.yml",
   ".github/templates/dependabot.yml",
   "packages/everything-dev/cli.js",
+  ".templatekeep",
+  ".templatesync-exclude",
 ];
 
 function extractVersion(value: string | undefined): string | null {
