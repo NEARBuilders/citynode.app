@@ -2,7 +2,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { scaffoldMinimalProject, stripOrphanedWorkspacesFromLockfile } from "../../src/cli/init";
+import {
+  removeInitLockfile,
+  scaffoldMinimalProject,
+  stripOrphanedWorkspacesFromLockfile,
+} from "../../src/cli/init";
 
 describe("scaffoldMinimalProject — catalog population", () => {
   let testDir: string;
@@ -39,6 +43,9 @@ describe("scaffoldMinimalProject — catalog population", () => {
       dependencies?: Record<string, string>;
       workspaces?: { packages?: string[]; catalog?: Record<string, string> };
     };
+    const frameworkPkg = JSON.parse(
+      readFileSync(join(import.meta.dirname, "..", "..", "package.json"), "utf-8"),
+    ) as { version: string };
 
     expect(pkg.dependencies?.["everything-dev"]).toBe("catalog:");
     expect(pkg.dependencies?.["every-plugin"]).toBe("catalog:");
@@ -47,8 +54,35 @@ describe("scaffoldMinimalProject — catalog population", () => {
 
     expect(pkg.workspaces?.catalog?.["everything-dev"]).toBeDefined();
     expect(pkg.workspaces?.catalog?.["every-plugin"]).toBeDefined();
-    expect(pkg.workspaces?.catalog?.["everything-dev"]).toMatch(/^\^?\d+/);
+    expect(pkg.workspaces?.catalog?.["everything-dev"]).toBe(`^${frameworkPkg.version}`);
     expect(pkg.workspaces?.catalog?.["every-plugin"]).toMatch(/^\^?\d+/);
+  });
+});
+
+describe("removeInitLockfile", () => {
+  let testDir: string;
+
+  beforeAll(() => {
+    testDir = mkdtempSync(join(tmpdir(), "bos-init-lockfile-"));
+  });
+
+  afterAll(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("deletes copied bun.lock so init cannot reuse stale framework resolutions", () => {
+    const lockfilePath = join(testDir, "bun.lock");
+    writeFileSync(lockfilePath, JSON.stringify({ lockfileVersion: 1 }, null, 2));
+
+    removeInitLockfile(lockfilePath);
+
+    expect(existsSync(lockfilePath)).toBe(false);
+  });
+
+  it("no-ops when bun.lock does not exist", () => {
+    const lockfilePath = join(testDir, "missing.lock");
+
+    expect(() => removeInitLockfile(lockfilePath)).not.toThrow();
   });
 });
 

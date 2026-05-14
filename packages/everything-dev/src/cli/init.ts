@@ -683,7 +683,13 @@ export async function runBunInstallForUpgrade(
   destination: string,
   spinner?: { message: (msg: string) => void },
 ): Promise<void> {
-  await runWithProgress("bun", ["install"], destination, spinner, "Installing dependencies");
+  await runWithProgress(
+    "bun",
+    ["install", "--force"],
+    destination,
+    spinner,
+    "Installing dependencies",
+  );
 }
 
 export async function runTypesGen(
@@ -761,6 +767,11 @@ export function stripOrphanedWorkspacesFromLockfile(
   if (changed) {
     writeFileSync(lockfilePath, `${JSON.stringify(lockfile, null, 2)}\n`);
   }
+}
+
+export function removeInitLockfile(lockfilePath: string): void {
+  if (!existsSync(lockfilePath)) return;
+  rmSync(lockfilePath, { force: true });
 }
 
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {

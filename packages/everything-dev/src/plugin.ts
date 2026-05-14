@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import process from "node:process";
 import * as p from "@clack/prompts";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
@@ -12,6 +13,7 @@ import {
   generateDatabaseMigrations,
   personalizeConfig,
   readTemplatekeep,
+  removeInitLockfile,
   resolveSourceDir,
   runBunInstall,
   runDockerComposeUp,
@@ -1235,6 +1237,8 @@ export default createPlugin({
 
         if (!input.noInteractive) {
           s.stop("Config fetched");
+          const initialExtendsAccount = extendsAccount;
+          const initialExtendsGateway = extendsGateway;
           const prompted = await promptInitOptions({
             extends: `bos://${extendsAccount}/${extendsGateway}`,
             directory,
@@ -1251,6 +1255,58 @@ export default createPlugin({
           domain = prompted.domain;
           plugins = prompted.plugins;
           overrides = prompted.overrides;
+
+          if (
+            !parentConfig ||
+            prompted.extendsAccount !== initialExtendsAccount ||
+            prompted.extendsGateway !== initialExtendsGateway
+          ) {
+            try {
+              parentConfig = await timePhase(
+                timings,
+                "parent config",
+                () => fetchParentConfig(prompted.extendsAccount, prompted.extendsGateway),
+                s,
+              );
+              if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
+                parentPluginKeys = Object.keys(parentConfig.plugins);
+              } else {
+                parentPluginKeys = [];
+              }
+            } catch {
+              return {
+                status: "error" as const,
+                directory,
+                extendsRef: `bos://${prompted.extendsAccount}/${prompted.extendsGateway}`,
+                account,
+                domain,
+                extends: `bos://${prompted.extendsAccount}/${prompted.extendsGateway}`,
+                plugins,
+                overrides,
+                filesCopied: 0,
+                timings,
+                error: `No config found at bos://${prompted.extendsAccount}/${prompted.extendsGateway} — are you sure this is the right parent?`,
+              };
+            }
+            s.stop("Config fetched");
+          }
+
+          if (
+            typeof parentConfig?.title === "string" &&
+            parentConfig.title.trim() &&
+            typeof parentConfig.description === "string" &&
+            parentConfig.description.trim()
+          ) {
+            const shouldContinue = await p.confirm({
+              message: `You will be extending ${parentConfig.title} - ${parentConfig.description}. Continue?`,
+              initialValue: true,
+            });
+
+            if (p.isCancel(shouldContinue) || !shouldContinue) {
+              process.exit(0);
+            }
+          }
+
           s.start("Setting up project");
         }
 
@@ -1432,6 +1488,7 @@ export default createPlugin({
           const lockfilePath = join(targetDir, "bun.lock");
           const allowedWorkspaces = computeAllowedWorkspaces(overrides, plugins);
           stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
+          removeInitLockfile(lockfilePath);
 
           const initConfig = await timePhase(
             timings,

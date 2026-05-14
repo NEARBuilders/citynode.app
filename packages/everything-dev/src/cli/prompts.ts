@@ -89,7 +89,7 @@ export async function promptInitOptions(input: {
   const overrides =
     input.overrides ??
     ((await p.multiselect({
-      message: "Which sections to override locally?",
+      message: "Which sections would you like to customize",
       options: OVERRIDE_OPTIONS,
       initialValues: ["ui", "api"] as OverrideSection[],
       required: false,

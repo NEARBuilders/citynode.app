@@ -96,7 +96,7 @@ export const cliCommandMeta = {
         description: "Comma-separated plugin keys to include (requires --overrides=plugins)",
       },
       overrides: {
-        description: "Comma-separated sections to override locally: ui,api,host,plugins",
+        description: "Comma-separated sections to customize locally: ui,api,host,plugins",
       },
       noInteractive: { description: "Skip prompts, use flags only" },
       noInstall: { description: "Skip bun install" },
