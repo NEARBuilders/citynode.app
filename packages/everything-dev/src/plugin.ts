@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { Effect } from "effect";
@@ -17,6 +17,7 @@ import {
   runDockerComposeUp,
   runTypesGen,
   scaffoldMinimalProject,
+  stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
 import { promptInitOptions } from "./cli/prompts";
@@ -1429,9 +1430,8 @@ export default createPlugin({
           }
 
           const lockfilePath = join(targetDir, "bun.lock");
-          if (existsSync(lockfilePath)) {
-            rmSync(lockfilePath, { force: true });
-          }
+          const allowedWorkspaces = computeAllowedWorkspaces(overrides, plugins);
+          stripOrphanedWorkspacesFromLockfile(lockfilePath, allowedWorkspaces);
 
           const initConfig = await timePhase(
             timings,
@@ -1746,4 +1746,19 @@ function extractTransactionHash(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const match = message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
   return match?.[1];
+}
+
+function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): string[] {
+  const workspaces: string[] = [];
+  for (const section of overrides) {
+    if (section === "host") workspaces.push("host");
+    if (section === "ui") workspaces.push("ui");
+    if (section === "api") workspaces.push("api");
+  }
+  if (plugins) {
+    for (const plugin of plugins) {
+      workspaces.push(`plugins/${plugin}`);
+    }
+  }
+  return workspaces;
 }

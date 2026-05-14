@@ -378,7 +378,6 @@ export async function personalizeConfig(
     staging?: unknown;
   },
 ): Promise<void> {
-  const isInit = opts.mode !== "sync";
   const has = (section: OverrideSection) => opts.overrides.includes(section);
 
   const configPath = join(destination, "bos.config.json");
@@ -395,20 +394,18 @@ export async function personalizeConfig(
     }
     if (opts.repository) {
       config.repository = opts.repository;
-    } else if (isInit) {
+    } else {
       delete config.repository;
     }
 
-    if (isInit) {
-      const inheritableFields = ["title", "description", "testnet", "staging"] as const;
-      for (const field of inheritableFields) {
-        if (!(field in opts)) {
-          delete config[field];
-        }
+    const inheritableFields = ["title", "description", "testnet", "staging"] as const;
+    for (const field of inheritableFields) {
+      if (!(field in opts)) {
+        delete config[field];
       }
     }
 
-    if (isInit && config.app && typeof config.app === "object") {
+    if (config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
 
       for (const entryKey of Object.keys(app)) {
@@ -455,7 +452,7 @@ export async function personalizeConfig(
         }
 
         if (Object.keys(plugins).length === 0) {
-          config.plugins = {};
+          delete config.plugins;
         }
       }
     } else {
@@ -676,13 +673,7 @@ export async function runBunInstallForUpgrade(
   destination: string,
   spinner?: { message: (msg: string) => void },
 ): Promise<void> {
-  await runWithProgress(
-    "bun",
-    ["install", "--force"],
-    destination,
-    spinner,
-    "Installing dependencies",
-  );
+  await runWithProgress("bun", ["install"], destination, spinner, "Installing dependencies");
 }
 
 export async function runTypesGen(
