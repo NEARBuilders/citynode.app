@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  buildInitPatterns,
   copyFilteredFiles,
   personalizeConfig,
-  readTemplatekeep,
   runBunInstall,
 } from "../../src/cli/init";
 
@@ -35,6 +35,35 @@ function runCommand(
   });
 }
 
+function writeGeneratedAuthStubs(projectDir: string) {
+  const authDir = join(projectDir, ".bos", "generated", "auth");
+  mkdirSync(authDir, { recursive: true });
+  writeFileSync(
+    join(authDir, "auth-export.d.ts"),
+    `export type Auth = any;
+export type AuthOrganizationContext = any;
+export type AuthOrganization = any;
+export type AuthOrganizationSummary = any;
+export type AuthOrganizationMember = any;
+export type AuthApiKey = any;
+export type AuthInvitation = any;
+export type GetActiveMemberInput = any;
+export type GetOrganizationInput = any;
+export type ListMembersInput = any;
+export type ListInvitationsInput = any;
+export type ListApiKeysInput = any;
+export type AuthServices = any;
+export type createAuthInstance = any;
+`,
+  );
+  writeFileSync(
+    join(authDir, "contract.d.ts"),
+    `export type ContractType = any;
+export type InferOutput<_TRoute extends string> = any;
+`,
+  );
+}
+
 describe.skipIf(process.env.CI !== "true")("bos init — full (install + typecheck)", () => {
   let testDir: string;
 
@@ -47,8 +76,12 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
   });
 
   it("installs dependencies", async () => {
-    const patterns = await readTemplatekeep(REPO_ROOT);
-    await copyFilteredFiles(REPO_ROOT, testDir, patterns, { withHost: false });
+    const patterns = buildInitPatterns({
+      withUi: true,
+      withApi: true,
+      plugins: ["apps", "projects", "settings"],
+    });
+    await copyFilteredFiles(REPO_ROOT, testDir, patterns);
 
     cpSync(join(REPO_ROOT, "packages/everything-dev"), join(testDir, "packages/everything-dev"), {
       recursive: true,
@@ -64,10 +97,14 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
+      withUi: true,
+      withApi: true,
+      plugins: ["apps", "projects", "settings"],
       workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
     });
 
     await runBunInstall(testDir);
+    writeGeneratedAuthStubs(testDir);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
   });
 

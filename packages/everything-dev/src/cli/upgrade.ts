@@ -2,8 +2,9 @@ import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:
 import { join } from "node:path";
 import { glob } from "glob";
 import type { UpgradeOptions, UpgradeResult } from "../contract";
+import { isPlainObject as isPlainObjectFromMerge, resolveExtendsRef } from "../merge";
 import { readInstalledFrameworkVersion } from "./framework-version";
-import { runBunInstall, runTypesGen } from "./init";
+import { resolveSourceDir, runBunInstall, runTypesGen } from "./init";
 import { syncTemplate } from "./sync";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
@@ -20,6 +21,14 @@ const CATALOG_TOOL_PACKAGES = [
   "@module-federation/sdk",
   "@module-federation/dts-plugin",
 ] as const;
+const PINNED_CATALOG_TOOL_VERSIONS: Partial<
+  Record<(typeof CATALOG_TOOL_PACKAGES)[number], string>
+> = {
+  "@rspack/core": "1.7.11",
+  "@rspack/cli": "1.7.11",
+  "@rsbuild/core": "1.7.5",
+  "@rsbuild/plugin-react": "1.4.6",
+};
 const LEGACY_UI_IMPORT_REWRITES = [
   ['from "@/auth"', 'from "@/app"'],
   ["from '@/auth'", "from '@/app'"],
@@ -45,6 +54,51 @@ const OBSOLETE_FILES = [
 
 interface NpmPackageInfo {
   version: string;
+}
+
+function extractVersion(value: string | undefined): string | null {
+  if (!value) return null;
+  const match = value.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
+  return match?.[0] ?? null;
+}
+
+async function readExtendedRootCatalog(projectDir: string): Promise<Record<string, string>> {
+  const configPath = join(projectDir, "bos.config.json");
+  if (!existsSync(configPath)) {
+    return {};
+  }
+
+  const localConfig = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+  let extendsRef: string | undefined;
+  if (typeof localConfig.extends === "string") {
+    extendsRef = localConfig.extends;
+  } else if (isPlainObjectFromMerge(localConfig.extends)) {
+    extendsRef = resolveExtendsRef(localConfig.extends as Record<string, string>, "production");
+  }
+
+  const match = extendsRef?.match(/^bos:\/\/([^/]+)\/(.+)$/);
+  if (!match) {
+    return {};
+  }
+
+  const { sourceDir, cleanup } = await resolveSourceDir({
+    extendsAccount: match[1],
+    extendsGateway: match[2],
+  });
+
+  try {
+    const sourcePkgPath = join(sourceDir, "package.json");
+    if (!existsSync(sourcePkgPath)) {
+      return {};
+    }
+
+    const sourcePkg = JSON.parse(readFileSync(sourcePkgPath, "utf-8")) as {
+      workspaces?: { catalog?: Record<string, string> };
+    };
+    return { ...(sourcePkg.workspaces?.catalog ?? {}) };
+  } finally {
+    await cleanup();
+  }
 }
 
 async function fetchLatestNpmVersion(packageName: string): Promise<string | null> {
@@ -116,7 +170,7 @@ function updateRootPackageVersion(
     modified = true;
   }
 
-  const nextVersion = `^${newVersion}`;
+  const nextVersion = newVersion;
   if (workspaces.catalog[packageName] !== nextVersion) {
     workspaces.catalog[packageName] = nextVersion;
     modified = true;
@@ -145,7 +199,7 @@ function updateRootCatalogVersion(
     workspaces.catalog = {};
   }
 
-  const nextVersion = `^${newVersion}`;
+  const nextVersion = newVersion;
   if (workspaces.catalog[packageName] === nextVersion) return false;
 
   workspaces.catalog[packageName] = nextVersion;
@@ -240,10 +294,11 @@ export async function upgradeTemplate(
   }
 
   const packages: UpgradeResult["packages"] = [];
+  const sourceRootCatalog = await readExtendedRootCatalog(projectDir);
 
   for (const name of FRAMEWORK_PACKAGES) {
     const installed = readInstalledVersion(projectDir, name);
-    const latest = await fetchLatestNpmVersion(name);
+    const latest = extractVersion(sourceRootCatalog[name]) ?? (await fetchLatestNpmVersion(name));
 
     if (!latest) {
       packages.push({ name, from: installed, to: installed ?? "unknown" });
@@ -257,10 +312,11 @@ export async function upgradeTemplate(
   for (const name of CATALOG_TOOL_PACKAGES) {
     const installed = readInstalledVersion(projectDir, name);
     if (!installed) continue;
-    const latest = await fetchLatestNpmVersion(name);
-    if (!latest) continue;
-    if (installed === latest) continue;
-    catalogVersionUpdates.push({ name, from: installed, to: latest });
+    const targetVersion =
+      extractVersion(sourceRootCatalog[name]) ?? PINNED_CATALOG_TOOL_VERSIONS[name] ?? installed;
+    if (!targetVersion) continue;
+    if (installed === targetVersion) continue;
+    catalogVersionUpdates.push({ name, from: installed, to: targetVersion });
   }
 
   const hasFrameworkUpdates = packages.some((p) => p.from !== p.to && p.from !== undefined);

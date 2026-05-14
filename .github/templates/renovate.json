@@ -20,6 +20,10 @@
       "minimumReleaseAge": "5 days"
     },
     {
+      "matchPackagePatterns": ["^@rspack/", "^@rsbuild/"],
+      "allowedVersions": "<2.0.0"
+    },
+    {
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch"],
       "automerge": true

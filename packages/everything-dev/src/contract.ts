@@ -150,6 +150,8 @@ export const InitOptionsSchema = z.object({
   account: z.string().optional(),
   domain: z.string().optional(),
   source: z.string().optional(),
+  withUi: z.boolean().optional(),
+  withApi: z.boolean().optional(),
   plugins: z.array(z.string()).optional(),
   withHost: z.boolean().default(false),
   noInteractive: z.boolean().default(false),

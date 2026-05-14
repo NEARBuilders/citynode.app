@@ -23,6 +23,8 @@ export async function promptInitOptions(input: {
   directory?: string;
   account?: string;
   domain?: string;
+  withUi?: boolean;
+  withApi?: boolean;
   plugins?: string[];
   withHost?: boolean;
   parentPluginKeys?: string[];
@@ -32,6 +34,8 @@ export async function promptInitOptions(input: {
   directory: string;
   account?: string;
   domain?: string;
+  withUi: boolean;
+  withApi: boolean;
   plugins: string[];
   withHost: boolean;
 }> {
@@ -83,13 +87,39 @@ export async function promptInitOptions(input: {
 
   const directory = input.directory || domain || extendsGateway;
 
+  const selectedCustomizations =
+    input.withUi !== undefined || input.withApi !== undefined || input.withHost !== undefined
+      ? [
+          ...((input.withUi ?? true) ? ["ui"] : []),
+          ...((input.withApi ?? true) ? ["api"] : []),
+          ...((input.withHost ?? false) ? ["host"] : []),
+          ...((input.plugins?.length ?? 0) > 0 ? ["plugins"] : []),
+        ]
+      : ((await p.multiselect({
+          message: "What do you want to customize?",
+          options: [
+            { value: "ui", label: "ui", hint: "local UI code" },
+            { value: "api", label: "api", hint: "local API code" },
+            { value: "host", label: "host", hint: "local host code" },
+            { value: "plugins", label: "plugins", hint: "selected local plugins" },
+          ],
+          initialValues: ["ui", "api"],
+          required: true,
+        })) as string[]);
+
+  if (p.isCancel(selectedCustomizations)) process.exit(0);
+
+  const withUi = selectedCustomizations.includes("ui");
+  const withApi = selectedCustomizations.includes("api");
+  const withHost = selectedCustomizations.includes("host");
+
   const parentPlugins = input.parentPluginKeys ?? [];
   const pluginOptions =
     parentPlugins.length > 0 ? parentPlugins.map((key) => ({ value: key, label: key })) : [];
 
   const plugins =
     input.plugins ??
-    (pluginOptions.length > 0
+    (selectedCustomizations.includes("plugins") && pluginOptions.length > 0
       ? ((await p.multiselect({
           message: "Select plugins:",
           options: pluginOptions,
@@ -109,14 +139,14 @@ export async function promptInitOptions(input: {
 
   if (p.isCancel(go) || !go) process.exit(0);
 
-  const withHost = input.withHost ?? false;
-
   return {
     extendsAccount,
     extendsGateway,
     directory,
     account: account || undefined,
     domain: domain || undefined,
+    withUi,
+    withApi,
     plugins,
     withHost,
   };

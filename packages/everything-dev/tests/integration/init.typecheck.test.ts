@@ -1,12 +1,20 @@
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  buildInitPatterns,
   copyFilteredFiles,
   personalizeConfig,
-  readTemplatekeep,
   runBunInstall,
 } from "../../src/cli/init";
 
@@ -71,21 +79,40 @@ function parseTypeErrors(output: string): string[] {
   return errors;
 }
 
-function isExpectedRouteError(line: string): boolean {
-  const expectedPatterns = [
-    "routes/_layout/_authenticated/settings",
-    "routes/_layout/_authenticated/projects",
-    "routes/_layout/_authenticated/keys",
-    "routes/_layout/_authenticated/_admin",
-    'to="/settings"',
-    'to="/projects',
-  ];
-  return expectedPatterns.some((p) => line.includes(p));
+function isExpectedUiScaffoldError(error: string): boolean {
+  return error.includes("src/routes/_layout/_authenticated/organizations/$id.tsx");
+}
+
+function writeGeneratedAuthStubs(projectDir: string) {
+  const authDir = join(projectDir, ".bos", "generated", "auth");
+  mkdirSync(authDir, { recursive: true });
+  writeFileSync(
+    join(authDir, "auth-export.d.ts"),
+    `export type Auth = any;
+export type AuthOrganizationContext = any;
+export type AuthOrganization = any;
+export type AuthOrganizationSummary = any;
+export type AuthOrganizationMember = any;
+export type AuthApiKey = any;
+export type AuthInvitation = any;
+export type GetActiveMemberInput = any;
+export type GetOrganizationInput = any;
+export type ListMembersInput = any;
+export type ListInvitationsInput = any;
+export type ListApiKeysInput = any;
+export type AuthServices = any;
+export type createAuthInstance = any;
+`,
+  );
+  writeFileSync(
+    join(authDir, "contract.d.ts"),
+    `export type ContractType = any;
+export type InferOutput<_TRoute extends string> = any;
+`,
+  );
 }
 
 function isUnexpectedError(error: string): boolean {
-  if (isExpectedRouteError(error)) return false;
-
   // Core infrastructure should never have errors
   const corePaths = [
     "ui/src/lib/",
@@ -100,12 +127,12 @@ function isUnexpectedError(error: string): boolean {
   if (corePaths.some((p) => error.includes(p))) return true;
 
   // Any error in generated contract files is unexpected
-  if (error.includes(".gen.ts") && !isExpectedRouteError(error)) return true;
+  if (error.includes(".gen.ts")) return true;
 
-  return false;
+  return true;
 }
 
-describe("bos init — typecheck with expected route errors", () => {
+describe("bos init — typecheck", () => {
   let testDir: string;
 
   beforeAll(() => {
@@ -117,8 +144,12 @@ describe("bos init — typecheck with expected route errors", () => {
   });
 
   it("scaffolds project with template files", async () => {
-    const patterns = await readTemplatekeep(REPO_ROOT);
-    await copyFilteredFiles(REPO_ROOT, testDir, patterns, { withHost: false });
+    const patterns = buildInitPatterns({
+      withUi: true,
+      withApi: true,
+      plugins: ["apps", "projects", "settings"],
+    });
+    await copyFilteredFiles(REPO_ROOT, testDir, patterns);
 
     cpSync(join(REPO_ROOT, "packages/everything-dev"), join(testDir, "packages/everything-dev"), {
       recursive: true,
@@ -134,6 +165,9 @@ describe("bos init — typecheck with expected route errors", () => {
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
+      withUi: true,
+      withApi: true,
+      plugins: ["apps", "projects", "settings"],
       workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
     });
 
@@ -158,6 +192,7 @@ describe("bos init — typecheck with expected route errors", () => {
 
   it("installs dependencies", async () => {
     await runBunInstall(testDir);
+    writeGeneratedAuthStubs(testDir);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
   }, 120000);
 
@@ -178,7 +213,7 @@ describe("bos init — typecheck with expected route errors", () => {
     expect(unexpected).toEqual([]);
   });
 
-  it("typechecks ui with only expected route errors", async () => {
+  it("typechecks ui with zero unexpected errors", async () => {
     const result = await runCommand(
       "bun",
       ["run", "--cwd", "ui", "tsc", "--noEmit"],
@@ -186,7 +221,12 @@ describe("bos init — typecheck with expected route errors", () => {
       120000,
     );
     const errors = parseTypeErrors(result.stdout + result.stderr);
-    const unexpected = errors.filter(isUnexpectedError);
+    const unexpected = errors.filter((error) => {
+      if (isExpectedUiScaffoldError(error)) {
+        return false;
+      }
+      return isUnexpectedError(error);
+    });
 
     if (unexpected.length > 0) {
       console.error(`\nUnexpected UI type errors:\n${unexpected.join("\n---\n")}`);

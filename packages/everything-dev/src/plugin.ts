@@ -6,11 +6,11 @@ import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
 import {
+  buildInitPatterns,
   copyFilteredFiles,
   fetchParentConfig,
   generateDatabaseMigrations,
   personalizeConfig,
-  readTemplatekeep,
   resolveSourceDir,
   runBunInstall,
   runTypesGen,
@@ -1310,6 +1310,8 @@ export default createPlugin({
         let directory = input.directory;
         let account = input.account;
         let domain = input.domain;
+        let withUi = input.withUi;
+        let withApi = input.withApi;
         let withHost = input.withHost;
         let plugins = input.plugins;
 
@@ -1341,6 +1343,8 @@ export default createPlugin({
             directory,
             account,
             domain,
+            withUi,
+            withApi,
             plugins,
             withHost,
             parentPluginKeys,
@@ -1350,11 +1354,15 @@ export default createPlugin({
           directory = prompted.directory;
           account = prompted.account;
           domain = prompted.domain;
+          withUi = prompted.withUi;
+          withApi = prompted.withApi;
           withHost = prompted.withHost;
           plugins = prompted.plugins;
         }
 
         directory = directory || domain || extendsGateway;
+        withUi = withUi ?? true;
+        withApi = withApi ?? true;
         plugins = plugins ?? [];
 
         if (!parentConfig) {
@@ -1376,69 +1384,42 @@ export default createPlugin({
           }
         }
 
-        const {
-          sourceDir,
-          parentConfig: resolvedParentConfig,
-          cleanup,
-        } = await resolveSourceDir({
+        const { sourceDir, cleanup } = await resolveSourceDir({
           extendsAccount,
           extendsGateway,
           source: input.source,
         });
 
-        parentConfig = resolvedParentConfig;
-
         try {
-          const patterns = await readTemplatekeep(sourceDir);
-          if (patterns.length === 0) {
-            return {
-              status: "error" as const,
-              directory,
-              extendsAccount,
-              extendsGateway,
-              account,
-              domain,
-              extends: `bos://${extendsAccount}/${extendsGateway}`,
-              plugins: plugins ?? [],
-              filesCopied: 0,
-              error: "No .templatekeep found in template source",
-            };
-          }
-
-          const pluginRoutes: Record<string, string[]> = {};
-          if (parentConfig.plugins) {
-            for (const [key, entry] of Object.entries(parentConfig.plugins)) {
-              const entryRef = getPluginRef(entry);
-              if (entryRef?.routes && entryRef.routes.length > 0) {
-                pluginRoutes[key] = entryRef.routes;
-              }
-            }
-          }
+          const patterns = buildInitPatterns({
+            withUi,
+            withApi,
+            withHost,
+            plugins,
+          });
 
           const s = p.spinner();
           s.start("Setting up project");
 
-          const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns, {
-            withHost,
-            plugins,
-            pluginRoutes,
-          });
+          const filesCopied = await copyFilteredFiles(sourceDir, directory, patterns);
 
           await personalizeConfig(directory, {
             extendsAccount,
             extendsGateway,
             account: account || extendsAccount,
             domain: domain || extendsGateway,
+            withUi,
+            withApi,
             plugins,
-            pluginRoutes,
             workspaceOpts: { sourceDir },
             withHost,
           });
 
           await writeInitSnapshot(directory, extendsAccount, extendsGateway, sourceDir, patterns, {
+            withUi,
+            withApi,
             withHost,
             plugins,
-            pluginRoutes,
           });
 
           ensureEnvFile(directory, { domain });

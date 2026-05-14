@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { copyFilteredFiles, personalizeConfig, readTemplatekeep } from "../../src/cli/init";
+import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
 import { loadManifestNormalizationSpec } from "../../src/internal/manifest-normalizer";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
@@ -19,38 +19,41 @@ describe("bos init — structure", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("reads .templatekeep patterns", async () => {
-    const patterns = await readTemplatekeep(REPO_ROOT);
-    expect(patterns.length).toBeGreaterThan(0);
+  it("builds root and selected surface patterns", () => {
+    const patterns = buildInitPatterns({ withUi: true, withApi: true, plugins: ["settings"] });
     expect(patterns).toContain("bos.config.json");
-    expect(patterns).toContain("ui/src/lib/api.ts");
+    expect(patterns).toContain("ui/**");
+    expect(patterns).toContain("api/**");
+    expect(patterns).toContain("plugins/settings/**");
+    expect(patterns).not.toContain("host/**");
   });
 
-  it("copies only .templatekeep files", async () => {
-    const patterns = await readTemplatekeep(REPO_ROOT);
-    const filesCopied = await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
-      withHost: false,
+  it("copies curated root files and selected surfaces", async () => {
+    const patterns = buildInitPatterns({
+      withUi: true,
+      withApi: true,
+      plugins: ["settings"],
     });
+    const filesCopied = await copyFilteredFiles(REPO_ROOT, testDir, patterns);
 
     expect(filesCopied).toBeGreaterThan(0);
 
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
+    expect(existsSync(join(testDir, "biome.json"))).toBe(true);
+    expect(existsSync(join(testDir, ".github", "workflows", "ci.yml"))).toBe(true);
+    expect(existsSync(join(testDir, "CONTRIBUTING.md"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "ui/src/styles.css"))).toBe(true);
     expect(existsSync(join(testDir, "plugins/settings/bos.config.json"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/apps/bos.config.json"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/projects/bos.config.json"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/apps/bos.config.json"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/projects/bos.config.json"))).toBe(false);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
     expect(existsSync(join(testDir, "plans"))).toBe(false);
     expect(existsSync(join(testDir, ".changeset"))).toBe(true);
-    expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/keys"))).toBe(false);
-    expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/organizations"))).toBe(
-      true,
-    );
-    expect(existsSync(join(testDir, "ui/src/routes/_layout/apps"))).toBe(true);
-    expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(false);
+    expect(existsSync(join(testDir, "ui/src/routes/_layout/_authenticated/projects"))).toBe(true);
   });
 
   it("keeps ui build scripts direct", async () => {
@@ -69,6 +72,8 @@ describe("bos init — structure", () => {
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
+      withUi: true,
+      withApi: true,
       workspaceOpts: { sourceDir: REPO_ROOT },
     });
 
@@ -116,14 +121,15 @@ describe("bos init — structure", () => {
   it("includes host when withHost is true", async () => {
     const hostTestDir = mkdtempSync(join(tmpdir(), "bos-init-host-"));
     try {
-      const patterns = await readTemplatekeep(REPO_ROOT);
-      const hostPatterns = [...patterns, "host/**"];
-      await copyFilteredFiles(REPO_ROOT, hostTestDir, hostPatterns, { withHost: true });
+      const hostPatterns = buildInitPatterns({ withUi: true, withApi: true, withHost: true });
+      await copyFilteredFiles(REPO_ROOT, hostTestDir, hostPatterns);
       await personalizeConfig(hostTestDir, {
         extendsAccount: "dev.everything.near",
         extendsGateway: "everything.dev",
         account: "test.near",
         domain: "test.dev",
+        withUi: true,
+        withApi: true,
         workspaceOpts: { sourceDir: REPO_ROOT },
         withHost: true,
       });
@@ -138,6 +144,31 @@ describe("bos init — structure", () => {
       expect(hostPkg.dependencies?.["every-plugin"]).toBe("catalog:");
     } finally {
       rmSync(hostTestDir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports scaffolding a single selected surface", async () => {
+    const apiOnlyDir = mkdtempSync(join(tmpdir(), "bos-init-api-only-"));
+    try {
+      const patterns = buildInitPatterns({ withUi: false, withApi: true, withHost: false });
+      await copyFilteredFiles(REPO_ROOT, apiOnlyDir, patterns);
+      await personalizeConfig(apiOnlyDir, {
+        extendsAccount: "dev.everything.near",
+        extendsGateway: "everything.dev",
+        account: "test.near",
+        domain: "test.dev",
+        withUi: false,
+        withApi: true,
+        workspaceOpts: { sourceDir: REPO_ROOT },
+      });
+
+      expect(existsSync(join(apiOnlyDir, "api", "package.json"))).toBe(true);
+      expect(existsSync(join(apiOnlyDir, "ui", "package.json"))).toBe(false);
+      const config = JSON.parse(readFileSync(join(apiOnlyDir, "bos.config.json"), "utf-8"));
+      expect(config.app.api).toBeDefined();
+      expect(config.app.ui).toBeUndefined();
+    } finally {
+      rmSync(apiOnlyDir, { recursive: true, force: true });
     }
   });
 });

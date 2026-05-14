@@ -1,44 +1,42 @@
 import { createHash } from "node:crypto";
-import {
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { glob } from "glob";
 import type { SyncOptions, SyncResult } from "../contract";
 import {
   isPlainObject as isPlainObjectFromMerge,
   mergeBosConfigWithTemplate,
   resolveExtendsRef,
 } from "../merge";
-import type { BosPluginRef } from "../types";
-import { isPathExcluded } from "../utils/path-match";
 import {
   personalizeConfig,
-  readTemplatekeep,
   resolveSourceDir,
   runBunInstall,
   runTypesGen,
+  sourcePathToDestinationPath,
 } from "./init";
-import { readSnapshot, writeSnapshot } from "./snapshot";
+import { writeSnapshot } from "./snapshot";
 
 const FRAMEWORK_OWNED_SYNC_FILES = new Set([
+  ".env.example",
   ".gitignore",
+  "AGENTS.md",
   "biome.json",
   "bos.config.json",
+  "bunfig.toml",
+  "CONTRIBUTING.md",
   "package.json",
+  ".changeset/config.json",
+  ".changeset/README.md",
   ".github/renovate.json",
   ".github/workflows/ci.yml",
   ".github/workflows/release-sync.yml",
+  ".opencode/skills/everything-dev/SKILL.md",
   "ui/package.json",
   "ui/postcss.config.mjs",
   "ui/rsbuild.config.ts",
   "ui/tsconfig.json",
   "ui/src/app.ts",
+  "ui/src/globals.d.ts",
   "ui/src/hydrate.tsx",
   "ui/src/lib/api.ts",
   "ui/src/lib/auth.ts",
@@ -57,23 +55,6 @@ type PackageJson = Record<string, unknown>;
 
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   return FRAMEWORK_OWNED_SYNC_FILES.has(filePath);
-}
-
-function readExcludeFile(filePath: string): string[] {
-  if (!existsSync(filePath)) return [];
-  const content = readFileSync(filePath, "utf-8");
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
-}
-
-export async function readTemplatesyncExclude(sourceDir: string): Promise<string[]> {
-  return readExcludeFile(join(sourceDir, ".templatesync-exclude"));
-}
-
-export function readLocalSyncExcludes(projectDir: string): string[] {
-  return readExcludeFile(join(projectDir, ".bos", "sync-local-exclude"));
 }
 
 function computeLocalHash(projectDir: string, filePath: string): string | null {
@@ -229,9 +210,23 @@ export function mergePackageJson(
 }
 
 function toDestPath(filePath: string): string {
-  return filePath.startsWith(".github/templates/")
-    ? filePath.replace(/^\.github\/templates\//, ".github/")
-    : filePath;
+  return sourcePathToDestinationPath(filePath);
+}
+
+function toSourcePath(sourceDir: string, destPath: string): string | null {
+  const directPath = join(sourceDir, destPath);
+  if (existsSync(directPath)) {
+    return destPath;
+  }
+
+  if (destPath.startsWith(".github/")) {
+    const templatePath = destPath.replace(/^\.github\//, ".github/templates/");
+    if (existsSync(join(sourceDir, templatePath))) {
+      return templatePath;
+    }
+  }
+
+  return null;
 }
 
 function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string): void {
@@ -310,98 +305,37 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
   const extendsAccount = extendsMatch[1];
   const extendsGateway = extendsMatch[2];
 
-  const { sourceDir, parentConfig, cleanup } = await resolveSourceDir({
+  const { sourceDir, cleanup } = await resolveSourceDir({
     extendsAccount,
     extendsGateway,
   });
 
   try {
-    const patterns = await readTemplatekeep(sourceDir);
-    if (patterns.length === 0) {
-      return {
-        status: "error",
-        updated: [],
-        skipped: [],
-        added: [],
-        error: "No .templatekeep found in template source",
-      };
-    }
-
-    const parentExcludes = await readTemplatesyncExclude(sourceDir);
-    const localExcludes = readLocalSyncExcludes(projectDir);
-    const excludePatterns = [...parentExcludes, ...localExcludes];
-
-    const allTemplateFiles = new Set<string>();
-    for (const pattern of patterns) {
-      const matches = await glob(pattern, {
-        cwd: sourceDir,
-        nodir: true,
-        dot: true,
-        absolute: false,
-      });
-      for (const match of matches) {
-        allTemplateFiles.add(match);
-      }
-    }
-
     const childPlugins =
       localConfig.plugins && typeof localConfig.plugins === "object"
         ? Object.keys(localConfig.plugins as Record<string, unknown>)
         : [];
-
-    const pluginRoutes: Record<string, string[]> = {};
-    if (parentConfig.plugins) {
-      for (const [key, entry] of Object.entries(parentConfig.plugins)) {
-        const ref: BosPluginRef | null = entry && typeof entry !== "string" ? entry : null;
-        if (ref?.routes && ref.routes.length > 0) {
-          pluginRoutes[key] = ref.routes;
-        }
-      }
-    }
-
-    const excludedRoutePatterns: string[] = [];
-    for (const [pluginKey, routePatterns] of Object.entries(pluginRoutes)) {
-      if (!childPlugins.includes(pluginKey)) {
-        excludedRoutePatterns.push(...routePatterns);
-      }
-    }
+    const withUi = existsSync(join(projectDir, "ui", "package.json"));
+    const withApi = existsSync(join(projectDir, "api", "package.json"));
+    const withHost = existsSync(join(projectDir, "host", "package.json"));
 
     const filteredFiles = new Set<string>();
-    for (const filePath of allTemplateFiles) {
-      const pluginMatch = filePath.match(/^plugins\/([^/]+)/);
-      if (pluginMatch && !childPlugins.includes(pluginMatch[1])) continue;
-      if (isPathExcluded(filePath, excludedRoutePatterns)) continue;
-      filteredFiles.add(filePath);
+    const destToSource = new Map<string, string>();
+    for (const destPath of FRAMEWORK_OWNED_SYNC_FILES) {
+      if (destPath.startsWith("ui/") && !withUi) continue;
+      if (destPath.startsWith("api/") && !withApi) continue;
+      if (destPath.startsWith("host/") && !withHost) continue;
+      const sourcePath = toSourcePath(sourceDir, destPath);
+      if (!sourcePath) continue;
+      filteredFiles.add(sourcePath);
+      destToSource.set(destPath, sourcePath);
     }
-
-    for (const [pluginKey, routePatterns] of Object.entries(pluginRoutes)) {
-      if (!childPlugins.includes(pluginKey)) continue;
-      for (const rp of routePatterns) {
-        const matches = await glob(rp, {
-          cwd: sourceDir,
-          nodir: true,
-          dot: true,
-          absolute: false,
-        });
-        for (const match of matches) {
-          if (!isPathExcluded(match, excludedRoutePatterns)) {
-            filteredFiles.add(match);
-          }
-        }
-      }
-    }
-
-    const snapshot = await readSnapshot(projectDir);
 
     const updated: string[] = [];
     const skipped: string[] = [];
     const added: string[] = [];
 
-    for (const filePath of filteredFiles) {
-      const destPath = toDestPath(filePath);
-      const frameworkOwned = isFrameworkOwnedSyncFile(destPath);
-      if (isPathExcluded(destPath, excludePatterns) && !frameworkOwned) continue;
-
+    for (const [destPath, filePath] of destToSource.entries()) {
       const localHash = computeLocalHash(projectDir, destPath);
       const sourceContent = readFileSync(join(sourceDir, filePath));
       const sourceHash = createHash("sha256").update(sourceContent).digest("hex").substring(0, 16);
@@ -411,28 +345,8 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
         continue;
       }
 
-      if (localHash === sourceHash) continue;
-
-      if (frameworkOwned) {
+      if (localHash !== sourceHash) {
         updated.push(destPath);
-        continue;
-      }
-
-      const snapshotHash = snapshot?.files[destPath];
-
-      if (snapshotHash === undefined) {
-        updated.push(destPath);
-        continue;
-      }
-
-      if (localHash === snapshotHash) {
-        updated.push(destPath);
-      } else {
-        if (options.force) {
-          updated.push(destPath);
-        } else {
-          skipped.push(destPath);
-        }
       }
     }
 
@@ -445,14 +359,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       };
     }
 
-    const filesToWrite = [...updated, ...added].filter(
-      (f) => isFrameworkOwnedSyncFile(f) || !isPathExcluded(f, excludePatterns),
-    );
-
-    const destToSource = new Map<string, string>();
-    for (const filePath of filteredFiles) {
-      destToSource.set(toDestPath(filePath), filePath);
-    }
+    const filesToWrite = [...updated, ...added];
 
     if (filesToWrite.length > 0) {
       backupFiles(projectDir, filesToWrite);
@@ -466,8 +373,6 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     const newSnapshotFiles: Record<string, string> = {};
     for (const filePath of filteredFiles) {
       const src = join(sourceDir, filePath);
-      const stat = lstatSync(src);
-      if (!stat.isFile()) continue;
       const content = readFileSync(src);
       newSnapshotFiles[toDestPath(filePath)] = createHash("sha256")
         .update(content)
@@ -488,8 +393,10 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       extendsGateway,
       account,
       domain,
+      withUi,
+      withApi,
+      withHost,
       plugins: childPlugins,
-      pluginRoutes,
       workspaceOpts: { sourceDir },
       mode: "sync",
     });

@@ -21,11 +21,37 @@ import {
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
 import type { BosConfig } from "../types";
-import { isPathExcluded } from "../utils/path-match";
 import { saveBosConfig } from "../utils/save-config";
 import { writeSnapshot } from "./snapshot";
 
 const require = createRequire(import.meta.url);
+
+export const INIT_ROOT_PATTERNS = [
+  "bos.config.json",
+  "package.json",
+  ".env.example",
+  ".gitignore",
+  "biome.json",
+  "bunfig.toml",
+  "Dockerfile",
+  "docker-compose.yml",
+  "railway.json",
+  ".agent/**",
+  "AGENTS.md",
+  ".opencode/skills/everything-dev/**",
+  ".changeset/config.json",
+  ".changeset/README.md",
+  "README.md",
+  "CONTRIBUTING.md",
+  ".github/templates/**",
+] as const;
+
+export interface InitScaffoldOptions {
+  withUi?: boolean;
+  withApi?: boolean;
+  withHost?: boolean;
+  plugins?: string[];
+}
 
 interface SourceResult {
   sourceDir: string;
@@ -59,17 +85,32 @@ export async function resolveSourceDir(opts: {
   return { sourceDir, parentConfig, cleanup };
 }
 
-export async function readTemplatekeep(sourceDir: string): Promise<string[]> {
-  const keepFile = join(sourceDir, ".templatekeep");
-  if (!existsSync(keepFile)) {
-    return [];
+export function buildInitPatterns(options: InitScaffoldOptions): string[] {
+  const patterns: string[] = [...INIT_ROOT_PATTERNS];
+
+  if (options.withUi ?? true) {
+    patterns.push("ui/**");
   }
 
-  const content = readFileSync(keepFile, "utf-8");
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  if (options.withApi ?? true) {
+    patterns.push("api/**");
+  }
+
+  if (options.withHost) {
+    patterns.push("host/**");
+  }
+
+  for (const pluginKey of options.plugins ?? []) {
+    patterns.push(`plugins/${pluginKey}/**`);
+  }
+
+  return patterns;
+}
+
+export function sourcePathToDestinationPath(filePath: string): string {
+  return filePath.startsWith(".github/templates/")
+    ? filePath.replace(/^\.github\/templates\//, ".github/")
+    : filePath;
 }
 
 export async function fetchParentConfig(
@@ -151,72 +192,24 @@ export async function copyFilteredFiles(
   sourceDir: string,
   destination: string,
   patterns: string[],
-  options: { withHost: boolean; plugins?: string[]; pluginRoutes?: Record<string, string[]> },
 ): Promise<number> {
   if (patterns.length === 0) {
     return 0;
   }
 
-  const effectivePatterns = options.withHost
-    ? [...patterns, "host/**"]
-    : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
-
-  const filteredPatterns = effectivePatterns.filter((p) => {
-    const pluginMatch = p.match(/^plugins\/([^/]+)/);
-    if (!pluginMatch) return true;
-    const pluginName = pluginMatch[1];
-    return options.plugins?.includes(pluginName) ?? true;
-  });
-
-  const excludedRoutePatterns: string[] = [];
-  if (options.pluginRoutes) {
-    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
-      if (!(options.plugins?.includes(pluginKey) ?? true)) {
-        excludedRoutePatterns.push(...routePatterns);
-      }
-    }
-  }
-
   const allFiles = new Set<string>();
-  for (const pattern of filteredPatterns) {
+  for (const pattern of patterns) {
     const matches = await glob(pattern, {
       cwd: sourceDir,
       nodir: true,
       dot: true,
       absolute: false,
+      ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/.bos/**"],
     });
     for (const match of matches) {
-      const pluginMatch = match.match(/^plugins\/([^/]+)/);
-      if (pluginMatch) {
-        const pluginName = pluginMatch[1];
-        if (!(options.plugins?.includes(pluginName) ?? true)) continue;
-      }
-      if (isPathExcluded(match, excludedRoutePatterns)) continue;
       allFiles.add(match);
     }
   }
-
-  const routeFiles = new Set<string>();
-  if (options.pluginRoutes) {
-    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
-      if (!(options.plugins?.includes(pluginKey) ?? true)) continue;
-      for (const rp of routePatterns) {
-        const matches = await glob(rp, {
-          cwd: sourceDir,
-          nodir: true,
-          dot: true,
-          absolute: false,
-        });
-        for (const match of matches) {
-          if (!isPathExcluded(match, excludedRoutePatterns)) {
-            routeFiles.add(match);
-          }
-        }
-      }
-    }
-  }
-
-  for (const f of routeFiles) allFiles.add(f);
 
   mkdirSync(destination, { recursive: true });
 
@@ -226,9 +219,7 @@ export async function copyFilteredFiles(
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
 
-    const destPath = filePath.startsWith(".github/templates/")
-      ? filePath.replace(/^\.github\/templates\//, ".github/")
-      : filePath;
+    const destPath = sourcePathToDestinationPath(filePath);
     const dest = join(destination, destPath);
     mkdirSync(dirname(dest), { recursive: true });
     const content = readFileSync(src);
@@ -250,6 +241,8 @@ export async function personalizeConfig(
     pluginRoutes?: Record<string, string[]>;
     workspaceOpts?: { localOverrides?: boolean; sourceDir?: string };
     mode?: "init" | "sync";
+    withUi?: boolean;
+    withApi?: boolean;
     withHost?: boolean;
   },
 ): Promise<void> {
@@ -269,6 +262,19 @@ export async function personalizeConfig(
 
     if (isInit && config.app && typeof config.app === "object") {
       const app = config.app as Record<string, unknown>;
+
+      if (!(opts.withUi ?? true)) {
+        delete app.ui;
+      }
+      if (!(opts.withApi ?? true)) {
+        delete app.api;
+      }
+      if (!(opts.withHost ?? false)) {
+        delete app.host;
+      }
+      if (isInit) {
+        delete app.auth;
+      }
 
       for (const entryKey of Object.keys(app)) {
         const entry = app[entryKey];
@@ -432,6 +438,8 @@ export async function personalizeConfig(
       if (Array.isArray(ws.packages)) {
         ws.packages = ws.packages.filter((p: string) => {
           if (p.startsWith("packages/")) return false;
+          if (p === "ui") return opts.withUi ?? true;
+          if (p === "api") return opts.withApi ?? true;
           if (p === "host") return opts.withHost ?? false;
           if (p === "plugins/*") return (opts.plugins?.length ?? 0) > 0;
           const pluginMatch = p.match(/^plugins\/([^/]+)/);
@@ -463,6 +471,12 @@ export async function personalizeConfig(
         scripts.typecheck = scripts.typecheck
           .replace("bun run types:gen && ", "")
           .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
+        if (!(opts.withUi ?? true)) {
+          scripts.typecheck = scripts.typecheck.replace(/bun run --cwd ui tsc --noEmit & ?/, "");
+        }
+        if (!(opts.withApi ?? true)) {
+          scripts.typecheck = scripts.typecheck.replace(/bun run --cwd api tsc --noEmit & ?/, "");
+        }
         if (!opts.withHost) {
           scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
         }
@@ -520,13 +534,13 @@ export async function personalizeConfig(
   await resolveWorkspaceRefs(destination, opts.workspaceOpts);
 
   const genContractPath = join(destination, "ui", "src", "lib", "api-types.gen.ts");
-  if (!existsSync(genContractPath)) {
+  if (existsSync(join(destination, "ui", "src")) && !existsSync(genContractPath)) {
     mkdirSync(dirname(genContractPath), { recursive: true });
     writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
   }
 
   const pluginsClientGenPath = join(destination, "api", "src", "lib", "plugins-types.gen.ts");
-  if (!existsSync(pluginsClientGenPath)) {
+  if (existsSync(join(destination, "api", "src")) && !existsSync(pluginsClientGenPath)) {
     mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
     writeFileSync(
       pluginsClientGenPath,
@@ -535,10 +549,13 @@ export async function personalizeConfig(
   }
 
   const authTypesContent = generateAuthTypesTemplate();
-  const authTypesPaths = [
-    join(destination, "ui", "src", "lib", "auth-types.gen.ts"),
-    join(destination, "api", "src", "lib", "auth-types.gen.ts"),
-  ];
+  const authTypesPaths: string[] = [];
+  if (existsSync(join(destination, "ui", "src"))) {
+    authTypesPaths.push(join(destination, "ui", "src", "lib", "auth-types.gen.ts"));
+  }
+  if (existsSync(join(destination, "api", "src"))) {
+    authTypesPaths.push(join(destination, "api", "src", "lib", "auth-types.gen.ts"));
+  }
   if (existsSync(join(destination, "host", "src"))) {
     authTypesPaths.push(join(destination, "host", "src", "lib", "auth-types.gen.ts"));
   }
@@ -606,7 +623,23 @@ export async function runBunInstall(destination: string): Promise<void> {
 }
 
 export async function runTypesGen(destination: string): Promise<void> {
-  await execCommand("node_modules/.bin/bos", ["types", "gen"], destination);
+  const localBosBin = join(destination, "node_modules", ".bin", "bos");
+  if (existsSync(localBosBin)) {
+    await execCommand("node_modules/.bin/bos", ["types", "gen"], destination);
+    return;
+  }
+
+  const localCli = join(destination, "packages", "everything-dev", "src", "cli.ts");
+  if (existsSync(localCli)) {
+    await execCommand(
+      "bun",
+      ["run", "--cwd", "packages/everything-dev", "src/cli.ts", "types", "gen"],
+      destination,
+    );
+    return;
+  }
+
+  throw new Error("Unable to locate bos CLI for types generation");
 }
 
 const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
@@ -663,53 +696,19 @@ export async function writeInitSnapshot(
   extendsGateway: string,
   sourceDir: string,
   patterns: string[],
-  options: { withHost: boolean; plugins?: string[]; pluginRoutes?: Record<string, string[]> },
+  _options: { withUi?: boolean; withApi?: boolean; withHost?: boolean; plugins?: string[] },
 ): Promise<void> {
-  const effectivePatterns = options.withHost
-    ? [...patterns, "host/**"]
-    : patterns.filter((p) => !p.startsWith("host/") && p !== "host/**");
-
-  const excludedRoutePatterns: string[] = [];
-  if (options.pluginRoutes) {
-    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
-      if (!(options.plugins?.includes(pluginKey) ?? true)) {
-        excludedRoutePatterns.push(...routePatterns);
-      }
-    }
-  }
-
   const allFiles = new Set<string>();
-  for (const pattern of effectivePatterns) {
+  for (const pattern of patterns) {
     const matches = await glob(pattern, {
       cwd: sourceDir,
       nodir: true,
       dot: true,
       absolute: false,
+      ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/.bos/**"],
     });
     for (const match of matches) {
-      const pluginMatch = match.match(/^plugins\/([^/]+)/);
-      if (pluginMatch && !(options.plugins?.includes(pluginMatch[1]) ?? true)) continue;
-      if (isPathExcluded(match, excludedRoutePatterns)) continue;
       allFiles.add(match);
-    }
-  }
-
-  if (options.pluginRoutes) {
-    for (const [pluginKey, routePatterns] of Object.entries(options.pluginRoutes)) {
-      if (!(options.plugins?.includes(pluginKey) ?? true)) continue;
-      for (const rp of routePatterns) {
-        const matches = await glob(rp, {
-          cwd: sourceDir,
-          nodir: true,
-          dot: true,
-          absolute: false,
-        });
-        for (const match of matches) {
-          if (!isPathExcluded(match, excludedRoutePatterns)) {
-            allFiles.add(match);
-          }
-        }
-      }
     }
   }
 
@@ -719,9 +718,7 @@ export async function writeInitSnapshot(
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
     const content = readFileSync(src);
-    const destPath = filePath.startsWith(".github/templates/")
-      ? filePath.replace(/^\.github\/templates\//, ".github/")
-      : filePath;
+    const destPath = sourcePathToDestinationPath(filePath);
     fileHashes[destPath] = computeHash(content);
   }
 

@@ -95,6 +95,8 @@ export const cliCommandMeta = {
       },
       directory: { description: "Target directory (auto-derived from domain)" },
       source: { description: "Local source dir (skips GitHub download)" },
+      withUi: { description: "Include ui/ in template output" },
+      withApi: { description: "Include api/ in template output" },
       withHost: { description: "Include host/ in template output" },
       noInteractive: { description: "Skip prompts, use flags only" },
       noInstall: { description: "Skip bun install" },
