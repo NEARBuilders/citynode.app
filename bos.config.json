@@ -112,14 +112,12 @@
       "integrity": "sha384-Tsu6qanLw+Pn81PyT0VmuOM6bcae5ki20tZ09x1AUPMygsYj7QwoV2eGG299Zj+T"
     },
     "ui": {
-      "name": "ui",
       "development": "local:ui",
       "production": "https://elliot-braem-3595-ui-everything-dev-nearbuilders-7ed144ebc-ze.zephyrcloud.app",
       "ssr": "https://elliot-braem-3596-ui-everything-dev-nearbuilders-1955887dd-ze.zephyrcloud.app",
       "integrity": "sha384-bhsSvsHZ6WxwIJhjDnpjgZu29X48wB5ToLZDoUSOaLQ/ER8euGFejQTuYBGd8abB"
     },
     "api": {
-      "name": "api",
       "development": "local:api",
       "production": "https://elliot-braem-3597-api-everything-dev-nearbuilders-8804fe651-ze.zephyrcloud.app",
       "integrity": "sha384-7Or1eW+htEfi8qg87nNbmzqwY+VLv2ZHG83d02DAnHf/c/Fhaf5RqdRK5XH1NScF",
@@ -128,18 +126,7 @@
       ]
     },
     "auth": {
-      "name": "everything-dev_auth-plugin",
-      "development": "local:plugins/auth",
-      "production": "https://elliot-braem-3451-everything-dev-auth-plugin-bett-e5165f8e4-ze.zephyrcloud.app",
-      "integrity": "sha384-n7jDrAEpRArwIBMWAxwk47Yor5YC//OJJ+eGWLROjNHezNlJow92IYi30HXCdToh",
-      "secrets": [
-        "AUTH_DATABASE_URL",
-        "BETTER_AUTH_SECRET",
-        "CORS_ORIGIN"
-      ],
-      "sidebar": [
-        { "icon": "Building2", "label": "organizations", "to": "/organizations" }
-      ]
+      "extends": "bos://auth.everything.near/everything.dev"
     }
   }
 }
