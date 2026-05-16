@@ -110,7 +110,7 @@ export async function loadConfig(options?: {
       extendedChain,
       env,
     );
-    const config = await resolveRootComposableEntries(
+    const config = await resolveConfigComposableEntries(
       BosConfigSchema.parse(parsed),
       baseDir,
       runtimeEnv,
@@ -151,6 +151,66 @@ export async function loadBosConfig(options?: {
   return result.runtime;
 }
 
+<<<<<<< Updated upstream
+=======
+export async function loadRemoteConfig(
+  bosUrl: string,
+  env: BosEnv = "production",
+): Promise<RemoteConfigResult> {
+  const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
+  const extendedChain: string[] = [];
+  const parsed = await resolveConfigWithExtends(
+    bosUrl,
+    process.cwd(),
+    new Set(),
+    extendedChain,
+    env,
+  );
+  const config = await resolveConfigComposableEntries(
+    BosConfigSchema.parse(parsed),
+    process.cwd(),
+    runtimeEnv,
+  );
+
+  return {
+    rawConfig: await loadConfigFile(bosUrl, process.cwd()),
+    config,
+    source: bosUrl,
+    extendsChain: extendedChain,
+  };
+}
+
+export function parseRuntimeOverrideTargets(value?: string | null): RuntimeOverrideTarget[] {
+  if (!value) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    ),
+  ].map((entry) => RuntimeOverrideTargetSchema.parse(entry));
+}
+
+export function isRuntimeOverrideAllowed(
+  allowedTargets: ReadonlyArray<RuntimeOverrideTarget>,
+  target: "ui" | "api" | "plugins" | `plugins.${string}`,
+): boolean {
+  if (allowedTargets.includes(target as RuntimeOverrideTarget)) {
+    return true;
+  }
+
+  if (target.startsWith("plugins.")) {
+    return allowedTargets.includes("plugins.*");
+  }
+
+  return false;
+}
+
+>>>>>>> Stashed changes
 export async function buildRuntimePluginsForConfig(
   config: BosConfig,
   baseDir: string,
@@ -160,7 +220,50 @@ export async function buildRuntimePluginsForConfig(
   return Object.keys(plugins).length > 0 ? plugins : undefined;
 }
 
-async function resolveRootComposableEntries(
+function getEntryAssociatedUi(entry: Partial<BosPluginRef>): Record<string, unknown> | undefined {
+  if (!isPlainObject(entry.app)) {
+    return undefined;
+  }
+
+  const app = entry.app as Record<string, unknown>;
+  return isPlainObject(app.ui) ? (app.ui as Record<string, unknown>) : undefined;
+}
+
+function mergeAssociatedUi(
+  parentUi: Record<string, unknown> | undefined,
+  childUi: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!parentUi) {
+    return childUi ? { ...childUi } : undefined;
+  }
+
+  if (!childUi) {
+    return { ...parentUi };
+  }
+
+  return bosConfigMerger({ ...childUi }, parentUi) as Record<string, unknown>;
+}
+
+function withAssociatedUi(
+  entry: BosPluginRef,
+  associatedUi?: Record<string, unknown>,
+): BosPluginRef {
+  if (!associatedUi) {
+    return entry;
+  }
+
+  const app = isPlainObject(entry.app)
+    ? ({ ...(entry.app as Record<string, unknown>) } as Record<string, unknown>)
+    : {};
+  app.ui = mergeAssociatedUi(getEntryAssociatedUi(entry), associatedUi);
+
+  return {
+    ...entry,
+    app,
+  };
+}
+
+async function resolveConfigComposableEntries(
   config: BosConfig,
   baseDir: string,
   env: BosEnv,
@@ -175,6 +278,26 @@ async function resolveRootComposableEntries(
     ? await resolveComposableReference(config.app.auth as BosPluginRef, baseDir, env, "app.auth")
     : undefined;
 
+  const resolvedPlugins = config.plugins
+    ? Object.fromEntries(
+        await Promise.all(
+          Object.entries(config.plugins).map(async ([pluginId, pluginValue]) => {
+            const resolvedPlugin = await resolveComposableReference(
+              asComposableEntry(pluginValue),
+              baseDir,
+              env,
+              `plugins.${pluginId}`,
+            );
+
+            return [
+              pluginId,
+              withAssociatedUi(resolvedPlugin.entry, resolvedPlugin.associatedUi),
+            ] as const;
+          }),
+        ),
+      )
+    : undefined;
+
   return {
     ...config,
     app: {
@@ -182,6 +305,7 @@ async function resolveRootComposableEntries(
       api: resolvedApi.entry,
       auth: resolvedAuth?.entry,
     },
+    plugins: resolvedPlugins,
   };
 }
 
@@ -345,7 +469,7 @@ export async function resolveComposableReference(
   let resolvedEntry: BosPluginRef = {};
   let providerBaseDir = baseDir;
   let targetPath = defaultTargetPath;
-  let associatedUi: Record<string, unknown> | undefined;
+  let associatedUi = getEntryAssociatedUi(source);
   let allowLocalPaths = false;
   let extendsError: unknown;
 
@@ -367,7 +491,7 @@ export async function resolveComposableReference(
         getTargetedEntry(extendedConfig, targetPath),
       );
       providerBaseDir = extendsBaseDir;
-      associatedUi = getAssociatedUi(extendedConfig, targetPath);
+      associatedUi = mergeAssociatedUi(associatedUi, getAssociatedUi(extendedConfig, targetPath));
     } catch (error) {
       extendsError = error;
     }
@@ -394,7 +518,7 @@ export async function resolveComposableReference(
         getTargetedEntry(localConfig, targetPath),
       );
       providerBaseDir = localPath;
-      associatedUi = getAssociatedUi(localConfig, targetPath);
+      associatedUi = mergeAssociatedUi(associatedUi, getAssociatedUi(localConfig, targetPath));
       allowLocalPaths = true;
     }
   }
@@ -405,6 +529,7 @@ export async function resolveComposableReference(
   }
 
   resolvedEntry = mergeComposableEntries(resolvedEntry, sourceOverrides);
+  associatedUi = mergeAssociatedUi(associatedUi, getEntryAssociatedUi(sourceOverrides));
 
   if (
     extendsError &&
