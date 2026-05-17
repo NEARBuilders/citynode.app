@@ -8,6 +8,12 @@ on:
       - ".changeset/**"
   pull_request:
   workflow_dispatch:
+    inputs:
+      fail_on_critical_high:
+        description: "Fail the audit step on critical/high vulnerabilities"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,10 +42,16 @@ jobs:
         run: bun run postinstall
 
       - name: Security audit
+        id: audit
         run: |
           bun audit 2>&1 | tee audit-output.txt
           if grep -qiE '(critical|high)' audit-output.txt; then
-            echo "::warning::Critical or high vulnerabilities found — see audit output"
+            if [ "${{ inputs.fail_on_critical_high }}" = "true" ]; then
+              echo "::error::Critical or high vulnerabilities found — failing the audit"
+              exit 1
+            else
+              echo "::warning::Critical or high vulnerabilities found — see audit output"
+            fi
           fi
 
       - name: Run Biome lint and format check

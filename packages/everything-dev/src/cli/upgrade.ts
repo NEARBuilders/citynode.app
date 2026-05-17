@@ -32,6 +32,7 @@ const OBSOLETE_FILES = [
   "ui/scripts/generate-metadata.ts",
   ".github/dependabot.yml",
   ".github/templates/dependabot.yml",
+  ".github/workflows/release-sync.yml",
   "packages/everything-dev/cli.js",
   ".templatekeep",
   ".templatesync-exclude",
