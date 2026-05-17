@@ -234,7 +234,6 @@ describe("loadConfig plugin runtime filtering", () => {
 
   it("warns and uses production when a plugin has no development target", async () => {
     const testDir = mkdtempSync(join(tmpdir(), "bos-config-runtime-"));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
       writeFileSync(
@@ -274,7 +273,7 @@ describe("loadConfig plugin runtime filtering", () => {
 
       expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
       expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
-      expect(warn).toHaveBeenCalledWith(
+      expect(loaded?.warnings).toContain(
         '[Config] No development target for "plugins.settings", using production',
       );
     } finally {
@@ -284,7 +283,6 @@ describe("loadConfig plugin runtime filtering", () => {
 
   it("warns and uses production when a local development target is missing", async () => {
     const testDir = mkdtempSync(join(tmpdir(), "bos-config-runtime-"));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
       writeFileSync(
@@ -325,7 +323,7 @@ describe("loadConfig plugin runtime filtering", () => {
 
       expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
       expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
-      expect(warn).toHaveBeenCalledWith(
+      expect(loaded?.warnings).toContain(
         '[Config] Could not load local target for "plugins.settings", using production',
       );
     } finally {

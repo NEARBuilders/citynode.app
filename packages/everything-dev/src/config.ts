@@ -37,10 +37,35 @@ interface RuntimeTarget {
 
 let cachedConfig: BosConfig | null = null;
 let projectRoot: string | null = null;
+let configWarnings: string[] = [];
+let suppressConfigWarnings = false;
 
 export function clearConfigCache(): void {
   cachedConfig = null;
   projectRoot = null;
+  configWarnings = [];
+}
+
+export function suppressWarnings(): void {
+  suppressConfigWarnings = true;
+}
+
+export function resumeWarnings(): void {
+  suppressConfigWarnings = false;
+}
+
+export function drainConfigWarnings(): string[] {
+  const warnings = [...configWarnings];
+  configWarnings = [];
+  return warnings;
+}
+
+function emitConfigWarning(message: string): void {
+  if (suppressConfigWarnings) {
+    configWarnings.push(message);
+  } else {
+    console.warn(message);
+  }
 }
 
 export function findConfigPath(cwd?: string): string | null {
@@ -74,6 +99,7 @@ export interface ConfigResult {
     extended?: string[];
     remote?: boolean;
   };
+  warnings?: string[];
 }
 
 export interface RemoteConfigResult {
@@ -111,6 +137,7 @@ export async function loadConfig(options?: {
   const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
 
   try {
+    suppressWarnings();
     const extendedChain: string[] = [];
     const parsed = await resolveConfigWithExtends(
       configPath,
@@ -132,6 +159,8 @@ export async function loadConfig(options?: {
     const runtime = buildRuntimeConfig(config, baseDir, runtimeEnv, {
       plugins: pluginRuntime,
     });
+    const warnings = drainConfigWarnings();
+    resumeWarnings();
 
     return {
       config,
@@ -141,8 +170,10 @@ export async function loadConfig(options?: {
         extended: extendedChain.length > 0 ? extendedChain : undefined,
         remote: extendedChain.some((entry) => entry.startsWith("bos://")),
       },
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   } catch (error) {
+    resumeWarnings();
     throw new Error(`Failed to load config from ${configPath}: ${error}`);
   }
 }
@@ -579,9 +610,9 @@ function resolveDevelopmentTarget(
   if (!development) {
     if (production && target) {
       if (extendsRef) {
-        console.warn(`[Config] Resolving "${target}" from ${extendsRef}`);
+        emitConfigWarning(`[Config] Resolving "${target}" from ${extendsRef}`);
       } else {
-        console.warn(`[Config] No development target for "${target}", using production`);
+        emitConfigWarning(`[Config] No development target for "${target}", using production`);
       }
     }
     return resolveRuntimeTarget(production, baseDir, "remote");
@@ -589,7 +620,7 @@ function resolveDevelopmentTarget(
   const devTarget = resolveRuntimeTarget(development, baseDir);
   if (devTarget.source === "local" && (!devTarget.localPath || !existsSync(devTarget.localPath))) {
     if (production && target) {
-      console.warn(`[Config] Could not load local target for "${target}", using production`);
+      emitConfigWarning(`[Config] Could not load local target for "${target}", using production`);
     }
     return resolveRuntimeTarget(production, baseDir, "remote");
   }
