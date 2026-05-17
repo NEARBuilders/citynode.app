@@ -184,7 +184,7 @@ jobs:
     name: Deploy
     needs: [publish]
     if: needs.publish.outputs.should_publish == 'true'
-    uses: ./.github/templates/workflows/release.yml
+    uses: ./.github/templates/workflows/release.yml@main
     with:
       deploy: true
     secrets: inherit
