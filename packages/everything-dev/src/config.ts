@@ -26,6 +26,8 @@ const LOCAL_PREFIX = "local:";
 const DEFAULT_HOST_PORT = 3000;
 const RESOLVED_CONFIG_FILENAME = "bos.resolved-config.json";
 
+type RuntimeOverrideTarget = "ui" | "api" | "plugins" | `plugins.${string}`;
+
 interface RuntimeTarget {
   source: "local" | "remote";
   url: string;
@@ -72,6 +74,13 @@ export interface ConfigResult {
     extended?: string[];
     remote?: boolean;
   };
+}
+
+export interface RemoteConfigResult {
+  rawConfig: BosConfigInput;
+  config: BosConfig;
+  source: string;
+  extendsChain: string[];
 }
 
 export interface ResolvedComposableReference {
@@ -151,8 +160,6 @@ export async function loadBosConfig(options?: {
   return result.runtime;
 }
 
-<<<<<<< Updated upstream
-=======
 export async function loadRemoteConfig(
   bosUrl: string,
   env: BosEnv = "production",
@@ -192,7 +199,17 @@ export function parseRuntimeOverrideTargets(value?: string | null): RuntimeOverr
         .map((entry) => entry.trim())
         .filter(Boolean),
     ),
-  ].map((entry) => RuntimeOverrideTargetSchema.parse(entry));
+  ].map((entry) => {
+    if (entry === "ui" || entry === "api" || entry === "plugins") {
+      return entry;
+    }
+
+    if (entry.startsWith("plugins.") && entry.length > "plugins.".length) {
+      return entry as RuntimeOverrideTarget;
+    }
+
+    throw new Error(`Invalid runtime override target: ${entry}`);
+  });
 }
 
 export function isRuntimeOverrideAllowed(
@@ -210,7 +227,6 @@ export function isRuntimeOverrideAllowed(
   return false;
 }
 
->>>>>>> Stashed changes
 export async function buildRuntimePluginsForConfig(
   config: BosConfig,
   baseDir: string,
@@ -501,9 +517,13 @@ export async function resolveComposableReference(
     typeof source.development === "string" && source.development.startsWith(LOCAL_PREFIX)
       ? source.development
       : undefined;
+  const localDevelopmentPath = localDevelopment
+    ? resolve(baseDir, localDevelopment.slice(LOCAL_PREFIX.length).trim())
+    : undefined;
+  const hasUsableLocalDevelopment = Boolean(localDevelopmentPath && existsSync(localDevelopmentPath));
 
-  if (localDevelopment) {
-    const localPath = resolve(baseDir, localDevelopment.slice(LOCAL_PREFIX.length).trim());
+  if (localDevelopmentPath) {
+    const localPath = localDevelopmentPath;
     const localConfigPath = join(localPath, "bos.config.json");
     if (existsSync(localConfigPath)) {
       const localConfig = await resolveConfigWithExtends(
@@ -531,13 +551,7 @@ export async function resolveComposableReference(
   resolvedEntry = mergeComposableEntries(resolvedEntry, sourceOverrides);
   associatedUi = mergeAssociatedUi(associatedUi, getEntryAssociatedUi(sourceOverrides));
 
-  if (
-    extendsError &&
-    !allowLocalPaths &&
-    typeof resolvedEntry.development !== "string" &&
-    typeof resolvedEntry.production !== "string" &&
-    typeof resolvedEntry.name !== "string"
-  ) {
+  if (extendsError && !allowLocalPaths && !hasUsableLocalDevelopment) {
     throw extendsError;
   }
 
@@ -554,15 +568,22 @@ function resolveDevelopmentTarget(
   production: string | undefined,
   baseDir: string,
   forceSource?: "local" | "remote",
+  target?: string,
 ): RuntimeTarget {
   if (forceSource === "remote") {
     return resolveRuntimeTarget(production, baseDir, "remote");
   }
   if (!development) {
+    if (production && target) {
+      console.warn(`[Config] No development target for "${target}", using production`);
+    }
     return resolveRuntimeTarget(production, baseDir, "remote");
   }
   const devTarget = resolveRuntimeTarget(development, baseDir);
   if (devTarget.source === "local" && (!devTarget.localPath || !existsSync(devTarget.localPath))) {
+    if (production && target) {
+      console.warn(`[Config] Could not load local target for "${target}", using production`);
+    }
     return resolveRuntimeTarget(production, baseDir, "remote");
   }
   return devTarget;
@@ -593,6 +614,7 @@ export function buildRuntimeConfig(
           uiConfig.production,
           baseDir,
           options?.uiSource,
+          "app.ui",
         )
       : resolveRuntimeTarget(uiConfig.production, baseDir, "remote");
   const apiRuntime =
@@ -602,6 +624,7 @@ export function buildRuntimeConfig(
           apiConfig.production,
           baseDir,
           options?.apiSource,
+          "app.api",
         )
       : resolveRuntimeTarget(apiConfig.production, baseDir, "remote");
   const authRuntime = authConfig
@@ -611,6 +634,7 @@ export function buildRuntimeConfig(
           authConfig.production,
           baseDir,
           options?.authSource,
+          "app.auth",
         )
       : resolveRuntimeTarget(authConfig.production, baseDir, "remote")
     : undefined;
@@ -623,6 +647,7 @@ export function buildRuntimeConfig(
           hostConfig.production,
           baseDir,
           options?.hostSource,
+          "app.host",
         )
       : resolveRuntimeTarget(hostConfig.production, baseDir, "remote");
 
@@ -846,7 +871,13 @@ function buildRuntimePluginConfig(
 
   const runtimeTarget =
     env === "development"
-      ? resolveDevelopmentTarget(development, production, resolved.providerBaseDir)
+      ? resolveDevelopmentTarget(
+          development,
+          production,
+          resolved.providerBaseDir,
+          undefined,
+          `plugins.${pluginId}`,
+        )
       : resolveRuntimeTarget(production, resolved.providerBaseDir, "remote");
   const apiName = resolvePluginRuntimeName(source.name, runtimeTarget.localPath, pluginId);
 
@@ -857,7 +888,13 @@ function buildRuntimePluginConfig(
   const uiRuntime =
     uiConfig && (uiDevelopment || uiProduction)
       ? env === "development"
-        ? resolveDevelopmentTarget(uiDevelopment, uiProduction, resolved.providerBaseDir)
+        ? resolveDevelopmentTarget(
+            uiDevelopment,
+            uiProduction,
+            resolved.providerBaseDir,
+            undefined,
+            `plugins.${pluginId}.ui`,
+          )
         : resolveRuntimeTarget(uiProduction, resolved.providerBaseDir, "remote")
       : undefined;
 

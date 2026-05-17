@@ -14,7 +14,14 @@
       "react": "19.2.4",
       "react-dom": "19.2.4",
       "@tanstack/react-query": "5.90.20",
+      "@tanstack/react-query-devtools": "^5.91.1",
       "@tanstack/react-router": "1.157.16",
+      "@tanstack/react-router-devtools": "1.157.16",
+      "@tanstack/router-plugin": "1.157.16",
+      "@tanstack/react-devtools": "^0.10.1",
+      "@tanstack/react-form": "^1.29.1",
+      "@tanstack/react-table": "^8.21.3",
+      "@tanstack/zod-form-adapter": "^0.42.1",
       "near-kit": "^0.14.0",
       "@scure/base": "^2.2.0",
       "drizzle-orm": "^0.45.1",
@@ -109,7 +116,6 @@
   "dependencies": {
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
-    "@hot-labs/near-connect": "0.11.2",
     "@libsql/client": "^0.17.0",
     "@orpc/contract": "^1.13.14",
     "@orpc/server": "^1.13.14",
@@ -127,7 +133,6 @@
     "axios": "1.13.6",
     "effect": "3.21.0",
     "@orpc/contract": "1.13.14",
-    "@orpc/server": "1.13.14",
-    "@hot-labs/near-connect": "0.11.2"
+    "@orpc/server": "1.13.14"
   }
 }

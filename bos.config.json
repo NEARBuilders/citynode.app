@@ -80,6 +80,7 @@
       ]
     },
     "projects": {
+      "development": "local:plugins/projects",
       "extends": "bos://project.everything.near/everything.dev"
     },
     "settings": {
@@ -102,6 +103,7 @@
       "integrity": "sha384-Tsu6qanLw+Pn81PyT0VmuOM6bcae5ki20tZ09x1AUPMygsYj7QwoV2eGG299Zj+T"
     },
     "ui": {
+      "name": "ui",
       "development": "local:ui",
       "production": "https://elliot-braem-3595-ui-everything-dev-nearbuilders-7ed144ebc-ze.zephyrcloud.app",
       "ssr": "https://elliot-braem-3596-ui-everything-dev-nearbuilders-1955887dd-ze.zephyrcloud.app",

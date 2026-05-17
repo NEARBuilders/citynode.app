@@ -8,7 +8,6 @@
         "@better-auth/api-key": "catalog:",
         "@better-auth/passkey": "catalog:",
         "@electric-sql/pglite": "catalog:",
-        "@hot-labs/near-connect": "0.11.2",
         "@libsql/client": "^0.17.0",
         "@opentelemetry/api": "catalog:",
         "@orpc/contract": "^1.13.14",
@@ -61,7 +60,7 @@
         "host": "workspace:*",
         "vite-tsconfig-paths": "^5.1.4",
         "vitest": "catalog:",
-        "zephyr-rspack-plugin": "^1.1.0",
+        "zephyr-rspack-plugin": "catalog:",
       },
       "peerDependencies": {
         "typescript": "catalog:",
@@ -103,7 +102,7 @@
         "typescript": "catalog:",
         "vite-tsconfig-paths": "^6.0.4",
         "vitest": "catalog:",
-        "zephyr-rsbuild-plugin": "^1.0.1",
+        "zephyr-rsbuild-plugin": "catalog:",
       },
     },
     "packages/every-plugin": {
@@ -149,7 +148,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.27.0",
+      "version": "1.28.2",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -163,6 +162,7 @@
         "@module-federation/runtime-core": "catalog:",
         "chalk": "^5.6.2",
         "defu": "^6.1.7",
+        "dotenv": "^17.3.1",
         "effect": "^3.21.0",
         "every-plugin": "catalog:",
         "execa": "^9.5.2",
@@ -219,7 +219,7 @@
         "host": "workspace:*",
         "vite-tsconfig-paths": "^5.1.4",
         "vitest": "catalog:",
-        "zephyr-rspack-plugin": "^1.1.0",
+        "zephyr-rspack-plugin": "catalog:",
       },
       "peerDependencies": {
         "typescript": "catalog:",
@@ -250,7 +250,7 @@
         "host": "workspace:*",
         "vite-tsconfig-paths": "^5.1.4",
         "vitest": "catalog:",
-        "zephyr-rspack-plugin": "^1.1.0",
+        "zephyr-rspack-plugin": "catalog:",
       },
       "peerDependencies": {
         "typescript": "catalog:",
@@ -274,7 +274,7 @@
         "everything-dev": "catalog:",
         "vite-tsconfig-paths": "^5.1.4",
         "vitest": "catalog:",
-        "zephyr-rspack-plugin": "^1.1.0",
+        "zephyr-rspack-plugin": "catalog:",
       },
       "peerDependencies": {
         "typescript": "catalog:",
@@ -286,7 +286,6 @@
       "dependencies": {
         "@better-auth/api-key": "catalog:",
         "@better-auth/passkey": "catalog:",
-        "@hot-labs/near-connect": "0.11.2",
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
         "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -353,7 +352,7 @@
         "tailwindcss": "^4.1.17",
         "typescript": "catalog:",
         "vitest": "catalog:",
-        "zephyr-rsbuild-plugin": "^1.0.1",
+        "zephyr-rsbuild-plugin": "catalog:",
       },
       "peerDependencies": {
         "@tanstack/react-query": "catalog:",
@@ -364,7 +363,6 @@
     },
   },
   "overrides": {
-    "@hot-labs/near-connect": "0.11.2",
     "@orpc/contract": "1.13.14",
     "@orpc/server": "1.13.14",
     "axios": "1.13.6",
@@ -405,13 +403,15 @@
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.0",
     "every-plugin": "^2.5.11",
-    "everything-dev": "^1.27.0",
+    "everything-dev": "^1.28.2",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17",
+    "zephyr-rsbuild-plugin": "^1.0.1",
+    "zephyr-rspack-plugin": "^1.1.0",
     "zod": "4.3.6",
   },
   "packages": {
@@ -643,7 +643,7 @@
 
     "@hono/node-server": ["@hono/node-server@2.0.2", "", { "peerDependencies": { "hono": "^4" } }, "sha512-tXlTi1h/4V7sDe7i97IVP+9re9ZU7wXZZggnR5ucCRclf1+AX6YhGStrR5w8bLj+3Mlyl0pKfBh9gqTqqnGKfQ=="],
 
-    "@hot-labs/near-connect": ["@hot-labs/near-connect@0.11.2", "", {}, "sha512-6Xl/mWyV55URpWx/yLLcEnP14UD2ZKv+YsyPpMzBFd4Gg4ACtyC1MplW59bBXzb0XLRKzut1Gq8XvkV9osy2zQ=="],
+    "@hot-labs/near-connect": ["@hot-labs/near-connect@github:azbang/near-connect#9deed2f", {}, "azbang-near-connect-9deed2f", "sha512-NmK8Wunfn7HzAfVZPOhn9xVWPGw4MAKvVQ2be4Abo/0vyc49lYOlk2g5NkhNi895oCLoHSd1E93vyDtOAApzOA=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
