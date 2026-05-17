@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -82,21 +82,12 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
       plugins: ["apps", "projects", "settings"],
     });
 
-    cpSync(join(REPO_ROOT, "packages/everything-dev"), join(testDir, "packages/everything-dev"), {
-      recursive: true,
-      filter: (src) => !src.includes("node_modules") && !src.includes("dist"),
-    });
-    cpSync(join(REPO_ROOT, "packages/every-plugin"), join(testDir, "packages/every-plugin"), {
-      recursive: true,
-      filter: (src) => !src.includes("node_modules") && !src.includes("dist"),
-    });
-
     await personalizeConfig(testDir, {
       extendsAccount: "dev.everything.near",
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      workspaceOpts: { localOverrides: true, sourceDir: REPO_ROOT },
+      workspaceOpts: { sourceDir: REPO_ROOT },
       overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
