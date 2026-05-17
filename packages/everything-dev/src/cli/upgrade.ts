@@ -4,7 +4,7 @@ import process from "node:process";
 import * as p from "@clack/prompts";
 import { glob } from "glob";
 import type { PhaseTiming, UpgradeOptions, UpgradeResult } from "../contract";
-import { isPlainObject as isPlainObjectFromMerge, resolveExtendsRef } from "../merge";
+import { resolveExtendsRef } from "../merge";
 import { saveBosConfig } from "../utils/save-config";
 import { readInstalledFrameworkVersion } from "./framework-version";
 import { fetchParentConfig, resolveSourceDir, runBunInstallForUpgrade, runTypesGen } from "./init";

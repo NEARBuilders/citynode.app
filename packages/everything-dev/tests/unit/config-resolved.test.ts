@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   getResolvedConfigPath,
   loadConfig,
@@ -371,7 +371,9 @@ describe("loadConfig plugin runtime filtering", () => {
         )}\n`,
       );
 
-      await expect(loadConfig({ cwd: testDir })).rejects.toThrow("missing-provider/bos.config.json");
+      await expect(loadConfig({ cwd: testDir })).rejects.toThrow(
+        "missing-provider/bos.config.json",
+      );
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -383,37 +385,40 @@ describe("loadConfig plugin runtime filtering", () => {
     try {
       const localPluginDir = join(testDir, "plugins", "settings");
       mkdirSync(localPluginDir, { recursive: true });
-      writeFileSync(join(testDir, "bos.config.json"), `${JSON.stringify(
-        {
-          account: "test.near",
-          domain: "test.dev",
-          plugins: {
-            settings: {
-              extends: "./missing-provider/bos.config.json",
-              development: "local:plugins/settings",
-              production: "https://settings.example.com",
+      writeFileSync(
+        join(testDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "test.near",
+            domain: "test.dev",
+            plugins: {
+              settings: {
+                extends: "./missing-provider/bos.config.json",
+                development: "local:plugins/settings",
+                production: "https://settings.example.com",
+              },
+            },
+            app: {
+              host: {
+                development: "http://localhost:3000",
+                production: "https://host.example.com",
+              },
+              ui: {
+                name: "ui",
+                development: "http://localhost:3003",
+                production: "https://ui.example.com",
+              },
+              api: {
+                name: "api",
+                development: "http://localhost:3001",
+                production: "https://api.example.com",
+              },
             },
           },
-          app: {
-            host: {
-              development: "http://localhost:3000",
-              production: "https://host.example.com",
-            },
-            ui: {
-              name: "ui",
-              development: "http://localhost:3003",
-              production: "https://ui.example.com",
-            },
-            api: {
-              name: "api",
-              development: "http://localhost:3001",
-              production: "https://api.example.com",
-            },
-          },
-        },
-        null,
-        2,
-      )}\n`);
+          null,
+          2,
+        )}\n`,
+      );
       writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
 
       const loaded = await loadConfig({ cwd: testDir });

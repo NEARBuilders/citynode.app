@@ -520,7 +520,9 @@ export async function resolveComposableReference(
   const localDevelopmentPath = localDevelopment
     ? resolve(baseDir, localDevelopment.slice(LOCAL_PREFIX.length).trim())
     : undefined;
-  const hasUsableLocalDevelopment = Boolean(localDevelopmentPath && existsSync(localDevelopmentPath));
+  const hasUsableLocalDevelopment = Boolean(
+    localDevelopmentPath && existsSync(localDevelopmentPath),
+  );
 
   if (localDevelopmentPath) {
     const localPath = localDevelopmentPath;
@@ -569,13 +571,18 @@ function resolveDevelopmentTarget(
   baseDir: string,
   forceSource?: "local" | "remote",
   target?: string,
+  extendsRef?: string,
 ): RuntimeTarget {
   if (forceSource === "remote") {
     return resolveRuntimeTarget(production, baseDir, "remote");
   }
   if (!development) {
     if (production && target) {
-      console.warn(`[Config] No development target for "${target}", using production`);
+      if (extendsRef) {
+        console.warn(`[Config] Resolving "${target}" from ${extendsRef}`);
+      } else {
+        console.warn(`[Config] No development target for "${target}", using production`);
+      }
     }
     return resolveRuntimeTarget(production, baseDir, "remote");
   }
@@ -627,6 +634,9 @@ export function buildRuntimeConfig(
           "app.api",
         )
       : resolveRuntimeTarget(apiConfig.production, baseDir, "remote");
+  const authExtendsRef = authConfig?.extends
+    ? resolveExtendsRef(authConfig.extends, env)
+    : undefined;
   const authRuntime = authConfig
     ? env === "development"
       ? resolveDevelopmentTarget(
@@ -635,6 +645,7 @@ export function buildRuntimeConfig(
           baseDir,
           options?.authSource,
           "app.auth",
+          authExtendsRef,
         )
       : resolveRuntimeTarget(authConfig.production, baseDir, "remote")
     : undefined;
@@ -869,6 +880,8 @@ function buildRuntimePluginConfig(
     );
   }
 
+  const pluginExtendsRef = source.extends ? resolveExtendsRef(source.extends, env) : undefined;
+
   const runtimeTarget =
     env === "development"
       ? resolveDevelopmentTarget(
@@ -877,6 +890,7 @@ function buildRuntimePluginConfig(
           resolved.providerBaseDir,
           undefined,
           `plugins.${pluginId}`,
+          pluginExtendsRef,
         )
       : resolveRuntimeTarget(production, resolved.providerBaseDir, "remote");
   const apiName = resolvePluginRuntimeName(source.name, runtimeTarget.localPath, pluginId);
