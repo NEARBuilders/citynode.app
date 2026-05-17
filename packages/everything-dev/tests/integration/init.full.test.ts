@@ -16,7 +16,7 @@ function runCommand(
   command: string,
   args: string[],
   cwd: string,
-  timeout = 120_000,
+  timeout = 60_000,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, stdio: "pipe" });

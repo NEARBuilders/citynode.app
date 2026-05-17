@@ -22,7 +22,7 @@ function runCommand(
   command: string,
   args: string[],
   cwd: string,
-  timeout = 120_000,
+  timeout = 60_000,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -118,10 +118,6 @@ function isUnexpectedError(error: string): boolean {
   return true;
 }
 
-function isExpectedUiScaffoldError(error: string): boolean {
-  return error.includes("src/routes/_layout/_authenticated/organizations/$id.tsx");
-}
-
 describe("bos init — typecheck", () => {
   let testDir: string;
 
@@ -172,15 +168,17 @@ describe("bos init — typecheck", () => {
   it("installs dependencies", async () => {
     await runBunInstall(testDir);
     writeGeneratedAuthStubs(testDir);
+    const typesGen = await runCommand("bun", ["run", "types:gen"], testDir, 60000);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
-  }, 120000);
+    expect(typesGen.code).toBe(0);
+  }, 60000);
 
   it("typechecks api with zero unexpected errors", async () => {
     const result = await runCommand(
       "bun",
       ["run", "--cwd", "api", "tsc", "--noEmit"],
       testDir,
-      120000,
+      60000,
     );
     const errors = parseTypeErrors(result.stdout + result.stderr);
     const unexpected = errors.filter(isUnexpectedError);
@@ -189,6 +187,7 @@ describe("bos init — typecheck", () => {
       console.error(`\nUnexpected API type errors:\n${unexpected.join("\n---\n")}`);
     }
 
+    expect(result.code).toBe(0);
     expect(unexpected).toEqual([]);
   });
 
@@ -197,20 +196,16 @@ describe("bos init — typecheck", () => {
       "bun",
       ["run", "--cwd", "ui", "tsc", "--noEmit"],
       testDir,
-      120000,
+      60000,
     );
     const errors = parseTypeErrors(result.stdout + result.stderr);
-    const unexpected = errors.filter((error) => {
-      if (isExpectedUiScaffoldError(error)) {
-        return false;
-      }
-      return isUnexpectedError(error);
-    });
+    const unexpected = errors.filter(isUnexpectedError);
 
     if (unexpected.length > 0) {
       console.error(`\nUnexpected UI type errors:\n${unexpected.join("\n---\n")}`);
     }
 
+    expect(result.code).toBe(0);
     expect(unexpected).toEqual([]);
   });
 });
