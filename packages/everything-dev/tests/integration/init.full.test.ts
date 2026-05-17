@@ -12,21 +12,35 @@ import {
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
 
+interface CommandResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
 function runCommand(
   command: string,
   args: string[],
   cwd: string,
   timeout = 60_000,
-): Promise<number> {
+): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
     const child = spawn(command, args, { cwd, stdio: "pipe" });
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error(`Command '${command} ${args.join(" ")}' timed out after ${timeout}ms`));
     }, timeout);
+    child.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+    child.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve(code ?? 1);
+      resolve({ code: code ?? 1, stdout, stderr });
     });
     child.on("error", (err) => {
       clearTimeout(timer);
@@ -98,7 +112,12 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
   });
 
   it("typechecks successfully", async () => {
-    const exitCode = await runCommand("bun", ["typecheck"], testDir);
-    expect(exitCode).toBe(0);
-  });
+    const result = await runCommand("bun", ["typecheck"], testDir);
+
+    if (result.code !== 0) {
+      console.error(`\nUnexpected full typecheck output:\n${result.stdout}${result.stderr}`);
+    }
+
+    expect(result.code).toBe(0);
+  }, 60_000);
 });

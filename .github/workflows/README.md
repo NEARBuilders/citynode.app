@@ -81,15 +81,15 @@ The important distinction is that `release.yml` is the reusable production deplo
 
 ### Preview (`preview.yml`)
 
-**Trigger:** `pull_request` events for comments and cleanup, plus `workflow_run` after successful PR `CI` for optional preview deploys.
+**Trigger:** `pull_request` close events for cleanup, plus `workflow_run` after successful PR `CI` to publish the resolved Railway preview URL.
 
-**Purpose:** Comment config context on PRs, let Railway handle branch preview environments, and optionally deploy preview remotes for trusted or approved internal PRs.
+**Purpose:** Let Railway own PR environments while GitHub Actions mirrors the real Railway preview URL back onto the PR.
 
-**Security note:** Uses `pull_request` only (not `pull_request_target`) for PR comments. Preview deploys only run after successful `CI`, only for internal PRs, and non-version PRs are gated by the `preview` environment.
+**Security note:** Uses `workflow_run` only after successful internal PR `CI`, so repository secrets are not exposed to forked PRs.
 
-**Behavior:** On PR open/update, reads `account` and `domain` from `bos.config.json` and comments them on the PR. After `CI` succeeds for an internal PR, trusted version-package PRs automatically run `bos build --deploy`, while other internal PRs can run the same preview deploy behind the `preview` environment approval gate. Both upload the refreshed `bos.config.json` as an artifact without publishing it to FastKV.
+**Behavior:** After `CI` succeeds for an internal PR, the workflow polls Railway's GraphQL API for the matching ephemeral PR environment, resolves the public Railway domain for the preview service, and upserts a single PR comment with the real URL. When the PR closes, that bot comment is removed.
 
-**Note:** Railway still owns preview URLs. The GitHub workflow prepares preview remotes and artifacts, but it does not query Railway for the final preview URL.
+**Configuration:** Set `RAILWAY_TOKEN` and `RAILWAY_PROJECT_ID` as GitHub Actions secrets. If the project exposes more than one public Railway domain, set `RAILWAY_SERVICE_NAME` as a repository variable to pick the correct service.
 
 ### CI (`ci.yml`)
 

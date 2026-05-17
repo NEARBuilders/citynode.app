@@ -10,7 +10,6 @@ export default {
     variables: {},
     secrets: {
       PROJECTS_DATABASE_URL: process.env.PROJECTS_DATABASE_URL || "pglite:.bos/projects/:memory:",
-      PROJECTS_DATABASE_AUTH_TOKEN: process.env.PROJECTS_DATABASE_AUTH_TOKEN,
     },
   } satisfies PluginConfigInput<typeof Plugin>,
 };

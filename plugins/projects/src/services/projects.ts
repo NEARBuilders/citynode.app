@@ -169,7 +169,8 @@ export const ProjectServiceLive = Layer.effect(
       listProjects: (input, userId) =>
         Effect.gen(function* () {
           const limit = Math.min(input.limit ?? 24, 100);
-          const offset = input.cursor ? parseInt(input.cursor, 10) : 0;
+          const cursor = (input as { cursor?: string }).cursor;
+          const offset = cursor ? parseInt(cursor, 10) : 0;
           const conditions: any[] = [];
 
           if (input.organizationId) {

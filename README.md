@@ -250,9 +250,9 @@ The temporary publish registry currently points at `dev.everything.near`, and `b
 
 Use the repo `Dockerfile` for the service, and treat the GHCR image as the deployable artifact.
 
-- Image source: `ghcr.io/<lowercased github.repository>:latest`
-- Staging: `ghcr.io/<lowercased github.repository>:staging`
-- Preview: `ghcr.io/<lowercased github.repository>:pr-<number>`
+- Image source: `ghcr.io/nearbuilders/everything-dev:latest`
+- Staging: `ghcr.io/nearbuilders/everything-dev:staging`
+- Preview: Railway PR Environment URL for the host service, sourced from the same image-backed service configuration as the base environment
 
 All configuration derives from `bos.config.json` (baked into the image). Only secrets need to be set as environment variables.
 

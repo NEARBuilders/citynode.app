@@ -18,6 +18,7 @@ import {
 } from "./fastkv";
 
 type PrivateKey = `ed25519:${string}` | `secp256k1:${string}`;
+type JsonObject = Record<string, unknown>;
 
 function assertPrivateKey(key: string): PrivateKey {
   if (!isPrivateKey(key)) {
@@ -28,7 +29,7 @@ function assertPrivateKey(key: string): PrivateKey {
   return key as PrivateKey;
 }
 
-function createRelayNear(accountId: string, privateKey: string, network?: string) {
+function createRelayNear(accountId: string, privateKey: string, network?: NetworkId) {
   return new Near({
     network: network ?? "mainnet",
     defaultSignerId: accountId,
@@ -259,7 +260,8 @@ function createRegistryMethods(config: RegistryConfig) {
     configInput: BosConfigInput,
     registryConfig: RegistryConfig,
   ): Promise<BosConfigInput> => {
-    if (!configInput.extends?.startsWith("bos://")) {
+    const extendsRef = getBosExtends(configInput);
+    if (!extendsRef) {
       return configInput;
     }
 
@@ -271,21 +273,19 @@ function createRegistryMethods(config: RegistryConfig) {
     visited: Set<string>,
     registryConfig: RegistryConfig,
   ): Promise<BosConfigInput> => {
-    if (!configInput.extends?.startsWith("bos://")) {
+    const extendsRef = getBosExtends(configInput);
+    if (!extendsRef) {
       return configInput;
     }
 
-    if (visited.has(configInput.extends)) {
-      throw new Error(`Circular extends detected for ${configInput.extends}`);
+    if (visited.has(extendsRef)) {
+      throw new Error(`Circular extends detected for ${extendsRef}`);
     }
 
     const nextVisited = new Set(visited);
-    nextVisited.add(configInput.extends);
+    nextVisited.add(extendsRef);
 
-    const parent = await fetchBosConfigFromFastKv<BosConfigInput>(
-      configInput.extends,
-      registryConfig,
-    );
+    const parent = await fetchBosConfigFromFastKv<BosConfigInput>(extendsRef, registryConfig);
     const resolvedParent = await resolveConfigWithExtends(parent, nextVisited, registryConfig);
 
     return mergeConfigs(resolvedParent, configInput);
@@ -756,4 +756,10 @@ function buildOpenUrl(domain: string | null) {
 function sanitizeNullable(value: string | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function getBosExtends(configInput: BosConfigInput) {
+  return typeof configInput.extends === "string" && configInput.extends.startsWith("bos://")
+    ? configInput.extends
+    : null;
 }
