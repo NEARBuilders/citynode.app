@@ -7,7 +7,13 @@ import type { PhaseTiming, UpgradeOptions, UpgradeResult } from "../contract";
 import { resolveExtendsRef } from "../merge";
 import { saveBosConfig } from "../utils/save-config";
 import { readInstalledFrameworkVersion } from "./framework-version";
-import { fetchParentConfig, resolveSourceDir, runBunInstallForUpgrade, runTypesGen } from "./init";
+import {
+  buildChildRootScripts,
+  fetchParentConfig,
+  resolveSourceDir,
+  runBunInstallForUpgrade,
+  runTypesGen,
+} from "./init";
 import { syncTemplate } from "./sync";
 import { timePhase } from "./timing";
 
@@ -32,7 +38,10 @@ const OBSOLETE_FILES = [
   "ui/scripts/generate-metadata.ts",
   ".github/dependabot.yml",
   ".github/templates/dependabot.yml",
+  ".github/renovate.json",
+  ".github/workflows/publish.yml",
   ".github/workflows/release-sync.yml",
+  ".github/workflows/staging.yml",
   "packages/everything-dev/cli.js",
   ".templatekeep",
   ".templatesync-exclude",
@@ -744,6 +753,126 @@ async function findWorkspacePackageJsons(projectDir: string): Promise<string[]> 
   return [...new Set(pkgPaths)];
 }
 
+export async function migrateChildRootPackageJson(projectDir: string): Promise<boolean> {
+  const configPath = join(projectDir, "bos.config.json");
+  const pkgPath = join(projectDir, "package.json");
+  if (!existsSync(configPath) || !existsSync(pkgPath)) {
+    return false;
+  }
+
+  const config = readJsonFile<Record<string, unknown>>(configPath);
+  const extendsRef = getExtendsRef(config);
+  if (!extendsRef?.startsWith("bos://")) {
+    return false;
+  }
+  const configDomain =
+    typeof config.domain === "string" && config.domain.length > 0 ? config.domain : null;
+
+  const pkg = readJsonFile<Record<string, unknown>>(pkgPath);
+  let changed = false;
+
+  if (pkg.name === "monorepo" && configDomain) {
+    pkg.name = configDomain;
+    changed = true;
+  }
+  if (pkg.private !== true) {
+    pkg.private = true;
+    changed = true;
+  }
+  if (pkg.type !== "module") {
+    pkg.type = "module";
+    changed = true;
+  }
+  if ("module" in pkg) {
+    delete pkg.module;
+    changed = true;
+  }
+  if ("peerDependencies" in pkg) {
+    delete pkg.peerDependencies;
+    changed = true;
+  }
+
+  const pluginPackageJsons = await glob("plugins/*/package.json", {
+    cwd: projectDir,
+    nodir: true,
+    dot: false,
+    absolute: false,
+  });
+  const childScripts = buildChildRootScripts({
+    ui: existsSync(join(projectDir, "ui", "package.json")),
+    api: existsSync(join(projectDir, "api", "package.json")),
+    host: existsSync(join(projectDir, "host", "package.json")),
+    plugins: pluginPackageJsons.length > 0,
+  });
+
+  if (!pkg.scripts || typeof pkg.scripts !== "object") {
+    pkg.scripts = {};
+    changed = true;
+  }
+  const scripts = pkg.scripts as Record<string, string>;
+  for (const [key, value] of Object.entries(childScripts)) {
+    if (scripts[key] !== value) {
+      scripts[key] = value;
+      changed = true;
+    }
+  }
+  for (const obsoleteScript of [
+    "sync-catalog",
+    "init",
+    "db:push",
+    "db:studio",
+    "db:generate",
+    "db:migrate",
+    "test",
+    "test:api",
+    "test:integration",
+    "test:e2e",
+    "dev:postgres",
+    "dev:postgres:down",
+    "dev:postgres:reset",
+  ]) {
+    if (obsoleteScript in scripts) {
+      delete scripts[obsoleteScript];
+      changed = true;
+    }
+  }
+
+  const workspaces = pkg.workspaces;
+  if (workspaces && typeof workspaces === "object") {
+    const workspaceConfig = workspaces as { packages?: string[] };
+    if (Array.isArray(workspaceConfig.packages)) {
+      const nextPackages = workspaceConfig.packages.filter(
+        (entry) => entry !== "packages/everything-dev" && entry !== "packages/every-plugin",
+      );
+      if (nextPackages.length !== workspaceConfig.packages.length) {
+        workspaceConfig.packages = nextPackages;
+        changed = true;
+      }
+    }
+  }
+
+  if (pkg.overrides && typeof pkg.overrides === "object") {
+    const overrides = pkg.overrides as Record<string, string>;
+    for (const packageName of FRAMEWORK_PACKAGES) {
+      const value = overrides[packageName];
+      if (typeof value === "string" && value.startsWith("file:packages/")) {
+        delete overrides[packageName];
+        changed = true;
+      }
+    }
+    if (Object.keys(overrides).length === 0) {
+      delete pkg.overrides;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  }
+
+  return changed;
+}
+
 function buildChangelogUrl(
   oldVersion: string | undefined,
   newVersion: string,
@@ -895,6 +1024,9 @@ export async function upgradeTemplate(
   const migratedBosConfigs = await timePhase(timings, "migrate bos configs", () =>
     migrateBosConfigFiles(projectDir),
   );
+  const migratedRootPackageJson = await timePhase(timings, "migrate root package", () =>
+    migrateChildRootPackageJson(projectDir),
+  );
 
   let syncResult: UpgradeResult["sync"];
   let addedPlugins: string[] = [];
@@ -921,6 +1053,7 @@ export async function upgradeTemplate(
   const migratedFiles = await timePhase(timings, "clean obsolete files", async () => {
     const nextMigratedFiles = [
       ...migratedBosConfigs,
+      ...(migratedRootPackageJson ? ["package.json"] : []),
       ...(await rewriteLegacyUiImports(projectDir)),
     ];
     for (const file of OBSOLETE_FILES) {

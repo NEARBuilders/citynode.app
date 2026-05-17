@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { migrateBosConfigFiles } from "../../src/cli/upgrade";
+import { migrateBosConfigFiles, migrateChildRootPackageJson } from "../../src/cli/upgrade";
 
 describe("upgrade bos config migration", () => {
   const tempDirs: string[] = [];
@@ -300,5 +300,83 @@ describe("upgrade bos config migration", () => {
 
     expect(migrated).toContain("plugins/projects/bos.config.json");
     expect(existsSync(join(projectDir, "plugins/projects/bos.config.json"))).toBe(false);
+  });
+
+  it("removes legacy child workflow and framework package wiring from root package.json", async () => {
+    const projectDir = makeProjectDir();
+    mkdirSync(join(projectDir, "ui"), { recursive: true });
+    writeFileSync(join(projectDir, "ui", "package.json"), '{"name":"ui"}\n');
+
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          extends: "bos://dev.everything.near/everything.dev",
+          account: "test.near",
+          domain: "test.dev",
+          app: {
+            ui: { development: "local:ui" },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    writeFileSync(
+      join(projectDir, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "monorepo",
+          scripts: {
+            version: "changeset version && bun run sync-catalog",
+            "sync-catalog": "bun scripts/sync-catalog-versions.ts",
+            typecheck:
+              "bun run types:gen && bun run --cwd packages/everything-dev typecheck & bun run --cwd ui tsc --noEmit & wait",
+          },
+          module: "index.ts",
+          peerDependencies: {
+            typescript: "^5",
+          },
+          overrides: {
+            "everything-dev": "file:packages/everything-dev",
+            "every-plugin": "file:packages/every-plugin",
+          },
+          workspaces: {
+            packages: ["ui", "packages/everything-dev", "packages/every-plugin"],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const changed = await migrateChildRootPackageJson(projectDir);
+
+    expect(changed).toBe(true);
+
+    const pkg = JSON.parse(readFileSync(join(projectDir, "package.json"), "utf-8")) as {
+      name?: string;
+      private?: boolean;
+      type?: string;
+      module?: string;
+      peerDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
+      overrides?: Record<string, string>;
+      workspaces?: { packages?: string[] };
+    };
+
+    expect(pkg.name).toBe("test.dev");
+    expect(pkg.private).toBe(true);
+    expect(pkg.type).toBe("module");
+    expect(pkg.module).toBeUndefined();
+    expect(pkg.peerDependencies).toBeUndefined();
+    expect(pkg.scripts?.version).toBe("changeset version");
+    expect(pkg.scripts?.["sync-catalog"]).toBeUndefined();
+    expect(pkg.scripts?.typecheck).toBe(
+      "bun run types:gen && if [ -d ui ]; then bun run --cwd ui typecheck; fi",
+    );
+    expect(pkg.overrides).toBeUndefined();
+    expect(pkg.workspaces?.packages).toEqual(["ui"]);
   });
 });

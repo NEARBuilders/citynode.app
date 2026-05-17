@@ -307,6 +307,68 @@ function stripProductionFields(entry: Record<string, unknown>): void {
   delete entry.ssrIntegrity;
 }
 
+function buildRootTypecheckScript(sections: {
+  ui: boolean;
+  api: boolean;
+  host: boolean;
+  plugins: boolean;
+}): string {
+  const commands = ["bun run types:gen"];
+
+  if (sections.ui) {
+    commands.push("if [ -d ui ]; then bun run --cwd ui typecheck; fi");
+  }
+  if (sections.api) {
+    commands.push("if [ -d api ]; then bun run --cwd api typecheck; fi");
+  }
+  if (sections.host) {
+    commands.push("if [ -d host ]; then bun run --cwd host typecheck; fi");
+  }
+  if (sections.plugins) {
+    commands.push(
+      'if [ -d plugins ]; then for dir in plugins/*; do if [ -f "$dir/package.json" ]; then bun run --cwd "$dir" typecheck; fi; done; fi',
+    );
+  }
+
+  return commands.join(" && ");
+}
+
+export function buildChildRootScripts(sections: {
+  ui: boolean;
+  api: boolean;
+  host: boolean;
+  plugins: boolean;
+}): Record<string, string> {
+  const scripts: Record<string, string> = {
+    dev: "node_modules/.bin/bos dev --host remote",
+    "dev:proxy": "node_modules/.bin/bos dev --proxy",
+    build: "node_modules/.bin/bos build",
+    deploy: "node_modules/.bin/bos build --deploy",
+    publish: "node_modules/.bin/bos publish",
+    start: "node_modules/.bin/bos start",
+    typecheck: buildRootTypecheckScript(sections),
+    lint: "biome check .",
+    "lint:fix": "biome check --write .",
+    format: "biome format --write .",
+    "format:check": "biome format .",
+    changeset: "changeset",
+    version: "changeset version",
+    release: "echo 'Packages versioned - app release handled by workflow'",
+    postinstall: "node_modules/.bin/bos types gen || true",
+    "types:gen": "node_modules/.bin/bos types gen",
+    bos: "node_modules/.bin/bos",
+  };
+
+  if (sections.ui) {
+    scripts["dev:ui"] = "node_modules/.bin/bos dev --ui local --api remote";
+  }
+  if (sections.api) {
+    scripts["dev:api"] = "node_modules/.bin/bos dev --ui remote --api local";
+  }
+
+  return scripts;
+}
+
 export async function personalizeConfig(
   destination: string,
   opts: {
@@ -455,6 +517,18 @@ export async function personalizeConfig(
   const pkgPath = join(destination, "package.json");
   if (existsSync(pkgPath)) {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
+    const childScripts = buildChildRootScripts({
+      ui: has("ui"),
+      api: has("api"),
+      host: has("host"),
+      plugins: has("plugins"),
+    });
+
+    pkg.name = opts.domain || opts.extendsGateway;
+    pkg.private = true;
+    pkg.type = "module";
+    delete pkg.module;
+    delete pkg.peerDependencies;
 
     if (pkg.workspaces && typeof pkg.workspaces === "object") {
       const ws = pkg.workspaces as { packages?: string[] };
@@ -474,39 +548,32 @@ export async function personalizeConfig(
       }
     }
 
-    if (pkg.scripts && typeof pkg.scripts === "object") {
-      const scripts = pkg.scripts as Record<string, string>;
-      const FROM = "bun packages/everything-dev/src/cli.ts";
-      const TO = "node_modules/.bin/bos";
-      const rewrite = (key: string) => {
-        if (scripts[key]?.includes(FROM)) {
-          scripts[key] = scripts[key].replaceAll(FROM, TO);
-        }
-      };
-      rewrite("dev");
-      rewrite("dev:ui");
-      rewrite("dev:api");
-      rewrite("dev:proxy");
-      rewrite("build");
-      rewrite("deploy");
-      rewrite("publish");
-      rewrite("start");
-      rewrite("bos");
-      scripts.postinstall = "node_modules/.bin/bos types gen || true";
-      scripts["types:gen"] = "node_modules/.bin/bos types gen";
-      if (scripts.typecheck) {
-        scripts.typecheck = scripts.typecheck
-          .replace("bun run types:gen && ", "")
-          .replace(/bun run --cwd packages\/everything-dev typecheck & ?/, "");
-        if (!has("ui")) {
-          scripts.typecheck = scripts.typecheck.replace(/bun run --cwd ui tsc --noEmit & ?/, "");
-        }
-        if (!has("api")) {
-          scripts.typecheck = scripts.typecheck.replace(/bun run --cwd api tsc --noEmit & ?/, "");
-        }
-        if (!has("host")) {
-          scripts.typecheck = scripts.typecheck.replace(/bun run --cwd host tsc --noEmit & ?/, "");
-        }
+    if (!pkg.scripts || typeof pkg.scripts !== "object") {
+      pkg.scripts = {};
+    }
+    const scripts = pkg.scripts as Record<string, string>;
+    for (const [key, value] of Object.entries(childScripts)) {
+      scripts[key] = value;
+    }
+    for (const obsoleteScript of [
+      "init",
+      "sync-catalog",
+      "db:push",
+      "db:studio",
+      "db:generate",
+      "db:migrate",
+      "test",
+      "test:api",
+      "test:integration",
+      "test:e2e",
+      "dev:postgres",
+      "dev:postgres:down",
+      "dev:postgres:reset",
+      "dev:ui",
+      "dev:api",
+    ]) {
+      if (!(obsoleteScript in childScripts)) {
+        delete scripts[obsoleteScript];
       }
     }
 
@@ -688,18 +755,6 @@ export async function runTypesGen(
     await runWithProgress(
       "node_modules/.bin/bos",
       ["types", "gen"],
-      destination,
-      spinner,
-      "Generating types",
-    );
-    return;
-  }
-
-  const localCli = join(destination, "packages", "everything-dev", "src", "cli.ts");
-  if (existsSync(localCli)) {
-    await runWithProgress(
-      "bun",
-      ["run", "--cwd", "packages/everything-dev", "src/cli.ts", "types", "gen"],
       destination,
       spinner,
       "Generating types",
@@ -948,19 +1003,12 @@ export async function scaffoldMinimalProject(
     name: opts.domain || opts.extendsGateway,
     private: true,
     type: "module",
-    scripts: {
-      dev: "node_modules/.bin/bos dev --host remote",
-      "dev:ui": "node_modules/.bin/bos dev --ui local --api remote",
-      "dev:api": "node_modules/.bin/bos dev --ui remote --api local",
-      build: "node_modules/.bin/bos build",
-      deploy: "node_modules/.bin/bos build --deploy",
-      publish: "node_modules/.bin/bos publish",
-      start: "node_modules/.bin/bos start",
-      typecheck: "node_modules/.bin/bos types gen && tsc --noEmit",
-      postinstall: "node_modules/.bin/bos types gen || true",
-      "types:gen": "node_modules/.bin/bos types gen",
-      bos: "node_modules/.bin/bos",
-    },
+    scripts: buildChildRootScripts({
+      ui: has("ui"),
+      api: has("api"),
+      host: has("host"),
+      plugins: has("plugins"),
+    }),
     dependencies: {
       "everything-dev": "catalog:",
       "every-plugin": "catalog:",

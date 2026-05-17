@@ -698,16 +698,16 @@ Added new endpoint for user profiles
 
 ### Release Process
 
-The release workflow (`.github/workflows/release.yml`) runs automatically on merge to main:
+This repo uses a two-step release flow:
 
-1. **Version PR Creation:**
+1. **Version PR Creation (`.github/workflows/packages-release.yml`):**
    - Changesets action creates/updates a "Version Packages" PR
    - This PR bumps versions and updates CHANGELOG.md files
 
 2. **On Merge of Version PR:**
-   - Publishes GitHub releases for `api` and `ui` packages
-   - Runs `bun run deploy` to build and deploy to Zephyr Cloud
-   - Commits updated `bos.config.json` with new production URLs
+   - `packages-release.yml` runs again with no pending changesets
+   - It then calls `.github/workflows/release.yml`
+   - `release.yml` runs `bun run deploy`, publishes `bos.config.json` to FastKV, and commits updated production URLs
 
 **Local Release Commands (rarely needed):**
 ```bash
@@ -913,7 +913,7 @@ Module Federation shares React, TanStack Query, and TanStack Router as singleton
 
 ### Dependency Security
 
-- **Renovate** manages dependency updates (not Dependabot). Config: `.github/renovate.json`
+- **Renovate** manages dependency updates for this parent repo (not Dependabot). Config: `.github/renovate.json`. New generated child repos no longer scaffold that config by default.
 - **`--ignore-scripts`** — all CI workflows use `bun install --frozen-lockfile --ignore-scripts`. Lifecycle scripts (the TanStack attack vector) never execute during install.
 - **`dependency-review-action`** runs on every PR to flag known vulnerabilities.
 - **`bun audit`** runs in CI and fails on critical/high findings.

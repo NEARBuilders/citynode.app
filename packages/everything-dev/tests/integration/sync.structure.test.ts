@@ -6,6 +6,7 @@ describe("bos sync — framework-owned files", () => {
     expect(isFrameworkOwnedSyncFile(".gitignore")).toBe(true);
     expect(isFrameworkOwnedSyncFile("biome.json")).toBe(true);
     expect(isFrameworkOwnedSyncFile("CONTRIBUTING.md")).toBe(true);
+    expect(isFrameworkOwnedSyncFile(".github/workflows/packages-release.yml")).toBe(true);
     expect(isFrameworkOwnedSyncFile(".github/workflows/release.yml")).toBe(true);
     expect(isFrameworkOwnedSyncFile("ui/src/globals.d.ts")).toBe(true);
     expect(isFrameworkOwnedSyncFile("ui/src/router.tsx")).toBe(true);
@@ -14,6 +15,7 @@ describe("bos sync — framework-owned files", () => {
 
   it("does not mark app-owned files as framework-owned", () => {
     expect(isFrameworkOwnedSyncFile("Dockerfile")).toBe(false);
+    expect(isFrameworkOwnedSyncFile(".github/renovate.json")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/routes/_layout/index.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/components/user-nav.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("api/src/index.ts")).toBe(false);

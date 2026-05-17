@@ -30,8 +30,8 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "package.json",
   ".changeset/config.json",
   ".changeset/README.md",
-  ".github/renovate.json",
   ".github/workflows/ci.yml",
+  ".github/workflows/packages-release.yml",
   ".github/workflows/release.yml",
   ".opencode/skills/everything-dev/SKILL.md",
   "ui/package.json",
@@ -338,6 +338,26 @@ async function getSelectedChildPlugins(
   return selected;
 }
 
+function hasPluginsWorkspace(projectDir: string): boolean {
+  const packageJsonPath = join(projectDir, "package.json");
+  if (!existsSync(packageJsonPath)) return false;
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as {
+      workspaces?: { packages?: string[] } | string[];
+    };
+    const workspaces = pkg.workspaces;
+    const packages = Array.isArray(workspaces)
+      ? workspaces
+      : Array.isArray(workspaces?.packages)
+        ? workspaces.packages
+        : [];
+    return packages.includes("plugins/*");
+  } catch {
+    return false;
+  }
+}
+
 export async function syncTemplate(projectDir: string, options: SyncOptions): Promise<SyncResult> {
   // Sync reads the raw bos.config.json (not the resolved config) because it needs
   // the user's explicit local settings: their extends ref, selected plugins, etc.
@@ -387,6 +407,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     const withUi = existsSync(join(projectDir, "ui", "package.json"));
     const withApi = existsSync(join(projectDir, "api", "package.json"));
     const withHost = existsSync(join(projectDir, "host", "package.json"));
+    const withPlugins = childPlugins.length > 0 || hasPluginsWorkspace(projectDir);
 
     const filteredFiles = new Set<string>();
     const destToSource = new Map<string, string>();
@@ -460,7 +481,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     if (withUi) overrides.push("ui");
     if (withApi) overrides.push("api");
     if (withHost) overrides.push("host");
-    if (childPlugins.length > 0) overrides.push("plugins");
+    if (withPlugins) overrides.push("plugins");
 
     await personalizeConfig(projectDir, {
       extendsAccount,

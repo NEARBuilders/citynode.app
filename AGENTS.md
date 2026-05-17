@@ -184,6 +184,11 @@ This repo is the parent platform, not a generated child project.
 - Breaking changes
 - Skip for: docs-only changes, internal refactors, test-only changes
 
+**Release flow:**
+- Parent repo production releases run through `.github/workflows/packages-release.yml`, which creates or updates the `chore: version packages` PR when changesets are pending.
+- After that version PR is merged, `packages-release.yml` calls `.github/workflows/release.yml`, which runs `bun run deploy`, publishes `bos.config.json` to FastKV, and commits the updated deployment URLs.
+- Generated child repos use the same `CI` -> `Packages Release` -> `Release` pattern, but only version and deploy their local workspaces and runtime surfaces.
+
 **Create changeset:**
 ```bash
 bun run changeset
@@ -249,7 +254,7 @@ Module Federation shares React, TanStack Query, and TanStack Router as singleton
 
 ### Dependency Security
 
-- **Renovate** manages dependency updates (not Dependabot). Config: `.github/renovate.json`
+- **Renovate** manages dependency updates for this parent repo (not Dependabot). Config: `.github/renovate.json`. New generated child repos no longer scaffold that config by default.
 - **`--ignore-scripts`** — all CI workflows use `bun install --frozen-lockfile --ignore-scripts`. Lifecycle scripts (the TanStack attack vector) never execute during install.
 - **`dependency-review-action`** runs on every PR to flag known vulnerabilities.
 - **`bun audit`** runs in CI and fails on critical/high findings.

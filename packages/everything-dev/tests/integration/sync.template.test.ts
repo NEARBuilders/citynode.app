@@ -215,4 +215,27 @@ describe("syncTemplate", () => {
     expect(syncedConfig.description).toBeUndefined();
     expect(Object.keys(syncedConfig.plugins ?? {})).toEqual(["apps"]);
   });
+
+  it("keeps the plugins workspace override when no child plugins are selected", async () => {
+    const projectDir = await scaffoldProject(["ui", "api", "plugins"], []);
+    tempDirs.push(projectDir);
+
+    const result = await syncTemplate(projectDir, {
+      dryRun: false,
+      force: false,
+      noInstall: true,
+    });
+
+    expect(result.status).toBe("synced");
+
+    const pkg = JSON.parse(readFileSync(join(projectDir, "package.json"), "utf-8")) as {
+      workspaces?: { packages?: string[] };
+    };
+    const config = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
+      plugins?: Record<string, unknown>;
+    };
+
+    expect(pkg.workspaces?.packages).toContain("plugins/*");
+    expect(config.plugins).toBeUndefined();
+  });
 });

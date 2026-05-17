@@ -2,49 +2,74 @@
 
 ## Overview
 
-This repository uses four workflows: release, staging, preview, and CI. The release pipeline is the most critical — it orchestrates npm publishing, CDN deployment, and Docker image building in a single sequential job where each step gates the next.
+This repository uses the following production-facing workflows:
+
+- `CI` — lint, audit, and typecheck
+- `Packages Release` — changeset/version gate for framework packages
+- `Release` — production Zephyr deploy + FastKV publish
+- `Publish Config` — standalone config-only publish path when `bos.config.json` changes
+- `Staging Deploy` — staging Docker image
+- `Preview` — PR preview comments and preview deploy helpers
+
+The important distinction is that `release.yml` is the reusable production deploy workflow, while `packages-release.yml` is the gate that decides when production deploy should happen.
 
 ## Workflows
 
-### Release (`release.yml`)
+### Packages Release (`packages-release.yml`)
 
-**Trigger:** Push to `main` that changes `.changeset/**`, `package.json`, or the workflow file itself. Also `workflow_dispatch`.
+**Trigger:** Push to `main`. Also `workflow_dispatch`.
 
-**Purpose:** Version packages, publish to npm, deploy to Zephyr CDN, publish config to FastKV, and build/push the Docker image.
+**Purpose:** Test the framework packages, create or update the `chore: version packages` PR when changesets are pending, and call the reusable production deploy workflow once those changesets have been consumed.
 
 **Lifecycle:**
 
 ```
 1. Developer creates changeset          →  bun run changeset
 2. Developer merges feature branch      →  Changesets land on main
-3. Release workflow triggers            →  changesets/action detects changesets
-                                          Creates "chore: version packages" PR
-                                          (bun run version bumps versions)
-4. Team merges Version Packages PR      →  Release workflow triggers again
+3. Packages Release triggers            →  changesets/action detects changesets
+                                          Creates/updates "chore: version packages" PR
+4. Team merges Version Packages PR      →  Packages Release triggers again
                                           No changesets remain (hasChangesets=false)
                                           ↓
-                                          Build every-plugin + everything-dev
+                                          npm publish / GitHub release steps run for framework packages
                                           ↓
-                                          Stage normalized release manifests
-                                          ↓
-                                          npm publish (gates everything below)
-                                          ↓
-                                          GitHub Releases for all packages
-                                          ↓
-                                          bos publish --deploy (Zephyr + FastKV)
-                                          ↓
-                                          Commit bos.config.json [skip ci]
-                                          ↓
-                                          Docker build + push (multi-stage, inline)
+                                          Deploy job calls release.yml
+```
+
+### Release (`release.yml`)
+
+**Trigger:** `workflow_call` from `packages-release.yml`, or `workflow_dispatch`.
+
+**Purpose:** Build and deploy runtime surfaces to Zephyr, publish `bos.config.json` to FastKV, commit the refreshed production URLs, and build/push the Docker image.
+
+**Lifecycle:**
+
+```
+1. Packages Release decides deploy      →  calls release.yml with deploy=true
+2. Release installs dependencies        →  bun install --frozen-lockfile --ignore-scripts
+3. Release regenerates artifacts        →  bun run postinstall
+4. Runtime surfaces deploy              →  bun run deploy
+5. Config is published to FastKV        →  bos publish
+6. Deployment URLs are committed        →  bos.config.json [skip ci]
+7. Docker image is built and pushed     →  inline latest image build
 ```
 
 **Key design decisions:**
 
-- **npm publish gates everything.** If npm publish fails, no Zephyr deploy or Docker build happens. The `everything-dev` and `every-plugin` packages must be on npm before the Docker image can be built (the image installs them from npm, not from workspace refs).
-- **Single sequential job.** All steps run in one job so that failure at any point stops the pipeline. There is no separate `publish-npm` job or `docker.yml` dispatch.
+- **`Packages Release` is the changeset gate.** If there are pending changesets, deploy is intentionally skipped until the version PR is merged.
+- **`Release` owns production deploy.** Zephyr deploy and FastKV publish happen in `release.yml`, not `ci.yml`.
+- **Docker is part of the parent release workflow only.** Child-project templates no longer use this exact workflow shape.
 - **Normalized manifests for shipping.** Source manifests keep `workspace:*` and `workspaces.catalog` for monorepo development. Release staging, generated apps, and Docker builds normalize framework refs to concrete semver while preserving `workspaces.catalog` where appropriate.
 - **Multi-stage Docker build.** The builder stage copies the full repo (including `packages/`), normalizes framework workspace refs via `scripts/resolve-workspace-refs.ts`, then runs `bun install`. The final stage copies only app code + `node_modules` — no `packages/` directory. This produces a smaller image with a clean separation between framework packages (from npm) and app code.
 - **`bos start` reads config from `bos.config.json`.** The Docker start command uses `bos start --env production --no-interactive` instead of passing `--account`/`--domain` flags. Account and domain are read from the config file at runtime.
+
+### Publish Config (`publish.yml`)
+
+**Trigger:** `workflow_run` after `CI` completes on `main`. Also `workflow_dispatch`.
+
+**Purpose:** Publish `bos.config.json` to FastKV when a commit changes the config directly, without requiring the full production release flow.
+
+**Behavior:** On automatic runs it checks whether the triggering commit changed `bos.config.json`. If so, it runs `bos publish`. On manual dispatch it can also run `publish --deploy`.
 
 ### Staging (`staging.yml`)
 
@@ -70,7 +95,7 @@ This repository uses four workflows: release, staging, preview, and CI. The rele
 
 **Trigger:** Push to `main` or pull requests.
 
-**Purpose:** Lint, typecheck, dependency review, and test. Also builds and pushes a `:latest` Docker image on main push.
+**Purpose:** Lint, typecheck, security audit, and a separate Docker image build on main push.
 
 **Security features:**
 - `dependency-review-action` runs on every PR to flag known vulnerabilities
@@ -78,11 +103,9 @@ This repository uses four workflows: release, staging, preview, and CI. The rele
 - All actions pinned to commit SHAs
 - `--ignore-scripts` on all installs
 
-### Docker Build (`docker.yml`)
+### Docker Images
 
-**Trigger:** `workflow_dispatch` only (manual).
-
-**Purpose:** Manually build and push a Docker image. Not called by the release workflow (which builds inline). Exists as a safety valve for manual rebuilds.
+Docker images are built inline in the parent repo's `ci.yml`, `staging.yml`, and `release.yml` workflows. Generated child repos no longer scaffold Docker as part of their blocking CI or release workflows.
 
 ## Docker Image Architecture
 

@@ -124,6 +124,14 @@ bun run changeset
 
 The release workflow (`.github/workflows/release.yml`) handles versioning and GitHub releases automatically on merge to main.
 
+Production releases actually flow through `.github/workflows/packages-release.yml` first:
+
+1. Push changesets to `main`
+2. `Packages Release` creates or updates the `chore: version packages` PR
+3. Merge that version PR
+4. `Packages Release` runs again with no pending changesets and calls `.github/workflows/release.yml`
+5. `release.yml` runs `bun run deploy`, updates `bos.config.json`, and publishes the config to FastKV
+
 ### Git Workflow
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed contribution guidelines including:

@@ -42,6 +42,11 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "biome.json"))).toBe(true);
     expect(existsSync(join(testDir, ".github", "workflows", "ci.yml"))).toBe(true);
+    expect(existsSync(join(testDir, ".github", "workflows", "packages-release.yml"))).toBe(true);
+    expect(existsSync(join(testDir, ".github", "workflows", "release.yml"))).toBe(true);
+    expect(existsSync(join(testDir, ".github", "renovate.json"))).toBe(false);
+    expect(existsSync(join(testDir, ".github", "workflows", "publish.yml"))).toBe(false);
+    expect(existsSync(join(testDir, ".github", "workflows", "staging.yml"))).toBe(false);
     expect(existsSync(join(testDir, "CONTRIBUTING.md"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
@@ -124,7 +129,12 @@ describe("bos init — structure", () => {
 
   it("preserves catalog refs for framework packages", () => {
     const rootPkg = JSON.parse(readFileSync(join(testDir, "package.json"), "utf-8")) as {
+      name?: string;
+      private?: boolean;
       dependencies?: Record<string, string>;
+      module?: string;
+      peerDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
       workspaces?: { catalog?: Record<string, string> };
     };
     const uiPkg = JSON.parse(readFileSync(join(testDir, "ui", "package.json"), "utf-8")) as {
@@ -137,6 +147,12 @@ describe("bos init — structure", () => {
 
     expect(rootPkg.dependencies?.["everything-dev"]).toBe("catalog:");
     expect(rootPkg.dependencies?.["every-plugin"]).toBe("catalog:");
+    expect(rootPkg.name).toBe("test.dev");
+    expect(rootPkg.private).toBe(true);
+    expect(rootPkg.module).toBeUndefined();
+    expect(rootPkg.peerDependencies).toBeUndefined();
+    expect(rootPkg.scripts?.version).toBe("changeset version");
+    expect(rootPkg.scripts?.["sync-catalog"]).toBeUndefined();
     expect(rootPkg.workspaces?.catalog?.["everything-dev"]).toBe(
       MANIFEST_SPEC.rootCatalog["everything-dev"],
     );
@@ -203,8 +219,13 @@ describe("bos init — structure", () => {
       expect(existsSync(join(apiOnlyDir, "api", "package.json"))).toBe(true);
       expect(existsSync(join(apiOnlyDir, "ui", "package.json"))).toBe(false);
       const config = JSON.parse(readFileSync(join(apiOnlyDir, "bos.config.json"), "utf-8"));
+      const pkg = JSON.parse(readFileSync(join(apiOnlyDir, "package.json"), "utf-8")) as {
+        scripts?: Record<string, string>;
+      };
       expect(config.app.api).toBeDefined();
       expect(config.app.ui).toBeUndefined();
+      expect(pkg.scripts?.["dev:api"]).toBeDefined();
+      expect(pkg.scripts?.["dev:ui"]).toBeUndefined();
     } finally {
       rmSync(apiOnlyDir, { recursive: true, force: true });
     }
