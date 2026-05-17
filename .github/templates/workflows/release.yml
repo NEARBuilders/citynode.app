@@ -76,7 +76,7 @@ jobs:
 
       - name: Lowercase repository name
         if: hashFiles('Dockerfile') != ''
-        run: echo "REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        run: echo "REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         if: hashFiles('Dockerfile') != ''
@@ -114,10 +114,12 @@ jobs:
 
       - name: Deployment summary
         run: |
-          echo "## Release Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Zephyr:** UI, API, plugins deployed" >> $GITHUB_STEP_SUMMARY
-          echo "**FastKV:** bos.config.json published" >> $GITHUB_STEP_SUMMARY
-          if [ -f Dockerfile ]; then
-            echo "**Docker:** \`ghcr.io/${{ env.REPO }}:latest\` pushed" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## Release Complete"
+            echo ""
+            echo "**Zephyr:** UI, API, plugins deployed"
+            echo "**FastKV:** bos.config.json published"
+            if [ -f Dockerfile ]; then
+              echo "**Docker:** \`ghcr.io/${{ env.REPO }}:latest\` pushed"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
