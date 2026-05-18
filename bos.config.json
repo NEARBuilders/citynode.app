@@ -83,10 +83,7 @@
       ]
     },
     "projects": {
-      "development": "local:plugins/projects",
-      "extends": "bos://project.everything.near/everything.dev",
-      "production": "https://elliot-braem-3916-everything-dev-projects-plugin--d01d5e951-ze.zephyrcloud.app",
-      "integrity": "sha384-Pb8ECbKtPb4HII8/OC2JF8TUMQqA0urKNRQbkJTKz7AHRnyuXUg7sTysFq35SQjO"
+      "extends": "bos://work.efiz.near/projects.everything.dev"
     },
     "settings": {
       "development": "local:plugins/settings",
