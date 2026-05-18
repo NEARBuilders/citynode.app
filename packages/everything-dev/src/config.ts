@@ -448,6 +448,9 @@ function getConfigBaseDir(configPath: string, baseDir: string): string {
 }
 
 function asComposableEntry(value: unknown): BosPluginRef {
+  if (value === undefined) {
+    return {};
+  }
   if (typeof value === "string") {
     return { extends: value };
   }
