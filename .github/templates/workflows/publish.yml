@@ -35,7 +35,6 @@ jobs:
         github.event.workflow_run.head_branch == 'main'
       )
     outputs:
-      should_publish: ${{ steps.detect.outputs.should_publish }}
       should_deploy: ${{ steps.detect.outputs.should_deploy }}
     steps:
       - name: Checkout code
@@ -55,8 +54,26 @@ jobs:
           const { existsSync, readdirSync, readFileSync } = require("node:fs")
           const { join } = require("node:path")
 
-          const isManual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch"
           const forceDeploy = process.env.FORCE_DEPLOY === "true"
+          const targetSha = process.env.TARGET_SHA
+
+          const runGit = (command) => {
+            try {
+              return execSync(command, { encoding: "utf8" }).trim()
+            } catch {
+              return ""
+            }
+          }
+
+          const getFrontmatterPackageNames = (content) => {
+            const match = content.match(/^---\n([\s\S]*?)\n---/)
+            if (!match?.[1]) return []
+
+            return [...match[1].matchAll(/["']([^"']+)["']\s*:\s*(major|minor|patch)/g)].map(
+              (pkgMatch) => pkgMatch[1],
+            )
+          }
+
           const deployablePackageJsons = []
 
           for (const dir of ["ui", "api", "host"]) {
@@ -82,42 +99,50 @@ jobs:
               .filter(Boolean),
           )
 
-          let appChanges = false
+          const changesetPackages = new Set()
           if (existsSync(".changeset")) {
             for (const entry of readdirSync(".changeset")) {
               if (!entry.endsWith(".md") || entry === "README.md") continue
               const content = readFileSync(join(".changeset", entry), "utf8")
-              const match = content.match(/^---\n([\s\S]*?)\n---/)
-              if (!match?.[1]) continue
-              const frontmatter = match[1]
-              for (const pkgMatch of frontmatter.matchAll(/["']([^"']+)["']\s*:\s*(major|minor|patch)/g)) {
-                if (deployablePackages.has(pkgMatch[1])) {
-                  appChanges = true
-                  break
-                }
+              for (const packageName of getFrontmatterPackageNames(content)) {
+                changesetPackages.add(packageName)
               }
-              if (appChanges) break
             }
           }
 
-          let configChanged = false
-          try {
-            const changed = execSync(`git show --name-only --pretty="" ${process.env.TARGET_SHA} -- bos.config.json`, {
-              encoding: "utf8",
-            })
-            configChanged = changed.split(/\r?\n/).includes("bos.config.json")
-          } catch {}
+          const parentSha = runGit(`git rev-parse ${targetSha}^`)
+          if (parentSha) {
+            const removedChangesets = runGit(
+              `git diff --name-status ${parentSha} ${targetSha} -- .changeset`,
+            )
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line) => line.split(/\s+/, 2))
+              .filter(([status, filePath]) =>
+                status === "D" && filePath && filePath.endsWith(".md") && !filePath.endsWith("README.md"),
+              )
+              .map(([, filePath]) => filePath)
+
+            for (const filePath of removedChangesets) {
+              const previousContent = runGit(`git show ${parentSha}:${filePath}`)
+              for (const packageName of getFrontmatterPackageNames(previousContent)) {
+                changesetPackages.add(packageName)
+              }
+            }
+          }
+
+          const appChanges = [...changesetPackages].some((packageName) =>
+            deployablePackages.has(packageName),
+          )
 
           const shouldDeploy = forceDeploy || appChanges
-          const shouldPublish = shouldDeploy || configChanged || isManual
 
           console.log(`should_deploy=${shouldDeploy}`)
-          console.log(`should_publish=${shouldPublish}`)
           EOF
 
   publish:
     needs: [detect-publish]
-    if: needs.detect-publish.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
