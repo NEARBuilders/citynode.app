@@ -151,6 +151,9 @@ describe("bos init — typecheck", () => {
     expect(existsSync(join(testDir, "ui", "src", "lib", "auth-types.gen.ts"))).toBe(true);
     expect(existsSync(join(testDir, "api", "src", "lib", "plugins-types.gen.ts"))).toBe(true);
     expect(existsSync(join(testDir, "api", "src", "lib", "auth-types.gen.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins", "settings", "src", "plugins-client.gen.ts"))).toBe(
+      true,
+    );
   });
 
   it("sets postinstall to 'node_modules/.bin/bos types gen || true'", async () => {

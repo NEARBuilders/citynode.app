@@ -667,6 +667,22 @@ export async function personalizeConfig(
       writeFileSync(authTypesGenPath, authTypesContent);
     }
   }
+
+  if (has("plugins")) {
+    for (const plugin of opts.plugins ?? []) {
+      const pluginSrcDir = join(destination, "plugins", plugin, "src");
+      const pluginIndexPath = join(pluginSrcDir, "index.ts");
+      const pluginClientGenPath = join(pluginSrcDir, "plugins-client.gen.ts");
+      if (!existsSync(pluginIndexPath) || existsSync(pluginClientGenPath)) {
+        continue;
+      }
+      const pluginIndex = readFileSync(pluginIndexPath, "utf-8");
+      if (!pluginIndex.includes("./plugins-client.gen")) {
+        continue;
+      }
+      writeFileSync(pluginClientGenPath, "export type PluginsClient = Record<string, never>;\n");
+    }
+  }
 }
 
 function generateAuthTypesTemplate(): string {
