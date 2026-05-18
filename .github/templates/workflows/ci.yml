@@ -67,4 +67,7 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ github.sha }}
-    secrets: inherit
+    secrets:
+      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+      ZEPHYR_AUTH_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
+      ZEPHYR_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
