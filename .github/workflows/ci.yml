@@ -26,6 +26,9 @@ permissions:
   pull-requests: write
   packages: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint-and-typecheck:
     name: Lint and Type Check
@@ -94,10 +97,7 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ github.sha }}
-    secrets:
-      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-      ZEPHYR_AUTH_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
-      ZEPHYR_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
+    secrets: inherit
 
   build-docker:
     name: Build and Push Docker Image

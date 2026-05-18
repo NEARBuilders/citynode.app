@@ -11,6 +11,9 @@ concurrency:
   group: preview-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.run_id }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   publish-preview-url:
     name: Publish Railway preview URL

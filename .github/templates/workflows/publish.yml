@@ -29,14 +29,17 @@ on:
       NEAR_PRIVATE_KEY:
         required: true
       ZEPHYR_AUTH_TOKEN:
-        required: true
+        required: false
       ZEPHYR_USER_EMAIL:
-        required: true
+        required: false
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   detect-publish:
