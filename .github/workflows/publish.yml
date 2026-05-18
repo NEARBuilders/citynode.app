@@ -28,6 +28,10 @@ on:
     secrets:
       NEAR_PRIVATE_KEY:
         required: true
+      ZEPHYR_AUTH_TOKEN:
+        required: true
+      ZEPHYR_USER_EMAIL:
+        required: true
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -146,6 +150,8 @@ jobs:
         env:
           BOS_INSTALL_NEAR_CLI: "true"
           NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+          ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
+          ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
           SHOULD_DEPLOY: ${{ needs.detect-publish.outputs.should_deploy }}
         run: |
           if [ "$SHOULD_DEPLOY" = "true" ]; then

@@ -4,112 +4,83 @@
 
 This repository uses the following production-facing workflows:
 
-- `CI` — lint, audit, and typecheck
-- `Packages Release` — changeset/version gate for framework packages
-- `Release` — production Zephyr deploy + FastKV publish
-- `Publish Config` — standalone config-only publish path when `bos.config.json` changes
-- `Staging Deploy` — staging Docker image
-- `Preview` — PR preview comments and preview deploy helpers
+- `CI` — lint, audit, typecheck, Docker build, then release and publish
+- `Release` — changeset versioning and npm publish for framework packages
+- `Publish` — runtime deploy and FastKV config publish
+- `Preview` — PR preview comments via Railway
 
-The important distinction is that `release.yml` is the reusable production deploy workflow, while `packages-release.yml` is the gate that decides when production deploy should happen.
+The key design: `CI` calls `Release` and `Publish` as reusable workflows after lint+typecheck passes on `main`. `Release` owns changeset versioning and npm publishing. `Publish` owns runtime deploy (`bos publish --deploy`) and FastKV config publish.
 
 ## Workflows
 
-### Packages Release (`packages-release.yml`)
+### CI (`ci.yml`)
 
-**Trigger:** Push to `main`. Also `workflow_dispatch`.
+**Trigger:** Push to `main` (with `paths-ignore` for markdown and changesets) or pull requests. Also `workflow_dispatch`.
 
-**Purpose:** Test the framework packages, create or update the `chore: version packages` PR when changesets are pending, and call the reusable production deploy workflow once those changesets have been consumed.
+**Purpose:** Lint, typecheck, security audit, then call `Release` and `Publish` as reusable workflows. Also builds and pushes the Docker image.
+
+**Jobs:**
+1. `lint-and-typecheck` — install, build, postinstall, audit, lint, typecheck
+2. `release` — calls `release.yml` (only on push to main)
+3. `publish` — calls `publish.yml` (only on push to main)
+4. `build-docker` — builds and pushes Docker image (only if `Dockerfile` exists)
+
+**Key design decisions:**
+- `secrets: inherit` is not used for the `publish` call because `publish.yml` declares `NEAR_PRIVATE_KEY` as `required: true`. The secret is passed explicitly to satisfy the reusable workflow contract.
+- Docker build no longer requires `environment: production` approval, so it doesn't block release/publish.
+- `Build every-plugin` runs before `postinstall` in both `release.yml` and `ci.yml` because `postinstall` triggers `types:gen` which needs `every-plugin` to be built first.
+
+### Release (`release.yml`)
+
+**Trigger:** `workflow_call` from `CI`, or `workflow_dispatch`.
+
+**Purpose:** Consume changesets, create version PRs, and publish framework packages to npm.
 
 **Lifecycle:**
 
 ```
 1. Developer creates changeset          →  bun run changeset
 2. Developer merges feature branch      →  Changesets land on main
-3. Packages Release triggers            →  changesets/action detects changesets
-                                          Creates/updates "chore: version packages" PR
-4. Team merges Version Packages PR      →  Packages Release triggers again
-                                          No changesets remain (hasChangesets=false)
-                                          ↓
-                                          npm publish / GitHub release steps run for framework packages
-                                          ↓
-                                          Deploy job calls release.yml
+3. CI triggers Release                   →  changesets/action detects changesets
+                                           Creates/updates "chore: version packages" PR
+4. Team merges Version Packages PR      →  CI triggers Release again
+                                           No changesets remain (hasChangesets=false)
+                                           ↓
+                                           npm publish --provenance --access public
+                                           ↓
+                                           GitHub Releases created for each package
 ```
 
-### Release (`release.yml`)
+**npm publishing uses OIDC trusted publishing** — no `NPM_TOKEN` secret needed. `NODE_AUTH_TOKEN` is set to empty string, and `npm publish --provenance` authenticates via the OIDC token provisioned by `id-token: write` permission and `actions/setup-node` with `registry-url`.
 
-**Trigger:** `workflow_call` from `packages-release.yml`, or `workflow_dispatch`.
+### Publish (`publish.yml`)
 
-**Purpose:** Build and deploy runtime surfaces to Zephyr, publish `bos.config.json` to FastKV, commit the refreshed production URLs, and build/push the Docker image.
+**Trigger:** `workflow_call` from `CI`, or `workflow_dispatch`.
 
-**Lifecycle:**
+**Purpose:** Detect whether a commit requires runtime deploy or just config publish, then run `bos publish` (with optional `--deploy`).
 
-```
-1. Packages Release decides deploy      →  calls release.yml with deploy=true
-2. Release installs dependencies        →  bun install --frozen-lockfile --ignore-scripts
-3. Release regenerates artifacts        →  bun run postinstall
-4. Runtime surfaces deploy              →  bun run deploy
-5. Config is published to FastKV        →  bos publish
-6. Deployment URLs are committed        →  bos.config.json [skip ci]
-7. Docker image is built and pushed     →  inline latest image build
-```
+**Behavior:**
+- Scans `.changeset/` files for changes to deployable packages (ui, api, host, plugins)
+- Checks if `bos.config.json` changed in the commit
+- If deployable changes exist: runs `bos publish --deploy`
+- If only config changed (or manual dispatch): runs `bos publish`
+- Commits updated deployment URLs in `bos.config.json`
 
-**Key design decisions:**
-
-- **`Packages Release` is the changeset gate.** If there are pending changesets, deploy is intentionally skipped until the version PR is merged.
-- **`Release` owns production deploy.** Zephyr deploy and FastKV publish happen in `release.yml`, not `ci.yml`.
-- **Docker is part of the parent release workflow only.** Child-project templates no longer use this exact workflow shape.
-- **Normalized manifests for shipping.** Source manifests keep `workspace:*` and `workspaces.catalog` for monorepo development. Release staging, generated apps, and Docker builds normalize framework refs to concrete semver while preserving `workspaces.catalog` where appropriate.
-- **Multi-stage Docker build.** The builder stage copies the full repo (including `packages/`), normalizes framework workspace refs via `scripts/resolve-workspace-refs.ts`, then runs `bun install`. The final stage copies only app code + `node_modules` — no `packages/` directory. This produces a smaller image with a clean separation between framework packages (from npm) and app code.
-- **`bos start` reads config from `bos.config.json`.** The Docker start command uses `bos start --env production --no-interactive` instead of passing `--account`/`--domain` flags. Account and domain are read from the config file at runtime.
-
-### Publish Config (`publish.yml`)
-
-**Trigger:** `workflow_run` after `CI` completes on `main`. Also `workflow_dispatch`.
-
-**Purpose:** Publish `bos.config.json` to FastKV when a commit changes the config directly, without requiring the full production release flow.
-
-**Behavior:** On automatic runs it checks whether the triggering commit changed `bos.config.json`. If so, it runs `bos publish`. On manual dispatch it can also run `publish --deploy`.
-
-### Staging (`staging.yml`)
-
-**Trigger:** `workflow_run` after CI completes on `main`. Also `workflow_dispatch`.
-
-**Purpose:** Build and push a `:staging` Docker image for the staging environment.
-
-**Behavior:** Reads the staging domain from `bos.config.json` (falls back to the production domain), builds the same multi-stage Docker image, and pushes with the `:staging` tag. Railway auto-deploys from this tag.
+**Secret:** `NEAR_PRIVATE_KEY` is required (passed explicitly from CI) for FastKV publish.
 
 ### Preview (`preview.yml`)
 
-**Trigger:** `pull_request` close events for cleanup, plus `workflow_run` after successful PR `CI` to publish the resolved Railway preview URL.
+**Trigger:** `pull_request` close events for cleanup, plus `workflow_run` after successful PR CI.
 
-**Purpose:** Let Railway own PR environments while GitHub Actions mirrors the real Railway preview URL back onto the PR.
+**Purpose:** Publish the Railway preview URL as a PR comment.
 
-**Security note:** Uses `workflow_run` only after successful internal PR `CI`, so repository secrets are not exposed to forked PRs.
+**Security:** Uses `workflow_run` only after successful internal PR CI, so repository secrets are not exposed to forked PRs.
 
-**Behavior:** After `CI` succeeds for an internal PR, the workflow polls Railway's GraphQL API for the matching ephemeral PR environment, resolves the public Railway domain for the preview service, and upserts a single PR comment with the real URL. When the PR closes, that bot comment is removed.
-
-**Configuration:** Set `RAILWAY_TOKEN` and `RAILWAY_PROJECT_ID` as GitHub Actions secrets. If the project exposes more than one public Railway domain, set `RAILWAY_SERVICE_NAME` as a repository variable to pick the correct service.
-
-### CI (`ci.yml`)
-
-**Trigger:** Push to `main` or pull requests.
-
-**Purpose:** Lint, typecheck, security audit, and a separate Docker image build on main push.
-
-**Security features:**
-- `dependency-review-action` runs on every PR to flag known vulnerabilities
-- `bun audit` fails on critical/high findings
-- All actions pinned to commit SHAs
-- `--ignore-scripts` on all installs
-
-### Docker Images
-
-Docker images are built inline in the parent repo's `ci.yml`, `staging.yml`, and `release.yml` workflows. Generated child repos no longer scaffold Docker as part of their blocking CI or release workflows.
+**Configuration:** Set `RAILWAY_TOKEN` and `RAILWAY_PROJECT_ID` as GitHub Actions secrets. Optionally set `RAILWAY_SERVICE_NAME` as a repository variable.
 
 ## Docker Image Architecture
 
-The Docker image uses a multi-stage build:
+Docker images are built inline in `ci.yml`. The image uses a multi-stage build:
 
 ```
 Builder stage:
@@ -126,41 +97,33 @@ Final stage:
 ```
 
 **Why this design:**
-
 - `packages/everything-dev` and `packages/every-plugin` are framework packages published to npm. The Docker image installs them from the registry, not from local source.
-- The normalize script (`scripts/resolve-workspace-refs.ts`) rewrites framework `workspace:*` references to concrete package versions and updates matching `workspaces.catalog` entries before install. This happens in the builder stage only — committed manifests keep monorepo-friendly refs for local development.
-- The final image is smaller because `packages/` source code (including tests, build configs, etc.) is excluded.
-- The start command uses `bos` (the CLI binary from `node_modules/.bin/bos`) instead of `bun packages/everything-dev/cli.js`.
+- The normalize script rewrites `workspace:*` references to concrete package versions before install.
+- The final image excludes `packages/` source code, producing a smaller image.
+- The start command uses `bos` from `node_modules/.bin/bos` instead of `bun packages/everything-dev/cli.js`.
 
 ## npm Trusted Publishing (OIDC)
 
-npm packages are published using **Trusted Publishing** (OpenID Connect), which eliminates the need for long-lived `NPM_TOKEN` secrets. Instead, GitHub Actions generates short-lived OIDC tokens that npm verifies against the configured trusted publisher.
+npm packages are published using **Trusted Publishing** (OpenID Connect), which eliminates the need for a long-lived `NPM_TOKEN` secret.
 
 **How it works:**
-1. The release workflow provisions OIDC tokens only during the npm publish steps (not at job level — `id-token: write` is removed from job-level permissions as a security hardening measure)
-2. `actions/setup-node@v6` provisions Node 24 with npm 11 support and configures the npm registry
-3. Release staging writes normalized package manifests into `.release/` before publish
-4. `npm publish --provenance` authenticates via OIDC using `NODE_AUTH_TOKEN` from `secrets.NPM_TOKEN`
-5. Provenance attestations are automatically generated, linking the published package to the exact commit and workflow
+1. The release job has `id-token: write` and `contents: write` permissions
+2. `actions/setup-node` provisions Node 24 with npm 11 and configures the npm registry
+3. Release staging writes normalized package manifests into `.release/`
+4. `NODE_AUTH_TOKEN` is set to empty string — `npm publish --provenance` authenticates via OIDC
+5. Provenance attestations link the published package to the exact commit and workflow
 
 **Setup (already done):**
-- Trusted publisher configured on npm for both `every-plugin` and `everything-dev` at `https://www.npmjs.com/package/<name>/access`
-- Publisher points to the repository, `release.yml` workflow filename
-- `NPM_TOKEN` secret is used for `NODE_AUTH_TOKEN` during publish (scoped to publish steps only, not job-level env)
+- Trusted publisher configured on npm for both `every-plugin` and `everything-dev`
+- Publisher points to this repository and the `release.yml` workflow filename
+- No `NPM_TOKEN` secret is needed or configured
 
 ## Environment Variables
 
 | Variable | Where | Purpose |
 |----------|-------|---------|
-| `ZE_SECRET_TOKEN` | Release (build step) | Zephyr Cloud auth for CDN deploy |
-| `ZE_SERVER_TOKEN` | Release (build step) | Zephyr Cloud server auth |
-| `ZE_USER_EMAIL` | Release (build step) | Zephyr Cloud user email |
-| `NEAR_PRIVATE_KEY` | Release (publish step), Publish | NEAR key for FastKV publish |
-| `BOS_INSTALL_NEAR_CLI` | Release | Ensures NEAR CLI is available |
-| `APP_ENV` | Docker runtime | `production` or `staging` |
-| `PORT` | Docker runtime | HTTP port (default 3000) |
-| `BETTER_AUTH_SECRET` | Railway | Auth encryption key |
-| `BETTER_AUTH_URL` | Railway | Auth callback URL |
-| `HOST_DATABASE_URL` | Railway | Host database connection |
-| `HOST_DATABASE_AUTH_TOKEN` | Railway | Host database auth |
-| `CORS_ORIGIN` | Railway | Allowed CORS origins |
+| `NEAR_PRIVATE_KEY` | Publish | NEAR key for FastKV config publish |
+| `ZEPHYR_AUTH_TOKEN` | Publish | Zephyr Cloud auth for CDN deploy |
+| `ZEPHYR_USER_EMAIL` | Publish | Zephyr Cloud user email |
+| `BOS_INSTALL_NEAR_CLI` | Release, Publish | Ensures NEAR CLI is available |
+| `GITHUB_TOKEN` | Release, Publish | Changesets PR creation, GitHub releases |
