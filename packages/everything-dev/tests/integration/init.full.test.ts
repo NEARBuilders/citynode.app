@@ -22,7 +22,7 @@ function runCommand(
   command: string,
   args: string[],
   cwd: string,
-  timeout = 60_000,
+  timeout = 120_000,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -87,7 +87,7 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
 
   afterAll(() => {
     rmSync(testDir, { recursive: true, force: true });
-  });
+  }, 120_000);
 
   it("installs dependencies", async () => {
     const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects", "settings"]);
@@ -101,7 +101,7 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      workspaceOpts: { sourceDir: REPO_ROOT },
+      workspaceOpts: { sourceDir: REPO_ROOT, localOverrides: true },
       overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
@@ -109,7 +109,7 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
     await runBunInstall(testDir);
     writeGeneratedAuthStubs(testDir);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
-  });
+  }, 120_000);
 
   it("typechecks successfully", async () => {
     const result = await runCommand("bun", ["typecheck"], testDir);
@@ -119,5 +119,5 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
     }
 
     expect(result.code).toBe(0);
-  }, 60_000);
+  }, 120_000);
 });

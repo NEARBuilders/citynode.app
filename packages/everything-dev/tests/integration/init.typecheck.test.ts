@@ -141,7 +141,7 @@ describe("bos init — typecheck", () => {
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      workspaceOpts: { sourceDir: REPO_ROOT },
+      workspaceOpts: { sourceDir: REPO_ROOT, localOverrides: true },
       overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
