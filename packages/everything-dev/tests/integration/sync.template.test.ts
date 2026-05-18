@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +11,7 @@ import {
   personalizeConfig,
   writeInitSnapshot,
 } from "../../src/cli/init";
+import { readSnapshot } from "../../src/cli/snapshot";
 import { syncTemplate } from "../../src/cli/sync";
 import * as configModule from "../../src/config";
 
@@ -31,6 +33,10 @@ function runtimePluginsFromRoot(): Record<string, { routes: string[] }> {
       { routes: value.routes ?? [] },
     ]),
   );
+}
+
+function fileHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex").substring(0, 16);
 }
 
 async function scaffoldProject(
@@ -83,7 +89,7 @@ describe("syncTemplate", () => {
       parentConfig: ROOT_CONFIG as never,
       cleanup: async () => {},
     });
-    vi.spyOn(configModule, "loadConfig").mockImplementation(async ({ cwd }) => {
+    vi.spyOn(configModule, "loadResolvedConfig").mockImplementation(async ({ cwd }) => {
       if (cwd === REPO_ROOT) {
         return { runtime: { plugins: runtimePluginsFromRoot() } } as never;
       }
@@ -118,7 +124,6 @@ describe("syncTemplate", () => {
 
     const result = await syncTemplate(projectDir, {
       dryRun: false,
-      force: false,
       noInstall: true,
     });
 
@@ -136,25 +141,6 @@ describe("syncTemplate", () => {
     expect(existsSync(join(projectDir, ".bos", "sync-backup"))).toBe(true);
   });
 
-  it("force sync still only updates framework-owned files", async () => {
-    const projectDir = await scaffoldProject(["ui", "api"], []);
-    tempDirs.push(projectDir);
-
-    const syncOwnedPath = join(projectDir, "ui", "src", "providers", "index.tsx");
-    writeFileSync(syncOwnedPath, "provider override\n");
-
-    const result = await syncTemplate(projectDir, {
-      dryRun: false,
-      force: true,
-      noInstall: true,
-    });
-
-    expect(result.status).toBe("synced");
-    expect(result.updated).not.toContain("ui/src/providers/index.tsx");
-    expect(result.skipped).not.toContain("ui/src/providers/index.tsx");
-    expect(readFileSync(syncOwnedPath, "utf-8")).toBe("provider override\n");
-  });
-
   it("sync does not re-add plugin workspaces because it only manages framework-owned files", async () => {
     const projectDir = await scaffoldProject(["ui", "api", "plugins"], ["apps"]);
     tempDirs.push(projectDir);
@@ -164,7 +150,6 @@ describe("syncTemplate", () => {
 
     const result = await syncTemplate(projectDir, {
       dryRun: true,
-      force: false,
       noInstall: true,
     });
 
@@ -197,7 +182,6 @@ describe("syncTemplate", () => {
 
     const result = await syncTemplate(projectDir, {
       dryRun: false,
-      force: false,
       noInstall: true,
     });
 
@@ -222,7 +206,6 @@ describe("syncTemplate", () => {
 
     const result = await syncTemplate(projectDir, {
       dryRun: false,
-      force: false,
       noInstall: true,
     });
 
@@ -247,7 +230,6 @@ describe("syncTemplate", () => {
 
     const result = await syncTemplate(projectDir, {
       dryRun: false,
-      force: false,
       noInstall: true,
     });
 
@@ -262,5 +244,32 @@ describe("syncTemplate", () => {
 
     expect(pkg.workspaces?.packages).toContain("plugins/*");
     expect(config.plugins).toBeUndefined();
+  });
+
+  it("records sync snapshots using the final merged file content", async () => {
+    const projectDir = await scaffoldProject(["ui", "api"], []);
+    tempDirs.push(projectDir);
+
+    const packageJsonPath = join(projectDir, "package.json");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+    packageJson.scripts = {
+      ...(packageJson.scripts ?? {}),
+      custom: "bun run custom",
+    };
+    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+    const result = await syncTemplate(projectDir, {
+      dryRun: false,
+      noInstall: true,
+    });
+
+    expect(result.status).toBe("synced");
+
+    const snapshot = await readSnapshot(projectDir);
+    const finalPackageJson = readFileSync(packageJsonPath, "utf-8");
+
+    expect(snapshot?.files["package.json"]).toBe(fileHash(finalPackageJson));
   });
 });

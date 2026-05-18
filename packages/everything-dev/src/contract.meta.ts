@@ -36,6 +36,9 @@ export const cliCommandMeta = {
     commandPath: ["config"],
     summary: "Print the loaded BOS configuration",
     interactive: false,
+    fields: {
+      full: { description: "Print the fully resolved configuration" },
+    },
   },
   pluginAdd: {
     commandPath: ["plugin", "add"],
@@ -108,7 +111,6 @@ export const cliCommandMeta = {
     interactive: false,
     fields: {
       dryRun: { description: "Preview changes without writing files" },
-      force: { description: "Overwrite user-modified files" },
       noInstall: { description: "Skip bun install" },
     },
   },
@@ -118,7 +120,6 @@ export const cliCommandMeta = {
     interactive: true,
     fields: {
       dryRun: { description: "Preview changes without writing" },
-      force: { description: "Overwrite user-modified files during sync" },
       noInstall: { description: "Skip bun install" },
       noSync: { description: "Only upgrade packages, skip template sync" },
     },

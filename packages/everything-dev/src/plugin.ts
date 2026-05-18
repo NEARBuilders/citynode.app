@@ -36,7 +36,8 @@ import {
   findConfigPath,
   getHostDevelopmentPort,
   getProjectRoot,
-  loadConfig,
+  loadLocalConfig,
+  loadResolvedConfig,
   resolveLocalDevelopmentPath,
   resumeWarnings,
   suppressWarnings,
@@ -163,14 +164,19 @@ function parseSourceMode(value: string | undefined, defaultValue: SourceMode): S
   return defaultValue;
 }
 
-function buildConfigResult(bosConfig: BosConfig | null): BosConfigResult {
-  const packages = bosConfig ? Object.keys(bosConfig.app) : [];
+function buildConfigResult(
+  bosConfig: BosConfigInput | BosConfig | null,
+  full = false,
+): BosConfigResult {
+  const packages =
+    bosConfig?.app && typeof bosConfig.app === "object" ? Object.keys(bosConfig.app) : [];
   const remotes = packages.filter((name) => name !== "host");
 
   return {
-    config: bosConfig,
+    config: bosConfig ?? null,
     packages,
     remotes,
+    full,
   };
 }
 
@@ -323,7 +329,8 @@ async function generateCodeArtifacts(
     writeResolvedConfig(configDir, config, opts.env, opts.extendsChain);
   }
 
-  const runtimeConfig = opts?.runtimeConfig ?? (await loadConfig({ cwd: configDir }))?.runtime;
+  const runtimeConfig =
+    opts?.runtimeConfig ?? (await loadResolvedConfig({ cwd: configDir }))?.runtime;
   if (!runtimeConfig) return null;
 
   writePluginSidebarGen(configDir, runtimeConfig);
@@ -540,7 +547,7 @@ export default createPlugin({
   contract: bosContract,
   initialize: (config) =>
     Effect.promise(async () => {
-      const configResult = await loadConfig({ path: config.variables.configPath });
+      const configResult = await loadResolvedConfig({ path: config.variables.configPath });
       return {
         bosConfig: configResult?.config ?? null,
         runtimeConfig: configResult?.runtime ?? null,
@@ -549,7 +556,14 @@ export default createPlugin({
     }),
   shutdown: () => Effect.void,
   createRouter: (deps, builder) => ({
-    config: builder.config.handler(async () => buildConfigResult(deps.bosConfig)),
+    config: builder.config.handler(async ({ input }) => {
+      if (input.full) {
+        return buildConfigResult(deps.bosConfig, true);
+      }
+
+      const localConfig = await loadLocalConfig({ cwd: deps.configDir });
+      return buildConfigResult(localConfig?.config ?? null, false);
+    }),
 
     pluginAdd: builder.pluginAdd.handler(async ({ input }) => {
       if (!deps.bosConfig) {
@@ -833,7 +847,7 @@ export default createPlugin({
 
       pluginEvents.emit("progress", { phase: "config", status: "done" } satisfies ProgressEvent);
 
-      const refreshed = await loadConfig({ cwd: deps.configDir });
+      const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
       deps.bosConfig = refreshed?.config ?? deps.bosConfig;
       deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
 
@@ -1193,7 +1207,7 @@ export default createPlugin({
         built = result.built;
         skipped = result.skipped;
 
-        const refreshed = await loadConfig({ cwd: deps.configDir });
+        const refreshed = await loadResolvedConfig({ cwd: deps.configDir });
         if (refreshed?.config) {
           deps.bosConfig = refreshed.config;
           deps.runtimeConfig = refreshed.runtime;
@@ -1476,7 +1490,7 @@ export default createPlugin({
           removeInitLockfile(lockfilePath);
 
           const initConfig = await timePhase(timings, "resolve config", () =>
-            loadConfig({ cwd: targetDir }),
+            loadResolvedConfig({ cwd: targetDir }),
           );
           if (initConfig?.runtime) {
             await timePhase(timings, "generate env/docker", async () => {
@@ -1556,7 +1570,7 @@ export default createPlugin({
         const result = await syncTemplate(projectDir, input);
 
         if (result.status === "synced" || result.status === "dry-run") {
-          const syncedConfig = await loadConfig({ cwd: projectDir });
+          const syncedConfig = await loadResolvedConfig({ cwd: projectDir });
           if (syncedConfig?.config) {
             await generateCodeArtifacts(projectDir, syncedConfig.config);
           }
@@ -1614,7 +1628,7 @@ export default createPlugin({
         const env =
           input.env ?? (process.env.NODE_ENV === "production" ? "production" : "development");
 
-        const refreshed = await loadConfig({ cwd: projectDir, env });
+        const refreshed = await loadResolvedConfig({ cwd: projectDir, env });
         if (!refreshed) {
           return {
             status: "error" as const,

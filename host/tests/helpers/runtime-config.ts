@@ -1,4 +1,4 @@
-import { loadConfig } from "everything-dev/config";
+import { loadResolvedConfig } from "everything-dev/config";
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import type { RenderOptionsWithApi, RouterContext } from "everything-dev/ui/types";
 import type { RuntimeConfig } from "@/types";
@@ -6,7 +6,7 @@ import type { ApiClient } from "../../../ui/src/lib/api";
 import type { AuthClient } from "../../../ui/src/lib/auth";
 
 export async function loadTestRuntimeConfig(): Promise<RuntimeConfig> {
-  const result = await loadConfig();
+  const result = await loadResolvedConfig();
 
   if (!result) {
     throw new Error("No bos.config.json found for host tests");

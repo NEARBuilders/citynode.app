@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { oc } from "./sdk";
-import { BosConfigSchema, SourceModeSchema } from "./types";
+import { BosConfigInputSchema, BosConfigSchema, SourceModeSchema } from "./types";
 
 export const DevOptionsSchema = z.object({
   host: SourceModeSchema.default("local"),
@@ -46,10 +46,15 @@ export const BuildResultSchema = z.object({
   deployed: z.boolean().optional(),
 });
 
+export const ConfigOptionsSchema = z.object({
+  full: z.boolean().default(false),
+});
+
 export const ConfigResultSchema = z.object({
-  config: BosConfigSchema.nullable(),
+  config: z.union([BosConfigInputSchema, BosConfigSchema]).nullable(),
   packages: z.array(z.string()),
   remotes: z.array(z.string()),
+  full: z.boolean().default(false),
 });
 
 export const PluginAddOptionsSchema = z.object({
@@ -186,7 +191,6 @@ export const InitResultSchema = z.object({
 
 export const SyncOptionsSchema = z.object({
   dryRun: z.boolean().default(false),
-  force: z.boolean().default(false),
   noInstall: z.boolean().default(false),
 });
 
@@ -200,7 +204,6 @@ export const SyncResultSchema = z.object({
 
 export const UpgradeOptionsSchema = z.object({
   dryRun: z.boolean().default(false),
-  force: z.boolean().default(false),
   noInstall: z.boolean().default(false),
   noSync: z.boolean().default(false),
 });
@@ -266,7 +269,10 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/build" })
     .input(BuildOptionsSchema)
     .output(BuildResultSchema),
-  config: oc.route({ method: "GET", path: "/config" }).output(ConfigResultSchema),
+  config: oc
+    .route({ method: "GET", path: "/config" })
+    .input(ConfigOptionsSchema)
+    .output(ConfigResultSchema),
   pluginAdd: oc
     .route({ method: "POST", path: "/plugin/add" })
     .input(PluginAddOptionsSchema)

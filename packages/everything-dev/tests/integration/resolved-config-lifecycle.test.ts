@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   getResolvedConfigPath,
-  loadResolvedConfig,
+  loadGeneratedResolvedConfig,
   readBosConfigForBuild,
   resolveBosConfigPath,
   writeResolvedConfig,
@@ -53,10 +53,10 @@ describe("resolved config lifecycle", () => {
     expect(raw.account).toBe("test.near");
   });
 
-  it("loadResolvedConfig reads back config without _resolved", () => {
+  it("loadGeneratedResolvedConfig reads back config without _resolved", () => {
     writeResolvedConfig(testDir, VALID_CONFIG as any, "development");
 
-    const loaded = loadResolvedConfig(testDir);
+    const loaded = loadGeneratedResolvedConfig(testDir);
     expect(loaded).not.toBeNull();
     expect(loaded!.account).toBe("test.near");
   });
@@ -89,7 +89,7 @@ describe("resolved config lifecycle", () => {
     writeResolvedConfig(testDir, { ...VALID_CONFIG, account: "first.near" } as any, "development");
     writeResolvedConfig(testDir, { ...VALID_CONFIG, account: "second.near" } as any, "production");
 
-    const loaded = loadResolvedConfig(testDir);
+    const loaded = loadGeneratedResolvedConfig(testDir);
     expect(loaded!.account).toBe("second.near");
   });
 

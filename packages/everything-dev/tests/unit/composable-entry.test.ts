@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { clearConfigCache, loadConfig } from "../../src/config";
+import { clearConfigCache, loadResolvedConfig } from "../../src/config";
 
 describe("asComposableEntry handles undefined parent entries", () => {
   let testDir: string;
@@ -87,13 +87,13 @@ describe("asComposableEntry handles undefined parent entries", () => {
 
   it("does not throw when extends targets a plugin missing from parent config", async () => {
     clearConfigCache();
-    const loaded = await loadConfig({ cwd: childDir });
+    const loaded = await loadResolvedConfig({ cwd: childDir });
     expect(loaded).not.toBeNull();
   });
 
   it("resolves plugin to child-only values when parent lacks the plugin", async () => {
     clearConfigCache();
-    const loaded = await loadConfig({ cwd: childDir });
+    const loaded = await loadResolvedConfig({ cwd: childDir });
     expect(loaded?.runtime.plugins?.myplugin).toBeDefined();
     expect(loaded?.runtime.plugins?.myplugin?.url).toBe("https://myplugin.child.dev");
   });
@@ -138,7 +138,7 @@ describe("asComposableEntry handles undefined parent entries", () => {
     );
 
     clearConfigCache();
-    const loaded = await loadConfig({ cwd: authChildDir });
+    const loaded = await loadResolvedConfig({ cwd: authChildDir });
     expect(loaded).not.toBeNull();
     expect(loaded?.config.app?.auth?.name).toBe("auth-plugin");
     expect(loaded?.config.app?.auth?.production).toBe("https://auth.authchild.dev");

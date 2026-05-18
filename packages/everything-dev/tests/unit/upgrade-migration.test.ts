@@ -1,13 +1,20 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { migrateBosConfigFiles, migrateChildRootPackageJson } from "../../src/cli/upgrade";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as initModule from "../../src/cli/init";
+import * as syncModule from "../../src/cli/sync";
+import {
+  migrateBosConfigFiles,
+  migrateChildRootPackageJson,
+  upgradeTemplate,
+} from "../../src/cli/upgrade";
 
 describe("upgrade bos config migration", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
+    vi.restoreAllMocks();
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -451,5 +458,105 @@ describe("upgrade bos config migration", () => {
 
     expect(rootPkg.dependencies?.["@better-auth/core"]).toBe("catalog:");
     expect(uiPkg.dependencies?.["@better-auth/core"]).toBe("catalog:");
+  });
+
+  it("preserves an existing child auth override during upgrade sync", async () => {
+    const projectDir = makeProjectDir();
+    mkdirSync(join(projectDir, "ui"), { recursive: true });
+    writeFileSync(join(projectDir, "ui", "package.json"), '{"name":"ui"}\n');
+
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          extends: "bos://dev.everything.near/everything.dev",
+          account: "test.near",
+          domain: "test.dev",
+          shared: {
+            ui: {
+              effect: {
+                version: "3.21.0",
+                requiredVersion: "^3.21.0",
+                singleton: true,
+                strictVersion: false,
+                shareScope: "default",
+              },
+            },
+          },
+          app: {
+            ui: { development: "local:ui" },
+            auth: {
+              development: "local:plugins/auth",
+              production: "https://auth.child.dev",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    writeFileSync(
+      join(projectDir, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "monorepo",
+          private: true,
+          workspaces: {
+            packages: ["ui"],
+            catalog: {
+              effect: "3.21.0",
+              "everything-dev": "^1.28.11",
+              "every-plugin": "^2.5.11",
+            },
+          },
+          dependencies: {
+            "everything-dev": "catalog:",
+            "every-plugin": "catalog:",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    vi.spyOn(initModule, "runBunInstallForUpgrade").mockResolvedValue();
+    vi.spyOn(initModule, "runTypesGen").mockResolvedValue();
+    vi.spyOn(syncModule, "syncTemplate").mockImplementation(async (dir, options) => {
+      await initModule.personalizeConfig(dir, {
+        extendsAccount: "dev.everything.near",
+        extendsGateway: "everything.dev",
+        account: "test.near",
+        domain: "test.dev",
+        overrides: ["ui"],
+        workspaceOpts: { sourceDir: "/Users/elliot.braem/workspace/product/everything.dev" },
+        mode: "sync",
+        existingConfig: JSON.parse(readFileSync(join(dir, "bos.config.json"), "utf-8")),
+      });
+
+      return {
+        status: options.dryRun ? ("dry-run" as const) : ("synced" as const),
+        updated: [],
+        skipped: [],
+        added: [],
+      };
+    });
+
+    const result = await upgradeTemplate(projectDir, {
+      dryRun: false,
+      noInstall: true,
+      noSync: false,
+    });
+
+    expect(result.status).toBe("upgraded");
+
+    const config = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
+      app?: { auth?: { development?: string; production?: string } };
+    };
+
+    expect(config.app?.auth).toEqual({
+      development: "local:plugins/auth",
+      production: "https://auth.child.dev",
+    });
   });
 });

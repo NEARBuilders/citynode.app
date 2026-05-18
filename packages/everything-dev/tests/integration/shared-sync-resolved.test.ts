@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getResolvedConfigPath } from "../../src/config";
 import type { ResolvedConfigMeta } from "../../src/merge";
 import { syncAndGenerateSharedUi } from "../../src/shared";
+import type { BosConfig } from "../../src/types";
 
 const VALID_CONFIG = {
   account: "test.near",
@@ -126,6 +127,77 @@ describe("shared sync resolved config", () => {
     >;
     expect(ui.effect.version).toBe("3.21.0");
     expect(ui.zod.version).toBe("4.3.6");
+  });
+
+  it("uses provided resolved config when raw child config omits inherited host", async () => {
+    const childDir = mkdtempSync(join(tmpdir(), "bos-shared-child-"));
+    try {
+      writeFileSync(
+        join(childDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            extends: "bos://dev.everything.near/everything.dev",
+            account: "child.near",
+            app: {
+              ui: { name: "ui", development: "local:ui" },
+              api: { name: "api", development: "local:api" },
+            },
+            shared: {
+              ui: {
+                effect: { version: "0.0.1", singleton: true },
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      writeFileSync(
+        join(childDir, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "child-app",
+            private: true,
+            workspaces: {
+              packages: ["ui", "api"],
+              catalog: { effect: "3.21.0" },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const resolvedConfig: BosConfig = {
+        account: "child.near",
+        extends: "bos://dev.everything.near/everything.dev",
+        shared: {
+          ui: {
+            effect: { version: "0.0.1", singleton: true },
+          },
+        },
+        app: {
+          host: { development: "http://localhost:3000", production: "https://host.test.dev" },
+          ui: { name: "ui", development: "local:ui", production: "https://ui.test.dev" },
+          api: { name: "api", development: "local:api", production: "https://api.test.dev" },
+        },
+      };
+
+      const result = await syncAndGenerateSharedUi({
+        configDir: childDir,
+        hostMode: "local",
+        bosConfig: resolvedConfig,
+      });
+
+      expect(result.mode).toBe("catalog->bos");
+      const resolved = JSON.parse(readFileSync(getResolvedConfigPath(childDir), "utf-8")) as {
+        shared: { ui: { effect: { version: string; requiredVersion: string } } };
+      };
+      expect(resolved.shared.ui.effect.version).toBe("3.21.0");
+      expect(resolved.shared.ui.effect.requiredVersion).toBe("^3.21.0");
+    } finally {
+      rmSync(childDir, { recursive: true, force: true });
+    }
   });
 
   it("fingerprint is deterministic for same deps", async () => {

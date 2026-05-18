@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { clearConfigCache, loadConfig } from "../../src/config";
+import { resolveCatalogChainSource } from "../../src/cli/init";
+import { clearConfigCache, loadResolvedConfig } from "../../src/config";
 import { mergeBosConfigWithExtends, rebuildOrderedConfig } from "../../src/merge";
 
 const BASE_CONFIG = {
@@ -217,7 +218,7 @@ describe("extends chain", () => {
 
   it("resolved config does not inherit parent plugins through extends", async () => {
     clearConfigCache();
-    const loaded = await loadConfig({ cwd: childDir });
+    const loaded = await loadResolvedConfig({ cwd: childDir });
     expect(loaded?.config.plugins).toEqual({
       apps: { variables: { namespace: "child.near" } },
     });
@@ -240,6 +241,82 @@ describe("extends chain", () => {
     expect(keys.includes("plugins")).toBe(false);
     expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("shared"));
   });
+
+  it("merges parent catalogs across the extends chain from root to leaf", async () => {
+    const grandDir = join(testDir, "grand");
+    mkdirSync(grandDir, { recursive: true });
+    writeFileSync(
+      join(parentDir, "package.json"),
+      `${JSON.stringify(
+        {
+          workspaces: {
+            catalog: {
+              effect: "3.21.0",
+              "better-auth": "1.6.9",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(
+      join(parentDir, "bos.config.json"),
+      `${JSON.stringify(
+        rebuildOrderedConfig({
+          ...BASE_CONFIG,
+          repository: "https://github.com/parent",
+          extends: "../grand/bos.config.json",
+        }),
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(
+      join(grandDir, "package.json"),
+      `${JSON.stringify(
+        {
+          workspaces: {
+            catalog: {
+              effect: "3.20.0",
+              zod: "4.3.6",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    writeFileSync(
+      join(grandDir, "bos.config.json"),
+      `${JSON.stringify(
+        rebuildOrderedConfig({
+          ...BASE_CONFIG,
+          repository: "https://github.com/root",
+        }),
+        null,
+        2,
+      )}\n`,
+    );
+
+    const source = await resolveCatalogChainSource({
+      extendsAccount: "parent.near",
+      extendsGateway: "parent.dev",
+      sourceDir: parentDir,
+    });
+
+    expect(source.catalog).toEqual({
+      effect: "3.21.0",
+      zod: "4.3.6",
+      "better-auth": "1.6.9",
+    });
+    expect(source.repository).toBe("https://github.com/root");
+    expect(source.extendsChain).toEqual([
+      "bos://parent.near/parent.dev",
+      join(grandDir, "bos.config.json"),
+    ]);
+  });
 });
 
 describe("circular extends detection", () => {
@@ -260,7 +337,7 @@ describe("circular extends detection", () => {
       );
 
       clearConfigCache();
-      await expect(loadConfig({ cwd: testDir })).rejects.toThrow(/Circular extends/);
+      await expect(loadResolvedConfig({ cwd: testDir })).rejects.toThrow(/Circular extends/);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }

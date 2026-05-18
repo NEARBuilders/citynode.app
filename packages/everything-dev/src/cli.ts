@@ -26,7 +26,7 @@ function printConfigView(result: {
   account: string;
   domain?: string;
   staging?: { domain: string };
-  app: {
+  app?: {
     host: { name?: string; development: string; production?: string };
     ui: { name?: string; development?: string; production?: string; ssr?: string };
     api: { name?: string; development?: string; production?: string; proxy?: string };

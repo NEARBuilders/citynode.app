@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ensureEnvFile, writeGeneratedInfra } from "../../src/cli/infra";
 import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
-import { loadConfig } from "../../src/config";
+import { loadResolvedConfig } from "../../src/config";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
 
@@ -42,7 +42,7 @@ describe("bos init - relative directory", () => {
       workspaceOpts: { sourceDir: REPO_ROOT },
     });
 
-    const loaded = await loadConfig({ cwd: targetDir });
+    const loaded = await loadResolvedConfig({ cwd: targetDir });
     expect(loaded?.config.account).toBe("testing.near");
     expect(loaded?.config.domain).toBe("testing.com");
 

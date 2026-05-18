@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { glob } from "glob";
-import { loadConfig } from "../config";
+import { loadResolvedConfig } from "../config";
 import type { SyncOptions, SyncResult } from "../contract";
 import {
   isPlainObject as isPlainObjectFromMerge,
@@ -10,13 +10,7 @@ import {
   resolveExtendsRef,
 } from "../merge";
 import { writeGeneratedInfra } from "./infra";
-import {
-  personalizeConfig,
-  resolveSourceDir,
-  runBunInstall,
-  runTypesGen,
-  sourcePathToDestinationPath,
-} from "./init";
+import { personalizeConfig, resolveSourceDir, runBunInstall, runTypesGen } from "./init";
 import { writeSnapshot } from "./snapshot";
 
 const FRAMEWORK_OWNED_SYNC_FILES = new Set([
@@ -55,6 +49,10 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
 
 type PackageJson = Record<string, unknown>;
 
+function computeHash(content: string | Uint8Array): string {
+  return createHash("sha256").update(content).digest("hex").substring(0, 16);
+}
+
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   return FRAMEWORK_OWNED_SYNC_FILES.has(filePath);
 }
@@ -64,7 +62,7 @@ function computeLocalHash(projectDir: string, filePath: string): string | null {
   if (!existsSync(fullPath)) return null;
   try {
     const content = readFileSync(fullPath);
-    return createHash("sha256").update(content).digest("hex").substring(0, 16);
+    return computeHash(content);
   } catch {
     return null;
   }
@@ -221,10 +219,6 @@ export function mergePackageJson(
   return merged;
 }
 
-function toDestPath(filePath: string): string {
-  return sourcePathToDestinationPath(filePath);
-}
-
 function toSourcePath(sourceDir: string, destPath: string): string | null {
   if (destPath.startsWith(".github/")) {
     const templatePath = destPath.replace(/^\.github\//, ".github/templates/");
@@ -241,13 +235,16 @@ function toSourcePath(sourceDir: string, destPath: string): string | null {
   return null;
 }
 
-function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string): void {
+function buildSyncedFileContent(
+  sourceDir: string,
+  projectDir: string,
+  filePath: string,
+): string | Uint8Array {
   const src = join(sourceDir, filePath);
   const destPath = filePath.startsWith(".github/templates/")
     ? filePath.replace(/^\.github\/templates\//, ".github/")
     : filePath;
   const dest = join(projectDir, destPath);
-  mkdirSync(dirname(dest), { recursive: true });
 
   if (filePath.endsWith("bos.config.json")) {
     const localContent = existsSync(dest) ? readFileSync(dest, "utf-8") : null;
@@ -257,8 +254,7 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
       const local = JSON.parse(localContent) as Record<string, unknown>;
       const template = JSON.parse(templateContent) as Record<string, unknown>;
       const merged = mergeBosConfigWithTemplate(local, template);
-      writeFileSync(dest, `${JSON.stringify(merged, null, 2)}\n`);
-      return;
+      return `${JSON.stringify(merged, null, 2)}\n`;
     }
   }
 
@@ -270,12 +266,20 @@ function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string
       const local = JSON.parse(localContent) as Record<string, unknown>;
       const template = JSON.parse(templateContent) as Record<string, unknown>;
       const merged = mergePackageJson(destPath, local, template);
-      writeFileSync(dest, `${JSON.stringify(merged, null, 2)}\n`);
-      return;
+      return `${JSON.stringify(merged, null, 2)}\n`;
     }
   }
 
-  writeFileSync(dest, readFileSync(src));
+  return readFileSync(src);
+}
+
+function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string): void {
+  const destPath = filePath.startsWith(".github/templates/")
+    ? filePath.replace(/^\.github\/templates\//, ".github/")
+    : filePath;
+  const dest = join(projectDir, destPath);
+  mkdirSync(dirname(dest), { recursive: true });
+  writeFileSync(dest, buildSyncedFileContent(sourceDir, projectDir, filePath));
 }
 
 async function getSelectedChildPlugins(
@@ -408,7 +412,6 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     const withHost = existsSync(join(projectDir, "host", "package.json"));
     const withPlugins = childPlugins.length > 0 || hasPluginsWorkspace(projectDir);
 
-    const filteredFiles = new Set<string>();
     const destToSource = new Map<string, string>();
     for (const destPath of FRAMEWORK_OWNED_SYNC_FILES) {
       if (destPath.startsWith("ui/") && !withUi) continue;
@@ -416,7 +419,6 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       if (destPath.startsWith("host/") && !withHost) continue;
       const sourcePath = toSourcePath(sourceDir, destPath);
       if (!sourcePath) continue;
-      filteredFiles.add(sourcePath);
       destToSource.set(destPath, sourcePath);
     }
 
@@ -426,8 +428,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
     for (const [destPath, filePath] of destToSource.entries()) {
       const localHash = computeLocalHash(projectDir, destPath);
-      const sourceContent = readFileSync(join(sourceDir, filePath));
-      const sourceHash = createHash("sha256").update(sourceContent).digest("hex").substring(0, 16);
+      const sourceHash = computeHash(buildSyncedFileContent(sourceDir, projectDir, filePath));
 
       if (localHash === null) {
         added.push(destPath);
@@ -459,21 +460,6 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       }
     }
 
-    const newSnapshotFiles: Record<string, string> = {};
-    for (const filePath of filteredFiles) {
-      const src = join(sourceDir, filePath);
-      const content = readFileSync(src);
-      newSnapshotFiles[toDestPath(filePath)] = createHash("sha256")
-        .update(content)
-        .digest("hex")
-        .substring(0, 16);
-    }
-
-    await writeSnapshot(projectDir, {
-      parentRef: `bos://${extendsAccount}/${extendsGateway}`,
-      files: newSnapshotFiles,
-    });
-
     const account = (localConfig.account as string) || extendsAccount;
     const domain = (localConfig.domain as string) || extendsGateway;
     const overrides: Array<"ui" | "api" | "host" | "plugins"> = [];
@@ -494,10 +480,23 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       existingConfig: localConfig,
     });
 
-    const syncedConfig = await loadConfig({ cwd: projectDir });
+    const syncedConfig = await loadResolvedConfig({ cwd: projectDir });
     if (syncedConfig?.runtime) {
       writeGeneratedInfra(projectDir, syncedConfig.runtime);
     }
+
+    const newSnapshotFiles: Record<string, string> = {};
+    for (const destPath of destToSource.keys()) {
+      const hash = computeLocalHash(projectDir, destPath);
+      if (hash) {
+        newSnapshotFiles[destPath] = hash;
+      }
+    }
+
+    await writeSnapshot(projectDir, {
+      parentRef: `bos://${extendsAccount}/${extendsGateway}`,
+      files: newSnapshotFiles,
+    });
 
     if (!options.noInstall) {
       await runBunInstall(projectDir);

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -177,5 +177,42 @@ describe("personalizeConfig with real root config", () => {
     expect(config.app?.host?.production).toBeUndefined();
     expect(config.app?.host?.integrity).toBeUndefined();
     expect(config.app?.auth).toBeUndefined();
+  });
+
+  it("preserves an existing child auth override during sync mode", async () => {
+    const testDir = await scaffoldProject(["ui", "api"]);
+    tempDirs.push(testDir);
+
+    const configPath = join(testDir, "bos.config.json");
+    const existingConfig = JSON.parse(readFileSync(configPath, "utf-8")) as {
+      app?: Record<string, unknown>;
+    };
+    existingConfig.app = {
+      ...(existingConfig.app ?? {}),
+      auth: {
+        development: "local:plugins/auth",
+        production: "https://auth.child.dev",
+      },
+    };
+    writeFileSync(configPath, `${JSON.stringify(existingConfig, null, 2)}\n`);
+    await personalizeConfig(testDir, {
+      extendsAccount: "dev.everything.near",
+      extendsGateway: "everything.dev",
+      account: "test.near",
+      domain: "test.dev",
+      overrides: ["ui", "api"],
+      workspaceOpts: { sourceDir: REPO_ROOT },
+      mode: "sync",
+      existingConfig,
+    });
+
+    const syncedConfig = JSON.parse(readFileSync(configPath, "utf-8")) as {
+      app?: { auth?: { development?: string; production?: string } };
+    };
+
+    expect(syncedConfig.app?.auth).toEqual({
+      development: "local:plugins/auth",
+      production: "https://auth.child.dev",
+    });
   });
 });

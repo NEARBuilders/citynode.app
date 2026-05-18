@@ -21,6 +21,7 @@ import {
   loadManifestNormalizationSpec,
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
+import { resolveExtendsRef } from "../merge";
 import type { BosConfig, BosConfigInput } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { writeSnapshot } from "./snapshot";
@@ -46,8 +47,6 @@ export const INIT_ROOT_PATTERNS = [
   ".github/templates/**",
 ] as const;
 
-const FRAMEWORK_PACKAGES = ["every-plugin", "everything-dev"] as const;
-
 const OVERRIDE_WORKSPACE_MAP: Record<OverrideSection, string[]> = {
   ui: ["ui"],
   api: ["api"],
@@ -59,6 +58,129 @@ interface SourceResult {
   sourceDir: string;
   parentConfig: BosConfig;
   cleanup: () => Promise<void>;
+}
+
+export interface CatalogChainSource {
+  catalog: Record<string, string>;
+  repository?: string;
+  extendsChain: string[];
+}
+
+function getExtendsRef(config: Record<string, unknown>): string | undefined {
+  if (typeof config.extends === "string") {
+    return config.extends;
+  }
+
+  if (config.extends && typeof config.extends === "object") {
+    return resolveExtendsRef(config.extends as Record<string, string>, "production");
+  }
+
+  return undefined;
+}
+
+function parseBosRef(ref: string): { account: string; gateway: string } | null {
+  const match = ref.match(/^bos:\/\/([^/]+)\/(.+)$/);
+  if (!match?.[1] || !match[2]) return null;
+  return { account: match[1], gateway: match[2] };
+}
+
+function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
+  const pkgPath = join(sourceDir, "package.json");
+  if (!existsSync(pkgPath)) {
+    return {};
+  }
+
+  const pkg = readJsonFile<{ workspaces?: { catalog?: Record<string, string> } }>(pkgPath);
+  return { ...(pkg.workspaces?.catalog ?? {}) };
+}
+
+export async function resolveCatalogChainSource(opts: {
+  extendsAccount: string;
+  extendsGateway: string;
+  sourceDir?: string;
+}): Promise<CatalogChainSource> {
+  const catalogs: Record<string, string>[] = [];
+  const cleanups: Array<() => Promise<void>> = [];
+  const extendsChain: string[] = [];
+  const visited = new Set<string>();
+  let repository: string | undefined;
+  let currentRef = `bos://${opts.extendsAccount}/${opts.extendsGateway}`;
+  let sourceDir = opts.sourceDir ? resolve(opts.sourceDir) : undefined;
+  let configPath = sourceDir ? join(sourceDir, "bos.config.json") : undefined;
+
+  try {
+    while (true) {
+      if (visited.has(currentRef)) {
+        throw new Error(`Circular extends detected while resolving catalog source: ${currentRef}`);
+      }
+
+      visited.add(currentRef);
+      extendsChain.push(currentRef);
+
+      let config: Record<string, unknown>;
+      let currentSourceDir = sourceDir;
+      let cleanup: () => Promise<void> = async () => {};
+
+      if (configPath) {
+        config = readJsonFile<Record<string, unknown>>(configPath);
+        currentSourceDir = dirname(configPath);
+      } else {
+        const parsed = parseBosRef(currentRef);
+        if (!parsed) {
+          break;
+        }
+        const sourceResult = await resolveSourceDir({
+          extendsAccount: parsed.account,
+          extendsGateway: parsed.gateway,
+        });
+        config = sourceResult.parentConfig as Record<string, unknown>;
+        currentSourceDir = sourceResult.sourceDir || undefined;
+        cleanup = sourceResult.cleanup;
+      }
+
+      cleanups.push(cleanup);
+      catalogs.push(currentSourceDir ? readWorkspaceCatalog(currentSourceDir) : {});
+
+      if (typeof config.repository === "string") {
+        repository = config.repository;
+      }
+
+      const nextExtendsRef = getExtendsRef(config);
+      if (!nextExtendsRef) {
+        break;
+      }
+
+      if (nextExtendsRef.startsWith("bos://")) {
+        currentRef = nextExtendsRef;
+        sourceDir = undefined;
+        configPath = undefined;
+        continue;
+      }
+
+      if (!currentSourceDir) {
+        break;
+      }
+
+      const nextConfigPath = resolve(currentSourceDir, nextExtendsRef);
+      if (!existsSync(nextConfigPath)) {
+        break;
+      }
+
+      currentRef = nextConfigPath;
+      sourceDir = dirname(nextConfigPath);
+      configPath = nextConfigPath;
+    }
+  } finally {
+    for (const cleanup of cleanups.reverse()) {
+      await cleanup();
+    }
+  }
+
+  return {
+    catalog: Object.assign({}, ...catalogs.reverse()),
+    repository,
+    extendsChain,
+  };
 }
 
 export async function resolveSourceDir(opts: {
@@ -145,12 +267,16 @@ export async function resolveRepositoryViaExtendsChain(
       return { repository: config.repository, config };
     }
 
-    const extendsRef = config.extends;
-    if (extendsRef && typeof extendsRef === "string") {
+    const extendsRef = getExtendsRef(config as Record<string, unknown>);
+    if (extendsRef) {
       const normalized = extendsRef.startsWith("bos://") ? extendsRef : `bos://${extendsRef}`;
-      const match = normalized.match(/^bos:\/\/([^/]+)\/(.+)$/);
-      if (match) {
-        const result = await resolveRepositoryViaExtendsChain(match[1], match[2], visited);
+      const parsed = parseBosRef(normalized);
+      if (parsed) {
+        const result = await resolveRepositoryViaExtendsChain(
+          parsed.account,
+          parsed.gateway,
+          visited,
+        );
         if (result) return result;
       }
     }
@@ -195,26 +321,38 @@ export async function downloadTarball(
     throw new Error(`Cannot parse repository URL: ${repoUrl}`);
   }
 
-  const { owner, repo, branch } = parsed;
-  const tarballUrl = `https://api.github.com/repos/${owner}/${repo}/tarball/${branch}`;
+  const { owner, repo } = parsed;
+  let response: Response | null = null;
 
-  const tmpDir = mkTmpDir("bos-init-tarball-");
-  const tarballPath = join(tmpDir, "source.tar.gz");
+  for (const branch of ["main", "master"]) {
+    const candidate = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/tarball/${branch}`,
+      {
+        headers: { "User-Agent": "everything-dev" },
+        redirect: "follow",
+      },
+    );
+    if (candidate.ok) {
+      response = candidate;
+      break;
+    }
+    if (candidate.status !== 404) {
+      throw new Error(
+        `GitHub tarball download failed: ${candidate.status} ${candidate.statusText}`,
+      );
+    }
+  }
 
-  const response = await fetch(tarballUrl, {
-    headers: { "User-Agent": "everything-dev" },
-    redirect: "follow",
-  });
-
-  if (!response.ok) {
-    rmSync(tmpDir, { recursive: true, force: true });
-    throw new Error(`GitHub tarball download failed: ${response.status} ${response.statusText}`);
+  if (!response) {
+    throw new Error(`GitHub tarball download failed for ${repoUrl}: tried main and master`);
   }
 
   if (!response.body) {
-    rmSync(tmpDir, { recursive: true, force: true });
     throw new Error("GitHub tarball download returned empty body");
   }
+
+  const tmpDir = mkTmpDir("bos-init-tarball-");
+  const tarballPath = join(tmpDir, "source.tar.gz");
 
   const fileStream = createWriteStream(tarballPath);
   const reader = response.body as unknown as NodeJS.ReadableStream;
@@ -240,15 +378,15 @@ export async function downloadTarball(
   };
 }
 
-function parseGitHubUrl(url: string): { owner: string; repo: string; branch: string } | null {
+function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
   const httpsMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/);
   if (httpsMatch) {
-    return { owner: httpsMatch[1], repo: httpsMatch[2], branch: "main" };
+    return { owner: httpsMatch[1], repo: httpsMatch[2] };
   }
 
   const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
   if (sshMatch) {
-    return { owner: sshMatch[1], repo: sshMatch[2], branch: "main" };
+    return { owner: sshMatch[1], repo: sshMatch[2] };
   }
 
   return null;
@@ -357,18 +495,34 @@ export function buildChildRootScripts(sections: {
     postinstall: "node_modules/.bin/bos types gen || true",
     "types:gen": "node_modules/.bin/bos types gen",
     bos: "node_modules/.bin/bos",
-    "db:push": "bun run --cwd api drizzle-kit push",
-    "db:studio": "bun run --cwd api drizzle-kit studio",
-    "db:generate": "bun run --cwd api drizzle-kit generate",
-    "db:migrate": "bun run --cwd api drizzle-kit migrate",
-    test: "bun run test:api && bun run test:e2e",
-    "test:api": "cd api && bun run test tests/integration/ tests/unit/",
-    "test:integration": "cd api && bun run test tests/integration/",
-    "test:e2e": "bun run --cwd host test:e2e",
-    "dev:postgres": "docker compose up -d --wait && bun run dev",
-    "dev:postgres:down": "docker compose down",
-    "dev:postgres:reset": "docker compose down -v && docker compose up -d --wait",
   };
+
+  if (sections.api) {
+    scripts["db:push"] = "bun run --cwd api drizzle-kit push";
+    scripts["db:studio"] = "bun run --cwd api drizzle-kit studio";
+    scripts["db:generate"] = "bun run --cwd api drizzle-kit generate";
+    scripts["db:migrate"] = "bun run --cwd api drizzle-kit migrate";
+    scripts["test:api"] = "cd api && bun run test tests/integration/ tests/unit/";
+    scripts["test:integration"] = "cd api && bun run test tests/integration/";
+  }
+
+  if (sections.host) {
+    scripts["test:e2e"] = "bun run --cwd host test:e2e";
+  }
+
+  if (sections.api && sections.host) {
+    scripts.test = "bun run test:api && bun run test:e2e";
+  } else if (sections.api) {
+    scripts.test = "bun run test:api";
+  } else if (sections.host) {
+    scripts.test = "bun run test:e2e";
+  }
+
+  if (sections.api || sections.host) {
+    scripts["dev:postgres"] = "docker compose up -d --wait && bun run dev";
+    scripts["dev:postgres:down"] = "docker compose down";
+    scripts["dev:postgres:reset"] = "docker compose down -v && docker compose up -d --wait";
+  }
 
   if (sections.ui) {
     scripts["dev:ui"] = "node_modules/.bin/bos dev --ui local --api remote";
@@ -401,6 +555,11 @@ export async function personalizeConfig(
   },
 ): Promise<void> {
   const has = (section: OverrideSection) => opts.overrides.includes(section);
+  const existingApp =
+    opts.mode === "sync" && opts.existingConfig?.app && typeof opts.existingConfig.app === "object"
+      ? (opts.existingConfig.app as Record<string, unknown>)
+      : undefined;
+  const preservedAuth = existingApp?.auth;
 
   const explicitRootKeys = new Set(
     Object.entries(opts)
@@ -452,8 +611,12 @@ export async function personalizeConfig(
       for (const entryKey of Object.keys(app)) {
         if (
           !has(entryKey as OverrideSection) &&
-          (entryKey === "host" || entryKey === "ui" || entryKey === "api" || entryKey === "auth")
+          (entryKey === "host" || entryKey === "ui" || entryKey === "api")
         ) {
+          delete app[entryKey];
+          continue;
+        }
+        if (entryKey === "auth") {
           delete app[entryKey];
           continue;
         }
@@ -461,6 +624,14 @@ export async function personalizeConfig(
         if (entry && typeof entry === "object") {
           stripProductionFields(entry as Record<string, unknown>);
         }
+      }
+
+      if (preservedAuth !== undefined) {
+        app.auth = preservedAuth;
+      }
+
+      if (Object.keys(app).length === 0) {
+        delete config.app;
       }
     }
 
@@ -613,7 +784,13 @@ export async function personalizeConfig(
       workspaces.catalog["everything-dev"] = spec.rootCatalog["everything-dev"];
       workspaces.catalog["every-plugin"] = spec.rootCatalog["every-plugin"];
     }
-    const frameworkCatalog = resolveFrameworkCatalog();
+    const frameworkCatalog = (
+      await resolveCatalogChainSource({
+        extendsAccount: opts.extendsAccount,
+        extendsGateway: opts.extendsGateway,
+        sourceDir: opts.workspaceOpts?.sourceDir,
+      })
+    ).catalog;
     for (const [name, version] of Object.entries(frameworkCatalog)) {
       workspaces.catalog[name] = version;
     }
@@ -872,71 +1049,6 @@ function readJsonFile<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, "utf-8")) as T;
 }
 
-function tryResolvePackageJson(packageName: string): string | null {
-  try {
-    return require.resolve(`${packageName}/package.json`);
-  } catch {
-    return null;
-  }
-}
-
-function resolveFrameworkCatalog(): Record<string, string> {
-  const catalog: Record<string, string> = {};
-  const everythingDevPackageJson = tryResolvePackageJson("everything-dev");
-
-  if (everythingDevPackageJson) {
-    try {
-      const selfPkgDir = dirname(everythingDevPackageJson);
-      const monorepoPkgPath = join(selfPkgDir, "..", "..", "package.json");
-      if (existsSync(monorepoPkgPath)) {
-        const monorepoPkg = readJsonFile<{
-          workspaces?: { catalog?: Record<string, string> };
-        }>(monorepoPkgPath);
-        const sourceCatalog = monorepoPkg.workspaces?.catalog;
-        if (sourceCatalog && typeof sourceCatalog === "object") {
-          for (const [name, version] of Object.entries(sourceCatalog)) {
-            if (typeof version === "string") {
-              catalog[name] = version;
-            }
-          }
-        }
-      }
-    } catch {}
-
-    try {
-      const selfPkg = readJsonFile<{
-        version?: string;
-        workspaces?: { catalog?: Record<string, string> };
-      }>(everythingDevPackageJson);
-      if (selfPkg.version && !catalog["everything-dev"]) {
-        catalog["everything-dev"] = `^${selfPkg.version}`;
-      }
-      const sourceCatalog = selfPkg.workspaces?.catalog;
-      if (sourceCatalog && typeof sourceCatalog === "object") {
-        for (const [name, version] of Object.entries(sourceCatalog)) {
-          if (typeof version === "string" && !catalog[name]) {
-            catalog[name] = version;
-          }
-        }
-      }
-    } catch {}
-  }
-
-  for (const packageName of FRAMEWORK_PACKAGES) {
-    const resolved = tryResolvePackageJson(packageName);
-    if (!resolved) continue;
-
-    try {
-      const pkg = readJsonFile<{ version?: string }>(resolved);
-      if (pkg.version) {
-        catalog[packageName] = `^${pkg.version}`;
-      }
-    } catch {}
-  }
-
-  return catalog;
-}
-
 export async function scaffoldMinimalProject(
   destination: string,
   parentConfig: BosConfigInput,
@@ -984,11 +1096,6 @@ export async function scaffoldMinimalProject(
       stripProductionFields(app.api as Record<string, unknown>);
     }
 
-    if (has("plugins") && parentApp.auth) {
-      app.auth = { ...parentApp.auth };
-      stripProductionFields(app.auth as Record<string, unknown>);
-    }
-
     if (Object.keys(app).length > 0) {
       config.app = app;
     }
@@ -1021,7 +1128,12 @@ export async function scaffoldMinimalProject(
     workspacePackages.push("plugins/*");
   }
 
-  const catalog = resolveFrameworkCatalog();
+  const catalog = (
+    await resolveCatalogChainSource({
+      extendsAccount: opts.extendsAccount,
+      extendsGateway: opts.extendsGateway,
+    })
+  ).catalog;
 
   const pkg: Record<string, unknown> = {
     name: "monorepo",

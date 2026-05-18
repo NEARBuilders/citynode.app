@@ -3,6 +3,7 @@ import { join } from "node:path";
 import process from "node:process";
 import * as p from "@clack/prompts";
 import { glob } from "glob";
+import { loadResolvedConfig } from "../config";
 import type { PhaseTiming, UpgradeOptions, UpgradeResult } from "../contract";
 import { resolveExtendsRef } from "../merge";
 import { syncAndGenerateSharedUi } from "../shared";
@@ -11,7 +12,7 @@ import { readInstalledFrameworkVersion } from "./framework-version";
 import {
   buildChildRootScripts,
   fetchParentConfig,
-  resolveSourceDir,
+  resolveCatalogChainSource,
   runBunInstallForUpgrade,
   runTypesGen,
 } from "./init";
@@ -329,28 +330,16 @@ async function readExtendedRootSource(projectDir: string): Promise<ExtendedRootS
     return { catalog: {}, repository, extendsChain };
   }
 
-  const { sourceDir, cleanup } = await resolveSourceDir({
+  const source = await resolveCatalogChainSource({
     extendsAccount: parsed.account,
     extendsGateway: parsed.gateway,
   });
 
-  try {
-    const sourcePkgPath = join(sourceDir, "package.json");
-    if (!existsSync(sourcePkgPath)) {
-      return { catalog: {}, repository, extendsChain };
-    }
-
-    const sourcePkg = JSON.parse(readFileSync(sourcePkgPath, "utf-8")) as {
-      workspaces?: { catalog?: Record<string, string> };
-    };
-    return {
-      catalog: { ...(sourcePkg.workspaces?.catalog ?? {}) },
-      repository,
-      extendsChain,
-    };
-  } finally {
-    await cleanup();
-  }
+  return {
+    catalog: source.catalog,
+    repository: source.repository ?? repository,
+    extendsChain: source.extendsChain.length > 0 ? source.extendsChain : extendsChain,
+  };
 }
 
 function getExtendsRef(config: Record<string, unknown>): string | undefined {
@@ -1089,7 +1078,6 @@ export async function upgradeTemplate(
     syncResult = await timePhase(timings, "sync template", () =>
       syncTemplate(projectDir, {
         dryRun: false,
-        force: options.force,
         noInstall: true,
       }),
     );
@@ -1099,12 +1087,18 @@ export async function upgradeTemplate(
     }
   }
 
-  const sharedSync = await timePhase(timings, "sync shared ui", () =>
-    syncAndGenerateSharedUi({
+  const sharedSync = await timePhase(timings, "sync shared ui", async () => {
+    const configResult = await loadResolvedConfig({ cwd: projectDir });
+    if (!configResult) {
+      throw new Error("No bos.config.json found in current directory");
+    }
+
+    return syncAndGenerateSharedUi({
       configDir: projectDir,
       hostMode: "local",
-    }),
-  );
+      bosConfig: configResult.config,
+    });
+  });
 
   if ((hasUpdates || addedPlugins.length > 0 || sharedSync.catalogChanged) && !options.noInstall) {
     await timePhase(timings, "install dependencies", () => runBunInstallForUpgrade(projectDir));

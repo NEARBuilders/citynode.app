@@ -86,7 +86,7 @@ export function getConfig(): BosConfig | null {
 
 export function getProjectRoot(): string {
   if (!projectRoot) {
-    throw new Error("Config not loaded. Call loadConfig() first.");
+    throw new Error("Config not loaded. Call loadResolvedConfig() first.");
   }
   return projectRoot;
 }
@@ -100,6 +100,13 @@ export interface ConfigResult {
     remote?: boolean;
   };
   warnings?: string[];
+}
+
+export interface LocalConfigResult {
+  config: BosConfigInput;
+  source: {
+    path: string;
+  };
 }
 
 export interface RemoteConfigResult {
@@ -121,7 +128,30 @@ interface ParsedExtendsTarget {
   targetPath?: string;
 }
 
-export async function loadConfig(options?: {
+export async function loadLocalConfig(options?: {
+  cwd?: string;
+  path?: string;
+}): Promise<LocalConfigResult | null> {
+  const configPath = options?.path ?? findConfigPath(options?.cwd);
+  if (!configPath) {
+    projectRoot = options?.cwd ?? process.cwd();
+    return null;
+  }
+
+  const baseDir = dirname(configPath);
+  const config = await loadConfigFile(configPath, baseDir);
+
+  projectRoot = baseDir;
+
+  return {
+    config,
+    source: {
+      path: configPath,
+    },
+  };
+}
+
+export async function loadResolvedConfig(options?: {
   cwd?: string;
   path?: string;
   env?: BosEnv;
@@ -183,7 +213,7 @@ export async function loadBosConfig(options?: {
   path?: string;
   env?: BosEnv;
 }): Promise<RuntimeConfig> {
-  const result = await loadConfig(options);
+  const result = await loadResolvedConfig(options);
   if (!result) {
     throw new Error("No bos.config.json found");
   }
@@ -360,7 +390,7 @@ export function getResolvedConfigPath(configDir: string): string {
   return join(configDir, ".bos", RESOLVED_CONFIG_FILENAME);
 }
 
-export function loadResolvedConfig(configDir: string): BosConfig | null {
+export function loadGeneratedResolvedConfig(configDir: string): BosConfig | null {
   const resolvedPath = getResolvedConfigPath(configDir);
   if (!existsSync(resolvedPath)) return null;
   try {

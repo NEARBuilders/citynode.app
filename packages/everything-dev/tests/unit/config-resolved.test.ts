@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   getResolvedConfigPath,
-  loadConfig,
+  loadGeneratedResolvedConfig,
+  loadLocalConfig,
   loadResolvedConfig,
   readBosConfigForBuild,
   resolveBosConfigPath,
@@ -59,7 +60,7 @@ describe("writeResolvedConfig / loadResolvedConfig", () => {
     } as any;
     writeResolvedConfig(testDir, config, "development");
 
-    const loaded = loadResolvedConfig(testDir);
+    const loaded = loadGeneratedResolvedConfig(testDir);
     expect(loaded).not.toBeNull();
     expect(loaded!.account).toBe("test.near");
   });
@@ -67,7 +68,7 @@ describe("writeResolvedConfig / loadResolvedConfig", () => {
   it("loadResolvedConfig returns null when file doesn't exist", () => {
     const emptyDir = mkdtempSync(join(tmpdir(), "bos-resolved-empty-"));
     try {
-      expect(loadResolvedConfig(emptyDir)).toBeNull();
+      expect(loadGeneratedResolvedConfig(emptyDir)).toBeNull();
     } finally {
       rmSync(emptyDir, { recursive: true, force: true });
     }
@@ -122,7 +123,7 @@ describe("writeResolvedConfig / loadResolvedConfig", () => {
     } as any;
     writeResolvedConfig(testDir, config2, "development");
 
-    const loaded = loadResolvedConfig(testDir);
+    const loaded = loadGeneratedResolvedConfig(testDir);
     expect(loaded!.account).toBe("second.near");
     expect(loaded!.domain).toBe("second.dev");
   });
@@ -223,7 +224,7 @@ describe("loadConfig plugin runtime filtering", () => {
         )}\n`,
       );
 
-      const loaded = await loadConfig({ cwd: testDir });
+      const loaded = await loadResolvedConfig({ cwd: testDir });
 
       expect(loaded).not.toBeNull();
       expect(loaded?.runtime.plugins).toBeUndefined();
@@ -269,7 +270,7 @@ describe("loadConfig plugin runtime filtering", () => {
         )}\n`,
       );
 
-      const loaded = await loadConfig({ cwd: testDir });
+      const loaded = await loadResolvedConfig({ cwd: testDir });
 
       expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
       expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
@@ -319,7 +320,7 @@ describe("loadConfig plugin runtime filtering", () => {
         )}\n`,
       );
 
-      const loaded = await loadConfig({ cwd: testDir });
+      const loaded = await loadResolvedConfig({ cwd: testDir });
 
       expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
       expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
@@ -369,7 +370,7 @@ describe("loadConfig plugin runtime filtering", () => {
         )}\n`,
       );
 
-      await expect(loadConfig({ cwd: testDir })).rejects.toThrow(
+      await expect(loadResolvedConfig({ cwd: testDir })).rejects.toThrow(
         "missing-provider/bos.config.json",
       );
     } finally {
@@ -419,12 +420,67 @@ describe("loadConfig plugin runtime filtering", () => {
       );
       writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
 
-      const loaded = await loadConfig({ cwd: testDir });
+      const loaded = await loadResolvedConfig({ cwd: testDir });
 
       expect(loaded?.runtime.plugins?.settings?.source).toBe("local");
       expect(loaded?.runtime.plugins?.settings?.localPath).toBe(localPluginDir);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("local vs resolved config loading", () => {
+  it("loads the raw child config by default and resolves extends separately", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "bos-config-local-"));
+    const parentDir = join(rootDir, "parent");
+    const childDir = join(rootDir, "child");
+
+    try {
+      mkdirSync(parentDir, { recursive: true });
+      mkdirSync(childDir, { recursive: true });
+
+      writeFileSync(
+        join(parentDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "parent.near",
+            app: {
+              host: { development: "local:host", production: "https://host.parent.dev" },
+              ui: { name: "ui", development: "local:ui", production: "https://ui.parent.dev" },
+              api: { name: "api", development: "local:api", production: "https://api.parent.dev" },
+              auth: { development: "local:plugins/auth", production: "https://auth.parent.dev" },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      writeFileSync(
+        join(childDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "child.near",
+            extends: "../parent/bos.config.json",
+            app: {
+              ui: { name: "ui", development: "local:ui" },
+              api: { name: "api", development: "local:api" },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const local = await loadLocalConfig({ cwd: childDir });
+      const resolved = await loadResolvedConfig({ cwd: childDir });
+
+      expect(local?.config.app?.host).toBeUndefined();
+      expect(local?.config.app?.auth).toBeUndefined();
+      expect(resolved?.config.app.host.production).toBe("https://host.parent.dev");
+      expect(resolved?.config.app.auth?.production).toBe("https://auth.parent.dev");
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
     }
   });
 });

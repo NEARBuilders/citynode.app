@@ -224,10 +224,42 @@ describe("bos init — structure", () => {
       };
       expect(config.app.api).toBeDefined();
       expect(config.app.ui).toBeUndefined();
+      expect(pkg.scripts?.["db:push"]).toBeDefined();
+      expect(pkg.scripts?.["test:api"]).toBeDefined();
+      expect(pkg.scripts?.["test:e2e"]).toBeUndefined();
       expect(pkg.scripts?.["dev:api"]).toBeDefined();
       expect(pkg.scripts?.["dev:ui"]).toBeUndefined();
     } finally {
       rmSync(apiOnlyDir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits api and host-only root scripts for a ui-only child", async () => {
+    const uiOnlyDir = mkdtempSync(join(tmpdir(), "bos-init-ui-only-"));
+    try {
+      const patterns = buildInitPatterns(["ui"]);
+      await copyFilteredFiles(REPO_ROOT, uiOnlyDir, patterns, { overrides: ["ui"] });
+      await personalizeConfig(uiOnlyDir, {
+        extendsAccount: "dev.everything.near",
+        extendsGateway: "everything.dev",
+        account: "test.near",
+        domain: "test.dev",
+        overrides: ["ui"],
+        workspaceOpts: { sourceDir: REPO_ROOT },
+      });
+
+      const pkg = JSON.parse(readFileSync(join(uiOnlyDir, "package.json"), "utf-8")) as {
+        scripts?: Record<string, string>;
+      };
+
+      expect(pkg.scripts?.["db:push"]).toBeUndefined();
+      expect(pkg.scripts?.["test:api"]).toBeUndefined();
+      expect(pkg.scripts?.["test:e2e"]).toBeUndefined();
+      expect(pkg.scripts?.["dev:postgres"]).toBeUndefined();
+      expect(pkg.scripts?.["dev:ui"]).toBeDefined();
+      expect(pkg.scripts?.["dev:api"]).toBeUndefined();
+    } finally {
+      rmSync(uiOnlyDir, { recursive: true, force: true });
     }
   });
 });
