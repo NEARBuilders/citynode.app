@@ -216,6 +216,31 @@ describe("syncTemplate", () => {
     expect(Object.keys(syncedConfig.plugins ?? {})).toEqual(["apps"]);
   });
 
+  it("syncs GitHub workflow files from .github/templates for child projects", async () => {
+    const projectDir = await scaffoldProject(["ui", "api"], []);
+    tempDirs.push(projectDir);
+
+    const result = await syncTemplate(projectDir, {
+      dryRun: false,
+      force: false,
+      noInstall: true,
+    });
+
+    expect(result.status).toBe("synced");
+
+    const childPublishWorkflow = readFileSync(
+      join(projectDir, ".github", "workflows", "publish.yml"),
+      "utf-8",
+    );
+    const templatePublishWorkflow = readFileSync(
+      join(REPO_ROOT, ".github", "templates", "workflows", "publish.yml"),
+      "utf-8",
+    );
+
+    expect(childPublishWorkflow).toBe(templatePublishWorkflow);
+    expect(childPublishWorkflow).not.toContain("Build every-plugin");
+  });
+
   it("keeps the plugins workspace override when no child plugins are selected", async () => {
     const projectDir = await scaffoldProject(["ui", "api", "plugins"], []);
     tempDirs.push(projectDir);

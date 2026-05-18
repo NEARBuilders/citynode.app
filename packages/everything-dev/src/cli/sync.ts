@@ -226,16 +226,16 @@ function toDestPath(filePath: string): string {
 }
 
 function toSourcePath(sourceDir: string, destPath: string): string | null {
-  const directPath = join(sourceDir, destPath);
-  if (existsSync(directPath)) {
-    return destPath;
-  }
-
   if (destPath.startsWith(".github/")) {
     const templatePath = destPath.replace(/^\.github\//, ".github/templates/");
     if (existsSync(join(sourceDir, templatePath))) {
       return templatePath;
     }
+  }
+
+  const directPath = join(sourceDir, destPath);
+  if (existsSync(directPath)) {
+    return destPath;
   }
 
   return null;
