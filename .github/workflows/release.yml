@@ -13,18 +13,9 @@ on:
         required: false
         default: ""
         type: string
-  workflow_call:
-    inputs:
-      force_release:
-        description: "Publish package releases even when changesets were just consumed"
-        required: false
-        type: boolean
-        default: false
-      ref:
-        description: "Git ref or SHA to release"
-        required: false
-        default: ""
-        type: string
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -38,8 +29,17 @@ jobs:
   release:
     name: Publish Packages
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     env:
       BOS_INSTALL_NEAR_CLI: "true"
+      TARGET_REF: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
     outputs:
       should_publish: ${{ steps.release_mode.outputs.should_publish }}
     steps:
@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
-          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          ref: ${{ env.TARGET_REF }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

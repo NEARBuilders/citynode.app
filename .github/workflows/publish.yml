@@ -13,25 +13,9 @@ on:
         required: false
         default: ""
         type: string
-  workflow_call:
-    inputs:
-      deploy:
-        description: "Force app deploy before publish"
-        required: false
-        default: false
-        type: boolean
-      ref:
-        description: "Git ref or SHA to publish"
-        required: false
-        default: ""
-        type: string
-    secrets:
-      NEAR_PRIVATE_KEY:
-        required: true
-      ZEPHYR_AUTH_TOKEN:
-        required: false
-      ZEPHYR_USER_EMAIL:
-        required: false
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -42,6 +26,14 @@ jobs:
   detect-publish:
     name: Detect Publish Work
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     outputs:
       should_publish: ${{ steps.detect.outputs.should_publish }}
       should_deploy: ${{ steps.detect.outputs.should_deploy }}
@@ -50,12 +42,12 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 2
-          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          ref: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
 
       - name: Detect deploy/publish intent
         id: detect
         env:
-          TARGET_SHA: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          TARGET_SHA: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
           FORCE_DEPLOY: ${{ inputs.deploy && 'true' || 'false' }}
         run: |
           node <<'EOF' >> "$GITHUB_OUTPUT"
@@ -130,7 +122,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          ref: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

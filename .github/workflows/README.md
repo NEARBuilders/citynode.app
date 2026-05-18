@@ -4,12 +4,12 @@
 
 This repository uses the following production-facing workflows:
 
-- `CI` — lint, audit, typecheck, Docker build, then release and publish
+- `CI` — lint, audit, typecheck, and Docker build
 - `Release` — changeset versioning and npm publish for framework packages
 - `Publish` — app deploy (Zephyr CDN + FastKV config publish)
 - `Preview` — PR preview comments via Railway
 
-The key design: `CI` calls `Release` and `Publish` as reusable workflows after lint+typecheck passes on `main`. `Release` owns changeset versioning and npm publishing. `Publish` owns runtime deploy (`bos publish --deploy`) and FastKV config publish.
+The key design: `CI` is the validation workflow. `Release` and `Publish` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. `Release` owns changeset versioning and npm publishing. `Publish` owns runtime deploy (`bos publish --deploy`) and FastKV config publish.
 
 ## Workflows
 
@@ -17,22 +17,19 @@ The key design: `CI` calls `Release` and `Publish` as reusable workflows after l
 
 **Trigger:** Push to `main` (with `paths-ignore` for markdown and changesets) or pull requests. Also `workflow_dispatch`.
 
-**Purpose:** Lint, typecheck, security audit, then call `Release` and `Publish` as reusable workflows. Also builds and pushes the Docker image.
+**Purpose:** Lint, typecheck, security audit, and build the Docker image.
 
 **Jobs:**
 1. `lint-and-typecheck` — install, build, postinstall, audit, lint, typecheck
-2. `release` — calls `release.yml` (only on push to main)
-3. `publish` — calls `publish.yml` (only on push to main)
-4. `build-docker` — builds and pushes Docker image (only if `Dockerfile` exists)
+2. `build-docker` — builds and pushes Docker image (only if `Dockerfile` exists)
 
 **Key design decisions:**
-- `secrets: inherit` is not used for the `publish` call because `publish.yml` declares `NEAR_PRIVATE_KEY` as `required: true`. The secret is passed explicitly to satisfy the reusable workflow contract.
 - Docker build no longer requires `environment: production` approval, so it doesn't block release/publish.
 - `Build every-plugin` runs before `postinstall` in both `release.yml` and `ci.yml` because `postinstall` triggers `types:gen` which needs `every-plugin` to be built first.
 
 ### Release (`release.yml`)
 
-**Trigger:** `workflow_call` from `CI`, or `workflow_dispatch`.
+**Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
 
 **Purpose:** Consume changesets, create version PRs, and publish framework packages to npm.
 
@@ -41,10 +38,10 @@ The key design: `CI` calls `Release` and `Publish` as reusable workflows after l
 ```
 1. Developer creates changeset          →  bun run changeset
 2. Developer merges feature branch      →  Changesets land on main
-3. CI triggers Release                   →  changesets/action detects changesets
-                                           Creates/updates "chore: version packages" PR
+3. CI succeeds on main                   →  `workflow_run` triggers Release
+                                            Creates/updates "chore: version packages" PR
 4. Team merges Version Packages PR      →  CI triggers Release again
-                                           No changesets remain (hasChangesets=false)
+                                            No changesets remain (hasChangesets=false)
                                            ↓
                                            npm publish --provenance --access public
                                            ↓
@@ -55,7 +52,7 @@ The key design: `CI` calls `Release` and `Publish` as reusable workflows after l
 
 ### Publish (`publish.yml`)
 
-**Trigger:** `workflow_call` from `CI`, or `workflow_dispatch`.
+**Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
 
 **Purpose:** Detect whether a commit requires app deploy or just config publish, then run `bos publish` (with optional `--deploy`).
 
@@ -65,7 +62,7 @@ The key design: `CI` calls `Release` and `Publish` as reusable workflows after l
 - If deployable changes exist: runs `bos publish --deploy` (Zephyr CDN deploy + FastKV publish)
 - If only config changed (or manual dispatch): runs `bos publish` (FastKV publish only)
 
-**Secrets:** `NEAR_PRIVATE_KEY`, `ZEPHYR_AUTH_TOKEN`, and `ZEPHYR_USER_EMAIL` are required (passed explicitly from CI). NEAR for FastKV publish, Zephyr for CDN deploy.
+**Secrets:** `NEAR_PRIVATE_KEY`, `ZEPHYR_AUTH_TOKEN`, and `ZEPHYR_USER_EMAIL` come directly from repository secrets. NEAR for FastKV publish, Zephyr for CDN deploy.
 
 ### Preview (`preview.yml`)
 

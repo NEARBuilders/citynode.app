@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   lint-and-typecheck:
@@ -59,15 +59,3 @@ jobs:
 
       - name: Run typecheck
         run: bun typecheck
-
-  publish:
-    name: Publish
-    needs: [lint-and-typecheck]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/publish.yml
-    with:
-      ref: ${{ github.sha }}
-    secrets:
-      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-      ZEPHYR_AUTH_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
-      ZEPHYR_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
