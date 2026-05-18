@@ -379,4 +379,77 @@ describe("upgrade bos config migration", () => {
     expect(pkg.overrides).toBeUndefined();
     expect(pkg.workspaces?.packages).toEqual(["ui"]);
   });
+
+  it("adds @better-auth/core catalog refs to root and workspace packages during package migration", async () => {
+    const projectDir = makeProjectDir();
+    mkdirSync(join(projectDir, "ui"), { recursive: true });
+
+    writeFileSync(
+      join(projectDir, "bos.config.json"),
+      `${JSON.stringify(
+        {
+          extends: "bos://dev.everything.near/everything.dev",
+          account: "test.near",
+          domain: "test.dev",
+          app: {
+            ui: { development: "local:ui" },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    writeFileSync(
+      join(projectDir, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "monorepo",
+          dependencies: {
+            "better-auth": "catalog:",
+            "better-near-auth": "catalog:",
+          },
+          workspaces: {
+            packages: ["ui"],
+            catalog: {
+              "better-auth": "1.6.9",
+              "better-near-auth": "1.5.0",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    writeFileSync(
+      join(projectDir, "ui", "package.json"),
+      `${JSON.stringify(
+        {
+          name: "ui",
+          dependencies: {
+            "@better-auth/api-key": "catalog:",
+            "@better-auth/passkey": "catalog:",
+            "better-auth": "catalog:",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const changed = await migrateChildRootPackageJson(projectDir);
+
+    expect(changed).toBe(true);
+
+    const rootPkg = JSON.parse(readFileSync(join(projectDir, "package.json"), "utf-8")) as {
+      dependencies?: Record<string, string>;
+    };
+    const uiPkg = JSON.parse(readFileSync(join(projectDir, "ui", "package.json"), "utf-8")) as {
+      dependencies?: Record<string, string>;
+    };
+
+    expect(rootPkg.dependencies?.["@better-auth/core"]).toBe("catalog:");
+    expect(uiPkg.dependencies?.["@better-auth/core"]).toBe("catalog:");
+  });
 });

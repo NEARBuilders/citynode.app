@@ -158,6 +158,10 @@ describe("bos init — typecheck", () => {
     expect(existsSync(join(testDir, "plugins", "settings", "src", "plugins-client.gen.ts"))).toBe(
       true,
     );
+    const pkg = JSON.parse(readFileSync(join(testDir, "ui", "package.json"), "utf-8")) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(pkg.dependencies?.["@better-auth/core"]).toBe("catalog:");
   });
 
   it("sets postinstall to 'node_modules/.bin/bos types gen || true'", async () => {

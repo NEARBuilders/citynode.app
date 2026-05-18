@@ -5,6 +5,7 @@ import * as p from "@clack/prompts";
 import { glob } from "glob";
 import type { PhaseTiming, UpgradeOptions, UpgradeResult } from "../contract";
 import { resolveExtendsRef } from "../merge";
+import { syncAndGenerateSharedUi } from "../shared";
 import { saveBosConfig } from "../utils/save-config";
 import { readInstalledFrameworkVersion } from "./framework-version";
 import {
@@ -18,6 +19,13 @@ import { syncTemplate } from "./sync";
 import { timePhase } from "./timing";
 
 const FRAMEWORK_PACKAGES = ["everything-dev", "every-plugin"];
+const AUTH_CORE_PACKAGE = "@better-auth/core";
+const AUTH_CORE_TRIGGER_PACKAGES = [
+  "better-auth",
+  "better-near-auth",
+  "@better-auth/api-key",
+  "@better-auth/passkey",
+] as const;
 const LEGACY_UI_IMPORT_REWRITES = [
   ['from "@/auth"', 'from "@/app"'],
   ["from '@/auth'", "from '@/app'"],
@@ -134,6 +142,43 @@ function syncPackageObjectCatalogRefs(
   return modified;
 }
 
+function findPackageFieldWithAnyDependency(
+  pkg: Record<string, unknown>,
+  packageNames: ReadonlyArray<string>,
+): Record<string, string> | undefined {
+  for (const fieldName of ["dependencies", "devDependencies", "peerDependencies"] as const) {
+    const field = pkg[fieldName] as Record<string, string> | undefined;
+    if (!field) continue;
+    if (packageNames.some((packageName) => typeof field[packageName] === "string")) {
+      return field;
+    }
+  }
+
+  return undefined;
+}
+
+function packageObjectNeedsAuthCoreCatalogRef(pkg: Record<string, unknown>): boolean {
+  const targetField = findPackageFieldWithAnyDependency(pkg, AUTH_CORE_TRIGGER_PACKAGES);
+  if (!targetField) return false;
+
+  for (const fieldName of ["dependencies", "devDependencies", "peerDependencies"] as const) {
+    const field = pkg[fieldName] as Record<string, string> | undefined;
+    if (field?.[AUTH_CORE_PACKAGE]) return false;
+  }
+
+  return true;
+}
+
+function ensureAuthCoreCatalogRef(pkg: Record<string, unknown>): boolean {
+  if (!packageObjectNeedsAuthCoreCatalogRef(pkg)) return false;
+
+  const targetField = findPackageFieldWithAnyDependency(pkg, AUTH_CORE_TRIGGER_PACKAGES);
+  if (!targetField) return false;
+
+  targetField[AUTH_CORE_PACKAGE] = "catalog:";
+  return true;
+}
+
 function packageObjectNeedsCatalogRefs(
   pkg: Record<string, unknown>,
   packageNames: ReadonlyArray<string>,
@@ -170,6 +215,17 @@ function updatePackageFileCatalogRefs(
 ): boolean {
   const pkg = readJsonFile<Record<string, unknown>>(filePath);
   const modified = syncPackageObjectCatalogRefs(pkg, packageNames);
+
+  if (modified) {
+    writeFileSync(filePath, `${JSON.stringify(pkg, null, 2)}\n`);
+  }
+
+  return modified;
+}
+
+function updatePackageFileAuthCoreRef(filePath: string): boolean {
+  const pkg = readJsonFile<Record<string, unknown>>(filePath);
+  const modified = ensureAuthCoreCatalogRef(pkg);
 
   if (modified) {
     writeFileSync(filePath, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -843,6 +899,17 @@ export async function migrateChildRootPackageJson(projectDir: string): Promise<b
     }
   }
 
+  if (ensureAuthCoreCatalogRef(pkg)) {
+    changed = true;
+  }
+
+  const workspacePackageJsons = await findWorkspacePackageJsons(projectDir);
+  for (const workspacePkgPath of workspacePackageJsons) {
+    if (updatePackageFileAuthCoreRef(workspacePkgPath)) {
+      changed = true;
+    }
+  }
+
   if (changed) {
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   }
@@ -925,6 +992,11 @@ export async function upgradeTemplate(
       workspacePkgPaths.some((pkgPath) =>
         packageFileNeedsCatalogRefs(pkgPath, inheritedCatalogPackageNames),
       ));
+  const hasAuthCoreRefRewrites =
+    packageObjectNeedsAuthCoreCatalogRef(readRootPackageJson(projectDir)) ||
+    workspacePkgPaths.some((pkgPath) =>
+      packageObjectNeedsAuthCoreCatalogRef(readJsonFile<Record<string, unknown>>(pkgPath)),
+    );
 
   const { packages, catalogVersionUpdates } = await timePhase(
     timings,
@@ -958,7 +1030,8 @@ export async function upgradeTemplate(
 
   const hasFrameworkUpdates = packages.some((p) => p.from !== p.to && p.from !== undefined);
   const hasCatalogUpdates = catalogVersionUpdates.length > 0;
-  const hasUpdates = hasFrameworkUpdates || hasCatalogUpdates || hasCatalogRefRewrites;
+  const hasUpdates =
+    hasFrameworkUpdates || hasCatalogUpdates || hasCatalogRefRewrites || hasAuthCoreRefRewrites;
 
   if (options.dryRun) {
     let changelogUrl: string | undefined;
@@ -1026,7 +1099,14 @@ export async function upgradeTemplate(
     }
   }
 
-  if ((hasUpdates || addedPlugins.length > 0) && !options.noInstall) {
+  const sharedSync = await timePhase(timings, "sync shared ui", () =>
+    syncAndGenerateSharedUi({
+      configDir: projectDir,
+      hostMode: "local",
+    }),
+  );
+
+  if ((hasUpdates || addedPlugins.length > 0 || sharedSync.catalogChanged) && !options.noInstall) {
     await timePhase(timings, "install dependencies", () => runBunInstallForUpgrade(projectDir));
     await timePhase(timings, "generate types", () => runTypesGen(projectDir));
   }

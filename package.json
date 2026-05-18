@@ -26,6 +26,7 @@
       "@scure/base": "^2.2.0",
       "drizzle-orm": "^0.45.1",
       "drizzle-kit": "^0.31.8",
+      "@better-auth/core": "1.6.9",
       "better-auth": "1.6.9",
       "@better-auth/api-key": "1.6.9",
       "@better-auth/passkey": "1.6.9",
@@ -114,6 +115,7 @@
   },
   "dependencies": {
     "@better-auth/api-key": "catalog:",
+    "@better-auth/core": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@libsql/client": "^0.17.0",
     "@orpc/contract": "catalog:",

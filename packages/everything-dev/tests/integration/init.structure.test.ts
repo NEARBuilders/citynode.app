@@ -147,7 +147,7 @@ describe("bos init — structure", () => {
 
     expect(rootPkg.dependencies?.["everything-dev"]).toBe("catalog:");
     expect(rootPkg.dependencies?.["every-plugin"]).toBe("catalog:");
-    expect(rootPkg.name).toBe("test.dev");
+    expect(rootPkg.name).toBe("monorepo");
     expect(rootPkg.private).toBe(true);
     expect(rootPkg.module).toBeUndefined();
     expect(rootPkg.peerDependencies).toBeUndefined();

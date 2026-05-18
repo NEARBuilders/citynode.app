@@ -535,7 +535,9 @@ export async function personalizeConfig(
       plugins: has("plugins"),
     });
 
-    pkg.name = opts.domain || opts.extendsGateway;
+    if (typeof pkg.name !== "string" || pkg.name.length === 0) {
+      pkg.name = "monorepo";
+    }
     pkg.private = true;
     pkg.type = "module";
     delete pkg.module;
@@ -1022,7 +1024,7 @@ export async function scaffoldMinimalProject(
   const catalog = resolveFrameworkCatalog();
 
   const pkg: Record<string, unknown> = {
-    name: opts.domain || opts.extendsGateway,
+    name: "monorepo",
     private: true,
     type: "module",
     scripts: buildChildRootScripts({
