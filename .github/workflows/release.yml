@@ -34,9 +34,6 @@ permissions:
   pull-requests: write
   packages: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   release:
     name: Publish Packages
