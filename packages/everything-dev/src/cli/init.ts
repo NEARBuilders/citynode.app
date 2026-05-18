@@ -13,7 +13,6 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { pathToFileURL } from "node:url";
 import { execa } from "execa";
 import { glob } from "glob";
 import type { OverrideSection } from "../contract";
@@ -856,11 +855,6 @@ export function removeInitLockfile(lockfilePath: string): void {
   rmSync(lockfilePath, { force: true });
 }
 
-const WORKSPACE_LOCAL_PATHS: Record<string, string> = {
-  "everything-dev": "packages/everything-dev",
-  "every-plugin": "packages/every-plugin",
-};
-
 function readJsonFile<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, "utf-8")) as T;
 }
@@ -1059,47 +1053,6 @@ async function resolveWorkspaceRefs(
     preserveCatalogRefs: true,
     removeWorkspaceDeps: ["host"],
   });
-
-  if (options?.localOverrides && options.sourceDir) {
-    const packageJsonPaths = await glob("**/package.json", {
-      cwd: destination,
-      nodir: true,
-      dot: false,
-      absolute: false,
-      ignore: ["**/node_modules/**", "**/dist/**", "**/.git/**", "**/.bos/**"],
-    });
-
-    for (const packageJsonRel of packageJsonPaths) {
-      const packageJsonPath = join(destination, packageJsonRel);
-      const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as Record<string, unknown>;
-      let changed = false;
-
-      for (const [name, relPath] of Object.entries(WORKSPACE_LOCAL_PATHS)) {
-        const srcPkgPath = join(options.sourceDir, relPath, "package.json");
-        if (!existsSync(srcPkgPath)) continue;
-
-        const fileSpec = pathToFileURL(join(options.sourceDir, relPath)).href;
-
-        for (const section of [
-          "dependencies",
-          "devDependencies",
-          "optionalDependencies",
-          "peerDependencies",
-        ] as const) {
-          const deps = pkg[section];
-          if (!deps || typeof deps !== "object") continue;
-          const record = deps as Record<string, string>;
-          if (!(name in record)) continue;
-          record[name] = fileSpec;
-          changed = true;
-        }
-      }
-
-      if (changed) {
-        writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
-      }
-    }
-  }
 }
 
 export async function writeInitSnapshot(

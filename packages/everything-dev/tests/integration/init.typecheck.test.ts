@@ -9,6 +9,7 @@ import {
   personalizeConfig,
   runBunInstall,
 } from "../../src/cli/init";
+import { getFrameworkTarballs, rewriteFrameworkPackageSpecs } from "./framework-packages";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
 
@@ -22,7 +23,7 @@ function runCommand(
   command: string,
   args: string[],
   cwd: string,
-  timeout = 60_000,
+  timeout = 120_000,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -120,14 +121,16 @@ function isUnexpectedError(error: string): boolean {
 
 describe("bos init — typecheck", () => {
   let testDir: string;
+  let frameworkTarballs: Awaited<ReturnType<typeof getFrameworkTarballs>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     testDir = mkdtempSync(join(tmpdir(), "bos-init-typecheck-"));
-  }, 30000);
+    frameworkTarballs = await getFrameworkTarballs(REPO_ROOT);
+  }, 180_000);
 
   afterAll(() => {
     rmSync(testDir, { recursive: true, force: true });
-  }, 30000);
+  }, 120_000);
 
   it("scaffolds project with template files", async () => {
     const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects", "settings"]);
@@ -141,10 +144,11 @@ describe("bos init — typecheck", () => {
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      workspaceOpts: { sourceDir: REPO_ROOT, localOverrides: true },
+      workspaceOpts: { sourceDir: REPO_ROOT },
       overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
+    rewriteFrameworkPackageSpecs(testDir, frameworkTarballs);
 
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "ui", "src", "lib", "api-types.gen.ts"))).toBe(true);
@@ -171,17 +175,17 @@ describe("bos init — typecheck", () => {
   it("installs dependencies", async () => {
     await runBunInstall(testDir);
     writeGeneratedAuthStubs(testDir);
-    const typesGen = await runCommand("bun", ["run", "types:gen"], testDir, 60000);
+    const typesGen = await runCommand("bun", ["run", "types:gen"], testDir, 120_000);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
     expect(typesGen.code).toBe(0);
-  }, 60000);
+  }, 120_000);
 
   it("typechecks api with zero unexpected errors", async () => {
     const result = await runCommand(
       "bun",
       ["run", "--cwd", "api", "tsc", "--noEmit"],
       testDir,
-      60000,
+      120_000,
     );
     const errors = parseTypeErrors(result.stdout + result.stderr);
     const unexpected = errors.filter(isUnexpectedError);
@@ -192,14 +196,14 @@ describe("bos init — typecheck", () => {
 
     expect(result.code).toBe(0);
     expect(unexpected).toEqual([]);
-  });
+  }, 120_000);
 
   it("typechecks ui with zero unexpected errors", async () => {
     const result = await runCommand(
       "bun",
       ["run", "--cwd", "ui", "tsc", "--noEmit"],
       testDir,
-      60000,
+      120_000,
     );
     const errors = parseTypeErrors(result.stdout + result.stderr);
     const unexpected = errors.filter(isUnexpectedError);
@@ -210,5 +214,5 @@ describe("bos init — typecheck", () => {
 
     expect(result.code).toBe(0);
     expect(unexpected).toEqual([]);
-  });
+  }, 120_000);
 });

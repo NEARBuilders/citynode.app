@@ -9,6 +9,7 @@ import {
   personalizeConfig,
   runBunInstall,
 } from "../../src/cli/init";
+import { getFrameworkTarballs, rewriteFrameworkPackageSpecs } from "./framework-packages";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../");
 
@@ -80,10 +81,12 @@ export type InferOutput<_TRoute extends string> = any;
 
 describe.skipIf(process.env.CI !== "true")("bos init — full (install + typecheck)", () => {
   let testDir: string;
+  let frameworkTarballs: Awaited<ReturnType<typeof getFrameworkTarballs>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     testDir = mkdtempSync(join(tmpdir(), "bos-init-full-"));
-  }, 30000);
+    frameworkTarballs = await getFrameworkTarballs(REPO_ROOT);
+  }, 180_000);
 
   afterAll(() => {
     rmSync(testDir, { recursive: true, force: true });
@@ -101,10 +104,11 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
       extendsGateway: "everything.dev",
       account: "test.near",
       domain: "test.dev",
-      workspaceOpts: { sourceDir: REPO_ROOT, localOverrides: true },
+      workspaceOpts: { sourceDir: REPO_ROOT },
       overrides: ["ui", "api", "plugins"],
       plugins: ["apps", "projects", "settings"],
     });
+    rewriteFrameworkPackageSpecs(testDir, frameworkTarballs);
 
     await runBunInstall(testDir);
     writeGeneratedAuthStubs(testDir);
