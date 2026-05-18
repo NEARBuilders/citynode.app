@@ -44,17 +44,17 @@ jobs:
           const { existsSync, readdirSync, readFileSync } = require("node:fs")
           const { join } = require("node:path")
 
-          const rootPackage = JSON.parse(readFileSync("package.json", "utf8"))
           const isManual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch"
           const forceDeploy = process.env.FORCE_DEPLOY === "true"
-
           const deployablePackageJsons = []
+
           for (const dir of ["ui", "api", "host"]) {
             const packageJsonPath = join(dir, "package.json")
             if (existsSync(packageJsonPath)) {
               deployablePackageJsons.push(packageJsonPath)
             }
           }
+
           if (existsSync("plugins")) {
             for (const entry of readdirSync("plugins", { withFileTypes: true })) {
               if (!entry.isDirectory()) continue

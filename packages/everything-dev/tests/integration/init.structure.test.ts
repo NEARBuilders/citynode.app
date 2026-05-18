@@ -42,10 +42,10 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(testDir, "biome.json"))).toBe(true);
     expect(existsSync(join(testDir, ".github", "workflows", "ci.yml"))).toBe(true);
-    expect(existsSync(join(testDir, ".github", "workflows", "packages-release.yml"))).toBe(true);
-    expect(existsSync(join(testDir, ".github", "workflows", "release.yml"))).toBe(true);
+    expect(existsSync(join(testDir, ".github", "workflows", "publish.yml"))).toBe(true);
     expect(existsSync(join(testDir, ".github", "renovate.json"))).toBe(false);
-    expect(existsSync(join(testDir, ".github", "workflows", "publish.yml"))).toBe(false);
+    expect(existsSync(join(testDir, ".github", "workflows", "packages-release.yml"))).toBe(false);
+    expect(existsSync(join(testDir, ".github", "workflows", "release.yml"))).toBe(false);
     expect(existsSync(join(testDir, ".github", "workflows", "staging.yml"))).toBe(false);
     expect(existsSync(join(testDir, "CONTRIBUTING.md"))).toBe(true);
     expect(existsSync(join(testDir, "api/src/contract.ts"))).toBe(true);
