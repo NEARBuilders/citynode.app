@@ -59,3 +59,12 @@ jobs:
 
       - name: Run typecheck
         run: bun typecheck
+
+  publish:
+    name: Publish
+    needs: [lint-and-typecheck]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ github.sha }}
+    secrets: inherit

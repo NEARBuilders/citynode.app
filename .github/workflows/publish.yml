@@ -1,10 +1,6 @@
 name: Publish
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       deploy:
@@ -12,6 +8,26 @@ on:
         required: false
         default: false
         type: boolean
+      ref:
+        description: "Git ref or SHA to publish"
+        required: false
+        default: ""
+        type: string
+  workflow_call:
+    inputs:
+      deploy:
+        description: "Force runtime deploy before publish"
+        required: false
+        default: false
+        type: boolean
+      ref:
+        description: "Git ref or SHA to publish"
+        required: false
+        default: ""
+        type: string
+    secrets:
+      NEAR_PRIVATE_KEY:
+        required: true
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -21,7 +37,6 @@ permissions:
 jobs:
   detect-publish:
     name: Detect Publish Work
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       should_publish: ${{ steps.detect.outputs.should_publish }}
@@ -31,20 +46,19 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 2
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
       - name: Detect deploy/publish intent
         id: detect
         env:
-          TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-          FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy || 'false' }}
+          TARGET_SHA: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          FORCE_DEPLOY: ${{ inputs.deploy && 'true' || 'false' }}
         run: |
           node <<'EOF' >> "$GITHUB_OUTPUT"
           const { execSync } = require("node:child_process")
           const { existsSync, readdirSync, readFileSync } = require("node:fs")
           const { join } = require("node:path")
 
-          const rootPackage = JSON.parse(readFileSync("package.json", "utf8"))
           const isManual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch"
           const forceDeploy = process.env.FORCE_DEPLOY === "true"
 
@@ -112,7 +126,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

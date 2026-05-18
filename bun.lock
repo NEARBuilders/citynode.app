@@ -148,7 +148,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.28.4",
+      "version": "1.28.5",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -410,7 +410,7 @@
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.0",
     "every-plugin": "^2.5.11",
-    "everything-dev": "^1.28.4",
+    "everything-dev": "^1.28.5",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",

@@ -75,6 +75,24 @@ jobs:
       - name: Run typecheck
         run: bun typecheck
 
+  release:
+    name: Release
+    needs: [lint-and-typecheck]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/release.yml
+    with:
+      ref: ${{ github.sha }}
+    secrets: inherit
+
+  publish:
+    name: Publish
+    needs: [lint-and-typecheck]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ github.sha }}
+    secrets: inherit
+
   build-docker:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
