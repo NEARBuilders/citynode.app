@@ -2,7 +2,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ensureEnvFile, loadProjectEnv, writeGeneratedInfra } from "../../src/cli/infra";
+import {
+  ensureEnvFile,
+  loadProjectEnv,
+  syncGeneratedInfra,
+  writeGeneratedInfra,
+} from "../../src/cli/infra";
 import type { RuntimeConfig } from "../../src/types";
 
 function buildRuntimeConfig(): RuntimeConfig {
@@ -59,18 +64,22 @@ describe("generated infra", () => {
     expect(secrets).toContain("PROJECTS_DATABASE_URL");
     expect(secrets).toContain("PAYMENT_API_URL");
 
+    expect(envExample).toContain("# app.host");
+    expect(envExample).toContain("CORS_ORIGIN=http://localhost:3000");
+    expect(envExample).toContain("# app.api");
     expect(envExample).toContain(
       "API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
+    expect(envExample).toContain("# app.auth");
     expect(envExample).toContain(
       "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db",
     );
+    expect(envExample).toContain("BETTER_AUTH_SECRET=");
+    expect(envExample).toContain("# plugins.projects");
     expect(envExample).toContain(
       "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
     );
     expect(envExample).toContain("PAYMENT_API_URL=");
-    expect(envExample).toContain("CORS_ORIGIN=http://localhost:3000");
-    expect(envExample).toContain("BETTER_AUTH_SECRET=");
 
     expect(dockerCompose).toContain("postgres-api:");
     expect(dockerCompose).toContain("POSTGRES_DB: api_db");
@@ -105,6 +114,19 @@ describe("generated infra", () => {
     expect(env).toContain("PAYMENT_API_URL=");
     expect(env).toContain("CORS_ORIGIN=http://localhost:3000");
     expect(env).toMatch(/BETTER_AUTH_SECRET=.+/);
+  });
+
+  it("skips rewriting generated infra when nothing changed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bos-sync-env-"));
+    tempDirs.push(dir);
+
+    const first = syncGeneratedInfra(dir, buildRuntimeConfig());
+    const second = syncGeneratedInfra(dir, buildRuntimeConfig());
+
+    expect(first.envExampleChanged).toBe(true);
+    expect(first.dockerComposeChanged).toBe(true);
+    expect(second.envExampleChanged).toBe(false);
+    expect(second.dockerComposeChanged).toBe(false);
   });
 
   it("loads .env into the bos process without overriding exported values", () => {

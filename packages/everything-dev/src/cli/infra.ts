@@ -9,6 +9,7 @@ const POSTGRES_USER = "everythingdev";
 const POSTGRES_PASSWORD = "everythingdev";
 const API_DATABASE_SECRET = "API_DATABASE_URL";
 const AUTH_DATABASE_SECRET = "AUTH_DATABASE_URL";
+const HOST_SECRET = "CORS_ORIGIN";
 const BASE_DATABASE_PORT = 5434;
 
 interface DatabaseSecretConfig {
@@ -19,6 +20,22 @@ interface DatabaseSecretConfig {
   databaseName: string;
   volumeName: string;
   url: string;
+}
+
+interface SecretGroup {
+  section: string;
+  secrets: string[];
+}
+
+interface GeneratedInfraSpec {
+  groups: SecretGroup[];
+  databases: DatabaseSecretConfig[];
+}
+
+interface SyncGeneratedInfraResult {
+  secrets: string[];
+  envExampleChanged: boolean;
+  dockerComposeChanged: boolean;
 }
 
 function uniqueSecrets(values: Array<string | undefined>): string[] {
@@ -34,18 +51,44 @@ function uniqueSecrets(values: Array<string | undefined>): string[] {
   return secrets;
 }
 
-function getRuntimeSecrets(runtimeConfig: RuntimeConfig): string[] {
-  const pluginSecrets = Object.values(runtimeConfig.plugins ?? {}).flatMap(
-    (plugin) => plugin.secrets ?? [],
-  );
+function getSecretGroups(runtimeConfig: RuntimeConfig): SecretGroup[] {
+  const groups: SecretGroup[] = [];
+  const seen = new Set<string>();
 
-  return uniqueSecrets([
-    API_DATABASE_SECRET,
-    AUTH_DATABASE_SECRET,
-    ...(runtimeConfig.api.secrets ?? []),
-    ...(runtimeConfig.auth?.secrets ?? []),
-    ...pluginSecrets,
-  ]);
+  const addGroup = (section: string, secrets: string[]) => {
+    const filtered = secrets.filter((s) => {
+      if (seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    });
+    if (filtered.length > 0) {
+      groups.push({ section, secrets: filtered });
+    }
+  };
+
+  addGroup("app.host", uniqueSecrets([...(runtimeConfig.host.secrets ?? []), HOST_SECRET]));
+
+  addGroup("app.api", uniqueSecrets(runtimeConfig.api.secrets ?? []));
+
+  if (runtimeConfig.auth) {
+    addGroup("app.auth", uniqueSecrets(runtimeConfig.auth.secrets ?? []));
+  }
+
+  if (runtimeConfig.plugins) {
+    for (const [pluginKey, plugin] of Object.entries(runtimeConfig.plugins)) {
+      if (plugin.secrets && plugin.secrets.length > 0) {
+        addGroup(`plugins.${pluginKey}`, plugin.secrets);
+      }
+    }
+  }
+
+  return groups;
+}
+
+function buildGeneratedInfraSpec(runtimeConfig: RuntimeConfig): GeneratedInfraSpec {
+  const groups = getSecretGroups(runtimeConfig);
+  const databases = buildDatabaseConfigs(groups.flatMap((group) => group.secrets));
+  return { groups, databases };
 }
 
 function normalizeDatabaseSlug(secret: string): string {
@@ -101,19 +144,23 @@ function defaultSecretValue(
 }
 
 function renderEnvFile(
-  secrets: string[],
+  groups: SecretGroup[],
   databases: DatabaseSecretConfig[],
   options: { forExample: boolean },
 ): string {
   const databaseMap = new Map(databases.map((entry) => [entry.secret, entry]));
-  const lines = [
+  const lines: string[] = [
     "# Generated from configured bos secrets",
     "# Update values as needed for your local environment",
     "",
   ];
 
-  for (const secret of secrets) {
-    lines.push(`${secret}=${defaultSecretValue(secret, databaseMap, options)}`);
+  for (const group of groups) {
+    lines.push(`# ${group.section}`);
+    for (const secret of group.secrets) {
+      lines.push(`${secret}=${defaultSecretValue(secret, databaseMap, options)}`);
+    }
+    lines.push("");
   }
 
   return `${lines.join("\n")}\n`;
@@ -156,16 +203,36 @@ function renderDockerCompose(databases: DatabaseSecretConfig[]): string {
   return `${lines.join("\n")}\n`;
 }
 
+function syncTextFile(filePath: string, nextContent: string): boolean {
+  if (existsSync(filePath) && readFileSync(filePath, "utf-8") === nextContent) {
+    return false;
+  }
+
+  writeFileSync(filePath, nextContent);
+  return true;
+}
+
 export function writeGeneratedInfra(configDir: string, runtimeConfig: RuntimeConfig): string[] {
-  const secrets = getRuntimeSecrets(runtimeConfig);
-  const databases = buildDatabaseConfigs(secrets);
+  return syncGeneratedInfra(configDir, runtimeConfig).secrets;
+}
+
+export function syncGeneratedInfra(
+  configDir: string,
+  runtimeConfig: RuntimeConfig,
+): SyncGeneratedInfraResult {
+  const spec = buildGeneratedInfraSpec(runtimeConfig);
+  const secrets = spec.groups.flatMap((group) => group.secrets);
+  const newEnvContent = renderEnvFile(spec.groups, spec.databases, { forExample: true });
+  const newDockerContent = renderDockerCompose(spec.databases);
+
   const envExamplePath = join(configDir, ".env.example");
   const dockerComposePath = join(configDir, "docker-compose.yml");
 
-  writeFileSync(envExamplePath, renderEnvFile(secrets, databases, { forExample: true }));
-  writeFileSync(dockerComposePath, renderDockerCompose(databases));
-
-  return secrets;
+  return {
+    secrets,
+    envExampleChanged: syncTextFile(envExamplePath, newEnvContent),
+    dockerComposeChanged: syncTextFile(dockerComposePath, newDockerContent),
+  };
 }
 
 export function ensureEnvFile(configDir: string): void {

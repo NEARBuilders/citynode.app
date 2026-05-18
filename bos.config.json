@@ -11,8 +11,8 @@
   "shared": {
     "ui": {
       "effect": {
-        "version": "3.21.0",
-        "requiredVersion": "^3.21.0",
+        "version": "3.21.2",
+        "requiredVersion": "^3.21.2",
         "singleton": true,
         "strictVersion": false,
         "shareScope": "default"
@@ -25,8 +25,8 @@
         "shareScope": "default"
       },
       "@orpc/contract": {
-        "version": "1.13.14",
-        "requiredVersion": "^1.13.14",
+        "version": "1.14.3",
+        "requiredVersion": "^1.14.3",
         "singleton": true,
         "strictVersion": false,
         "shareScope": "default"

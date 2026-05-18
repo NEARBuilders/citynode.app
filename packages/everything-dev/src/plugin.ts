@@ -6,7 +6,12 @@ import process from "node:process";
 import { Effect } from "effect";
 import { syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
-import { ensureEnvFile, loadProjectEnv, writeGeneratedInfra } from "./cli/infra";
+import {
+  ensureEnvFile,
+  loadProjectEnv,
+  syncGeneratedInfra,
+  writeGeneratedInfra,
+} from "./cli/infra";
 import {
   buildInitPatterns,
   copyFilteredFiles,
@@ -865,6 +870,12 @@ export default createPlugin({
         ssr,
       });
 
+      syncGeneratedInfra(deps.configDir, runtimeConfig);
+      if (!existsSync(join(deps.configDir, ".env"))) {
+        ensureEnvFile(deps.configDir);
+        loadProjectEnv(deps.configDir);
+      }
+
       await generateCodeArtifacts(deps.configDir, deps.bosConfig, {
         env: "development",
         extendsChain: refreshed?.source.extended,
@@ -959,6 +970,12 @@ export default createPlugin({
       });
       drainConfigWarnings();
       resumeWarnings();
+
+      syncGeneratedInfra(deps.configDir, runtimeConfig);
+      if (!existsSync(join(deps.configDir, ".env"))) {
+        ensureEnvFile(deps.configDir);
+        loadProjectEnv(deps.configDir);
+      }
 
       pluginEvents.emit("progress", {
         phase: "generate artifacts",

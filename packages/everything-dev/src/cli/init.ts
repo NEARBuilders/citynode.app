@@ -357,6 +357,17 @@ export function buildChildRootScripts(sections: {
     postinstall: "node_modules/.bin/bos types gen || true",
     "types:gen": "node_modules/.bin/bos types gen",
     bos: "node_modules/.bin/bos",
+    "db:push": "bun run --cwd api drizzle-kit push",
+    "db:studio": "bun run --cwd api drizzle-kit studio",
+    "db:generate": "bun run --cwd api drizzle-kit generate",
+    "db:migrate": "bun run --cwd api drizzle-kit migrate",
+    test: "bun run test:api && bun run test:e2e",
+    "test:api": "cd api && bun run test tests/integration/ tests/unit/",
+    "test:integration": "cd api && bun run test tests/integration/",
+    "test:e2e": "bun run --cwd host test:e2e",
+    "dev:postgres": "docker compose up -d --wait && bun run dev",
+    "dev:postgres:down": "docker compose down",
+    "dev:postgres:reset": "docker compose down -v && docker compose up -d --wait",
   };
 
   if (sections.ui) {
@@ -1032,11 +1043,6 @@ export async function scaffoldMinimalProject(
   };
   writeFileSync(join(destination, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
 
-  const envExample = generateEnvExample(parentConfig, opts.overrides);
-  if (envExample) {
-    writeFileSync(join(destination, ".env.example"), envExample);
-  }
-
   writeFileSync(join(destination, ".gitignore"), generateGitignore());
 
   return 4;
@@ -1142,62 +1148,6 @@ export async function execCommand(
 ): Promise<void> {
   const timeout = COMMAND_TIMEOUTS[command] ?? 2 * 60_000;
   await execa(command, args, { cwd, stdio: options?.stdio ?? "pipe", timeout });
-}
-
-function generateEnvExample(config: BosConfigInput, overrides: OverrideSection[]): string {
-  const has = (section: OverrideSection) => overrides.includes(section);
-
-  const lines: string[] = ["# Environment variables"];
-  const collectSecrets = (
-    obj: Record<string, unknown>,
-    includeSection: boolean,
-    prefix = "",
-  ): void => {
-    for (const [key, value] of Object.entries(obj)) {
-      if (!includeSection) continue;
-      if (key === "secrets" && Array.isArray(value)) {
-        for (const secret of value) {
-          if (typeof secret === "string") {
-            lines.push(`${secret}=`);
-          }
-        }
-      } else if (key === "variables" && isPlainObject(value)) {
-        for (const [varKey, varVal] of Object.entries(value as Record<string, unknown>)) {
-          if (typeof varVal === "string") {
-            lines.push(`${varKey}=${varVal}`);
-          }
-        }
-      } else if (isPlainObject(value) && key !== "extends") {
-        collectSecrets(value as Record<string, unknown>, includeSection, `${prefix}${key}.`);
-      }
-    }
-  };
-
-  if (config.app && typeof config.app === "object") {
-    const app = config.app as Record<string, unknown>;
-    collectSecrets(app, has("host"), "host.");
-    collectSecrets(app, has("ui"), "ui.");
-    collectSecrets(app, has("api"), "api.");
-    collectSecrets(app, has("plugins"), "auth.");
-  }
-  if (has("plugins") && config.plugins && typeof config.plugins === "object") {
-    for (const [pluginKey, pluginVal] of Object.entries(
-      config.plugins as Record<string, unknown>,
-    )) {
-      if (isPlainObject(pluginVal)) {
-        collectSecrets(pluginVal as Record<string, unknown>, true);
-      } else if (typeof pluginVal === "string") {
-        lines.push(`# Plugin '${pluginKey}' extends ${pluginVal}`);
-      }
-    }
-  }
-
-  lines.push("BETTER_AUTH_SECRET=generate-a-secret-here");
-  return `${lines.join("\n")}\n`;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function generateGitignore(): string {

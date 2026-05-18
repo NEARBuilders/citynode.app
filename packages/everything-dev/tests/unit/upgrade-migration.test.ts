@@ -366,11 +366,11 @@ describe("upgrade bos config migration", () => {
       workspaces?: { packages?: string[] };
     };
 
-    expect(pkg.name).toBe("test.dev");
+    expect(pkg.name).toBe("monorepo");
     expect(pkg.private).toBe(true);
     expect(pkg.type).toBe("module");
     expect(pkg.module).toBeUndefined();
-    expect(pkg.peerDependencies).toBeUndefined();
+    expect(pkg.peerDependencies).toEqual({ typescript: "^5" });
     expect(pkg.scripts?.version).toBe("changeset version");
     expect(pkg.scripts?.["sync-catalog"]).toBeUndefined();
     expect(pkg.scripts?.typecheck).toBe(

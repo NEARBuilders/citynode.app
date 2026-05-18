@@ -41,13 +41,13 @@
       "@types/node": "^25.0.3",
       "@types/react": "^19.2.7",
       "@types/react-dom": "^19.2.3",
-      "effect": "3.21.0",
+      "effect": "3.21.2",
       "zod": "4.3.6",
-      "@orpc/contract": "1.13.14",
-      "@orpc/server": "1.13.14",
-      "@orpc/client": "1.13.14",
-      "@orpc/zod": "1.13.14",
-      "@orpc/openapi": "1.13.14",
+      "@orpc/contract": "1.14.3",
+      "@orpc/server": "1.14.3",
+      "@orpc/client": "1.14.3",
+      "@orpc/zod": "1.14.3",
+      "@orpc/openapi": "1.14.3",
       "@module-federation/enhanced": "^2.4.0",
       "@module-federation/node": "^2.7.42",
       "@module-federation/rsbuild-plugin": "^2.4.0",
@@ -99,7 +99,6 @@
     "dev:postgres:reset": "docker compose down -v && docker compose up -d --wait"
   },
   "packageManager": "bun@1.2.20",
-  "module": "index.ts",
   "type": "module",
   "devDependencies": {
     "@biomejs/biome": "2.4.14",
@@ -117,8 +116,8 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@libsql/client": "^0.17.0",
-    "@orpc/contract": "^1.13.14",
-    "@orpc/server": "^1.13.14",
+    "@orpc/contract": "catalog:",
+    "@orpc/server": "catalog:",
     "better-auth": "catalog:",
     "better-near-auth": "catalog:",
     "drizzle-orm": "^0.45.1",
@@ -128,11 +127,5 @@
     "@opentelemetry/api": "catalog:",
     "every-plugin": "catalog:",
     "everything-dev": "catalog:"
-  },
-  "overrides": {
-    "axios": "1.13.6",
-    "effect": "3.21.0",
-    "@orpc/contract": "1.13.14",
-    "@orpc/server": "1.13.14"
   }
 }

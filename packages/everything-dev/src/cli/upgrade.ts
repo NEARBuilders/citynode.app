@@ -766,16 +766,10 @@ export async function migrateChildRootPackageJson(projectDir: string): Promise<b
   if (!extendsRef?.startsWith("bos://")) {
     return false;
   }
-  const configDomain =
-    typeof config.domain === "string" && config.domain.length > 0 ? config.domain : null;
 
   const pkg = readJsonFile<Record<string, unknown>>(pkgPath);
   let changed = false;
 
-  if (pkg.name === "monorepo" && configDomain) {
-    pkg.name = configDomain;
-    changed = true;
-  }
   if (pkg.private !== true) {
     pkg.private = true;
     changed = true;
@@ -786,10 +780,6 @@ export async function migrateChildRootPackageJson(projectDir: string): Promise<b
   }
   if ("module" in pkg) {
     delete pkg.module;
-    changed = true;
-  }
-  if ("peerDependencies" in pkg) {
-    delete pkg.peerDependencies;
     changed = true;
   }
 
@@ -817,21 +807,7 @@ export async function migrateChildRootPackageJson(projectDir: string): Promise<b
       changed = true;
     }
   }
-  for (const obsoleteScript of [
-    "sync-catalog",
-    "init",
-    "db:push",
-    "db:studio",
-    "db:generate",
-    "db:migrate",
-    "test",
-    "test:api",
-    "test:integration",
-    "test:e2e",
-    "dev:postgres",
-    "dev:postgres:down",
-    "dev:postgres:reset",
-  ]) {
+  for (const obsoleteScript of ["sync-catalog", "init"]) {
     if (obsoleteScript in scripts) {
       delete scripts[obsoleteScript];
       changed = true;
@@ -1044,6 +1020,10 @@ export async function upgradeTemplate(
         noInstall: true,
       }),
     );
+
+    if (inheritedCatalogPackageNames.length > 0) {
+      syncRootCatalogWithParent(projectDir, sourceRootCatalog);
+    }
   }
 
   if ((hasUpdates || addedPlugins.length > 0) && !options.noInstall) {
