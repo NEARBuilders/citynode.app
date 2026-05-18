@@ -5,12 +5,12 @@
 This repository uses the following production-facing workflows:
 
 - `CI` — lint, audit, and typecheck
-- `Docker` — Docker build and push for `main`
+- `Docker` — Docker build and push after successful `CI` on `main`
 - `Release` — changeset versioning and npm publish for framework packages
 - `Publish` — app deploy (Zephyr CDN + FastKV config publish)
 - `Preview` — PR preview comments via Railway
 
-The key design: `CI` is the validation workflow. `Release` and `Publish` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. `Docker` runs independently on `main` so long image builds do not delay release or publish.
+The key design: `CI` is the validation workflow. `Release`, `Publish`, and `Docker` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. Docker remains decoupled so long image builds do not delay release or publish.
 
 ## Workflows
 
@@ -28,9 +28,9 @@ The key design: `CI` is the validation workflow. `Release` and `Publish` run as 
 
 ### Docker (`docker.yml`)
 
-**Trigger:** Push to `main`, or `workflow_dispatch`.
+**Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
 
-**Purpose:** Build and push the Docker image without blocking `Release` or `Publish`.
+**Purpose:** Build and push the Docker image only after validation passes, without blocking `Release` or `Publish`.
 
 **Behavior:**
 - Detects whether the repository has a `Dockerfile`
