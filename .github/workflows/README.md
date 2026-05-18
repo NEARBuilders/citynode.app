@@ -6,7 +6,7 @@ This repository uses the following production-facing workflows:
 
 - `CI` — lint, audit, typecheck, Docker build, then release and publish
 - `Release` — changeset versioning and npm publish for framework packages
-- `Publish` — runtime deploy and FastKV config publish
+- `Publish` — app deploy (Zephyr CDN + FastKV config publish)
 - `Preview` — PR preview comments via Railway
 
 The key design: `CI` calls `Release` and `Publish` as reusable workflows after lint+typecheck passes on `main`. `Release` owns changeset versioning and npm publishing. `Publish` owns runtime deploy (`bos publish --deploy`) and FastKV config publish.
@@ -57,16 +57,15 @@ The key design: `CI` calls `Release` and `Publish` as reusable workflows after l
 
 **Trigger:** `workflow_call` from `CI`, or `workflow_dispatch`.
 
-**Purpose:** Detect whether a commit requires runtime deploy or just config publish, then run `bos publish` (with optional `--deploy`).
+**Purpose:** Detect whether a commit requires app deploy or just config publish, then run `bos publish` (with optional `--deploy`).
 
 **Behavior:**
 - Scans `.changeset/` files for changes to deployable packages (ui, api, host, plugins)
 - Checks if `bos.config.json` changed in the commit
-- If deployable changes exist: runs `bos publish --deploy`
-- If only config changed (or manual dispatch): runs `bos publish`
-- Commits updated deployment URLs in `bos.config.json`
+- If deployable changes exist: runs `bos publish --deploy` (Zephyr CDN deploy + FastKV publish)
+- If only config changed (or manual dispatch): runs `bos publish` (FastKV publish only)
 
-**Secret:** `NEAR_PRIVATE_KEY` is required (passed explicitly from CI) for FastKV publish.
+**Secrets:** `NEAR_PRIVATE_KEY`, `ZEPHYR_AUTH_TOKEN`, and `ZEPHYR_USER_EMAIL` are required (passed explicitly from CI). NEAR for FastKV publish, Zephyr for CDN deploy.
 
 ### Preview (`preview.yml`)
 
@@ -123,7 +122,7 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 | Variable | Where | Purpose |
 |----------|-------|---------|
 | `NEAR_PRIVATE_KEY` | Publish | NEAR key for FastKV config publish |
-| `ZEPHYR_AUTH_TOKEN` | Publish | Zephyr Cloud auth for CDN deploy |
-| `ZEPHYR_USER_EMAIL` | Publish | Zephyr Cloud user email |
+| `ZEPHYR_AUTH_TOKEN` | Publish (as `ZE_SECRET_TOKEN`) | Zephyr Cloud auth for CDN deploy |
+| `ZEPHYR_USER_EMAIL` | Publish (as `ZE_USER_EMAIL`) | Zephyr Cloud user email |
 | `BOS_INSTALL_NEAR_CLI` | Release, Publish | Ensures NEAR CLI is available |
 | `GITHUB_TOKEN` | Release, Publish | Changesets PR creation, GitHub releases |

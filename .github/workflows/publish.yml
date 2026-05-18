@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: "Force runtime deploy before publish"
+        description: "Force app deploy before publish"
         required: false
         default: false
         type: boolean
@@ -16,7 +16,7 @@ on:
   workflow_call:
     inputs:
       deploy:
-        description: "Force runtime deploy before publish"
+        description: "Force app deploy before publish"
         required: false
         default: false
         type: boolean
@@ -89,7 +89,7 @@ jobs:
               .filter(Boolean),
           )
 
-          let runtimeChanges = false
+          let appChanges = false
           if (existsSync(".changeset")) {
             for (const entry of readdirSync(".changeset")) {
               if (!entry.endsWith(".md") || entry === "README.md") continue
@@ -99,11 +99,11 @@ jobs:
               const frontmatter = match[1]
               for (const pkgMatch of frontmatter.matchAll(/["']([^"']+)["']\s*:\s*(major|minor|patch)/g)) {
                 if (deployablePackages.has(pkgMatch[1])) {
-                  runtimeChanges = true
+                  appChanges = true
                   break
                 }
               }
-              if (runtimeChanges) break
+              if (appChanges) break
             }
           }
 
@@ -115,7 +115,7 @@ jobs:
             configChanged = changed.split(/\r?\n/).includes("bos.config.json")
           } catch {}
 
-          const shouldDeploy = forceDeploy || runtimeChanges
+          const shouldDeploy = forceDeploy || appChanges
           const shouldPublish = shouldDeploy || configChanged || isManual
 
           console.log(`should_deploy=${shouldDeploy}`)
@@ -146,7 +146,7 @@ jobs:
       - name: Run postinstall
         run: bun run postinstall
 
-      - name: Publish runtime
+      - name: Publish app
         env:
           BOS_INSTALL_NEAR_CLI: "true"
           NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
