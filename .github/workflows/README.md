@@ -4,12 +4,13 @@
 
 This repository uses the following production-facing workflows:
 
-- `CI` — lint, audit, typecheck, and Docker build
+- `CI` — lint, audit, and typecheck
+- `Docker` — Docker build and push for `main`
 - `Release` — changeset versioning and npm publish for framework packages
 - `Publish` — app deploy (Zephyr CDN + FastKV config publish)
 - `Preview` — PR preview comments via Railway
 
-The key design: `CI` is the validation workflow. `Release` and `Publish` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. `Release` owns changeset versioning and npm publishing. `Publish` owns runtime deploy (`bos publish --deploy`) and FastKV config publish.
+The key design: `CI` is the validation workflow. `Release` and `Publish` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. `Docker` runs independently on `main` so long image builds do not delay release or publish.
 
 ## Workflows
 
@@ -17,15 +18,24 @@ The key design: `CI` is the validation workflow. `Release` and `Publish` run as 
 
 **Trigger:** Push to `main` (with `paths-ignore` for markdown and changesets) or pull requests. Also `workflow_dispatch`.
 
-**Purpose:** Lint, typecheck, security audit, and build the Docker image.
+**Purpose:** Lint, typecheck, and security audit.
 
 **Jobs:**
 1. `lint-and-typecheck` — install, build, postinstall, audit, lint, typecheck
-2. `build-docker` — builds and pushes Docker image (only if `Dockerfile` exists)
 
 **Key design decisions:**
-- Docker build no longer requires `environment: production` approval, so it doesn't block release/publish.
 - `Build every-plugin` runs before `postinstall` in both `release.yml` and `ci.yml` because `postinstall` triggers `types:gen` which needs `every-plugin` to be built first.
+
+### Docker (`docker.yml`)
+
+**Trigger:** Push to `main`, or `workflow_dispatch`.
+
+**Purpose:** Build and push the Docker image without blocking `Release` or `Publish`.
+
+**Behavior:**
+- Detects whether the repository has a `Dockerfile`
+- Skips the build steps entirely when no Dockerfile exists
+- Pushes `latest`, branch, and SHA tags to `ghcr.io`
 
 ### Release (`release.yml`)
 
@@ -76,7 +86,7 @@ The key design: `CI` is the validation workflow. `Release` and `Publish` run as 
 
 ## Docker Image Architecture
 
-Docker images are built inline in `ci.yml`. The image uses a multi-stage build:
+Docker images are built in `docker.yml`. The image uses a multi-stage build:
 
 ```
 Builder stage:
