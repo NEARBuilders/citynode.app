@@ -389,6 +389,7 @@ function writeGeneratedFiles(opts: {
   authSource: ContractSource | null;
   authExportPath?: string | null;
 }) {
+  const hasLocalApiWorkspace = existsSync(join(opts.configDir, "api", "src"));
   const baseSource = opts.sources.find((source) => source.key === "api");
   const pluginSources = opts.pluginKeys
     .map((key) => opts.sources.find((entry) => entry.key === key))
@@ -432,51 +433,53 @@ function writeGeneratedFiles(opts: {
 
   // --- Generate api/src/lib/plugins-types.gen.ts ---
   // Includes both plugin contracts AND auth as a unified PluginsClient type
-  const pluginsClientPath = join(opts.configDir, "api", "src", "lib", "plugins-types.gen.ts");
-  const pluginsClientLines: string[] = [];
+  if (hasLocalApiWorkspace) {
+    const pluginsClientPath = join(opts.configDir, "api", "src", "lib", "plugins-types.gen.ts");
+    const pluginsClientLines: string[] = [];
 
-  for (const source of pluginSources) {
-    const importPath = toImportPath(pluginsClientPath, source.sourceFilePath);
-    pluginsClientLines.push(
-      `import type { ContractType as ${source.importName} } from "${importPath}";`,
-    );
-  }
-
-  if (opts.authSource) {
-    const authImportPath = toImportPath(pluginsClientPath, opts.authSource.sourceFilePath);
-    pluginsClientLines.push(
-      `import type { ContractType as ${opts.authSource.importName} } from "${authImportPath}";`,
-    );
-  }
-
-  pluginsClientLines.push(
-    'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
-  );
-  pluginsClientLines.push(
-    "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
-  );
-  pluginsClientLines.push("");
-
-  const allPluginSources = [...pluginSources];
-  if (opts.authSource) {
-    allPluginSources.push({ ...opts.authSource, key: "auth" });
-  }
-
-  if (allPluginSources.length === 0) {
-    pluginsClientLines.push("export type PluginsClient = Record<string, never>;");
-  } else {
-    pluginsClientLines.push("export type PluginsClient = {");
-    for (const source of allPluginSources) {
-      const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
-        ? source.key
-        : JSON.stringify(source.key);
-      pluginsClientLines.push(`  ${key}: ClientFactory<${source.importName}>;`);
+    for (const source of pluginSources) {
+      const importPath = toImportPath(pluginsClientPath, source.sourceFilePath);
+      pluginsClientLines.push(
+        `import type { ContractType as ${source.importName} } from "${importPath}";`,
+      );
     }
-    pluginsClientLines.push("};");
-  }
 
-  mkdirSync(dirname(pluginsClientPath), { recursive: true });
-  writeFileIfChanged(pluginsClientPath, `${pluginsClientLines.join("\n")}\n`);
+    if (opts.authSource) {
+      const authImportPath = toImportPath(pluginsClientPath, opts.authSource.sourceFilePath);
+      pluginsClientLines.push(
+        `import type { ContractType as ${opts.authSource.importName} } from "${authImportPath}";`,
+      );
+    }
+
+    pluginsClientLines.push(
+      'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
+    );
+    pluginsClientLines.push(
+      "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+    );
+    pluginsClientLines.push("");
+
+    const allPluginSources = [...pluginSources];
+    if (opts.authSource) {
+      allPluginSources.push({ ...opts.authSource, key: "auth" });
+    }
+
+    if (allPluginSources.length === 0) {
+      pluginsClientLines.push("export type PluginsClient = Record<string, never>;");
+    } else {
+      pluginsClientLines.push("export type PluginsClient = {");
+      for (const source of allPluginSources) {
+        const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
+          ? source.key
+          : JSON.stringify(source.key);
+        pluginsClientLines.push(`  ${key}: ClientFactory<${source.importName}>;`);
+      }
+      pluginsClientLines.push("};");
+    }
+
+    mkdirSync(dirname(pluginsClientPath), { recursive: true });
+    writeFileIfChanged(pluginsClientPath, `${pluginsClientLines.join("\n")}\n`);
+  }
 
   // --- Generate */src/lib/auth-types.gen.ts ---
   const authTypeTargets = [join(opts.configDir, "ui", "src", "lib", "auth-types.gen.ts")];

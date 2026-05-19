@@ -1644,6 +1644,7 @@ export default createPlugin({
           const pluginEntries = Object.entries(refreshed.runtime.plugins ?? {});
           const fetched: string[] = [];
           const skipped: string[] = [];
+          const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
 
           if (refreshed.runtime.api.source !== "local") {
             fetched.push(refreshed.runtime.api.url);
@@ -1670,9 +1671,10 @@ export default createPlugin({
           const generated = [
             "ui/src/lib/api-types.gen.ts",
             "ui/src/lib/auth-types.gen.ts",
-            "api/src/lib/plugins-types.gen.ts",
-            "api/src/lib/auth-types.gen.ts",
           ];
+          if (hasLocalApiWorkspace) {
+            generated.push("api/src/lib/plugins-types.gen.ts", "api/src/lib/auth-types.gen.ts");
+          }
           if (existsSync(join(projectDir, "host", "src"))) {
             generated.push("host/src/lib/auth-types.gen.ts");
           }
@@ -1691,12 +1693,14 @@ export default createPlugin({
           runtimeConfig: refreshed.runtime,
         });
 
+        const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
         const generated = [
           "ui/src/lib/plugin-sidebar.gen.ts",
           "ui/src/lib/api-types.gen.ts",
-          "api/src/lib/plugins-types.gen.ts",
-          "api/src/lib/auth-types.gen.ts",
         ];
+        if (hasLocalApiWorkspace) {
+          generated.push("api/src/lib/plugins-types.gen.ts", "api/src/lib/auth-types.gen.ts");
+        }
         if (
           refreshed.runtime.auth &&
           (refreshed.runtime.auth.source !== "local" || refreshed.runtime.auth.localPath)

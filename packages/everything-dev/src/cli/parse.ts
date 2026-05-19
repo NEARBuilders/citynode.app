@@ -84,17 +84,18 @@ export function parseCommandInput(descriptor: CommandDescriptor, argv: string[])
     const token = argv[i];
     if (!token) continue;
 
-    if (token.startsWith("--no-")) {
-      const flagName = `--${token.slice(5)}`;
-      const fieldName = fieldByFlag.get(flagName);
-      if (!fieldName) throw new Error(`Unknown flag: ${token}`);
-      input[fieldName] = false;
-      continue;
-    }
-
     if (token.startsWith("--")) {
       const [flag, inline] = token.split("=", 2);
       const fieldName = fieldByFlag.get(flag);
+
+      if (!fieldName && flag.startsWith("--no-")) {
+        const positiveFlagName = `--${flag.slice(5)}`;
+        const positiveFieldName = fieldByFlag.get(positiveFlagName);
+        if (!positiveFieldName) throw new Error(`Unknown flag: ${token}`);
+        input[positiveFieldName] = false;
+        continue;
+      }
+
       if (!fieldName) throw new Error(`Unknown flag: ${token}`);
 
       const fieldSchema = shape[fieldName];

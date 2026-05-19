@@ -15,6 +15,7 @@ describe("bos sync — framework-owned files", () => {
   it("does not mark app-owned files as framework-owned", () => {
     expect(isFrameworkOwnedSyncFile("Dockerfile")).toBe(false);
     expect(isFrameworkOwnedSyncFile(".github/renovate.json")).toBe(false);
+    expect(isFrameworkOwnedSyncFile(".opencode/skills/everything-dev/SKILL.md")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/routes/_layout/index.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/components/user-nav.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("api/src/index.ts")).toBe(false);

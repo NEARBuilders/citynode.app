@@ -59,6 +59,8 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
     expect(existsSync(join(testDir, "plans"))).toBe(false);
+    expect(existsSync(join(testDir, ".agent"))).toBe(false);
+    expect(existsSync(join(testDir, ".opencode"))).toBe(false);
     expect(existsSync(join(testDir, ".changeset"))).toBe(true);
   });
 
@@ -249,9 +251,11 @@ describe("bos init — structure", () => {
       });
 
       const pkg = JSON.parse(readFileSync(join(uiOnlyDir, "package.json"), "utf-8")) as {
+        workspaces?: { packages?: string[] };
         scripts?: Record<string, string>;
       };
 
+      expect(pkg.workspaces?.packages).toEqual(["ui"]);
       expect(pkg.scripts?.["db:push"]).toBeUndefined();
       expect(pkg.scripts?.["test:api"]).toBeUndefined();
       expect(pkg.scripts?.["test:e2e"]).toBeUndefined();

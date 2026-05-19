@@ -1,6 +1,6 @@
 # everything.dev skill
 
-Use this when you want an agent to understand, run, edit, and publish an `everything.dev` app.
+Use this when you want an agent to scaffold, run, edit, and publish an `everything.dev` app or a tenant UI that extends a base runtime.
 
 ## TanStack Intent
 
@@ -15,17 +15,27 @@ Use this when you want an agent to understand, run, edit, and publish an `everyt
 - The host is the runtime shell and trust boundary.
 - The UI is loaded at runtime through Module Federation.
 - The API is loaded at runtime through `every-plugin`.
-- Public metadata can describe the runtime, but should not replace `bos.config.json`.
 
-## What an agent should be able to do
+## Parent vs child repo
 
-- read the runtime model and explain how the app is assembled
-- initialize a new app or tenant that extends a base runtime
-- run the app locally
-- edit the UI in `ui/src/`
-- change or add routes, components, and styles
-- publish the app with the user's own account
-- keep the same gateway or domain pattern while swapping account ownership
+Be explicit about which repo you are editing.
+
+- In the parent `everything.dev` repo, work across `host/`, `api/`, `ui/`, `plugins/`, and `packages/`.
+- In a generated child repo created by `bos init`, work primarily in `ui/src/` and `bos.config.json`.
+- Do not describe a generated child repo as the upstream runtime monorepo.
+- A UI-only child tenant inherits the upstream host, auth, and API unless it explicitly overrides more surfaces.
+
+## White-label starter app contract
+
+The default scaffold should stay generic.
+
+- `ui/src/routes/_layout.tsx` is the public shell boundary.
+- `ui/src/routes/_layout/login.tsx` is the login entry.
+- `ui/src/routes/_layout/_authenticated.tsx` is the auth gate.
+- routes under `ui/src/routes/_layout/_authenticated/` are protected pages.
+- app-specific branding, navigation, and concepts should stay outside that contract.
+
+This lets different apps keep their own style system and product language while preserving the same route and auth structure.
 
 ## Core model
 
@@ -50,21 +60,58 @@ Use this when you want an agent to understand, run, edit, and publish an `everyt
 
 Example:
 
-- `bos://linktree.near/linktree.com` is the base runtime
-- `bos://alice.near/linktree.com` is a tenant runtime on the same gateway
+- `bos://dev.everything.near/everything.dev` is the base runtime
+- `bos://your-account.near/everything.dev` is a tenant runtime on the same gateway
+
+## Scaffold a UI-only tenant starter
+
+Use `bos init` for new child apps.
+
+```bash
+bos init your-app.everything.dev \
+  --extends dev.everything.near/everything.dev \
+  --account your-account.near \
+  --overrides ui \
+  --no-interactive
+```
+
+If your installed `bos` version rejects `--no-interactive` or other expected init flags, use one of these fallbacks:
+
+```bash
+bunx everything-dev@latest init your-app.everything.dev
+```
+
+or run `bos init` interactively and answer the prompts.
+
+What this gives you:
+
+- a fresh app directory with `bos.config.json`
+- a local `ui/` workspace to customize
+- the shared host, auth, and API inherited from the base runtime
+- the current parent UI scaffold as a starting point
+
+Keep these route boundaries intact:
+
+- `ui/src/routes/_layout.tsx`
+- `ui/src/routes/_layout/login.tsx`
+- `ui/src/routes/_layout/_authenticated.tsx`
+
+Current caveat:
+
+- today the scaffold may still copy showcase routes from the parent UI
+- for a true white-label child app, treat those routes as starter material to replace, not as the final app shape
 
 ## Run locally
 
 ```bash
 cp .env.example .env
 bun install
-bun run dev
+bos dev --host remote
 ```
 
 Useful variants:
 
 ```bash
-bos dev --host remote
 bos dev --host remote --api remote
 bos start --no-interactive
 ```
@@ -74,71 +121,84 @@ bos start --no-interactive
 - main UI code lives in `ui/src/`
 - routes live in `ui/src/routes/`
 - reusable components live in `ui/src/components/`
-- app shell and runtime helpers live in `ui/src/app.ts`, `ui/src/router.tsx`, and `ui/src/routes/__root.tsx`
+- runtime helpers live in `ui/src/app.ts`
+- root document wiring lives in `ui/src/routes/__root.tsx`
 - use semantic Tailwind classes such as `bg-background`, `bg-card`, `text-foreground`, and `text-muted-foreground`
 
-## Init a base runtime
+For the default starter app:
+
+- keep `_layout` and `_authenticated` generic
+- keep `user-nav` generic
+- avoid baking tenant-specific product concepts into the scaffold shell
+
+Canonical starter shell recipe:
+
+- keep one public landing page at `/`
+- keep `/about` and `/skill` as public documentation routes
+- keep one authenticated landing page under `_authenticated/`
+- simplify navigation before adding app-specific sections
+- remove showcase routes such as projects, organizations, apps, or settings unless the child app actually needs them
+
+## Post-init cleanup for `--overrides ui`
+
+After scaffold:
+
+- replace copied showcase routes with starter routes
+- remove non-essential demo routes if present
+- update `README.md`, `AGENTS.md`, and `skill.md` to describe the child app, not the parent runtime repo
+- replace placeholder `account`, `domain`, `title`, and `description`
+- keep the shared runtime relationship clear in `bos.config.json`
+
+## Generated types in UI-only children
+
+- `bos types gen` may still generate API and auth client types in a UI-only child
+- those types can come from the upstream remote runtime
+- the absence of a local `api/` workspace is normal for a UI-only tenant
+- if your local installed CLI version behaves differently from the latest framework code, prefer `bunx everything-dev@latest` while validating the scaffold flow
+
+## Verify the child app
+
+Recommended success criteria:
 
 ```bash
-bos init --overrides ui,api,host
+bun run types:gen
+bun run typecheck
+bun run lint
+```
+
+## Publish a tenant UI
+
+```bash
 bos publish --deploy
+bos publish
 ```
 
-This creates and publishes the base runtime that tenants can extend.
+After `bos publish --deploy`, the child app `bos.config.json` gets the deployed UI URL and integrity.
 
-## Create a tenant on the same gateway or domain
+## Tenant runtime rules
 
-Use a tenant `bos.config.json` like this:
-
-```json
-{
-  "extends": "bos://linktree.near/linktree.com",
-  "account": "alice.near",
-  "domain": "linktree.com",
-  "app": {
-    "ui": {
-      "name": "ui",
-      "development": "local:ui",
-      "production": "https://cdn.example.com/alice-ui",
-      "integrity": "sha384-..."
-    }
-  }
-}
-```
-
-Rules:
-
-- change `account` to the user's own NEAR account
-- keep `domain` or gateway the same when you want the same shared-host pattern
 - publish the base runtime first
-- then publish the tenant runtime that extends it
+- publish the tenant runtime that extends it
+- use your own NEAR account in `account`
+- keep the same gateway or domain when you want the shared-host tenant model
+- tenant SSR is gated by `TENANT_WHITELIST` unless `ALLOW_UNTRUSTED_SSR=true`
 
-## Publish
-
-```bash
-bos publish --deploy
-```
-
-If config changes affect the base host runtime, restart the host so it reloads the latest base config snapshot.
-
-## Host env for tenant mode
+## Host env for fixed-core tenant mode
 
 ```bash
 NETWORK_ID=mainnet
 ALLOW_OVERRIDE=ui,plugins.*
-TENANT_WHITELIST=alice.near,bob.near
+TENANT_WHITELIST=your-account.near
 ALLOW_UNTRUSTED_SSR=false
 ```
 
 ## Good tasks for an agent
 
-- explain runtime inheritance and composition
-- scaffold a super app
-- turn a project into a shared-host base runtime
-- create a tenant app that extends a base runtime
-- debug why tenant UI overrides are not applying
-- wire a new page or design into `ui/src/routes/`
-- publish updates without changing the shared domain model
+- scaffold a white-label starter app with `bos init --overrides ui`
+- explain runtime inheritance and fixed-core tenant behavior
+- wire new pages into the `_layout` and `_authenticated` route structure
+- publish a tenant UI without changing the shared host
+- debug why a tenant UI override is not loading
 
 ## Public entry points
 

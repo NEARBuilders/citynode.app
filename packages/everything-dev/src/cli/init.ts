@@ -37,9 +37,7 @@ export const INIT_ROOT_PATTERNS = [
   "bunfig.toml",
   "Dockerfile",
   "railway.json",
-  ".agent/**",
   "AGENTS.md",
-  ".opencode/skills/everything-dev/**",
   ".changeset/config.json",
   ".changeset/README.md",
   "README.md",
@@ -719,6 +717,8 @@ export async function personalizeConfig(
       if (Array.isArray(ws.packages)) {
         ws.packages = ws.packages.filter((p: string) => {
           if (p.startsWith("packages/")) return false;
+          if (p === "ui") return has("ui");
+          if (p === "api") return has("api");
           if (p === "host") return has("host");
           if (p.startsWith("plugins/")) return false;
           return true;
