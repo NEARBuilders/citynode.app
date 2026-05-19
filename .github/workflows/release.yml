@@ -171,3 +171,18 @@ jobs:
               --notes "$NOTES" \
               --target main
           done
+
+      - name: Publish runtime config
+        if: steps.release_mode.outputs.should_publish == 'true'
+        env:
+          NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+          ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
+          ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
+        run: bun packages/everything-dev/src/cli.ts publish --deploy
+
+      - name: Commit bos.config.json updates
+        if: steps.release_mode.outputs.should_publish == 'true'
+        uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5.2.0
+        with:
+          commit_message: "chore: update deployment URLs [skip ci]"
+          file_pattern: "**/bos.config.json"
