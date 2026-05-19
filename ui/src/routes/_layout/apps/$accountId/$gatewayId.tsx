@@ -1,25 +1,53 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { ArrowLeft, Check, Copy, ExternalLink, Info } from "lucide-react";
 import type { TransactionBuilder } from "near-kit";
-import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
-import { Badge, Button, Card, CardContent } from "@/components";
+import { Badge, Button } from "@/components";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+const BASE_RUNTIME = "bos://dev.everything.near/everything.dev";
+
+const getStartCommand = (accountId: string, gatewayId: string) =>
+  `bunx everything-dev@latest start --account ${accountId} --domain ${gatewayId}`;
+
+const getExtendsCommand = (accountId: string, gatewayId: string) =>
+  `bunx everything-dev@latest init --extends bos://${accountId}/${gatewayId}`;
 
 export const Route = createFileRoute("/_layout/apps/$accountId/$gatewayId")({
-  head: ({ params }) => ({
-    meta: [
-      {
-        title: `${params.accountId}/${params.gatewayId} | Published Apps | app`,
-      },
-      {
-        name: "description",
-        content: `Runtime details for ${params.accountId} on ${params.gatewayId}.`,
-      },
-    ],
-  }),
+  loader: async ({ params, context }) => {
+    const { queryClient, apiClient } = context;
+    await queryClient.prefetchQuery({
+      queryKey: ["app", params.accountId, params.gatewayId],
+      queryFn: () =>
+        apiClient.apps.getRegistryApp({
+          accountId: params.accountId,
+          gatewayId: params.gatewayId,
+        }),
+      staleTime: 30_000,
+    });
+    return { accountId: params.accountId, gatewayId: params.gatewayId };
+  },
+  head: ({ loaderData }) => {
+    if (!loaderData) return { meta: [] };
+    return {
+      meta: [
+        {
+          title: `${loaderData.accountId} / ${loaderData.gatewayId} | Apps | everything.dev`,
+        },
+        {
+          name: "description",
+          content: `Runtime details for bos://${loaderData.accountId}/${loaderData.gatewayId} — inspect host, UI, API, and plugin composition.`,
+        },
+      ],
+    };
+  },
   component: AppDetailPage,
 });
 
@@ -28,81 +56,75 @@ function AppDetailPage() {
   const queryClient = useQueryClient();
   const apiClient = useApiClient();
   const auth = useAuthClient();
-  const detailQuery = useQuery({
-    queryKey: ["registry-app", accountId, gatewayId],
+  const router = useRouter();
+  const navigate = useNavigate();
+  const canGoBack = router.history.canGoBack?.() ?? false;
+
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [copiedUri, setCopiedUri] = useState(false);
+  const [configExpanded, setConfigExpanded] = useState(false);
+
+  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const nearAccountId = auth.near.getAccountId();
+  const user = session?.user;
+
+  const appQuery = useSuspenseQuery({
+    queryKey: ["app", accountId, gatewayId],
     queryFn: () => apiClient.apps.getRegistryApp({ accountId, gatewayId }),
+    staleTime: 30_000,
   });
+
   const projectsQuery = useQuery({
     queryKey: ["app-projects", accountId, gatewayId],
     queryFn: () => apiClient.projects.listProjectsForApp({ accountId, domain: gatewayId }),
   });
-  const registryStatusQuery = useQuery({
+
+  const statusQuery = useQuery({
     queryKey: ["registry-status"],
     queryFn: () => apiClient.apps.getRegistryStatus(),
     staleTime: 60_000,
   });
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
 
-  const nearAccountId = auth.near.getAccountId();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [repoUrl, setRepoUrl] = useState("");
-  const [homepageUrl, setHomepageUrl] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const app = appQuery.data?.data;
+
+  const [title, setTitle] = useState(app?.metadata?.title ?? "");
+  const [description, setDescription] = useState(app?.metadata?.description ?? "");
+  const [repoUrl, setRepoUrl] = useState(app?.metadata?.repoUrl ?? "");
+  const [homepageUrl, setHomepageUrl] = useState(app?.metadata?.homepageUrl ?? app?.openUrl ?? "");
+  const [imageUrl, setImageUrl] = useState(app?.metadata?.imageUrl ?? "");
   const [delegatePayload, setDelegatePayload] = useState<string | null>(null);
-  const [pendingRefreshUntil, setPendingRefreshUntil] = useState<number | null>(null);
 
-  const app = detailQuery.data?.data;
-  const initialMetadata = useMemo(
-    () => ({
-      title: app?.metadata?.title ?? "",
-      description: app?.metadata?.description ?? "",
-      repoUrl: app?.metadata?.repoUrl ?? "",
-      homepageUrl: app?.metadata?.homepageUrl ?? app?.openUrl ?? app?.hostUrl ?? "",
-      imageUrl: app?.metadata?.imageUrl ?? "",
-    }),
-    [app],
-  );
+  if (!app) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 px-4 py-24 text-center sm:px-6">
+        <p className="text-base font-semibold text-foreground">App not found.</p>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/apps" search={{}}>
+            ← back to apps
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    setTitle(initialMetadata.title);
-    setDescription(initialMetadata.description);
-    setRepoUrl(initialMetadata.repoUrl);
-    setHomepageUrl(initialMetadata.homepageUrl);
-    setImageUrl(initialMetadata.imageUrl);
-  }, [initialMetadata]);
+  const isTenant = app.extends === BASE_RUNTIME;
+  const bosUri = `bos://${accountId}/${gatewayId}`;
+  const displayTitle = app.metadata?.title ?? `${accountId} / ${gatewayId}`;
+  const startCommand = getStartCommand(accountId, gatewayId);
+  const extendsCommand = getExtendsCommand(accountId, gatewayId);
 
-  useEffect(() => {
-    if (!pendingRefreshUntil) {
-      return;
-    }
-
-    if (Date.now() > pendingRefreshUntil) {
-      setPendingRefreshUntil(null);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      void detailQuery.refetch();
-    }, 4_000);
-
-    return () => window.clearTimeout(timer);
-  }, [detailQuery, pendingRefreshUntil, app?.metadata?.updatedAt]);
-
-  useEffect(() => {
-    if (!pendingRefreshUntil || !app?.metadata?.updatedAt) {
-      return;
-    }
-
-    setPendingRefreshUntil(null);
-  }, [app?.metadata?.updatedAt, pendingRefreshUntil]);
+  const refreshQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["app", accountId, gatewayId] }),
+      queryClient.invalidateQueries({ queryKey: ["apps-account", accountId] }),
+      queryClient.invalidateQueries({ queryKey: ["apps"] }),
+    ]);
+  };
 
   const prepareMetadataMutation = useMutation({
     mutationFn: async () => {
-      if (!nearAccountId) {
-        throw new Error("Connect a NEAR wallet to publish registry metadata.");
-      }
-
+      if (!nearAccountId) throw new Error("Connect a NEAR wallet to publish metadata.");
       return apiClient.apps.prepareRegistryMetadataWrite({
         accountId,
         gatewayId,
@@ -116,24 +138,10 @@ function AppDetailPage() {
     },
   });
 
-  const refreshQueries = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["registry-app", accountId, gatewayId] }),
-      queryClient.invalidateQueries({ queryKey: ["registry-account", accountId] }),
-      queryClient.invalidateQueries({ queryKey: ["registry-apps"] }),
-    ]);
-  };
-
-  const publishMetadataMutation = useMutation({
+  const publishMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const signerId = auth.near.getAccountId();
-
-      if (!signerId) {
-        throw new Error("Connect a NEAR wallet before publishing metadata.");
-      }
-
-      const signedDelegateAction = await auth.near.buildSignedDelegateAction(
+      const signed = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
         (builder: TransactionBuilder) =>
           builder.functionCall(
@@ -143,36 +151,24 @@ function AppDetailPage() {
             { gas: "10000000000000", attachedDeposit: 0n },
           ),
       );
-
-      const result = await auth.near.relayTransaction({ payload: signedDelegateAction });
+      const result = await auth.near.relayTransaction({ payload: signed });
       if (result.error) throw new Error(result.error.message || "Relay failed");
       return result.data;
     },
     onSuccess: async (result) => {
       setDelegatePayload(null);
-      toast.success("Registry metadata submitted", {
-        description: result?.txHash
-          ? `Submitted transaction ${result.txHash}. FastKV indexing can still succeed even if the contract call looks failed.`
-          : "The transaction was submitted. FastKV indexing can take a moment.",
+      toast.success("Metadata submitted", {
+        description: result?.txHash ? `tx: ${result.txHash}` : "Indexing may take a moment.",
       });
       await refreshQueries();
-      setPendingRefreshUntil(Date.now() + 45_000);
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to submit registry metadata");
-    },
+    onError: (err: Error) => toast.error(err.message || "Failed to publish"),
   });
 
   const signDelegateMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      const signerId = auth.near.getAccountId();
-
-      if (!signerId) {
-        throw new Error("Connect a NEAR wallet before signing delegate payloads.");
-      }
-
-      const signedDelegateAction = await auth.near.buildSignedDelegateAction(
+      return auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
         (builder: TransactionBuilder) =>
           builder.functionCall(
@@ -182,570 +178,712 @@ function AppDetailPage() {
             { gas: "10000000000000", attachedDeposit: 0n },
           ),
       );
-
-      return signedDelegateAction;
     },
     onSuccess: (payload: string) => {
       setDelegatePayload(payload);
-      toast.success("Delegate payload signed", {
-        description: payload
-          ? "Copy the payload below or use the relay button if this host is configured to sponsor submissions."
-          : "Signed delegate action is ready.",
-      });
+      toast.success("Payload signed — relay below or copy to submit elsewhere.");
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to sign delegate payload");
-    },
+    onError: (err: Error) => toast.error(err.message || "Failed to sign"),
   });
 
-  const relayMetadataMutation = useMutation({
+  const relayMutation = useMutation({
     mutationFn: async () => {
-      if (!delegatePayload) {
-        throw new Error("Sign a delegate payload first.");
-      }
-
-      const result = await auth.near.relayTransaction({
-        payload: delegatePayload,
-      });
+      if (!delegatePayload) throw new Error("Sign a payload first.");
+      const result = await auth.near.relayTransaction({ payload: delegatePayload });
       if (result.error) throw new Error(result.error.message || "Relay failed");
       return result.data;
     },
     onSuccess: async (result) => {
-      toast.success("Delegate payload relayed", {
-        description: result?.txHash
-          ? `Submitted relayed transaction ${result.txHash}.`
-          : "Relay submitted the signed delegate action.",
+      toast.success("Relayed", {
+        description: result?.txHash ? `tx: ${result.txHash}` : undefined,
       });
       await refreshQueries();
-      setPendingRefreshUntil(Date.now() + 45_000);
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to relay delegate payload");
-    },
+    onError: (err: Error) => toast.error(err.message || "Relay failed"),
   });
 
-  if (detailQuery.isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-sm text-muted-foreground">
-          Loading published runtime...
-        </CardContent>
-      </Card>
-    );
-  }
+  const isAnyPending =
+    publishMutation.isPending || signDelegateMutation.isPending || relayMutation.isPending;
 
-  if (!app) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center space-y-3">
-          <p className="text-sm">This published runtime could not be resolved.</p>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/apps" search={{}}>
-              back to apps
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+  const resolvedConfig = app.resolvedConfig as Record<string, unknown>;
+  const configApp = resolvedConfig?.app as Record<string, unknown> | undefined;
+  const configPlugins = resolvedConfig?.plugins as Record<string, unknown> | undefined;
+
+  const metaPanel = (
+    <div className="space-y-4 text-sm">
+      <MetaSectionLabel>Details</MetaSectionLabel>
+      <MetaRow label="Status">
+        <Badge variant={app.status === "ready" ? "default" : "destructive"} className="text-xs">
+          {app.status}
+        </Badge>
+      </MetaRow>
+      {isTenant && (
+        <MetaRow label="Type">
+          <Badge variant="outline" className="text-xs">
+            tenant runtime
+          </Badge>
+        </MetaRow>
+      )}
+      {app.extends && (
+        <MetaRow label="Extends">
+          <code className="font-mono text-xs break-all text-foreground">{app.extends}</code>
+        </MetaRow>
+      )}
+      {app.domain && (
+        <MetaRow label="Domain">
+          <span className="font-mono text-xs">{app.domain}</span>
+        </MetaRow>
+      )}
+      {app.metadata?.claimedBy && (
+        <MetaRow label="Claimed by">
+          <span className="font-mono text-xs">{app.metadata.claimedBy}</span>
+        </MetaRow>
+      )}
+      {app.metadata?.updatedAt && (
+        <MetaRow label="Updated">{new Date(app.metadata.updatedAt).toLocaleDateString()}</MetaRow>
+      )}
+      <MetaRow label="Relay">
+        {statusQuery.data?.relayEnabled ? (
+          <Badge variant="secondary" className="text-xs">
+            enabled
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground text-xs">disabled</span>
+        )}
+      </MetaRow>
+      <div className="pt-1 space-y-1.5">
+        <MetaSectionLabel>FastKV key</MetaSectionLabel>
+        <code className="block font-mono text-[10px] text-muted-foreground break-all bg-muted/30 rounded px-2 py-1.5">
+          {app.canonicalKey}
+        </code>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-muted-foreground">
-          <Link to="/apps" search={{}} className="hover:text-foreground transition-colors">
-            apps
-          </Link>
-          <span>/</span>
-          <Link
-            to="/apps/$accountId"
-            params={{ accountId }}
-            className="hover:text-foreground transition-colors"
-          >
-            {accountId}
-          </Link>
-          <span>/</span>
-          <span>{gatewayId}</span>
+    <TooltipProvider>
+      <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-6">
+        <div className="flex items-center gap-2 flex-wrap justify-between">
+          <div className="flex items-center gap-2">
+            {canGoBack ? (
+              <button
+                type="button"
+                onClick={() => router.history.back()}
+                aria-label="Go back"
+                className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm transition-all duration-200 ease-out hover:shadow-md hover:bg-muted rounded-[10px]"
+              >
+                <ArrowLeft size={14} className="text-foreground" />
+              </button>
+            ) : (
+              <Link
+                to="/apps/$accountId"
+                params={{ accountId }}
+                aria-label="Go back"
+                className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm transition-all duration-200 ease-out hover:shadow-md hover:bg-muted rounded-[10px]"
+              >
+                <ArrowLeft size={14} className="text-foreground" />
+              </Link>
+            )}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+              <Link to="/apps" search={{}} className="hover:text-foreground transition-colors">
+                apps
+              </Link>
+              <span>/</span>
+              <Link
+                to="/apps/$accountId"
+                params={{ accountId }}
+                className="hover:text-foreground transition-colors"
+              >
+                {accountId}
+              </Link>
+              <span>/</span>
+              <span className="text-foreground font-semibold">{gatewayId}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {app.openUrl && (
+              <Button asChild size="sm" className="h-8 gap-1.5">
+                <a href={app.openUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={11} />
+                  open app
+                </a>
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={async () => {
+                await navigator.clipboard.writeText(startCommand);
+                setCopiedCmd(true);
+                toast.success("Copied start command");
+                setTimeout(() => setCopiedCmd(false), 2000);
+              }}
+            >
+              {copiedCmd ? <Check size={11} /> : <Copy size={11} />}
+              <span className="hidden sm:inline">start command</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="sm:hidden"
+              onClick={() => setDetailsOpen(true)}
+              aria-label="App details"
+            >
+              <Info size={14} />
+            </Button>
+          </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <Card id="overview">
-            <CardContent className="p-6 space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={app.status === "ready" ? "default" : "destructive"}>
-                  {app.status}
-                </Badge>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-6">
+          <div className="space-y-6 min-w-0">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                    app.status === "ready" ? "bg-green-500" : "bg-destructive"
+                  }`}
+                />
+                {isTenant && (
+                  <Badge variant="outline" className="text-xs">
+                    tenant
+                  </Badge>
+                )}
                 {app.metadata?.claimedBy ? (
-                  <Badge variant="outline">claimed by {app.metadata.claimedBy}</Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    claimed by {app.metadata.claimedBy}
+                  </Badge>
                 ) : (
-                  <Badge variant="outline">unclaimed metadata</Badge>
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    unclaimed
+                  </Badge>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight break-all">
-                  {app.metadata?.title ?? `${accountId} / ${gatewayId}`}
-                </h1>
+              <h1 className="text-xl font-bold text-foreground break-all">{displayTitle}</h1>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(bosUri);
+                  setCopiedUri(true);
+                  toast.success("Copied bos:// address");
+                  setTimeout(() => setCopiedUri(false), 2000);
+                }}
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                <code className="font-mono text-xs">{bosUri}</code>
+                {copiedUri ? (
+                  <Check size={11} className="shrink-0 text-green-500" />
+                ) : (
+                  <Copy
+                    size={11}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                )}
+              </button>
+
+              {app.metadata?.description && (
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  {app.metadata?.description ??
-                    "This runtime has no public FastKV metadata yet. You can still inspect its canonical config and launch targets below."}
+                  {app.metadata.description}
                 </p>
-              </div>
+              )}
 
-              <div className="flex flex-wrap gap-2">
-                {app.openUrl && (
-                  <Button asChild variant="outline" size="sm">
-                    <a href={app.openUrl} target="_blank" rel="noreferrer">
-                      open app
-                    </a>
-                  </Button>
-                )}
-                <Button asChild variant="outline" size="sm">
-                  <a href={app.canonicalConfigUrl} target="_blank" rel="noreferrer">
-                    view FastKV config
-                  </a>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(app.startCommand);
-                    toast.success("bos start command copied");
-                  }}
-                >
-                  copy bos start
-                </Button>
+              <div className="flex gap-3 flex-wrap">
                 {app.metadata?.repoUrl && (
-                  <Button asChild variant="outline" size="sm">
-                    <a href={app.metadata.repoUrl} target="_blank" rel="noreferrer">
-                      repo
-                    </a>
-                  </Button>
+                  <a
+                    href={app.metadata.repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                  >
+                    repository
+                  </a>
                 )}
                 {app.metadata?.homepageUrl && (
-                  <Button asChild variant="outline" size="sm">
-                    <a href={app.metadata.homepageUrl} target="_blank" rel="noreferrer">
-                      homepage
+                  <a
+                    href={app.metadata.homepageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                  >
+                    homepage
+                  </a>
+                )}
+                <a
+                  href={app.canonicalConfigUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                >
+                  FastKV config
+                </a>
+              </div>
+            </div>
+
+            {isTenant && (
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-1">
+                <p className="text-sm font-semibold text-foreground">Tenant runtime</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  This app extends{" "}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void navigate({
+                        to: "/apps/$accountId/$gatewayId",
+                        params: {
+                          accountId: "dev.everything.near",
+                          gatewayId: "everything.dev",
+                        },
+                      })
+                    }
+                    className="font-mono text-foreground hover:underline"
+                  >
+                    bos://dev.everything.near/everything.dev
+                  </button>
+                  . The shared host serves a custom UI at{" "}
+                  {app.domain ? (
+                    <a
+                      href={`https://${app.domain}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-foreground hover:underline"
+                    >
+                      {app.domain}
                     </a>
-                  </Button>
+                  ) : (
+                    <span className="font-mono">{accountId}.everything.dev</span>
+                  )}{" "}
+                  while keeping the base auth, API, and plugins intact.
+                </p>
+              </div>
+            )}
+
+            <section className="space-y-2">
+              <SectionLabel>Runtime</SectionLabel>
+              <div className="space-y-1.5">
+                <RuntimeRow label="host" value={app.hostUrl} />
+                <RuntimeRow label="ui" value={app.uiUrl} />
+                <RuntimeRow label="api" value={app.apiUrl} />
+                {app.uiSsrUrl && <RuntimeRow label="ssr" value={app.uiSsrUrl} />}
+                {app.extends && (
+                  <RuntimeRow label="extends" value={app.extends} isUrl={false} mono />
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </section>
 
-          <Card>
-            <CardContent className="p-6 space-y-3">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">navigator</div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                <AnchorButton href="#overview" label="overview" />
-                <AnchorButton href="#runtime" label="runtime" />
-                <AnchorButton href="#config" label="config" />
-                <AnchorButton href="#metadata" label="metadata" />
-                <AnchorButton href="#publish" label="claim / publish" />
-              </div>
-              <div className="pt-3 border-t border-border text-xs font-mono text-muted-foreground break-all">
-                {app.metadataContractId}:{app.metadataKey}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+            <section className="space-y-2">
+              <SectionLabel>Start command</SectionLabel>
+              <StartCommand command={startCommand} />
+            </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="account" value={accountId} mono />
-        <MetricCard label="gateway" value={gatewayId} mono />
-        <MetricCard label="extends" value={app.extends ?? "direct"} mono />
-        <MetricCard
-          label="relay"
-          value={registryStatusQuery.data?.relayEnabled ? "enabled" : "disabled"}
-        />
-      </section>
+            <section className="space-y-2">
+              <SectionLabel>Extends command</SectionLabel>
+              <StartCommand command={extendsCommand} />
+            </section>
 
-      <Card id="runtime">
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight">Runtime</h2>
-            <p className="text-sm text-muted-foreground">
-              Resolved runtime values from the published config chain.
-            </p>
-          </div>
-
-          <div className="grid gap-3 text-sm">
-            <RuntimeRow label="host" value={app.hostUrl} />
-            <RuntimeRow label="ui" value={app.uiUrl} />
-            <RuntimeRow label="ui ssr" value={app.uiSsrUrl} />
-            <RuntimeRow label="api" value={app.apiUrl} />
-            <RuntimeRow label="canonical key" value={app.canonicalKey} />
-            <RuntimeRow label="bos start" value={app.startCommand} />
-            <RuntimeRow label="extends" value={app.extends} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <section id="config" className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight">Resolved Config</h2>
-          <p className="text-sm text-muted-foreground">
-            The live resolved <code>bos.config.json</code> for this app, fetched from FastKV and
-            merged with any inherited values.
-          </p>
-        </div>
-        <pre className="overflow-x-auto text-xs leading-relaxed text-muted-foreground font-mono whitespace-pre">
-          {JSON.stringify(app.resolvedConfig, null, 2)}
-        </pre>
-      </section>
-
-      <Card id="metadata">
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight">Registry Metadata</h2>
-            <p className="text-sm text-muted-foreground">
-              Public FastKV manifest data attached to this runtime.
-            </p>
-          </div>
-
-          {app.metadata ? (
-            <div className="grid gap-3 text-sm">
-              <RuntimeRow label="claimed by" value={app.metadata.claimedBy} />
-              <RuntimeRow label="title" value={app.metadata.title} />
-              <RuntimeRow label="description" value={app.metadata.description} />
-              <RuntimeRow label="repo" value={app.metadata.repoUrl} />
-              <RuntimeRow label="homepage" value={app.metadata.homepageUrl} />
-              <RuntimeRow label="image" value={app.metadata.imageUrl} />
-              <RuntimeRow label="updated" value={app.metadata.updatedAt} />
-            </div>
-          ) : (
-            <div className="rounded-sm border border-border bg-muted/10 p-4 text-sm text-muted-foreground">
-              No FastKV metadata has been published for this runtime yet.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card id="projects">
-        <CardContent className="p-6 space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight">In Projects</h2>
-            <p className="text-sm text-muted-foreground">Projects that include this app.</p>
-          </div>
-
-          {projectsQuery.isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading projects...</div>
-          ) : projectsQuery.data?.data && projectsQuery.data.data.length > 0 ? (
-            <div className="space-y-3">
-              {projectsQuery.data.data.map((project: (typeof projectsQuery.data.data)[number]) => (
-                <div
-                  key={project.id}
-                  className="rounded-sm border border-border bg-muted/10 p-4 flex items-start justify-between gap-4"
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant={
-                          project.status === "active"
-                            ? "default"
-                            : project.status === "paused"
-                              ? "secondary"
-                              : "destructive"
-                        }
-                      >
-                        {project.status}
-                      </Badge>
-                      <Badge variant="outline">{project.visibility}</Badge>
-                    </div>
-                    <Link
-                      to="/projects/$id"
-                      params={{ id: project.id }}
-                      className="font-medium hover:underline break-all"
+            {configApp && (
+              <section className="space-y-2">
+                <SectionLabel>Resolved bos.config.json</SectionLabel>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="bg-muted/30 px-3 py-2 border-b border-border flex items-center justify-between">
+                    <span className="text-[11px] font-mono text-muted-foreground">
+                      apps/{accountId}/{gatewayId}/bos.config.json
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setConfigExpanded((v) => !v)}
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {project.title}
-                    </Link>
-                    {project.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {project.description}
-                      </p>
+                      {configExpanded ? "collapse" : "expand"}
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-border">
+                    {(["host", "ui", "api", "auth"] as const).map((key) => {
+                      const val = configApp[key] as Record<string, unknown> | undefined;
+                      if (!val) return null;
+                      const prod = val.production as string | undefined;
+                      if (!prod) return null;
+                      return (
+                        <div key={key} className="flex items-start gap-2 px-3 py-2 text-xs">
+                          <span
+                            className="font-mono text-muted-foreground shrink-0 uppercase font-semibold min-w-[36px]"
+                            style={{ fontSize: 10 }}
+                          >
+                            {key}
+                          </span>
+                          <a
+                            href={prod}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-foreground hover:underline break-all"
+                          >
+                            {prod}
+                          </a>
+                        </div>
+                      );
+                    })}
+
+                    {configPlugins && Object.keys(configPlugins).length > 0 && (
+                      <div className="px-3 py-2">
+                        <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">
+                          plugins
+                        </div>
+                        <div className="space-y-1">
+                          {Object.entries(configPlugins).map(([id, val]) => {
+                            const pluginVal = val as Record<string, unknown> | undefined;
+                            const prod = pluginVal?.production as string | undefined;
+                            return (
+                              <div key={id} className="flex items-center gap-2 text-xs">
+                                <span
+                                  className="font-mono text-muted-foreground shrink-0"
+                                  style={{ fontSize: 10 }}
+                                >
+                                  {id}
+                                </span>
+                                {prod ? (
+                                  <a
+                                    href={prod}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-mono text-foreground hover:underline break-all"
+                                    style={{ fontSize: 10 }}
+                                  >
+                                    {prod}
+                                  </a>
+                                ) : (
+                                  <span
+                                    className="text-muted-foreground font-mono"
+                                    style={{ fontSize: 10 }}
+                                  >
+                                    inherited
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <Button asChild variant="outline" size="sm">
-                    <Link to="/projects/$id" params={{ id: project.id }}>
-                      view
-                    </Link>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              This app is not included in any projects yet.
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card id="publish">
-        <CardContent className="p-6 space-y-5">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight">Claim / Edit Metadata</h2>
-            <p className="text-sm text-muted-foreground">
-              Publish a FastKV manifest for this runtime, either directly from your wallet or
-              through a sponsored relay when available.
-            </p>
+                  {configExpanded && (
+                    <div className="border-t border-border">
+                      <pre
+                        className="overflow-x-auto p-4 font-mono text-muted-foreground whitespace-pre"
+                        style={{ fontSize: 10, lineHeight: "1.7" }}
+                      >
+                        {JSON.stringify(resolvedConfig, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {projectsQuery.data !== undefined && (
+              <section className="space-y-2">
+                <SectionLabel>In Projects</SectionLabel>
+                {projectsQuery.isLoading ? (
+                  <Skeleton className="h-12 w-full" />
+                ) : projectsQuery.data?.data && projectsQuery.data.data.length > 0 ? (
+                  <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                    {projectsQuery.data.data.map((project) => (
+                      <Link
+                        key={project.id}
+                        to="/projects/$id"
+                        params={{ id: project.id }}
+                        className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="text-sm font-medium text-foreground truncate">
+                            {project.title}
+                          </div>
+                          {project.description && (
+                            <div className="text-xs text-muted-foreground line-clamp-1">
+                              {project.description}
+                            </div>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="text-xs shrink-0 ml-2">
+                          {project.status}
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not linked to any projects yet.</p>
+                )}
+              </section>
+            )}
+
+            <section className="space-y-3">
+              <SectionLabel>Claim / Edit Metadata</SectionLabel>
+              {!user ? (
+                <p className="text-sm text-muted-foreground">
+                  Sign in and link a NEAR wallet to publish metadata for this app.
+                </p>
+              ) : !nearAccountId ? (
+                <p className="text-sm text-muted-foreground">
+                  No NEAR wallet linked.{" "}
+                  <Link to="/settings" className="text-foreground hover:underline">
+                    Open settings
+                  </Link>{" "}
+                  to connect one.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FormField label="Title" htmlFor="meta-title">
+                      <Input
+                        id="meta-title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="App title"
+                        className="h-9 text-sm"
+                      />
+                    </FormField>
+                    <FormField label="Repo URL" htmlFor="meta-repo">
+                      <Input
+                        id="meta-repo"
+                        value={repoUrl}
+                        onChange={(e) => setRepoUrl(e.target.value)}
+                        placeholder="https://github.com/..."
+                        className="h-9 text-sm"
+                      />
+                    </FormField>
+                    <FormField label="Homepage URL" htmlFor="meta-homepage">
+                      <Input
+                        id="meta-homepage"
+                        value={homepageUrl}
+                        onChange={(e) => setHomepageUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="h-9 text-sm"
+                      />
+                    </FormField>
+                    <FormField label="Image URL" htmlFor="meta-image">
+                      <Input
+                        id="meta-image"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="h-9 text-sm"
+                      />
+                    </FormField>
+                  </div>
+                  <FormField label="Description" htmlFor="meta-desc">
+                    <textarea
+                      id="meta-desc"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
+                      placeholder="Short description"
+                      className="flex w-full rounded-md border-2 border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring transition-[color,box-shadow]"
+                    />
+                  </FormField>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => publishMutation.mutate()}
+                      disabled={isAnyPending}
+                      size="sm"
+                    >
+                      {publishMutation.isPending ? "Publishing..." : "Publish now"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => signDelegateMutation.mutate()}
+                      disabled={isAnyPending}
+                    >
+                      {signDelegateMutation.isPending ? "Signing..." : "Sign delegate"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => relayMutation.mutate()}
+                      disabled={!statusQuery.data?.relayEnabled || !delegatePayload || isAnyPending}
+                    >
+                      {relayMutation.isPending ? "Relaying..." : "Relay payload"}
+                    </Button>
+                  </div>
+
+                  {delegatePayload && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
+                          Signed delegate payload
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(delegatePayload);
+                            toast.success("Payload copied");
+                          }}
+                        >
+                          <Copy size={10} />
+                          copy
+                        </Button>
+                      </div>
+                      <pre
+                        className="overflow-x-auto rounded border border-border bg-muted/10 p-3 font-mono text-foreground whitespace-pre-wrap break-all"
+                        style={{ fontSize: 10, lineHeight: "1.5", maxHeight: 140 }}
+                      >
+                        {delegatePayload}
+                      </pre>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Direct publish uses <code className="font-mono">waitUntil: NONE</code>. The
+                    wallet may report failure while FastKV still indexes the transaction
+                    successfully.
+                  </p>
+                </div>
+              )}
+            </section>
           </div>
 
-          {!session?.user ? (
-            <div className="rounded-sm border border-border bg-muted/10 p-4 text-sm text-muted-foreground">
-              Sign in first, then link a NEAR wallet to publish metadata for this app.
+          <div className="hidden sm:block">
+            <div className="sticky top-4 space-y-0 border border-border rounded-lg overflow-hidden bg-card">
+              <div className="px-4 py-3 border-b border-border bg-muted/20">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Details
+                </span>
+              </div>
+              <div className="px-4 py-4">{metaPanel}</div>
             </div>
-          ) : !nearAccountId ? (
-            <div className="rounded-sm border border-border bg-muted/10 p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Your account session is active, but no NEAR wallet is linked for publishing.
-              </p>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/settings">open settings</Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="title" htmlFor="registry-title">
-                  <Input
-                    id="registry-title"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
-                </Field>
-                <Field label="repo url" htmlFor="registry-repo-url">
-                  <Input
-                    id="registry-repo-url"
-                    value={repoUrl}
-                    onChange={(event) => setRepoUrl(event.target.value)}
-                  />
-                </Field>
-                <Field label="homepage url" htmlFor="registry-homepage-url">
-                  <Input
-                    id="registry-homepage-url"
-                    value={homepageUrl}
-                    onChange={(event) => setHomepageUrl(event.target.value)}
-                  />
-                </Field>
-                <Field label="image url" htmlFor="registry-image-url">
-                  <Input
-                    id="registry-image-url"
-                    value={imageUrl}
-                    onChange={(event) => setImageUrl(event.target.value)}
-                  />
-                </Field>
-              </div>
+          </div>
+        </div>
+      </div>
 
-              <Field label="description" htmlFor="registry-description">
-                <textarea
-                  id="registry-description"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  rows={5}
-                  className="flex min-h-[120px] w-full rounded-md border-2 border-inset border-[rgb(51,51,51)] bg-[rgb(255,255,255)] px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus:ring-2 focus:ring-ring dark:bg-[rgb(40,40,40)] dark:border-[rgb(100,100,100)]"
-                />
-              </Field>
+      <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <SheetContent side="bottom" className="max-h-[70dvh] overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-sm">Details</SheetTitle>
+            <SheetClose />
+          </SheetHeader>
+          {metaPanel}
+        </SheetContent>
+      </Sheet>
+    </TooltipProvider>
+  );
+}
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <ActionCard
-                  title="publish now"
-                  body="Submit a direct `__fastdata_kv` transaction from your linked wallet."
-                  buttonLabel={publishMetadataMutation.isPending ? "publishing..." : "publish now"}
-                  onClick={() => publishMetadataMutation.mutate()}
-                  disabled={
-                    publishMetadataMutation.isPending ||
-                    signDelegateMutation.isPending ||
-                    relayMetadataMutation.isPending
-                  }
-                />
-                <ActionCard
-                  title="sign delegate"
-                  body="Create a signed delegate payload that can be copied or relayed later."
-                  buttonLabel={signDelegateMutation.isPending ? "signing..." : "sign payload"}
-                  onClick={() => signDelegateMutation.mutate()}
-                  disabled={
-                    publishMetadataMutation.isPending ||
-                    signDelegateMutation.isPending ||
-                    relayMetadataMutation.isPending
-                  }
-                />
-                <ActionCard
-                  title="relay payload"
-                  body={
-                    registryStatusQuery.data?.relayEnabled
-                      ? "Use the configured relayer account on this host."
-                      : "Relay is not configured on this host yet."
-                  }
-                  buttonLabel={relayMetadataMutation.isPending ? "relaying..." : "relay payload"}
-                  onClick={() => relayMetadataMutation.mutate()}
-                  disabled={
-                    !registryStatusQuery.data?.relayEnabled ||
-                    !delegatePayload ||
-                    publishMetadataMutation.isPending ||
-                    signDelegateMutation.isPending ||
-                    relayMetadataMutation.isPending
-                  }
-                />
-              </div>
+function StartCommand({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false);
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <InfoBox
-                  title="relay status"
-                  body={
-                    registryStatusQuery.data?.relayEnabled
-                      ? `enabled via ${registryStatusQuery.data.relayAccountId ?? "configured relayer"}`
-                      : "disabled on this host"
-                  }
-                />
-                <InfoBox
-                  title="indexing"
-                  body={pendingRefreshUntil ? "rechecking FastKV for fresh metadata now" : "idle"}
-                />
-              </div>
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(command);
+    setCopied(true);
+    toast.success("Copied");
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-              <div className="text-xs text-muted-foreground">
-                Direct publish uses `waitUntil: NONE`. Wallets may show the contract call as failed
-                while FastKV still indexes the transaction arguments successfully.
-              </div>
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="w-full group flex items-center justify-between gap-3 rounded-[8px] border border-border bg-foreground px-4 py-3 cursor-pointer transition-opacity duration-150 hover:opacity-90 text-left"
+    >
+      <code className="font-mono text-sm font-semibold text-background break-all leading-snug">
+        {command}
+      </code>
+      <span
+        className={`shrink-0 transition-colors duration-150 ${copied ? "text-brand-accent" : "text-background/50 group-hover:text-background/80"}`}
+      >
+        <Copy size={14} />
+      </span>
+    </button>
+  );
+}
 
-              {delegatePayload && (
-                <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                        delegate payload
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(delegatePayload);
-                          toast.success("Delegate payload copied");
-                        }}
-                      >
-                        copy payload
-                      </Button>
-                    </div>
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs font-mono text-foreground">
-                      {delegatePayload}
-                    </pre>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+      {children}
     </div>
   );
 }
 
-function AnchorButton({ href, label }: { href: string; label: string }) {
+function MetaSectionLabel({ children }: { children: ReactNode }) {
   return (
-    <a
-      href={href}
-      className="rounded-sm border border-border bg-muted/10 px-3 py-2 text-sm hover:bg-muted/20 transition-colors"
-    >
-      {label}
-    </a>
+    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </div>
   );
 }
 
-function MetricCard({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function MetaRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Card>
-      <CardContent className="p-4 space-y-1">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div
-          className={mono ? "text-sm font-mono break-all" : "text-xl font-semibold tracking-tight"}
+    <div className="space-y-0.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-foreground">{children}</div>
+    </div>
+  );
+}
+
+function RuntimeRow({
+  label,
+  value,
+  isUrl = true,
+  mono,
+}: {
+  label: string;
+  value: string | null | undefined;
+  isUrl?: boolean;
+  mono?: boolean;
+}) {
+  if (!value) return null;
+  const looksLikeUrl = isUrl && /^https?:\/\//.test(value);
+  return (
+    <div className="flex items-start gap-2 rounded border border-border bg-muted/10 px-2.5 py-1.5 text-xs">
+      <span
+        className="text-muted-foreground uppercase tracking-wide shrink-0 pt-px font-semibold min-w-[40px]"
+        style={{ fontSize: 10 }}
+      >
+        {label}
+      </span>
+      {looksLikeUrl ? (
+        <a
+          href={value}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-foreground hover:underline break-all"
         >
           {value}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActionCard({
-  title,
-  body,
-  buttonLabel,
-  onClick,
-  disabled,
-}: {
-  title: string;
-  body: string;
-  buttonLabel: string;
-  onClick: () => void;
-  disabled: boolean;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        <div className="space-y-1">
-          <div className="font-medium">{title}</div>
-          <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={disabled}>
-          {buttonLabel}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function InfoBox({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-muted/10 p-4 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{title}</div>
-      <div className="text-sm text-muted-foreground break-all">{body}</div>
+        </a>
+      ) : (
+        <span className={`text-foreground break-all ${mono ? "font-mono" : ""}`}>{value}</span>
+      )}
     </div>
   );
 }
 
-function Field({
+function FormField({
   label,
   htmlFor,
   children,
 }: {
   label: string;
   htmlFor: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className="space-y-2 block">
-      <label htmlFor={htmlFor} className="text-xs uppercase tracking-wide text-muted-foreground">
+    <div className="space-y-1.5">
+      <Label
+        htmlFor={htmlFor}
+        className="text-xs uppercase tracking-wide text-muted-foreground font-semibold"
+      >
         {label}
-      </label>
+      </Label>
       {children}
-    </div>
-  );
-}
-
-function RuntimeRow({ label, value }: { label: string; value: string | null }) {
-  const isUrl = Boolean(value && /^https?:\/\//.test(value));
-
-  return (
-    <div className="grid gap-1 sm:grid-cols-[140px_1fr] sm:gap-4 rounded-sm border border-border bg-muted/10 p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="font-mono text-xs break-all text-foreground">
-        {isUrl ? (
-          <a
-            href={value ?? "#"}
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-4"
-          >
-            {value}
-          </a>
-        ) : (
-          (value ?? "-")
-        )}
-      </div>
     </div>
   );
 }

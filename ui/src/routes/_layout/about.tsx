@@ -1,347 +1,187 @@
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useApiClient } from "@/app";
-import { Badge, Card, CardContent, UnderConstruction } from "@/components";
-import { Route as RootRoute } from "../__root";
+import { BookOpen, ExternalLink, FileText, GitFork, Sparkles } from "lucide-react";
+import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
+import { Markdown } from "@/components/ui/markdown";
+import { useClientValue } from "@/hooks/use-client";
+import { fetchRepositoryReadme } from "@/lib/repository-content";
 
 export const Route = createFileRoute("/_layout/about")({
+  loader: async ({ context }) => {
+    const repository = getRepository(context.runtimeConfig);
+    const description =
+      ((context.runtimeConfig as Record<string, unknown>)?.description as string | null) ?? null;
+    const rawSkillUrl = context.runtimeConfig?.hostUrl
+      ? new URL("/skill.md", context.runtimeConfig.hostUrl).toString()
+      : "/skill.md";
+    let readme: string | null = null;
+    if (repository) {
+      readme = await fetchRepositoryReadme(repository).catch(() => null);
+    }
+    return { repository, readme, description, runtimeConfig: context.runtimeConfig, rawSkillUrl };
+  },
   head: () => ({
     meta: [
       { title: "About | app" },
-      {
-        name: "description",
-        content:
-          "app is a runtime-composed site on NEAR where published config defines how host, UI, and API load together.",
-      },
+      { name: "description", content: "About this runtime-composed app on NEAR." },
     ],
   }),
   component: About,
 });
 
+function isGithubUrl(url: string) {
+  return /github\.com/i.test(url);
+}
+
+function GithubIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577v-2.165c-3.338.726-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.083-.729.083-.729 1.205.085 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.492.997.108-.775.418-1.305.76-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.52 11.52 0 0 1 12 6.803c1.02.005 2.047.138 3.006.404 2.29-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.91 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.218.694.825.576C20.565 21.796 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
+    </svg>
+  );
+}
+
+function parseGithubRepo(url: string): { owner: string; repo: string } | null {
+  const match = url.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/i);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2] };
+}
+
 function About() {
-  const apiClient = useApiClient();
-  const { runtimeConfig } = RootRoute.useLoaderData();
-  const appName = runtimeConfig?.runtime?.title ?? runtimeConfig?.account ?? "every.near";
-  const activeRuntime = runtimeConfig?.runtime;
-  const registryAccountId = activeRuntime?.accountId ?? "every.near";
-  const registryGatewayId = activeRuntime?.gatewayId ?? "everything.dev";
-  const configQuery = useQuery({
-    queryKey: ["registry-app", registryAccountId, registryGatewayId],
-    queryFn: () =>
-      apiClient.apps.getRegistryApp({
-        accountId: registryAccountId,
-        gatewayId: registryGatewayId,
-      }),
-    staleTime: 5 * 60_000,
-  });
+  const { repository, readme, description, runtimeConfig, rawSkillUrl } = Route.useLoaderData();
+  const runtime = useClientValue(() => getActiveRuntime(runtimeConfig), undefined);
+  const account = useClientValue(() => getAccount(runtimeConfig), "every.near");
+  const appName = useClientValue(() => getAppName(runtimeConfig), "app");
 
-  const resolvedConfig = configQuery.data?.data?.resolvedConfig;
+  const accountId = runtime?.accountId ?? account;
+  const githubRepo = repository && isGithubUrl(repository) ? parseGithubRepo(repository) : null;
 
   return (
-    <div className="space-y-10">
-      <section className="space-y-5">
-        <Link
-          to="/"
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono"
-        >
-          &larr; back home
-        </Link>
-        <div className="space-y-4 max-w-3xl">
-          <Badge variant="outline">about</Badge>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-            Runtime composition, published in public
-          </h1>
-          <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-            <strong className="text-foreground">{appName}</strong> is a runtime-composed site on{" "}
-            <a
-              href="https://near.org"
-              className="underline hover:text-foreground transition-colors"
-            >
-              NEAR
-            </a>
-            . A published <code>bos.config.json</code> record defines how the host, UI, and API fit
-            together, and the running site is built from that composition instead of a single fixed
-            bundle.
-          </p>
-          <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-            The goal is not only to browse apps, but to make software easier to inspect, reuse, and
-            keep building over. The same host can support multiple sites, while each published
-            config can point at its own remotes, plugins, and interfaces.
-          </p>
-          <UnderConstruction
-            label="about"
-            sourceFile="ui/src/routes/_layout/about.tsx"
-            className="w-full max-w-sm mt-3"
-          />
-        </div>
-      </section>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-4 animate-fade-in">
+          <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-[10px] bg-foreground flex items-center justify-center shrink-0">
+                  <BookOpen size={18} className="text-background" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground font-mono">{accountId}</span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-base font-semibold text-foreground">{appName}</span>
+                  </div>
+                  {githubRepo && (
+                    <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground font-mono">
+                      <GitFork size={11} />
+                      <span>
+                        {githubRepo.owner}/{githubRepo.repo}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              how it works
-            </div>
-            <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
-              <p>
-                1. discover the published runtime record from the FastKV registry on{" "}
-                <a
-                  href="https://near.org"
-                  className="underline hover:text-foreground transition-colors"
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Link
+                  to="/skill"
+                  preload="intent"
+                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-foreground text-background hover:opacity-90"
                 >
-                  NEAR
-                </a>
-              </p>
-              <p>
-                2. resolve the effective config, including inherited <code>bos://</code> values
-              </p>
-              <p>
-                3. load the UI through{" "}
+                  <Sparkles size={14} />
+                  Skill
+                </Link>
                 <a
-                  href="https://module-federation.io/"
-                  className="underline hover:text-foreground transition-colors"
-                >
-                  Module Federation
-                </a>{" "}
-                and the API through{" "}
-                <a
-                  href="https://github.com/near-everything/every-plugin"
+                  href={rawSkillUrl}
                   target="_blank"
-                  rel="noreferrer"
-                  className="underline hover:text-foreground transition-colors font-mono"
+                  rel="noopener noreferrer"
+                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
                 >
-                  every-plugin
+                  <FileText size={14} />
+                  skill.md
                 </a>
-              </p>
-              <p>
-                4. layer public metadata and tooling around the canonical runtime without replacing
-                it
-              </p>
+                {repository && (
+                  <a
+                    href={repository}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
+                  >
+                    {isGithubUrl(repository) ? (
+                      <GithubIcon size={14} />
+                    ) : (
+                      <ExternalLink size={14} />
+                    )}
+                    {isGithubUrl(repository) ? "GitHub" : "Repository"}
+                  </a>
+                )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">start here</div>
-            <div className="grid gap-3">
-              <BoxLink
-                href="/apps"
-                title="browse published apps"
-                body="inspect accounts, gateways, remotes, and public runtime metadata"
-              />
-              <BoxLink
-                href="/README.md"
-                title="read the public overview"
-                body={`human-readable context for what ${appName} is and how it is composed`}
-              />
-              <BoxLink
-                href="/skill.md"
-                title="open the agent guide"
-                body="task-oriented notes for agents, crawlers, and AI-native clients"
-              />
-              <BoxLink
-                href="/skill.md"
-                title="open the agent guide"
-                body="task-oriented notes for agents, crawlers, and AI-native clients"
-              />
+            {description && (
+              <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+            )}
+
+            {repository && (
+              <div className="rounded-[8px] border border-border bg-muted px-3.5 py-2.5 flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0 min-w-[64px]">
+                  repo
+                </span>
+                <a
+                  href={repository}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-mono text-foreground hover:underline truncate"
+                >
+                  {repository}
+                </a>
+              </div>
+            )}
+
+            <div className="rounded-[8px] border border-border bg-muted px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  for agents and builders
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Open the skill page for the essential TanStack Intent, local dev, and publish
+                  instructions.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/skill"
+                  preload="intent"
+                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
+                >
+                  <Sparkles size={14} />
+                  Open skill
+                </Link>
+                <a
+                  href={rawSkillUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
+                >
+                  <FileText size={14} />
+                  Raw markdown
+                </a>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      {resolvedConfig && (
-        <section className="space-y-4">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-            canonical runtime record
           </div>
-          <p className="text-sm leading-relaxed text-muted-foreground max-w-3xl">
-            This is the live resolved <code>bos.config.json</code> for{" "}
-            <code>
-              {registryAccountId}/{registryGatewayId}
-            </code>
-            , fetched from the FastKV-backed public registry and merged with any inherited values.
-          </p>
-          <Card>
-            <CardContent className="p-4 sm:p-6">
-              <pre className="overflow-x-auto text-xs leading-relaxed text-muted-foreground font-mono whitespace-pre">
-                {JSON.stringify(resolvedConfig, null, 2)}
-              </pre>
-            </CardContent>
-          </Card>
-        </section>
-      )}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <FactCard
-          title="canonical runtime"
-          body="The published bos.config.json stays the source of truth for runtime composition. Other metadata can help describe the app, but it does not replace how the system boots."
-        />
-        <FactCard
-          title="runtime-loaded product"
-          body={
-            <>
-              The host acts as the shell, loading the UI at runtime through Module Federation and
-              the API through{" "}
-              <a
-                href="https://github.com/near-everything/every-plugin"
-                target="_blank"
-                rel="noreferrer"
-                className="underline hover:text-foreground transition-colors font-mono"
-              >
-                every-plugin
-              </a>
-              , so each part can evolve independently.
-            </>
-          }
-        />
-        <FactCard
-          title="shared host, different sites"
-          body="Multiple sites can share the same stable host configuration while publishing different runtime records that point to different remotes, plugins, and product surfaces."
-        />
-        <FactCard
-          title="AI-friendly surface"
-          body={
-            <>
-              Public files such as{" "}
-              <a
-                href="/README.md"
-                className="underline hover:text-foreground transition-colors font-mono"
-              >
-                /README.md
-              </a>
-              ,{" "}
-              <a
-                href="/skill.md"
-                className="underline hover:text-foreground transition-colors font-mono"
-              >
-                /skill.md
-              </a>
-              , and{" "}
-              <a
-                href="/llms.txt"
-                className="underline hover:text-foreground transition-colors font-mono"
-              >
-                /llms.txt
-              </a>{" "}
-              make the project easier for agents to understand without losing the visual atmosphere
-              of the site itself.
-            </>
-          }
-        />
-      </section>
-
-      <section className="space-y-4 max-w-3xl">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">wider context</div>
-        <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-          <strong className="text-foreground">{appName}</strong> sits within a broader ecosystem of
-          internet forward ideas coming from{" "}
-          <a href="https://near.org" className="underline hover:text-foreground transition-colors">
-            NEAR Protocol
-          </a>
-          , such as Intents (
-          <a href="https://near.com" className="underline hover:text-foreground transition-colors">
-            near.com
-          </a>
-          ), named accounts (
-          <a
-            href="https://namesky.app/"
-            className="underline hover:text-foreground transition-colors"
-          >
-            namesky.app
-          </a>
-          ),{" "}
-          <a
-            href="https://github.com/frol/near-dns"
-            className="underline hover:text-foreground transition-colors"
-          >
-            neardns
-          </a>
-          ,{" "}
-          <a
-            href="https://web4.near.page"
-            className="underline hover:text-foreground transition-colors"
-          >
-            web4
-          </a>
-          ,{" "}
-          <a
-            href="https://github.com/petersalomonsen/wasm-git-apps"
-            className="underline hover:text-foreground transition-colors"
-          >
-            wasm-git-apps
-          </a>
-          ,{" "}
-          <a
-            href="https://outlayer.fastnear.com/"
-            className="underline hover:text-foreground transition-colors"
-          >
-            outlayer
-          </a>
-          , and the{" "}
-          <a
-            href="https://near.social/"
-            className="underline hover:text-foreground transition-colors"
-          >
-            blockchain operating system (BOS)
-          </a>
-          . This site is one product surface inside that arc: a place to inspect runtime composition
-          today and keep building richer runtime-native experiences over time.
-        </p>
-      </section>
+          {readme ? (
+            <div className="rounded-[12px] border border-border bg-card p-8">
+              <Markdown content={readme} />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 px-8 py-16 rounded-[12px] border border-border bg-card text-muted-foreground">
+              <FileText size={32} className="text-border" />
+              <p className="text-sm text-muted-foreground">No README available.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
-  );
-}
-
-function BoxLink({
-  title,
-  body,
-  href,
-  onMouseEnter,
-  onFocus,
-  onClick,
-}: {
-  title: string;
-  body: string;
-  href: string;
-  onMouseEnter?: () => void;
-  onFocus?: () => void;
-  onClick?: (e: React.MouseEvent) => void;
-}) {
-  const isStaticFile = /\.(md|txt|json)$/i.test(href);
-
-  if (isStaticFile) {
-    return (
-      <a href={href} onMouseEnter={onMouseEnter} onFocus={onFocus} onClick={onClick}>
-        <Card className="transition-colors hover:bg-muted/20">
-          <CardContent className="p-4 space-y-1">
-            <div className="font-medium">{title}</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-          </CardContent>
-        </Card>
-      </a>
-    );
-  }
-
-  return (
-    <Link to={href} onMouseEnter={onMouseEnter} onFocus={onFocus} onClick={onClick}>
-      <Card className="transition-colors hover:bg-muted/20">
-        <CardContent className="p-4 space-y-1">
-          <div className="font-medium">{title}</div>
-          <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
-function FactCard({ title, body }: { title: string; body: React.ReactNode }) {
-  return (
-    <Card>
-      <CardContent className="p-5 space-y-2">
-        <div className="text-sm font-medium">{title}</div>
-        <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
-      </CardContent>
-    </Card>
   );
 }

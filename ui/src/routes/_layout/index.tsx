@@ -1,120 +1,125 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { buildRuntimeHref } from "@/app";
-import { Button } from "@/components";
-import { Route as RootRoute } from "../__root";
+import { AnimatePresence, motion } from "framer-motion";
+import { Copy, ExternalLink, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+
+type SearchParams = {
+  path?: string;
+};
 
 export const Route = createFileRoute("/_layout/")({
-  head: () => ({
-    meta: [
-      { title: "app | Runtime composition on NEAR" },
-      {
-        name: "description",
-        content:
-          "app is an open runtime for apps on NEAR, composed from published config and loaded at runtime.",
-      },
-    ],
+  validateSearch: (search: Record<string, unknown>): SearchParams => ({
+    path: typeof search.path === "string" && search.path.length > 0 ? search.path : undefined,
   }),
-  component: Landing,
+  component: HomeViewerPage,
 });
 
-const subtitles = [
-  <>
-    A common runtime for apps on{" "}
-    <a href="https://near.org" className="underline hover:text-foreground transition-colors">
-      NEAR
-    </a>
-  </>,
-  "upgradable and secure for a verifiable internet",
-  "in pursuit of the open web.",
-];
-
-function Landing() {
-  const { runtimeConfig } = RootRoute.useLoaderData();
-  const appName = runtimeConfig?.runtime?.title ?? runtimeConfig?.account ?? "every.near";
-  const [subtitleIndex, setSubtitleIndex] = useState(0);
-  const activeRuntime = runtimeConfig?.runtime;
-  const runtimeLabel = activeRuntime
-    ? `${activeRuntime.accountId} / ${activeRuntime.gatewayId}`
-    : runtimeConfig?.account
-      ? `${runtimeConfig.account} / ${getGatewayLabel(runtimeConfig.hostUrl)}`
-      : "runtime / host";
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSubtitleIndex((i) => (i + 1) % subtitles.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
+function HomeViewerPage() {
+  const { path } = Route.useSearch();
+  const iframeSrc = path ? `./_viewer?path=${encodeURIComponent(path)}` : "./_viewer";
 
   return (
-    <div className="flex min-h-[80vh] flex-col items-center justify-center pb-[8vh] animate-fade-in">
-      <div className="flex max-w-3xl flex-col items-center text-center">
-        <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground font-mono">
-          {runtimeLabel}
-        </p>
-
-        <h1
-          className="mt-4 text-5xl font-semibold tracking-tight sm:text-7xl"
-          style={{
-            textShadow: "rgba(0,0,0,0.08) 1px 1px 1px, rgba(0,0,0,0.06) 3px 3px 3px",
-          }}
-        >
-          {appName}
-        </h1>
-
-        <div className="mt-2 flex min-h-[1.75rem] items-center justify-center sm:min-h-[2rem]">
-          <p
-            key={subtitleIndex}
-            className="text-lg text-foreground sm:text-xl animate-subtitle-cycle"
-          >
-            {subtitles[subtitleIndex]}
-          </p>
-        </div>
-
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-          Published config composes the host, UI, and API at runtime. The runtime is published from
-          NEAR, can share a stable host, and leaves room for new interfaces, plugins, and composed
-          applications to grow around the same core record.
-        </p>
-
-        <div className="mt-5 flex flex-wrap items-start justify-center gap-3">
-          <Button asChild>
-            <Link to="/apps" search={{}}>
-              browse apps
-            </Link>
-          </Button>
-          <div className="group relative flex flex-col items-center">
-            <Button asChild variant="outline">
-              <Link to="/about">about</Link>
-            </Button>
-            <a
-              href="/skill.md"
-              className="absolute top-full mt-1 text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:text-foreground whitespace-nowrap font-mono"
-            >
-              for your agent: skill.md
-            </a>
-          </div>
-          <Button asChild variant="outline">
-            <a href={buildRuntimeHref("/config", runtimeConfig)}>config</a>
-          </Button>
-        </div>
-      </div>
-
-      <p className="pt-4 text-xs text-muted-foreground text-center max-w-md">
-        Software that stays portable, inspectable, and continuously built over time.
-      </p>
+    <div className="relative h-full w-full bg-background">
+      <iframe
+        title="BOS viewer"
+        src={iframeSrc}
+        loading="eager"
+        allow="clipboard-read; clipboard-write"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+        className="block h-full w-full border-0 bg-background"
+      />
+      <FloatingSkillAssistant />
     </div>
   );
 }
 
-function getGatewayLabel(hostUrl?: string) {
-  if (!hostUrl) {
-    return "gateway";
-  }
+function FloatingSkillAssistant() {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const issueUrl = "https://github.com/NEARBuilders/everything-dev/issues/new";
 
-  try {
-    return new URL(hostUrl).host;
-  } catch {
-    return hostUrl;
-  }
+  const handleCopy = async () => {
+    const rawSkillUrl = new URL("/skill.md", window.location.origin).toString();
+    await navigator.clipboard.writeText(rawSkillUrl);
+    setCopied(true);
+    toast.success("Skill URL copied");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="pointer-events-auto w-[min(22rem,calc(100vw-2rem))] rounded-[24px] border border-border bg-card/95 p-4 shadow-2xl backdrop-blur"
+          >
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Sparkles size={16} />
+              Assistant
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button asChild className="justify-start">
+                <Link to="/skill" preload="intent" onClick={() => setOpen(false)}>
+                  <Sparkles size={14} />
+                  Open skill
+                </Link>
+              </Button>
+              <Button variant="outline" asChild className="justify-start">
+                <a href={issueUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink size={14} />
+                  Report issue
+                </a>
+              </Button>
+              <Button variant="outline" asChild className="justify-start">
+                <Link to="/about" preload="intent" onClick={() => setOpen(false)}>
+                  <ExternalLink size={14} />
+                  About
+                </Link>
+              </Button>
+              <Button variant="outline" className="justify-start" onClick={handleCopy}>
+                <Copy size={14} />
+                {copied ? "Copied URL" : "Copy skill URL"}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        animate={
+          open
+            ? { y: 0, scale: 1.02 }
+            : {
+                y: [0, -34, 0, -15, 0, -6, 0],
+                scale: [1, 1.02, 0.97, 1.01, 0.992, 1, 1],
+              }
+        }
+        transition={
+          open
+            ? { duration: 0.25, ease: "easeOut" }
+            : {
+                duration: 2.8,
+                ease: [0.22, 1, 0.36, 1],
+                repeat: Number.POSITIVE_INFINITY,
+                times: [0, 0.18, 0.34, 0.5, 0.66, 0.8, 1],
+              }
+        }
+        whileTap={{ scale: 0.97 }}
+        aria-expanded={open}
+        aria-label={open ? "Close assistant" : "Open assistant"}
+        className="pointer-events-auto relative h-24 w-24 cursor-pointer rounded-full border border-white/10 bg-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.45)]"
+      >
+        <span className="absolute inset-[10%] rounded-full bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.24),rgba(255,255,255,0.05)_28%,transparent_44%)]" />
+        <span className="absolute inset-[18%] rounded-full border border-white/6" />
+      </motion.button>
+    </div>
+  );
 }

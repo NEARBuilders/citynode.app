@@ -1,8 +1,9 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { type Organization, sessionQueryOptions, useAuthClient } from "@/app";
-import { Button } from "@/components/ui/button";
+import type { Organization } from "@/app";
+import { sessionQueryOptions, useAuthClient } from "@/app";
+import { OrgSwitcher } from "@/components";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,9 @@ import {
 
 export function UserNav() {
   const auth = useAuthClient();
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { data: session } = useQuery(sessionQueryOptions(auth));
   const user = session?.user;
   const { data: organizations } = useQuery({
     queryKey: ["organizations"],
@@ -33,13 +36,16 @@ export function UserNav() {
 
   const signOutMutation = useMutation({
     mutationFn: async () => {
-      await auth.signOut();
+      const { error } = await auth.signOut();
+      if (error) {
+        throw new Error(error.message || "Failed to sign out");
+      }
       await auth.near.disconnect().catch(() => {});
     },
-    onSuccess: () => {
-      if (typeof window !== "undefined") {
-        window.location.assign("/");
-      }
+    onSuccess: async () => {
+      queryClient.setQueryData(["session"], null);
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      navigate({ to: "/", replace: true });
     },
     onError: (error: Error) => {
       console.error("Sign out error:", error);
@@ -49,34 +55,37 @@ export function UserNav() {
   if (!user) {
     return (
       <div className="flex items-center gap-2">
-        <Button asChild variant="outline" size="sm">
-          <Link to="/login">connect</Link>
-        </Button>
+        <Link
+          to="/login"
+          className="h-9 px-4 inline-flex items-center justify-center text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md hover:bg-muted active:border-inset active:shadow-none transition-all duration-200 ease-out cursor-pointer"
+        >
+          connect
+        </Link>
         <DotControl />
       </div>
     );
   }
 
+  const handleOrgSwitch = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["session"] });
+    await queryClient.invalidateQueries({ queryKey: ["organizations"] });
+  };
+
   return (
     <div className="flex items-center gap-2">
-      {activeOrg && (
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="hidden sm:flex max-w-[120px] text-xs text-muted-foreground"
-        >
-          <Link to="/home">
-            <span className="truncate">{activeOrg.name}</span>
-          </Link>
-        </Button>
+      {organizations && organizations.length > 0 && (
+        <OrgSwitcher
+          organizations={organizations}
+          activeOrgId={activeOrgId}
+          onSwitch={handleOrgSwitch}
+        />
       )}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="w-6 h-6 rounded-full bg-foreground transition-all duration-200 ease-out hover:shadow-lg hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="w-6 h-6 rounded-full! bg-foreground transition-all duration-200 ease-out hover:shadow-lg hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             title="menu"
           />
         </DropdownMenuTrigger>
@@ -90,6 +99,16 @@ export function UserNav() {
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <Link to="/home">workspace</Link>
+          </DropdownMenuItem>
+          {activeOrg && (
+            <DropdownMenuItem asChild>
+              <Link to="/organizations/$slug" params={{ slug: activeOrg.slug }}>
+                {activeOrg.name}
+              </Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem asChild>
+            <Link to="/settings">settings</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -114,7 +133,7 @@ function DotControl() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="w-6 h-6 rounded-full bg-foreground transition-all duration-200 ease-out hover:shadow-lg hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="w-6 h-6 rounded-full! bg-foreground transition-all duration-200 ease-out hover:shadow-lg hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           title="actions"
         />
       </DropdownMenuTrigger>

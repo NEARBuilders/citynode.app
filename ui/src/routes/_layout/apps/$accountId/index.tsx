@@ -1,15 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { ArrowLeft, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, CardContent } from "@/components";
+import { Badge, Button } from "@/components";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+const BASE_RUNTIME = "bos://dev.everything.near/everything.dev";
 
 export const Route = createFileRoute("/_layout/apps/$accountId/")({
+  loader: async ({ params, context }) => {
+    const { queryClient, apiClient } = context;
+    await queryClient.prefetchQuery({
+      queryKey: ["apps-account", params.accountId],
+      queryFn: () => apiClient.apps.getRegistryAppsByAccount({ accountId: params.accountId }),
+      staleTime: 30_000,
+    });
+    return { accountId: params.accountId };
+  },
   head: ({ params }) => ({
     meta: [
-      { title: `${params.accountId} | Published Apps | app` },
+      { title: `${params.accountId} | Apps | everything.dev` },
       {
         name: "description",
-        content: `Published BOS runtimes for ${params.accountId}.`,
+        content: `Browse published runtime configurations for ${params.accountId} on NEAR.`,
       },
     ],
   }),
@@ -18,152 +33,199 @@ export const Route = createFileRoute("/_layout/apps/$accountId/")({
 
 function AccountAppsPage() {
   const { accountId } = Route.useParams();
+  const navigate = useNavigate();
+  const router = useRouter();
   const apiClient = useApiClient();
-  type RegistryAppsResult = Awaited<ReturnType<typeof apiClient.apps.getRegistryAppsByAccount>>;
+  const canGoBack = router.history.canGoBack?.() ?? false;
 
-  const accountQuery = useQuery<RegistryAppsResult>({
-    queryKey: ["registry-account", accountId],
+  const accountQuery = useSuspenseQuery({
+    queryKey: ["apps-account", accountId],
     queryFn: () => apiClient.apps.getRegistryAppsByAccount({ accountId }),
+    staleTime: 30_000,
   });
 
   const apps = accountQuery.data?.data ?? [];
-  const readyCount = apps.filter((app: (typeof apps)[number]) => app.status === "ready").length;
+  const readyCount = apps.filter((a) => a.status === "ready").length;
+  const bosUri = `bos://${accountId}`;
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-muted-foreground">
-          <Link to="/apps" search={{}} className="hover:text-foreground transition-colors">
-            apps
-          </Link>
-          <span>/</span>
-          <span>{accountId}</span>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card>
-            <CardContent className="p-6 space-y-3">
-              <Badge variant="outline">account</Badge>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight break-all">
-                {accountId}
-              </h1>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Gateway runtimes discovered for this account. Use the account view to compare
-                runtime records before jumping into a specific gateway detail page.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <MiniStat label="gateways" value={String(apps.length)} />
-              <MiniStat label="ready" value={String(readyCount)} />
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {accountQuery.isLoading ? (
-        <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            Loading account runtimes...
-          </CardContent>
-        </Card>
-      ) : accountQuery.isError ? (
-        <Card>
-          <CardContent className="p-8 text-center space-y-3">
-            <p className="text-sm">This account view could not be loaded.</p>
-            <Button
+    <TooltipProvider>
+      <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          {canGoBack ? (
+            <button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => accountQuery.refetch()}
+              onClick={() => router.history.back()}
+              aria-label="Go back"
+              className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm transition-all duration-200 ease-out hover:shadow-md hover:bg-muted rounded-[10px]"
             >
-              retry
-            </Button>
-          </CardContent>
-        </Card>
-      ) : apps.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center space-y-3">
-            <p className="text-sm">No published gateways were found for this account.</p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/apps" search={{}}>
-                back to registry
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {apps.map((app: RegistryAppsResult["data"][number]) => (
-            <Card key={app.gatewayId}>
-              <CardContent className="p-5 space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={app.status === "ready" ? "default" : "destructive"}>
-                        {app.status}
-                      </Badge>
-                      {app.metadata?.claimedBy && <Badge variant="outline">claimed</Badge>}
-                    </div>
-                    <Link
-                      to="/apps/$accountId/$gatewayId"
-                      params={{ accountId, gatewayId: app.gatewayId }}
-                      className="font-medium hover:underline break-all"
-                    >
-                      {app.metadata?.title ?? app.gatewayId}
-                    </Link>
-                    <div className="text-xs font-mono text-muted-foreground break-all">
-                      {app.gatewayId}
-                    </div>
-                  </div>
-
-                  <div className="text-xs font-mono text-muted-foreground">
-                    {app.extends ?? "direct"}
-                  </div>
-                </div>
-
-                <p className="text-sm text-muted-foreground leading-relaxed min-h-10">
-                  {app.metadata?.description ??
-                    "No FastKV metadata published yet for this gateway."}
-                </p>
-
-                <div className="rounded-sm border border-border bg-muted/10 p-3 text-xs font-mono text-muted-foreground break-all">
-                  {app.hostUrl ?? app.uiUrl ?? app.apiUrl ?? app.canonicalKey}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm">
-                    <Link
-                      to="/apps/$accountId/$gatewayId"
-                      params={{ accountId, gatewayId: app.gatewayId }}
-                    >
-                      inspect runtime
-                    </Link>
-                  </Button>
-                  {app.openUrl && (
-                    <Button asChild variant="outline" size="sm">
-                      <a href={app.openUrl} target="_blank" rel="noreferrer">
-                        open app
-                      </a>
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              <ArrowLeft size={14} className="text-foreground" />
+            </button>
+          ) : (
+            <Link
+              to="/apps"
+              search={{}}
+              aria-label="All apps"
+              className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm transition-all duration-200 ease-out hover:shadow-md hover:bg-muted rounded-[10px]"
+            >
+              <ArrowLeft size={14} className="text-foreground" />
+            </Link>
+          )}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+            <Link to="/apps" search={{}} className="hover:text-foreground transition-colors">
+              apps
+            </Link>
+            <span>/</span>
+            <span className="text-foreground font-semibold">{accountId}</span>
+          </div>
+          <div className="flex items-center gap-1.5 ml-1">
+            <Badge variant="secondary" className="font-mono text-xs">
+              {apps.length} {apps.length === 1 ? "gateway" : "gateways"}
+            </Badge>
+            {readyCount > 0 && readyCount < apps.length && (
+              <Badge variant="outline" className="text-xs">
+                {readyCount} ready
+              </Badge>
+            )}
+          </div>
         </div>
-      )}
-    </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-base font-semibold text-foreground font-mono">{accountId}</h1>
+            <button
+              type="button"
+              onClick={async () => {
+                await navigator.clipboard.writeText(bosUri);
+                toast.success("Copied bos:// address");
+              }}
+              className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {bosUri}
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg overflow-hidden bg-card divide-y divide-border">
+          {apps.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                No published gateways for{" "}
+                <span className="font-mono text-foreground">{accountId}</span>.
+              </p>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/apps" search={{}}>
+                  back to registry
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            apps.map((app) => {
+              const isTenant = app.extends === BASE_RUNTIME;
+              const title = app.metadata?.title;
+
+              return (
+                <button
+                  key={app.gatewayId}
+                  type="button"
+                  onClick={() =>
+                    void navigate({
+                      to: "/apps/$accountId/$gatewayId",
+                      params: { accountId, gatewayId: app.gatewayId },
+                    })
+                  }
+                  className="w-full text-left hover:bg-muted/40 transition-colors group"
+                  style={{ padding: "12px 16px" }}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
+                            app.status === "ready" ? "bg-green-500" : "bg-destructive"
+                          }`}
+                          title={app.status}
+                        />
+                        {isTenant && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                            tenant
+                          </Badge>
+                        )}
+                        {app.domain && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] font-mono px-1.5 py-0 h-4"
+                          >
+                            {app.domain}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="font-mono text-sm font-semibold text-foreground truncate">
+                        {title ?? app.gatewayId}
+                      </div>
+                      {title && (
+                        <div className="font-mono text-[11px] text-muted-foreground truncate">
+                          {app.gatewayId}
+                        </div>
+                      )}
+                      {app.metadata?.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {app.metadata.description}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {app.openUrl && (
+                        <a
+                          href={app.openUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="hidden sm:inline-flex"
+                        >
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-7 px-2.5 text-xs gap-1"
+                            asChild
+                          >
+                            <span>
+                              <ExternalLink size={10} />
+                              open
+                            </span>
+                          </Button>
+                        </a>
+                      )}
+                      <ArrowLeft
+                        size={13}
+                        className="text-muted-foreground rotate-180 opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </TooltipProvider>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+export function AccountAppsPageSkeleton() {
   return (
-    <div className="rounded-sm border border-border bg-muted/10 p-3 space-y-1">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold tracking-tight">{value}</div>
+    <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-6">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-7 w-7 rounded" />
+        <Skeleton className="h-4 w-48" />
+      </div>
+      <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="p-4">
+            <Skeleton className="h-14 w-full" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
