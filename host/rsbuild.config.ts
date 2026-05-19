@@ -13,11 +13,12 @@ const __dirname = import.meta.dirname;
 const shouldDeploy = process.env.DEPLOY === "true";
 
 const resolvedConfigPath = path.resolve(__dirname, "../.bos/bos.resolved-config.json");
+const rootBosConfigPath = path.resolve(__dirname, "../bos.config.json");
 const configPath =
   process.env.BOS_CONFIG_PATH ??
   (fs.existsSync(resolvedConfigPath)
     ? resolvedConfigPath
-    : path.resolve(__dirname, "../bos.config.json"));
+    : rootBosConfigPath);
 
 const bosConfigRaw = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const bosConfig = bosConfigRaw._resolved
@@ -82,14 +83,14 @@ const shared = { ...pluginShared, ...sharedUi, ...sharedPlugins };
 
 function updateBosConfig(url: string, integrity?: string) {
   try {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const config = JSON.parse(fs.readFileSync(rootBosConfigPath, "utf8"));
     config.app.host.production = url;
     if (integrity) {
       config.app.host.integrity = integrity;
     } else {
       delete config.app.host.integrity;
     }
-    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    fs.writeFileSync(rootBosConfigPath, `${JSON.stringify(config, null, 2)}\n`);
     console.log(`   ✅ Updated bos.config.json: app.host.production`);
     if (integrity) {
       console.log(`   ✅ Updated bos.config.json: app.host.integrity`);
