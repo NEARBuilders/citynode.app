@@ -1668,10 +1668,7 @@ export default createPlugin({
             }
           }
 
-          const generated = [
-            "ui/src/lib/api-types.gen.ts",
-            "ui/src/lib/auth-types.gen.ts",
-          ];
+          const generated = ["ui/src/lib/api-types.gen.ts", "ui/src/lib/auth-types.gen.ts"];
           if (hasLocalApiWorkspace) {
             generated.push("api/src/lib/plugins-types.gen.ts", "api/src/lib/auth-types.gen.ts");
           }
@@ -1694,10 +1691,7 @@ export default createPlugin({
         });
 
         const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
-        const generated = [
-          "ui/src/lib/plugin-sidebar.gen.ts",
-          "ui/src/lib/api-types.gen.ts",
-        ];
+        const generated = ["ui/src/lib/plugin-sidebar.gen.ts", "ui/src/lib/api-types.gen.ts"];
         if (hasLocalApiWorkspace) {
           generated.push("api/src/lib/plugins-types.gen.ts", "api/src/lib/auth-types.gen.ts");
         }
