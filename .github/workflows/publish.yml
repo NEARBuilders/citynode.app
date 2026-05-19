@@ -142,6 +142,12 @@ jobs:
   publish:
     needs: [detect-publish]
     runs-on: ubuntu-latest
+    env:
+      BOS_INSTALL_NEAR_CLI: "true"
+      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+      ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
+      ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
+      SHOULD_DEPLOY: ${{ needs.detect-publish.outputs.should_deploy }}
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -163,12 +169,6 @@ jobs:
         run: bun run postinstall
 
       - name: Publish app
-        env:
-          BOS_INSTALL_NEAR_CLI: "true"
-          NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-          ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
-          ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
-          SHOULD_DEPLOY: ${{ needs.detect-publish.outputs.should_deploy }}
         run: |
           if [ "$SHOULD_DEPLOY" = "true" ]; then
             bun run publish --deploy
