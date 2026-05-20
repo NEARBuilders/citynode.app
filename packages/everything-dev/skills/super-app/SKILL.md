@@ -1,25 +1,27 @@
 ---
 name: super-app
-description: Build shared-host, shared-API super apps with tenant-specific UI composition. Use when setting up a base runtime plus custom tenant apps, configuring fixed-core multi-tenancy, or reasoning about what tenants can override today.
+description: Build shared-host, shared-API super apps with tenant-specific UI composition. Use when setting up a base runtime plus custom tenant apps, configuring fixed-core multi-tenancy, reasoning about extends-based runtime lineage, or deciding what tenants can override today.
 metadata:
   sources: "host/src/services/tenant-runtime.ts,host/src/program.ts,host/src/services/federation.server.ts,packages/everything-dev/src/config.ts"
 ---
 
 # Super Apps
 
-Use this skill for the shared-host pattern where one runtime owns the host, auth, API, and base plugin set, while many tenant apps extend that runtime and swap UI-facing pieces per request.
+Use this skill for the shared-host pattern where one runtime owns the host, auth, API, and base plugin set, while many descendant runtimes extend that runtime and swap UI-facing pieces per request.
 
 ## Mental Model
 
-- The base runtime is the server core and trust boundary.
-- Tenant apps are published BOS configs that extend the base runtime.
-- The host resolves the tenant config from the request hostname.
-- In fixed-core mode, the host, auth, API, and server-side plugins stay fixed to the base runtime.
+- `extends` is the lineage edge between runtimes.
+- `account` is the tenant namespace root for the currently active runtime.
+- `domain` is the public ingress for that runtime, not the lineage key.
+- A runtime may be both a child in lineage and a tenant root operationally on its own domain.
+- In fixed-core mode, the host, auth, API, and server-side plugins stay fixed to the active base runtime.
 - Tenant-specific UI composition is applied per request.
 
 Example mapping:
-- `linktree.com` -> base runtime `bos://linktree.near/linktree.com`
-- `alice.linktree.com` -> tenant runtime `bos://alice.near/linktree.com`
+- `pingpay.io` -> base runtime `bos://pingpayio.near/pingpay.io`
+- `pizza.com` -> runtime `bos://pizza.pingpayio.near/pizza.com` that extends `bos://pingpayio.near/pingpay.io`
+- `chicago.pizza.com` should resolve inside the `pizza.pingpayio.near` namespace as `bos://chicago.pizza.pingpayio.near/pizza.com`
 
 ## What Works Today
 
@@ -60,26 +62,28 @@ The base runtime must be published before tenants can extend it:
 bos publish --deploy
 ```
 
-### 3. Create a tenant app that extends the base runtime
+### 3. Create a descendant runtime that extends the base runtime
 
-Tenant `bos.config.json`:
+Child runtime `bos.config.json`:
 
 ```json
 {
-  "extends": "bos://linktree.near/linktree.com",
-  "account": "alice.near",
-  "domain": "linktree.com",
-  "repository": "https://github.com/example/alice-app",
+  "extends": "bos://pingpayio.near/pingpay.io",
+  "account": "pizza.pingpayio.near",
+  "domain": "pizza.com",
+  "repository": "https://github.com/example/pizza-app",
   "app": {
     "ui": {
       "name": "ui",
       "development": "local:ui",
-      "production": "https://cdn.example.com/alice-ui",
+      "production": "https://cdn.example.com/pizza-ui",
       "integrity": "sha384-..."
     }
   }
 }
 ```
+
+This runtime is still a lineage child because it extends the parent, but it is also its own tenant root when served from `pizza.com`.
 
 You can also override existing plugin UIs and sidebar entries for tenant-specific navigation.
 
@@ -88,29 +92,33 @@ You can also override existing plugin UIs and sidebar entries for tenant-specifi
 The shared host uses these env vars to resolve tenants:
 
 ```bash
-NETWORK_ID=mainnet
 ALLOW_OVERRIDE=ui,plugins.*
-TENANT_WHITELIST=alice.near,bob.near
+TENANT_WHITELIST=pizza.pingpayio.near,chicago.pizza.pingpayio.near
 ALLOW_UNTRUSTED_SSR=false
 ```
 
 Meaning:
-- `NETWORK_ID` controls whether subdomains resolve to `.near` or `.testnet`
 - `ALLOW_OVERRIDE` controls which tenant config sections can affect request-scoped composition
 - `TENANT_WHITELIST` controls which tenants may use SSR
 - `ALLOW_UNTRUSTED_SSR=true` allows SSR for any valid tenant with SSR config
 
 ## Resolution Rules
 
-Tenant resolution is convention-based:
-- bare domain serves the base runtime
-- a single subdomain label resolves to a tenant account
-- nested labels are rejected in tenant mode
+Design target:
+- bare domain serves the active runtime
+- subdomains resolve within the active runtime account namespace
+- nested labels should compose onto the active runtime account
+- a runtime with its own account and domain becomes a new tenant root operationally, even when it extends another runtime
+
+Current implementation limits:
+- the shared host still resolves one tenant overlay on top of a process-wide base runtime
+- fixed-core mode still only applies UI-facing overrides
+- nested label resolution and account-relative tenant derivation are the desired model for future work, not the fully implemented resolver today
 
 The tenant config must:
 - exist in FastKV
 - extend the base runtime
-- resolve to the expected tenant account
+- resolve to the expected account for that active namespace
 - provide integrity for overridden remote UIs
 
 ## Security Model
@@ -130,7 +138,7 @@ bos dev --host remote
 bos publish --deploy
 ```
 
-For a tenant UI app:
+For a shared-host child UI app:
 
 ```bash
 bos dev --host remote --api remote

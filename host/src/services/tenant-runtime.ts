@@ -12,6 +12,8 @@ const REMOTE_CONFIG_TTL_MS = 30_000;
 const VERIFICATION_TTL_MS = 5 * 60_000;
 const MAX_REMOTE_CONFIG_CACHE_SIZE = 256;
 const MAX_VERIFICATION_CACHE_SIZE = 512;
+const NEAR_ACCOUNT_ID_REGEX =
+  /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
 
 type RuntimeOverrideTarget = ReturnType<typeof parseRuntimeOverrideTargets>[number];
 type BosEnv = "development" | "production" | "staging";
@@ -120,14 +122,6 @@ function parseBoolean(value: string | undefined): boolean {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
-function getTenantNetworkId(): "mainnet" | "testnet" {
-  return process.env.NETWORK_ID === "testnet" ? "testnet" : "mainnet";
-}
-
-function getTenantAccountSuffix(networkId: "mainnet" | "testnet") {
-  return networkId === "testnet" ? ".testnet" : ".near";
-}
-
 function getTenantWhitelist(): Set<string> {
   const raw = process.env.TENANT_WHITELIST ?? "";
   if (tenantWhitelistCache?.raw === raw) {
@@ -170,9 +164,10 @@ function warnUnsupportedOverrideTargets(targets: ReadonlyArray<RuntimeOverrideTa
   }
 }
 
-function resolveTenantAccountId(hostname: string, gatewayId: string): string | null {
+function resolveTenantAccountId(hostname: string, gatewayId: string, namespaceAccountId: string): string | null {
   const normalizedHost = hostname.toLowerCase();
   const normalizedGateway = gatewayId.toLowerCase();
+  const normalizedNamespaceAccountId = namespaceAccountId.toLowerCase();
 
   if (
     normalizedHost === normalizedGateway ||
@@ -188,13 +183,12 @@ function resolveTenantAccountId(hostname: string, gatewayId: string): string | n
   }
 
   const tenantLabel = normalizedHost.slice(0, -suffix.length);
-  if (!tenantLabel || tenantLabel.includes(".")) {
+  const tenantSegments = tenantLabel.split(".").filter(Boolean);
+  if (tenantSegments.length === 0 || tenantSegments.join(".") !== tenantLabel) {
     throw new TenantRuntimeError(`Invalid tenant host: ${hostname}`, 404);
   }
 
-  const accountId = `${tenantLabel}${getTenantAccountSuffix(getTenantNetworkId())}`;
-  const NEAR_ACCOUNT_ID_REGEX =
-    /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
+  const accountId = `${tenantSegments.join(".")}.${normalizedNamespaceAccountId}`;
   if (!NEAR_ACCOUNT_ID_REGEX.test(accountId)) {
     throw new TenantRuntimeError(`Invalid tenant account: ${accountId}`, 404);
   }
@@ -455,7 +449,7 @@ export async function resolveRequestRuntime(
   }
 
   const gatewayId = normalizeDomain(baseConfig.domain, baseConfig.host.url);
-  const tenantAccountId = resolveTenantAccountId(url.hostname, gatewayId);
+  const tenantAccountId = resolveTenantAccountId(url.hostname, gatewayId, baseConfig.account);
   if (!tenantAccountId) {
     return {
       config: baseConfig,

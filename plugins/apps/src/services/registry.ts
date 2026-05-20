@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
 import type { BosConfigInput } from "everything-dev";
+import { mergeBosConfigWithExtends, resolveExtendsRef } from "everything-dev/config";
 import { decodeSignedDelegateAction, isPrivateKey, Near } from "near-kit";
 import {
   buildRegistryConfigUrl,
@@ -11,6 +12,7 @@ import {
   getRegistryNamespaceForAccount,
   getRegistryNamespaceForNetwork,
   listLatestValues,
+  parseBosUrl,
   type NetworkId,
   type RegistryConfig,
   RegistryConfigService,
@@ -39,6 +41,9 @@ function createRelayNear(accountId: string, privateKey: string, network?: Networ
 
 export interface RegistryListInput {
   q?: string;
+  parent?: string;
+  root?: string;
+  ancestor?: string;
   limit?: number;
   cursor?: string;
 }
@@ -77,6 +82,9 @@ export interface RegistryAppSummary {
   uiSsrUrl: string | null;
   apiUrl: string | null;
   extends: string | null;
+  parent: string | null;
+  root: string | null;
+  depth: number;
   status: "ready" | "invalid";
   metadata: RegistryMetadata | null;
 }
@@ -86,7 +94,20 @@ export interface RegistryAppDetail extends RegistryAppSummary {
   metadataKey: string;
   metadataContractId: string;
   metadataFastKvUrl: string;
+  extendsChain: string[];
   resolvedConfig: JsonObject;
+}
+
+export interface RegistryLineage {
+  parent: string | null;
+  root: string | null;
+  depth: number;
+  extendsChain: string[];
+}
+
+export interface ResolvedPublishedRuntime {
+  resolvedConfig: BosConfigInput;
+  lineage: RegistryLineage;
 }
 
 export interface PreparedRegistryMetadataWrite {
@@ -195,7 +216,7 @@ export class RegistryService extends Context.Tag("registry/RegistryService")<
   );
 }
 
-function createRegistryMethods(config: RegistryConfig) {
+export function createRegistryMethods(config: RegistryConfig) {
   const discoverPublishedConfigs = async (): Promise<DiscoveredConfig[]> => {
     if (discoveryCache && Date.now() < discoveryCache.expiresAt) {
       return discoveryCache.data;
@@ -260,7 +281,12 @@ function createRegistryMethods(config: RegistryConfig) {
   };
 
   const resolveAppSummary = async (item: DiscoveredConfig): Promise<RegistryAppSummary> => {
-    const resolved = await resolvePublishedConfig(item.rawConfig, config);
+    const resolved = await resolvePublishedRuntime(
+      item.accountId,
+      item.gatewayId,
+      item.rawConfig,
+      config,
+    );
     const metadata = await getRegistryMetadata(item.accountId, item.gatewayId, config);
 
     return {
@@ -269,47 +295,13 @@ function createRegistryMethods(config: RegistryConfig) {
     };
   };
 
-  const resolvePublishedConfig = async (
-    configInput: BosConfigInput,
-    registryConfig: RegistryConfig,
-  ): Promise<BosConfigInput> => {
-    const extendsRef = getBosExtends(configInput);
-    if (!extendsRef) {
-      return configInput;
-    }
-
-    return resolveConfigWithExtends(configInput, new Set(), registryConfig);
-  };
-
-  const resolveConfigWithExtends = async (
-    configInput: BosConfigInput,
-    visited: Set<string>,
-    registryConfig: RegistryConfig,
-  ): Promise<BosConfigInput> => {
-    const extendsRef = getBosExtends(configInput);
-    if (!extendsRef) {
-      return configInput;
-    }
-
-    if (visited.has(extendsRef)) {
-      throw new Error(`Circular extends detected for ${extendsRef}`);
-    }
-
-    const nextVisited = new Set(visited);
-    nextVisited.add(extendsRef);
-
-    const parent = await fetchBosConfigFromFastKv<BosConfigInput>(extendsRef, registryConfig);
-    const resolvedParent = await resolveConfigWithExtends(parent, nextVisited, registryConfig);
-
-    return mergeConfigs(resolvedParent, configInput);
-  };
-
   const normalizeResolvedConfig = (
     accountId: string,
     gatewayId: string,
-    configInput: BosConfigInput,
+    runtime: ResolvedPublishedRuntime,
     registryConfig: RegistryConfig,
   ): RegistryAppSummary => {
+    const { resolvedConfig: configInput, lineage } = runtime;
     const hostConfig = getAppConfig(configInput, "host");
     const uiConfig = getAppConfig(configInput, "ui");
     const apiConfig = getAppConfig(configInput, "api");
@@ -333,7 +325,10 @@ function createRegistryMethods(config: RegistryConfig) {
       uiUrl,
       apiUrl,
       uiSsrUrl,
-      extends: typeof configInput.extends === "string" ? configInput.extends : null,
+      extends: getBosExtends(configInput),
+      parent: lineage.parent,
+      root: lineage.root,
+      depth: lineage.depth,
       status: hostUrl && uiUrl ? "ready" : "invalid",
       metadata: null,
     };
@@ -372,11 +367,17 @@ function createRegistryMethods(config: RegistryConfig) {
       const limit = clamp(input.limit ?? 24, 1, 100);
       const offset = clamp(parseCursor(input.cursor), 0, Number.MAX_SAFE_INTEGER);
       const discovered = await discoverPublishedConfigs();
-      const filtered = discovered.filter(({ accountId, gatewayId }) =>
-        matchesQuery(accountId, gatewayId, input.q),
+      const resolved = await Promise.all(
+        discovered.map(async (item) => ({
+          item,
+          runtime: await resolvePublishedRuntime(item.accountId, item.gatewayId, item.rawConfig, config),
+        })),
+      );
+      const filtered = resolved.filter(({ item, runtime }) =>
+        matchesRegistryFilters(item.accountId, item.gatewayId, runtime.lineage, input),
       );
       const page = filtered.slice(offset, offset + limit);
-      const data = await Promise.all(page.map(resolveAppSummary));
+      const data = await Promise.all(page.map(({ item }) => resolveAppSummary(item)));
       const nextOffset = offset + page.length;
 
       return {
@@ -416,7 +417,7 @@ function createRegistryMethods(config: RegistryConfig) {
         return null;
       }
 
-      const resolved = await resolvePublishedConfig(match.rawConfig, config);
+      const resolved = await resolvePublishedRuntime(accountId, gatewayId, match.rawConfig, config);
       const normalized = normalizeResolvedConfig(accountId, gatewayId, resolved, config);
       const metadataKey = getRegistryMetadataKey(accountId, gatewayId);
       const metadata = await getRegistryMetadata(accountId, gatewayId, config);
@@ -427,7 +428,8 @@ function createRegistryMethods(config: RegistryConfig) {
         metadataKey,
         metadataContractId: getRegistryNamespaceForAccount(accountId, config),
         metadataFastKvUrl: getFastKvBaseUrlForAccount(accountId),
-        resolvedConfig: resolved as JsonObject,
+        extendsChain: resolved.lineage.extendsChain,
+        resolvedConfig: resolved.resolvedConfig as JsonObject,
       };
     },
 
@@ -435,7 +437,7 @@ function createRegistryMethods(config: RegistryConfig) {
       const discovered = await discoverPublishedConfigs();
 
       for (const item of discovered) {
-        const resolved = await resolvePublishedConfig(item.rawConfig, config);
+        const resolved = await resolvePublishedRuntime(item.accountId, item.gatewayId, item.rawConfig, config);
         const normalized = normalizeResolvedConfig(
           item.accountId,
           item.gatewayId,
@@ -456,7 +458,8 @@ function createRegistryMethods(config: RegistryConfig) {
           metadataKey,
           metadataContractId: getRegistryNamespaceForAccount(item.accountId, config),
           metadataFastKvUrl: getFastKvBaseUrlForAccount(item.accountId),
-          resolvedConfig: resolved as JsonObject,
+          extendsChain: resolved.lineage.extendsChain,
+          resolvedConfig: resolved.resolvedConfig as JsonObject,
         };
       }
 
@@ -633,6 +636,55 @@ function buildRegistryManifest(input: RegistryMetadataDraftInput): RegistryMetad
   };
 }
 
+export async function resolvePublishedRuntime(
+  accountId: string,
+  gatewayId: string,
+  configInput: BosConfigInput,
+  registryConfig: RegistryConfig,
+  visited = new Set<string>(),
+): Promise<ResolvedPublishedRuntime> {
+  const selfRef = `bos://${accountId}/${gatewayId}`;
+  if (visited.has(selfRef)) {
+    throw new Error(`Circular extends detected for ${selfRef}`);
+  }
+
+  const nextVisited = new Set(visited);
+  nextVisited.add(selfRef);
+  const parentRef = getBosExtends(configInput);
+
+  if (!parentRef) {
+    return {
+      resolvedConfig: configInput,
+      lineage: {
+        parent: null,
+        root: selfRef,
+        depth: 0,
+        extendsChain: [selfRef],
+      },
+    };
+  }
+
+  const { accountId: parentAccountId, gatewayId: parentGatewayId } = parseBosUrl(parentRef);
+  const parentConfig = await fetchBosConfigFromFastKv<BosConfigInput>(parentRef, registryConfig);
+  const parentResolved = await resolvePublishedRuntime(
+    parentAccountId,
+    parentGatewayId,
+    parentConfig,
+    registryConfig,
+    nextVisited,
+  );
+
+  return {
+    resolvedConfig: mergeBosConfigWithExtends(parentResolved.resolvedConfig, configInput),
+    lineage: {
+      parent: parentRef,
+      root: parentResolved.lineage.root,
+      depth: parentResolved.lineage.depth + 1,
+      extendsChain: [selfRef, ...parentResolved.lineage.extendsChain],
+    },
+  };
+}
+
 function getAppConfig(config: BosConfigInput, appName: string): JsonObject {
   const app = config.app?.[appName];
   return app && typeof app === "object" ? app : {};
@@ -678,50 +730,6 @@ function parseRegistryConfigKey(key: string): { accountId: string; gatewayId: st
   };
 }
 
-function mergeConfigs(parent: BosConfigInput, child: BosConfigInput): BosConfigInput {
-  const merged: BosConfigInput = { ...parent, ...child };
-
-  if (parent.app || child.app) {
-    merged.app = { ...parent.app, ...child.app };
-    const parentApps = parent.app || {};
-    const childApps = child.app || {};
-
-    for (const key of new Set([...Object.keys(parentApps), ...Object.keys(childApps)])) {
-      const parentApp = parentApps[key];
-      const childApp = childApps[key];
-
-      if (parentApp && childApp) {
-        merged.app[key] = { ...parentApp, ...childApp };
-      } else if (childApp) {
-        merged.app[key] = childApp;
-      } else if (parentApp) {
-        merged.app[key] = parentApp;
-      }
-    }
-  }
-
-  if (parent.shared || child.shared) {
-    merged.shared = { ...parent.shared, ...child.shared };
-    const parentShared = parent.shared || {};
-    const childShared = child.shared || {};
-
-    for (const key of new Set([...Object.keys(parentShared), ...Object.keys(childShared)])) {
-      const parentValue = parentShared[key];
-      const childValue = childShared[key];
-
-      if (parentValue && childValue) {
-        merged.shared[key] = { ...parentValue, ...childValue };
-      } else if (childValue) {
-        merged.shared[key] = childValue;
-      } else if (parentValue) {
-        merged.shared[key] = parentValue;
-      }
-    }
-  }
-
-  return merged;
-}
-
 function matchesQuery(accountId: string, gatewayId: string, query?: string) {
   if (!query) {
     return true;
@@ -735,6 +743,31 @@ function matchesQuery(accountId: string, gatewayId: string, query?: string) {
   return (
     accountId.toLowerCase().includes(normalized) || gatewayId.toLowerCase().includes(normalized)
   );
+}
+
+function matchesRegistryFilters(
+  accountId: string,
+  gatewayId: string,
+  lineage: RegistryLineage,
+  input: RegistryListInput,
+) {
+  if (!matchesQuery(accountId, gatewayId, input.q)) {
+    return false;
+  }
+
+  if (input.parent && lineage.parent !== input.parent) {
+    return false;
+  }
+
+  if (input.root && lineage.root !== input.root) {
+    return false;
+  }
+
+  if (input.ancestor && !lineage.extendsChain.slice(1).includes(input.ancestor)) {
+    return false;
+  }
+
+  return true;
 }
 
 function compareDiscovered(a: DiscoveredConfig, b: DiscoveredConfig) {
@@ -772,7 +805,6 @@ function sanitizeNullable(value: string | undefined) {
 }
 
 function getBosExtends(configInput: BosConfigInput) {
-  return typeof configInput.extends === "string" && configInput.extends.startsWith("bos://")
-    ? configInput.extends
-    : null;
+  const extendsRef = resolveExtendsRef(configInput.extends, "production");
+  return extendsRef?.startsWith("bos://") ? extendsRef : null;
 }

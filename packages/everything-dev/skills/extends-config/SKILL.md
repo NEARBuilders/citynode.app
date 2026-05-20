@@ -55,34 +55,43 @@ Set a plugin to `null` to explicitly remove an inherited plugin:
 
 ## Fixed-Core Tenant Mode
 
-For shared-host tenant setups, the tenant app extends a base runtime and the host resolves that tenant config per request.
+For shared-host tenant setups, `extends` is both the config inheritance mechanism and the lineage edge between runtimes.
 
 Example:
 
 ```json
 {
-  "extends": "bos://linktree.near/linktree.com",
-  "account": "alice.near",
-  "domain": "linktree.com"
+  "extends": "bos://pingpayio.near/pingpay.io",
+  "account": "pizza.pingpayio.near",
+  "domain": "pizza.com"
 }
 ```
+
+Use this mental model:
+- `extends` says which runtime this one remixes or inherits from
+- `account` is the tenant namespace root for this runtime when it is served as a base app
+- `domain` is the public ingress for this runtime
+- a runtime can be a child in lineage and still become a new tenant root on its own domain
 
 With host env like:
 
 ```bash
-NETWORK_ID=mainnet
 ALLOW_OVERRIDE=ui,plugins.*
-TENANT_WHITELIST=alice.near
+TENANT_WHITELIST=pizza.pingpayio.near
 ALLOW_UNTRUSTED_SSR=false
 ```
 
-Request mapping is by subdomain convention:
-- `linktree.com` -> base runtime
-- `alice.linktree.com` -> `bos://alice.near/linktree.com`
+Design target for request mapping:
+- `pizza.com` -> base runtime `bos://pizza.pingpayio.near/pizza.com`
+- `chicago.pizza.com` -> `bos://chicago.pizza.pingpayio.near/pizza.com`
+
+Current implementation note:
+- the host still applies a single request-scoped tenant overlay on top of one process-wide base runtime
+- nested label routing and account-relative tenant derivation are the intended direction, but not the complete runtime behavior today
 
 ### What the tenant may override today
 
-In fixed-core mode, the host keeps the server core from the base runtime and only applies request-scoped UI-facing overrides from the tenant config:
+In fixed-core mode, the host keeps the server core from the active base runtime and only applies request-scoped UI-facing overrides from the child config:
 - `app.ui`
 - existing `plugins.<id>.ui`
 - existing `plugins.<id>.sidebar`

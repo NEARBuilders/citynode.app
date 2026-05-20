@@ -105,9 +105,8 @@ describe("resolveRequestRuntime", () => {
     verifySriForUrlMock.mockResolvedValue(undefined);
     process.env = {
       ...envSnapshot,
-      NETWORK_ID: "mainnet",
       ALLOW_OVERRIDE: "ui",
-      TENANT_WHITELIST: "alice.near",
+      TENANT_WHITELIST: "alice.linktree.near",
       ALLOW_UNTRUSTED_SSR: "false",
     };
   });
@@ -126,21 +125,110 @@ describe("resolveRequestRuntime", () => {
     expect(loadRemoteConfigMock).not.toHaveBeenCalled();
   });
 
-  it("requires the tenant config to extend the base runtime", async () => {
+  it("derives tenant accounts relative to the active runtime account", async () => {
     loadRemoteConfigMock.mockResolvedValue({
-      source: "bos://alice.near/linktree.com",
+      source: "bos://alice.linktree.near/linktree.com",
       rawConfig: {
-        extends: "bos://somewhere-else.near/linktree.com",
+        extends: "bos://linktree.near/linktree.com",
       },
       config: {
-        account: "alice.near",
+        account: "alice.linktree.near",
         app: {
           host: { development: "local:host", production: "https://host.example.com" },
           ui: { name: "ui", production: "https://cdn.example.com/alice-ui" },
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: ["bos://alice.near/linktree.com", "bos://somewhere-else.near/linktree.com"],
+      extendsChain: [
+        "bos://alice.linktree.near/linktree.com",
+        "bos://linktree.near/linktree.com",
+      ],
+    });
+
+    buildRuntimeConfigMock.mockReturnValue({
+      ...createBaseRuntimeConfig(),
+      account: "alice.linktree.near",
+      ui: {
+        ...createBaseRuntimeConfig().ui,
+        url: "https://cdn.example.com/alice-ui",
+        entry: "https://cdn.example.com/alice-ui/mf-manifest.json",
+        integrity: "sha384-alice",
+      },
+    });
+
+    const result = await resolveRequestRuntime(
+      createBaseRuntimeConfig(),
+      new Request("https://alice.linktree.com/"),
+    );
+
+    expect(result.tenantAccountId).toBe("alice.linktree.near");
+    expect(loadRemoteConfigMock).toHaveBeenCalledWith(
+      "bos://alice.linktree.near/linktree.com",
+      "production",
+    );
+  });
+
+  it("supports nested tenant labels within the active runtime namespace", async () => {
+    loadRemoteConfigMock.mockResolvedValue({
+      source: "bos://chicago.alice.linktree.near/linktree.com",
+      rawConfig: {
+        extends: "bos://linktree.near/linktree.com",
+      },
+      config: {
+        account: "chicago.alice.linktree.near",
+        app: {
+          host: { development: "local:host", production: "https://host.example.com" },
+          ui: { name: "ui", production: "https://cdn.example.com/chicago-ui" },
+          api: { name: "api", production: "https://api.example.com" },
+        },
+      },
+      extendsChain: [
+        "bos://chicago.alice.linktree.near/linktree.com",
+        "bos://linktree.near/linktree.com",
+      ],
+    });
+
+    buildRuntimeConfigMock.mockReturnValue({
+      ...createBaseRuntimeConfig(),
+      account: "chicago.alice.linktree.near",
+      ui: {
+        ...createBaseRuntimeConfig().ui,
+        url: "https://cdn.example.com/chicago-ui",
+        entry: "https://cdn.example.com/chicago-ui/mf-manifest.json",
+        integrity: "sha384-chicago",
+      },
+    });
+
+    const result = await resolveRequestRuntime(
+      createBaseRuntimeConfig(),
+      new Request("https://chicago.alice.linktree.com/"),
+    );
+
+    expect(result.tenantAccountId).toBe("chicago.alice.linktree.near");
+    expect(loadRemoteConfigMock).toHaveBeenCalledWith(
+      "bos://chicago.alice.linktree.near/linktree.com",
+      "production",
+    );
+  });
+
+  it("requires the tenant config to extend the base runtime", async () => {
+    loadRemoteConfigMock.mockResolvedValue({
+      source: "bos://alice.linktree.near/linktree.com",
+      rawConfig: {
+        extends: "bos://somewhere-else.near/linktree.com",
+      },
+      config: {
+        account: "alice.linktree.near",
+        app: {
+          host: { development: "local:host", production: "https://host.example.com" },
+          ui: { name: "ui", production: "https://cdn.example.com/alice-ui" },
+          api: { name: "api", production: "https://api.example.com" },
+        },
+      },
+      extendsChain: [
+        "bos://alice.linktree.near/linktree.com",
+        "bos://somewhere-else.near/linktree.com",
+      ],
     });
 
     buildRuntimeConfigMock.mockReturnValue(createBaseRuntimeConfig());
@@ -154,12 +242,12 @@ describe("resolveRequestRuntime", () => {
     const baseConfig = createBaseRuntimeConfig();
 
     loadRemoteConfigMock.mockResolvedValue({
-      source: "bos://alice.near/linktree.com",
+      source: "bos://alice.linktree.near/linktree.com",
       rawConfig: {
         extends: "bos://linktree.near/linktree.com",
       },
       config: {
-        account: "alice.near",
+        account: "alice.linktree.near",
         title: "Alice",
         description: "Alice links",
         repository: "https://github.com/example/alice",
@@ -169,12 +257,15 @@ describe("resolveRequestRuntime", () => {
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: ["bos://alice.near/linktree.com", "bos://linktree.near/linktree.com"],
+      extendsChain: [
+        "bos://alice.linktree.near/linktree.com",
+        "bos://linktree.near/linktree.com",
+      ],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
       ...baseConfig,
-      account: "alice.near",
+      account: "alice.linktree.near",
       title: "Alice",
       description: "Alice links",
       repository: "https://github.com/example/alice",
@@ -193,8 +284,8 @@ describe("resolveRequestRuntime", () => {
       new Request("https://alice.linktree.com/"),
     );
 
-    expect(result.tenantAccountId).toBe("alice.near");
-    expect(result.config.account).toBe("alice.near");
+    expect(result.tenantAccountId).toBe("alice.linktree.near");
+    expect(result.config.account).toBe("alice.linktree.near");
     expect(result.config.ui.url).toBe("https://cdn.example.com/alice-ui");
     expect(result.ssrAllowed).toBe(true);
     expect(result.config.ui.ssrUrl).toBe("https://cdn.example.com/alice-ui-ssr");
@@ -208,24 +299,27 @@ describe("resolveRequestRuntime", () => {
     const baseConfig = createBaseRuntimeConfig();
 
     loadRemoteConfigMock.mockResolvedValue({
-      source: "bos://bob.near/linktree.com",
+      source: "bos://bob.linktree.near/linktree.com",
       rawConfig: {
         extends: "bos://linktree.near/linktree.com",
       },
       config: {
-        account: "bob.near",
+        account: "bob.linktree.near",
         app: {
           host: { development: "local:host", production: "https://host.example.com" },
           ui: { name: "ui", production: "https://cdn.example.com/bob-ui" },
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: ["bos://bob.near/linktree.com", "bos://linktree.near/linktree.com"],
+      extendsChain: [
+        "bos://bob.linktree.near/linktree.com",
+        "bos://linktree.near/linktree.com",
+      ],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
       ...baseConfig,
-      account: "bob.near",
+      account: "bob.linktree.near",
       ui: {
         ...baseConfig.ui,
         url: "https://cdn.example.com/bob-ui",
@@ -251,12 +345,12 @@ describe("resolveRequestRuntime", () => {
     process.env.ALLOW_OVERRIDE = "ui,plugins.*";
 
     loadRemoteConfigMock.mockResolvedValue({
-      source: "bos://alice.near/linktree.com",
+      source: "bos://alice.linktree.near/linktree.com",
       rawConfig: {
         extends: "bos://linktree.near/linktree.com",
       },
       config: {
-        account: "alice.near",
+        account: "alice.linktree.near",
         app: {
           host: { development: "local:host", production: "https://host.example.com" },
           ui: { name: "ui", production: "https://cdn.example.com/alice-ui" },
@@ -280,12 +374,15 @@ describe("resolveRequestRuntime", () => {
           },
         },
       },
-      extendsChain: ["bos://alice.near/linktree.com", "bos://linktree.near/linktree.com"],
+      extendsChain: [
+        "bos://alice.linktree.near/linktree.com",
+        "bos://linktree.near/linktree.com",
+      ],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
       ...baseConfig,
-      account: "alice.near",
+      account: "alice.linktree.near",
       ui: {
         ...baseConfig.ui,
         url: "https://cdn.example.com/alice-ui",
@@ -344,24 +441,27 @@ describe("resolveRequestRuntime", () => {
       const baseConfig = createBaseRuntimeConfig();
 
       loadRemoteConfigMock.mockResolvedValue({
-        source: "bos://alice.near/linktree.com",
+        source: "bos://alice.linktree.near/linktree.com",
         rawConfig: {
           extends: "bos://linktree.near/linktree.com",
         },
         config: {
-          account: "alice.near",
+          account: "alice.linktree.near",
           app: {
             host: { development: "local:host", production: "https://host.example.com" },
             ui: { name: "ui", production: "https://cdn.example.com/alice-ui" },
             api: { name: "api", production: "https://api.example.com" },
           },
         },
-        extendsChain: ["bos://alice.near/linktree.com", "bos://linktree.near/linktree.com"],
+        extendsChain: [
+          "bos://alice.linktree.near/linktree.com",
+          "bos://linktree.near/linktree.com",
+        ],
       });
 
       buildRuntimeConfigMock.mockReturnValue({
         ...baseConfig,
-        account: "alice.near",
+        account: "alice.linktree.near",
         ui: {
           ...baseConfig.ui,
           url: "https://cdn.example.com/alice-ui",
@@ -382,14 +482,14 @@ describe("resolveRequestRuntime", () => {
         resolveRequestRuntime(baseConfig, new Request("https://alice.linktree.com/asset.js"), {
           verification: "stale-while-revalidate",
         }),
-      ).resolves.toMatchObject({ tenantAccountId: "alice.near" });
+      ).resolves.toMatchObject({ tenantAccountId: "alice.linktree.near" });
       expect(verifySriForUrlMock).toHaveBeenCalledTimes(2);
 
       await expect(
         resolveRequestRuntime(baseConfig, new Request("https://alice.linktree.com/asset-2.js"), {
           verification: "stale-while-revalidate",
         }),
-      ).resolves.toMatchObject({ tenantAccountId: "alice.near" });
+      ).resolves.toMatchObject({ tenantAccountId: "alice.linktree.near" });
       expect(verifySriForUrlMock).toHaveBeenCalledTimes(2);
 
       refresh.resolve();
@@ -406,24 +506,27 @@ describe("resolveRequestRuntime", () => {
       const baseConfig = createBaseRuntimeConfig();
 
       loadRemoteConfigMock.mockResolvedValue({
-        source: "bos://alice.near/linktree.com",
+        source: "bos://alice.linktree.near/linktree.com",
         rawConfig: {
           extends: "bos://linktree.near/linktree.com",
         },
         config: {
-          account: "alice.near",
+          account: "alice.linktree.near",
           app: {
             host: { development: "local:host", production: "https://host.example.com" },
             ui: { name: "ui", production: "https://cdn.example.com/alice-ui" },
             api: { name: "api", production: "https://api.example.com" },
           },
         },
-        extendsChain: ["bos://alice.near/linktree.com", "bos://linktree.near/linktree.com"],
+        extendsChain: [
+          "bos://alice.linktree.near/linktree.com",
+          "bos://linktree.near/linktree.com",
+        ],
       });
 
       buildRuntimeConfigMock.mockReturnValue({
         ...baseConfig,
-        account: "alice.near",
+        account: "alice.linktree.near",
         ui: {
           ...baseConfig.ui,
           url: "https://cdn.example.com/alice-ui",
@@ -466,24 +569,27 @@ describe("resolveRequestRuntime", () => {
     const baseConfig = createBaseRuntimeConfig();
 
     loadRemoteConfigMock.mockResolvedValue({
-      source: "bos://bob.near/linktree.com",
+      source: "bos://bob.linktree.near/linktree.com",
       rawConfig: {
         extends: "bos://linktree.near/linktree.com",
       },
       config: {
-        account: "bob.near",
+        account: "bob.linktree.near",
         app: {
           host: { development: "local:host", production: "https://host.example.com" },
           ui: { name: "ui", production: "https://cdn.example.com/bob-ui" },
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: ["bos://bob.near/linktree.com", "bos://linktree.near/linktree.com"],
+      extendsChain: [
+        "bos://bob.linktree.near/linktree.com",
+        "bos://linktree.near/linktree.com",
+      ],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
       ...baseConfig,
-      account: "bob.near",
+      account: "bob.linktree.near",
       ui: {
         ...baseConfig.ui,
         url: "https://cdn.example.com/bob-ui",
@@ -500,7 +606,7 @@ describe("resolveRequestRuntime", () => {
     );
     expect(blocked.ssrAllowed).toBe(false);
 
-    process.env.TENANT_WHITELIST = "bob.near";
+    process.env.TENANT_WHITELIST = "bob.linktree.near";
 
     const allowed = await resolveRequestRuntime(
       baseConfig,

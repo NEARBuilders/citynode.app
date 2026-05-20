@@ -27,9 +27,9 @@ bos init --overrides ui,api,host                          # Include host locally
 7. Write initial snapshot (`.bos/sync-snapshot.json`)
 8. `bun install` + `bos types gen`
 
-## Shared Host + Custom Tenant App
+## Shared Host + Custom Child App
 
-Use this pattern when you want one deployed host runtime and separate tenant apps that inherit from it.
+Use this pattern when you want one deployed host runtime and separate descendant apps that inherit from it.
 
 ### 1. Create the base host runtime
 
@@ -41,24 +41,27 @@ bos init --overrides ui,api,host
 
 This base runtime is the app the host boots from.
 
-### 2. Create the tenant app from the base runtime
+### 2. Create the child app from the base runtime
 
 Create a second app whose `bos.config.json` extends the base runtime:
 
 ```json
 {
-  "extends": "bos://linktree.near/linktree.com",
-  "account": "alice.near",
-  "domain": "linktree.com"
+  "extends": "bos://pingpayio.near/pingpay.io",
+  "account": "pizza.pingpayio.near",
+  "domain": "pizza.com"
 }
 ```
 
-Then customize the tenant-owned sections, usually:
+Then customize the child-owned sections, usually:
 - `account`
+- `domain`
 - `repository`
 - `app.ui`
 - existing `plugins.<id>.ui`
 - existing `plugins.<id>.sidebar`
+
+This runtime is still a child in lineage because it extends the parent, but on `pizza.com` it becomes its own tenant root operationally.
 
 ### 3. Understand fixed-core tenant mode
 
@@ -68,27 +71,31 @@ Today the shared host stays fixed to the base runtime for:
 - `app.auth`
 - server-side plugin loading
 
-Tenant apps are request-scoped overlays on top of that base host. In fixed-core mode, the supported tenant overrides are:
+Child apps can either run as their own base runtime on their own domain, or as request-scoped overlays on top of a shared host. In fixed-core mode, the supported shared-host overrides are:
 - `app.ui`
 - existing `plugins.<id>.ui`
 - existing `plugins.<id>.sidebar`
 
-Tenant apps must extend the base runtime and do not introduce new server-side plugin IDs dynamically.
+Shared-host children must extend the base runtime and do not introduce new server-side plugin IDs dynamically.
 
-### 4. Host deployment env for tenant mode
+### 4. Host deployment env for shared-host mode
 
-The shared host uses these env vars to resolve tenant requests:
+The shared host uses these env vars to resolve descendant requests:
 
 ```bash
-NETWORK_ID=mainnet
 ALLOW_OVERRIDE=ui,plugins.*
-TENANT_WHITELIST=alice.near,bob.near
+TENANT_WHITELIST=pizza.pingpayio.near,chicago.pizza.pingpayio.near
 ALLOW_UNTRUSTED_SSR=false
 ```
 
-Subdomains resolve by convention, for example:
-- `linktree.com` -> base runtime
-- `alice.linktree.com` -> `bos://alice.near/linktree.com`
+Design target, for example:
+- `pingpay.io` -> base runtime `bos://pingpayio.near/pingpay.io`
+- `pizza.com` -> child runtime `bos://pizza.pingpayio.near/pizza.com`
+- `chicago.pizza.com` -> descendant runtime `bos://chicago.pizza.pingpayio.near/pizza.com`
+
+Current implementation note:
+- shared-host fixed-core mode still applies one tenant overlay on top of a process-wide base runtime
+- nested label routing and account-relative tenant derivation are the intended architecture direction for upcoming work
 
 Use the `extends-config` skill when reasoning about how the tenant config merges with the base runtime.
 

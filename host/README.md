@@ -110,6 +110,7 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
 - Current: one process-wide base `RuntimeConfig`, fixed auth/API/plugin server core
 - Current: tenant subdomains can resolve request-scoped UI remotes from FastKV-backed BOS config
 - Current: tenant config must extend the base BOS runtime
+- Current: tenant accounts derive relative to the active runtime account namespace
 - Current: supported tenant overrides are `app.ui`, existing `plugins.<id>.ui`, and existing `plugins.<id>.sidebar`
 - Current: tenant SSR is opt-in via `TENANT_WHITELIST` or `ALLOW_UNTRUSTED_SSR=true`
 - Not yet implemented: tenant API/auth overrides in fixed-core mode
@@ -122,9 +123,8 @@ Example deployment:
 ```bash
 BOS_ACCOUNT=linktree.near
 BOS_GATEWAY=linktree.com
-NETWORK_ID=mainnet
 ALLOW_OVERRIDE=ui,plugins.*
-TENANT_WHITELIST=alice.near,bob.near
+TENANT_WHITELIST=alice.linktree.near,bob.linktree.near
 ALLOW_UNTRUSTED_SSR=false
 bos start --no-interactive
 ```
@@ -132,8 +132,9 @@ bos start --no-interactive
 Example tenant behavior:
 
 - `linktree.com` serves the base runtime
-- `alice.linktree.com` resolves `bos://alice.near/linktree.com`
-- `bob.linktree.com` resolves `bos://bob.near/linktree.com`
+- `alice.linktree.com` resolves `bos://alice.linktree.near/linktree.com`
+- `bob.linktree.com` resolves `bos://bob.linktree.near/linktree.com`
+- nested labels compose too, such as `chicago.alice.linktree.com` -> `bos://chicago.alice.linktree.near/linktree.com`
 
 Tenant config rules:
 
@@ -142,6 +143,7 @@ Tenant config rules:
 - in fixed-core mode, only UI-facing overrides are applied
 - custom UI remotes must provide integrity
 - custom plugin UI remotes must provide integrity
+- a child runtime with its own `account` and `domain` becomes a new tenant root on that domain even when it extends another runtime
 
 Tenant SSR rules:
 

@@ -1132,6 +1132,11 @@ export function parsePort(url: string): number {
   }
 }
 
-export { BOS_CONFIG_ORDER, rebuildOrderedConfig } from "./merge";
+export {
+  BOS_CONFIG_ORDER,
+  mergeBosConfigWithExtends,
+  rebuildOrderedConfig,
+  resolveExtendsRef,
+} from "./merge";
 export type { BosConfig, RuntimeConfig } from "./types";
 export { BosConfigSchema } from "./types";

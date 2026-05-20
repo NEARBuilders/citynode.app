@@ -33,6 +33,12 @@ After `bos publish --deploy`:
 2. `bos.config.json` is auto-updated with production URLs + integrity hashes
 3. Config is published to the FastKV registry at `{account}/bos/gateways/{gateway}/bos.config.json`
 
+Lineage model:
+- `extends` is the canonical parent edge between published runtimes
+- `account` is the tenant namespace root for that runtime
+- `domain` is the public ingress for that runtime
+- a child runtime can extend a parent and still become a new tenant root on its own domain
+
 ## Sync
 
 Pull template updates from the parent referenced by local `bos.config.json`:
@@ -123,6 +129,14 @@ Or per-environment:
 ```
 
 Deep merge: child overrides parent. Plugins are deep-merged (set to `null` to remove). `secrets` arrays are unioned. See the `extends-config` skill for full details.
+
+Registry and discovery should treat `extends` as runtime lineage. That keeps remix ancestry, tenant roots, and published BOS refs aligned without adding a second parent field.
+
+For remix-host browsing with the apps plugin:
+- use `parent` when you want only direct children of a runtime
+- use `ancestor` when you want all descendants of a runtime, even when that runtime is not the lineage root
+- use `root` when you want the whole tree from the topmost ancestor
+- prefer querying by canonical BOS ref like `bos://account/gateway`, not by host URL, because shared-host descendants can reuse the same host
 
 ### What bos dev writes vs bos publish writes
 

@@ -36,6 +36,9 @@ const registryAppSummarySchema = z.object({
   uiSsrUrl: z.string().url().nullable(),
   apiUrl: z.string().url().nullable(),
   extends: z.string().nullable(),
+  parent: z.string().nullable(),
+  root: z.string().nullable(),
+  depth: z.number().int().nonnegative(),
   status: z.enum(["ready", "invalid"]),
   metadata: registryMetadataSchema.nullable(),
 });
@@ -45,6 +48,7 @@ const registryAppDetailSchema = registryAppSummarySchema.extend({
   metadataKey: z.string(),
   metadataContractId: z.string(),
   metadataFastKvUrl: z.string().url(),
+  extendsChain: z.array(z.string()),
   resolvedConfig: z.record(z.string(), z.unknown()),
 });
 
@@ -93,6 +97,9 @@ export const contract = oc.router({
     .input(
       z.object({
         q: z.string().optional(),
+        parent: z.string().optional(),
+        root: z.string().optional(),
+        ancestor: z.string().optional(),
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),
       }),

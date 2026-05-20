@@ -137,6 +137,14 @@ export const ClientRuntimeInfoSchema = z.object({
 });
 export type ClientRuntimeInfo = z.infer<typeof ClientRuntimeInfoSchema>;
 
+export const RuntimeLineageSchema = z.object({
+  parent: z.string().nullable(),
+  root: z.string().nullable(),
+  depth: z.number().int().nonnegative(),
+  extendsChain: z.array(z.string()),
+});
+export type RuntimeLineage = z.infer<typeof RuntimeLineageSchema>;
+
 export const BosStagingSchema = z.object({
   domain: z.string(),
 });

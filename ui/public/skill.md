@@ -54,14 +54,18 @@ This lets different apps keep their own style system and product language while 
 ## Super app mental model
 
 - bare domain -> base runtime
-- one subdomain label -> tenant runtime
+- `extends` -> lineage edge
+- `account` -> tenant namespace root for the active runtime
+- `domain` -> public ingress for that runtime
+- subdomains compose onto the active runtime account namespace
 - tenant config must extend the base runtime
 - tenant UI integrity must be present for trusted overrides
 
 Example:
 
 - `bos://dev.everything.near/everything.dev` is the base runtime
-- `bos://your-account.near/everything.dev` is a tenant runtime on the same gateway
+- `bos://pizza.pingpayio.near/pizza.com` can extend `bos://pingpayio.near/pingpay.io` and still become its own tenant root on `pizza.com`
+- `bos://chicago.pizza.pingpayio.near/pizza.com` is a descendant runtime inside the `pizza.pingpayio.near` namespace
 
 ## Scaffold a UI-only tenant starter
 

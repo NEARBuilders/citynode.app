@@ -193,13 +193,20 @@ The host now supports a fixed-core tenant mode for domain-based UI composition.
 What works today:
 - The host still boots once from one base `RuntimeConfig`.
 - Auth, API, and server-side plugin routers stay fixed from that base config.
-- Requests can resolve a tenant runtime from the subdomain, such as `alice.linktree.com -> bos://alice.near/linktree.com`.
+- `extends` is the lineage edge between runtimes.
+- `account` is the tenant namespace root for the active runtime.
+- `domain` is the public ingress for that runtime.
+- Requests can resolve account-relative tenant runtimes from subdomains, such as `alice.linktree.com -> bos://alice.linktree.near/linktree.com`.
 - Tenant configs must extend the base BOS runtime.
 - Per-request tenant overrides can currently change:
   - `app.ui`
   - existing `plugins.<pluginId>.ui`
   - existing `plugins.<pluginId>.sidebar`
 - Tenant SSR is gated by `TENANT_WHITELIST` and `ALLOW_UNTRUSTED_SSR`.
+
+Design direction:
+- nested labels compose onto the active runtime account, such as `chicago.pizza.com -> bos://chicago.pizza.pingpayio.near/pizza.com`
+- a runtime can extend another runtime and still become a new tenant root on its own domain
 
 What does not work yet:
 - tenant-specific API overrides in fixed-core mode
