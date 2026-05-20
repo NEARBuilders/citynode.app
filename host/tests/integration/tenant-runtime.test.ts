@@ -139,10 +139,7 @@ describe("resolveRequestRuntime", () => {
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: [
-        "bos://alice.linktree.near/linktree.com",
-        "bos://linktree.near/linktree.com",
-      ],
+      extendsChain: ["bos://alice.linktree.near/linktree.com", "bos://linktree.near/linktree.com"],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
@@ -257,10 +254,7 @@ describe("resolveRequestRuntime", () => {
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: [
-        "bos://alice.linktree.near/linktree.com",
-        "bos://linktree.near/linktree.com",
-      ],
+      extendsChain: ["bos://alice.linktree.near/linktree.com", "bos://linktree.near/linktree.com"],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
@@ -311,10 +305,7 @@ describe("resolveRequestRuntime", () => {
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: [
-        "bos://bob.linktree.near/linktree.com",
-        "bos://linktree.near/linktree.com",
-      ],
+      extendsChain: ["bos://bob.linktree.near/linktree.com", "bos://linktree.near/linktree.com"],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
@@ -374,10 +365,7 @@ describe("resolveRequestRuntime", () => {
           },
         },
       },
-      extendsChain: [
-        "bos://alice.linktree.near/linktree.com",
-        "bos://linktree.near/linktree.com",
-      ],
+      extendsChain: ["bos://alice.linktree.near/linktree.com", "bos://linktree.near/linktree.com"],
     });
 
     buildRuntimeConfigMock.mockReturnValue({
@@ -581,10 +569,7 @@ describe("resolveRequestRuntime", () => {
           api: { name: "api", production: "https://api.example.com" },
         },
       },
-      extendsChain: [
-        "bos://bob.linktree.near/linktree.com",
-        "bos://linktree.near/linktree.com",
-      ],
+      extendsChain: ["bos://bob.linktree.near/linktree.com", "bos://linktree.near/linktree.com"],
     });
 
     buildRuntimeConfigMock.mockReturnValue({

@@ -4,7 +4,7 @@ import { access, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { Effect } from "effect";
-import { syncApiContractBridge } from "./api-contract";
+import { type ContractBridgeStatus, syncApiContractBridge } from "./api-contract";
 import { buildRuntimeConfig, detectLocalPackages, prepareDevelopmentRuntimeConfig } from "./app";
 import {
   ensureEnvFile,
@@ -324,7 +324,7 @@ async function generateCodeArtifacts(
     extendsChain?: string[];
     runtimeConfig?: RuntimeConfig;
   },
-): Promise<GeneratedArtifacts | null> {
+): Promise<(GeneratedArtifacts & { contractStatus: ContractBridgeStatus[] }) | null> {
   if (opts?.env) {
     writeResolvedConfig(configDir, config, opts.env, opts.extendsChain);
   }
@@ -345,6 +345,7 @@ async function generateCodeArtifacts(
     sidebarPath: join(configDir, "ui/src/lib/plugin-sidebar.gen.ts"),
     resolvedConfigPath: opts?.env ? join(configDir, ".bos/bos.resolved-config.json") : undefined,
     contractBridgePath: bridge.bridgePath,
+    contractStatus: bridge.status,
   };
 }
 
@@ -1647,14 +1648,14 @@ export default createPlugin({
           const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
 
           if (refreshed.runtime.api.source !== "local") {
-            fetched.push(refreshed.runtime.api.url);
+            fetched.push(`api (${refreshed.runtime.api.url})`);
           } else {
             skipped.push("api (local)");
           }
 
           if (refreshed.runtime.auth) {
             if (refreshed.runtime.auth.source !== "local") {
-              fetched.push(refreshed.runtime.auth.url);
+              fetched.push(`auth (${refreshed.runtime.auth.url})`);
             } else {
               skipped.push("auth (local)");
             }
@@ -1662,9 +1663,11 @@ export default createPlugin({
 
           for (const [key, plugin] of pluginEntries) {
             if (plugin.url && plugin.source !== "local") {
-              fetched.push(plugin.url);
+              fetched.push(`${key} (${plugin.url})`);
             } else if (plugin.localPath) {
               skipped.push(`${key} (local)`);
+            } else {
+              skipped.push(`${key} (no URL resolved)`);
             }
           }
 
@@ -1686,7 +1689,7 @@ export default createPlugin({
           };
         }
 
-        await generateCodeArtifacts(projectDir, refreshed.config, {
+        const artifacts = await generateCodeArtifacts(projectDir, refreshed.config, {
           runtimeConfig: refreshed.runtime,
         });
 
@@ -1705,12 +1708,29 @@ export default createPlugin({
           generated.push("host/src/lib/auth-types.gen.ts");
         }
 
+        const contractStatus = artifacts?.contractStatus ?? [];
+        const fetched: string[] = [];
+        const skipped: string[] = [];
+        const failed: string[] = [];
+        for (const entry of contractStatus) {
+          if (entry.source === "remote") {
+            fetched.push(entry.url ? `${entry.key} (${entry.url})` : entry.key);
+          } else if (entry.source === "local") {
+            skipped.push(`${entry.key} (local)`);
+          } else if (entry.source === "skipped") {
+            skipped.push(`${entry.key} (no URL resolved)`);
+          } else if (entry.source === "failed") {
+            const detail = entry.error ? `: ${entry.error}` : "";
+            failed.push(`${entry.key}${detail}`);
+          }
+        }
+
         return {
           status: "success" as const,
           generated,
-          fetched: refreshed.runtime.api.source === "remote" ? [refreshed.runtime.api.url] : [],
-          skipped: refreshed.runtime.api.source === "local" ? ["api (local)"] : [],
-          failed: [],
+          fetched,
+          skipped,
+          failed,
           source: refreshed.runtime.api.source,
         };
       } catch (error) {

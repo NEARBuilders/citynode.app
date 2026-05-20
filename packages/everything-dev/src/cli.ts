@@ -657,11 +657,11 @@ async function main() {
         for (const f of result.generated) console.log(`    ${colors.dim(f)}`);
       }
       if (result.fetched.length > 0) {
-        console.log(`  ${colors.dim("Fetched from remote:")}`);
+        console.log(`  ${colors.dim("Fetched (remote):")}`);
         for (const url of result.fetched) console.log(`    ${colors.dim(url)}`);
       }
       if (result.skipped.length > 0) {
-        console.log(`  ${colors.dim("Skipped (local):")}`);
+        console.log(`  ${colors.dim("Skipped:")}`);
         for (const s of result.skipped) console.log(`    ${colors.dim(s)}`);
       }
       if (result.failed.length > 0) {

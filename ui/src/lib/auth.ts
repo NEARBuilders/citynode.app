@@ -53,10 +53,7 @@ function getCspNonce(config?: Partial<ClientRuntimeConfig>) {
   return undefined;
 }
 
-export function createAuthClient(
-  config?: Partial<ClientRuntimeConfig>,
-  headers?: HeadersInit,
-) {
+export function createAuthClient(config?: Partial<ClientRuntimeConfig>, headers?: HeadersInit) {
   const nearAuthConfig = {
     recipient: getAccountId(config),
     networkId: getNetworkId(config),

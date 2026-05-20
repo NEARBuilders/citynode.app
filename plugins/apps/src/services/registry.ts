@@ -12,8 +12,8 @@ import {
   getRegistryNamespaceForAccount,
   getRegistryNamespaceForNetwork,
   listLatestValues,
-  parseBosUrl,
   type NetworkId,
+  parseBosUrl,
   type RegistryConfig,
   RegistryConfigService,
   readLatestValue,
@@ -370,7 +370,12 @@ export function createRegistryMethods(config: RegistryConfig) {
       const resolved = await Promise.all(
         discovered.map(async (item) => ({
           item,
-          runtime: await resolvePublishedRuntime(item.accountId, item.gatewayId, item.rawConfig, config),
+          runtime: await resolvePublishedRuntime(
+            item.accountId,
+            item.gatewayId,
+            item.rawConfig,
+            config,
+          ),
         })),
       );
       const filtered = resolved.filter(({ item, runtime }) =>
@@ -437,7 +442,12 @@ export function createRegistryMethods(config: RegistryConfig) {
       const discovered = await discoverPublishedConfigs();
 
       for (const item of discovered) {
-        const resolved = await resolvePublishedRuntime(item.accountId, item.gatewayId, item.rawConfig, config);
+        const resolved = await resolvePublishedRuntime(
+          item.accountId,
+          item.gatewayId,
+          item.rawConfig,
+          config,
+        );
         const normalized = normalizeResolvedConfig(
           item.accountId,
           item.gatewayId,

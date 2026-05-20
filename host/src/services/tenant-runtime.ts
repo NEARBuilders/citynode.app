@@ -164,7 +164,11 @@ function warnUnsupportedOverrideTargets(targets: ReadonlyArray<RuntimeOverrideTa
   }
 }
 
-function resolveTenantAccountId(hostname: string, gatewayId: string, namespaceAccountId: string): string | null {
+function resolveTenantAccountId(
+  hostname: string,
+  gatewayId: string,
+  namespaceAccountId: string,
+): string | null {
   const normalizedHost = hostname.toLowerCase();
   const normalizedGateway = gatewayId.toLowerCase();
   const normalizedNamespaceAccountId = namespaceAccountId.toLowerCase();

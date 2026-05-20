@@ -7,12 +7,20 @@ const buildRuntimeConfigMock = vi.fn();
 const verifySriForUrlMock = vi.fn();
 
 vi.mock("everything-dev/config", async () => {
-  const actual = await vi.importActual<typeof import("everything-dev/config")>("everything-dev/config");
+  const actual =
+    await vi.importActual<typeof import("everything-dev/config")>("everything-dev/config");
   return {
     ...actual,
     parseRuntimeOverrideTargets: (value?: string | null) =>
       value
-        ? [...new Set(value.split(",").map((entry) => entry.trim()).filter(Boolean))]
+        ? [
+            ...new Set(
+              value
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+            ),
+          ]
         : [],
     isRuntimeOverrideAllowed: (targets: string[], target: string) =>
       targets.includes(target) || (target.startsWith("plugins.") && targets.includes("plugins.*")),

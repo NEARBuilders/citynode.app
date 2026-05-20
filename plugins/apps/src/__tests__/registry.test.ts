@@ -73,10 +73,7 @@ describe("resolvePublishedRuntime", () => {
       parent: "bos://pingpayio.near/pingpay.io",
       root: "bos://pingpayio.near/pingpay.io",
       depth: 1,
-      extendsChain: [
-        "bos://pizza.pingpayio.near/pizza.com",
-        "bos://pingpayio.near/pingpay.io",
-      ],
+      extendsChain: ["bos://pizza.pingpayio.near/pizza.com", "bos://pingpayio.near/pingpay.io"],
     });
     expect(result.resolvedConfig.title).toBe("Pizza");
     expect(result.resolvedConfig.description).toBe("Parent runtime");
@@ -219,13 +216,13 @@ describe("resolvePublishedRuntime", () => {
       "pingpayio.near",
       "pizza.pingpayio.near",
     ]);
-    expect(byRoot.data.find((item) => item.accountId === "chicago.pizza.pingpayio.near")).toMatchObject(
-      {
-        parent: "bos://pizza.pingpayio.near/pizza.com",
-        root: "bos://pingpayio.near/pingpay.io",
-        depth: 2,
-      },
-    );
+    expect(
+      byRoot.data.find((item) => item.accountId === "chicago.pizza.pingpayio.near"),
+    ).toMatchObject({
+      parent: "bos://pizza.pingpayio.near/pizza.com",
+      root: "bos://pingpayio.near/pingpay.io",
+      depth: 2,
+    });
 
     const byAncestor = await service.listRegistryApps({
       ancestor: "bos://pizza.pingpayio.near/pizza.com",

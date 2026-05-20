@@ -505,6 +505,13 @@ function writeGeneratedFiles(opts: {
   return uiContractPath;
 }
 
+export interface ContractBridgeStatus {
+  key: string;
+  source: "local" | "remote" | "skipped" | "failed";
+  url?: string;
+  error?: string;
+}
+
 export async function syncApiContractBridge(opts: {
   configDir: string;
   runtimeConfig: RuntimeConfig;
@@ -514,71 +521,105 @@ export async function syncApiContractBridge(opts: {
   generatedPath: string | null;
   manifest: ApiPluginManifest | null;
   source: "local" | "remote";
+  status: ContractBridgeStatus[];
 }> {
   const runtimeDir = join(opts.configDir, ".bos", "generated");
   const pluginEntries = Object.entries(opts.runtimeConfig.plugins ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   );
   const sources: ContractSource[] = [];
+  const status: ContractBridgeStatus[] = [];
   let manifest: ApiPluginManifest | null = null;
   let generatedPath: string | null = null;
   let authSource: ContractSource | null = null;
   let authExportPath: string | null = null;
+  const excludedPluginKeys = new Set<string>();
 
-  const baseSource = await resolveContractSource({
-    configDir: opts.configDir,
-    runtimeDir,
-    key: "api",
-    source: opts.runtimeConfig.api,
-    baseUrl: opts.apiBaseUrl,
-    generatedSubdir: "api",
-  });
-  sources.push(baseSource);
-
-  if (opts.runtimeConfig.auth) {
-    authSource = await resolveContractSource({
+  try {
+    const baseSource = await resolveContractSource({
       configDir: opts.configDir,
       runtimeDir,
-      key: "auth",
-      source: opts.runtimeConfig.auth,
-      baseUrl: opts.runtimeConfig.auth.url,
-      generatedSubdir: "auth",
-      localSourceFactory: localAuthContractSource,
+      key: "api",
+      source: opts.runtimeConfig.api,
+      baseUrl: opts.apiBaseUrl,
+      generatedSubdir: "api",
     });
-    sources.push(authSource);
-    if (authSource.generatedPath) {
-      generatedPath = authSource.generatedPath;
-    }
+    sources.push(baseSource);
+    status.push({
+      key: "api",
+      source: opts.runtimeConfig.api.source,
+      url: opts.runtimeConfig.api.source !== "local" ? opts.apiBaseUrl : undefined,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[API Contract] Failed to resolve api contract: ${message}`);
+    status.push({
+      key: "api",
+      source: "failed",
+      url: opts.apiBaseUrl || undefined,
+      error: message,
+    });
+  }
 
-    // Fetch auth additional exports (auth-export.d.ts) for remote auth
-    if (opts.runtimeConfig.auth.url && opts.runtimeConfig.auth.source !== "local") {
-      try {
-        const authManifest = await fetchApiPluginManifest(opts.runtimeConfig.auth.url);
-        const fetchedAuthExportPath = await fetchAuthExportTypes({
-          baseUrl: opts.runtimeConfig.auth.url,
-          runtimeDir,
-          manifest: authManifest,
-        });
-        if (fetchedAuthExportPath) {
-          authExportPath = fetchedAuthExportPath;
-        }
-      } catch (error) {
-        console.warn(
-          `[API Contract] Failed to fetch auth additional exports: ${error instanceof Error ? error.message : String(error)}`,
-        );
+  if (opts.runtimeConfig.auth) {
+    try {
+      authSource = await resolveContractSource({
+        configDir: opts.configDir,
+        runtimeDir,
+        key: "auth",
+        source: opts.runtimeConfig.auth,
+        baseUrl: opts.runtimeConfig.auth.url,
+        generatedSubdir: "auth",
+        localSourceFactory: localAuthContractSource,
+      });
+      sources.push(authSource);
+      status.push({
+        key: "auth",
+        source: opts.runtimeConfig.auth.source,
+        url: opts.runtimeConfig.auth.source !== "local" ? opts.runtimeConfig.auth.url : undefined,
+      });
+      if (authSource.generatedPath) {
+        generatedPath = authSource.generatedPath;
       }
-    }
 
-    if (!authExportPath) {
-      const localAuthExport = join(opts.configDir, "plugins", "auth", "src", "auth-export.ts");
-      if (existsSync(localAuthExport)) {
-        authExportPath = localAuthExport;
-      } else {
-        const generatedAuthExport = join(runtimeDir, "auth", "auth-export.d.ts");
-        if (existsSync(generatedAuthExport)) {
-          authExportPath = generatedAuthExport;
+      if (opts.runtimeConfig.auth.url && opts.runtimeConfig.auth.source !== "local") {
+        try {
+          const authManifest = await fetchApiPluginManifest(opts.runtimeConfig.auth.url);
+          const fetchedAuthExportPath = await fetchAuthExportTypes({
+            baseUrl: opts.runtimeConfig.auth.url,
+            runtimeDir,
+            manifest: authManifest,
+          });
+          if (fetchedAuthExportPath) {
+            authExportPath = fetchedAuthExportPath;
+          }
+        } catch (error) {
+          console.warn(
+            `[API Contract] Failed to fetch auth additional exports: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
+
+      if (!authExportPath) {
+        const localAuthExport = join(opts.configDir, "plugins", "auth", "src", "auth-export.ts");
+        if (existsSync(localAuthExport)) {
+          authExportPath = localAuthExport;
+        } else {
+          const generatedAuthExport = join(runtimeDir, "auth", "auth-export.d.ts");
+          if (existsSync(generatedAuthExport)) {
+            authExportPath = generatedAuthExport;
+          }
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[API Contract] Failed to resolve auth contract: ${message}`);
+      status.push({
+        key: "auth",
+        source: "failed",
+        url: opts.runtimeConfig.auth.url || undefined,
+        error: message,
+      });
     }
   }
 
@@ -587,23 +628,46 @@ export async function syncApiContractBridge(opts: {
       console.warn(
         `[API Contract] Skipping plugin "${key}" — no URL resolved (local path missing and no production URL configured)`,
       );
+      status.push({ key, source: "skipped" });
+      excludedPluginKeys.add(key);
       continue;
     }
-    const source = await resolveContractSource({
-      configDir: opts.configDir,
-      runtimeDir,
-      key,
-      source: plugin,
-      baseUrl: plugin.url,
-      generatedSubdir: `plugins/${key}`,
-    });
-    sources.push(source);
-    if (source.generatedPath) {
-      generatedPath = source.generatedPath;
+    try {
+      const source = await resolveContractSource({
+        configDir: opts.configDir,
+        runtimeDir,
+        key,
+        source: plugin,
+        baseUrl: plugin.url,
+        generatedSubdir: `plugins/${key}`,
+      });
+      sources.push(source);
+      status.push({
+        key,
+        source: plugin.source,
+        url: plugin.source !== "local" ? plugin.url : undefined,
+      });
+      if (source.generatedPath) {
+        generatedPath = source.generatedPath;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[API Contract] Failed to resolve plugin "${key}": ${message}`);
+      status.push({ key, source: "failed", url: plugin.url || undefined, error: message });
+      excludedPluginKeys.add(key);
     }
   }
 
-  const allPluginKeys = pluginEntries.map(([key]) => key);
+  const apiStatus = status.find((s) => s.key === "api");
+  if (apiStatus?.source === "failed") {
+    throw new Error(
+      `Cannot generate contract types without api contract: ${apiStatus.error ?? "unknown error"}`,
+    );
+  }
+
+  const allPluginKeys = pluginEntries
+    .filter(([key]) => !excludedPluginKeys.has(key))
+    .map(([key]) => key);
 
   writeGeneratedFiles({
     configDir: opts.configDir,
@@ -622,5 +686,6 @@ export async function syncApiContractBridge(opts: {
     generatedPath,
     manifest,
     source: opts.runtimeConfig.api.source,
+    status,
   };
 }
