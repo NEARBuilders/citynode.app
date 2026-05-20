@@ -24,7 +24,6 @@ import {
   createSessionMiddleware,
   type HonoEnv,
   registerAuthHandler,
-  toAuthClientContext,
 } from "./services/auth";
 import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
 import { loadRouterModule, resetFederationInstance } from "./services/federation.server";
@@ -793,9 +792,6 @@ export const createStartServer = (onReady?: () => void) =>
         const nonce = CSP_STRICT ? c.get("secureHeadersNonce") : undefined;
         const pluginContext = buildPluginContext(c);
         const ssrApiClient = createPluginsClient(plugins, pluginContext);
-        const ssrAuthClient = plugins.authClient
-          ? plugins.authClient({ reqHeaders: toAuthClientContext(c.get("reqHeaders")) })
-          : undefined;
 
         const render = () =>
           ssrRouterModule?.renderToStream(c.req.raw, {
@@ -804,7 +800,6 @@ export const createStartServer = (onReady?: () => void) =>
             basepath: runtimeConfig.runtime?.runtimeBasePath,
             runtimeConfig,
             apiClient: ssrApiClient,
-            authClient: ssrAuthClient,
             cspNonce: nonce,
           } as any);
 
