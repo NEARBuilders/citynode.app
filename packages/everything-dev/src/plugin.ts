@@ -75,6 +75,7 @@ import { writePluginSidebarGen } from "./sidebar";
 import type { BosConfig, BosConfigInput, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
+import { colors } from "./utils/theme";
 
 export interface DevSessionData {
   orchestrator: AppOrchestrator;
@@ -1278,6 +1279,12 @@ export default createPlugin({
       if (process.env.RAILWAY_TOKEN) {
         const railwayService = input.service ?? deps.bosConfig.ci?.railway?.service;
         if (!railwayService) {
+          console.log();
+          console.log(
+            colors.yellow(
+              "  Railway redeploy skipped: ci.railway.service is not configured in bos.config.json",
+            ),
+          );
           return {
             status: "published" as const,
             registryUrl: result.registryUrl,
@@ -1291,15 +1298,30 @@ export default createPlugin({
         }
 
         service = railwayService;
+        console.log();
+        console.log(`  Redeploying Railway service ${colors.cyan(railwayService)}...`);
         try {
-          await run("railway", ["redeploy", "--service", railwayService, "--yes"]);
+          const railResult = await run(
+            "railway",
+            ["redeploy", "--service", railwayService, "--yes"],
+            {
+              capture: true,
+            },
+          );
+          if (railResult?.stdout) {
+            for (const line of railResult.stdout.split("\n")) {
+              if (line.trim()) console.log(`  ${colors.dim(line.trim())}`);
+            }
+          }
           redeployed = true;
+          console.log(colors.green(`  Railway redeploy complete`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const railError =
             message.includes("not found") || message.includes("ENOENT")
               ? "Railway CLI not found. Install it: npm i -g @railway/cli"
               : `Railway redeploy failed: ${message}`;
+          console.log(colors.yellow(`  ${railError}`));
           return {
             status: "published" as const,
             registryUrl: result.registryUrl,
@@ -1311,6 +1333,9 @@ export default createPlugin({
             error: `Config published but ${railError}`,
           };
         }
+      } else {
+        console.log();
+        console.log(colors.yellow("  Railway redeploy skipped (RAILWAY_TOKEN not set)"));
       }
 
       return {
@@ -1898,9 +1923,30 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
   const privateKey =
     input.privateKey || process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
 
+  if (!privateKey) {
+    if (!process.stdin.isTTY) {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
+      };
+    }
+    console.log(
+      colors.yellow(
+        "  Warning: No NEAR_PRIVATE_KEY set — falling back to interactive keychain signing.",
+      ),
+    );
+  }
+
+  console.log();
+  console.log(`  Publishing to ${colors.cyan(registryUrl)}...`);
+
   try {
     await Effect.runPromise(ensureNearCli);
     let txHash: string | undefined;
+
+    console.log(`  Submitting transaction on ${network}...`);
 
     try {
       const tx = await Effect.runPromise(
@@ -1916,6 +1962,9 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
         }),
       );
       txHash = tx.txHash;
+      if (txHash) {
+        console.log(`  Transaction submitted: ${colors.dim(txHash)}`);
+      }
     } catch (error) {
       txHash = extractTransactionHash(error);
 

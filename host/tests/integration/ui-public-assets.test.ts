@@ -14,7 +14,7 @@ const uiDistDir = path.join(workspaceRoot, "ui", "dist");
 
 loadHostTestEnv(workspaceRoot);
 
-function buildUiProxyConfig(
+function buildUiRemoteConfig(
   uiAssetsUrl: string,
   apiProxyUrl: string,
   hostUrl: string,
@@ -46,11 +46,12 @@ function buildUiProxyConfig(
   } as RuntimeConfig;
 }
 
-describe("UI public asset proxying through host", () => {
+describe("UI public asset redirect (Cloudflare Error 1000 regression)", () => {
   let uiServer: Awaited<ReturnType<typeof startStaticDistServer>>;
   let apiProxy: Awaited<ReturnType<typeof startJsonProxyTarget>>;
   let hostHandle: ReturnType<typeof runServer>;
   let baseUrl: string;
+  let uiBaseUrl: string;
   const envSnapshot = { ...process.env };
 
   beforeAll(async () => {
@@ -63,12 +64,13 @@ describe("UI public asset proxying through host", () => {
 
     const hostPort = await getAvailablePort();
     baseUrl = `http://127.0.0.1:${hostPort}`;
+    uiBaseUrl = uiServer.baseUrl;
     process.env.NODE_ENV = "development";
     process.env.HOST = "127.0.0.1";
     process.env.PORT = String(hostPort);
     process.env.CSP_STRICT = "false";
 
-    const config = buildUiProxyConfig(uiServer.baseUrl, apiProxy.baseUrl, baseUrl);
+    const config = buildUiRemoteConfig(uiServer.baseUrl, apiProxy.baseUrl, baseUrl);
     hostHandle = runServer({ config });
     await hostHandle.ready;
   }, 30000);
@@ -80,69 +82,76 @@ describe("UI public asset proxying through host", () => {
     process.env = { ...envSnapshot };
   });
 
-  describe("text assets from ui/public", () => {
-    it("proxies /skill.md from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/skill.md`);
+  describe("UI assets redirect to remote URL instead of proxying", () => {
+    it("redirects /favicon.ico to the UI origin with 302", async () => {
+      const response = await fetch(`${baseUrl}/favicon.ico`, { redirect: "manual" });
 
-      expect(response.status).toBe(200);
-      const text = await response.text();
-      expect(text.length).toBeGreaterThan(0);
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}/favicon.ico`);
     });
 
-    it("proxies /llms.txt from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/llms.txt`);
+    it("redirects /icon.svg to the UI origin with 302", async () => {
+      const response = await fetch(`${baseUrl}/icon.svg`, { redirect: "manual" });
 
-      expect(response.status).toBe(200);
-      const text = await response.text();
-      expect(text.length).toBeGreaterThan(0);
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}/icon.svg`);
     });
 
-    it("proxies /robots.txt from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/robots.txt`);
+    it("redirects /skill.md to the UI origin with 302", async () => {
+      const response = await fetch(`${baseUrl}/skill.md`, { redirect: "manual" });
 
-      expect(response.status).toBe(200);
-      const text = await response.text();
-      expect(text.length).toBeGreaterThan(0);
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}/skill.md`);
     });
 
-    it("proxies /README.md from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/README.md`);
+    it("redirects /robots.txt to the UI origin with 302", async () => {
+      const response = await fetch(`${baseUrl}/robots.txt`, { redirect: "manual" });
 
-      expect(response.status).toBe(200);
-      const text = await response.text();
-      expect(text.length).toBeGreaterThan(0);
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}/robots.txt`);
     });
-  });
 
-  describe("binary assets from ui/public", () => {
-    it("proxies /favicon.ico from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/favicon.ico`);
+    it("redirects /static/css/async/style.css to the UI origin", async () => {
+      const response = await fetch(`${baseUrl}/static/css/async/style.css`, { redirect: "manual" });
+
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}/static/css/async/style.css`);
+    });
+
+    it("redirects a static/image path to the UI origin", async () => {
+      const testPath = "/static/image/built_on.2920b568.png";
+      const response = await fetch(`${baseUrl}${testPath}`, { redirect: "manual" });
+
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}${testPath}`);
+    });
+
+    it("redirect preserves query strings", async () => {
+      const response = await fetch(`${baseUrl}/icon.svg?v=123`, { redirect: "manual" });
+
+      expect(response.status).toBe(302);
+      const location = response.headers.get("location");
+      expect(location).toBe(`${uiBaseUrl}/icon.svg?v=123`);
+    });
+
+    it("following the redirect serves the actual asset", async () => {
+      const response = await fetch(`${baseUrl}/favicon.ico`, { redirect: "follow" });
 
       expect(response.status).toBe(200);
       const buf = await response.arrayBuffer();
       expect(buf.byteLength).toBeGreaterThan(0);
     });
-
-    it("proxies /icon.svg from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/icon.svg`);
-
-      expect(response.status).toBe(200);
-      const text = await response.text();
-      expect(text).toContain("<svg");
-    });
-
-    it("proxies /manifest.json from UI dist", async () => {
-      const response = await fetch(`${baseUrl}/manifest.json`);
-
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json).toHaveProperty("name");
-    });
   });
 
-  describe("non-asset paths are not proxied", () => {
-    it("/ (root) renders client shell, not proxied", async () => {
-      const response = await fetch(`${baseUrl}/`);
+  describe("non-asset paths are not redirected", () => {
+    it("/ (root) renders client shell, not redirected", async () => {
+      const response = await fetch(`${baseUrl}/`, { redirect: "manual" });
 
       expect(response.status).toBe(200);
       const html = await response.text();
@@ -157,16 +166,16 @@ describe("UI public asset proxying through host", () => {
       expect(await response.text()).toBe("OK");
     });
 
-    it("/api/ping is routed to API proxy, not UI proxy", async () => {
-      const response = await fetch(`${baseUrl}/api/ping`);
+    it("/api/ping is routed to API proxy, not redirected", async () => {
+      const response = await fetch(`${baseUrl}/api/ping`, { redirect: "manual" });
       const json = (await response.json()) as Record<string, unknown>;
 
       expect(response.status).toBe(200);
       expect(json).toMatchObject({ status: "ok" });
     });
 
-    it("paths without file extensions are not proxied to UI", async () => {
-      const response = await fetch(`${baseUrl}/nonexistent-page`);
+    it("paths without file extensions are not redirected", async () => {
+      const response = await fetch(`${baseUrl}/nonexistent-page`, { redirect: "manual" });
 
       expect(response.status).toBe(200);
       const html = await response.text();
@@ -174,9 +183,9 @@ describe("UI public asset proxying through host", () => {
     });
   });
 
-  describe("missing UI assets return 404", () => {
-    it("returns 404 for a file extension path that does not exist in UI dist", async () => {
-      const response = await fetch(`${baseUrl}/nonexistent-file.css`);
+  describe("missing UI assets return 404 from redirect target", () => {
+    it("follows redirect to a nonexistent asset, returns 404", async () => {
+      const response = await fetch(`${baseUrl}/nonexistent-file.css`, { redirect: "follow" });
 
       expect(response.status).toBe(404);
     });

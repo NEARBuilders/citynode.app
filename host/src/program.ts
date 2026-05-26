@@ -642,11 +642,13 @@ export const createStartServer = (onReady?: () => void) =>
       );
     };
 
-    const proxyUiAssetRequest = async (c: Context<HonoEnv>) => {
+    const redirectUiAssetRequest = async (c: Context<HonoEnv>) => {
       const runtime = await resolveRequestRuntime(config, c.req.raw, {
         verification: "stale-while-revalidate",
       });
-      return proxyRequest(c.req.raw, runtime.config.ui.url);
+      const url = new URL(c.req.url);
+      const targetUrl = `${runtime.config.ui.url}${url.pathname}${url.search}`;
+      return c.redirect(targetUrl, 302);
     };
 
     const sessionMiddleware = createSessionMiddleware(plugins);
@@ -660,7 +662,7 @@ export const createStartServer = (onReady?: () => void) =>
       }
 
       try {
-        return await proxyUiAssetRequest(c);
+        return await redirectUiAssetRequest(c);
       } catch (error) {
         const { message, status } = getTenantRuntimeErrorResponse(error);
         return c.text(message, { status: status as 404 | 500 | 502 });
@@ -801,7 +803,7 @@ export const createStartServer = (onReady?: () => void) =>
             runtimeConfig,
             apiClient: ssrApiClient,
             cspNonce: nonce,
-          } as any);
+          });
 
         const result = await render();
         const responseHeaders = new Headers(result?.headers);

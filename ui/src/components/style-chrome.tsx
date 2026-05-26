@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
+import { getRuntimeConfig } from "@/app";
 import builtOn from "@/assets/built_on.png";
 import builtOnRev from "@/assets/built_on_rev.png";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserNav } from "@/components/user-nav";
+import { useClientValue } from "@/hooks/use-client";
 import type { SidebarItem } from "@/lib/plugin-sidebar.gen";
 
 interface StyleChromeProps {
@@ -177,12 +179,20 @@ export function StyleChrome({
               className="relative h-6 w-[100px]"
             >
               <img
-                src={builtOn}
+                src={useClientValue(() => {
+                  const cfg = getRuntimeConfig();
+                  const base = cfg?.assetsUrl ?? "";
+                  return base + builtOn;
+                }, builtOn)}
                 alt="Built on NEAR"
                 className="absolute inset-0 h-full w-full object-contain dark:hidden"
               />
               <img
-                src={builtOnRev}
+                src={useClientValue(() => {
+                  const cfg = getRuntimeConfig();
+                  const base = cfg?.assetsUrl ?? "";
+                  return base + builtOnRev;
+                }, builtOnRev)}
                 alt="Built on NEAR"
                 className="absolute inset-0 hidden h-full w-full object-contain dark:block"
               />

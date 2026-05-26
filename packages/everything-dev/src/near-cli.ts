@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { Effect } from "effect";
 import { execa } from "execa";
+import { colors } from "./utils/theme";
 
 export interface NearTransactionConfig {
   account: string;
@@ -125,7 +126,9 @@ const checkNearCliInstalled = Effect.tryPromise({
 const installNearCli = Effect.tryPromise({
   try: async () => {
     await execa("sh", ["-c", `curl --proto '=https' --tlsv1.2 -LsSf ${INSTALLER_URL} | sh`], {
-      stdio: "inherit",
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
     });
   },
   catch: (error) => {
@@ -139,7 +142,7 @@ const installNearCli = Effect.tryPromise({
 });
 
 async function runNearCommand(args: string[]): Promise<void> {
-  await execa("near", args, { stdio: "inherit" });
+  await execa("near", args, { stdin: "pipe", stdout: "inherit", stderr: "inherit" });
 }
 
 export const ensureNearCli = Effect.gen(function* () {
@@ -189,13 +192,25 @@ export const executeTransaction = (
     if (config.privateKey) {
       args.push("sign-with-plaintext-private-key", config.privateKey, "send");
     } else {
+      if (!process.stdin.isTTY) {
+        return {
+          success: false,
+          error:
+            "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
+        };
+      }
+      console.log(
+        colors.yellow(
+          "  Warning: No NEAR_PRIVATE_KEY set — falling back to interactive keychain signing.",
+        ),
+      );
       args.push("sign-with-keychain", "send");
     }
 
     const output = yield* Effect.tryPromise({
       try: async () => {
         const result = await execa("near", args, {
-          stdin: "inherit",
+          stdin: config.privateKey ? "pipe" : "inherit",
           stdout: "pipe",
           stderr: "pipe",
           reject: false,

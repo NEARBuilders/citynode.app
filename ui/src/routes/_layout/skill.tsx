@@ -12,9 +12,8 @@ const INTENT_REGISTRY_URL = "https://tanstack.com/intent/registry/everything-dev
 export const Route = createFileRoute("/_layout/skill")({
   loader: async ({ context }) => {
     const runtimeConfig = context.runtimeConfig;
-    const rawSkillUrl = runtimeConfig?.hostUrl
-      ? new URL("/skill.md", runtimeConfig.hostUrl).toString()
-      : "/skill.md";
+    const assetsUrl = runtimeConfig?.assetsUrl;
+    const rawSkillUrl = assetsUrl ? new URL("/skill.md", assetsUrl).toString() : "/skill.md";
 
     const skill = await fetch(rawSkillUrl)
       .then(async (response) => {

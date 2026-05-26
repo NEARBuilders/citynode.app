@@ -101,5 +101,6 @@ export function buildTestRenderOptions(
     apiClient,
     session: null,
     authClient,
-  } as RenderOptionsWithApi<ApiClient>;
+    cspNonce: undefined,
+  } satisfies RenderOptionsWithApi<ApiClient>;
 }

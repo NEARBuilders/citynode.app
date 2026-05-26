@@ -69,6 +69,7 @@ const createRouter = (opts: CreateRouterOptions) => {
       authClient: opts.context.authClient ?? createAuthClient(opts.context.runtimeConfig),
       session: opts.context.session,
     },
+    ...(opts.cspNonce ? { ssr: { nonce: opts.cspNonce } } : {}),
     defaultPreload: "intent",
     scrollRestoration: true,
     defaultStructuralSharing: true,
@@ -143,6 +144,7 @@ const renderToStream = async (request: Request, renderOptions: RenderOptions) =>
       const { router } = createRouter({
         history,
         basepath: renderOptions.basepath,
+        cspNonce: renderOptions.cspNonce,
         context: {
           queryClient: localQueryClient,
           assetsUrl: renderOptions.assetsUrl,

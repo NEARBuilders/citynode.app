@@ -18,6 +18,7 @@ export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {
   history?: RouterHistory;
   context?: Partial<RouterContextWithApi<TApiClient, TSession>>;
   basepath?: string;
+  cspNonce?: string;
 }
 
 export type HeadMeta = NonNullable<AnyRouteMatch["meta"]>[number];
@@ -35,6 +36,7 @@ export interface RenderOptions<TSession = unknown> {
   runtimeConfig: Partial<ClientRuntimeConfig>;
   basepath?: string;
   session?: TSession;
+  cspNonce?: string;
 }
 
 export interface RenderOptionsWithApi<TApiClient = unknown, TSession = unknown>
