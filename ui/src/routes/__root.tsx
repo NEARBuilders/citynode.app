@@ -6,7 +6,6 @@ import {
   Link,
   Outlet,
   Scripts,
-  useRouter,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { getRemoteScripts } from "everything-dev/ui/head";
@@ -131,12 +130,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  const nonce = useRouter().options.ssr?.nonce;
+  const { cspNonce } = Route.useRouteContext();
   return (
     <html lang="en" className="scroll-smooth" suppressHydrationWarning>
       <head>
         <HeadContent />
-        <style nonce={nonce} dangerouslySetInnerHTML={{ __html: getBaseStyles() }} />
+        <style nonce={cspNonce} dangerouslySetInnerHTML={{ __html: getBaseStyles() }} />
       </head>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

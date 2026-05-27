@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { BookOpen, ExternalLink, FileText, GitFork, Sparkles } from "lucide-react";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Markdown } from "@/components/ui/markdown";
-import { useClientValue } from "@/hooks/use-client";
 import { fetchRepositoryReadme } from "@/lib/repository-content";
 
 export const Route = createFileRoute("/_layout/about")({
@@ -48,9 +47,9 @@ function parseGithubRepo(url: string): { owner: string; repo: string } | null {
 
 function About() {
   const { repository, readme, description, runtimeConfig, rawSkillUrl } = Route.useLoaderData();
-  const runtime = useClientValue(() => getActiveRuntime(runtimeConfig), undefined);
-  const account = useClientValue(() => getAccount(runtimeConfig), "every.near");
-  const appName = useClientValue(() => getAppName(runtimeConfig), "app");
+  const runtime = getActiveRuntime(runtimeConfig);
+  const account = getAccount(runtimeConfig);
+  const appName = getAppName(runtimeConfig);
 
   const accountId = runtime?.accountId ?? account;
   const githubRepo = repository && isGithubUrl(repository) ? parseGithubRepo(repository) : null;

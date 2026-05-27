@@ -1,3 +1,4 @@
+import type { ClientRuntimeConfig } from "everything-dev/types";
 import { motion } from "framer-motion";
 import { ExternalLink } from "lucide-react";
 import { getRepository } from "@/app";
@@ -16,6 +17,8 @@ interface UnderConstructionProps {
   onClick?: () => void;
   skipNavigation?: boolean;
   pressed?: boolean;
+  runtimeConfig?: Partial<ClientRuntimeConfig>;
+  assetsUrl?: string;
 }
 
 const DEFAULT_REPOSITORY = "https://github.com/nearbuilders/everything-dev";
@@ -27,8 +30,11 @@ export function UnderConstruction({
   onClick,
   skipNavigation,
   pressed,
+  runtimeConfig,
+  assetsUrl = "",
 }: UnderConstructionProps) {
-  const repository = getRepository() ?? DEFAULT_REPOSITORY;
+  const repository = getRepository(runtimeConfig) ?? DEFAULT_REPOSITORY;
+  const imgSrc = new URL(underConstructionImage, assetsUrl).toString();
   const githubUrl = sourceFile ? `${repository}/blob/main/${sourceFile}` : repository;
 
   const handleClick = () => {
@@ -90,7 +96,7 @@ export function UnderConstruction({
                 style={{ transformStyle: "preserve-3d" }}
               >
                 <img
-                  src={underConstructionImage}
+                  src={imgSrc}
                   alt={label ? `${label} under construction` : "under construction"}
                   className="w-full h-auto rounded-xl border border-border object-cover shadow-lg"
                 />

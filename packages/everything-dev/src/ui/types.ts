@@ -7,6 +7,7 @@ export interface RouterContext<TSession = unknown> {
   assetsUrl: string;
   runtimeConfig?: Partial<ClientRuntimeConfig>;
   session?: TSession;
+  cspNonce?: string;
 }
 
 export interface RouterContextWithApi<TApiClient = unknown, TSession = unknown>
@@ -18,7 +19,6 @@ export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {
   history?: RouterHistory;
   context?: Partial<RouterContextWithApi<TApiClient, TSession>>;
   basepath?: string;
-  cspNonce?: string;
 }
 
 export type HeadMeta = NonNullable<AnyRouteMatch["meta"]>[number];

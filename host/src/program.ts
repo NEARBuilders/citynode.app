@@ -584,9 +584,8 @@ export const createStartServer = (onReady?: () => void) =>
       const clientUrl = runtimeSourceConfig.ui.url;
       const uiIntegrity = runtimeSourceConfig.ui.integrity;
       const themeInitScript = (getThemeInitScript() as { children?: string }).children ?? "";
-      const configWithNonce = nonce ? { ...runtimeConfig, cspNonce: nonce } : runtimeConfig;
       const hydrateScript =
-        (getHydrateScript(configWithNonce as ClientRuntimeConfig) as { children?: string })
+        (getHydrateScript(runtimeConfig as Partial<ClientRuntimeConfig>) as { children?: string })
           .children ?? "";
 
       const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";

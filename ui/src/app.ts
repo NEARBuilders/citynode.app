@@ -108,7 +108,6 @@ export interface RouterContext extends BaseRouterContextWithApi<ApiClient, Sessi
 export interface CreateRouterOptions
   extends Omit<BaseCreateRouterOptions<ApiClient, SessionData>, "context"> {
   context: RouterContext;
-  cspNonce?: string;
 }
 
 export interface RenderOptions extends Omit<BaseRenderOptions<SessionData>, "runtimeConfig"> {

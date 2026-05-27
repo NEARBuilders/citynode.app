@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { getAccount, getActiveRuntime, getAppName } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/ui/markdown";
-import { useClientValue } from "@/hooks/use-client";
 
 const INTENT_REGISTRY_URL = "https://tanstack.com/intent/registry/everything-dev";
 
@@ -46,9 +45,9 @@ export const Route = createFileRoute("/_layout/skill")({
 
 function SkillPage() {
   const { rawSkillUrl, skill, runtimeConfig, intentRegistryUrl } = Route.useLoaderData();
-  const runtime = useClientValue(() => getActiveRuntime(runtimeConfig), undefined);
-  const account = useClientValue(() => getAccount(runtimeConfig), "every.near");
-  const appName = useClientValue(() => getAppName(runtimeConfig), "app");
+  const runtime = getActiveRuntime(runtimeConfig);
+  const account = getAccount(runtimeConfig);
+  const appName = getAppName(runtimeConfig);
   const [copied, setCopied] = useState(false);
 
   const accountId = runtime?.accountId ?? account;

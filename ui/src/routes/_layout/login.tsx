@@ -38,6 +38,7 @@ function LoginPage() {
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
   const { redirect } = Route.useSearch();
+  const { runtimeConfig, assetsUrl } = Route.useRouteContext();
   const queryClient = useQueryClient();
 
   const [nearPending, setNearPending] = useState(false);
@@ -108,7 +109,11 @@ function LoginPage() {
     <div className="min-h-[70vh] w-full flex items-start justify-center px-6 pt-[30vh] animate-fade-in">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex justify-center">
-          <UnderConstruction sourceFile="ui/src/routes/_layout/login.tsx" />
+          <UnderConstruction
+            sourceFile="ui/src/routes/_layout/login.tsx"
+            runtimeConfig={runtimeConfig}
+            assetsUrl={assetsUrl}
+          />
         </div>
 
         <div className="space-y-3 animate-fade-in-up">

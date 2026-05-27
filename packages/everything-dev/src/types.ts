@@ -290,7 +290,6 @@ export const RuntimeConfigSchema = z.object({
 export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;
 
 export const ClientRuntimeConfigSchema = z.object({
-  cspNonce: z.string().optional(),
   env: z.enum(["development", "production", "staging"]),
   account: z.string(),
   networkId: z.enum(["mainnet", "testnet"]),
