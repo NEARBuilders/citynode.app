@@ -128,18 +128,15 @@ describe("UI public assets proxied through host (Cloudflare Error 1000 regressio
     });
   });
 
-  describe("HTML pages use root-relative asset paths for proxied assets", () => {
-    it("/ renders client shell with root-relative boot assets", async () => {
+  describe("HTML pages use the UI asset origin for executable assets", () => {
+    it("/ renders client shell with UI boot assets on the UI origin", async () => {
       const response = await fetch(`${baseUrl}/`);
 
       expect(response.status).toBe(200);
       const html = await response.text();
       expect(html).toContain('href="/favicon.ico"');
-      expect(html).toContain('src="/remoteEntry.js"');
-      expect(html).toContain('href="/static/css/style.css"');
-      expect(html).not.toMatch(/href="http[^"]*favicon\.ico"/);
-      expect(html).not.toMatch(/src="http[^"]*remoteEntry\.js"/);
-      expect(html).not.toMatch(/href="http[^"]*\/static\/css\/style\.css"/);
+      expect(html).toContain(`${uiServer.baseUrl}/remoteEntry.js`);
+      expect(html).toContain(`${uiServer.baseUrl}/static/css/style.css`);
     });
   });
 

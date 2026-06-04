@@ -52,8 +52,9 @@ export function getHydrateScript(
 
 export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
   const { runtimeConfig, containerName, hydratePath, integrity } = options;
+  const assetsUrl = runtimeConfig?.assetsUrl?.replace(/\/$/, "");
   const entryScript: HeadScript = {
-    src: integrity ? `/remoteEntry.js?v=${encodeURIComponent(integrity)}` : "/remoteEntry.js",
+    src: `${assetsUrl ?? ""}/remoteEntry.js${integrity ? `?v=${encodeURIComponent(integrity)}` : ""}`,
   };
   if (integrity) {
     entryScript.integrity = integrity;

@@ -42,6 +42,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   head: ({ loaderData }) => {
     const runtimeConfig = loaderData?.runtimeConfig;
     const runtimeBasePath = runtimeConfig?.runtime?.runtimeBasePath ?? "/";
+    const assetsUrl = runtimeConfig?.assetsUrl?.replace(/\/$/, "");
     const siteUrl = runtimeConfig?.hostUrl
       ? `${runtimeConfig.hostUrl}${runtimeBasePath === "/" ? "" : runtimeBasePath}`
       : "";
@@ -87,7 +88,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       links: [
         {
           rel: "stylesheet",
-          href: `/static/css/style.css?v=${encodeURIComponent(runtimeConfig?.ui?.integrity ?? "")}`,
+          href: `${assetsUrl ?? ""}/static/css/style.css${runtimeConfig?.ui?.integrity ? `?v=${encodeURIComponent(runtimeConfig.ui.integrity)}` : ""}`,
         },
         { rel: "preconnect", href: "https://fonts.googleapis.com" },
         {

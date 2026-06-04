@@ -131,7 +131,7 @@ function buildRuntimeClientConfig(
     account: activeRuntime.accountId,
     networkId: config.account.endsWith(".testnet") ? "testnet" : "mainnet",
     hostUrl: requestUrl.origin,
-    assetsUrl: requestUrl.origin,
+    assetsUrl: uiConfig.url,
     apiBase: "/api",
     rpcBase: "/api/rpc",
     authAvailable: plugins.auth !== null,
@@ -580,6 +580,7 @@ export const createStartServer = (onReady?: () => void) =>
     ) => {
       const nonce = CSP_STRICT ? ctx.get("secureHeadersNonce") : undefined;
       const uiIntegrity = runtimeSourceConfig.ui.integrity;
+      const assetsUrl = runtimeConfig.assetsUrl.replace(/\/$/, "");
       const themeInitScript = (getThemeInitScript() as { children?: string }).children ?? "";
       const hydrateScript =
         (getHydrateScript(runtimeConfig as Partial<ClientRuntimeConfig>) as { children?: string })
@@ -610,7 +611,7 @@ export const createStartServer = (onReady?: () => void) =>
               <link rel="icon" type="image/x-icon" href="/favicon.ico" />
               <link rel="icon" type="image/svg+xml" href="/icon.svg" />
               <link rel="manifest" href="/manifest.json" />
-              <link rel="stylesheet" href="/static/css/style.css${uiVersion}" />
+              <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
               <style>
                 ${getBaseStyles()}
                 .shell { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
@@ -618,7 +619,7 @@ export const createStartServer = (onReady?: () => void) =>
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 .error { color: #fca5a5; }
               </style>
-              <script${nonceAttr} src="/remoteEntry.js${uiVersion}"${sriAttr}></script>
+              <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
               ${pluginUiScripts}
               <script${nonceAttr}>${themeInitScript}</script>
               <script${nonceAttr}>${hydrateScript}</script>
