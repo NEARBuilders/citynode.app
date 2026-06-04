@@ -50,11 +50,17 @@ jobs:
       - name: Run postinstall
         run: bun run postinstall
 
+      - name: Build and deploy artifacts
+        run: bun packages/everything-dev/src/cli.ts build --deploy
+
+      - name: Publish bos.config.json to FastKV
+        run: bun packages/everything-dev/src/cli.ts publish --env staging
+
       - name: Install Railway CLI
         run: npm i -g @railway/cli
 
-      - name: Deploy
-        run: bun packages/everything-dev/src/cli.ts deploy --env staging
+      - name: Redeploy Railway
+        run: railway redeploy --service app --yes
 
       - name: Commit and push bos.config.json updates
         run: |
