@@ -52,7 +52,9 @@ export function getHydrateScript(
 
 export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
   const { runtimeConfig, containerName, hydratePath, integrity } = options;
-  const entryScript: HeadScript = { src: "/remoteEntry.js" };
+  const entryScript: HeadScript = {
+    src: integrity ? `/remoteEntry.js?v=${encodeURIComponent(integrity)}` : "/remoteEntry.js",
+  };
   if (integrity) {
     entryScript.integrity = integrity;
     entryScript.crossOrigin = "anonymous";

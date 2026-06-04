@@ -585,6 +585,7 @@ export const createStartServer = (onReady?: () => void) =>
         (getHydrateScript(runtimeConfig as Partial<ClientRuntimeConfig>) as { children?: string })
           .children ?? "";
 
+      const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
       const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
       const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
 
@@ -594,7 +595,8 @@ export const createStartServer = (onReady?: () => void) =>
           const uiSri = p.ui!.integrity
             ? ` integrity="${p.ui!.integrity}" crossorigin="anonymous"`
             : "";
-          return `<script${nonceAttr} src="/__mf/plugin-ui/${pluginKey}/remoteEntry.js"${uiSri}></script>`;
+          const pluginVersion = p.ui!.integrity ? `?v=${encodeURIComponent(p.ui!.integrity)}` : "";
+          return `<script${nonceAttr} src="/__mf/plugin-ui/${pluginKey}/remoteEntry.js${pluginVersion}"${uiSri}></script>`;
         })
         .join("\n");
 
@@ -608,7 +610,7 @@ export const createStartServer = (onReady?: () => void) =>
               <link rel="icon" type="image/x-icon" href="/favicon.ico" />
               <link rel="icon" type="image/svg+xml" href="/icon.svg" />
               <link rel="manifest" href="/manifest.json" />
-              <link rel="stylesheet" href="/static/css/style.css" />
+              <link rel="stylesheet" href="/static/css/style.css${uiVersion}" />
               <style>
                 ${getBaseStyles()}
                 .shell { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
@@ -616,7 +618,7 @@ export const createStartServer = (onReady?: () => void) =>
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 .error { color: #fca5a5; }
               </style>
-              <script${nonceAttr} src="/remoteEntry.js"${sriAttr}></script>
+              <script${nonceAttr} src="/remoteEntry.js${uiVersion}"${sriAttr}></script>
               ${pluginUiScripts}
               <script${nonceAttr}>${themeInitScript}</script>
               <script${nonceAttr}>${hydrateScript}</script>
