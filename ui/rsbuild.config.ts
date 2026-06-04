@@ -144,6 +144,7 @@ function createClientConfig() {
       distPath: { root: "dist", css: "static/css", js: "static/js" },
       assetPrefix: "auto",
       filename: { js: "[name].js", css: "style.css" },
+      chunkFilename: "static/js/async/[name].[contenthash].js",
       copy: [{ from: path.resolve(__dirname, "public"), to: "./" }],
     },
   });

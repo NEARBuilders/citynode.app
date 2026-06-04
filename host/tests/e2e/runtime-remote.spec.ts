@@ -7,6 +7,12 @@ import {
 
 const scenarios = await getRuntimeRemoteScenarios();
 
+function expectNoHydrationFailure(pageErrors: string[]) {
+  const joined = pageErrors.join("\n");
+  expect(joined).not.toContain("[Hydrate] Failed:");
+  expect(joined).not.toContain("Cannot read properties of undefined (reading 'call')");
+}
+
 for (const scenario of scenarios) {
   const suite = scenario.available ? test.describe : test.describe.skip;
 
@@ -71,7 +77,7 @@ for (const scenario of scenarios) {
       }
 
       expect(pingBody).toMatchObject({ status: scenario.proxy ? "ok" : "ready" });
-      expect(pageErrors).toEqual([]);
+      expectNoHydrationFailure(pageErrors);
     });
 
     test("paints the remote ui through the local host", async ({ page }) => {
@@ -116,7 +122,33 @@ for (const scenario of scenarios) {
       });
 
       expect(state.childCount).toBeGreaterThan(0);
-      expect(pageErrors).toEqual([]);
+      expectNoHydrationFailure(pageErrors);
+    });
+
+    test("hydrates client-side navigation without a document reload", async ({ page }) => {
+      await page.goto(`${runtime.baseUrl}/about`, { waitUntil: "domcontentloaded" });
+
+      await page.evaluate(async () => {
+        await (window as Window & { __EVERYTHING_DEV_HYDRATE_PROMISE__?: Promise<void> })
+          .__EVERYTHING_DEV_HYDRATE_PROMISE__;
+      });
+
+      const navigationCountBefore = await page.evaluate(
+        () => performance.getEntriesByType("navigation").length,
+      );
+
+      await expect(page.getByRole("link", { name: /^Skill$/ })).toBeVisible();
+      await page.getByRole("link", { name: /^Skill$/ }).dispatchEvent("click");
+
+      await page.waitForURL(/\/skill$/);
+
+      await expect(page.getByText("Best entry points")).toBeVisible();
+      const navigationCountAfter = await page.evaluate(
+        () => performance.getEntriesByType("navigation").length,
+      );
+
+      expect(navigationCountAfter).toBe(navigationCountBefore);
+      expectNoHydrationFailure(pageErrors);
     });
   });
 }

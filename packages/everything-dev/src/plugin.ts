@@ -1908,10 +1908,18 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
     skipped = result.skipped;
 
     const refreshed = await loadResolvedConfig({ cwd: configDir });
-    if (refreshed?.config) {
-      bosConfig = refreshed.config;
-      publishConfig = isStaging ? { ...refreshed.config, domain: gateway } : refreshed.config;
+    if (!refreshed?.config) {
+      return {
+        status: "error",
+        registryUrl,
+        built,
+        skipped,
+        error: "Failed to reload bos.config.json after build",
+      };
     }
+
+    bosConfig = refreshed.config;
+    publishConfig = isStaging ? { ...refreshed.config, domain: gateway } : refreshed.config;
   }
 
   const registryEntries: Record<string, string> = {
