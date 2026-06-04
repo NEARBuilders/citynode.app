@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
@@ -17,6 +17,7 @@ export function UserNav() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const router = useRouter();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const user = session?.user;
   const { data: organizations } = useQuery({
@@ -44,8 +45,10 @@ export function UserNav() {
     },
     onSuccess: async () => {
       queryClient.setQueryData(["session"], null);
+      queryClient.removeQueries({ queryKey: ["organizations"] });
       await queryClient.invalidateQueries({ queryKey: ["session"] });
-      navigate({ to: "/", replace: true });
+      await router.invalidate();
+      await navigate({ to: "/", replace: true });
     },
     onError: (error: Error) => {
       console.error("Sign out error:", error);

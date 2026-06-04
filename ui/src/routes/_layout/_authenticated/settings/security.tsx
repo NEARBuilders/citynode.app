@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
@@ -24,6 +24,7 @@ function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean |
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -64,8 +65,10 @@ function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean |
     onSuccess: async () => {
       queryClient.setQueryData(["session"], null);
       queryClient.removeQueries({ queryKey: ["passkeys"] });
+      queryClient.removeQueries({ queryKey: ["organizations"] });
       await queryClient.invalidateQueries({ queryKey: ["session"] });
-      navigate({ to: "/", replace: true });
+      await router.invalidate();
+      await navigate({ to: "/", replace: true });
     },
     onError: (err: Error) => toast.error(err.message),
   });
