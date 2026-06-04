@@ -1,8 +1,7 @@
 import { createBrowserHistory, createRouter as createTanStackRouter } from "@tanstack/react-router";
+import type { CreateRouterOptions } from "./app";
 import { createAuthClient } from "./app";
 import { routeTree } from "./routeTree.gen";
-import "./styles.css";
-import type { CreateRouterOptions } from "./app";
 
 export type {
   ClientRuntimeConfig,
@@ -21,7 +20,6 @@ export function createRouter(opts: CreateRouterOptions) {
     basepath: opts.basepath ?? opts.context.runtimeConfig?.runtime?.runtimeBasePath ?? "/",
     context: {
       queryClient,
-      assetsUrl: opts.context.assetsUrl,
       runtimeConfig: opts.context.runtimeConfig,
       apiClient: opts.context.apiClient,
       authClient: opts.context.authClient ?? createAuthClient(opts.context.runtimeConfig),

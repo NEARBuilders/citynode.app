@@ -18,6 +18,7 @@ import { onError } from "every-plugin/orpc";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
+import { proxy } from "hono/proxy";
 import { NONCE, secureHeaders } from "hono/secure-headers";
 import {
   buildPluginContext,
@@ -29,7 +30,7 @@ import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./s
 import { loadRouterModule, resetFederationInstance } from "./services/federation.server";
 import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
-import { createRouterMounts } from "./services/router";
+
 import { getTenantRuntimeErrorResponse, resolveRequestRuntime } from "./services/tenant-runtime";
 import { logger } from "./utils/logger";
 
@@ -112,24 +113,6 @@ async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
   } satisfies ActiveRuntimeState;
 }
 
-function isUiPublicAssetPath(pathname: string) {
-  if (pathname === "/") return false;
-  if (
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/__mf/") ||
-    pathname.startsWith("/_runtime/")
-  ) {
-    return false;
-  }
-
-  if (["/health", "/remoteEntry.js", "/mf-manifest.json", "/mf-stats.json"].includes(pathname)) {
-    return false;
-  }
-
-  const lastSegment = pathname.split("/").pop() ?? "";
-  return /\.[A-Za-z0-9]+$/.test(lastSegment);
-}
-
 function buildRuntimeClientConfig(
   config: RuntimeConfig,
   request: Request,
@@ -148,7 +131,7 @@ function buildRuntimeClientConfig(
     account: activeRuntime.accountId,
     networkId: config.account.endsWith(".testnet") ? "testnet" : "mainnet",
     hostUrl: requestUrl.origin,
-    assetsUrl: uiConfig.url,
+    assetsUrl: requestUrl.origin,
     apiBase: "/api",
     rpcBase: "/api/rpc",
     authAvailable: plugins.auth !== null,
@@ -315,6 +298,29 @@ export async function proxyRequest(
   });
 }
 
+function buildStaticAssetProxyHeaders(req: Request) {
+  const headers = new Headers();
+
+  for (const name of ["accept", "accept-language", "if-none-match", "if-modified-since"]) {
+    const value = req.headers.get(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  }
+
+  return headers;
+}
+
+async function proxyStaticAssetRequest(req: Request, targetBase: string): Promise<Response> {
+  const url = new URL(req.url);
+  const targetUrl = `${targetBase}${url.pathname}${url.search}`;
+
+  return proxy(targetUrl, {
+    raw: req,
+    headers: buildStaticAssetProxyHeaders(req),
+  });
+}
+
 export function setupApiRoutes(
   app: Hono<HonoEnv>,
   config: RuntimeConfig,
@@ -392,66 +398,54 @@ export function setupApiRoutes(
       : c.text("Not Found", 404);
   };
 
-  const mountRouter = (router: unknown, suffix: string, title: string) => {
-    const basePath = `/api${suffix}` as const;
-    const rpcPath = `/api/rpc${suffix}` as const;
-    const rpcHandler = new RPCHandler(router as any, {
-      plugins: [new BatchHandlerPlugin()],
-      interceptors: [
-        onError((error: unknown) => {
-          formatORPCError(error);
-          throw error;
-        }),
-      ],
-    });
+  const apiRouter = plugins.api?.router;
 
-    const apiHandler = new OpenAPIHandler(router as any, {
-      plugins: [
-        new OpenAPIReferencePlugin({
-          schemaConverters: [new ZodToJsonSchemaConverter()],
-          specGenerateOptions: {
-            info: {
-              title,
-              version: "1.0.0",
-            },
-            servers: [{ url: basePath }, { url: `${config.host?.url ?? ""}${basePath}` }],
-          },
-        }),
-      ],
-      interceptors: [
-        onError((error: unknown) => {
-          formatORPCError(error);
-          throw error;
-        }),
-      ],
-    });
+  if (!apiRouter) {
+    const unavailable = (c: Context<HonoEnv>) =>
+      c.json({ error: "Service Unavailable", message: "The API is currently unavailable." }, 503);
 
-    app.all(rpcPath, (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, rpcPath));
-    app.all(`${rpcPath}/*`, (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, rpcPath));
-    app.all(basePath, (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, basePath));
-    app.all(`${basePath}/*`, (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, basePath));
-  };
-
-  for (const mount of createRouterMounts(plugins)) {
-    if (!mount.available) {
-      const basePath = `/api${mount.suffix}` as const;
-      const rpcPath = `/api/rpc${mount.suffix}` as const;
-      const handler = (c: Context<HonoEnv>) =>
-        c.json(
-          {
-            error: "Service Unavailable",
-            message: `The ${mount.title} plugin is currently unavailable.`,
-          },
-          503,
-        );
-      app.all(rpcPath, handler);
-      app.all(`${rpcPath}/*`, handler);
-      app.all(basePath, handler);
-      app.all(`${basePath}/*`, handler);
-      continue;
-    }
-    mountRouter(mount.router, mount.suffix, mount.title);
+    app.all("/api/rpc", unavailable);
+    app.all("/api/rpc/*", unavailable);
+    app.all("/api", unavailable);
+    app.all("/api/*", unavailable);
+    return;
   }
+
+  const rpcHandler = new RPCHandler(apiRouter as any, {
+    plugins: [new BatchHandlerPlugin()],
+    interceptors: [
+      onError((error: unknown) => {
+        formatORPCError(error);
+        throw error;
+      }),
+    ],
+  });
+
+  const apiHandler = new OpenAPIHandler(apiRouter as any, {
+    plugins: [
+      new OpenAPIReferencePlugin({
+        schemaConverters: [new ZodToJsonSchemaConverter()],
+        specGenerateOptions: {
+          info: {
+            title: `${config.title ?? config.account} API`,
+            version: "1.0.0",
+          },
+          servers: [{ url: "/api" }, { url: `${config.host?.url ?? ""}/api` }],
+        },
+      }),
+    ],
+    interceptors: [
+      onError((error: unknown) => {
+        formatORPCError(error);
+        throw error;
+      }),
+    ],
+  });
+
+  app.all("/api/rpc", (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, "/api/rpc"));
+  app.all("/api/rpc/*", (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, "/api/rpc"));
+  app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api"));
+  app.all("/api/*", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api"));
 }
 
 export const createStartServer = (onReady?: () => void) =>
@@ -535,6 +529,8 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("*", (c, next) => {
       const frameAncestors = isViewerFramePath(c.req.path) ? ["'self'"] : ["'none'"];
 
+      const viewerPath = isViewerFramePath(c.req.path);
+
       return secureHeaders({
         crossOriginOpenerPolicy: "same-origin-allow-popups",
         contentSecurityPolicy: {
@@ -548,7 +544,9 @@ export const createStartServer = (onReady?: () => void) =>
             ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
           ],
           connectSrc: ["'self'", "https:", ...uniqueOrigins, ...wsOrigins, ...cdnOrigins],
-          fontSrc: ["'self'", "https:", ...uniqueOrigins],
+          fontSrc: viewerPath
+            ? ["'self'", "data:", "https:", ...uniqueOrigins]
+            : ["'self'", "https:", ...uniqueOrigins],
           manifestSrc: [
             "'self'",
             "https:",
@@ -581,7 +579,6 @@ export const createStartServer = (onReady?: () => void) =>
       error?: Error | null,
     ) => {
       const nonce = CSP_STRICT ? ctx.get("secureHeadersNonce") : undefined;
-      const clientUrl = runtimeSourceConfig.ui.url;
       const uiIntegrity = runtimeSourceConfig.ui.integrity;
       const themeInitScript = (getThemeInitScript() as { children?: string }).children ?? "";
       const hydrateScript =
@@ -591,13 +588,13 @@ export const createStartServer = (onReady?: () => void) =>
       const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
       const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
 
-      const pluginUiScripts = Object.values(runtimeSourceConfig.plugins ?? {})
-        .filter((p: RuntimePlugin) => p.ui?.url && p.ui.source === "remote")
-        .map((p: RuntimePlugin) => {
+      const pluginUiScripts = Object.entries(runtimeSourceConfig.plugins ?? {})
+        .filter(([, p]: [string, RuntimePlugin]) => p.ui?.url && p.ui.source === "remote")
+        .map(([pluginKey, p]: [string, RuntimePlugin]) => {
           const uiSri = p.ui!.integrity
             ? ` integrity="${p.ui!.integrity}" crossorigin="anonymous"`
             : "";
-          return `<script${nonceAttr} src="${p.ui!.url}/remoteEntry.js"${uiSri}></script>`;
+          return `<script${nonceAttr} src="/__mf/plugin-ui/${pluginKey}/remoteEntry.js"${uiSri}></script>`;
         })
         .join("\n");
 
@@ -608,9 +605,10 @@ export const createStartServer = (onReady?: () => void) =>
               <meta charset="utf-8" />
               <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
               <title>${runtimeConfig.runtime?.title ?? runtimeSourceConfig.title ?? runtimeSourceConfig.account}</title>
-              <link rel="icon" type="image/x-icon" href="${clientUrl}/favicon.ico" />
-              <link rel="icon" type="image/svg+xml" href="${clientUrl}/icon.svg" />
-              <link rel="manifest" href="${clientUrl}/manifest.json" />
+              <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+              <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+              <link rel="manifest" href="/manifest.json" />
+              <link rel="stylesheet" href="/static/css/style.css" />
               <style>
                 ${getBaseStyles()}
                 .shell { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
@@ -618,7 +616,7 @@ export const createStartServer = (onReady?: () => void) =>
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 .error { color: #fca5a5; }
               </style>
-              <script${nonceAttr} src="${clientUrl}/remoteEntry.js"${sriAttr}></script>
+              <script${nonceAttr} src="/remoteEntry.js"${sriAttr}></script>
               ${pluginUiScripts}
               <script${nonceAttr}>${themeInitScript}</script>
               <script${nonceAttr}>${hydrateScript}</script>
@@ -641,13 +639,11 @@ export const createStartServer = (onReady?: () => void) =>
       );
     };
 
-    const redirectUiAssetRequest = async (c: Context<HonoEnv>) => {
+    const proxyUiAssetRequest = async (c: Context<HonoEnv>) => {
       const runtime = await resolveRequestRuntime(config, c.req.raw, {
         verification: "stale-while-revalidate",
       });
-      const url = new URL(c.req.url);
-      const targetUrl = `${runtime.config.ui.url}${url.pathname}${url.search}`;
-      return c.redirect(targetUrl, 302);
+      return await proxyStaticAssetRequest(c.req.raw, runtime.config.ui.url);
     };
 
     const sessionMiddleware = createSessionMiddleware(plugins);
@@ -656,12 +652,25 @@ export const createStartServer = (onReady?: () => void) =>
     setupApiRoutes(app, config, plugins, sessionMiddleware, loadingState);
 
     app.on(["GET", "HEAD"], "*", async (c: Context<HonoEnv>, next) => {
-      if (!isUiPublicAssetPath(c.req.path)) {
+      const { pathname } = new URL(c.req.url);
+
+      if (
+        pathname === "/" ||
+        pathname.startsWith("/api/") ||
+        pathname.startsWith("/__mf/") ||
+        pathname.startsWith("/_runtime/") ||
+        pathname === "/health"
+      ) {
+        return next();
+      }
+
+      const lastSegment = pathname.split("/").pop() ?? "";
+      if (!/\.[A-Za-z0-9]+$/.test(lastSegment)) {
         return next();
       }
 
       try {
-        return await redirectUiAssetRequest(c);
+        return await proxyUiAssetRequest(c);
       } catch (error) {
         const { message, status } = getTenantRuntimeErrorResponse(error);
         return c.text(message, { status: status as 404 | 500 | 502 });
@@ -682,7 +691,7 @@ export const createStartServer = (onReady?: () => void) =>
           if (!pluginUiUrl) {
             return c.text(`Plugin UI unavailable for ${pluginKey}`, 404);
           }
-          return await proxyRequest(c.req.raw, pluginUiUrl);
+          return await proxyStaticAssetRequest(c.req.raw, pluginUiUrl);
         } catch (error) {
           const { message, status } = getTenantRuntimeErrorResponse(error);
           return c.text(message, { status: status as 404 | 500 | 502 });
@@ -789,14 +798,12 @@ export const createStartServer = (onReady?: () => void) =>
       const ssrRouterModule = routerModuleResult.right;
 
       try {
-        const assetsUrl = effectiveConfig.ui.url;
         const nonce = CSP_STRICT ? c.get("secureHeadersNonce") : undefined;
         const pluginContext = buildPluginContext(c);
         const ssrApiClient = createPluginsClient(plugins, pluginContext);
 
         const render = () =>
           ssrRouterModule?.renderToStream(c.req.raw, {
-            assetsUrl,
             session: c.get("session") ? { session: c.get("session"), user: c.get("user") } : null,
             basepath: runtimeConfig.runtime?.runtimeBasePath,
             runtimeConfig,

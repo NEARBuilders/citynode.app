@@ -1,4 +1,5 @@
 import { createApiClient, createAuthClient, getRuntimeConfig } from "./app";
+import "./styles.css";
 
 declare global {
   interface Window {
@@ -37,7 +38,6 @@ export async function hydrate() {
     const { router } = createRouter({
       context: {
         queryClient: client,
-        assetsUrl: runtimeConfig.assetsUrl,
         runtimeConfig,
         apiClient: createApiClient({
           hostUrl: runtimeConfig.hostUrl,
