@@ -15,11 +15,7 @@
   "app": {
     "host": {
       "development": "local:host",
-<<<<<<< HEAD
-      "production": "https://elliot-braem-4538-host-everything-dev-nearbuilder-d1593e83f-ze.zephyrcloud.app",
-=======
       "production": "https://elliot-braem-4532-host-everything-dev-nearbuilder-38321e92b-ze.zephyrcloud.app",
->>>>>>> c458a10e4a654dd72def7e1beae34462fd3d4f6a
       "secrets": [
         "CORS_ORIGIN",
         "TENANT_WHITELIST",
