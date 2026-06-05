@@ -367,8 +367,10 @@ export async function waitForPublishedConfig(opts: {
   timeoutMs?: number;
   intervalMs?: number;
 }): Promise<void> {
-  const timeoutMs = Number(process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS) || opts.timeoutMs || 120_000;
-  const intervalMs = Number(process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS) || opts.intervalMs || 3_000;
+  const timeoutMs =
+    Number(process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS) || opts.timeoutMs || 120_000;
+  const intervalMs =
+    Number(process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS) || opts.intervalMs || 3_000;
   const startedAt = Date.now();
   let lastError: unknown;
 
