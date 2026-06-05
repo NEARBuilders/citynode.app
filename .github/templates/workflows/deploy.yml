@@ -56,7 +56,7 @@ jobs:
         run: bun run postinstall
 
       - name: Publish with deploy
-        run: node_modules/.bin/bos publish --deploy
+        run: bun run bos publish --deploy
 
       - name: Install Railway CLI
         run: npm i -g @railway/cli
