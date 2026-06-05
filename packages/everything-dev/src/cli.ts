@@ -816,9 +816,7 @@ async function main() {
   }
 }
 
-try {
-  await main();
-} catch (error) {
+void main().catch((error) => {
   console.error("[CLI] Fatal error:", error);
   process.exit(1);
-}
+});
