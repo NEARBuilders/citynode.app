@@ -120,5 +120,6 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 | `NEAR_PRIVATE_KEY` | Publish | NEAR key for FastKV config publish |
 | `ZEPHYR_AUTH_TOKEN` | Publish (as `ZE_SERVER_TOKEN`) | Zephyr Cloud auth for CDN deploy |
 | `ZEPHYR_USER_EMAIL` | Publish (as `ZE_USER_EMAIL`) | Zephyr Cloud user email |
-| `BOS_INSTALL_NEAR_CLI` | Release, Publish | Ensures NEAR CLI is available |
 | `GITHUB_TOKEN` | Release, Publish | Changesets PR creation, GitHub releases |
+
+NEAR CLI is installed in a dedicated workflow step before publishing so Actions can apply the PATH update before `bos publish --deploy` runs.

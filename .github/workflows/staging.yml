@@ -19,7 +19,6 @@ jobs:
     name: Deploy Staging
     runs-on: ubuntu-latest
     env:
-      BOS_INSTALL_NEAR_CLI: "true"
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
       ZE_SERVER_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
       ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
@@ -49,6 +48,12 @@ jobs:
 
       - name: Run postinstall
         run: bun run postinstall
+
+      - name: Install NEAR CLI
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh
+
+      - name: Verify NEAR CLI
+        run: near --version
 
       - name: Publish with deploy
         run: bun run bos publish --deploy --env staging

@@ -118,16 +118,16 @@ exit 0
     );
 
     expect(readFileSync(nearInvocationFile, "utf-8")).toBe("");
-    const ansiPrefix = `${String.fromCharCode(27)}[`;
     const cleanStdout = result.stdout
-      .split(ansiPrefix)
-      .join("")
-      .replace(/[0-9;]*m/g, "");
+      .replaceAll(String.fromCharCode(27), "")
+      .replace(/\[[0-9;?]*[A-Za-z]/g, "");
     const lines = cleanStdout.split("\n");
     const publishingIndex = lines.findIndex((line) => line.trim() === "Publishing to:");
     expect(publishingIndex).toBeGreaterThanOrEqual(0);
     expect(lines[publishingIndex + 1]?.trim()).toContain("bos.config.json");
     expect(lines[publishingIndex + 1]?.trim()).not.toContain("...");
+    expect(cleanStdout).toContain("Ensuring NEAR CLI...");
+    expect(cleanStdout).toContain("NEAR CLI ready");
     expect(cleanStdout).toContain("Submitting transaction on mainnet...");
     expect(cleanStdout).toContain("Waiting for publish confirmation...");
     expect(cleanStdout).not.toContain("Warning: No NEAR_PRIVATE_KEY set");

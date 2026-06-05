@@ -1993,7 +1993,9 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
   console.log(`    ${colors.cyan(registryUrl)}`);
 
   try {
+    console.log("  Ensuring NEAR CLI...");
     await Effect.runPromise(ensureNearCli);
+    console.log("  NEAR CLI ready");
     let txHash: string | undefined;
 
     console.log(`  Submitting transaction on ${network}...`);

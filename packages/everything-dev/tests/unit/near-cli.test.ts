@@ -15,7 +15,7 @@ vi.mock("execa", () => ({
   execa: execaMock,
 }));
 
-import { executeTransaction, resolveNearSigningMode } from "../../src/near-cli";
+import { ensureNearCli, executeTransaction, resolveNearSigningMode } from "../../src/near-cli";
 
 function createDeferredProc(withStreams = true) {
   let resolve!: (value: { exitCode: number; stdout?: string; stderr?: string }) => void;
@@ -62,6 +62,19 @@ describe("near-cli", () => {
         value: originalIsTTY,
       });
     }
+  });
+
+  it("prints manual install guidance when NEAR CLI is missing", async () => {
+    execaMock.mockRejectedValueOnce(new Error("near not found"));
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined as never);
+
+    await expect(Effect.runPromise(ensureNearCli)).rejects.toThrow("NEAR CLI not found");
+
+    expect(execaMock).toHaveBeenCalledWith("near", ["--version"], { stdio: "pipe" });
+    expect(logSpy.mock.calls.flat().join("\n")).toContain(
+      "To install manually: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh",
+    );
   });
 
   it("uses inherited stdio in interactive mode", async () => {

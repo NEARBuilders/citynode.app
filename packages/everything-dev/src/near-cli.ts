@@ -44,13 +44,6 @@ export class NearCliNotFoundError extends Error {
   }
 }
 
-export class NearCliInstallError extends Error {
-  readonly _tag = "NearCliInstallError";
-  constructor(message: string) {
-    super(`Failed to install NEAR CLI: ${message}`);
-  }
-}
-
 export class NearTransactionError extends Error {
   readonly _tag = "NearTransactionError";
 }
@@ -127,24 +120,6 @@ const checkNearCliInstalled = Effect.tryPromise({
   catch: () => new Error("Failed to check NEAR CLI"),
 });
 
-const installNearCli = Effect.tryPromise({
-  try: async () => {
-    await execa("sh", ["-c", `curl --proto '=https' --tlsv1.2 -LsSf ${INSTALLER_URL} | sh`], {
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-  },
-  catch: (error) => {
-    if (error instanceof Error && "exitCode" in error) {
-      return new NearCliInstallError(
-        `Installer exited with code ${(error as { exitCode: number }).exitCode}`,
-      );
-    }
-    return new NearCliInstallError(error instanceof Error ? error.message : String(error));
-  },
-});
-
 async function runNearCommand(args: string[]): Promise<void> {
   if (!process.stdin.isTTY) {
     throw new NearTransactionError(
@@ -177,11 +152,6 @@ export function resolveNearSigningMode(privateKey?: string): NearSigningMode {
 export const ensureNearCli = Effect.gen(function* () {
   const isInstalled = yield* checkNearCliInstalled;
   if (isInstalled) return;
-
-  if (process.env.BOS_INSTALL_NEAR_CLI === "true") {
-    yield* installNearCli;
-    return;
-  }
 
   console.log();
   console.log("  NEAR CLI not found");
