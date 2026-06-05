@@ -356,6 +356,44 @@ function extractPublishedUrl(output: string): string | null {
   return match[match.length - 1] ?? null;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function waitForPublishedConfig(opts: {
+  account: string;
+  gateway: string;
+  publishConfig: BosConfig;
+  timeoutMs?: number;
+  intervalMs?: number;
+}): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 120_000;
+  const intervalMs = opts.intervalMs ?? 3_000;
+  const startedAt = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const verifiedConfig = await fetchBosConfigFromFastKv<BosConfig>(
+        `bos://${opts.account}/${opts.gateway}`,
+      );
+
+      if (JSON.stringify(verifiedConfig) === JSON.stringify(opts.publishConfig)) {
+        return;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await sleep(intervalMs);
+  }
+
+  const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
+  throw new Error(
+    `Timed out waiting for publish confirmation at bos://${opts.account}/${opts.gateway}.${reason}`,
+  );
+}
+
 async function buildEveryPluginQuietly(cwd: string) {
   const packageDir = `${cwd}/packages/every-plugin`;
   const packageExists = await fileExists(`${packageDir}/package.json`);
@@ -1979,18 +2017,14 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
       if (!txHash) {
         throw error;
       }
-
-      try {
-        const bosUrl = `bos://${account}/${gateway}`;
-        const verifiedConfig = await fetchBosConfigFromFastKv<BosConfig>(bosUrl);
-        if (JSON.stringify(verifiedConfig) !== JSON.stringify(publishConfig)) {
-          throw error;
-        }
-      } catch {
-        // Config may not exist yet on first publish or propagation delay;
-        // a valid txHash is sufficient proof the transaction was submitted.
-      }
     }
+
+    console.log("  Waiting for publish confirmation...");
+    await waitForPublishedConfig({
+      account,
+      gateway,
+      publishConfig,
+    });
 
     return {
       status: "published",

@@ -193,11 +193,9 @@ export const executeTransaction = (
       args.push("sign-with-plaintext-private-key", config.privateKey, "send");
     } else {
       if (!process.stdin.isTTY) {
-        return {
-          success: false,
-          error:
-            "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
-        };
+        throw new NearTransactionError(
+          "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
+        );
       }
       console.log(
         colors.yellow(
@@ -209,15 +207,29 @@ export const executeTransaction = (
 
     const output = yield* Effect.tryPromise({
       try: async () => {
-        const result = await execa("near", args, {
-          stdin: config.privateKey ? "pipe" : "inherit",
+        const proc = execa("near", args, {
+          stdin: config.privateKey ? "ignore" : "inherit",
           stdout: "pipe",
           stderr: "pipe",
           reject: false,
+          timeout: 5 * 60 * 1000,
         });
 
-        process.stdout.write(result.stdout);
-        const combined = `${result.stdout}\n${result.stderr}`;
+        let stdout = "";
+        let stderr = "";
+
+        proc.stdout?.on("data", (chunk: Buffer) => {
+          stdout += chunk.toString();
+          process.stdout.write(chunk);
+        });
+
+        proc.stderr?.on("data", (chunk: Buffer) => {
+          stderr += chunk.toString();
+          process.stderr.write(chunk);
+        });
+
+        const result = await proc;
+        const combined = `${stdout}\n${stderr}`;
         const txHashMatch = combined.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
         const hasCodeDoesNotExist = /CodeDoesNotExist/i.test(combined);
         const hasTransactionFailed = /Transaction failed/i.test(combined);
@@ -239,10 +251,13 @@ export const executeTransaction = (
     });
 
     const txHashMatch = output.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
+    if (!txHashMatch?.[1]) {
+      throw new NearTransactionError("Transaction hash missing from NEAR CLI output");
+    }
 
     return {
       success: true,
-      txHash: txHashMatch?.[1],
+      txHash: txHashMatch[1],
     };
   });
 

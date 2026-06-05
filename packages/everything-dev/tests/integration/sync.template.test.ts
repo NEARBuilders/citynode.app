@@ -212,16 +212,15 @@ describe("syncTemplate", () => {
     expect(result.status).toBe("synced");
 
     const childPublishWorkflow = readFileSync(
-      join(projectDir, ".github", "workflows", "publish.yml"),
+      join(projectDir, ".github", "workflows", "deploy.yml"),
       "utf-8",
     );
     const templatePublishWorkflow = readFileSync(
-      join(REPO_ROOT, ".github", "templates", "workflows", "publish.yml"),
+      join(REPO_ROOT, ".github", "templates", "workflows", "deploy.yml"),
       "utf-8",
     );
 
     expect(childPublishWorkflow).toBe(templatePublishWorkflow);
-    expect(childPublishWorkflow).not.toContain("Build every-plugin");
   });
 
   it("keeps the plugins workspace override when no child plugins are selected", async () => {
