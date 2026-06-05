@@ -61,7 +61,12 @@ import {
 } from "./fastkv";
 import { computeSriHashForUrl } from "./integrity";
 import type { BosEnv } from "./merge";
-import { addFunctionCallAccessKey, ensureNearCli, executeTransaction } from "./near-cli";
+import {
+  addFunctionCallAccessKey,
+  ensureNearCli,
+  executeTransaction,
+  resolveNearSigningMode,
+} from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { createPlugin, z } from "./sdk";
 import {
@@ -367,10 +372,12 @@ export async function waitForPublishedConfig(opts: {
   timeoutMs?: number;
   intervalMs?: number;
 }): Promise<void> {
+  const envTimeoutMs = Number(process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS);
+  const envIntervalMs = Number(process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS);
   const timeoutMs =
-    Number(process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS) || opts.timeoutMs || 120_000;
+    opts.timeoutMs ?? (Number.isFinite(envTimeoutMs) ? envTimeoutMs : undefined) ?? 120_000;
   const intervalMs =
-    Number(process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS) || opts.intervalMs || 3_000;
+    opts.intervalMs ?? (Number.isFinite(envIntervalMs) ? envIntervalMs : undefined) ?? 3_000;
   const startedAt = Date.now();
   let lastError: unknown;
 
@@ -1970,25 +1977,20 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
   const argsBase64 = Buffer.from(payload).toString("base64");
   const privateKey =
     input.privateKey || process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
-
-  if (!privateKey) {
-    if (!process.stdin.isTTY) {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
-      };
-    }
-    console.log(
-      colors.yellow(
-        "  Warning: No NEAR_PRIVATE_KEY set — falling back to interactive keychain signing.",
-      ),
-    );
+  let signingMode: ReturnType<typeof resolveNearSigningMode>;
+  try {
+    signingMode = resolveNearSigningMode(privateKey);
+  } catch (error) {
+    return {
+      status: "error" as const,
+      registryUrl,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 
   console.log();
-  console.log(`  Publishing to ${colors.cyan(registryUrl)}...`);
+  console.log("  Publishing to:");
+  console.log(`    ${colors.cyan(registryUrl)}`);
 
   try {
     await Effect.runPromise(ensureNearCli);
@@ -1998,16 +2000,19 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
 
     try {
       const tx = await Effect.runPromise(
-        executeTransaction({
-          account,
-          contract: getRegistryNamespaceForNetwork(network),
-          method: "__fastdata_kv",
-          argsBase64,
-          network,
-          privateKey,
-          gas: "300Tgas",
-          deposit: "0NEAR",
-        }),
+        executeTransaction(
+          {
+            account,
+            contract: getRegistryNamespaceForNetwork(network),
+            method: "__fastdata_kv",
+            argsBase64,
+            network,
+            privateKey: signingMode._tag === "privateKey" ? signingMode.privateKey : undefined,
+            gas: "300Tgas",
+            deposit: "0NEAR",
+          },
+          signingMode,
+        ),
       );
       txHash = tx.txHash;
       if (txHash) {

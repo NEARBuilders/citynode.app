@@ -15,9 +15,9 @@ export interface NearTransactionConfig {
 }
 
 export interface NearTransactionResult {
-  success: boolean;
+  success: true;
   txHash?: string;
-  error?: string;
+  output?: string;
 }
 
 export interface NearKeyPair {
@@ -54,6 +54,10 @@ export class NearCliInstallError extends Error {
 export class NearTransactionError extends Error {
   readonly _tag = "NearTransactionError";
 }
+
+export type NearSigningMode =
+  | { _tag: "privateKey"; privateKey: string }
+  | { _tag: "interactiveKeychain" };
 
 function base64UrlToBytes(input: string): Uint8Array {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
@@ -142,7 +146,32 @@ const installNearCli = Effect.tryPromise({
 });
 
 async function runNearCommand(args: string[]): Promise<void> {
-  await execa("near", args, { stdin: "pipe", stdout: "inherit", stderr: "inherit" });
+  if (!process.stdin.isTTY) {
+    throw new NearTransactionError(
+      "No TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
+    );
+  }
+
+  await execa("near", args, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+}
+
+export function resolveNearSigningMode(privateKey?: string): NearSigningMode {
+  if (privateKey) {
+    return { _tag: "privateKey", privateKey };
+  }
+
+  if (!process.stdin.isTTY) {
+    throw new NearTransactionError(
+      "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
+    );
+  }
+
+  console.log(
+    colors.yellow(
+      "  Warning: No NEAR_PRIVATE_KEY set — falling back to interactive keychain signing.",
+    ),
+  );
+  return { _tag: "interactiveKeychain" };
 }
 
 export const ensureNearCli = Effect.gen(function* () {
@@ -163,10 +192,21 @@ export const ensureNearCli = Effect.gen(function* () {
   yield* Effect.fail(new NearCliNotFoundError());
 });
 
+function combineNearOutput(stdout?: string, stderr?: string): string {
+  return [stdout, stderr].filter((value) => value && value.trim().length > 0).join("\n");
+}
+
+function extractTransactionHash(output: string): string | undefined {
+  const match = output.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
+  return match?.[1];
+}
+
 export const executeTransaction = (
   config: NearTransactionConfig,
+  signingMode?: NearSigningMode,
 ): Effect.Effect<NearTransactionResult, Error> =>
   Effect.gen(function* () {
+    const resolvedSigningMode = signingMode ?? resolveNearSigningMode(config.privateKey);
     const gas = (config.gas || "300Tgas").replace(/\s+/g, "");
     const deposit = (config.deposit || "0NEAR").replace(/\s+/g, "");
     const network = config.network || (config.account.endsWith(".testnet") ? "testnet" : "mainnet");
@@ -189,75 +229,62 @@ export const executeTransaction = (
       network,
     ];
 
-    if (config.privateKey) {
-      args.push("sign-with-plaintext-private-key", config.privateKey, "send");
+    if (resolvedSigningMode._tag === "privateKey") {
+      args.push("sign-with-plaintext-private-key", resolvedSigningMode.privateKey, "send");
     } else {
-      if (!process.stdin.isTTY) {
-        throw new NearTransactionError(
-          "No private key provided and no TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
-        );
-      }
-      console.log(
-        colors.yellow(
-          "  Warning: No NEAR_PRIVATE_KEY set — falling back to interactive keychain signing.",
-        ),
-      );
       args.push("sign-with-keychain", "send");
     }
 
     const output = yield* Effect.tryPromise({
       try: async () => {
+        const isPrivateKeyMode = resolvedSigningMode._tag === "privateKey";
         const proc = execa("near", args, {
-          stdin: config.privateKey ? "ignore" : "inherit",
-          stdout: "pipe",
-          stderr: "pipe",
+          stdin: isPrivateKeyMode ? "ignore" : "inherit",
+          stdout: isPrivateKeyMode ? "pipe" : "inherit",
+          stderr: isPrivateKeyMode ? "pipe" : "inherit",
           reject: false,
           timeout: 5 * 60 * 1000,
         });
 
-        let stdout = "";
-        let stderr = "";
+        if (isPrivateKeyMode) {
+          proc.stdout?.on("data", (chunk: Buffer) => {
+            process.stdout.write(chunk);
+          });
 
-        proc.stdout?.on("data", (chunk: Buffer) => {
-          stdout += chunk.toString();
-          process.stdout.write(chunk);
-        });
-
-        proc.stderr?.on("data", (chunk: Buffer) => {
-          stderr += chunk.toString();
-          process.stderr.write(chunk);
-        });
+          proc.stderr?.on("data", (chunk: Buffer) => {
+            process.stderr.write(chunk);
+          });
+        }
 
         const result = await proc;
-        const combined = `${stdout}\n${stderr}`;
-        const txHashMatch = combined.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
+        const combined = combineNearOutput(result.stdout, result.stderr);
+        const txHash = extractTransactionHash(combined);
         const hasCodeDoesNotExist = /CodeDoesNotExist/i.test(combined);
         const hasTransactionFailed = /Transaction failed/i.test(combined);
-        const softSuccess =
-          Boolean(txHashMatch?.[1]) && hasCodeDoesNotExist && hasTransactionFailed;
+        const softSuccess = Boolean(txHash) && hasCodeDoesNotExist && hasTransactionFailed;
 
         if (result.exitCode === 0 || softSuccess) {
           if (softSuccess) {
-            console.log(`  ${txHashMatch?.[1]} — FastDATA CodeDoesNotExist (expected)`);
+            console.log(`  ${txHash} — FastDATA CodeDoesNotExist (expected)`);
           }
-          return combined;
+          return {
+            success: true,
+            txHash,
+            output: combined || undefined,
+          };
         }
 
         throw new NearTransactionError(
-          result.stderr || `Transaction failed with code ${result.exitCode}`,
+          combined || `Transaction failed with code ${result.exitCode}`,
         );
       },
       catch: (error) => error as Error,
     });
 
-    const txHashMatch = output.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
-    if (!txHashMatch?.[1]) {
-      throw new NearTransactionError("Transaction hash missing from NEAR CLI output");
-    }
-
     return {
       success: true,
-      txHash: txHashMatch[1],
+      txHash: output.txHash,
+      output: output.output,
     };
   });
 

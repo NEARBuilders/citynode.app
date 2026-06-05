@@ -15,7 +15,7 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-4525-host-everything-dev-nearbuilder-7d15fc100-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4538-host-everything-dev-nearbuilder-d1593e83f-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "TENANT_WHITELIST",
@@ -23,7 +23,7 @@
         "ALLOW_UNTRUSTED_SSR",
         "CSP_STRICT"
       ],
-      "integrity": "sha384-TkLPL4VPcGgGDY4WAnGYQGqGod+qlSh9wTmYh4YpBK5LLnBQ+NO/wHKBKJZnRBWa"
+      "integrity": "sha384-tEguGZihnWOCjrRHrtjycqEQEkNATlaT1FA9yy0NA9IThWMn52dtBZFKppKss5sP"
     },
     "ui": {
       "development": "local:ui",

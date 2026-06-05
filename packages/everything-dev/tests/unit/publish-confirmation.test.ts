@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { fetchBosConfigFromFastKvMock } = vi.hoisted(() => ({
   fetchBosConfigFromFastKvMock: vi.fn(),
@@ -16,8 +16,21 @@ import { waitForPublishedConfig } from "../../src/plugin";
 import type { BosConfig } from "../../src/types";
 
 describe("waitForPublishedConfig", () => {
+  const originalTimeout = process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS;
+  const originalInterval = process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS;
+
+  beforeEach(() => {
+    delete process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS;
+    delete process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS;
+  });
+
   afterEach(() => {
     fetchBosConfigFromFastKvMock.mockReset();
+    if (originalTimeout === undefined) delete process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS;
+    else process.env.BOS_PUBLISH_CONFIRMATION_TIMEOUT_MS = originalTimeout;
+
+    if (originalInterval === undefined) delete process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS;
+    else process.env.BOS_PUBLISH_CONFIRMATION_INTERVAL_MS = originalInterval;
   });
 
   const publishConfig: BosConfig = {
