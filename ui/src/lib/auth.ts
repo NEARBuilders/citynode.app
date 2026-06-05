@@ -13,7 +13,7 @@ import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import type { RelayedTransactionT } from "better-near-auth";
 import { siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "everything-dev/types";
-import { getRuntimeConfig } from "everything-dev/ui/runtime";
+import { getCspNonce, getRuntimeConfig } from "everything-dev/ui/runtime";
 import type { Auth } from "./auth-types.gen";
 
 function readRuntimeConfig(config?: Partial<ClientRuntimeConfig>) {
@@ -44,10 +44,15 @@ function getHostUrl(config?: Partial<ClientRuntimeConfig>) {
   return "";
 }
 
-export function createAuthClient(config?: Partial<ClientRuntimeConfig>, headers?: HeadersInit) {
+export function createAuthClient(
+  config?: Partial<ClientRuntimeConfig>,
+  headers?: HeadersInit,
+  cspNonce?: string,
+) {
   const nearAuthConfig = {
     recipient: getAccountId(config),
     networkId: getNetworkId(config),
+    cspNonce: cspNonce ?? getCspNonce(),
   };
 
   return createBetterAuthClient({

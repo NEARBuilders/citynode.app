@@ -6,6 +6,7 @@ export interface RemoteScriptsOptions {
   containerName?: string;
   hydratePath?: string;
   integrity?: string;
+  cspNonce?: string;
 }
 
 export function getThemeInitScript(): HeadScript {
@@ -19,14 +20,19 @@ export function getHydrateScript(
   runtimeConfig: Partial<ClientRuntimeConfig> | undefined,
   containerName = "ui",
   hydratePath = "./Hydrate",
+  cspNonce?: string,
 ): HeadScript {
   return {
     children: `
+ window.__CSP_NONCE__=${JSON.stringify(cspNonce)};
  window.__RUNTIME_CONFIG__=${JSON.stringify(runtimeConfig)};
  function __hydrate(){
-  var container = window['${containerName}'];
-  if (!container) {
-    console.warn('[Hydrate] Container not ready yet, waiting...');
+  if (window.__EVERYTHING_DEV_HYDRATE_PROMISE__) {
+    return;
+  }
+   var container = window['${containerName}'];
+   if (!container) {
+     console.warn('[Hydrate] Container not ready yet, waiting...');
     window.__hydrateRetry = window.__hydrateRetry || 0;
     if (window.__hydrateRetry < 10) {
       window.__hydrateRetry++;
@@ -51,7 +57,7 @@ export function getHydrateScript(
 }
 
 export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
-  const { runtimeConfig, containerName, hydratePath, integrity } = options;
+  const { runtimeConfig, containerName, hydratePath, integrity, cspNonce } = options;
   const assetsUrl = runtimeConfig?.assetsUrl?.replace(/\/$/, "");
   const entryScript: HeadScript = {
     src: `${assetsUrl ?? ""}/remoteEntry.js${integrity ? `?v=${encodeURIComponent(integrity)}` : ""}`,
@@ -60,11 +66,7 @@ export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
     entryScript.integrity = integrity;
     entryScript.crossOrigin = "anonymous";
   }
-  return [
-    entryScript,
-    getThemeInitScript(),
-    getHydrateScript(runtimeConfig, containerName, hydratePath),
-  ];
+  return [entryScript, getHydrateScript(runtimeConfig, containerName, hydratePath, cspNonce)];
 }
 
 export function getBaseStyles(): string {

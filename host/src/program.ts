@@ -364,6 +364,41 @@ export function setupApiRoutes(
 
   const isProxyMode = !!apiConfig.proxy;
 
+  const publicRpcRouters = new Map<string, RPCHandler<any>>();
+
+  const registerPublicRpcRouter = (prefix: string, router: unknown) => {
+    publicRpcRouters.set(
+      prefix,
+      new RPCHandler(router as any, {
+        plugins: [new BatchHandlerPlugin()],
+        interceptors: [
+          onError((error: unknown) => {
+            formatORPCError(error);
+            throw error;
+          }),
+        ],
+      }),
+    );
+  };
+
+  if (plugins.auth?.router) {
+    registerPublicRpcRouter("/api/rpc/auth", plugins.auth.router);
+  }
+
+  for (const [pluginKey, plugin] of Object.entries(plugins.plugins)) {
+    registerPublicRpcRouter(`/api/rpc/${pluginKey}`, plugin.router);
+  }
+
+  const getPublicRpcRoute = (pathname: string) => {
+    for (const [prefix, handler] of publicRpcRouters.entries()) {
+      if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+        return { prefix, handler };
+      }
+    }
+
+    return null;
+  };
+
   if (isProxyMode) {
     const proxyTarget = apiConfig.proxy!;
     logger.info(`[API] Proxy mode enabled → ${proxyTarget}`);
@@ -443,7 +478,14 @@ export function setupApiRoutes(
   });
 
   app.all("/api/rpc", (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, "/api/rpc"));
-  app.all("/api/rpc/*", (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, "/api/rpc"));
+  app.all("/api/rpc/*", (c: Context<HonoEnv>) => {
+    const publicRoute = getPublicRpcRoute(c.req.path);
+    if (publicRoute) {
+      return handleOrpc(c, publicRoute.handler, publicRoute.prefix as `/${string}`);
+    }
+
+    return handleOrpc(c, rpcHandler, "/api/rpc");
+  });
   app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api"));
   app.all("/api/*", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api"));
 }
@@ -583,8 +625,16 @@ export const createStartServer = (onReady?: () => void) =>
       const assetsUrl = runtimeConfig.assetsUrl.replace(/\/$/, "");
       const themeInitScript = (getThemeInitScript() as { children?: string }).children ?? "";
       const hydrateScript =
-        (getHydrateScript(runtimeConfig as Partial<ClientRuntimeConfig>) as { children?: string })
-          .children ?? "";
+        (
+          getHydrateScript(
+            runtimeConfig as Partial<ClientRuntimeConfig>,
+            undefined,
+            undefined,
+            nonce,
+          ) as {
+            children?: string;
+          }
+        ).children ?? "";
 
       const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
       const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
@@ -727,7 +777,10 @@ export const createStartServer = (onReady?: () => void) =>
               <script${nonceAttr}>
                 (function() {
                   var widgetPath = ${widgetPathJson};
-                  history.replaceState(null, "", "/" + widgetPath.replace(/^/+/, ""));
+                  while (widgetPath.startsWith("/")) {
+                    widgetPath = widgetPath.slice(1);
+                  }
+                  history.replaceState(null, "", "/" + widgetPath);
                 })();
               </script>
               <script${nonceAttr} src="${BOS_VIEWER_RUNTIME_SCRIPT_URL}"></script>
@@ -738,6 +791,9 @@ export const createStartServer = (onReady?: () => void) =>
               <script${nonceAttr}>
                 (function() {
                   var widgetPath = ${widgetPathJson};
+                  while (widgetPath.startsWith("/")) {
+                    widgetPath = widgetPath.slice(1);
+                  }
                   var mount = function() {
                     var root = document.getElementById("viewer-root");
                     if (!root || root.querySelector("near-social-viewer")) return;
@@ -778,6 +834,7 @@ export const createStartServer = (onReady?: () => void) =>
 
       const effectiveConfig = resolvedRuntime.config;
       const activeRuntime = await resolveActiveRuntime(effectiveConfig, c.req.raw);
+      const nonce = CSP_STRICT ? c.get("secureHeadersNonce") : undefined;
       const runtimeConfig = buildRuntimeClientConfig(
         effectiveConfig,
         c.req.raw,
@@ -801,7 +858,6 @@ export const createStartServer = (onReady?: () => void) =>
       const ssrRouterModule = routerModuleResult.right;
 
       try {
-        const nonce = CSP_STRICT ? c.get("secureHeadersNonce") : undefined;
         const pluginContext = buildPluginContext(c);
         const ssrApiClient = createPluginsClient(plugins, pluginContext);
 

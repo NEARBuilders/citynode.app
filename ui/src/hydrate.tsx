@@ -1,4 +1,4 @@
-import { createApiClient, createAuthClient, getRuntimeConfig } from "./app";
+import { createApiClient, createAuthClient, getCspNonce, getRuntimeConfig } from "./app";
 import "./styles.css";
 
 declare global {
@@ -17,6 +17,7 @@ export async function hydrate() {
     console.log("[Hydrate] Starting...");
 
     const runtimeConfig = getRuntimeConfig();
+    const cspNonce = getCspNonce();
 
     const { QueryClientProvider } = await import("@tanstack/react-query");
     const { createRouter } = await import("./router");
@@ -39,11 +40,12 @@ export async function hydrate() {
       context: {
         queryClient: client,
         runtimeConfig,
+        cspNonce,
         apiClient: createApiClient({
           hostUrl: runtimeConfig.hostUrl,
           rpcBase: runtimeConfig.rpcBase,
         }),
-        authClient: createAuthClient(runtimeConfig),
+        authClient: createAuthClient(runtimeConfig, undefined, cspNonce),
       },
     });
 

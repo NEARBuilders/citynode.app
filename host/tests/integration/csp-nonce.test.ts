@@ -98,6 +98,26 @@ describe("CSP Nonce Regression Tests", () => {
       }
     });
 
+    it("bootstraps the nonce on window for hydration", { timeout: 6000 }, async () => {
+      const testNonce = "regression-test-runtime-nonce-789";
+      const request = new Request("http://localhost/");
+
+      const renderOptions: RenderOptionsWithApi<ApiClient> = {
+        runtimeConfig: buildTestClientRuntimeConfig(config),
+        apiClient: mockApiClient,
+        session: null,
+        authClient: mockAuthClient,
+        cspNonce: testNonce,
+      };
+
+      const result = await routerModule.renderToStream(request, renderOptions);
+      const html = await consumeStream(result.stream);
+
+      expect(result.statusCode).toBe(200);
+      expect(html).toContain(`window.__CSP_NONCE__=${JSON.stringify(testNonce)}`);
+      expect(html).not.toContain('"cspNonce"');
+    });
+
     it("does not include nonce attributes when cspNonce is omitted", {
       timeout: 6000,
     }, async () => {

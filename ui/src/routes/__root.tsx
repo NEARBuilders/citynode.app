@@ -23,6 +23,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
     return {
       runtimeConfig: context.runtimeConfig,
+      cspNonce: context.cspNonce,
       session,
     };
   },
@@ -36,11 +37,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
     return {
       runtimeConfig: context.runtimeConfig,
+      cspNonce: context.cspNonce,
       session,
     };
   },
   head: ({ loaderData }) => {
     const runtimeConfig = loaderData?.runtimeConfig;
+    const cspNonce = loaderData?.cspNonce;
     const runtimeBasePath = runtimeConfig?.runtime?.runtimeBasePath ?? "/";
     const assetsUrl = runtimeConfig?.assetsUrl?.replace(/\/$/, "");
     const siteUrl = runtimeConfig?.hostUrl
@@ -114,6 +117,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
           containerName: "ui",
           hydratePath: "./Hydrate",
           integrity: runtimeConfig?.ui?.integrity,
+          cspNonce,
         }),
         {
           type: "application/ld+json",

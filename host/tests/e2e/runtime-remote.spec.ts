@@ -21,6 +21,7 @@ for (const scenario of scenarios) {
 
     let runtime: RuntimeRemoteHost;
     let pageErrors: string[];
+    let consoleErrors: string[];
 
     test.beforeAll(async () => {
       runtime = await startRuntimeRemoteHost(scenario);
@@ -28,8 +29,14 @@ for (const scenario of scenarios) {
 
     test.beforeEach(async ({ page }) => {
       pageErrors = [];
+      consoleErrors = [];
       page.on("pageerror", (error) => {
         pageErrors.push(error.message);
+      });
+      page.on("console", (message) => {
+        if (message.type() === "error") {
+          consoleErrors.push(message.text());
+        }
       });
     });
 
@@ -123,6 +130,10 @@ for (const scenario of scenarios) {
 
       expect(state.childCount).toBeGreaterThan(0);
       expectNoHydrationFailure(pageErrors);
+      expect(consoleErrors.join("\n")).not.toContain("[Hydrate] Failed:");
+      expect(consoleErrors.join("\n")).not.toContain(
+        "Cannot read properties of undefined (reading 'call')",
+      );
     });
 
     test("hydrates client-side navigation without a document reload", async ({ page }) => {
@@ -149,6 +160,33 @@ for (const scenario of scenarios) {
 
       expect(navigationCountAfter).toBe(navigationCountBefore);
       expectNoHydrationFailure(pageErrors);
+      expect(consoleErrors.join("\n")).not.toContain("[Hydrate] Failed:");
     });
+
+    if (!scenario.ssr) {
+      test("toggles theme after hydration", async ({ page }) => {
+        await page.goto(`${runtime.baseUrl}/`, { waitUntil: "domcontentloaded" });
+
+        await page.evaluate(async () => {
+          await (window as Window & { __EVERYTHING_DEV_HYDRATE_PROMISE__?: Promise<void> })
+            .__EVERYTHING_DEV_HYDRATE_PROMISE__;
+        });
+
+        const initialDark = await page.evaluate(() =>
+          document.documentElement.classList.contains("dark"),
+        );
+
+        await page.getByRole("button", { name: "Toggle theme" }).click();
+
+        await expect
+          .poll(async () =>
+            page.evaluate(() => document.documentElement.classList.contains("dark")),
+          )
+          .toBe(!initialDark);
+
+        expectNoHydrationFailure(pageErrors);
+        expect(consoleErrors.join("\n")).not.toContain("[Hydrate] Failed:");
+      });
+    }
   });
 }

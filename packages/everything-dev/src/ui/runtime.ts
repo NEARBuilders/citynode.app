@@ -5,6 +5,7 @@ export type { ClientRuntimeInfo } from "../types";
 declare global {
   interface Window {
     __RUNTIME_CONFIG__?: ClientRuntimeConfig;
+    __CSP_NONCE__?: string;
   }
 }
 
@@ -18,6 +19,14 @@ export function getRuntimeConfig(): ClientRuntimeConfig {
   }
 
   return window.__RUNTIME_CONFIG__;
+}
+
+export function getCspNonce() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return window.__CSP_NONCE__;
 }
 
 export function buildRuntimeHref(pathname: string, runtimeConfig?: Partial<ClientRuntimeConfig>) {

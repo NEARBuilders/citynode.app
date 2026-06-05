@@ -23,6 +23,14 @@ import { type ProjectKindFilter, parseProjectListSearch } from "./-search";
 
 type VoteDirection = "up" | "down" | null;
 
+type VoteEvent = {
+  type: "upvote" | "downvote";
+  thingId: string;
+  userId: string;
+  timestamp: string;
+  totalCount: number;
+};
+
 type ProjectKind = "project" | "idea";
 
 interface RankedProject {
@@ -222,9 +230,8 @@ function ProjectsList() {
 
   const userVoteMap = userVoteStates.data ?? {};
 
-  const { data: latestVote } = useQuery(
-    orpc.subscribeUpvotes.experimental_liveOptions({ retry: true }),
-  );
+  const latestVoteQuery = useQuery(orpc.subscribeUpvotes.experimental_liveOptions({ retry: true }));
+  const latestVote = latestVoteQuery.data as VoteEvent | undefined;
 
   useEffect(() => {
     if (!latestVote) return;
