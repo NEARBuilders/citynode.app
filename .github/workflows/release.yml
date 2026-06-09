@@ -62,6 +62,9 @@ jobs:
       - name: Run postinstall
         run: bun run postinstall
 
+      - name: Test everything-dev release
+        run: bun run --cwd packages/everything-dev test
+
       - name: Create release PR when changesets are pending
         id: changesets
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
@@ -115,10 +118,6 @@ jobs:
       - name: Stage release packages
         if: steps.release_mode.outputs.should_publish == 'true'
         run: bun run scripts/stage-release-packages.ts
-
-      - name: Test everything-dev release
-        if: steps.release_mode.outputs.should_publish == 'true'
-        run: bun run --cwd packages/everything-dev test
 
       - name: Publish packages to npm
         if: steps.release_mode.outputs.should_publish == 'true'
