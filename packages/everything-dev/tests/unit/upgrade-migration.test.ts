@@ -612,27 +612,46 @@ describe("upgrade bos config migration", () => {
       )}\n`,
     );
 
+    vi.spyOn(initModule, "fetchParentConfig").mockResolvedValue({
+      repository: "https://github.com/NEARBuilders/everything-dev",
+    } as never);
+    vi.spyOn(initModule, "resolveCatalogChainSource").mockResolvedValue({
+      catalog: {
+        effect: "3.21.0",
+        "everything-dev": "^1.28.11",
+        "every-plugin": "^2.5.11",
+      },
+      repository: "https://github.com/NEARBuilders/everything-dev",
+      extendsChain: [],
+    } as never);
     vi.spyOn(initModule, "runBunInstallForUpgrade").mockResolvedValue();
     vi.spyOn(initModule, "runTypesGen").mockResolvedValue();
-    vi.spyOn(syncModule, "syncTemplate").mockImplementation(async (dir, options) => {
+    vi.spyOn(syncModule, "syncTemplate").mockImplementation(async (dir, _options) => {
       await initModule.personalizeConfig(dir, {
         extendsAccount: "dev.everything.near",
         extendsGateway: "everything.dev",
         account: "test.near",
         domain: "test.dev",
         overrides: ["ui"],
-        workspaceOpts: { sourceDir: "/Users/elliot.braem/workspace/product/everything.dev" },
         mode: "sync",
         existingConfig: JSON.parse(readFileSync(join(dir, "bos.config.json"), "utf-8")),
       });
 
       return {
-        status: options.dryRun ? ("dry-run" as const) : ("synced" as const),
+        status: "synced" as const,
         updated: [],
         skipped: [],
         added: [],
       };
     });
+    vi.spyOn(sharedDepsModule, "syncResolvedSharedDeps").mockResolvedValue({
+      mode: "bos->catalog",
+      hostMode: "local",
+      bosConfigChanged: false,
+      catalogChanged: false,
+      generatedChanged: false,
+      resolved: { deps: {}, fingerprintSha256: "" },
+    } as never);
 
     const result = await upgradeTemplate(projectDir, {
       dryRun: false,
