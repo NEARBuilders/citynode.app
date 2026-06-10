@@ -95,15 +95,12 @@ export function mergeBosConfigWithExtends(
   parent: BosConfigInput,
   child: BosConfigInput,
 ): BosConfigInput {
-  const { plugins: _ignoredParentPlugins, ...parentWithoutPlugins } = parent;
-  const merged = bosConfigMerger(child, parentWithoutPlugins) as BosConfigInput;
+  const merged = bosConfigMerger(child, parent) as BosConfigInput;
 
   if (child.plugins !== undefined && isPlainObject(child.plugins)) {
     (merged as Record<string, unknown>).plugins = cleanNullSentinels(
       child.plugins as Record<string, unknown>,
     );
-  } else {
-    delete (merged as Record<string, unknown>).plugins;
   }
 
   const mergedRecord = merged as Record<string, unknown>;

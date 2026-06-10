@@ -55,7 +55,7 @@ const SHARE_DEFAULTS = {
   strictVersion: false,
   eager: false,
   shareScope: "default",
-};
+} as const;
 
 const uiSharedDeps = {
   react: { version: getInstalledVersion("react", pkg.dependencies.react), ...SHARE_DEFAULTS },
@@ -183,6 +183,7 @@ function createClientConfig() {
         target: "web",
         output: {
           uniqueName: normalizedName,
+          chunkFilename: "static/js/async/[name].[contenthash].js",
         },
         resolve: {
           fallback: { bufferutil: false, "utf-8-validate": false },
@@ -202,7 +203,6 @@ function createClientConfig() {
       distPath: { root: "dist", css: "static/css", js: "static/js" },
       assetPrefix: "auto",
       filename: { js: "[name].js", css: "style.css" },
-      chunkFilename: "static/js/async/[name].[contenthash].js",
       copy: [{ from: path.resolve(__dirname, "public"), to: "./" }],
     },
   });

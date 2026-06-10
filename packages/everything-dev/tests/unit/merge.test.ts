@@ -293,6 +293,43 @@ describe("mergeBosConfigWithExtends", () => {
     });
   });
 
+  it("child inherits parent plugins when not declared", () => {
+    const parent = {
+      plugins: {
+        apps: { development: "local:plugins/apps" },
+        projects: { development: "local:plugins/projects" },
+      },
+    };
+    const child = { account: "child.near" };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, Record<string, unknown>>;
+    expect(plugins.apps).toBeDefined();
+    expect(plugins.projects).toBeDefined();
+    expect(plugins.apps.development).toBe("local:plugins/apps");
+  });
+
+  it("child with empty plugins object does not inherit parent plugins", () => {
+    const parent = {
+      plugins: {
+        apps: { development: "local:plugins/apps" },
+      },
+    };
+    const child = {
+      plugins: {},
+    };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, Record<string, unknown>>;
+    expect(plugins).toEqual({});
+  });
+
+  it("child with empty plugins object gets no plugins even without parent plugins", () => {
+    const parent = {};
+    const child = { plugins: {} };
+    const merged = mergeBosConfigWithExtends(parent, child);
+    const plugins = merged.plugins as Record<string, Record<string, unknown>>;
+    expect(plugins).toEqual({});
+  });
+
   it("applies canonical ordering", () => {
     const parent = {
       plugins: {},
@@ -306,7 +343,7 @@ describe("mergeBosConfigWithExtends", () => {
     const keys = Object.keys(merged);
     expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("repository"));
     expect(keys.indexOf("repository")).toBeLessThan(keys.indexOf("app"));
-    expect(keys.includes("plugins")).toBe(false);
+    expect(keys.includes("plugins")).toBe(true);
     expect(keys.includes("shared")).toBe(false);
   });
 });

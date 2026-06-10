@@ -35,13 +35,16 @@ describe("extends chain", () => {
   let testDir: string;
   let parentDir: string;
   let childDir: string;
+  let childInheritDir: string;
 
   beforeAll(() => {
     testDir = mkdtempSync(join(tmpdir(), "bos-extends-chain-"));
     parentDir = join(testDir, "parent");
     childDir = join(testDir, "child");
+    childInheritDir = join(testDir, "child-inherit");
     mkdirSync(parentDir, { recursive: true });
     mkdirSync(childDir, { recursive: true });
+    mkdirSync(childInheritDir, { recursive: true });
 
     writeFileSync(
       join(parentDir, "bos.config.json"),
@@ -76,6 +79,32 @@ describe("extends chain", () => {
           shared: {
             ui: {
               effect: { version: "3.21.0" },
+            },
+          },
+        }),
+        null,
+        2,
+      )}\n`,
+    );
+
+    writeFileSync(
+      join(childInheritDir, "bos.config.json"),
+      `${JSON.stringify(
+        rebuildOrderedConfig({
+          account: "inherit.near",
+          domain: "inherit.dev",
+          extends: "../parent/bos.config.json",
+          app: {
+            host: { development: "http://localhost:3000", production: "https://host.inherit.dev" },
+            ui: {
+              name: "ui",
+              development: "http://localhost:3003",
+              production: "https://ui.inherit.dev",
+            },
+            api: {
+              name: "api",
+              development: "http://localhost:3001",
+              production: "https://api.inherit.dev",
             },
           },
         }),
@@ -226,6 +255,15 @@ describe("extends chain", () => {
     });
   });
 
+  it("resolved config inherits parent plugins when child does not declare plugins", async () => {
+    clearConfigCache();
+    const loaded = await loadResolvedConfig({ cwd: childInheritDir });
+    expect(loaded?.config.plugins).toEqual({
+      apps: { development: "local:plugins/apps" },
+      projects: { development: "local:plugins/projects" },
+    });
+  });
+
   it("canonical ordering is preserved after merge", () => {
     const parent = {
       shared: {},
@@ -240,7 +278,7 @@ describe("extends chain", () => {
     const keys = Object.keys(merged);
     expect(keys.indexOf("account")).toBeLessThan(keys.indexOf("repository"));
     expect(keys.indexOf("repository")).toBeLessThan(keys.indexOf("app"));
-    expect(keys.includes("plugins")).toBe(false);
+    expect(keys.includes("plugins")).toBe(true);
     expect(keys.indexOf("app")).toBeLessThan(keys.indexOf("shared"));
   });
 
@@ -347,7 +385,7 @@ describe("circular extends detection", () => {
 });
 
 describe("multi-level extends chain", () => {
-  it("grandchild inherits shared config but not parent plugins through parent", () => {
+  it("grandchild inherits shared config and parent plugins through parent", () => {
     const grandparent = {
       account: "gp.near",
       domain: "gp.dev",
@@ -394,6 +432,6 @@ describe("multi-level extends chain", () => {
     expect(ui.effect.singleton).toBe(true);
     expect(ui.effect.strictVersion).toBe(false);
 
-    expect(secondMerge.plugins).toBeUndefined();
+    expect(secondMerge.plugins).toEqual({});
   });
 });
