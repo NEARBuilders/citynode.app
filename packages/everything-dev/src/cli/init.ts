@@ -664,11 +664,11 @@ export async function personalizeConfig(
         }
 
         if (Object.keys(plugins).length === 0) {
-          delete config.plugins;
+          config.plugins = {};
         }
       }
     } else {
-      delete config.plugins;
+      config.plugins = {};
     }
 
     if (opts.mode === "sync" && opts.existingConfig) {
@@ -1163,6 +1163,8 @@ export async function scaffoldMinimalProject(
       }
     }
     config.plugins = plugins;
+  } else if (has("plugins")) {
+    config.plugins = {};
   }
 
   await saveBosConfig(destination, config);
