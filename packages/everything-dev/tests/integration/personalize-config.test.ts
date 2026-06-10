@@ -102,7 +102,7 @@ describe("personalizeConfig with real root config", () => {
     expect(config.app?.api?.development).toBe("local:api");
     expect(config.app?.api?.production).toBeUndefined();
     expect(config.app?.api?.integrity).toBeUndefined();
-    expect(config.plugins).toBeUndefined();
+    expect(config.plugins).toEqual({});
   });
 
   it("filters plugin config and workspaces to the selected plugin set", async () => {

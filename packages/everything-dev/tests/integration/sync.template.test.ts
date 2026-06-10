@@ -242,7 +242,7 @@ describe("syncTemplate", () => {
     };
 
     expect(pkg.workspaces?.packages).toContain("plugins/*");
-    expect(config.plugins).toBeUndefined();
+    expect(config.plugins).toEqual({});
   });
 
   it("records sync snapshots using the final merged file content", async () => {
