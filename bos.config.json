@@ -15,7 +15,7 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-4708-host-everything-dev-nearbuilder-b6ccc8c76-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4715-host-everything-dev-nearbuilder-c9990bf45-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "TENANT_WHITELIST",
@@ -27,14 +27,14 @@
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-4702-ui-everything-dev-nearbuilders-6cfe24b4a-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-4703-ui-everything-dev-nearbuilders-579f8d6b2-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4709-ui-everything-dev-nearbuilders-f4e9a0d81-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-4710-ui-everything-dev-nearbuilders-7482e589c-ze.zephyrcloud.app",
       "integrity": "sha384-zgupbReMggm6Wtzl8NJWrLZXOwF+OORXa8TkvMkO/NrHzRZzU3EXyeZVTMlEk8g4",
       "ssrIntegrity": "sha384-uPEwFJlDO5hwCwM2ukmXAqMWi1RsPusc0PeSLgLh5ySLFtrAbnHTWo60ANKJfNwI"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-4704-api-everything-dev-nearbuilders-e636e0808-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4711-api-everything-dev-nearbuilders-40e69210b-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -104,7 +104,7 @@
   "plugins": {
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-4705-everything-dev-apps-plugin-ever-4ecf40d4f-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4712-everything-dev-apps-plugin-ever-71dca82d0-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
@@ -123,7 +123,7 @@
     },
     "projects": {
       "development": "local:plugins/projects",
-      "production": "https://elliot-braem-4706-everything-dev-projects-plugin--54e54b0c6-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4713-everything-dev-projects-plugin--e0d421177-ze.zephyrcloud.app",
       "secrets": [
         "PROJECTS_DATABASE_URL"
       ],
@@ -140,7 +140,7 @@
     },
     "settings": {
       "development": "local:plugins/settings",
-      "production": "https://elliot-braem-4707-every-plugin-settings-everythin-f50511a63-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-4714-every-plugin-settings-everythin-c1f4e7a9b-ze.zephyrcloud.app",
       "routes": [
         "ui/src/routes/_layout/_authenticated/settings.tsx"
       ],
