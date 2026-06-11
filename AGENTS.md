@@ -41,6 +41,8 @@ skills:
     use: "everything-dev#plugin-development"
   - when: "Create UI routes with TanStack Router, fetch data from API using useApiClient/useOrpc, implement auth flows with useAuthClient/sessionQueryOptions, configure the sidebar, understand SSR hydration, or use the @/app module surface."
     use: "everything-dev#ui-integration"
+  - when: "Code style conventions — component file naming (kebab-case, lowercase), semantic Tailwind CSS (no hardcoded colors), no comments in implementation, import/export patterns, file/directory naming, and following neighboring file conventions."
+    use: "everything-dev#code-style"
 <!-- intent-skills:end -->
 
 # Agent Instructions
@@ -162,6 +164,8 @@ For full per-request host/plugin/auth/api swapping, start from `plans/runtime-co
 - Use semantic Tailwind classes: `bg-background`, `text-foreground`, `text-muted-foreground`
 - No hardcoded colors like `bg-blue-600`
 - No code comments in implementation
+- Component file naming: lowercase kebab-case (`data-table.tsx`, `user-profile.tsx`)
+- File/directory naming: kebab-case for all files and directories
 - Follow existing patterns in neighboring files
 
 ### Adding API Endpoints

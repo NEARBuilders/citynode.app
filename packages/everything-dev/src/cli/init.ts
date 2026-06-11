@@ -1403,6 +1403,7 @@ bos info      # Show configuration
 - Use semantic Tailwind classes: \`bg-background\`, \`text-foreground\`, \`text-muted-foreground\`
 - No hardcoded colors like \`bg-blue-600\`
 - No code comments in implementation
+- Component file naming: lowercase kebab-case (\`data-table.tsx\`, \`user-profile.tsx\`)
 - Follow existing patterns in neighboring files`);
 
   if (has("api")) {
