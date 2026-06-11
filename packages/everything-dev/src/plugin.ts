@@ -368,7 +368,7 @@ function sleep(ms: number): Promise<void> {
 export async function waitForPublishedConfig(opts: {
   account: string;
   gateway: string;
-  publishConfig: BosConfig;
+  publishConfig: BosConfigInput;
   timeoutMs?: number;
   intervalMs?: number;
 }): Promise<void> {
@@ -383,7 +383,7 @@ export async function waitForPublishedConfig(opts: {
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const verifiedConfig = await fetchBosConfigFromFastKv<BosConfig>(
+      const verifiedConfig = await fetchBosConfigFromFastKv<BosConfigInput>(
         `bos://${opts.account}/${opts.gateway}`,
       );
 
@@ -1914,7 +1914,7 @@ interface PublishToFastKvResult {
   built?: string[];
   skipped?: string[];
   error?: string;
-  publishConfig?: BosConfig;
+  publishConfig?: BosConfigInput;
 }
 
 async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFastKvResult> {
@@ -1937,7 +1937,6 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
   const registryUrl = buildRegistryConfigUrlForNetwork(network, account, gateway);
   const targets = selectWorkspaceTargets(input.packages, bosConfig);
 
-  let publishConfig: BosConfig = isStaging ? { ...bosConfig, domain: gateway } : bosConfig;
   let built: string[] | undefined;
   let skipped: string[] | undefined;
 
@@ -1973,11 +1972,14 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
     }
 
     bosConfig = refreshed.config;
-    publishConfig = isStaging ? { ...refreshed.config, domain: gateway } : refreshed.config;
   }
 
+  const rawConfigPath = join(configDir, "bos.config.json");
+  const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
+  const publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
+
   const registryEntries: Record<string, string> = {
-    [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishConfig),
+    [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishPayload),
   };
 
   const payload = JSON.stringify(registryEntries);
@@ -2039,7 +2041,7 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
     await waitForPublishedConfig({
       account,
       gateway,
-      publishConfig,
+      publishConfig: publishPayload,
     });
 
     return {
@@ -2048,7 +2050,7 @@ async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFa
       txHash,
       built,
       skipped,
-      publishConfig,
+      publishConfig: publishPayload,
     };
   } catch (error) {
     return {
