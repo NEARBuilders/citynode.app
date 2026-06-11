@@ -93,7 +93,10 @@ function buildGeneratedInfraSpec(
 ): GeneratedInfraSpec {
   const groups = getSecretGroups(runtimeConfig);
   const originMap = configDir ? buildOriginMap(configDir, runtimeConfig) : new Map();
-  const databases = buildDatabaseConfigs(groups.flatMap((group) => group.secrets), originMap);
+  const databases = buildDatabaseConfigs(
+    groups.flatMap((group) => group.secrets),
+    originMap,
+  );
   return { groups, databases };
 }
 
@@ -181,9 +184,7 @@ function buildDatabaseConfigs(
       ? `${fromKey.replace(/\./g, "_")}_postgres_${slug}_data`
       : `postgres_${slug}_data`;
 
-    const containerName = fromKey
-      ? `${fromKey}-postgres-${slug}`
-      : `postgres-${slug}`;
+    const containerName = fromKey ? `${fromKey}-postgres-${slug}` : `postgres-${slug}`;
 
     return {
       secret,
@@ -238,10 +239,7 @@ function renderEnvFile(
   return `${lines.join("\n")}\n`;
 }
 
-function renderDockerCompose(
-  databases: DatabaseSecretConfig[],
-  projectName: string,
-): string {
+function renderDockerCompose(databases: DatabaseSecretConfig[], projectName: string): string {
   const lines = [
     `name: ${projectName}`,
     "",

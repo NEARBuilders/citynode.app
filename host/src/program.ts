@@ -721,7 +721,11 @@ export const createStartServer = (onReady?: () => void) =>
       }
 
       const lastSegment = pathname.split("/").pop() ?? "";
-      if (!/\.[A-Za-z0-9]+$/.test(lastSegment)) {
+      if (
+        !/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i.test(
+          lastSegment,
+        )
+      ) {
         return next();
       }
 
