@@ -16,11 +16,6 @@ import type { ClientRuntimeConfig } from "everything-dev/types";
 import { getRuntimeConfig } from "everything-dev/ui/runtime";
 import type { Auth } from "./auth-types.gen";
 
-type ProviderConfig = {
-  name: string;
-  icon: string;
-};
-
 type RuntimeAuthVariables = {
   siwn: {
     recipient?: string;
@@ -117,23 +112,6 @@ export function getLinkedProviders(
   }
 
   return [...new Set(linkedAccounts.map((account) => getProviderId(account)))];
-}
-
-export function getProviderConfig(providerId: string): ProviderConfig {
-  switch (providerId) {
-    case "siwn":
-      return { name: "NEAR", icon: "🔗" };
-    case "google":
-      return { name: "Google", icon: "🔵" };
-    case "github":
-      return { name: "GitHub", icon: "⚫" };
-    case "email_password":
-      return { name: "Email", icon: "📧" };
-    case "anonymous":
-      return { name: "Anonymous", icon: "👻" };
-    default:
-      return { name: providerId, icon: "❓" };
-  }
 }
 
 function getSiwnClientConfig(options: CreateAuthClientOptions): SiwnClientConfig {

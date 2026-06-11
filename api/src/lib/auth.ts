@@ -60,6 +60,18 @@ export function createAuthMiddleware(builder: any) {
     },
   );
 
+  const requireAuthOrApiKey = builder.middleware(
+    async ({ context, next }: { context: RequestAuthContext; next: any }) => {
+      if (!context.user && !context.userId && !context.apiKey) {
+        throw new ORPCError("UNAUTHORIZED", {
+          message: "Authentication required",
+          data: { hint: "Sign in or provide an API key" },
+        });
+      }
+      return next({ context: toRequestAuthContext(context) });
+    },
+  );
+
   const requireUser = builder.middleware(
     async ({ context, next }: { context: RequestAuthContext; next: any }) => {
       if (!context.user || !context.userId) {
@@ -136,6 +148,7 @@ export function createAuthMiddleware(builder: any) {
 
   return {
     requireAuth,
+    requireAuthOrApiKey,
     requireUser,
     requireRole,
     requireAdmin,
