@@ -1318,6 +1318,7 @@ function generateGitignore(): string {
 dist/
 .env
 .bos/
+docker-compose.yml
 *.gen.ts
 *.gen.tsx
 `;

@@ -81,15 +81,22 @@ describe("generated infra", () => {
     );
     expect(envExample).toContain("PAYMENT_API_URL=");
 
+    expect(dockerCompose).toContain("name: dev.everything.near");
     expect(dockerCompose).toContain("postgres-api:");
+    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-api");
     expect(dockerCompose).toContain("POSTGRES_DB: api_db");
     expect(dockerCompose).toContain('"5432:5432"');
     expect(dockerCompose).toContain("postgres-auth:");
+    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-auth");
     expect(dockerCompose).toContain("POSTGRES_DB: auth_db");
     expect(dockerCompose).toContain('"5433:5432"');
     expect(dockerCompose).toContain("postgres-projects:");
+    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-projects");
     expect(dockerCompose).toContain("POSTGRES_DB: projects_db");
     expect(dockerCompose).toContain('"5434:5432"');
+    expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_data");
+    expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_data");
+    expect(dockerCompose).toContain("name: dev_everything_near_postgres_projects_data");
     expect(dockerCompose).not.toContain("payment");
   });
 
