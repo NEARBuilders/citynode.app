@@ -68,7 +68,7 @@ function getRegistryConfigKey(
   return `apps/${accountId}/${gatewayId}${suffix}/bos.config.json`;
 }
 
-function parseBosUrl(bosUrl: string): {
+export function parseBosUrl(bosUrl: string): {
   accountId: string;
   gatewayId: string;
   pathSegments: string[];

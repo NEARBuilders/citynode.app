@@ -59,9 +59,10 @@ import {
   getRegistryNamespaceForAccount,
   getRegistryNamespaceForNetwork,
   type PluginManifest,
+  parseBosUrl,
 } from "./fastkv";
 import { computeSriHashForUrl } from "./integrity";
-import type { BosEnv } from "./merge";
+import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import {
   addFunctionCallAccessKey,
   ensureNearCli,
@@ -78,7 +79,14 @@ import {
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import { writePluginSidebarGen } from "./sidebar";
-import type { BosConfig, BosConfigInput, BosPluginRef, RuntimeConfig, SourceMode } from "./types";
+import type {
+  BosConfig,
+  BosConfigInput,
+  BosPluginRef,
+  ExtendsConfig,
+  RuntimeConfig,
+  SourceMode,
+} from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
@@ -478,12 +486,43 @@ async function buildEverythingDevQuietly(cwd: string) {
   );
 }
 
+export async function resolveRemoteConfigChain(
+  accountId: string,
+  gatewayId: string,
+  visited: Set<string>,
+): Promise<BosConfigInput> {
+  const selfRef = `bos://${accountId}/${gatewayId}`;
+  if (visited.has(selfRef)) {
+    throw new Error(`Circular extends detected: ${selfRef}`);
+  }
+
+  const nextVisited = new Set(visited);
+  nextVisited.add(selfRef);
+
+  const config = await fetchBosConfigFromFastKv<BosConfigInput>(selfRef);
+  const parentRef = config.extends
+    ? resolveExtendsRef(config.extends as string | ExtendsConfig, "production")
+    : undefined;
+
+  if (!parentRef) return config;
+
+  const { accountId: parentAccountId, gatewayId: parentGatewayId } = parseBosUrl(parentRef);
+  const parentResolved = await resolveRemoteConfigChain(
+    parentAccountId,
+    parentGatewayId,
+    nextVisited,
+  );
+
+  return mergeBosConfigWithExtends(parentResolved, config);
+}
+
 async function fetchPublishedConfig(
   accountId: string,
   gatewayId: string,
 ): Promise<BosConfig | null> {
   try {
-    return await fetchBosConfigFromFastKv<BosConfig>(`bos://${accountId}/${gatewayId}`);
+    const resolved = await resolveRemoteConfigChain(accountId, gatewayId, new Set());
+    return resolved as BosConfig;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("No config found")) {
       return null;
