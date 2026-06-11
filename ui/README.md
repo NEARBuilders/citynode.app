@@ -24,7 +24,7 @@ The app-level barrel is `ui/src/app.ts` and is the preferred import for route co
 ## Development
 
 ```bash
-bos dev --host remote   # Typical: remote host, local UI + API
+bos dev                 # Typical: remote host (auto-detected), local UI + API
 bos dev --api remote    # Isolate UI work
 ```
 

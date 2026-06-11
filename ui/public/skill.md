@@ -110,13 +110,13 @@ Current caveat:
 ```bash
 cp .env.example .env
 bun install
-bos dev --host remote
+bos dev
 ```
 
 Useful variants:
 
 ```bash
-bos dev --host remote --api remote
+bos dev --api remote
 bos start --no-interactive
 ```
 

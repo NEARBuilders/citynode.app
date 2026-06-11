@@ -10,8 +10,8 @@ metadata:
 ## Starting Development
 
 ```bash
-# Typical: remote host, local UI + API
-bos dev --host remote
+# Typical: start development (host mode auto-detected)
+bos dev
 
 # Isolate work
 bos dev --api remote     # UI only
@@ -49,7 +49,7 @@ The orchestrator:
 
 - **UI changes**: Rsbuild HMR — instant at :3003, no rebuild
 - **API changes**: Rspack HMR — instant at :3001, no rebuild
-- **Config changes**: Require host restart (`bos kill && bos dev --host remote`)
+- **Config changes**: Require host restart (`bos kill && bos dev`)
 
 ## Contract Sync & Type Generation
 

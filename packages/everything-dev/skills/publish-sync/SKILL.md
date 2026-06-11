@@ -159,5 +159,5 @@ Process issues:
 ```bash
 bos kill               # Kill all tracked processes
 bun install            # Reinstall deps
-bos dev --host remote  # Restart
+bos dev                # Restart
 ```

@@ -30,7 +30,7 @@
       "better-auth": "1.6.9",
       "@better-auth/api-key": "1.6.9",
       "@better-auth/passkey": "1.6.9",
-      "better-near-auth": "1.6.1",
+      "better-near-auth": "1.6.3",
       "every-plugin": "^2.7.0",
       "everything-dev": "^1.35.2",
       "typescript": "^5.9.3",
@@ -109,7 +109,7 @@
     "dotenv": "^17.3.1",
     "tsx": "^4.21.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.1.8"
+    "vitest": "^catalog:"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -118,12 +118,12 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/core": "catalog:",
     "@better-auth/passkey": "catalog:",
-    "@libsql/client": "^0.17.0",
+    "@libsql/client": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/server": "catalog:",
     "better-auth": "catalog:",
     "better-near-auth": "catalog:",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "effect": "catalog:",
     "zod": "catalog:",

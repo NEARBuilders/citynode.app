@@ -546,7 +546,7 @@ The `bos` CLI provides the primary development workflow:
 
 **Typical Development:**
 ```bash
-bos dev --host remote   # Remote host, local UI + API
+bos dev                 # Start development (host mode auto-detected)
 ```
 
 This is the standard workflow because:
@@ -570,7 +570,7 @@ bos start --no-interactive   # Run with all production modules
 ### How Host, UI, and API Relate
 
 ```
-Development Mode (bos dev --host remote):
+Development Mode (bos dev):
 ┌─────────────────────────────────────────┐
 │  Host (Remote)                          │
 │  - Running on production/staging URL   │
@@ -588,7 +588,7 @@ Development Mode (bos dev --host remote):
 1. **Host** orchestrates everything - serves the HTML, loads the UI runtime, merges API routes
 2. **UI** owns routes/components; runtime factories live in `everything-dev/ui/client` and `/server`
 3. **API** is an every-plugin - host loads plugin and merges its router
-4. During dev with `--host remote`, host URLs come from `bos.config.json` production URLs
+4. During dev (when host is remote), host URLs come from `bos.config.json` production URLs
 5. Local UI/API URLs are injected at runtime
 
 ### Debugging Development Issues

@@ -43,7 +43,7 @@ For full host/plugin/auth/api hot-swap, see [`../plans/runtime-config-hot-swap.m
 ## Development
 
 ```bash
-bos dev --host remote   # Remote host, local UI + API (typical)
+bos dev                 # Start development (host mode auto-detected)
 bos dev                 # Full local development
 ```
 

@@ -477,7 +477,7 @@ export function buildChildRootScripts(sections: {
   plugins: boolean;
 }): Record<string, string> {
   const scripts: Record<string, string> = {
-    dev: "node_modules/.bin/bos dev --host remote",
+    dev: "node_modules/.bin/bos dev",
     "dev:proxy": "node_modules/.bin/bos dev --proxy",
     build: "node_modules/.bin/bos build",
     deploy: "node_modules/.bin/bos build --deploy",

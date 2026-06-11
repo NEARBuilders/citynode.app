@@ -134,14 +134,14 @@ The tenant config must:
 For the base runtime:
 
 ```bash
-bos dev --host remote
+bos dev
 bos publish --deploy
 ```
 
 For a shared-host child UI app:
 
 ```bash
-bos dev --host remote --api remote
+bos dev --api remote
 bos publish --deploy
 ```
 

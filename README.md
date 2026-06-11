@@ -54,7 +54,7 @@ For the full argument, see [A New Renaissance: Why Software Must Compose or Coll
 ### Development
 
 ```bash
-everything-dev dev --host remote   # Remote host, local UI + API (typical)
+everything-dev dev                 # Start development (host mode auto-detected)
 everything-dev dev --ui remote     # Isolate API work
 everything-dev dev --api remote    # Isolate UI work
            |/ --proxy              # Use a proxy
