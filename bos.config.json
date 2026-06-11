@@ -41,34 +41,19 @@
       "integrity": "sha384-gdDKeQ++6oHEb9Z6GSHg7Z3RkXbtsoiv0AUbd2bfq/L4ZvdHHhpQc73ohyUxBoQS"
     },
     "auth": {
-      "name": "everything-dev_auth-plugin",
-      "development": "local:plugins/auth",
-      "production": "https://elliot-braem-4596-everything-dev-auth-plugin-bett-5c7464d90-ze.zephyrcloud.app",
-      "integrity": "sha384-hdiTtgW15RyAVkpNdgNxQxKP3xOkMs2jJ27O53l1zEi++nghcPFn8QZQb9avuLMe",
+      "extends": "bos://auth.everything.near/auth.everything.dev",
       "variables": {
         "passkey": {
           "rpID": "everything.dev",
-          "rpName": "Better NEAR Auth"
+          "rpName": "everything.dev"
         },
         "siwn": {
           "recipients": {
-            "mainnet": "auth.everything.near",
+            "mainnet": "dev.everything.near",
             "testnet": "dev.allthethings.testnet"
           }
         }
-      },
-      "secrets": [
-        "AUTH_DATABASE_URL",
-        "BETTER_AUTH_SECRET",
-        "GITHUB_CLIENT_SECRET",
-        "FASTNEAR_API_KEY",
-        "TWILIO_ACCOUNT_SID",
-        "TWILIO_AUTH_TOKEN",
-        "TWILIO_PHONE_NUMBER",
-        "NEAR_RELAYER_PRIVATE_KEY",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
-      ]
+      }
     }
   },
   "plugins": {

@@ -355,6 +355,12 @@ export const initializePlugins = Effect.gen(function* () {
             domain: normalizedDomain,
             hostUrl: normalizedDomain,
           };
+
+          const corsOrigin = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim());
+          if (corsOrigin) {
+            authBaseVariables.trustedOrigins = corsOrigin;
+          }
+
           authPlugin = await loadPluginEntry(
             runtime,
             authEntry,
