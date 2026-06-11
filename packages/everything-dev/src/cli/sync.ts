@@ -11,17 +11,22 @@ import {
 } from "../merge";
 import { syncResolvedSharedDeps } from "../shared-deps";
 import { writeGeneratedInfra } from "./infra";
-import { personalizeConfig, resolveSourceDir, runBunInstall, runTypesGen } from "./init";
+import {
+  buildChildAgentsMd,
+  extractSkillsBlock,
+  personalizeConfig,
+  resolveSourceDir,
+  runBunInstall,
+  runTypesGen,
+} from "./init";
 import { writeSnapshot } from "./snapshot";
 
 const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   ".env.example",
   ".gitignore",
-  "AGENTS.md",
   "biome.json",
   "bos.config.json",
   "bunfig.toml",
-  "CONTRIBUTING.md",
   "package.json",
   ".changeset/config.json",
   ".changeset/README.md",
@@ -442,7 +447,32 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       }
     }
 
+    const account = (localConfig.account as string) || extendsAccount;
+    const domain = (localConfig.domain as string) || extendsGateway;
+    const overrides: Array<"ui" | "api" | "host" | "plugins"> = [];
+    if (withUi) overrides.push("ui");
+    if (withApi) overrides.push("api");
+    if (withHost) overrides.push("host");
+    if (withPlugins) overrides.push("plugins");
+
     if (options.dryRun) {
+      const agentsMdSourcePath = toSourcePath(sourceDir, "AGENTS.md");
+      if (agentsMdSourcePath) {
+        const agentsMdSourceContent = readFileSync(join(sourceDir, agentsMdSourcePath), "utf-8");
+        const skillsBlock = extractSkillsBlock(agentsMdSourceContent);
+        if (skillsBlock) {
+          const expectedContent = buildChildAgentsMd(skillsBlock, {
+            overrides,
+            plugins: childPlugins,
+          });
+          const expectedHash = computeHash(expectedContent);
+          const agentsMdLocalHash = computeLocalHash(projectDir, "AGENTS.md");
+          if (agentsMdLocalHash !== expectedHash) {
+            updated.push("AGENTS.md");
+          }
+        }
+      }
+
       return {
         status: "dry-run",
         updated,
@@ -461,14 +491,6 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
         writeSyncedFile(sourceDir, projectDir, sourcePath);
       }
     }
-
-    const account = (localConfig.account as string) || extendsAccount;
-    const domain = (localConfig.domain as string) || extendsGateway;
-    const overrides: Array<"ui" | "api" | "host" | "plugins"> = [];
-    if (withUi) overrides.push("ui");
-    if (withApi) overrides.push("api");
-    if (withHost) overrides.push("host");
-    if (withPlugins) overrides.push("plugins");
 
     await personalizeConfig(projectDir, {
       extendsAccount,
@@ -497,6 +519,27 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       const hash = computeLocalHash(projectDir, destPath);
       if (hash) {
         newSnapshotFiles[destPath] = hash;
+      }
+    }
+
+    const agentsMdSourcePath = toSourcePath(sourceDir, "AGENTS.md");
+    if (agentsMdSourcePath) {
+      const agentsMdSourceContent = readFileSync(join(sourceDir, agentsMdSourcePath), "utf-8");
+      const skillsBlock = extractSkillsBlock(agentsMdSourceContent);
+      if (skillsBlock) {
+        const expectedContent = buildChildAgentsMd(skillsBlock, {
+          overrides,
+          plugins: childPlugins,
+        });
+        const expectedHash = computeHash(expectedContent);
+
+        const agentsMdLocalHash = computeLocalHash(projectDir, "AGENTS.md");
+        if (agentsMdLocalHash !== expectedHash) {
+          writeFileSync(join(projectDir, "AGENTS.md"), expectedContent);
+          updated.push("AGENTS.md");
+        }
+
+        newSnapshotFiles["AGENTS.md"] = expectedHash;
       }
     }
 

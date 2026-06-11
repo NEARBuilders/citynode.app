@@ -35,6 +35,12 @@ skills:
     use: "everything-dev#super-app"
   - when: "Publish bos.config.json to the FastKV registry, sync from upstream, and upgrade workspace packages. Use when deploying, syncing, or managing runtime configuration across projects."
     use: "everything-dev#publish-sync"
+  - when: "API architecture with oRPC contracts, route implementation, auth middleware patterns (requireAuth, requireRole, requireOrganization), error handling with ORPCError, plugin-client in-process composition, session middleware flow, and client-side auth integration."
+    use: "everything-dev#api-and-auth"
+  - when: "Build and register plugins within everything.dev using the _template scaffold, contract/service/index pattern, Drizzle database setup, bos.config.json registration, plugin UI and sidebar configuration, or deploying plugins to Zephyr CDN."
+    use: "everything-dev#plugin-development"
+  - when: "Create UI routes with TanStack Router, fetch data from API using useApiClient/useOrpc, implement auth flows with useAuthClient/sessionQueryOptions, configure the sidebar, understand SSR hydration, or use the @/app module surface."
+    use: "everything-dev#ui-integration"
 <!-- intent-skills:end -->
 
 # Agent Instructions

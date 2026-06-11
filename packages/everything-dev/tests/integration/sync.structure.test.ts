@@ -5,7 +5,6 @@ describe("bos sync — framework-owned files", () => {
   it("marks scaffold runtime files as framework-owned", () => {
     expect(isFrameworkOwnedSyncFile(".gitignore")).toBe(true);
     expect(isFrameworkOwnedSyncFile("biome.json")).toBe(true);
-    expect(isFrameworkOwnedSyncFile("CONTRIBUTING.md")).toBe(true);
     expect(isFrameworkOwnedSyncFile(".github/workflows/deploy.yml")).toBe(true);
     expect(isFrameworkOwnedSyncFile("ui/src/globals.d.ts")).toBe(true);
     expect(isFrameworkOwnedSyncFile("ui/src/router.tsx")).toBe(true);

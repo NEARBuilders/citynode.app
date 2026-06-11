@@ -2,7 +2,7 @@
 name: extends-config
 description: How bos.config.json extends chains work, deep merge semantics, resolved config lifecycle, env-specific extends, and canonical field ordering. Use when debugging extends inheritance, configuring per-environment parents, understanding what dev writes vs publish writes, or reasoning about config merging.
 metadata:
-  sources: "src/merge.ts,src/config.ts,src/shared-deps.ts,src/types.ts"
+  sources: "packages/everything-dev/src/merge.ts,packages/everything-dev/src/config.ts,packages/everything-dev/src/shared-deps.ts,packages/everything-dev/src/types.ts"
 ---
 
 # extends & Config Merging
@@ -151,6 +151,16 @@ The `_resolved` metadata is stripped before use.
 
 When host is remote, `syncResolvedSharedDeps()` reads versions from `bos.config.json` and writes them into `package.json` catalog. No resolved config is written — the remote host reads `bos.config.json` directly.
 
+### `_resolved.resolvedAt`
+
+The `resolvedAt` timestamp in `.bos/bos.resolved-config.json` is metadata for debugging only. It is not used for staleness detection — the CLI always re-resolves on `bos dev` / `bos build`.
+
+## Circular Extends Detection
+
+If the extends chain contains a cycle (e.g., A→B→A), the resolver detects it during config loading and throws an error listing the cycle path. This prevents infinite recursion during merge.
+
+Detection occurs in `resolveExtendsRef()` → `mergeBosConfigWithExtends()`. The extends chain is tracked as a set of visited BOS refs; a duplicate visit triggers the error.
+
 ## Canonical Field Ordering
 
 `BOS_CONFIG_ORDER` enforces consistent key order:
@@ -158,24 +168,26 @@ When host is remote, `syncResolvedSharedDeps()` reads versions from `bos.config.
 1. `extends` — always first
 2. `account`
 3. `domain`
-4. `testnet`
-5. `staging`
-6. `repository`
-7. `app`
-8. `plugins`
-9. `shared`
+4. `title`
+5. `description`
+6. `testnet`
+7. `staging`
+8. `repository`
+9. `ci`
+10. `app`
+11. `plugins`
 
 Unknown keys go after known keys. `rebuildOrderedConfig()` is applied before every write.
 
 ## API
 
-From `src/config.ts`:
+From `packages/everything-dev/src/config.ts`:
 - `writeResolvedConfig(configDir, config, env, extendsChain?)` — writes `.bos/bos.resolved-config.json`
 - `loadResolvedConfig(configDir)` — reads resolved config, returns `BosConfig | null`
 - `resolveBosConfigPath(configDir)` — returns resolved config path if exists, else `bos.config.json`
 - `readBosConfigForBuild(configDir)` — reads resolved config stripping `_resolved`, falls back to `bos.config.json`
 
-From `src/merge.ts`:
+From `packages/everything-dev/src/merge.ts`:
 - `mergeBosConfigWithExtends(parent, child)` — deep merge for extends chain
 - `mergeBosConfigWithTemplate(local, template)` — merge for sync (local wins)
 - `resolveExtendsRef(extendsField, env)` — resolve string|object extends for a given env

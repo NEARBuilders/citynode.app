@@ -18,6 +18,7 @@ import {
   detectGitRemoteUrl,
   fetchParentConfig,
   generateDatabaseMigrations,
+  personalizeAgentsMd,
   personalizeConfig,
   removeInitLockfile,
   resolveSourceDir,
@@ -1599,6 +1600,10 @@ export default createPlugin({
                 overrides,
                 plugins,
               }),
+            );
+
+            await timePhase(timings, "personalize agents", () =>
+              personalizeAgentsMd(targetDir, { overrides, plugins }),
             );
           }
 

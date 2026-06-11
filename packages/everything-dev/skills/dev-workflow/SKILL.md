@@ -2,7 +2,7 @@
 name: dev-workflow
 description: Development workflow for everything-dev projects using bos dev, bos start, and the Module Federation runtime. Use when starting dev servers, debugging hot reload, or understanding the service-descriptor architecture.
 metadata:
-  sources: "src/service-descriptor.ts,src/orchestrator.ts,src/dev-logs.ts,src/host.ts"
+  sources: "packages/everything-dev/src/service-descriptor.ts,packages/everything-dev/src/orchestrator.ts,packages/everything-dev/src/dev-logs.ts,packages/everything-dev/src/dev-session.ts"
 ---
 
 # everything-dev Development Workflow
@@ -28,7 +28,7 @@ bos dev                  # Full local (rarely needed)
 | auth | 3002 | http://localhost:3002 |
 | ui | 3003 | http://localhost:3003 |
 | ui-ssr | 3004 | http://localhost:3004 |
-| plugins | 3010+ | http://localhost:3010+ |
+| plugins | 3010+ | http://localhost:3010+ (incremental — one per plugin in config order) |
 
 ## Service-Descriptor Architecture
 
@@ -49,6 +49,8 @@ The orchestrator:
 
 - **UI changes**: Rsbuild HMR — instant at :3003, no rebuild
 - **API changes**: Rspack HMR — instant at :3001, no rebuild
+- **Auth / Plugin changes**: No HMR — require full restart (`bos kill && bos dev`)
+- **SSR (ui-ssr)**: No HMR — restart required after UI changes
 - **Config changes**: Require host restart (`bos kill && bos dev`)
 
 ## Contract Sync & Type Generation
@@ -79,6 +81,8 @@ bos types gen   # Regenerate ui/src/lib/api-types.gen.ts and api/src/lib/plugins
 
 The host reads `BOS_RUNTIME_CONFIG` at startup (resolved from `bos.config.json` by the CLI). `ConfigService` is an immutable Effect Layer — every service is built from that one snapshot.
 
+**Override for testing**: Set `BOS_RUNTIME_CONFIG` env var to a JSON string or file path to bypass config loading from disk. Useful for testing with different configs without modifying `bos.config.json`.
+
 On page refresh:
 1. Browser re-fetches HTML shell from host
 2. Host injects current config into `window.__RUNTIME_CONFIG__`
@@ -99,21 +103,45 @@ Build configs (rsbuild/rspack) read from `.bos/bos.resolved-config.json` first, 
 ```bash
 bos ps                    # List running processes + ports
 bos status                # Check remote health
+bos info                  # Show current configuration
 ls .bos/logs/             # Available log files
 cat .bos/logs/api.log     # API process logs
 ```
 
-API not responding:
+### Port Conflicts
+
+If a port is already in use, the local service fails to start. Check what's on the port:
+
+```bash
+lsof -i :3003             # Check what is using port 3003
+```
+
+Kill the conflicting process and retry, or stop the existing `bos dev` session first.
+
+### Stale PID file
+
+If `bos kill` doesn't run cleanly (e.g., terminal was closed), stale PIDs in `.bos/pids.json` can block restart:
+
+```bash
+rm .bos/pids.json         # Clear stale PID tracking
+bos dev                   # Start fresh
+```
+
+### API not responding
+
 1. `bos ps` — is API running?
 2. `.bos/logs/api.log` — startup errors?
 3. `curl http://localhost:3001/remoteEntry.js` — is the entry accessible?
 
-UI not loading:
+### UI not loading
+
 1. Check browser console for Module Federation errors
 2. `bos.config.json` — is `app.ui.development` correct?
-3. Clear browser cache and hard reload
+3. Clear browser cache and hard reload (Cmd+Shift+R)
+4. Verify UI SSR restart if using SSR
 
-Module Federation errors:
+### Module Federation errors
+
 - Verify shared dependency versions match across package.json files
 - Clear browser cache (Cmd+Shift+R)
 - Check `bos.config.json` URLs are accessible

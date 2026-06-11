@@ -98,7 +98,7 @@ ALLOW_UNTRUSTED_SSR=false
 ```
 
 Meaning:
-- `ALLOW_OVERRIDE` controls which tenant config sections can affect request-scoped composition
+- `ALLOW_OVERRIDE` controls which tenant config sections can affect request-scoped composition. Format: comma-separated list (e.g., `ui,plugins.*`) where `plugins.*` is a glob matching all plugin overrides
 - `TENANT_WHITELIST` controls which tenants may use SSR
 - `ALLOW_UNTRUSTED_SSR=true` allows SSR for any valid tenant with SSR config
 
@@ -128,6 +128,28 @@ The tenant config must:
 - Asset requests use stale-while-revalidate verification to avoid latency spikes.
 - HTML and SSR requests use blocking verification.
 - SSR module cache identity includes `ssrIntegrity`, not just the SSR URL.
+- **On integrity failure**: the host rejects the remote entry. HTML and SSR requests block immediately; asset requests fall back. The page renders client-side without the failed remote.
+
+## Tenant Config Caching
+
+The host caches resolved tenant configs in memory. Cache TTL is managed by the tenant runtime service (`host/src/services/tenant-runtime.ts`). After publishing tenant config changes, a host restart is typically required to pick up fresh config unless the cache TTL has expired.
+
+## Debugging Tenant Resolution
+
+If tenant overrides are not applying as expected:
+
+1. **Verify the tenant config exists in FastKV**: The config must be published to `{tenantAccount}/bos/gateways/{gateway}/bos.config.json`
+2. **Check extends chain**: The tenant config must extend the base runtime via its `extends` field
+3. **Check host logs**: Run `cat .bos/logs/host.log` and look for tenant resolution messages — the host logs which runtime config it resolved for each request
+4. **Check env vars**: `ALLOW_OVERRIDE` must include the sections you're overriding (e.g., `ui` or `plugins.*`)
+5. **Verify integrity**: If tenant remote URLs have integrity hashes, the host validates them — mismatches cause rejection
+6. **Missing tenant config**: If the tenant config is not found in FastKV, the host silently serves the base runtime config without tenant overrides — no error is surfaced to the browser
+
+### Diagnostics
+
+- `bos info` shows the active runtime configuration loaded by the CLI
+- The host logs the resolved tenant account per request at startup
+- Compare the tenant's published config against the base runtime using `bos info` in the tenant project directory
 
 ## Recommended Workflow
 

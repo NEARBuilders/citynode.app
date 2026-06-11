@@ -1,6 +1,12 @@
 /**
  * Public UI surface — runtime helpers, client factories, and router types.
  *
+ * ⚠️  DO NOT MODIFY THIS FILE.
+ * It is framework-owned and will be overwritten by `bos sync` / `bos upgrade`.
+ *
+ * Imports within this file must be relative paths (./lib/api, ./lib/auth).
+ * Never import from "@/app" here — that would create a circular self-reference.
+ *
  * This file re-exports everything that UI route code needs and defines
  * thin runtime helpers (getAccount, getAppName, etc.) derived from
  * the injected runtime config.

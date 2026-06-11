@@ -2,7 +2,7 @@
 name: init-upgrade
 description: bos init, bos sync, and bos upgrade workflows — template download, snapshot-based conflict detection, package version bumps, and how init/sync select and own files. Use when scaffolding new projects, syncing upstream changes, or upgrading framework packages.
 metadata:
-  sources: "src/cli/init.ts,src/cli/sync.ts,src/cli/upgrade.ts,src/cli/snapshot.ts"
+  sources: "packages/everything-dev/src/cli/init.ts,packages/everything-dev/src/cli/sync.ts,packages/everything-dev/src/cli/upgrade.ts,packages/everything-dev/src/cli/snapshot.ts,packages/everything-dev/src/merge.ts"
 ---
 
 # bos init, sync, upgrade
@@ -23,8 +23,8 @@ bos init --overrides ui,api,host                          # Include host locally
 3. Build the file list with `buildInitPatterns(overrides, plugins)`
 4. Filter plugins: only included plugins + their routes are copied
 5. `personalizeConfig()` — sets `extends`, `account`, `domain`, removes production URLs
-6. `resolveWorkspaceRefs()` — normalizes package manifests, sets catalog refs
-7. Write initial snapshot (`.bos/sync-snapshot.json`)
+6. `resolveWorkspaceRefs()` — normalizes each workspace `package.json`: rewrites `file:`/`workspace:*` refs to `catalog:`, ensures all workspace packages are listed in root `workspaces.catalog`, pins framework versions (`everything-dev`, `every-plugin`)
+7. Write initial snapshot (`.bos/sync-snapshot.json`) — records file path → content hash for all template-origin files, used later by `bos sync` for conflict detection
 8. `bun install` + `bos types gen`
 
 ## Shared Host + Custom Child App
@@ -188,22 +188,18 @@ Workspace packages use `catalog:` refs so a single version bump in root catalog 
 
 ## bos publish
 
+See `everything-dev#publish-sync` for the full publish workflow. A quick reference:
+
 ```bash
 bos publish                  # Publish config to FastKV
 bos publish --deploy         # Build, deploy to CDN, then publish
 ```
 
-On `--deploy`:
-1. Build all workspace targets
-2. Deploy to Zephyr CDN → auto-updates `bos.config.json` with production URLs + integrity
-3. Re-read config to pick up deploy updates
-4. Publish full config to FastKV registry
-
-**This is the only time `bos dev`-style writes touch `bos.config.json`** — it's the snapshot moment.
+`bos publish --deploy` builds, deploys to Zephyr, auto-updates `bos.config.json` with production URLs + integrity hashes, then publishes the config to FastKV.
 
 ## Canonical Ordering
 
 All writes to `bos.config.json` enforce `BOS_CONFIG_ORDER`:
-`extends` → `account` → `domain` → `testnet` → `staging` → `repository` → `app` → `plugins`
+`extends` → `account` → `domain` → `title` → `description` → `testnet` → `staging` → `repository` → `ci` → `app` → `plugins`
 
-Unknown keys go after known keys.
+Unknown keys go after known keys. See `everything-dev#extends-config` for full ordering details.

@@ -2,7 +2,7 @@
 name: publish-sync
 description: Publish bos.config.json to the FastKV registry, sync from upstream, and upgrade workspace packages. Use when deploying, syncing, or managing runtime configuration across projects.
 metadata:
-  sources: "src/plugin.ts,src/cli/sync.ts,src/cli/upgrade.ts,src/fastkv.ts,src/integrity.ts"
+  sources: "packages/everything-dev/src/plugin.ts,packages/everything-dev/src/cli/sync.ts,packages/everything-dev/src/cli/upgrade.ts,packages/everything-dev/src/fastkv.ts,packages/everything-dev/src/integrity.ts,packages/everything-dev/src/config.ts"
 ---
 
 # everything-dev Publish & Sync
@@ -32,6 +32,19 @@ After `bos publish --deploy`:
 1. Each workspace builds and deploys to Zephyr CDN
 2. `bos.config.json` is auto-updated with production URLs + integrity hashes
 3. Config is published to the FastKV registry at `{account}/bos/gateways/{gateway}/bos.config.json`
+
+The `--network` flag controls the NEAR network (mainnet by default). With `--network testnet`, publishes go to the NEAR testnet chain under the testnet account specified in config.
+
+### Rollback
+
+To revert a publish, restore the previous `bos.config.json` from git and re-publish:
+
+```bash
+git checkout HEAD~1 -- bos.config.json
+bos publish
+```
+
+Or cherry-pick a specific version of `bos.config.json` and publish that snapshot.
 
 Lineage model:
 - `extends` is the canonical parent edge between published runtimes
@@ -140,13 +153,7 @@ For remix-host browsing with the apps plugin:
 
 ### What bos dev writes vs bos publish writes
 
-| Mode | Writes to | File |
-|------|-----------|------|
-| `bos dev` | `.bos/bos.resolved-config.json` | Full merged config (gitignored) |
-| `bos build` | `.bos/bos.resolved-config.json` | Full merged config |
-| `bos publish --deploy` | `bos.config.json` | Snapshot with pinned production URLs |
-| `bos plugin publish` | `bos.config.json` | Records production URL + integrity |
-| `bos sync` | `bos.config.json` | Merges template updates |
+See `everything-dev#extends-config` for the full table. In short: `bos dev` and `bos build` write to `.bos/bos.resolved-config.json` (gitignored); `bos publish --deploy`, `bos plugin publish`, and `bos sync` write to `bos.config.json`.
 
 ## Troubleshooting
 
@@ -155,7 +162,25 @@ bos info              # Show current configuration
 bos status            # Check remote health
 ```
 
-Process issues:
+### FastKV publish failures
+
+- **NEAR RPC error**: Verify the configured NEAR account has sufficient gas and the FastKV contract is deployed at `{account}/bos/gateways/{gateway}/bos.config.json`
+- **Account mismatch**: The `bos.config.json` `account` field must match the on-chain account that owns the FastKV path
+- **Network mismatch**: Ensure `--network` matches where the account is deployed (mainnet vs testnet)
+- **Dry-run first**: Use `bos publish --dry-run` to preview before sending
+
+### Integrity verification
+
+During `bos publish --deploy`, integrity SRI hashes are auto-generated for each remote entry and stored in `bos.config.json`. At runtime, the host:
+- Verifies integrity on first load using bounded streaming (not full-response buffering)
+- Uses stale-while-revalidate for asset requests to avoid latency spikes
+- Blocks HTML and SSR requests on integrity mismatch
+- Identifies SSR modules by both URL and `ssrIntegrity` hash in the cache
+
+If a remote entry fails integrity check, the host rejects it and falls back to client-rendered output without that remote.
+
+### Process issues
+
 ```bash
 bos kill               # Kill all tracked processes
 bun install            # Reinstall deps
