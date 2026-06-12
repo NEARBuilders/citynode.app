@@ -39,6 +39,7 @@ import {
   getProjectRoot,
   loadLocalConfig,
   loadResolvedConfig,
+  resolveConfigComposableEntries,
   resolveLocalDevelopmentPath,
   resumeWarnings,
   suppressWarnings,
@@ -87,6 +88,7 @@ import type {
   RuntimeConfig,
   SourceMode,
 } from "./types";
+import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
@@ -490,7 +492,7 @@ export async function resolveRemoteConfigChain(
   accountId: string,
   gatewayId: string,
   visited: Set<string>,
-): Promise<BosConfigInput> {
+): Promise<BosConfig> {
   const selfRef = `bos://${accountId}/${gatewayId}`;
   if (visited.has(selfRef)) {
     throw new Error(`Circular extends detected: ${selfRef}`);
@@ -504,16 +506,20 @@ export async function resolveRemoteConfigChain(
     ? resolveExtendsRef(config.extends as string | ExtendsConfig, "production")
     : undefined;
 
-  if (!parentRef) return config;
+  let merged: BosConfigInput;
+  if (!parentRef) {
+    merged = config;
+  } else {
+    const { accountId: parentAccountId, gatewayId: parentGatewayId } = parseBosUrl(parentRef);
+    const parentResolved = await resolveRemoteConfigChain(
+      parentAccountId,
+      parentGatewayId,
+      nextVisited,
+    );
+    merged = mergeBosConfigWithExtends(parentResolved, config);
+  }
 
-  const { accountId: parentAccountId, gatewayId: parentGatewayId } = parseBosUrl(parentRef);
-  const parentResolved = await resolveRemoteConfigChain(
-    parentAccountId,
-    parentGatewayId,
-    nextVisited,
-  );
-
-  return mergeBosConfigWithExtends(parentResolved, config);
+  return resolveConfigComposableEntries(BosConfigSchema.parse(merged), process.cwd(), "production");
 }
 
 async function fetchPublishedConfig(
@@ -521,8 +527,7 @@ async function fetchPublishedConfig(
   gatewayId: string,
 ): Promise<BosConfig | null> {
   try {
-    const resolved = await resolveRemoteConfigChain(accountId, gatewayId, new Set());
-    return resolved as BosConfig;
+    return await resolveRemoteConfigChain(accountId, gatewayId, new Set());
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("No config found")) {
       return null;

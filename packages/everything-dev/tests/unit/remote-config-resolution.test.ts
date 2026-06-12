@@ -35,7 +35,8 @@ describe("resolveRemoteConfigChain", () => {
 
     const result = await resolveRemoteConfigChain("parent.near", "parent.dev", new Set());
 
-    expect(result).toEqual(PARENT_WITH_HOST);
+    expect(result.account).toBe("parent.near");
+    expect(result.app.host).toEqual(PARENT_WITH_HOST.app!.host);
     expect(fetchBosConfigFromFastKvMock).toHaveBeenCalledTimes(1);
     expect(fetchBosConfigFromFastKvMock).toHaveBeenCalledWith("bos://parent.near/parent.dev");
   });
@@ -61,7 +62,7 @@ describe("resolveRemoteConfigChain", () => {
 
     expect(result.account).toBe("child.near");
     expect(result.domain).toBe("child.dev");
-    expect((result.app as Record<string, unknown>).host).toEqual(PARENT_WITH_HOST.app!.host);
+    expect(result.app.host).toEqual(PARENT_WITH_HOST.app!.host);
     expect(fetchBosConfigFromFastKvMock).toHaveBeenCalledTimes(2);
   });
 
@@ -91,13 +92,13 @@ describe("resolveRemoteConfigChain", () => {
 
     const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
 
-    expect((result.app as Record<string, unknown>).host).toEqual({
+    expect(result.app.host).toEqual({
       development: "local:host",
       production: "https://host.child.dev",
     });
   });
 
-  it("resolves multi-level extends chain (grandchild -> child -> parent)", async () => {
+  it("resolves multi-level extends chain", async () => {
     const parentConfig: BosConfigInput = PARENT_WITH_HOST;
     const childConfig: BosConfigInput = {
       extends: "bos://parent.near/parent.dev",
@@ -128,7 +129,7 @@ describe("resolveRemoteConfigChain", () => {
     const result = await resolveRemoteConfigChain("grandchild.near", "grandchild.dev", new Set());
 
     expect(result.account).toBe("grandchild.near");
-    expect((result.app as Record<string, unknown>).host).toEqual(parentConfig.app!.host);
+    expect(result.app.host).toEqual(parentConfig.app!.host);
     expect(fetchBosConfigFromFastKvMock).toHaveBeenCalledTimes(3);
   });
 
@@ -184,30 +185,17 @@ describe("resolveRemoteConfigChain", () => {
 
     const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
 
-    expect((result.app as Record<string, unknown>).host).toEqual(PARENT_WITH_HOST.app!.host);
+    expect(result.app.host).toEqual(PARENT_WITH_HOST.app!.host);
   });
 
-  it("returns resolved config without app when child and parent have no app", async () => {
-    const childConfig: BosConfigInput = {
-      extends: "bos://parent.near/parent.dev",
-      account: "child.near",
-    };
-    const parentConfig: BosConfigInput = {
-      account: "parent.near",
-      repository: "https://github.com/parent",
+  it("throws when merged config is missing required app fields", async () => {
+    const config: BosConfigInput = {
+      account: "bad.near",
     };
 
-    fetchBosConfigFromFastKvMock.mockImplementation((url: string) => {
-      if (url === "bos://child.near/child.dev") return childConfig;
-      if (url === "bos://parent.near/parent.dev") return parentConfig;
-      throw new Error(`No config found for ${url}`);
-    });
+    fetchBosConfigFromFastKvMock.mockResolvedValue(config);
 
-    const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
-
-    expect(result.account).toBe("child.near");
-    expect(result.repository).toBe("https://github.com/parent");
-    expect(result.app).toBeUndefined();
+    await expect(resolveRemoteConfigChain("bad.near", "bad.dev", new Set())).rejects.toThrow();
   });
 
   it("child without plugins key inherits parent plugins", async () => {
@@ -217,6 +205,11 @@ describe("resolveRemoteConfigChain", () => {
     };
     const parentConfig: BosConfigInput = {
       account: "parent.near",
+      app: {
+        host: { development: "local:host", production: "https://host.parent.dev" },
+        ui: { production: "https://ui.parent.dev" },
+        api: { production: "https://api.parent.dev" },
+      },
       plugins: {
         analytics: { production: "https://analytics.parent.dev" },
       },
@@ -233,7 +226,7 @@ describe("resolveRemoteConfigChain", () => {
     expect(result.plugins).toEqual(parentConfig.plugins);
   });
 
-  it("child with null-sentinel plugin removes parent plugin and does not inherit others", async () => {
+  it("child with null-sentinel plugin removes parent plugin", async () => {
     const childConfig: BosConfigInput = {
       extends: "bos://parent.near/parent.dev",
       account: "child.near",
@@ -243,6 +236,11 @@ describe("resolveRemoteConfigChain", () => {
     };
     const parentConfig: BosConfigInput = {
       account: "parent.near",
+      app: {
+        host: { development: "local:host", production: "https://host.parent.dev" },
+        ui: { production: "https://ui.parent.dev" },
+        api: { production: "https://api.parent.dev" },
+      },
       plugins: {
         analytics: { production: "https://analytics.parent.dev" },
         apps: { production: "https://apps.parent.dev" },
@@ -292,8 +290,7 @@ describe("resolveRemoteConfigChain", () => {
 
     const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
 
-    const apiSecrets = ((result.app as Record<string, unknown>).api as Record<string, unknown>)
-      .secrets as string[];
+    const apiSecrets = (result.app.api as Record<string, unknown>).secrets as string[];
     expect(apiSecrets).toContain("CHILD_SECRET");
     expect(apiSecrets).toContain("PARENT_SECRET");
     expect(apiSecrets).toContain("SHARED_SECRET");
@@ -308,6 +305,11 @@ describe("resolveRemoteConfigChain", () => {
     };
     const parentConfig: BosConfigInput = {
       account: "parent.near",
+      app: {
+        host: { development: "local:host", production: "https://host.parent.dev" },
+        ui: { production: "https://ui.parent.dev" },
+        api: { production: "https://api.parent.dev" },
+      },
       plugins: {
         analytics: { production: "https://analytics.parent.dev" },
       },
@@ -322,5 +324,125 @@ describe("resolveRemoteConfigChain", () => {
     const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
 
     expect(result.plugins).toEqual({});
+  });
+
+  it("resolves nested app.auth.extends and resolves production", async () => {
+    const authConfig: BosConfigInput = {
+      account: "auth.near",
+      domain: "auth.dev",
+      app: {
+        host: { development: "local:host", production: "https://host.auth.dev" },
+        ui: { production: "https://ui.auth.dev" },
+        api: { production: "https://api.auth.dev" },
+        auth: {
+          production: "https://auth.prod.dev",
+          integrity: "sha384-abc",
+          variables: { defaultKey: "default-value", sharedKey: "from-auth" },
+        },
+      },
+    };
+
+    const rootConfig: BosConfigInput = {
+      account: "root.near",
+      domain: "root.dev",
+      app: {
+        host: { development: "local:host", production: "https://host.root.dev" },
+        ui: { production: "https://ui.root.dev" },
+        api: { production: "https://api.root.dev" },
+        auth: {
+          extends: "bos://auth.near/auth.dev",
+          variables: { customKey: "custom-value", sharedKey: "from-root" },
+        },
+      },
+    };
+
+    const childConfig: BosConfigInput = {
+      extends: "bos://root.near/root.dev",
+      account: "child.near",
+      domain: "child.dev",
+      app: {
+        ui: { production: "https://ui.child.dev" },
+        api: { production: "https://api.child.dev" },
+      },
+    };
+
+    fetchBosConfigFromFastKvMock.mockImplementation((url: string) => {
+      if (url === "bos://child.near/child.dev") return childConfig;
+      if (url === "bos://root.near/root.dev") return rootConfig;
+      if (url === "bos://auth.near/auth.dev") return authConfig;
+      throw new Error(`No config found for ${url}`);
+    });
+
+    const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
+
+    expect(result.app.auth).toBeDefined();
+    expect(result.app.auth.production).toBe("https://auth.prod.dev");
+    expect(result.app.auth.integrity).toBe("sha384-abc");
+    expect(result.app.auth.variables).toEqual({
+      customKey: "custom-value",
+      defaultKey: "default-value",
+      sharedKey: "from-root",
+    });
+  });
+
+  it("resolves nested plugin extends via chain", async () => {
+    const pluginConfig: BosConfigInput = {
+      account: "plugin.near",
+      domain: "plugin.dev",
+      app: {
+        host: { development: "local:host", production: "https://host.plugin.dev" },
+        ui: { production: "https://ui.plugin.dev" },
+        api: { production: "https://api.plugin.dev" },
+      },
+      plugins: {
+        myplugin: {
+          production: "https://myplugin.prod.dev",
+          integrity: "sha384-def",
+          variables: { pluginKey: "plugin-value" },
+        },
+      },
+    };
+
+    const parentConfig: BosConfigInput = {
+      account: "parent.near",
+      domain: "parent.dev",
+      app: {
+        host: { development: "local:host", production: "https://host.parent.dev" },
+        ui: { production: "https://ui.parent.dev" },
+        api: { production: "https://api.parent.dev" },
+      },
+      plugins: {
+        myplugin: {
+          extends: "bos://plugin.near/plugin.dev",
+          variables: { overrideKey: "override-value" },
+        },
+      },
+    };
+
+    const childConfig: BosConfigInput = {
+      extends: "bos://parent.near/parent.dev",
+      account: "child.near",
+      domain: "child.dev",
+      app: {
+        ui: { production: "https://ui.child.dev" },
+        api: { production: "https://api.child.dev" },
+      },
+    };
+
+    fetchBosConfigFromFastKvMock.mockImplementation((url: string) => {
+      if (url === "bos://child.near/child.dev") return childConfig;
+      if (url === "bos://parent.near/parent.dev") return parentConfig;
+      if (url === "bos://plugin.near/plugin.dev") return pluginConfig;
+      throw new Error(`No config found for ${url}`);
+    });
+
+    const result = await resolveRemoteConfigChain("child.near", "child.dev", new Set());
+
+    expect(result.plugins?.myplugin).toBeDefined();
+    const myplugin = result.plugins!.myplugin as Record<string, unknown>;
+    expect(myplugin.production).toBe("https://myplugin.prod.dev");
+    expect(myplugin.integrity).toBe("sha384-def");
+    expect((myplugin.variables as Record<string, unknown>).pluginKey).toBe("plugin-value");
+    expect((myplugin.variables as Record<string, unknown>).overrideKey).toBe("override-value");
   });
 });

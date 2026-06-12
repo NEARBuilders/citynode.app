@@ -353,7 +353,7 @@ function withAssociatedUi(
   };
 }
 
-async function resolveConfigComposableEntries(
+export async function resolveConfigComposableEntries(
   config: BosConfig,
   baseDir: string,
   env: BosEnv,
@@ -504,12 +504,9 @@ function asComposableEntry(value: unknown): BosPluginRef {
 }
 
 function getTargetedEntry(config: BosConfigInput, targetPath: string): BosPluginRef {
-  if (targetPath === "app.api") {
-    return asComposableEntry(config.app?.api);
-  }
-
-  if (targetPath === "app.auth") {
-    return asComposableEntry(config.app?.auth);
+  if (targetPath.startsWith("app.")) {
+    const entryKey = targetPath.slice("app.".length);
+    return asComposableEntry(config.app?.[entryKey]);
   }
 
   if (targetPath.startsWith("plugins.")) {
