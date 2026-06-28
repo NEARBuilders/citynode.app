@@ -526,6 +526,113 @@ describe("loadConfig plugin runtime filtering", () => {
       rmSync(testDir, { recursive: true, force: true });
     }
   });
+  it("resolves plugin as remote when listed in remotePlugins", async () => {
+    const testDir = mkdtempSync(join(tmpdir(), "bos-config-remote-plugins-"));
+
+    try {
+      const localPluginDir = join(testDir, "plugins", "settings");
+      mkdirSync(localPluginDir, { recursive: true });
+      writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
+
+      writeFileSync(
+        join(testDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "test.near",
+            domain: "test.dev",
+            plugins: {
+              settings: {
+                development: "local:plugins/settings",
+                production: "https://settings.example.com",
+              },
+            },
+            app: {
+              host: {
+                development: "http://localhost:3000",
+                production: "https://host.example.com",
+              },
+              ui: {
+                name: "ui",
+                development: "http://localhost:3003",
+                production: "https://ui.example.com",
+              },
+              api: {
+                name: "api",
+                development: "http://localhost:3001",
+                production: "https://api.example.com",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const loaded = await loadResolvedConfig({ cwd: testDir, remotePlugins: ["settings"] });
+
+      expect(loaded?.runtime.plugins?.settings).toBeDefined();
+      expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
+      expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
+      expect(loaded?.runtime.plugins?.settings?.localPath).toBeUndefined();
+      expect(loaded?.runtime.plugins?.settings?.entry).toBe(
+        "https://settings.example.com/mf-manifest.json",
+      );
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves plugin as local without remotePlugins (default)", async () => {
+    const testDir = mkdtempSync(join(tmpdir(), "bos-config-remote-plugins-"));
+
+    try {
+      const localPluginDir = join(testDir, "plugins", "settings");
+      mkdirSync(localPluginDir, { recursive: true });
+      writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
+
+      writeFileSync(
+        join(testDir, "bos.config.json"),
+        `${JSON.stringify(
+          {
+            account: "test.near",
+            domain: "test.dev",
+            plugins: {
+              settings: {
+                development: "local:plugins/settings",
+                production: "https://settings.example.com",
+              },
+            },
+            app: {
+              host: {
+                development: "http://localhost:3000",
+                production: "https://host.example.com",
+              },
+              ui: {
+                name: "ui",
+                development: "http://localhost:3003",
+                production: "https://ui.example.com",
+              },
+              api: {
+                name: "api",
+                development: "http://localhost:3001",
+                production: "https://api.example.com",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const loaded = await loadResolvedConfig({ cwd: testDir });
+
+      expect(loaded?.runtime.plugins?.settings).toBeDefined();
+      expect(loaded?.runtime.plugins?.settings?.source).toBe("local");
+      expect(loaded?.runtime.plugins?.settings?.localPath).toBe(localPluginDir);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("local vs resolved config loading", () => {

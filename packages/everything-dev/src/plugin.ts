@@ -998,6 +998,23 @@ export default createPlugin({
 
       const services = buildServiceDescriptorMap(runtimeConfig, { ssr, proxy });
       const packages = [...services.keys()];
+      if (process.env.DEBUG === "true" || process.env.DEBUG === "1") {
+        console.error("[DEBUG dev] services keys:", packages.join(", "));
+        console.error(
+          "[DEBUG dev] services sources:",
+          packages.map((k) => `${k}=${services.get(k)?.source ?? "?"}`).join(", "),
+        );
+        console.error(
+          "[DEBUG dev] runtimeConfig.plugins keys:",
+          Object.keys(runtimeConfig.plugins ?? {}).join(", "),
+        );
+        console.error(
+          "[DEBUG dev] runtimeConfig.plugins sources:",
+          Object.entries(runtimeConfig.plugins ?? {})
+            .map(([k, v]) => `${k}=${v.source}`)
+            .join(", "),
+        );
+      }
       const displayEnv: Record<string, string> = {};
       const apiDescriptor = services.get("api");
       if (apiDescriptor?.proxy) {

@@ -88,6 +88,16 @@ export const runDevSession = (
       orchestrator.port,
     );
 
+    if (process.env.DEBUG === "true" || process.env.DEBUG === "1") {
+      console.error("[DEBUG session] orchestrator.packages:", orchestrator.packages.join(", "));
+      console.error("[DEBUG session] orderedPackages:", orderedPackages.join(", "));
+      console.error("[DEBUG session] services keys:", [...services.keys()].join(", "));
+      console.error(
+        "[DEBUG session] initialProcesses:",
+        initialProcesses.map((p) => `${p.name}=${p.source}`).join(", "),
+      );
+    }
+
     const logger = yield* Effect.promise(() =>
       createDevLogger(configDir, orchestrator.description),
     );
