@@ -37,7 +37,61 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   context: z.object({
     userId: z.string().optional(),
-    sessionId: z.string().optional(),
+    user: z
+      .object({
+        id: z.string(),
+        role: z.string().optional(),
+        email: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .optional(),
+    organizationId: z.string().optional(),
+    organization: z
+      .object({
+        activeOrganizationId: z.string().nullable().optional(),
+        organization: z
+          .object({
+            id: z.string(),
+            name: z.string(),
+            slug: z.string(),
+            logo: z.string().nullable().optional(),
+            metadata: z.record(z.string(), z.unknown()).optional(),
+          })
+          .nullable()
+          .optional(),
+        member: z
+          .object({
+            id: z.string(),
+            role: z.string(),
+          })
+          .nullable()
+          .optional(),
+        isPersonal: z.boolean(),
+        hasOrganization: z.boolean(),
+      })
+      .optional(),
+    near: z
+      .object({
+        primaryAccountId: z.string().nullable(),
+        linkedAccounts: z.array(
+          z.object({
+            accountId: z.string(),
+            network: z.string(),
+            publicKey: z.string(),
+            isPrimary: z.boolean(),
+          }),
+        ),
+        hasNearAccount: z.boolean(),
+      })
+      .optional(),
+    walletAddress: z.string().optional(),
+    apiKey: z
+      .object({
+        id: z.string(),
+        name: z.string().nullable().optional(),
+        permissions: z.record(z.string(), z.array(z.string())).nullable().optional(),
+      })
+      .optional(),
     reqHeaders: z.custom<Headers>().optional(),
     getRawBody: z.custom<() => Promise<string>>().optional(),
   }),

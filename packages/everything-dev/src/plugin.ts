@@ -516,7 +516,7 @@ export async function resolveRemoteConfigChain(
       parentGatewayId,
       nextVisited,
     );
-    merged = mergeBosConfigWithExtends(parentResolved, config);
+    merged = mergeBosConfigWithExtends(parentResolved as BosConfigInput, config);
   }
 
   return resolveConfigComposableEntries(BosConfigSchema.parse(merged), process.cwd(), "production");

@@ -33,6 +33,8 @@ export interface AuthVariables {
   walletAddress: string | null;
   apiKey: ApiKeyContext | null;
   organizationId: string | null;
+  near: AuthRequestContext["near"];
+  organization: AuthRequestContext["organization"] | null;
 }
 
 export type HonoEnv = { Variables: AuthVariables };
@@ -102,6 +104,8 @@ export function createSessionMiddleware(plugins: PluginResult) {
       c.set("walletAddress", contextResult.near.primaryAccountId ?? null);
       c.set("apiKey", contextResult.apiKey ?? null);
       c.set("organizationId", contextResult.organization?.activeOrganizationId ?? null);
+      c.set("near", contextResult.near ?? { primaryAccountId: null, linkedAccounts: [], hasNearAccount: false });
+      c.set("organization", contextResult.organization ?? null);
     } catch (error) {
       console.warn(
         `[Auth] Session resolution failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -111,6 +115,8 @@ export function createSessionMiddleware(plugins: PluginResult) {
       c.set("walletAddress", null);
       c.set("apiKey", null);
       c.set("organizationId", null);
+      c.set("near", { primaryAccountId: null, linkedAccounts: [], hasNearAccount: false });
+      c.set("organization", null);
     }
 
     await next();
@@ -123,6 +129,8 @@ export function buildPluginContext(c: Context<HonoEnv>) {
   const walletAddress = c.get("walletAddress");
   const apiKey = c.get("apiKey");
   const organizationId = c.get("organizationId");
+  const near = c.get("near");
+  const organization = c.get("organization");
 
   return {
     userId: user?.id,
@@ -132,5 +140,7 @@ export function buildPluginContext(c: Context<HonoEnv>) {
     apiKey: apiKey ?? undefined,
     reqHeaders: c.get("reqHeaders"),
     getRawBody: c.get("getRawBody"),
+    near: near ?? undefined,
+    organization: organization ?? undefined,
   };
 }
