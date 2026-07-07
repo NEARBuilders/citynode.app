@@ -104,7 +104,10 @@ export function createSessionMiddleware(plugins: PluginResult) {
       c.set("walletAddress", contextResult.near.primaryAccountId ?? null);
       c.set("apiKey", contextResult.apiKey ?? null);
       c.set("organizationId", contextResult.organization?.activeOrganizationId ?? null);
-      c.set("near", contextResult.near ?? { primaryAccountId: null, linkedAccounts: [], hasNearAccount: false });
+      c.set(
+        "near",
+        contextResult.near ?? { primaryAccountId: null, linkedAccounts: [], hasNearAccount: false },
+      );
       c.set("organization", contextResult.organization ?? null);
     } catch (error) {
       console.warn(
