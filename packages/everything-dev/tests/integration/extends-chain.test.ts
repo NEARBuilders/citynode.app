@@ -54,7 +54,7 @@ describe("extends chain", () => {
           repository: "https://github.com/parent",
           plugins: {
             apps: { development: "local:plugins/apps" },
-            projects: { development: "local:plugins/projects" },
+            example: { development: "local:plugins/example" },
           },
           shared: {
             ui: {
@@ -74,7 +74,6 @@ describe("extends chain", () => {
           ...CHILD_CONFIG,
           plugins: {
             apps: { variables: { namespace: "child.near" } },
-            projects: null,
           },
           shared: {
             ui: {
@@ -137,36 +136,36 @@ describe("extends chain", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
-        projects: { development: "local:plugins/projects" },
+        example: { development: "local:plugins/example" },
       },
     };
     const child = {
       plugins: {
-        projects: null,
+        example: null,
       },
     };
     const merged = mergeBosConfigWithExtends(parent as any, child as any);
     const plugins = merged.plugins as Record<string, unknown>;
     expect(plugins.apps).toBeUndefined();
-    expect(plugins.projects).toBeUndefined();
+    expect(plugins.example).toBeUndefined();
   });
 
   it("false-sentinel does not inherit parent plugins", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
-        projects: { development: "local:plugins/projects" },
+        example: { development: "local:plugins/example" },
       },
     };
     const child = {
       plugins: {
-        projects: false,
+        example: false,
       },
     };
     const merged = mergeBosConfigWithExtends(parent as any, child as any);
     const plugins = merged.plugins as Record<string, unknown>;
     expect(plugins.apps).toBeUndefined();
-    expect(plugins.projects).toBe(false);
+    expect(plugins.example).toBe(false);
   });
 
   it("deep merges app.api.shared — child version overrides, parent singleton preserved", () => {
@@ -260,7 +259,7 @@ describe("extends chain", () => {
     const loaded = await loadResolvedConfig({ cwd: childInheritDir });
     expect(loaded?.config.plugins).toEqual({
       apps: { development: "local:plugins/apps" },
-      projects: { development: "local:plugins/projects" },
+      example: { development: "local:plugins/example" },
     });
   });
 
@@ -397,7 +396,7 @@ describe("multi-level extends chain", () => {
       },
       plugins: {
         apps: { development: "local:plugins/apps" },
-        projects: { development: "local:plugins/projects" },
+        example: { development: "local:plugins/example" },
         analytics: { development: "local:plugins/analytics" },
       },
     };

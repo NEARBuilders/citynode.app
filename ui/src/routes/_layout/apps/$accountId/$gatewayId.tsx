@@ -9,7 +9,6 @@ import { Badge, Button } from "@/components";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const BASE_RUNTIME = "bos://dev.everything.near/everything.dev";
@@ -73,11 +72,6 @@ function AppDetailPage() {
     queryKey: ["app", accountId, gatewayId],
     queryFn: () => apiClient.apps.getRegistryApp({ accountId, gatewayId }),
     staleTime: 30_000,
-  });
-
-  const projectsQuery = useQuery({
-    queryKey: ["app-projects", accountId, gatewayId],
-    queryFn: () => apiClient.projects.listProjectsForApp({ accountId, domain: gatewayId }),
   });
 
   const statusQuery = useQuery({
@@ -580,42 +574,6 @@ function AppDetailPage() {
                     </div>
                   )}
                 </div>
-              </section>
-            )}
-
-            {projectsQuery.data !== undefined && (
-              <section className="space-y-2">
-                <SectionLabel>In Projects</SectionLabel>
-                {projectsQuery.isLoading ? (
-                  <Skeleton className="h-12 w-full" />
-                ) : projectsQuery.data?.data && projectsQuery.data.data.length > 0 ? (
-                  <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
-                    {projectsQuery.data.data.map((project) => (
-                      <Link
-                        key={project.id}
-                        to="/projects/$id"
-                        params={{ id: project.id }}
-                        className="flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="text-sm font-medium text-foreground truncate">
-                            {project.title}
-                          </div>
-                          {project.description && (
-                            <div className="text-xs text-muted-foreground line-clamp-1">
-                              {project.description}
-                            </div>
-                          )}
-                        </div>
-                        <Badge variant="secondary" className="text-xs shrink-0 ml-2">
-                          {project.status}
-                        </Badge>
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not linked to any projects yet.</p>
-                )}
               </section>
             )}
 

@@ -24,7 +24,7 @@ describe("upgrade bos config migration", () => {
   function makeProjectDir(): string {
     const dir = mkdtempSync(join(tmpdir(), "upgrade-migration-"));
     tempDirs.push(dir);
-    mkdirSync(join(dir, "plugins/projects"), { recursive: true });
+    mkdirSync(join(dir, "plugins/example"), { recursive: true });
     return dir;
   }
 
@@ -42,9 +42,9 @@ describe("upgrade bos config migration", () => {
             auth: { extends: "bos://auth.everything.near/auth.everything.dev" },
           },
           plugins: {
-            projects: {
-              extends: "bos://dev.everything.near/projects.everything.dev",
-              development: "local:plugins/projects",
+            example: {
+              extends: "bos://dev.everything.near/example.everything.dev#plugins.example",
+              development: "local:plugins/example",
             },
           },
         },
@@ -54,19 +54,19 @@ describe("upgrade bos config migration", () => {
     );
 
     writeFileSync(
-      join(projectDir, "plugins/projects/bos.config.json"),
+      join(projectDir, "plugins/example/bos.config.json"),
       `${JSON.stringify(
         {
-          domain: "projects.everything.dev",
+          domain: "example.everything.dev",
           app: {
             api: {
               development: "local:.",
-              production: "https://projects.test.dev",
-              secrets: ["PROJECTS_DATABASE_URL"],
+              production: "https://example.test.dev",
+              secrets: ["EXAMPLE_DATABASE_URL"],
             },
           },
-          sidebar: [{ icon: "FolderKanban", label: "projects" }],
-          routes: ["ui/src/routes/_layout/_authenticated/projects/**"],
+          sidebar: [{ icon: "FolderKanban", label: "example" }],
+          routes: ["ui/src/routes/_layout/_authenticated/example/**"],
         },
         null,
         2,
@@ -76,13 +76,13 @@ describe("upgrade bos config migration", () => {
     const migrated = await migrateBosConfigFiles(projectDir);
 
     expect(migrated).toContain("bos.config.json");
-    expect(migrated).toContain("plugins/projects/bos.config.json");
-    expect(existsSync(join(projectDir, "plugins/projects/bos.config.json"))).toBe(false);
+    expect(migrated).toContain("plugins/example/bos.config.json");
+    expect(existsSync(join(projectDir, "plugins/example/bos.config.json"))).toBe(false);
 
     const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
       app: { auth: { extends: string } };
       plugins: {
-        projects: {
+        example: {
           extends?: string;
           development: string;
           production?: string;
@@ -97,14 +97,14 @@ describe("upgrade bos config migration", () => {
       "bos://auth.everything.near/auth.everything.dev#app.auth",
     );
 
-    expect(rootConfig.plugins.projects.development).toBe("local:plugins/projects");
-    expect(rootConfig.plugins.projects.production).toBe("https://projects.test.dev");
-    expect(rootConfig.plugins.projects.secrets).toEqual(["PROJECTS_DATABASE_URL"]);
-    expect(rootConfig.plugins.projects.sidebar).toEqual([
-      { icon: "FolderKanban", label: "projects" },
+    expect(rootConfig.plugins.example.development).toBe("local:plugins/example");
+    expect(rootConfig.plugins.example.production).toBe("https://example.test.dev");
+    expect(rootConfig.plugins.example.secrets).toEqual(["EXAMPLE_DATABASE_URL"]);
+    expect(rootConfig.plugins.example.sidebar).toEqual([
+      { icon: "FolderKanban", label: "example" },
     ]);
-    expect(rootConfig.plugins.projects.routes).toEqual([
-      "ui/src/routes/_layout/_authenticated/projects/**",
+    expect(rootConfig.plugins.example.routes).toEqual([
+      "ui/src/routes/_layout/_authenticated/example/**",
     ]);
   });
 
@@ -121,10 +121,10 @@ describe("upgrade bos config migration", () => {
             api: { name: "api", development: "local:api", production: "https://api.test.dev" },
           },
           plugins: {
-            projects: {
-              extends: "bos://dev.everything.near/projects.everything.dev#plugins.projects",
-              development: "local:plugins/projects",
-              secrets: ["PROJECTS_DATABASE_URL"],
+            example: {
+              extends: "bos://dev.everything.near/example.everything.dev#plugins.example",
+              development: "local:plugins/example",
+              secrets: ["EXAMPLE_DATABASE_URL"],
             },
           },
         },
@@ -133,17 +133,17 @@ describe("upgrade bos config migration", () => {
       )}\n`,
     );
 
-    mkdirSync(join(projectDir, "plugins/projects"), { recursive: true });
-    writeFileSync(
-      join(projectDir, "plugins/projects/bos.config.json"),
+    mkdirSync(join(projectDir, "plugins/example"), { recursive: true });
+      writeFileSync(
+      join(projectDir, "plugins/example/bos.config.json"),
       `${JSON.stringify(
         {
-          domain: "projects.everything.dev",
+          domain: "example.everything.dev",
           plugins: {
-            projects: {
-              name: "projects",
+            example: {
+              name: "example",
               development: "local:.",
-              production: "https://projects.test.dev",
+              production: "https://example.test.dev",
             },
           },
         },
@@ -156,7 +156,7 @@ describe("upgrade bos config migration", () => {
 
     const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
       plugins: {
-        projects: {
+        example: {
           extends?: string;
           name?: string;
           development: string;
@@ -165,10 +165,10 @@ describe("upgrade bos config migration", () => {
       };
     };
 
-    expect(rootConfig.plugins.projects.extends).toBeUndefined();
-    expect(rootConfig.plugins.projects.name).toBeUndefined();
-    expect(rootConfig.plugins.projects.development).toBe("local:plugins/projects");
-    expect(rootConfig.plugins.projects.production).toBe("https://projects.test.dev");
+    expect(rootConfig.plugins.example.extends).toBeUndefined();
+    expect(rootConfig.plugins.example.name).toBeUndefined();
+    expect(rootConfig.plugins.example.development).toBe("local:plugins/example");
+    expect(rootConfig.plugins.example.production).toBe("https://example.test.dev");
   });
 
   it("removes name from plugin entries", async () => {
@@ -184,9 +184,9 @@ describe("upgrade bos config migration", () => {
             api: { name: "api", development: "local:api" },
           },
           plugins: {
-            projects: {
-              name: "projects",
-              development: "local:plugins/projects",
+            example: {
+              name: "example",
+              development: "local:plugins/example",
             },
           },
         },
@@ -198,11 +198,11 @@ describe("upgrade bos config migration", () => {
     await migrateBosConfigFiles(projectDir);
 
     const rootConfig = JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8")) as {
-      plugins: { projects: { name?: string; development: string } };
+      plugins: { example: { name?: string; development: string } };
     };
 
-    expect(rootConfig.plugins.projects.name).toBeUndefined();
-    expect(rootConfig.plugins.projects.development).toBe("local:plugins/projects");
+    expect(rootConfig.plugins.example.name).toBeUndefined();
+    expect(rootConfig.plugins.example.development).toBe("local:plugins/example");
   });
 
   it("merges top-level sidebar and routes from plugin config into root entry", async () => {
@@ -275,9 +275,9 @@ describe("upgrade bos config migration", () => {
             api: { name: "api", development: "local:api" },
           },
           plugins: {
-            projects: {
-              development: "local:plugins/projects",
-              secrets: ["PROJECTS_DATABASE_URL"],
+            example: {
+              development: "local:plugins/example",
+              secrets: ["EXAMPLE_DATABASE_URL"],
             },
           },
         },
@@ -286,15 +286,15 @@ describe("upgrade bos config migration", () => {
       )}\n`,
     );
 
-    mkdirSync(join(projectDir, "plugins/projects"), { recursive: true });
+    mkdirSync(join(projectDir, "plugins/example"), { recursive: true });
     writeFileSync(
-      join(projectDir, "plugins/projects/bos.config.json"),
+      join(projectDir, "plugins/example/bos.config.json"),
       `${JSON.stringify(
         {
-          domain: "projects.everything.dev",
+          domain: "example.everything.dev",
           plugins: {
-            projects: {
-              name: "projects",
+            example: {
+              name: "example",
               development: "local:.",
             },
           },
@@ -306,8 +306,8 @@ describe("upgrade bos config migration", () => {
 
     const migrated = await migrateBosConfigFiles(projectDir);
 
-    expect(migrated).toContain("plugins/projects/bos.config.json");
-    expect(existsSync(join(projectDir, "plugins/projects/bos.config.json"))).toBe(false);
+    expect(migrated).toContain("plugins/example/bos.config.json");
+    expect(existsSync(join(projectDir, "plugins/example/bos.config.json"))).toBe(false);
   });
 
   it("removes legacy child workflow and framework package wiring from root package.json", async () => {

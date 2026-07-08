@@ -75,37 +75,6 @@
         }
       ],
       "integrity": "sha384-wKXTvWAAHvluWG8DUBYgY70C/AFq6ey5dJSAdXWJrqCHs+YI4/LvmWpvTM7ri5cT"
-    },
-    "projects": {
-      "development": "local:plugins/projects",
-      "production": "https://elliot-braem-5345-everything-dev-projects-plugin--fae8052b1-ze.zephyrcloud.app",
-      "secrets": [
-        "PROJECTS_DATABASE_URL"
-      ],
-      "routes": [
-        "ui/src/routes/_layout/_authenticated/projects/**"
-      ],
-      "sidebar": [
-        {
-          "icon": "FolderKanban",
-          "label": "projects"
-        }
-      ],
-      "integrity": "sha384-VULjBjJHIE7EnPhnzE9WO4YLQ1c/UbpAt6W9h+sYrLvQoll7NGznKQ4CeZna5S0d"
-    },
-    "settings": {
-      "development": "local:plugins/settings",
-      "production": "https://elliot-braem-5346-every-plugin-settings-everythin-96d304dd2-ze.zephyrcloud.app",
-      "routes": [
-        "ui/src/routes/_layout/_authenticated/settings.tsx"
-      ],
-      "sidebar": [
-        {
-          "icon": "Settings",
-          "label": "settings"
-        }
-      ],
-      "integrity": "sha384-d8rrzi8hs5o1edB0Y4/Q5Gx+8u0zcRgGyqCzAOPgtEXskIcZjvvvBKHXoiq5YIz9"
     }
   }
 }

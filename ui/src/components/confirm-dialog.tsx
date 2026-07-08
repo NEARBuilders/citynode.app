@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -67,24 +66,3 @@ export function ConfirmDialog({
   );
 }
 
-export function useConfirmDialog() {
-  const [open, setOpen] = useState(false);
-  const [config, setConfig] = useState<Omit<ConfirmDialogProps, "open" | "onOpenChange">>({
-    title: "",
-    description: "",
-    onConfirm: () => {},
-  });
-
-  const confirm = (
-    options: Omit<ConfirmDialogProps, "open" | "onOpenChange" | "onConfirm"> & {
-      onConfirm: () => void;
-    },
-  ) => {
-    setConfig(options);
-    setOpen(true);
-  };
-
-  const dialog = <ConfirmDialog open={open} onOpenChange={setOpen} {...config} />;
-
-  return { confirm, dialog };
-}

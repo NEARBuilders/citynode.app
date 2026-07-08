@@ -198,8 +198,8 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
-                development: "local:plugins/settings",
+              example: {
+                development: "local:plugins/example",
               },
             },
             app: {
@@ -244,8 +244,8 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
-                production: "https://settings.example.com",
+              example: {
+                production: "https://example.example.com",
               },
             },
             app: {
@@ -272,10 +272,10 @@ describe("loadConfig plugin runtime filtering", () => {
 
       const loaded = await loadResolvedConfig({ cwd: testDir });
 
-      expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
-      expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
+      expect(loaded?.runtime.plugins?.example?.source).toBe("remote");
+      expect(loaded?.runtime.plugins?.example?.url).toBe("https://example.example.com");
       expect(loaded?.warnings).toContain(
-        '[Config] No development target for "plugins.settings", using production',
+        '[Config] No development target for "plugins.example", using production',
       );
     } finally {
       rmSync(testDir, { recursive: true, force: true });
@@ -293,9 +293,9 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
-                development: "local:plugins/settings",
-                production: "https://settings.example.com",
+              example: {
+                development: "local:plugins/example",
+                production: "https://example.example.com",
               },
             },
             app: {
@@ -322,10 +322,10 @@ describe("loadConfig plugin runtime filtering", () => {
 
       const loaded = await loadResolvedConfig({ cwd: testDir });
 
-      expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
-      expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
+      expect(loaded?.runtime.plugins?.example?.source).toBe("remote");
+      expect(loaded?.runtime.plugins?.example?.url).toBe("https://example.example.com");
       expect(loaded?.warnings).toContain(
-        '[Config] Could not load local target for "plugins.settings", using production',
+        '[Config] Could not load local target for "plugins.example", using production',
       );
     } finally {
       rmSync(testDir, { recursive: true, force: true });
@@ -343,9 +343,9 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
+              example: {
                 extends: "./missing-provider/bos.config.json",
-                production: "https://settings.example.com",
+                production: "https://example.example.com",
               },
             },
             app: {
@@ -382,7 +382,7 @@ describe("loadConfig plugin runtime filtering", () => {
     const testDir = mkdtempSync(join(tmpdir(), "bos-config-runtime-"));
 
     try {
-      const localPluginDir = join(testDir, "plugins", "settings");
+      const localPluginDir = join(testDir, "plugins", "example");
       mkdirSync(localPluginDir, { recursive: true });
       writeFileSync(
         join(testDir, "bos.config.json"),
@@ -391,10 +391,10 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
+              example: {
                 extends: "./missing-provider/bos.config.json",
-                development: "local:plugins/settings",
-                production: "https://settings.example.com",
+                development: "local:plugins/example",
+                production: "https://example.example.com",
               },
             },
             app: {
@@ -418,12 +418,12 @@ describe("loadConfig plugin runtime filtering", () => {
           2,
         )}\n`,
       );
-      writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
+      writeFileSync(join(localPluginDir, "package.json"), '{"name":"example"}\n');
 
       const loaded = await loadResolvedConfig({ cwd: testDir });
 
-      expect(loaded?.runtime.plugins?.settings?.source).toBe("local");
-      expect(loaded?.runtime.plugins?.settings?.localPath).toBe(localPluginDir);
+      expect(loaded?.runtime.plugins?.example?.source).toBe("local");
+      expect(loaded?.runtime.plugins?.example?.localPath).toBe(localPluginDir);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -478,8 +478,8 @@ describe("loadConfig plugin runtime filtering", () => {
               },
             },
             plugins: {
-              settings: {
-                production: "https://settings.example.com",
+              example: {
+                production: "https://example.example.com",
                 variables: {
                   sections: ["profile", "security"],
                   featureFlags: {
@@ -515,7 +515,7 @@ describe("loadConfig plugin runtime filtering", () => {
           },
         },
       });
-      expect(loaded?.runtime.plugins?.settings?.variables).toEqual({
+      expect(loaded?.runtime.plugins?.example?.variables).toEqual({
         sections: ["profile", "security"],
         featureFlags: {
           passkeys: true,
@@ -530,9 +530,9 @@ describe("loadConfig plugin runtime filtering", () => {
     const testDir = mkdtempSync(join(tmpdir(), "bos-config-remote-plugins-"));
 
     try {
-      const localPluginDir = join(testDir, "plugins", "settings");
+      const localPluginDir = join(testDir, "plugins", "example");
       mkdirSync(localPluginDir, { recursive: true });
-      writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
+      writeFileSync(join(localPluginDir, "package.json"), '{"name":"example"}\n');
 
       writeFileSync(
         join(testDir, "bos.config.json"),
@@ -541,9 +541,9 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
-                development: "local:plugins/settings",
-                production: "https://settings.example.com",
+              example: {
+                development: "local:plugins/example",
+                production: "https://example.example.com",
               },
             },
             app: {
@@ -568,14 +568,14 @@ describe("loadConfig plugin runtime filtering", () => {
         )}\n`,
       );
 
-      const loaded = await loadResolvedConfig({ cwd: testDir, remotePlugins: ["settings"] });
+      const loaded = await loadResolvedConfig({ cwd: testDir, remotePlugins: ["example"] });
 
-      expect(loaded?.runtime.plugins?.settings).toBeDefined();
-      expect(loaded?.runtime.plugins?.settings?.source).toBe("remote");
-      expect(loaded?.runtime.plugins?.settings?.url).toBe("https://settings.example.com");
-      expect(loaded?.runtime.plugins?.settings?.localPath).toBeUndefined();
-      expect(loaded?.runtime.plugins?.settings?.entry).toBe(
-        "https://settings.example.com/mf-manifest.json",
+      expect(loaded?.runtime.plugins?.example).toBeDefined();
+      expect(loaded?.runtime.plugins?.example?.source).toBe("remote");
+      expect(loaded?.runtime.plugins?.example?.url).toBe("https://example.example.com");
+      expect(loaded?.runtime.plugins?.example?.localPath).toBeUndefined();
+      expect(loaded?.runtime.plugins?.example?.entry).toBe(
+        "https://example.example.com/mf-manifest.json",
       );
     } finally {
       rmSync(testDir, { recursive: true, force: true });
@@ -586,9 +586,9 @@ describe("loadConfig plugin runtime filtering", () => {
     const testDir = mkdtempSync(join(tmpdir(), "bos-config-remote-plugins-"));
 
     try {
-      const localPluginDir = join(testDir, "plugins", "settings");
+      const localPluginDir = join(testDir, "plugins", "example");
       mkdirSync(localPluginDir, { recursive: true });
-      writeFileSync(join(localPluginDir, "package.json"), '{"name":"settings"}\n');
+      writeFileSync(join(localPluginDir, "package.json"), '{"name":"example"}\n');
 
       writeFileSync(
         join(testDir, "bos.config.json"),
@@ -597,9 +597,9 @@ describe("loadConfig plugin runtime filtering", () => {
             account: "test.near",
             domain: "test.dev",
             plugins: {
-              settings: {
-                development: "local:plugins/settings",
-                production: "https://settings.example.com",
+              example: {
+                development: "local:plugins/example",
+                production: "https://example.example.com",
               },
             },
             app: {
@@ -626,9 +626,9 @@ describe("loadConfig plugin runtime filtering", () => {
 
       const loaded = await loadResolvedConfig({ cwd: testDir });
 
-      expect(loaded?.runtime.plugins?.settings).toBeDefined();
-      expect(loaded?.runtime.plugins?.settings?.source).toBe("local");
-      expect(loaded?.runtime.plugins?.settings?.localPath).toBe(localPluginDir);
+      expect(loaded?.runtime.plugins?.example).toBeDefined();
+      expect(loaded?.runtime.plugins?.example?.source).toBe("local");
+      expect(loaded?.runtime.plugins?.example?.localPath).toBe(localPluginDir);
     } finally {
       rmSync(testDir, { recursive: true, force: true });
     }

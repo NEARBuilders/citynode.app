@@ -133,10 +133,10 @@ describe("bos init — typecheck", () => {
   }, 120_000);
 
   it("scaffolds project with template files", async () => {
-    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects", "settings"]);
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps"]);
     await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
       overrides: ["ui", "api", "plugins"],
-      plugins: ["apps", "projects", "settings"],
+      plugins: ["apps"],
     });
 
     await personalizeConfig(testDir, {
@@ -146,7 +146,7 @@ describe("bos init — typecheck", () => {
       domain: "test.dev",
       workspaceOpts: { sourceDir: REPO_ROOT },
       overrides: ["ui", "api", "plugins"],
-      plugins: ["apps", "projects", "settings"],
+      plugins: ["apps"],
     });
     rewriteFrameworkPackageSpecs(testDir, frameworkTarballs);
 
@@ -155,9 +155,6 @@ describe("bos init — typecheck", () => {
     expect(existsSync(join(testDir, "ui", "src", "lib", "auth-types.gen.ts"))).toBe(true);
     expect(existsSync(join(testDir, "api", "src", "lib", "plugins-types.gen.ts"))).toBe(true);
     expect(existsSync(join(testDir, "api", "src", "lib", "auth-types.gen.ts"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins", "settings", "src", "plugins-client.gen.ts"))).toBe(
-      true,
-    );
     const pkg = JSON.parse(readFileSync(join(testDir, "ui", "package.json"), "utf-8")) as {
       dependencies?: Record<string, string>;
     };

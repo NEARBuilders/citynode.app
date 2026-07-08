@@ -155,7 +155,7 @@ describe("syncTemplate", () => {
 
     expect(result.status).toBe("dry-run");
     expect(result.added).not.toContain("plugins/apps/package.json");
-    expect(result.added).not.toContain("plugins/settings/package.json");
+    expect(result.added).not.toContain("plugins/example/package.json");
   });
 
   it("preserves child root metadata and prunes stale local plugin entries during sync", async () => {
@@ -174,8 +174,8 @@ describe("syncTemplate", () => {
     config.repository = "https://github.com/example/child-app";
     config.plugins = {
       ...(config.plugins ?? {}),
-      settings: {
-        development: "local:plugins/settings",
+      example: {
+        development: "local:plugins/example",
       },
     };
     writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);

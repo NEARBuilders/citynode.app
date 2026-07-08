@@ -22,19 +22,19 @@ describe("bos init — structure", () => {
   });
 
   it("builds curated root and selected surface patterns", () => {
-    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["settings"]);
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps"]);
     expect(patterns.length).toBeGreaterThan(0);
     expect(patterns).toContain("bos.config.json");
     expect(patterns).toContain("ui/**");
     expect(patterns).toContain("api/**");
-    expect(patterns).toContain("plugins/settings/**");
+    expect(patterns).toContain("plugins/apps/**");
   });
 
   it("copies curated root files and selected surfaces", async () => {
-    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["settings"]);
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps"]);
     const filesCopied = await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
       overrides: ["ui", "api", "plugins"],
-      plugins: ["settings"],
+      plugins: ["apps"],
     });
 
     expect(filesCopied).toBeGreaterThan(0);
@@ -52,9 +52,9 @@ describe("bos init — structure", () => {
     expect(existsSync(join(testDir, "ui/src/lib/api.ts"))).toBe(true);
     expect(existsSync(join(testDir, "ui/src/styles.css"))).toBe(true);
 
-    expect(existsSync(join(testDir, "plugins/settings"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins/apps"))).toBe(false);
-    expect(existsSync(join(testDir, "plugins/projects"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/apps"))).toBe(true);
+    expect(existsSync(join(testDir, "plugins/example"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins/example"))).toBe(false);
 
     expect(existsSync(join(testDir, "host"))).toBe(false);
     expect(existsSync(join(testDir, "packages"))).toBe(false);
@@ -67,15 +67,15 @@ describe("bos init — structure", () => {
   it("copies selected plugin directories when plugins override is active", async () => {
     const selectedDir = mkdtempSync(join(tmpdir(), "bos-init-selected-plugins-"));
     try {
-      const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects"]);
+      const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps"]);
       await copyFilteredFiles(REPO_ROOT, selectedDir, patterns, {
         overrides: ["ui", "api", "plugins"],
-        plugins: ["apps", "projects"],
+        plugins: ["apps"],
       });
 
       expect(existsSync(join(selectedDir, "plugins", "apps"))).toBe(true);
-      expect(existsSync(join(selectedDir, "plugins", "projects"))).toBe(true);
-      expect(existsSync(join(selectedDir, "plugins", "settings"))).toBe(false);
+      expect(existsSync(join(selectedDir, "plugins", "example"))).toBe(false);
+      expect(existsSync(join(selectedDir, "plugins", "example"))).toBe(false);
     } finally {
       rmSync(selectedDir, { recursive: true, force: true });
     }

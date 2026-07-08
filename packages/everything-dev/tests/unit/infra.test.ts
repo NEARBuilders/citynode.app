@@ -30,12 +30,12 @@ function buildRuntimeConfig(overrides?: Partial<RuntimeConfig>): RuntimeConfig {
       secrets: ["AUTH_DATABASE_URL", "BETTER_AUTH_SECRET", "CORS_ORIGIN"],
     },
     plugins: {
-      projects: {
-        name: "projects",
+      example: {
+        name: "example",
         url: "http://localhost:3010",
         entry: "/mf-manifest.json",
         source: "local" as const,
-        secrets: ["PROJECTS_DATABASE_URL", "PAYMENT_API_URL"],
+        secrets: ["EXAMPLE_DATABASE_URL", "PAYMENT_API_URL"],
       },
     },
     ...overrides,
@@ -62,7 +62,7 @@ describe("generated infra", () => {
 
     expect(secrets).toContain("API_DATABASE_URL");
     expect(secrets).toContain("AUTH_DATABASE_URL");
-    expect(secrets).toContain("PROJECTS_DATABASE_URL");
+    expect(secrets).toContain("EXAMPLE_DATABASE_URL");
     expect(secrets).toContain("PAYMENT_API_URL");
 
     expect(envExample).toContain("# app.host");
@@ -76,9 +76,9 @@ describe("generated infra", () => {
       "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db",
     );
     expect(envExample).toContain("BETTER_AUTH_SECRET=");
-    expect(envExample).toContain("# plugins.projects");
+    expect(envExample).toContain("# plugins.example");
     expect(envExample).toContain(
-      "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
     );
     expect(envExample).toContain("PAYMENT_API_URL=");
 
@@ -91,13 +91,13 @@ describe("generated infra", () => {
     expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-auth");
     expect(dockerCompose).toContain("POSTGRES_DB: auth_db");
     expect(dockerCompose).toContain('"5433:5432"');
-    expect(dockerCompose).toContain("postgres-projects:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-projects");
-    expect(dockerCompose).toContain("POSTGRES_DB: projects_db");
+    expect(dockerCompose).toContain("postgres-example:");
+    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-example");
+    expect(dockerCompose).toContain("POSTGRES_DB: example_db");
     expect(dockerCompose).toContain('"5434:5432"');
     expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_data");
     expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_data");
-    expect(dockerCompose).toContain("name: dev_everything_near_postgres_projects_data");
+    expect(dockerCompose).toContain("name: dev_everything_near_postgres_example_data");
     expect(dockerCompose).not.toContain("payment");
   });
 
@@ -172,12 +172,12 @@ describe("generated infra", () => {
       dir,
       buildRuntimeConfig({
         plugins: {
-          projects: {
-            name: "projects",
+          example: {
+            name: "example",
             url: "http://localhost:3010",
             entry: "/mf-manifest.json",
             source: "local" as const,
-            secrets: ["PROJECTS_DATABASE_URL"],
+            secrets: ["EXAMPLE_DATABASE_URL"],
           },
         },
       }),
@@ -187,23 +187,23 @@ describe("generated infra", () => {
     expect(existsSync(statePath)).toBe(true);
 
     const firstState = JSON.parse(readFileSync(statePath, "utf-8"));
-    expect(firstState.postgresPorts.projects).toBe(5434);
+    expect(firstState.postgresPorts.example).toBe(5434);
 
     const firstEnv = readFileSync(join(dir, ".env.example"), "utf-8");
     expect(firstEnv).toContain(
-      "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
     );
 
     syncGeneratedInfra(
       dir,
       buildRuntimeConfig({
         plugins: {
-          projects: {
-            name: "projects",
+          example: {
+            name: "example",
             url: "http://localhost:3010",
             entry: "/mf-manifest.json",
             source: "local" as const,
-            secrets: ["PROJECTS_DATABASE_URL"],
+            secrets: ["EXAMPLE_DATABASE_URL"],
           },
           registry: {
             name: "registry",
@@ -217,12 +217,12 @@ describe("generated infra", () => {
     );
 
     const secondState = JSON.parse(readFileSync(statePath, "utf-8"));
-    expect(secondState.postgresPorts.projects).toBe(5434);
+    expect(secondState.postgresPorts.example).toBe(5434);
     expect(secondState.postgresPorts.registry).toBe(5435);
 
     const secondEnv = readFileSync(join(dir, ".env.example"), "utf-8");
     expect(secondEnv).toContain(
-      "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
     );
     expect(secondEnv).toContain(
       "REGISTRY_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5435/registry_db",
@@ -283,12 +283,12 @@ describe("generated infra", () => {
       dir,
       buildRuntimeConfig({
         plugins: {
-          projects: {
-            name: "projects",
+          example: {
+            name: "example",
             url: "http://localhost:3010",
             entry: "/mf-manifest.json",
             source: "local" as const,
-            secrets: ["PROJECTS_DATABASE_URL"],
+            secrets: ["EXAMPLE_DATABASE_URL"],
           },
         },
       }),
@@ -296,26 +296,26 @@ describe("generated infra", () => {
 
     writeFileSync(
       join(dir, ".env"),
-      "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:9999/projects_db\n",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:9999/example_db\n",
     );
 
     const result = syncGeneratedInfra(
       dir,
       buildRuntimeConfig({
         plugins: {
-          projects: {
-            name: "projects",
+          example: {
+            name: "example",
             url: "http://localhost:3010",
             entry: "/mf-manifest.json",
             source: "local" as const,
-            secrets: ["PROJECTS_DATABASE_URL"],
+            secrets: ["EXAMPLE_DATABASE_URL"],
           },
         },
       }),
     );
 
     expect(result.staleEnvWarnings.length).toBe(1);
-    expect(result.staleEnvWarnings[0]).toContain("PROJECTS_DATABASE_URL");
+    expect(result.staleEnvWarnings[0]).toContain("EXAMPLE_DATABASE_URL");
     expect(result.staleEnvWarnings[0]).toContain("9999");
     expect(result.staleEnvWarnings[0]).toContain("5434");
   });
@@ -352,7 +352,7 @@ describe("generated infra", () => {
       "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db",
     );
     expect(env).toContain(
-      "PROJECTS_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/projects_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
     );
     expect(env).toContain("PAYMENT_API_URL=");
     expect(env).toContain("CORS_ORIGIN=http://localhost:3000");

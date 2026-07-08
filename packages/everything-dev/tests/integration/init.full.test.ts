@@ -93,10 +93,10 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
   }, 120_000);
 
   it("installs dependencies", async () => {
-    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps", "projects", "settings"]);
+    const patterns = buildInitPatterns(["ui", "api", "plugins"], ["apps"]);
     await copyFilteredFiles(REPO_ROOT, testDir, patterns, {
       overrides: ["ui", "api", "plugins"],
-      plugins: ["apps", "projects", "settings"],
+      plugins: ["apps"],
     });
 
     await personalizeConfig(testDir, {
@@ -106,7 +106,7 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
       domain: "test.dev",
       workspaceOpts: { sourceDir: REPO_ROOT },
       overrides: ["ui", "api", "plugins"],
-      plugins: ["apps", "projects", "settings"],
+      plugins: ["apps"],
     });
     rewriteFrameworkPackageSpecs(testDir, frameworkTarballs);
 

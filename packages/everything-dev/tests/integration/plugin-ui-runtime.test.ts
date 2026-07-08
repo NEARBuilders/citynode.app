@@ -97,7 +97,7 @@ describe("plugin UI runtime config", () => {
 
   it("resolves targeted extends paths strictly", async () => {
     const baseDir = makeProjectDir();
-    const providerConfigPath = join(baseDir, "providers/projects.bos.config.json");
+    const providerConfigPath = join(baseDir, "providers/example.bos.config.json");
     writeJson(providerConfigPath, {
       app: {
         api: {
@@ -135,7 +135,7 @@ describe("plugin UI runtime config", () => {
 
   it("does not resolve remote local targets against the consumer root", async () => {
     const baseDir = makeProjectDir();
-    const providerConfigPath = join(baseDir, "providers/projects.bos.config.json");
+    const providerConfigPath = join(baseDir, "providers/example.bos.config.json");
     writeJson(providerConfigPath, {
       plugins: {
         apps: {

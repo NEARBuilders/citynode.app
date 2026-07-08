@@ -150,7 +150,7 @@ describe("mergeBosConfigWithExtends", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
-        projects: { development: "local:plugins/projects" },
+        example: { development: "local:plugins/example" },
       },
     };
     const child = {
@@ -161,25 +161,25 @@ describe("mergeBosConfigWithExtends", () => {
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
     expect(plugins.apps).toBeDefined();
-    expect(plugins.projects).toBeUndefined();
+    expect(plugins.example).toBeUndefined();
   });
 
   it("drops null plugin sentinels without inheriting parent plugins", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
-        projects: { development: "local:plugins/projects" },
+        example: { development: "local:plugins/example" },
       },
     };
     const child = {
       plugins: {
-        projects: null,
+        example: null,
       },
     };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, unknown>;
     expect(plugins.apps).toBeUndefined();
-    expect(plugins.projects).toBeUndefined();
+    expect(plugins.example).toBeUndefined();
   });
 
   it("child can add new plugins not in parent", () => {
@@ -297,14 +297,14 @@ describe("mergeBosConfigWithExtends", () => {
     const parent = {
       plugins: {
         apps: { development: "local:plugins/apps" },
-        projects: { development: "local:plugins/projects" },
+        example: { development: "local:plugins/example" },
       },
     };
     const child = { account: "child.near" };
     const merged = mergeBosConfigWithExtends(parent, child);
     const plugins = merged.plugins as Record<string, Record<string, unknown>>;
     expect(plugins.apps).toBeDefined();
-    expect(plugins.projects).toBeDefined();
+    expect(plugins.example).toBeDefined();
     expect(plugins.apps.development).toBe("local:plugins/apps");
   });
 

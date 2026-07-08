@@ -11,7 +11,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { getRemoteScripts } from "everything-dev/ui/head";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
 import { ThemeProvider } from "next-themes";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import type { RouterContext } from "@/app";
 import { getBaseStyles } from "@/app";
 import { sessionQueryKey } from "@/lib/auth";

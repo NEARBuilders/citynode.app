@@ -110,14 +110,14 @@ describe("personalizeConfig with real root config", () => {
     tempDirs.push(testDir);
 
     expect(existsSync(join(testDir, "plugins", "apps"))).toBe(true);
-    expect(existsSync(join(testDir, "plugins", "projects"))).toBe(false);
-    expect(existsSync(join(testDir, "plugins", "settings"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins", "example"))).toBe(false);
+    expect(existsSync(join(testDir, "plugins", "example"))).toBe(false);
     expect(existsSync(join(testDir, "ui", "src", "routes", "_layout", "apps", "index.tsx"))).toBe(
       true,
     );
     expect(
-      existsSync(join(testDir, "ui", "src", "routes", "_layout", "_authenticated", "settings.tsx")),
-    ).toBe(true);
+      existsSync(join(testDir, "ui", "src", "routes", "_layout", "_authenticated", "example.tsx")),
+    ).toBe(false);
 
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8")) as {
       plugins?: Record<string, Record<string, unknown>>;
