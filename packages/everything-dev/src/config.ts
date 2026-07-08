@@ -810,6 +810,7 @@ export function buildRuntimeConfig(
       if (!authConfig || !authRuntime) return undefined;
       return {
         name: resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth"),
+        extendsRef: authExtendsRef,
         url: authRuntime.url,
         entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
         localPath: authRuntime.localPath,
@@ -1022,6 +1023,7 @@ function buildRuntimePluginConfig(
       ? `${runtimeTarget.url.replace(/\/$/, "")}/mf-manifest.json`
       : "/mf-manifest.json",
     source: runtimeTarget.source,
+    extendsRef: pluginExtendsRef,
     localPath: runtimeTarget.localPath,
     port: runtimeTarget.port,
     proxy: typeof source.proxy === "string" ? source.proxy : undefined,

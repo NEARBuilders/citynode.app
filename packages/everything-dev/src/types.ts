@@ -116,6 +116,7 @@ export const RuntimePluginConfigSchema = z.object({
   url: z.string(),
   entry: z.string(),
   source: SourceModeSchema,
+  extendsRef: z.string().optional(),
   localPath: z.string().optional(),
   port: z.number().optional(),
   proxy: z.string().optional(),
@@ -292,6 +293,7 @@ export const RuntimeConfigSchema = z.object({
     shared: SharedDepMapSchema.optional(),
   }),
   auth: FederationEntrySchema.extend({
+    extendsRef: z.string().optional(),
     localPath: z.string().optional(),
     port: z.number().optional(),
     proxy: z.string().optional(),

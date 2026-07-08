@@ -33,18 +33,26 @@ export function generateThingId(): string {
 
 export function getThingProvider(pluginId: string): ThingProvider | null {
   const providers: Record<string, ThingProvider> = {
-    template: {
-      create: async (pluginClients, input, context) =>
-        await pluginClients.template(pluginContext(context)).createThing(input),
-      get: async (pluginClients, input, context) =>
-        await pluginClients.template(pluginContext(context)).getThing(input),
-      delete: async (pluginClients, input, context) => {
-        await pluginClients.template(pluginContext(context)).deleteThing(input);
-      },
-    },
+    template: buildPluginThingProvider("template"),
   };
 
   return providers[pluginId] ?? null;
+}
+
+function buildPluginThingProvider(pluginId: string): ThingProvider {
+  const getClient = (pluginClients: Omit<PluginsClient, "auth">, context: Context) =>
+    (pluginClients as Record<string, Function>)[pluginId]!(
+      pluginContext(context),
+    );
+  return {
+    create: async (pluginClients, input, context) =>
+      await getClient(pluginClients, context).createThing(input),
+    get: async (pluginClients, input, context) =>
+      await getClient(pluginClients, context).getThing(input),
+    delete: async (pluginClients, input, context) => {
+      await getClient(pluginClients, context).deleteThing(input);
+    },
+  };
 }
 
 export function toThingOutput(
