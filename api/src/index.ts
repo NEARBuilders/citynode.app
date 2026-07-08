@@ -2,10 +2,12 @@ import { createPlugin } from "every-plugin";
 import { Effect, Layer } from "every-plugin/effect";
 import { MemoryPublisher } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import { contract, ThingEventSchema } from "./contract";
+import { contract, type ThingEventSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema, runEffect } from "./lib/context";
+import type { PluginsClient } from "./lib/plugins-types.gen";
+import { RegistryLive, RegistryTag } from "./services/registry";
 import {
   generateThingId,
   getThingProvider,
@@ -13,8 +15,6 @@ import {
   toThingOutput,
   unsupportedPluginError,
 } from "./services/thing";
-import type { PluginsClient } from "./lib/plugins-types.gen";
-import { RegistryLive, RegistryTag } from "./services/registry";
 import { VotesLive, VotesTag } from "./services/votes";
 
 type ThingEvent = z.infer<typeof ThingEventSchema>;
@@ -74,31 +74,37 @@ export default createPlugin.withPlugins<PluginsClient>()({
         smsConfigured: !!process.env.SMS_PROVIDER,
       })),
 
-      createThing: builder.createThing.use(requireAuthOrApiKey).handler(async ({ input, context }) => {
-        const provider = getThingProvider(input.pluginId);
-        if (!provider) {
-          throw unsupportedPluginError(input.pluginId);
-        }
+      createThing: builder.createThing
+        .use(requireAuthOrApiKey)
+        .handler(async ({ input, context }) => {
+          const provider = getThingProvider(input.pluginId);
+          if (!provider) {
+            throw unsupportedPluginError(input.pluginId);
+          }
 
-        const thingId = generateThingId();
-        const providerResult = await provider.create(services.plugins, { thingId, payload: input.payload }, context);
-        const thingRecord = await runEffect(
-          services.thingRegistry.createThing({ thingId, pluginId: input.pluginId }),
-        );
-        const thing = toThingOutput(thingRecord, providerResult);
+          const thingId = generateThingId();
+          const providerResult = await provider.create(
+            services.plugins,
+            { thingId, payload: input.payload },
+            context,
+          );
+          const thingRecord = await runEffect(
+            services.thingRegistry.createThing({ thingId, pluginId: input.pluginId }),
+          );
+          const thing = toThingOutput(thingRecord, providerResult);
 
-        await services.publisher.publish(
-          "thing",
-          toThingEvent({
-            thingId,
-            pluginId: input.pluginId,
-            type: providerResult.type,
-            action: providerResult.action ?? "created",
-          }),
-        );
+          await services.publisher.publish(
+            "thing",
+            toThingEvent({
+              thingId,
+              pluginId: input.pluginId,
+              type: providerResult.type,
+              action: providerResult.action ?? "created",
+            }),
+          );
 
-        return thing;
-      }),
+          return thing;
+        }),
 
       getThing: builder.getThing.handler(async ({ input, context, errors }) => {
         const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
@@ -114,91 +120,107 @@ export default createPlugin.withPlugins<PluginsClient>()({
           throw unsupportedPluginError(thingRecord.pluginId);
         }
 
-        const providerResult = await provider.get(services.plugins, { thingId: input.thingId }, context);
+        const providerResult = await provider.get(
+          services.plugins,
+          { thingId: input.thingId },
+          context,
+        );
         return toThingOutput(thingRecord, providerResult);
       }),
 
-      upvoteThing: builder.upvoteThing.use(requireAuth).handler(async ({ input, context, errors }) => {
-        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
-        if (!thingRecord) {
-          throw errors.NOT_FOUND({
-            message: "Thing not found",
-            data: { resource: "thing", resourceId: input.thingId },
-          });
-        }
+      upvoteThing: builder.upvoteThing
+        .use(requireAuth)
+        .handler(async ({ input, context, errors }) => {
+          const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+          if (!thingRecord) {
+            throw errors.NOT_FOUND({
+              message: "Thing not found",
+              data: { resource: "thing", resourceId: input.thingId },
+            });
+          }
 
-        const provider = getThingProvider(thingRecord.pluginId);
-        if (!provider) {
-          throw unsupportedPluginError(thingRecord.pluginId);
-        }
+          const provider = getThingProvider(thingRecord.pluginId);
+          if (!provider) {
+            throw unsupportedPluginError(thingRecord.pluginId);
+          }
 
-        const providerResult = await provider.get(services.plugins, { thingId: input.thingId }, context);
-        const result = await runEffect(
-          services.thingVotes.upvote({
-            thingId: input.thingId,
-            pluginId: thingRecord.pluginId,
-            type: providerResult.type,
-            userId: context.userId!,
-          }),
-        );
+          const providerResult = await provider.get(
+            services.plugins,
+            { thingId: input.thingId },
+            context,
+          );
+          const result = await runEffect(
+            services.thingVotes.upvote({
+              thingId: input.thingId,
+              pluginId: thingRecord.pluginId,
+              type: providerResult.type,
+              userId: context.userId!,
+            }),
+          );
 
-        await runEffect(services.thingRegistry.touchThing(input.thingId));
+          await runEffect(services.thingRegistry.touchThing(input.thingId));
 
-        await services.publisher.publish(
-          "thing",
-          toThingEvent({
-            thingId: input.thingId,
-            pluginId: thingRecord.pluginId,
-            type: providerResult.type,
-            action: "upvoted",
-            userId: context.userId!,
-            totalCount: result.totalCount,
-          }),
-        );
+          await services.publisher.publish(
+            "thing",
+            toThingEvent({
+              thingId: input.thingId,
+              pluginId: thingRecord.pluginId,
+              type: providerResult.type,
+              action: "upvoted",
+              userId: context.userId!,
+              totalCount: result.totalCount,
+            }),
+          );
 
-        return result;
-      }),
+          return result;
+        }),
 
-      downvoteThing: builder.downvoteThing.use(requireAuth).handler(async ({ input, context, errors }) => {
-        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
-        if (!thingRecord) {
-          throw errors.NOT_FOUND({
-            message: "Thing not found",
-            data: { resource: "thing", resourceId: input.thingId },
-          });
-        }
+      downvoteThing: builder.downvoteThing
+        .use(requireAuth)
+        .handler(async ({ input, context, errors }) => {
+          const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+          if (!thingRecord) {
+            throw errors.NOT_FOUND({
+              message: "Thing not found",
+              data: { resource: "thing", resourceId: input.thingId },
+            });
+          }
 
-        const provider = getThingProvider(thingRecord.pluginId);
-        if (!provider) {
-          throw unsupportedPluginError(thingRecord.pluginId);
-        }
+          const provider = getThingProvider(thingRecord.pluginId);
+          if (!provider) {
+            throw unsupportedPluginError(thingRecord.pluginId);
+          }
 
-        const providerResult = await provider.get(services.plugins, { thingId: input.thingId }, context);
-        const result = await runEffect(
-          services.thingVotes.downvote({
-            thingId: input.thingId,
-            pluginId: thingRecord.pluginId,
-            type: providerResult.type,
-            userId: context.userId!,
-          }),
-        );
+          const providerResult = await provider.get(
+            services.plugins,
+            { thingId: input.thingId },
+            context,
+          );
+          const result = await runEffect(
+            services.thingVotes.downvote({
+              thingId: input.thingId,
+              pluginId: thingRecord.pluginId,
+              type: providerResult.type,
+              userId: context.userId!,
+            }),
+          );
 
-        await runEffect(services.thingRegistry.touchThing(input.thingId));
+          await runEffect(services.thingRegistry.touchThing(input.thingId));
 
-        await services.publisher.publish(
-          "thing",
-          toThingEvent({
-            thingId: input.thingId,
-            pluginId: thingRecord.pluginId,
-            type: providerResult.type,
-            action: "downvoted",
-            userId: context.userId!,
-            totalCount: result.totalCount,
-          }),
-        );
+          await services.publisher.publish(
+            "thing",
+            toThingEvent({
+              thingId: input.thingId,
+              pluginId: thingRecord.pluginId,
+              type: providerResult.type,
+              action: "downvoted",
+              userId: context.userId!,
+              totalCount: result.totalCount,
+            }),
+          );
 
-        return result;
-      }),
+          return result;
+        }),
 
       getUpvoteCount: builder.getUpvoteCount.handler(async ({ input, errors }) => {
         const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
@@ -212,17 +234,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return await runEffect(services.thingVotes.getUpvoteCount(input.thingId));
       }),
 
-      getUserVote: builder.getUserVote.use(requireAuth).handler(async ({ input, context, errors }) => {
-        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
-        if (!thingRecord) {
-          throw errors.NOT_FOUND({
-            message: "Thing not found",
-            data: { resource: "thing", resourceId: input.thingId },
-          });
-        }
+      getUserVote: builder.getUserVote
+        .use(requireAuth)
+        .handler(async ({ input, context, errors }) => {
+          const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+          if (!thingRecord) {
+            throw errors.NOT_FOUND({
+              message: "Thing not found",
+              data: { resource: "thing", resourceId: input.thingId },
+            });
+          }
 
-        return await runEffect(services.thingVotes.getUserVote(input.thingId, context.userId!));
-      }),
+          return await runEffect(services.thingVotes.getUserVote(input.thingId, context.userId!));
+        }),
 
       getUserVotes: builder.getUserVotes.use(requireAuth).handler(async ({ input, context }) => {
         return await runEffect(services.thingVotes.getUserVotes(input.thingIds, context.userId!));
@@ -236,36 +260,42 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return await runEffect(services.thingVotes.getUpvoteFeed(input.limit, input.cursor));
       }),
 
-      deleteThing: builder.deleteThing.use(requireAdmin).handler(async ({ input, context, errors }) => {
-        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
-        if (!thingRecord) {
-          throw errors.NOT_FOUND({
-            message: "Thing not found",
-            data: { resource: "thing", resourceId: input.thingId },
-          });
-        }
+      deleteThing: builder.deleteThing
+        .use(requireAdmin)
+        .handler(async ({ input, context, errors }) => {
+          const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+          if (!thingRecord) {
+            throw errors.NOT_FOUND({
+              message: "Thing not found",
+              data: { resource: "thing", resourceId: input.thingId },
+            });
+          }
 
-        const provider = getThingProvider(thingRecord.pluginId);
-        if (provider?.delete) {
-          await provider.delete(services.plugins, { thingId: input.thingId }, context);
-        }
+          const provider = getThingProvider(thingRecord.pluginId);
+          if (provider?.delete) {
+            await provider.delete(services.plugins, { thingId: input.thingId }, context);
+          }
 
-        await runEffect(services.thingRegistry.deleteThing(input.thingId));
+          await runEffect(services.thingRegistry.deleteThing(input.thingId));
 
-        await services.publisher.publish(
-          "thing",
-          toThingEvent({
-            thingId: input.thingId,
-            pluginId: thingRecord.pluginId,
-            type: "system",
-            action: "deleted",
-          }),
-        );
+          await services.publisher.publish(
+            "thing",
+            toThingEvent({
+              thingId: input.thingId,
+              pluginId: thingRecord.pluginId,
+              type: "system",
+              action: "deleted",
+            }),
+          );
 
-        return { success: true as const };
-      }),
+          return { success: true as const };
+        }),
 
-      subscribeThings: builder.subscribeThings.handler(async function* ({ input, signal, lastEventId }) {
+      subscribeThings: builder.subscribeThings.handler(async function* ({
+        input,
+        signal,
+        lastEventId,
+      }) {
         const iterator = services.publisher.subscribe("thing", { signal, lastEventId });
 
         for await (const event of iterator) {

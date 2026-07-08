@@ -11,17 +11,30 @@ export interface VoteEvent {
 }
 
 export interface VoteService {
-  upvote(input: { thingId: string; pluginId: string; type: string; userId: string }): Effect.Effect<{
+  upvote(input: {
+    thingId: string;
+    pluginId: string;
+    type: string;
+    userId: string;
+  }): Effect.Effect<{
     thingId: string;
     userId: string;
     totalCount: number;
   }>;
-  downvote(input: { thingId: string; pluginId: string; type: string; userId: string }): Effect.Effect<{
+  downvote(input: {
+    thingId: string;
+    pluginId: string;
+    type: string;
+    userId: string;
+  }): Effect.Effect<{
     thingId: string;
     totalCount: number;
   }>;
   getUpvoteCount(thingId: string): Effect.Effect<{ thingId: string; totalCount: number }>;
-  getUserVote(thingId: string, userId: string): Effect.Effect<{ thingId: string; hasUpvote: boolean }>;
+  getUserVote(
+    thingId: string,
+    userId: string,
+  ): Effect.Effect<{ thingId: string; hasUpvote: boolean }>;
   getUserVotes(
     thingIds: string[],
     userId: string,
@@ -29,7 +42,10 @@ export interface VoteService {
   getUpvoteCounts(
     thingIds: string[],
   ): Effect.Effect<Record<string, { thingId: string; totalCount: number }>>;
-  getUpvoteFeed(limit?: number, cursor?: string): Effect.Effect<{
+  getUpvoteFeed(
+    limit?: number,
+    cursor?: string,
+  ): Effect.Effect<{
     data: VoteEvent[];
     meta: {
       total: number;
@@ -103,7 +119,8 @@ function createVotesService(): VoteService {
         return { thingId: input.thingId, totalCount };
       }),
 
-    getUpvoteCount: (thingId) => Effect.sync(() => ({ thingId, totalCount: currentCount(thingId) })),
+    getUpvoteCount: (thingId) =>
+      Effect.sync(() => ({ thingId, totalCount: currentCount(thingId) })),
 
     getUserVote: (thingId, userId) =>
       Effect.sync(() => ({ thingId, hasUpvote: votesByThing.get(thingId)?.has(userId) ?? false })),
@@ -111,13 +128,18 @@ function createVotesService(): VoteService {
     getUserVotes: (thingIds, userId) =>
       Effect.sync(() =>
         Object.fromEntries(
-          thingIds.map((thingId) => [thingId, { thingId, hasUpvote: votesByThing.get(thingId)?.has(userId) ?? false }]),
+          thingIds.map((thingId) => [
+            thingId,
+            { thingId, hasUpvote: votesByThing.get(thingId)?.has(userId) ?? false },
+          ]),
         ),
       ),
 
     getUpvoteCounts: (thingIds) =>
       Effect.sync(() =>
-        Object.fromEntries(thingIds.map((thingId) => [thingId, { thingId, totalCount: currentCount(thingId) }])),
+        Object.fromEntries(
+          thingIds.map((thingId) => [thingId, { thingId, totalCount: currentCount(thingId) }]),
+        ),
       ),
 
     getUpvoteFeed: (limit = 50, cursor?: string) =>

@@ -1,6 +1,6 @@
 import { ORPCError } from "every-plugin/orpc";
 import type { Thing, ThingEvent } from "../contract";
-import { pluginContext, type Context } from "../lib/context";
+import { type Context, pluginContext } from "../lib/context";
 import type { PluginsClient } from "../lib/plugins-types.gen";
 
 export type ThingProviderResult = {
@@ -31,9 +31,7 @@ export function generateThingId(): string {
   return `thing_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-export function getThingProvider(
-  pluginId: string,
-): ThingProvider | null {
+export function getThingProvider(pluginId: string): ThingProvider | null {
   const providers: Record<string, ThingProvider> = {
     template: {
       create: async (pluginClients, input, context) =>
@@ -49,12 +47,15 @@ export function getThingProvider(
   return providers[pluginId] ?? null;
 }
 
-export function toThingOutput(input: {
-  thingId: string;
-  pluginId: string;
-  createdAt: string;
-  updatedAt: string;
-}, providerResult: ThingProviderResult): Thing {
+export function toThingOutput(
+  input: {
+    thingId: string;
+    pluginId: string;
+    createdAt: string;
+    updatedAt: string;
+  },
+  providerResult: ThingProviderResult,
+): Thing {
   return {
     thingId: input.thingId,
     pluginId: input.pluginId,

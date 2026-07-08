@@ -103,11 +103,7 @@ function LiveStreamPage() {
       </div>
 
       <div className="shrink-0 flex flex-wrap gap-2 border-b border-border bg-muted/20 px-4 py-2">
-        <FilterInput
-          placeholder="pluginId"
-          value={filterPluginId}
-          onChange={setFilterPluginId}
-        />
+        <FilterInput placeholder="pluginId" value={filterPluginId} onChange={setFilterPluginId} />
         <FilterInput placeholder="type" value={filterType} onChange={setFilterType} />
         <FilterInput placeholder="action" value={filterAction} onChange={setFilterAction} />
       </div>

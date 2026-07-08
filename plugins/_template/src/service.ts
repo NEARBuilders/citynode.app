@@ -3,7 +3,7 @@ import { ORPCError } from "every-plugin/orpc";
 import type { z } from "every-plugin/zod";
 
 // Import types from contract
-import { ItemSchema, SearchResultSchema } from "./contract";
+import type { ItemSchema, SearchResultSchema } from "./contract";
 
 // Infer the types from the schemas
 type Item = z.infer<typeof ItemSchema>;

@@ -134,7 +134,7 @@ describe("upgrade bos config migration", () => {
     );
 
     mkdirSync(join(projectDir, "plugins/example"), { recursive: true });
-      writeFileSync(
+    writeFileSync(
       join(projectDir, "plugins/example/bos.config.json"),
       `${JSON.stringify(
         {

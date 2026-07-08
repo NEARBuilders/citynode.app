@@ -142,11 +142,7 @@ export default defineConfig({
   });
 }
 
-function spawnAsync(
-  cmd: string,
-  args: string[],
-  options: { cwd: string },
-): Promise<void> {
+function spawnAsync(cmd: string, args: string[], options: { cwd: string }): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(cmd, args, {
       cwd: options.cwd,
@@ -170,9 +166,7 @@ function spawnAsync(
       if (code === 0 || code === null) {
         resolvePromise();
       } else {
-        reject(
-          new Error(`"${cmd}" exited with code ${code}`),
-        );
+        reject(new Error(`"${cmd}" exited with code ${code}`));
       }
     });
   });

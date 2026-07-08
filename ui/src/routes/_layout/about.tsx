@@ -35,9 +35,7 @@ async function fetchRepositoryReadme(repositoryUrl: string): Promise<string | nu
       const response = await fetch(url);
       if (!response.ok) continue;
       return sanitizeMarkdownContent(await response.text());
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return null;
 }

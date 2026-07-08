@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
-import { things } from "../db/schema";
 import { DatabaseTag } from "../db/layer";
+import { things } from "../db/schema";
 
 export interface ThingRecord {
   thingId: string;
@@ -12,18 +12,16 @@ export interface ThingRecord {
 }
 
 export interface RegistryService {
-  createThing(
-    input: { thingId: string; pluginId: string },
-  ): Effect.Effect<ThingRecord, ORPCError<string, unknown>>;
+  createThing(input: {
+    thingId: string;
+    pluginId: string;
+  }): Effect.Effect<ThingRecord, ORPCError<string, unknown>>;
   getThing(thingId: string): Effect.Effect<ThingRecord | null, ORPCError<string, unknown>>;
   touchThing(thingId: string): Effect.Effect<ThingRecord | null, ORPCError<string, unknown>>;
   deleteThing(thingId: string): Effect.Effect<{ thingId: string }, ORPCError<string, unknown>>;
 }
 
-export class RegistryTag extends Context.Tag("api/Registry")<
-  RegistryService,
-  RegistryService
->() {}
+export class RegistryTag extends Context.Tag("api/Registry")<RegistryService, RegistryService>() {}
 
 function toThingRecord(row: {
   thingId: string;

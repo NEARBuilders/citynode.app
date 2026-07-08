@@ -138,9 +138,15 @@ function ThingDetailPage() {
               </div>
 
               <div className="space-y-1.5 text-sm">
-                <MetaRow label="thingId" mono>{thing.thingId}</MetaRow>
-                <MetaRow label="pluginId" mono>{thing.pluginId}</MetaRow>
-                <MetaRow label="type" mono>{thing.type}</MetaRow>
+                <MetaRow label="thingId" mono>
+                  {thing.thingId}
+                </MetaRow>
+                <MetaRow label="pluginId" mono>
+                  {thing.pluginId}
+                </MetaRow>
+                <MetaRow label="type" mono>
+                  {thing.type}
+                </MetaRow>
                 <MetaRow label="created">{new Date(thing.createdAt).toLocaleString()}</MetaRow>
                 <MetaRow label="updated">{new Date(thing.updatedAt).toLocaleString()}</MetaRow>
               </div>
@@ -235,7 +241,15 @@ function ThingDetailPage() {
   );
 }
 
-function MetaRow({ label, mono, children }: { label: string; mono?: boolean; children: React.ReactNode }) {
+function MetaRow({
+  label,
+  mono,
+  children,
+}: {
+  label: string;
+  mono?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="grid grid-cols-[80px_1fr] gap-2 rounded-[6px] bg-muted/10 px-2.5 py-1.5">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

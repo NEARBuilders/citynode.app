@@ -47,10 +47,14 @@ function NewThingPage() {
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto max-w-lg space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <label
+              htmlFor="plugin-id"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
               Plugin ID
             </label>
             <input
+              id="plugin-id"
               type="text"
               value={pluginId}
               onChange={(e) => setPluginId(e.target.value)}
@@ -62,10 +66,14 @@ function NewThingPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <label
+              htmlFor="payload-json"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
               Payload (JSON)
             </label>
             <textarea
+              id="payload-json"
               value={payloadRaw}
               onChange={(e) => setPayloadRaw(e.target.value)}
               rows={8}
@@ -73,10 +81,7 @@ function NewThingPage() {
             />
           </div>
 
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending}
-          >
+          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
             {createMutation.isPending ? "Creating..." : "Create thing"}
           </Button>
         </div>

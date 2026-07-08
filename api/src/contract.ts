@@ -143,9 +143,7 @@ export const contract = oc.router({
     )
     .output(
       z.object({
-        data: z.array(
-          ThingEventSchema,
-        ),
+        data: z.array(ThingEventSchema),
         meta: z.object({
           total: z.number().int().nonnegative(),
           hasMore: z.boolean(),

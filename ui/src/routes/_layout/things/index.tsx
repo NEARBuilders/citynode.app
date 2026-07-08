@@ -38,8 +38,8 @@ function ThingsIndex() {
         <div className="mx-auto max-w-lg space-y-6">
           <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
             <p className="text-sm text-muted-foreground">
-              The thing registry is a generic API-owned durable store. Each thing has a
-              plugin-owned type and payload, supports upvotes, and emits real-time SSE events.
+              The thing registry is a generic API-owned durable store. Each thing has a plugin-owned
+              type and payload, supports upvotes, and emits real-time SSE events.
             </p>
           </div>
 

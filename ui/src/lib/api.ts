@@ -10,10 +10,7 @@ export type ApiClient = ContractRouterClient<ApiContract>;
 
 let browserApiClient: ApiClient | null = null;
 
-function createRpcLink(
-  runtimeConfig: { hostUrl: string; rpcBase: string },
-  headers?: Headers,
-) {
+function createRpcLink(runtimeConfig: { hostUrl: string; rpcBase: string }, headers?: Headers) {
   return new RPCLink({
     url: `${runtimeConfig.hostUrl}${runtimeConfig.rpcBase}`,
     interceptors: [

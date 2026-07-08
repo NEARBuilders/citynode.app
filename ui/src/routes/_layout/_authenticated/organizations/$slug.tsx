@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Edit2, Key, LogOut, Mail, RefreshCw, Shield, Trash2, User, UserCog, Users } from "lucide-react";
+import {
+  Edit2,
+  Key,
+  LogOut,
+  Mail,
+  RefreshCw,
+  Shield,
+  Trash2,
+  User,
+  UserCog,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type Organization, type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
