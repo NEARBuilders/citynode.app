@@ -156,6 +156,16 @@ export const cliCommandMeta = {
       dryRun: { description: "Preview what would be fetched without writing files" },
     },
   },
+  dbStudio: {
+    commandPath: ["db", "studio"],
+    summary: "Open Drizzle Studio for a plugin's database",
+    fields: {
+      plugin: {
+        positional: true,
+        description: "Plugin key: api, auth, or a plugin name (default: api)",
+      },
+    },
+  },
   status: {
     commandPath: ["status"],
     summary: "Show project health, versions, and update availability",

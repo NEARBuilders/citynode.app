@@ -1938,6 +1938,54 @@ export default createPlugin({
       }
     }),
 
+    dbStudio: builder.dbStudio.handler(async ({ input }) => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            plugin: input.plugin,
+            source: "remote" as const,
+            section: "",
+            error: "No bos.config.json found in current directory",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        const refreshed = await loadResolvedConfig({ cwd: projectDir });
+        if (!refreshed) {
+          return {
+            status: "error" as const,
+            plugin: input.plugin,
+            source: "remote" as const,
+            section: "",
+            error: "Failed to load bos.config.json",
+          };
+        }
+
+        const { resolvePluginDbInfo } = await import("./cli/db-studio");
+        const info = resolvePluginDbInfo(input.plugin, refreshed.runtime, projectDir);
+
+        return {
+          status: "success" as const,
+          plugin: info.key,
+          source: info.source,
+          section: info.section,
+          databaseSecret: info.databaseSecret,
+          databaseUrl: info.databaseUrl,
+          workspaceDir: info.workspaceDir,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          plugin: input.plugin,
+          source: "remote" as const,
+          section: "",
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
     status: builder.status.handler(async () => {
       try {
         const configPath = findConfigPath();

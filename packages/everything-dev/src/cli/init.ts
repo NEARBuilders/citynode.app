@@ -498,7 +498,7 @@ export function buildChildRootScripts(sections: {
 
   if (sections.api) {
     scripts["db:push"] = "bun run --cwd api drizzle-kit push";
-    scripts["db:studio"] = "bun run --cwd api drizzle-kit studio";
+    scripts["db:studio"] = "node_modules/.bin/bos db:studio";
     scripts["db:generate"] = "bun run --cwd api drizzle-kit generate";
     scripts["db:migrate"] = "bun run --cwd api drizzle-kit migrate";
     scripts["test:api"] = "cd api && bun run test tests/integration/ tests/unit/";

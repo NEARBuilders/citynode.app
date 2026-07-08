@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+import { dirname } from "node:path";
 import * as p from "@clack/prompts";
 import { findCommandDescriptor } from "./cli/catalog";
 import { printHelp } from "./cli/help";
 import { fetchParentConfig, runDockerComposeUp } from "./cli/init";
+import { loadProjectEnv } from "./cli/infra";
 import { parseCommandInput } from "./cli/parse";
 import { promptInitBasic, promptInitOverrides } from "./cli/prompts";
 import { formatDuration, sumPhaseDurations } from "./cli/timing";
@@ -433,6 +435,39 @@ async function main() {
     }
 
     const result = await (client as any)[descriptor.key](input);
+
+    if (descriptor.key === "dbStudio") {
+      if (result.status === "error") {
+        console.error(`[CLI] ${result.error || "Unknown error"}`);
+        process.exit(1);
+      }
+
+      const configPath = findConfigPath();
+      if (configPath) loadProjectEnv(dirname(configPath));
+
+      const { runStudioLocal, runStudioRemote } = await import("./cli/db-studio");
+      const info = {
+        key: result.plugin as string,
+        source: result.source as "local" | "remote",
+        section: result.section as "app.api" | "app.auth" | "plugins",
+        databaseSecret: result.databaseSecret as string,
+        databaseUrl: result.databaseUrl as string,
+        workspaceDir: result.workspaceDir as string | undefined,
+        projectDir: dirname(configPath ?? process.cwd()),
+      };
+
+      try {
+        if (info.source === "local" && info.workspaceDir) {
+          await runStudioLocal(info);
+        } else {
+          await runStudioRemote(info);
+        }
+      } catch (error) {
+        console.error(`[CLI] ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(1);
+      }
+      return;
+    }
 
     if (descriptor.key === "config") {
       if (!result.config) {

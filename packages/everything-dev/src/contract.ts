@@ -282,6 +282,21 @@ export const TypesGenResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const DbStudioOptionsSchema = z.object({
+  plugin: z.string().default("api"),
+});
+
+export const DbStudioResultSchema = z.object({
+  status: z.enum(["success", "error"]),
+  plugin: z.string(),
+  source: z.enum(["local", "remote"]),
+  section: z.string(),
+  databaseSecret: z.string().optional(),
+  databaseUrl: z.string().optional(),
+  workspaceDir: z.string().optional(),
+  error: z.string().optional(),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -338,6 +353,10 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/types/gen" })
     .input(TypesGenOptionsSchema)
     .output(TypesGenResultSchema),
+  dbStudio: oc
+    .route({ method: "POST", path: "/db/studio" })
+    .input(DbStudioOptionsSchema)
+    .output(DbStudioResultSchema),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -369,4 +388,6 @@ export type UpgradeResult = z.infer<typeof UpgradeResultSchema>;
 export type StatusResult = z.infer<typeof StatusResultSchema>;
 export type TypesGenOptions = z.infer<typeof TypesGenOptionsSchema>;
 export type TypesGenResult = z.infer<typeof TypesGenResultSchema>;
+export type DbStudioOptions = z.infer<typeof DbStudioOptionsSchema>;
+export type DbStudioResult = z.infer<typeof DbStudioResultSchema>;
 export type RuntimeOverrideTarget = z.infer<typeof RuntimeOverrideTargetSchema>;
