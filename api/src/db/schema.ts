@@ -1,12 +1,8 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const upvotes = pgTable(
-  "upvotes",
-  {
-    id: text("id").primaryKey(),
-    thingId: text("thing_id").notNull(),
-    userId: text("user_id").notNull(),
-    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [uniqueIndex("upvotes_thing_user_unique").on(table.thingId, table.userId)],
-);
+export const things = pgTable("things", {
+  thingId: text("thing_id").primaryKey(),
+  pluginId: text("plugin_id").notNull(),
+  createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});

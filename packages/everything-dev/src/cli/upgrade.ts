@@ -38,6 +38,7 @@ const LEGACY_UI_IMPORT_REWRITES = [
   ["from '@/lib/api-client'", "from '@/app'"],
 ] as const;
 const OBSOLETE_FILES = [
+  "api/src/lib/plugins.ts",
   "ui/src/auth.ts",
   "ui/src/auth-types.gen.ts",
   "ui/src/lib/api-client.ts",

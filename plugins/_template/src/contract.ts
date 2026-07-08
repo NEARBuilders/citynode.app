@@ -33,6 +33,12 @@ export const BackgroundEventSchema = z.object({
   timestamp: z.number().describe("Unix timestamp in milliseconds when the event was created"),
 });
 
+export const ThingPayloadSchema = z.object({
+  type: z.string().describe("Plugin-defined thing type"),
+  payload: z.unknown().describe("Plugin-defined thing payload"),
+  action: z.string().optional().describe("Optional plugin-defined event action"),
+});
+
 // oRPC Contract definition
 export const contract = oc.router({
   // Single item lookup by ID
@@ -146,6 +152,53 @@ export const contract = oc.router({
         ok: z.boolean().describe("True if the event was successfully enqueued"),
       }),
     ),
+
+  createThing: oc
+    .route({
+      method: "POST",
+      path: "/things",
+      summary: "Create a thing",
+      description: "Stores a plugin-owned thing payload and returns its public type",
+      tags: ["Things"],
+    })
+    .input(
+      z.object({
+        thingId: z.string().min(1, "Thing ID is required"),
+        payload: z.unknown(),
+      }),
+    )
+    .output(ThingPayloadSchema),
+
+  getThing: oc
+    .route({
+      method: "GET",
+      path: "/things/{thingId}",
+      summary: "Get a thing",
+      description: "Returns the plugin-owned payload for a thing",
+      tags: ["Things"],
+    })
+    .input(
+      z.object({
+        thingId: z.string().min(1, "Thing ID is required"),
+      }),
+    )
+    .output(ThingPayloadSchema.omit({ action: true }))
+    .errors({ NOT_FOUND: { status: 404, message: "Thing not found" } }),
+
+  deleteThing: oc
+    .route({
+      method: "DELETE",
+      path: "/things/{thingId}",
+      summary: "Delete a thing",
+      description: "Removes the plugin-owned payload for a thing",
+      tags: ["Things"],
+    })
+    .input(
+      z.object({
+        thingId: z.string().min(1, "Thing ID is required"),
+      }),
+    )
+    .output(z.object({ success: z.literal(true) })),
 });
 
 export type ContractType = typeof contract;

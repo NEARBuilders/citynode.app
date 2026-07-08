@@ -75,6 +75,9 @@
         }
       ],
       "integrity": "sha384-wKXTvWAAHvluWG8DUBYgY70C/AFq6ey5dJSAdXWJrqCHs+YI4/LvmWpvTM7ri5cT"
+    },
+    "template": {
+      "development": "local:plugins/_template"
     }
   }
 }

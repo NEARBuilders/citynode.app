@@ -1,121 +1,27 @@
-import { and, count, desc, eq } from "drizzle-orm";
 import { createPlugin } from "every-plugin";
-import { Effect } from "every-plugin/effect";
+import { Effect, Layer } from "every-plugin/effect";
 import { MemoryPublisher } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
-import { contract, type VoteEventSchema } from "./contract";
-import { loadMigrations } from "./db/load-migrations";
-import { migrate } from "./db/migrator";
-import { upvotes } from "./db/schema";
+import { contract, ThingEventSchema } from "./contract";
+import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
+import { ContextSchema, runEffect } from "./lib/context";
+import {
+  generateThingId,
+  getThingProvider,
+  toThingEvent,
+  toThingOutput,
+  unsupportedPluginError,
+} from "./services/thing";
 import type { PluginsClient } from "./lib/plugins-types.gen";
+import { RegistryLive, RegistryTag } from "./services/registry";
+import { VotesLive, VotesTag } from "./services/votes";
 
-type VoteEventDetail = z.infer<typeof VoteEventSchema>;
+type ThingEvent = z.infer<typeof ThingEventSchema>;
 
-type VoteEvents = {
-  vote: VoteEventDetail;
+type ThingEvents = {
+  thing: ThingEvent;
 };
-
-function generateId(): string {
-  return `uv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-}
-
-function createUpvoteService(db: any, publisher: MemoryPublisher<VoteEvents>) {
-  return {
-    async upvoteThing(thingId: string, userId: string) {
-      try {
-        await db.insert(upvotes).values({
-          id: generateId(),
-          thingId,
-          userId,
-        });
-      } catch {
-        // unique constraint violation — already upvoted
-      }
-
-      const [result] = await db
-        .select({ count: count() })
-        .from(upvotes)
-        .where(eq(upvotes.thingId, thingId));
-
-      const totalCount = result?.count ?? 0;
-
-      await publisher.publish("vote", {
-        type: "upvote",
-        thingId,
-        userId,
-        timestamp: new Date().toISOString(),
-        totalCount,
-      });
-
-      return { thingId, userId, totalCount };
-    },
-
-    async downvoteThing(thingId: string, userId: string) {
-      await db.delete(upvotes).where(and(eq(upvotes.thingId, thingId), eq(upvotes.userId, userId)));
-
-      const [result] = await db
-        .select({ count: count() })
-        .from(upvotes)
-        .where(eq(upvotes.thingId, thingId));
-
-      const totalCount = result?.count ?? 0;
-
-      await publisher.publish("vote", {
-        type: "downvote",
-        thingId,
-        userId,
-        timestamp: new Date().toISOString(),
-        totalCount,
-      });
-
-      return { thingId, totalCount };
-    },
-
-    async getUpvoteCount(thingId: string) {
-      const [result] = await db
-        .select({ count: count() })
-        .from(upvotes)
-        .where(eq(upvotes.thingId, thingId));
-
-      return { thingId, totalCount: result?.count ?? 0 };
-    },
-
-    async getUserVote(thingId: string, userId: string) {
-      const [result] = await db
-        .select({ count: count() })
-        .from(upvotes)
-        .where(and(eq(upvotes.thingId, thingId), eq(upvotes.userId, userId)));
-      return { thingId, hasUpvote: (result?.count ?? 0) > 0 };
-    },
-
-    async getUpvoteFeed(limit = 50, _cursor?: string) {
-      const pageLimit = Math.min(limit, 100);
-      const records = await db
-        .select()
-        .from(upvotes)
-        .orderBy(desc(upvotes.createdAt))
-        .limit(pageLimit + 1);
-
-      const hasMore = records.length > pageLimit;
-      const data = records.slice(0, pageLimit).map((r: any) => ({
-        id: r.id,
-        thingId: r.thingId,
-        userId: r.userId,
-        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
-      }));
-
-      return {
-        data,
-        meta: {
-          total: data.length,
-          hasMore,
-          nextCursor: hasMore ? (data[data.length - 1]?.id ?? null) : null,
-        },
-      };
-    },
-  };
-}
 
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({}),
@@ -124,92 +30,37 @@ export default createPlugin.withPlugins<PluginsClient>()({
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
   }),
 
-  context: z.object({
-    userId: z.string().optional(),
-    user: z
-      .object({
-        id: z.string(),
-        role: z.string().optional(),
-        email: z.string().optional(),
-        name: z.string().optional(),
-      })
-      .optional(),
-    organizationId: z.string().optional(),
-    organization: z
-      .object({
-        activeOrganizationId: z.string().nullable().optional(),
-        organization: z
-          .object({
-            id: z.string(),
-            name: z.string(),
-            slug: z.string(),
-            logo: z.string().nullable().optional(),
-            metadata: z.record(z.string(), z.unknown()).optional(),
-          })
-          .nullable()
-          .optional(),
-        member: z
-          .object({
-            id: z.string(),
-            role: z.string(),
-          })
-          .nullable()
-          .optional(),
-        isPersonal: z.boolean(),
-        hasOrganization: z.boolean(),
-      })
-      .optional(),
-    near: z
-      .object({
-        primaryAccountId: z.string().nullable(),
-        linkedAccounts: z.array(
-          z.object({
-            accountId: z.string(),
-            network: z.string(),
-            publicKey: z.string(),
-            isPrimary: z.boolean(),
-          }),
-        ),
-        hasNearAccount: z.boolean(),
-      })
-      .optional(),
-    reqHeaders: z.custom<Headers>().optional(),
-    getRawBody: z.custom<() => Promise<string>>().optional(),
-  }),
+  context: ContextSchema,
 
   contract,
 
   initialize: (config, plugins) =>
-    Effect.promise(async () => {
-      const { createDatabaseDriver } = await import("./db/index");
-      const driver = await createDatabaseDriver(config.secrets.API_DATABASE_URL);
+    Effect.gen(function* () {
+      const database = DatabaseLive(config.secrets.API_DATABASE_URL);
+      const registryLayer = RegistryLive.pipe(Layer.provide(database));
 
-      const migrations = await loadMigrations();
-      await migrate(driver.db, migrations);
-      console.log("[API] Migrations applied");
+      const thingRegistry = yield* Effect.provide(RegistryTag, registryLayer);
+      const thingVotes = yield* Effect.provide(VotesTag, VotesLive);
+      const publisher = new MemoryPublisher<ThingEvents>({ resumeRetentionSeconds: 120 });
 
       const { auth, ...restPlugins } = plugins;
       console.log("[API] Services Initialized");
       console.log("[API] Auth client available:", Boolean(auth));
       console.log("[API] Plugins available:", Object.keys(restPlugins).join(", ") || "none");
 
-      const publisher = new MemoryPublisher<VoteEvents>({
-        resumeRetentionSeconds: 120,
-      });
-      const upvoteService = createUpvoteService(driver.db, publisher);
-
-      return { auth, plugins: restPlugins, db: driver.db, upvoteService, publisher, driver };
+      return {
+        auth,
+        plugins: restPlugins,
+        thingRegistry,
+        thingVotes,
+        publisher,
+      };
     }),
 
-  shutdown: (services) =>
-    Effect.promise(async () => {
-      console.log("[API] Shutdown");
-      await (services as any).driver?.close?.();
-    }),
+  shutdown: () => Effect.log("[API] Shutdown"),
 
   createRouter: (services, builder) => {
-    const { requireAuth } = createAuthMiddleware(builder);
-    const { publisher } = services;
+    const { requireAuth, requireAuthOrApiKey, requireAdmin } = createAuthMiddleware(builder);
 
     return {
       ping: builder.ping.handler(async () => ({
@@ -223,29 +74,205 @@ export default createPlugin.withPlugins<PluginsClient>()({
         smsConfigured: !!process.env.SMS_PROVIDER,
       })),
 
-      upvoteThing: builder.upvoteThing.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.upvoteService.upvoteThing(input.thingId, context.userId!);
+      createThing: builder.createThing.use(requireAuthOrApiKey).handler(async ({ input, context }) => {
+        const provider = getThingProvider(input.pluginId);
+        if (!provider) {
+          throw unsupportedPluginError(input.pluginId);
+        }
+
+        const thingId = generateThingId();
+        const providerResult = await provider.create(services.plugins, { thingId, payload: input.payload }, context);
+        const thingRecord = await runEffect(
+          services.thingRegistry.createThing({ thingId, pluginId: input.pluginId }),
+        );
+        const thing = toThingOutput(thingRecord, providerResult);
+
+        await services.publisher.publish(
+          "thing",
+          toThingEvent({
+            thingId,
+            pluginId: input.pluginId,
+            type: providerResult.type,
+            action: providerResult.action ?? "created",
+          }),
+        );
+
+        return thing;
       }),
 
-      downvoteThing: builder.downvoteThing.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.upvoteService.downvoteThing(input.thingId, context.userId!);
+      getThing: builder.getThing.handler(async ({ input, context, errors }) => {
+        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+        if (!thingRecord) {
+          throw errors.NOT_FOUND({
+            message: "Thing not found",
+            data: { resource: "thing", resourceId: input.thingId },
+          });
+        }
+
+        const provider = getThingProvider(thingRecord.pluginId);
+        if (!provider) {
+          throw unsupportedPluginError(thingRecord.pluginId);
+        }
+
+        const providerResult = await provider.get(services.plugins, { thingId: input.thingId }, context);
+        return toThingOutput(thingRecord, providerResult);
       }),
 
-      getUpvoteCount: builder.getUpvoteCount.handler(async ({ input }) => {
-        return await services.upvoteService.getUpvoteCount(input.thingId);
+      upvoteThing: builder.upvoteThing.use(requireAuth).handler(async ({ input, context, errors }) => {
+        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+        if (!thingRecord) {
+          throw errors.NOT_FOUND({
+            message: "Thing not found",
+            data: { resource: "thing", resourceId: input.thingId },
+          });
+        }
+
+        const provider = getThingProvider(thingRecord.pluginId);
+        if (!provider) {
+          throw unsupportedPluginError(thingRecord.pluginId);
+        }
+
+        const providerResult = await provider.get(services.plugins, { thingId: input.thingId }, context);
+        const result = await runEffect(
+          services.thingVotes.upvote({
+            thingId: input.thingId,
+            pluginId: thingRecord.pluginId,
+            type: providerResult.type,
+            userId: context.userId!,
+          }),
+        );
+
+        await runEffect(services.thingRegistry.touchThing(input.thingId));
+
+        await services.publisher.publish(
+          "thing",
+          toThingEvent({
+            thingId: input.thingId,
+            pluginId: thingRecord.pluginId,
+            type: providerResult.type,
+            action: "upvoted",
+            userId: context.userId!,
+            totalCount: result.totalCount,
+          }),
+        );
+
+        return result;
       }),
 
-      getUserVote: builder.getUserVote.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.upvoteService.getUserVote(input.thingId, context.userId!);
+      downvoteThing: builder.downvoteThing.use(requireAuth).handler(async ({ input, context, errors }) => {
+        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+        if (!thingRecord) {
+          throw errors.NOT_FOUND({
+            message: "Thing not found",
+            data: { resource: "thing", resourceId: input.thingId },
+          });
+        }
+
+        const provider = getThingProvider(thingRecord.pluginId);
+        if (!provider) {
+          throw unsupportedPluginError(thingRecord.pluginId);
+        }
+
+        const providerResult = await provider.get(services.plugins, { thingId: input.thingId }, context);
+        const result = await runEffect(
+          services.thingVotes.downvote({
+            thingId: input.thingId,
+            pluginId: thingRecord.pluginId,
+            type: providerResult.type,
+            userId: context.userId!,
+          }),
+        );
+
+        await runEffect(services.thingRegistry.touchThing(input.thingId));
+
+        await services.publisher.publish(
+          "thing",
+          toThingEvent({
+            thingId: input.thingId,
+            pluginId: thingRecord.pluginId,
+            type: providerResult.type,
+            action: "downvoted",
+            userId: context.userId!,
+            totalCount: result.totalCount,
+          }),
+        );
+
+        return result;
+      }),
+
+      getUpvoteCount: builder.getUpvoteCount.handler(async ({ input, errors }) => {
+        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+        if (!thingRecord) {
+          throw errors.NOT_FOUND({
+            message: "Thing not found",
+            data: { resource: "thing", resourceId: input.thingId },
+          });
+        }
+
+        return await runEffect(services.thingVotes.getUpvoteCount(input.thingId));
+      }),
+
+      getUserVote: builder.getUserVote.use(requireAuth).handler(async ({ input, context, errors }) => {
+        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+        if (!thingRecord) {
+          throw errors.NOT_FOUND({
+            message: "Thing not found",
+            data: { resource: "thing", resourceId: input.thingId },
+          });
+        }
+
+        return await runEffect(services.thingVotes.getUserVote(input.thingId, context.userId!));
+      }),
+
+      getUserVotes: builder.getUserVotes.use(requireAuth).handler(async ({ input, context }) => {
+        return await runEffect(services.thingVotes.getUserVotes(input.thingIds, context.userId!));
+      }),
+
+      getUpvoteCounts: builder.getUpvoteCounts.handler(async ({ input }) => {
+        return await runEffect(services.thingVotes.getUpvoteCounts(input.thingIds));
       }),
 
       getUpvoteFeed: builder.getUpvoteFeed.handler(async ({ input }) => {
-        return await services.upvoteService.getUpvoteFeed(input.limit, input.cursor);
+        return await runEffect(services.thingVotes.getUpvoteFeed(input.limit, input.cursor));
       }),
 
-      subscribeUpvotes: builder.subscribeUpvotes.handler(async function* ({ signal, lastEventId }) {
-        const iterator = publisher.subscribe("vote", { signal, lastEventId });
+      deleteThing: builder.deleteThing.use(requireAdmin).handler(async ({ input, context, errors }) => {
+        const thingRecord = await runEffect(services.thingRegistry.getThing(input.thingId));
+        if (!thingRecord) {
+          throw errors.NOT_FOUND({
+            message: "Thing not found",
+            data: { resource: "thing", resourceId: input.thingId },
+          });
+        }
+
+        const provider = getThingProvider(thingRecord.pluginId);
+        if (provider?.delete) {
+          await provider.delete(services.plugins, { thingId: input.thingId }, context);
+        }
+
+        await runEffect(services.thingRegistry.deleteThing(input.thingId));
+
+        await services.publisher.publish(
+          "thing",
+          toThingEvent({
+            thingId: input.thingId,
+            pluginId: thingRecord.pluginId,
+            type: "system",
+            action: "deleted",
+          }),
+        );
+
+        return { success: true as const };
+      }),
+
+      subscribeThings: builder.subscribeThings.handler(async function* ({ input, signal, lastEventId }) {
+        const iterator = services.publisher.subscribe("thing", { signal, lastEventId });
+
         for await (const event of iterator) {
+          if (input.thingId && event.thingId !== input.thingId) continue;
+          if (input.pluginId && event.pluginId !== input.pluginId) continue;
+          if (input.type && event.type !== input.type) continue;
+          if (input.action && event.action !== input.action) continue;
           yield event;
         }
       }),

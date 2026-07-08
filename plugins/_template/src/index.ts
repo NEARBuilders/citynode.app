@@ -230,6 +230,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
         await publisher.publish("background-updates", event);
         return { ok: true };
       }),
+
+      createThing: builder.createThing.handler(async ({ input }) => {
+        return await Effect.runPromise(service.createThing(input.thingId, input.payload));
+      }),
+
+      getThing: builder.getThing.handler(async ({ input }) => {
+        return await Effect.runPromise(service.getThing(input.thingId));
+      }),
+
+      deleteThing: builder.deleteThing.handler(async ({ input }) => {
+        await Effect.runPromise(service.deleteThing(input.thingId));
+        return { success: true as const };
+      }),
     };
   },
 });

@@ -2,7 +2,45 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { BookOpen, ExternalLink, FileText, GitFork, Sparkles } from "lucide-react";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Markdown } from "@/components/ui/markdown";
-import { fetchRepositoryReadme } from "@/lib/repository-content";
+
+function sanitizeMarkdownContent(content: string): string {
+  return content
+    .replace(/<!-- markdownlint-disable[^>]*-->/g, "")
+    .replace(/<div align="center">[\s\S]*?<\/div>/g, "")
+    .trim();
+}
+
+function getRawReadmeUrls(repositoryUrl: string): string[] {
+  try {
+    const url = new URL(repositoryUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts.length < 2) {
+      return [];
+    }
+    const [owner, repo] = parts;
+    return [
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/master/README.md`,
+    ];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchRepositoryReadme(repositoryUrl: string): Promise<string | null> {
+  const candidates = getRawReadmeUrls(repositoryUrl);
+  if (candidates.length === 0) return null;
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      return sanitizeMarkdownContent(await response.text());
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
 
 export const Route = createFileRoute("/_layout/about")({
   loader: async ({ context }) => {

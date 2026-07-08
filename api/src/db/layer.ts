@@ -1,7 +1,9 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
-import type { ApiDatabase } from "./index";
+import type { DatabaseDriver } from "./index";
+import { loadMigrations } from "./load-migrations";
+import { migrate } from "./migrator";
 
-export class DatabaseTag extends Context.Tag("api/Database")<ApiDatabase, ApiDatabase>() {}
+export class DatabaseTag extends Context.Tag("api/Database")<DatabaseDriver, DatabaseDriver>() {}
 
 export const DatabaseLive = (url: string) =>
   Layer.scoped(
@@ -10,8 +12,14 @@ export const DatabaseLive = (url: string) =>
       Effect.promise(async () => {
         const { createDatabaseDriver } = await import("./index");
         const driver = await createDatabaseDriver(url);
-        return driver.db;
+        const migrations = await loadMigrations();
+        await migrate(driver.db, migrations);
+        console.log("[API] Migrations applied");
+        return driver;
       }),
-      () => Effect.void,
+      (driver) =>
+        Effect.promise(async () => {
+          await driver.close();
+        }),
     ),
   );

@@ -65,6 +65,11 @@ jobs:
       - name: Test everything-dev release
         run: bun run --cwd packages/everything-dev test
 
+      - name: Validate intent skills
+        run: |
+          npx @tanstack/intent@latest validate packages/everything-dev
+          npx @tanstack/intent@latest validate packages/every-plugin
+
       - name: Create release PR when changesets are pending
         id: changesets
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
