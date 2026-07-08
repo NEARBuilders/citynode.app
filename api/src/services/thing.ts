@@ -13,17 +13,17 @@ export type ThingProvider = {
   create: (
     plugins: Omit<PluginsClient, "auth">,
     input: { thingId: string; payload: unknown },
-    context: ApiContext,
+    context: Context,
   ) => Promise<ThingProviderResult>;
   get: (
     plugins: Omit<PluginsClient, "auth">,
     input: { thingId: string },
-    context: ApiContext,
+    context: Context,
   ) => Promise<ThingProviderResult>;
   delete?: (
     plugins: Omit<PluginsClient, "auth">,
     input: { thingId: string },
-    context: ApiContext,
+    context: Context,
   ) => Promise<void>;
 };
 
