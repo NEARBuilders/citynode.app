@@ -1,5 +1,5 @@
-import { verifySriForUrl } from "everything-dev/integrity";
 import { fetchBosConfigFromFastKv } from "everything-dev/fastkv";
+import { verifySriForUrl } from "everything-dev/integrity";
 import type { RuntimeConfig } from "everything-dev/types";
 import { logger } from "../utils/logger";
 
@@ -12,10 +12,7 @@ interface MonitoredRemote {
   extendsRef?: string;
 }
 
-function getIntegrityForExtends(
-  config: Record<string, unknown>,
-  key: string,
-): string | undefined {
+function getIntegrityForExtends(config: Record<string, unknown>, key: string): string | undefined {
   let targetPath: string;
   if (key === "auth") {
     targetPath = "app.auth";
