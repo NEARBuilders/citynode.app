@@ -40,7 +40,7 @@
       "integrity": "sha384-w4pCKJt6XuXd0q71wH/Q82y7VvyPChAIph8D+QfKIKs/ya5pYxfKc9EW9stvdylm"
     },
     "auth": {
-      "extends": "bos://auth.everything.near/auth.everything.dev",
+      "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
       "variables": {
         "passkey": {
           "rpID": "everything.dev",
