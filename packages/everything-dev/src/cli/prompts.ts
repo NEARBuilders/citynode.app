@@ -65,7 +65,8 @@ export async function promptInitBasic(input: {
     input.extends ??
     ((await p.text({
       message: "Extending an existing app?",
-      placeholder: "bos://dev.everything.near/everything.dev",
+      placeholder: "bos://dev.everything.near/dev.everything.dev",
+      defaultValue: "bos://dev.everything.near/dev.everything.dev",
     })) as string);
 
   if (p.isCancel(extendsInput)) process.exit(0);
