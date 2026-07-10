@@ -1,8 +1,19 @@
+<<<<<<< HEAD
 import type { Context, Hono, Next } from "hono";
 import type { AuthClient, AuthPluginContext, AuthServices, AuthVariables } from "../lib/auth";
 import type { PluginResult } from "./plugins";
 
 type AuthMiddlewareEnv = { Variables: AuthVariables };
+=======
+import type { Context, Next } from "hono";
+import type { AuthClient, AuthPluginContext, AuthServices, HonoEnv } from "../lib/auth";
+import { toAuthClientContext } from "../lib/auth";
+import type { HostPluginEntry, PluginResult } from "./plugins";
+
+function resolveAuthEntry(plugins: PluginResult): HostPluginEntry | null {
+  return plugins.auth ?? plugins.plugins.auth ?? null;
+}
+>>>>>>> 59480b4 (refactor: derive auth context types from generated auth contract)
 
 function getAuthServices(plugins: PluginResult): AuthServices | null {
   const entry = plugins.auth;
@@ -70,7 +81,11 @@ export function createSessionMiddleware(plugins: PluginResult) {
   };
 }
 
+<<<<<<< HEAD
 export function buildPluginContext(c: Context<AuthMiddlewareEnv>): AuthPluginContext {
+=======
+export function buildPluginContext(c: Context<HonoEnv>): AuthPluginContext {
+>>>>>>> 59480b4 (refactor: derive auth context types from generated auth contract)
   const authContext = c.get("authContext");
   return {
     ...(authContext ?? {}),

@@ -5,6 +5,14 @@ import type { PluginsClient } from "./plugins-types.gen";
 export type AuthContext = AuthPluginContext;
 export type RequestAuthUser = NonNullable<AuthContext["user"]>;
 export type ApiKeyContext = NonNullable<AuthContext["apiKey"]>;
+<<<<<<< HEAD
+=======
+
+export interface AuthenticatedContext extends AuthContext {
+  userId: string;
+  user: RequestAuthUser;
+}
+>>>>>>> 59480b4 (refactor: derive auth context types from generated auth contract)
 
 export type AuthPluginClientFactory = PluginsClient["auth"];
 export type AuthPluginClient = ReturnType<AuthPluginClientFactory>;
@@ -47,6 +55,7 @@ export function createAuthMiddleware(builder: any) {
           data: { hint: "Sign in or provide an API key" },
         });
       }
+<<<<<<< HEAD
 
       if (hasApiKey && requiredPermissions) {
         const keyPerms = context.apiKey!.permissions ?? {};
@@ -64,6 +73,35 @@ export function createAuthMiddleware(builder: any) {
 
       return next({ context });
     });
+=======
+      return next({ context });
+    },
+  );
+
+  const requireAuthOrApiKey = builder.middleware(
+    async ({ context, next }: { context: AuthContext; next: any }) => {
+      if (!context.user && !context.userId && !context.apiKey) {
+        throw new ORPCError("UNAUTHORIZED", {
+          message: "Authentication required",
+          data: { hint: "Sign in or provide an API key" },
+        });
+      }
+      return next({ context });
+    },
+  );
+
+  const requireUser = builder.middleware(
+    async ({ context, next }: { context: AuthContext; next: any }) => {
+      if (!context.user || !context.userId) {
+        throw new ORPCError("UNAUTHORIZED", {
+          message: "User authentication required",
+          data: { hint: "Sign in or provide a user-scoped API key" },
+        });
+      }
+      return next({ context });
+    },
+  );
+>>>>>>> 59480b4 (refactor: derive auth context types from generated auth contract)
 
   const requireRole = <TRoles extends readonly string[]>(...roles: TRoles) =>
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
