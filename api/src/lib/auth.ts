@@ -147,6 +147,30 @@ export function createAuthMiddleware(builder: any) {
     },
   );
 
+  const requireOrgRole = <TRoles extends readonly string[]>(...roles: TRoles) =>
+    builder.middleware(async ({ context, next }: { context: RequestAuthContext; next: any }) => {
+      if (!context.user || !context.userId) {
+        throw new ORPCError("UNAUTHORIZED", {
+          message: "Authentication required",
+          data: { authType: "session", hint: "Sign in to continue" },
+        });
+      }
+      if (!context.organization?.activeOrganizationId) {
+        throw new ORPCError("FORBIDDEN", {
+          message: "Active organization required",
+          data: { hint: "Select or create an organization" },
+        });
+      }
+      const member = context.organization?.member;
+      if (!member?.id || !member?.role || !roles.includes(member.role)) {
+        throw new ORPCError("FORBIDDEN", {
+          message: `Requires organization role: ${roles.join(" or ")}`,
+          data: { requiredRoles: roles, currentRole: member?.role ?? null },
+        });
+      }
+      return next({ context: toRequestAuthContext(context) });
+    });
+
   const requireApiKey = (requiredPermissions?: Record<string, string[]>) =>
     builder.middleware(async ({ context, next }: { context: RequestAuthContext; next: any }) => {
       if (!context.apiKey) {
@@ -178,6 +202,7 @@ export function createAuthMiddleware(builder: any) {
     requireRole,
     requireAdmin,
     requireOrganization,
+    requireOrgRole,
     requireApiKey,
   };
 }
