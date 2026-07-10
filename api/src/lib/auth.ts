@@ -1,3 +1,10 @@
+/**
+ * Auth context types and Better-Auth plugin client factory for the API.
+ *
+ * BE CAREFUL MODIFYING THIS FILE — changes will be overwritten by `bos sync` / `bos upgrade`.
+ * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
+ */
+
 import { ORPCError } from "every-plugin/orpc";
 import type { AuthPluginContext } from "./auth-types.gen";
 import type { PluginsClient } from "./plugins-types.gen";

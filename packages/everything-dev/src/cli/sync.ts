@@ -52,6 +52,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "api/tsconfig.contract.json",
   "api/tsconfig.json",
   "api/src/lib/auth.ts",
+  "api/src/lib/context.ts",
 ]);
 
 type PackageJson = Record<string, unknown>;
