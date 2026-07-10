@@ -1952,6 +1952,7 @@ export default createPlugin({
         }
 
         const projectDir = resolve(dirname(configPath));
+        loadProjectEnv(projectDir);
         const refreshed = await loadResolvedConfig({ cwd: projectDir });
         if (!refreshed) {
           return {
