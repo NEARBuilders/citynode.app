@@ -286,6 +286,25 @@ export const Route = createFileRoute('/_layout/_authenticated')({
 });
 ```
 
+### API Middleware (Server-side)
+Routes requiring auth use typed middleware that narrows the request context —
+no non-null assertions needed:
+
+```typescript
+import { createAuthMiddleware } from "./lib/auth";
+
+const { requireAuth } = createAuthMiddleware(builder);
+
+builder.myRoute.use(requireAuth).handler(async ({ input, context }) => {
+  context.userId; // string — narrowed by middleware
+  context.user;   // RequestAuthUser — non-null after requireAuth
+});
+```
+
+Available middlewares: `requireAuth`, `requireAuthOrApiKey`, `requireRole`,
+`requireAdmin`, `requireOrganization`, `requireOrgRole`, `requireApiKey`.
+Pass an optional Zod schema for org metadata: `createAuthMiddleware(builder, { orgMetaSchema })`.
+
 ### API Client Usage
 ```typescript
 import { useApiClient } from "@/app";
