@@ -3,14 +3,10 @@ import { Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
+import type { AuthContext } from "./lib/auth";
+import { ContextSchema } from "./lib/context";
 import { RegistryConfigService } from "./services/fastkv";
 import { RegistryService } from "./services/registry";
-
-interface AuthContext {
-  userId: string;
-  near?: { primaryAccountId?: string | null } | null;
-  reqHeaders?: Headers;
-}
 
 export default createPlugin({
   variables: z.object({
@@ -23,12 +19,7 @@ export default createPlugin({
     REGISTRY_RELAY_NETWORK: z.enum(["mainnet", "testnet"]).optional(),
   }),
 
-  context: z.object({
-    userId: z.string().optional(),
-    near: z.object({ primaryAccountId: z.string().nullable().optional() }).nullable().optional(),
-    reqHeaders: z.custom<Headers>().optional(),
-    getRawBody: z.custom<() => Promise<string>>().optional(),
-  }),
+  context: ContextSchema,
 
   contract,
 

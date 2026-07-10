@@ -467,6 +467,14 @@ function writeGeneratedFiles(opts: {
     authTypeTargets.push(join(hostLibDir, "auth-types.gen.ts"));
   }
 
+  // Per-plugin auth-types.gen.ts
+  for (const key of opts.pluginKeys) {
+    const pluginLibDir = join(opts.configDir, "plugins", key, "src", "lib");
+    if (existsSync(join(opts.configDir, "plugins", key, "src"))) {
+      authTypeTargets.push(join(pluginLibDir, "auth-types.gen.ts"));
+    }
+  }
+
   if (opts.authExportPath) {
     for (const authTypesPath of authTypeTargets) {
       writeAuthTypesGen(authTypesPath, opts.authExportPath);

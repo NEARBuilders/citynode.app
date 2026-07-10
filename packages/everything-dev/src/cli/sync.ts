@@ -62,7 +62,9 @@ function computeHash(content: string | Uint8Array): string {
 }
 
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
-  return FRAMEWORK_OWNED_SYNC_FILES.has(filePath);
+  if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
+  if (/^plugins\/[^/]+\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
+  return false;
 }
 
 function computeLocalHash(projectDir: string, filePath: string): string | null {
@@ -247,11 +249,14 @@ function buildSyncedFileContent(
   sourceDir: string,
   projectDir: string,
   filePath: string,
+  explicitDestPath?: string,
 ): string | Uint8Array {
   const src = join(sourceDir, filePath);
-  const destPath = filePath.startsWith(".github/templates/")
-    ? filePath.replace(/^\.github\/templates\//, ".github/")
-    : filePath;
+  const destPath =
+    explicitDestPath ??
+    (filePath.startsWith(".github/templates/")
+      ? filePath.replace(/^\.github\/templates\//, ".github/")
+      : filePath);
   const dest = join(projectDir, destPath);
 
   if (filePath.endsWith("bos.config.json")) {
@@ -281,13 +286,20 @@ function buildSyncedFileContent(
   return readFileSync(src);
 }
 
-function writeSyncedFile(sourceDir: string, projectDir: string, filePath: string): void {
-  const destPath = filePath.startsWith(".github/templates/")
-    ? filePath.replace(/^\.github\/templates\//, ".github/")
-    : filePath;
+function writeSyncedFile(
+  sourceDir: string,
+  projectDir: string,
+  filePath: string,
+  explicitDestPath?: string,
+): void {
+  const destPath =
+    explicitDestPath ??
+    (filePath.startsWith(".github/templates/")
+      ? filePath.replace(/^\.github\/templates\//, ".github/")
+      : filePath);
   const dest = join(projectDir, destPath);
   mkdirSync(dirname(dest), { recursive: true });
-  writeFileSync(dest, buildSyncedFileContent(sourceDir, projectDir, filePath));
+  writeFileSync(dest, buildSyncedFileContent(sourceDir, projectDir, filePath, destPath));
 }
 
 async function getSelectedChildPlugins(
@@ -430,6 +442,16 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       destToSource.set(destPath, sourcePath);
     }
 
+    // Sync api/src/lib/{auth,context}.ts into each plugin's src/lib/
+    for (const pluginKey of childPlugins) {
+      if (!existsSync(join(projectDir, "plugins", pluginKey, "src"))) continue;
+      for (const libFile of ["auth.ts", "context.ts"]) {
+        const sourceFile = `api/src/lib/${libFile}`;
+        if (!existsSync(join(sourceDir, sourceFile))) continue;
+        destToSource.set(`plugins/${pluginKey}/src/lib/${libFile}`, sourceFile);
+      }
+    }
+
     const updated: string[] = [];
     const skipped: string[] = [];
     const added: string[] = [];
@@ -489,7 +511,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
       for (const destPath of filesToWrite) {
         const sourcePath = destToSource.get(destPath) ?? destPath;
-        writeSyncedFile(sourceDir, projectDir, sourcePath);
+        writeSyncedFile(sourceDir, projectDir, sourcePath, destPath);
       }
     }
 

@@ -28,7 +28,7 @@
         "dotenv": "^17.3.1",
         "tsx": "^4.21.0",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^catalog:",
+        "vitest": "catalog:",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -36,7 +36,7 @@
     },
     "api": {
       "name": "api",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
@@ -68,7 +68,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.12.0",
+      "version": "1.12.1",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -148,7 +148,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.41.0",
+      "version": "1.42.0",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -201,7 +201,7 @@
     },
     "plugins/_template": {
       "name": "@every-plugin/template",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "dependencies": {
         "@orpc/contract": "catalog:",
         "@orpc/server": "catalog:",
@@ -251,7 +251,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.6.7",
+      "version": "1.7.0",
       "dependencies": {
         "@better-auth/api-key": "catalog:",
         "@better-auth/core": "catalog:",
@@ -379,7 +379,7 @@
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.2",
     "every-plugin": "^2.7.1",
-    "everything-dev": "^1.41.0",
+    "everything-dev": "^1.42.0",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",

@@ -4,6 +4,7 @@ import { getEventMeta, MemoryPublisher, ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 
 import { contract } from "./contract";
+import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./plugins-client.gen";
 import { TemplateService } from "./service";
 
@@ -47,9 +48,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
     apiKey: z.string().min(1, "API key is required").default("template-dev-key"),
   }),
 
-  context: z.custom<Record<string, unknown>>(),
+  context: ContextSchema,
 
-  contract, // START HERE: define your oRPC contract in ./contract
+  contract,
 
   initialize: (config) =>
     Effect.gen(function* () {
@@ -98,16 +99,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
   createRouter: (context, builder) => {
     const { service, publisher } = context;
 
-<<<<<<< HEAD
-=======
-    const requireAuth = builder.middleware(async ({ context, next }) => {
-      if (!context.userId) {
-        throw new ORPCError("UNAUTHORIZED", { message: "User ID required" });
-      }
-      return next({ context: { ...context, userId: context.userId } });
-    });
-
->>>>>>> 59480b4 (refactor: derive auth context types from generated auth contract)
     return {
       getById: builder.getById.handler(async ({ input, context }) => {
         try {
