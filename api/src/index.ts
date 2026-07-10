@@ -75,7 +75,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       })),
 
       createThing: builder.createThing
-        .use(requireAuthOrApiKey())
+        .use(requireAuthOrApiKey)
         .handler(async ({ input, context }) => {
           const provider = getThingProvider(input.pluginId);
           if (!provider) {
@@ -154,7 +154,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               thingId: input.thingId,
               pluginId: thingRecord.pluginId,
               type: providerResult.type,
-              userId: context.userId!,
+              userId: context.userId,
             }),
           );
 
@@ -167,7 +167,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               pluginId: thingRecord.pluginId,
               type: providerResult.type,
               action: "upvoted",
-              userId: context.userId!,
+              userId: context.userId,
               totalCount: result.totalCount,
             }),
           );
@@ -201,7 +201,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               thingId: input.thingId,
               pluginId: thingRecord.pluginId,
               type: providerResult.type,
-              userId: context.userId!,
+              userId: context.userId,
             }),
           );
 
@@ -214,7 +214,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               pluginId: thingRecord.pluginId,
               type: providerResult.type,
               action: "downvoted",
-              userId: context.userId!,
+              userId: context.userId,
               totalCount: result.totalCount,
             }),
           );
@@ -245,11 +245,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
             });
           }
 
-          return await runEffect(services.thingVotes.getUserVote(input.thingId, context.userId!));
+          return await runEffect(services.thingVotes.getUserVote(input.thingId, context.userId));
         }),
 
       getUserVotes: builder.getUserVotes.use(requireAuth).handler(async ({ input, context }) => {
-        return await runEffect(services.thingVotes.getUserVotes(input.thingIds, context.userId!));
+        return await runEffect(services.thingVotes.getUserVotes(input.thingIds, context.userId));
       }),
 
       getUpvoteCounts: builder.getUpvoteCounts.handler(async ({ input }) => {
