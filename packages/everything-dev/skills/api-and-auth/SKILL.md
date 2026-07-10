@@ -16,28 +16,18 @@ export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({ /* typed config */ }),
   secrets: z.object({ /* typed env vars, defaults for dev */ }),
   context: z.object({ /* per-request context injected by host */ }),
-  contract,                        // oRPC router from ./contract.ts
+  contract,
   initialize: (config, plugins) => Effect.promise(async () => {
-    // Startup: create DB driver, run migrations, create services, publisher
     return { db, upvoteService, publisher, auth, plugins };
   }),
   shutdown: (services) => Effect.promise(async () => { /* cleanup */ }),
   createRouter: (services, builder) => ({
     ping: builder.ping.handler(async () => ({ status: "ok", timestamp })),
-    // ... handler implementations
   }),
 });
 ```
 
-### Fields
-
-- **`variables`**: Public config (Zod schema) — set in `bos.config.json`.
-- **`secrets`**: Private config (Zod schema) — loaded from `process.env` by the host, defaults for dev.
-- **`context`**: Per-request context injected by the host's session middleware (userId, user, organizationId, reqHeaders, getRawBody).
-- **`contract`**: The typed oRPC router from `./contract.ts`.
-- **`initialize`**: Startup logic using Effect. Returns a services object passed to `createRouter`.
-- **`createRouter`**: Maps contract procedure names to handler implementations.
-- **`plugins`** (second arg to `initialize`): The `PluginsClient` map for calling other plugins in-process.
+Fields: `variables` (public config), `secrets` (private env), `context` (per-request host context), `contract` (oRPC router), `initialize` (startup, returns services), `createRouter` (maps procedures to handlers), `shutdown` (cleanup). `plugins` in `initialize` gives typed factories for all other plugins.
 
 ## oRPC Contract Design
 
@@ -49,47 +39,32 @@ import { eventIterator, oc } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 
 export const contract = oc.router({
-  // Simple GET
   ping: oc.route({ method: "GET", path: "/ping" }).output(
     z.object({ status: z.literal("ok"), timestamp: z.iso.datetime() }),
   ),
-
-  // POST with input validation
   upvoteThing: oc
     .route({ method: "POST", path: "/upvotes" })
     .input(z.object({ thingId: z.string() }))
     .output(z.object({ thingId: z.string(), userId: z.string(), totalCount: z.number().int().nonnegative() }))
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
-
-  // Path parameter
   getUserVote: oc
     .route({ method: "GET", path: "/upvotes/{thingId}/me" })
     .input(z.object({ thingId: z.string() }))
     .output(z.object({ thingId: z.string(), hasUpvote: z.boolean() }))
     .errors({ UNAUTHORIZED }),
-
-  // Cursor pagination
   getUpvoteFeed: oc
     .route({ method: "GET", path: "/upvotes/feed" })
     .input(z.object({ limit: z.number().int().min(1).max(100).optional(), cursor: z.string().optional() }))
     .output(z.object({ data: z.array(/*...*/), meta: z.object({ total, hasMore, nextCursor }) })),
-
-  // SSE streaming
   subscribeUpvotes: oc
     .route({ method: "GET", path: "/upvotes/stream" })
     .output(eventIterator(VoteEventSchema)),
 });
 ```
 
-Key conventions:
-- `.errors()` declares typed errors the procedure may throw
-- Path params use `{paramName}` syntax, match Zod input keys
-- `.output(eventIterator(Schema))` enables SSE streaming
-- Export `type ContractType = typeof contract` for type generation
+Conventions: `.errors()` declares typed errors, `{paramName}` path params match Zod input keys, `.output(eventIterator(Schema))` enables SSE streaming, export `type ContractType = typeof contract` for type generation.
 
 ## Route Implementation
-
-In `createRouter`, map each contract procedure to a handler:
 
 ```ts
 createRouter: (services, builder) => {
@@ -100,94 +75,39 @@ createRouter: (services, builder) => {
       status: "ok",
       timestamp: new Date().toISOString(),
     })),
-
     upvoteThing: builder.upvoteThing.use(requireAuth).handler(async ({ input, context }) => {
       return await services.upvoteService.upvoteThing(input.thingId, context.userId);
     }),
-
-    // SSE handler (async generator)
     subscribeUpvotes: builder.subscribeUpvotes.handler(async function* ({ signal, lastEventId }) {
       const iterator = services.publisher.subscribe("vote", { signal, lastEventId });
-      for await (const event of iterator) {
-        yield event;
-      }
+      for await (const event of iterator) yield event;
     }),
   };
 };
 ```
 
-Handler receives `{ input, context, signal?, lastEventId? }`:
-- `input` — validated Zod input
-- `context` — per-request context from host middleware
-- `signal` — abort signal (SSE)
-- `lastEventId` — resume ID (SSE)
+Handler receives `{ input, context, signal?, lastEventId? }`.
 
 ## Middleware
 
-Create auth middleware with `createAuthMiddleware(builder)` in `api/src/lib/auth.ts`.
-Each middleware is typed with a `DecoratedMiddleware` alias that enables automatic
-context narrowing through `.use()`. After applying a middleware, the handler receives
-a narrowed context type — no non-null assertions needed.
+Create auth middleware with `createAuthMiddleware(builder)` in `api/src/lib/auth.ts`. Each middleware narrows the context type through `.use()` — no non-null assertions needed.
 
 ```ts
 const { requireAuth } = createAuthMiddleware(builder);
 
 builder.myRoute.use(requireAuth).handler(async ({ input, context }) => {
-  context.userId; // string — narrowed by middleware, no `!` needed
+  context.userId; // string — narrowed by middleware
 });
 ```
 
-### Available Middlewares
-
-| Middleware | Narrows |
-|---|---|
-| `requireAuth` | `userId: string`, `user: RequestAuthUser` |
-| `requireAuthOrApiKey` | gate only — allows session or API key auth, no narrowing |
-| `requireRole("admin")` | `userId`, `user` |
-| `requireOrganization` | `userId`, `user`, `organization.activeOrganizationId: string` |
-| `requireOrgRole("owner")` | all of above + `organization.member` non-null with `id`, `role` |
-| `requireApiKey` | `apiKey: ApiKeyContext` |
-
-Apply middleware with `.use()`:
+Available: `requireAuth`, `requireAuthOrApiKey`, `requireRole("admin")`, `requireOrganization`, `requireOrgRole("owner")`, `requireApiKey`. Apply via `.use()`:
 
 ```ts
 builder.authHealth.use(requireAuth).handler(...)
 builder.adminAction.use(requireRole("admin")).handler(...)
-builder.createProject.use(requireOrganization).handler(...)
 ```
 
-### Org Metadata Validation
-
-Pass an optional Zod schema to `createAuthMiddleware` for runtime validation:
-
-```ts
-import { z } from "every-plugin/zod";
-
-const orgMetaSchema = z.object({ plan: z.enum(["free", "pro"]), seats: z.number() });
-const { requireOrganization } = createAuthMiddleware(builder, { orgMetaSchema });
-```
-
-When a schema is provided, `requireOrganization` and `requireOrgRole` call
-`schema.safeParse()` on the org metadata. On parse failure, throws
-`INTERNAL_SERVER_ERROR` (data integrity issue). When no schema is passed,
-metadata stays `Record<string, unknown>` with no validation.
-
-### Typed Org Context Helpers
-
-```ts
-import type { OrgAuthenticatedContext } from "./lib/auth";
-
-type MyOrgMeta = { plan: "free" | "pro"; seats: number };
-
-// After requireOrganization, cast for typed metadata access:
-const ctx = context as OrgAuthenticatedContext<MyOrgMeta>;
-ctx.organization.organization?.metadata?.plan; // "free" | "pro"
-```
-
-Also available: `OrgMemberAuthenticatedContext<TMeta>` (guarantees
-`organization.member` is non-null). Both types derive from the generated
-`AuthOrganizationContext`/`AuthOrganizationSummary`, so future auth plugin
-field additions flow through automatically.
+See `references/middleware.md` for the full middleware table, org metadata validation, and typed context helpers.
 
 ## Error Handling
 
@@ -195,7 +115,7 @@ Use `ORPCError` from `every-plugin/errors`:
 
 ```ts
 import { ORPCError } from "every-plugin/orpc";
-import { BAD_REQUEST, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
+import { BAD_REQUEST, UNAUTHORIZED } from "every-plugin/errors";
 
 throw new ORPCError("UNAUTHORIZED", {
   message: "Authentication required",
@@ -203,23 +123,14 @@ throw new ORPCError("UNAUTHORIZED", {
 });
 ```
 
-Declare which errors a procedure may throw in the contract using `.errors()`:
-
-```ts
-upvoteThing: oc.route({ method: "POST", path: "/upvotes" })
-  .input(z.object({ thingId: z.string() }))
-  .output(...)
-  .errors({ UNAUTHORIZED, BAD_REQUEST })
-```
-
-Client-side errors are intercepted by `onError` in `createRpcLink` (`ui/src/lib/api.ts`), which shows a toast for network/fetch errors.
+Declare throwable errors in the contract via `.errors({ UNAUTHORIZED, BAD_REQUEST })`. Client-side errors are intercepted by `onError` in `createRpcLink` (`ui/src/lib/api.ts`).
 
 ## Auth Plugin Architecture
 
 The auth plugin is an **external plugin** loaded in **Phase 0** of the host's initialization:
 
 1. **Phase 0** (`host/src/services/plugins.ts`): Load auth plugin, create `authClient` factory.
-2. **Phase 1**: Load all non-API plugins (apps, projects, settings).
+2. **Phase 1**: Load all non-API plugins.
 3. **Phase 2**: Load API plugin with `pluginsClient` (includes auth + all other plugin factories).
 
 The host mounts the auth handler at `/api/auth/*`:
@@ -235,16 +146,14 @@ export function registerAuthHandler(app, plugins) {
 
 ## Session Middleware
 
-Runs on every non-auth request. Resolves the session from cookies and sets context on the Hono request:
+Runs on every non-auth request. Resolves the session from cookies and sets Hono request context:
 
 ```ts
 // host/src/services/auth.ts
 export function createSessionMiddleware(plugins) {
   return async (c, next) => {
     if (c.req.path.startsWith("/api/auth/")) return next();
-
     c.set("reqHeaders", c.req.raw.headers);
-    // ... lazy getRawBody ...
 
     const authClient = authClientFactory({ reqHeaders });
     const [session, context] = await Promise.all([
@@ -263,18 +172,14 @@ export function createSessionMiddleware(plugins) {
 }
 ```
 
-If auth plugin or session resolution fails, all values are `null` — routes with `requireAuth` will reject with `UNAUTHORIZED`.
+If resolution fails, all values are `null` — `requireAuth` routes reject with `UNAUTHORIZED`.
 
-The context is transformed for the API plugin via `buildPluginContext()`, with
-the full `organization` envelope (activeOrganizationId, organization, member,
-isPersonal, hasOrganization) from Better Auth:
+The context is transformed for the API plugin via `buildPluginContext()`, with the full `organization` envelope from Better Auth:
 
 ```ts
-// host/src/services/auth.ts
 export function buildPluginContext(c) {
   return {
-    userId: user?.id,
-    user: user ?? undefined,
+    userId: user?.id, user: user ?? undefined,
     organization: context.organization ?? undefined,
     apiKey: apiKey ?? undefined,
     reqHeaders: c.get("reqHeaders"),
@@ -285,7 +190,7 @@ export function buildPluginContext(c) {
 
 ## Auth in API Routes
 
-The API plugin receives `auth` in the `plugins` map during `initialize`:
+The API plugin receives `auth` in `initialize`:
 
 ```ts
 initialize: (config, plugins) => Effect.promise(async () => {
@@ -294,36 +199,26 @@ initialize: (config, plugins) => Effect.promise(async () => {
 })
 ```
 
-Use `getAuthClient()` for in-process auth calls:
+Use `getAuthClient()` for in-process calls:
 
 ```ts
 import { getAuthClient, createAuthMiddleware } from "./lib/auth";
 
-// In a service or handler:
 const authClient = getAuthClient(services, { reqHeaders: context.reqHeaders });
 const session = await authClient.getSession();
 ```
 
-The `AuthCapableServices` interface requires an `auth` factory. If unavailable, `getAuthClient()` throws.
+`AuthCapableServices` requires an `auth` factory. If unavailable, `getAuthClient()` throws.
 
 ## Auth on the Client
 
-Create the client with Better-Auth plugins:
+Create the client in `ui/src/lib/auth.ts`:
 
 ```ts
-// ui/src/lib/auth.ts
 export function createAuthClient(runtimeConfig) {
   return betterAuth.createClient({
     baseURL: runtimeConfig.authBaseUrl,
-    plugins: [
-      siwn({ recipients: runtimeConfig.auth.variables.siwn.recipients, networkId }),
-      passkey(),
-      organization(),
-      admin(),
-      apiKey(),
-      anonymous(),
-      phone(),
-    ],
+    plugins: [siwn({ recipients, networkId }), passkey(), organization(), admin(), apiKey(), anonymous(), phone()],
   });
 }
 ```
@@ -333,12 +228,7 @@ In route code:
 ```ts
 import { useAuthClient, sessionQueryOptions } from "@/app";
 
-function Component() {
-  const authClient = useAuthClient();
-  // authClient.signIn.email(...)
-  // authClient.signOut()
-  // authClient.organization.setActive(...)
-}
+const authClient = useAuthClient();
 ```
 
 The `sessionQueryOptions()` helper provides standard TanStack Query config:
@@ -375,10 +265,10 @@ The host uses **two-phase loading** so API plugins can call other plugins in-pro
 
 1. **Phase 0**: Auth plugin → `authClient` factory
 2. **Phase 1**: All non-API plugins → `pluginsClient` map of `createClient` factories
-3. **Phase 2**: API plugin with `{ auth, apps, projects, settings }` merged into a single `pluginsClient` map
+3. **Phase 2**: API plugin with all plugin factories merged
 
 ```ts
-// host/src/services/plugins.ts — simplified
+// host/src/services/plugins.ts
 const pluginsClient = { ...pluginClients };
 if (authClient) pluginsClient.auth = authClient;
 const baseApi = await loadPluginEntry(runtime, apiEntry, integrityRegistry, pluginsClient);
@@ -386,22 +276,19 @@ const baseApi = await loadPluginEntry(runtime, apiEntry, integrityRegistry, plug
 
 ### Calling Plugins from API Routes
 
-The API plugin receives `plugins` in the second argument to `initialize`:
+The API plugin receives `plugins` in `initialize`:
 
 ```ts
 initialize: (config, plugins) => Effect.promise(async () => {
-  // plugins.auth — auth plugin client factory
-  // plugins.apps — apps plugin client factory
-  // plugins.projects — projects plugin client factory
   const authClient = plugins.auth({ reqHeaders: someHeaders });
   const session = await authClient.getSession();
   return { auth: plugins.auth, plugins, ... };
 })
 ```
 
-### API-Owned Thing Registry
+### API-Owned Registry Pattern
 
-Use this pattern when the API owns the durable registry and the plugin owns the semantic payload:
+When the API owns the durable registry and a plugin owns the semantic payload:
 
 ```ts
 const provider = thingProviders[input.pluginId];
@@ -410,21 +297,11 @@ if (!provider) {
 }
 ```
 
-Rules:
-- API owns `thingId`, `pluginId`, `createdAt`, and `updatedAt`.
-- Plugin owns `type` and `payload`.
-- `action` is a free-form string and can come from the provider or default to a platform verb like `created`.
-- Keep one SSE stream for the concept and filter server-side before yielding.
+Rules: API owns `thingId`, `pluginId`, timestamps. Plugin owns `type` and `payload`. Keep one SSE stream per concept and filter server-side.
 
-### Effect And DB Lifecycle
+### Effect and DB Lifecycle
 
-Prefer `Layer` for long-lived resources (DB connections, service singletons) and `Effect` for the work itself. Compose layers with `.pipe(Layer.provide(...))` and access them via tags:
-
-```ts
-const myService = yield* Effect.provide(MyServiceTag, MyServiceLive);
-```
-
-Use `runEffect()` to bridge Effect and async handlers with clean ORPC error boundaries. The helper unwraps `ORPCError` instances thrown inside Effect and re-throws them directly, while converting unknown errors to `INTERNAL_SERVER_ERROR`:
+Prefer `Layer` for long-lived resources (DB, service singletons) and `Effect` for the work itself. Use `runEffect()` to bridge Effect and async handlers with clean ORPC error boundaries — unwraps `ORPCError` from Effect and converts unknown errors to `INTERNAL_SERVER_ERROR`:
 
 ```ts
 import { runEffect } from "@/lib/context";
@@ -432,19 +309,13 @@ import { runEffect } from "@/lib/context";
 const result = await runEffect(services.myService.doSomething(input));
 ```
 
-This avoids try/catch boilerplate in every handler and ensures Effect errors propagate as typed ORPC errors to the client.
-
-Best practices:
-- Keep service interfaces Effect-native. Bridge to async only at the handler boundary via `runEffect()`.
-- Use `Context.Tag` for dependency injection between services — avoids manual wiring and makes testing easier via `Layer` substitution.
-- Initialize long-lived resources (DB pools, publishers, cached data) in `initialize` and return them as services. `createRouter` receives the initialized context.
+Best practices: Keep service interfaces Effect-native, bridge to async only at the handler boundary via `runEffect()`. Use `Context.Tag` for DI between services. Initialize long-lived resources in `initialize` and return them as services.
 
 ### SSR Proxy Client
 
-For SSR, `createPluginsClient()` creates a Proxy that merges the API client with all plugin clients:
+`createPluginsClient()` creates a Proxy that merges the API client with all plugin clients:
 
 ```ts
-// host/src/services/plugins.ts
 export function createPluginsClient(result, context) {
   const apiClient = result.api?.createClient(context);
   const pluginClients = {};
@@ -465,18 +336,7 @@ export function createPluginsClient(result, context) {
 
 ## Generated Types
 
-| File | Contents | Regenerated by |
-|------|----------|---------------|
-| `api/src/lib/plugins-types.gen.ts` | `PluginsClient` — factory types for all plugins | `bos types gen` |
-| `api/src/lib/auth-types.gen.ts` | Auth plugin request context types | `bos types gen` |
-| `ui/src/lib/api-types.gen.ts` | `ApiContract` — all procedure types | `bos types gen` |
-| `ui/src/lib/auth-types.gen.ts` | Auth client session/user types | `bos types gen` |
-
-Type resolution:
-- `local:plugins/<name>` → reads `src/contract.ts` directly from disk
-- Remote URL → fetches contract types from the deployed plugin's manifest
-- Missing local path with no URL → skipped with a warning
-- Run `bos types gen` or restart `bos dev` after hand-editing `bos.config.json`
+See `references/generated-types.md` for the full table — files, contents, and regeneration triggers.
 
 ## SSE Notes
 
@@ -490,16 +350,6 @@ for await (const event of iterator) {
 }
 ```
 
-This keeps replay/resume behavior simple and lets the API stay the source of truth for event routing.
-
 ## How Routes Are Mounted
 
-The host (`host/src/program.ts`) mounts API routes:
-
-```ts
-// RPCHandler + OpenAPIHandler created from API plugin's router
-// Mounted at /api/rpc and /api/rpc/*
-// Each plugin gets a namespace: /api/rpc/auth, /api/rpc/apps, /api/rpc/projects
-```
-
-The session middleware runs on `/api/*` before the RPC handlers, ensuring context is set.
+The host (`host/src/program.ts`) creates RPC and OpenAPI handlers from each plugin's router, mounted at `/api/rpc/<plugin-namespace>`. The session middleware runs on `/api/*` before the RPC handlers, ensuring context is set.
