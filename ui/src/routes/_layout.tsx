@@ -69,7 +69,14 @@ function Layout() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen w-full flex overflow-hidden bg-background text-foreground">
+      <div
+        className="h-dvh w-full flex overflow-hidden bg-background text-foreground"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}
+      >
         {isAuthenticated && (
           <aside className="hidden sm:flex h-full shrink-0 w-16 flex-col items-center border-r border-border bg-card animate-fade-in">
             <div className="flex-1 w-full overflow-y-auto flex flex-col items-center gap-1.5 py-4 min-h-0">
@@ -200,7 +207,7 @@ function Layout() {
             <Outlet />
           </main>
 
-          <footer className="shrink-0 flex justify-center py-6 pb-20 sm:pb-6">
+          <footer className="shrink-0 flex justify-center py-6 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6">
             <a
               href="https://near.dev"
               target="_blank"
@@ -235,17 +242,21 @@ function Layout() {
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const active = isActive(item);
-                  const className = `flex flex-col items-center justify-center gap-0.5 p-1.5 transition-colors duration-200 ${active ? "text-foreground" : "text-muted-foreground"}`;
+                  const className = `flex flex-col items-center justify-center gap-0.5 p-2 min-w-[56px] transition-colors duration-200 ${active ? "text-foreground" : "text-muted-foreground"}`;
 
                   return (
                     <Link key={item.label} to={item.to} preload="intent" className={className}>
-                      <Icon className="w-4 h-4" />
-                      <span className="text-[10px]">{item.label}</span>
+                      <span
+                        className={`flex items-center justify-center p-1 ${active ? "bg-foreground/10 rounded-[10px]" : ""}`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </span>
+                      <span className="text-[10px] font-medium">{item.label}</span>
                     </Link>
                   );
                 })}
 
-                <div className="flex flex-col items-center justify-center p-1.5">
+                <div className="flex flex-col items-center justify-center p-2 min-w-[56px]">
                   <ThemeToggle />
                 </div>
               </div>

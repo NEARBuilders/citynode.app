@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BookOpen, ExternalLink, FileText, GitFork, Sparkles } from "lucide-react";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
+import { PageContainer } from "@/components";
 import { Markdown } from "@/components/ui/markdown";
 
 function sanitizeMarkdownContent(content: string): string {
@@ -88,132 +89,126 @@ function About() {
   const githubRepo = repository && isGithubUrl(repository) ? parseGithubRepo(repository) : null;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-4 animate-fade-in">
-          <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-[10px] bg-foreground flex items-center justify-center shrink-0">
-                  <BookOpen size={18} className="text-background" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-muted-foreground font-mono">{accountId}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-base font-semibold text-foreground">{appName}</span>
-                  </div>
-                  {githubRepo && (
-                    <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground font-mono">
-                      <GitFork size={11} />
-                      <span>
-                        {githubRepo.owner}/{githubRepo.repo}
-                      </span>
-                    </div>
-                  )}
-                </div>
+    <PageContainer variant="default">
+      <div className="space-y-4">
+        <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-[10px] bg-foreground flex items-center justify-center shrink-0">
+                <BookOpen size={18} className="text-background" />
               </div>
-
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Link
-                  to="/skill"
-                  preload="intent"
-                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-foreground text-background hover:opacity-90"
-                >
-                  <Sparkles size={14} />
-                  Skill
-                </Link>
-                <a
-                  href="/skill.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
-                >
-                  <FileText size={14} />
-                  skill.md
-                </a>
-                {repository && (
-                  <a
-                    href={repository}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
-                  >
-                    {isGithubUrl(repository) ? (
-                      <GithubIcon size={14} />
-                    ) : (
-                      <ExternalLink size={14} />
-                    )}
-                    {isGithubUrl(repository) ? "GitHub" : "Repository"}
-                  </a>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground font-mono">{accountId}</span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="text-base font-semibold text-foreground">{appName}</span>
+                </div>
+                {githubRepo && (
+                  <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground font-mono">
+                    <GitFork size={11} />
+                    <span>
+                      {githubRepo.owner}/{githubRepo.repo}
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
 
-            {description && (
-              <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
-            )}
-
-            {repository && (
-              <div className="rounded-[8px] border border-border bg-muted px-3.5 py-2.5 flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0 min-w-[64px]">
-                  repo
-                </span>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Link
+                to="/skill"
+                preload="intent"
+                className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-foreground text-background hover:opacity-90"
+              >
+                <Sparkles size={14} />
+                Skill
+              </Link>
+              <a
+                href="/skill.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
+              >
+                <FileText size={14} />
+                skill.md
+              </a>
+              {repository && (
                 <a
                   href={repository}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-mono text-foreground hover:underline truncate"
+                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
                 >
-                  {repository}
+                  {isGithubUrl(repository) ? <GithubIcon size={14} /> : <ExternalLink size={14} />}
+                  {isGithubUrl(repository) ? "GitHub" : "Repository"}
                 </a>
-              </div>
-            )}
-
-            <div className="rounded-[8px] border border-border bg-muted px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  for agents and builders
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Open the skill page for the essential TanStack Intent, local dev, and publish
-                  instructions.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  to="/skill"
-                  preload="intent"
-                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
-                >
-                  <Sparkles size={14} />
-                  Open skill
-                </Link>
-                <a
-                  href="/skill.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
-                >
-                  <FileText size={14} />
-                  Raw markdown
-                </a>
-              </div>
+              )}
             </div>
           </div>
 
-          {readme ? (
-            <div className="rounded-[12px] border border-border bg-card p-8">
-              <Markdown content={readme} />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3 px-8 py-16 rounded-[12px] border border-border bg-card text-muted-foreground">
-              <FileText size={32} className="text-border" />
-              <p className="text-sm text-muted-foreground">No README available.</p>
+          {description && (
+            <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+          )}
+
+          {repository && (
+            <div className="rounded-[8px] border border-border bg-muted px-3.5 py-2.5 flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0 min-w-[64px]">
+                repo
+              </span>
+              <a
+                href={repository}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-mono text-foreground hover:underline truncate"
+              >
+                {repository}
+              </a>
             </div>
           )}
+
+          <div className="rounded-[8px] border border-border bg-muted px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                for agents and builders
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Open the skill page for the essential TanStack Intent, local dev, and publish
+                instructions.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/skill"
+                preload="intent"
+                className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
+              >
+                <Sparkles size={14} />
+                Open skill
+              </Link>
+              <a
+                href="/skill.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
+              >
+                <FileText size={14} />
+                Raw markdown
+              </a>
+            </div>
+          </div>
         </div>
+
+        {readme ? (
+          <div className="rounded-[12px] border border-border bg-card p-8">
+            <Markdown content={readme} />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-3 px-8 py-16 rounded-[12px] border border-border bg-card text-muted-foreground">
+            <FileText size={32} className="text-border" />
+            <p className="text-sm text-muted-foreground">No README available.</p>
+          </div>
+        )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

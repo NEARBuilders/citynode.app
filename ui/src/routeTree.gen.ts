@@ -31,6 +31,7 @@ import { Route as LayoutAuthenticatedSettingsProfileRouteImport } from './routes
 import { Route as LayoutAuthenticatedSettingsAuthMethodsRouteImport } from './routes/_layout/_authenticated/settings/auth-methods'
 import { Route as LayoutAuthenticatedOrganizationsNewRouteImport } from './routes/_layout/_authenticated/organizations/new'
 import { Route as LayoutAuthenticatedOrganizationsSlugRouteImport } from './routes/_layout/_authenticated/organizations/$slug'
+import { Route as LayoutAuthenticatedAdminRouteImport } from './routes/_layout/_authenticated/admin'
 import { Route as LayoutAuthenticatedAcceptInvitationIdRouteImport } from './routes/_layout/_authenticated/accept-invitation.$id'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -90,6 +91,11 @@ const LayoutAuthenticatedSettingsRoute =
 const LayoutAuthenticatedHomeRoute = LayoutAuthenticatedHomeRouteImport.update({
   id: '/home',
   path: '/home',
+  getParentRoute: () => LayoutAuthenticatedRoute,
+} as any)
+const LayoutAuthenticatedAdminRoute = LayoutAuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => LayoutAuthenticatedRoute,
 } as any)
 const LayoutAppsAccountIdIndexRoute =
@@ -160,6 +166,7 @@ const LayoutAuthenticatedAcceptInvitationIdRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/admin': typeof LayoutAuthenticatedAdminRoute
   '/': typeof LayoutIndexRoute
   '/about': typeof LayoutAboutRoute
   '/login': typeof LayoutLoginRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/apps/$accountId/': typeof LayoutAppsAccountIdIndexRoute
 }
 export interface FileRoutesByTo {
+  '/admin': typeof LayoutAuthenticatedAdminRoute
   '/': typeof LayoutIndexRoute
   '/about': typeof LayoutAboutRoute
   '/login': typeof LayoutLoginRoute
@@ -207,6 +215,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
+  '/_layout/_authenticated/admin': typeof LayoutAuthenticatedAdminRoute
   '/_layout/_authenticated': typeof LayoutAuthenticatedRouteWithChildren
   '/_layout/about': typeof LayoutAboutRoute
   '/_layout/login': typeof LayoutLoginRoute
@@ -233,6 +242,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/admin'
     | '/'
     | '/about'
     | '/login'
@@ -256,6 +266,7 @@ export interface FileRouteTypes {
     | '/apps/$accountId/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/admin'
     | '/'
     | '/about'
     | '/login'
@@ -279,6 +290,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_layout'
+    | '/_layout/_authenticated/admin'
     | '/_layout/_authenticated'
     | '/_layout/about'
     | '/_layout/login'
@@ -384,6 +396,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof LayoutAuthenticatedSettingsRouteImport
+      parentRoute: typeof LayoutAuthenticatedRoute
+    }
+    '/_layout/_authenticated/admin': {
+      id: '/_layout/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof LayoutAuthenticatedAdminRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
     '/_layout/_authenticated/home': {
@@ -498,6 +517,7 @@ const LayoutAuthenticatedSettingsRouteWithChildren =
   )
 
 interface LayoutAuthenticatedRouteChildren {
+  LayoutAuthenticatedAdminRoute: typeof LayoutAuthenticatedAdminRoute
   LayoutAuthenticatedHomeRoute: typeof LayoutAuthenticatedHomeRoute
   LayoutAuthenticatedSettingsRoute: typeof LayoutAuthenticatedSettingsRouteWithChildren
   LayoutAuthenticatedAcceptInvitationIdRoute: typeof LayoutAuthenticatedAcceptInvitationIdRoute
@@ -508,6 +528,7 @@ interface LayoutAuthenticatedRouteChildren {
 }
 
 const LayoutAuthenticatedRouteChildren: LayoutAuthenticatedRouteChildren = {
+  LayoutAuthenticatedAdminRoute: LayoutAuthenticatedAdminRoute,
   LayoutAuthenticatedHomeRoute: LayoutAuthenticatedHomeRoute,
   LayoutAuthenticatedSettingsRoute:
     LayoutAuthenticatedSettingsRouteWithChildren,

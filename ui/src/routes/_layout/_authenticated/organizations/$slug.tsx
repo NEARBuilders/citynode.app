@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import {
+  Building2,
   Edit2,
   Key,
   LogOut,
@@ -24,7 +25,9 @@ import {
   Button,
   Card,
   CardContent,
+  EmptyState,
   Input,
+  PageContainer,
   Tabs,
   TabsContent,
   TabsList,
@@ -348,333 +351,328 @@ function OrganizationDetail() {
 
   if (isLoadingOrgs) {
     return (
-      <div className="flex h-full flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2.5 sm:px-6 sm:py-3">
-          <div className="h-6 w-32 animate-pulse rounded-[6px] bg-muted" />
-        </div>
-        <div className="flex-1 flex items-center justify-center">
+      <PageContainer variant="default">
+        <div className="flex items-center justify-center min-h-[30vh]">
           <p className="text-sm text-muted-foreground">Loading organization...</p>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   if (!org) {
     return (
-      <div className="flex h-full flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2.5 sm:px-6 sm:py-3">
-          <h1 className="text-xl font-semibold text-foreground">Organization</h1>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/organizations">back</Link>
-          </Button>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="rounded-[12px] border border-border bg-card p-8 text-center space-y-3 max-w-sm w-full">
-            <p className="text-sm text-foreground">
-              This organization does not exist or you do not have access.
-            </p>
+      <PageContainer variant="default">
+        <EmptyState
+          icon={Building2}
+          title="Organization not found"
+          description="This organization does not exist or you do not have access."
+          action={
             <Button asChild variant="outline" size="sm">
               <Link to="/organizations">back to organizations</Link>
             </Button>
-          </div>
-        </div>
-      </div>
+          }
+        />
+      </PageContainer>
     );
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2.5 sm:px-6 sm:py-3">
-        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground min-w-0">
-          <Link to="/organizations" className="hover:text-foreground transition-colors shrink-0">
-            organizations
-          </Link>
-          <span>/</span>
-          <span className="text-foreground truncate">{org.slug}</span>
-        </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/organizations">back</Link>
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div className="rounded-[12px] border border-border bg-card p-6">
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <Chip>organization</Chip>
-              {isActive && <Chip accent>active</Chip>}
-              {isPersonal && <Chip>personal</Chip>}
-            </div>
-            <h2 className="text-foreground text-2xl font-semibold mb-1">{org.name}</h2>
-            <p className="text-muted-foreground text-sm font-mono mb-1">@{org.slug}</p>
-            <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-              Manage membership, invitations, and organization-scoped API access.
-            </p>
-            <div className="flex flex-col gap-2 mb-4">
-              <InfoRow label="members" value={String(members.length)} />
-              <InfoRow label="invites" value={String(pendingInvitationsCount)} />
-              <InfoRow label="api keys" value={String(apiKeys.length)} />
-              {org.createdAt && (
-                <InfoRow label="created" value={new Date(org.createdAt).toLocaleDateString()} />
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {!isActive && (
-                <Button
-                  onClick={() => switchOrgMutation.mutate()}
-                  disabled={switchOrgMutation.isPending}
-                  size="sm"
-                >
-                  {switchOrgMutation.isPending ? "switching..." : "switch to org"}
-                </Button>
-              )}
-              {isOwner && !isPersonal && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditName(org.name);
-                    setEditSlug(org.slug);
-                    setIsEditing(true);
-                  }}
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  edit
-                </Button>
-              )}
-              {!isPersonal && !isOwner && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (confirm(`Leave "${org.name}"?`)) {
-                      leaveOrgMutation.mutate();
-                    }
-                  }}
-                  disabled={leaveOrgMutation.isPending}
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  {leaveOrgMutation.isPending ? "leaving..." : "leave"}
-                </Button>
-              )}
-              {isOwner && !isPersonal && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (confirm(`Delete "${org.name}"? This cannot be undone.`)) {
-                      deleteOrgMutation.mutate();
-                    }
-                  }}
-                  disabled={deleteOrgMutation.isPending}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {deleteOrgMutation.isPending ? "deleting..." : "delete org"}
-                </Button>
-              )}
-            </div>
+    <PageContainer variant="default">
+      <div className="space-y-6">
+        <header className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <Building2 size={14} />
+            <span>Organization</span>
           </div>
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-xl font-semibold text-foreground">{org.name}</h1>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/organizations">back</Link>
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">@{org.slug}</p>
+        </header>
+        <div className="rounded-[12px] border border-border bg-card p-6">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Chip>organization</Chip>
+            {isActive && <Chip accent>active</Chip>}
+            {isPersonal && <Chip>personal</Chip>}
+          </div>
+          <h2 className="text-foreground text-2xl font-semibold mb-1">{org.name}</h2>
+          <p className="text-muted-foreground text-sm font-mono mb-1">@{org.slug}</p>
+          <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+            Manage membership, invitations, and organization-scoped API access.
+          </p>
+          <div className="flex flex-col gap-2 mb-4">
+            <InfoRow label="members" value={String(members.length)} />
+            <InfoRow label="invites" value={String(pendingInvitationsCount)} />
+            <InfoRow label="api keys" value={String(apiKeys.length)} />
+            {org.createdAt && (
+              <InfoRow label="created" value={new Date(org.createdAt).toLocaleDateString()} />
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {!isActive && (
+              <Button
+                onClick={() => switchOrgMutation.mutate()}
+                disabled={switchOrgMutation.isPending}
+                size="sm"
+              >
+                {switchOrgMutation.isPending ? "switching..." : "switch to org"}
+              </Button>
+            )}
+            {isOwner && !isPersonal && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditName(org.name);
+                  setEditSlug(org.slug);
+                  setIsEditing(true);
+                }}
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+                edit
+              </Button>
+            )}
+            {!isPersonal && !isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Leave "${org.name}"?`)) {
+                    leaveOrgMutation.mutate();
+                  }
+                }}
+                disabled={leaveOrgMutation.isPending}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                {leaveOrgMutation.isPending ? "leaving..." : "leave"}
+              </Button>
+            )}
+            {isOwner && !isPersonal && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Delete "${org.name}"? This cannot be undone.`)) {
+                    deleteOrgMutation.mutate();
+                  }
+                }}
+                disabled={deleteOrgMutation.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {deleteOrgMutation.isPending ? "deleting..." : "delete org"}
+              </Button>
+            )}
+          </div>
+        </div>
 
-          {isEditing && isOwner && (
-            <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Edit Organization
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
+        {isEditing && isOwner && (
+          <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Edit Organization
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Organization name"
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-sm">@</span>
                 <Input
                   type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Organization name"
+                  value={editSlug}
+                  onChange={(e) => setEditSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="slug"
+                  pattern="[a-z0-9-]+"
                 />
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-sm">@</span>
-                  <Input
-                    type="text"
-                    value={editSlug}
-                    onChange={(e) => setEditSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                    placeholder="slug"
-                    pattern="[a-z0-9-]+"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => updateOrgMutation.mutate({ name: editName, slug: editSlug })}
-                  disabled={updateOrgMutation.isPending || !editName || !editSlug}
-                  size="sm"
-                >
-                  {updateOrgMutation.isPending ? "saving..." : "save"}
-                </Button>
-                <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
-                  cancel
-                </Button>
               </div>
             </div>
-          )}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => updateOrgMutation.mutate({ name: editName, slug: editSlug })}
+                disabled={updateOrgMutation.isPending || !editName || !editSlug}
+                size="sm"
+              >
+                {updateOrgMutation.isPending ? "saving..." : "save"}
+              </Button>
+              <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
+                cancel
+              </Button>
+            </div>
+          </div>
+        )}
 
-          <Tabs defaultValue="members" className="w-full min-w-0">
-            <TabsList className="w-full justify-start overflow-x-auto">
-              <TabsTrigger value="members" className="shrink-0">
-                <Users className="h-4 w-4 mr-1.5" />
-                Members ({members.length})
-              </TabsTrigger>
-              <TabsTrigger value="invitations" className="shrink-0">
-                <Mail className="h-4 w-4 mr-1.5" />
-                Invitations ({pendingInvitationsCount})
-              </TabsTrigger>
-              <TabsTrigger value="apikeys" className="shrink-0">
-                <Key className="h-4 w-4 mr-1.5" />
-                API Keys ({apiKeys.length})
-              </TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="members" className="w-full min-w-0">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="members" className="shrink-0">
+              <Users className="h-4 w-4 mr-1.5" />
+              Members ({members.length})
+            </TabsTrigger>
+            <TabsTrigger value="invitations" className="shrink-0">
+              <Mail className="h-4 w-4 mr-1.5" />
+              Invitations ({pendingInvitationsCount})
+            </TabsTrigger>
+            <TabsTrigger value="apikeys" className="shrink-0">
+              <Key className="h-4 w-4 mr-1.5" />
+              API Keys ({apiKeys.length})
+            </TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="members" className="space-y-6 pt-4">
-              {members.length > 0 ? (
+          <TabsContent value="members" className="space-y-6 pt-4">
+            {members.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {members.map((member) => (
+                  <MemberCard
+                    key={member.id}
+                    member={member}
+                    canManage={canManageMembers && member.userId !== session?.user?.id}
+                    onRemove={() => removeMemberMutation.mutate(member)}
+                    isRemoving={removeMemberMutation.isPending}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-[12px] border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+                No members found
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="invitations" className="space-y-6 pt-4">
+            {canManageMembers && !isPersonal && (
+              <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Invite member
+                </div>
+                <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="email@example.com"
+                  />
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as "admin" | "member")}
+                    className="w-full px-3 py-2 text-sm bg-card text-foreground border-2 border-inset border-border-strong rounded-[8px] outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <Button
+                  onClick={() => inviteMutation.mutate()}
+                  disabled={inviteMutation.isPending || !inviteEmail}
+                  variant="outline"
+                  size="sm"
+                >
+                  {inviteMutation.isPending ? "sending..." : "send invitation"}
+                </Button>
+              </div>
+            )}
+
+            {(() => {
+              const pendingInvitations = invitations.filter((i) => i.status === "pending");
+              return pendingInvitations.length > 0 ? (
                 <div className="grid gap-4 md:grid-cols-2">
-                  {members.map((member) => (
-                    <MemberCard
-                      key={member.id}
-                      member={member}
-                      canManage={canManageMembers && member.userId !== session?.user?.id}
-                      onRemove={() => removeMemberMutation.mutate(member)}
-                      isRemoving={removeMemberMutation.isPending}
+                  {pendingInvitations.map((invitation) => (
+                    <InvitationCard
+                      key={invitation.id}
+                      invitation={invitation}
+                      onCancel={
+                        canManageMembers
+                          ? () => cancelInvitationMutation.mutate(invitation.id)
+                          : undefined
+                      }
+                      onResend={
+                        canManageMembers
+                          ? () => resendInvitationMutation.mutate(invitation)
+                          : undefined
+                      }
+                      isCancelling={cancelInvitationMutation.isPending}
+                      isResending={resendInvitationMutation.isPending}
                     />
                   ))}
                 </div>
               ) : (
-                <EmptyState label="No members found" />
-              )}
-            </TabsContent>
+                <div className="rounded-[12px] border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+                  No pending invitations
+                </div>
+              );
+            })()}
+          </TabsContent>
 
-            <TabsContent value="invitations" className="space-y-6 pt-4">
-              {canManageMembers && !isPersonal && (
-                <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Invite member
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_180px]">
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="email@example.com"
-                    />
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as "admin" | "member")}
-                      className="w-full px-3 py-2 text-sm bg-card text-foreground border-2 border-inset border-border-strong rounded-[8px] outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                  <Button
-                    onClick={() => inviteMutation.mutate()}
-                    disabled={inviteMutation.isPending || !inviteEmail}
-                    variant="outline"
-                    size="sm"
+          <TabsContent value="apikeys" className="space-y-6 pt-4">
+            {canManageMembers && (
+              <div className="rounded-[12px] border border-border bg-card p-6">
+                <ApiKeyForm
+                  onCreate={(values: ApiKeyFormValues) => createApiKeyMutation.mutate(values)}
+                  isPending={createApiKeyMutation.isPending}
+                />
+              </div>
+            )}
+
+            {createdApiKey && (
+              <ApiKeyReveal apiKey={createdApiKey} onDismiss={() => setCreatedApiKey(null)} />
+            )}
+
+            {apiKeys.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {apiKeys.map((key) => (
+                  <div
+                    key={key.id}
+                    className="rounded-[12px] border border-border bg-card p-5 space-y-3"
                   >
-                    {inviteMutation.isPending ? "sending..." : "send invitation"}
-                  </Button>
-                </div>
-              )}
-
-              {(() => {
-                const pendingInvitations = invitations.filter((i) => i.status === "pending");
-                return pendingInvitations.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {pendingInvitations.map((invitation) => (
-                      <InvitationCard
-                        key={invitation.id}
-                        invitation={invitation}
-                        onCancel={
-                          canManageMembers
-                            ? () => cancelInvitationMutation.mutate(invitation.id)
-                            : undefined
-                        }
-                        onResend={
-                          canManageMembers
-                            ? () => resendInvitationMutation.mutate(invitation)
-                            : undefined
-                        }
-                        isCancelling={cancelInvitationMutation.isPending}
-                        isResending={resendInvitationMutation.isPending}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState label="No pending invitations" />
-                );
-              })()}
-            </TabsContent>
-
-            <TabsContent value="apikeys" className="space-y-6 pt-4">
-              {canManageMembers && (
-                <div className="rounded-[12px] border border-border bg-card p-6">
-                  <ApiKeyForm
-                    onCreate={(values: ApiKeyFormValues) => createApiKeyMutation.mutate(values)}
-                    isPending={createApiKeyMutation.isPending}
-                  />
-                </div>
-              )}
-
-              {createdApiKey && (
-                <ApiKeyReveal apiKey={createdApiKey} onDismiss={() => setCreatedApiKey(null)} />
-              )}
-
-              {apiKeys.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {apiKeys.map((key) => (
-                    <div
-                      key={key.id}
-                      className="rounded-[12px] border border-border bg-card p-5 space-y-3"
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="font-medium text-foreground break-all">
-                          {key.name ?? "unnamed"}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {key.prefix ?? "api_"}...{key.start ?? ""}
-                        </div>
+                    <div className="space-y-1 min-w-0">
+                      <div className="font-medium text-foreground break-all">
+                        {key.name ?? "unnamed"}
                       </div>
-                      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                        <div>created {new Date(key.createdAt).toLocaleString()}</div>
-                        {key.expiresAt && (
-                          <div>expires {new Date(key.expiresAt).toLocaleString()}</div>
-                        )}
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {key.prefix ?? "api_"}...{key.start ?? ""}
                       </div>
-                      <div className="flex gap-2">
+                    </div>
+                    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      <div>created {new Date(key.createdAt).toLocaleString()}</div>
+                      {key.expiresAt && (
+                        <div>expires {new Date(key.expiresAt).toLocaleString()}</div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleCopyApiKey(key.start || "", "Key prefix copied")}
+                        variant="outline"
+                        size="sm"
+                      >
+                        copy id
+                      </Button>
+                      {canManageMembers && (
                         <Button
-                          onClick={() => handleCopyApiKey(key.start || "", "Key prefix copied")}
+                          onClick={() => deleteApiKeyMutation.mutate(key.id)}
+                          disabled={deleteApiKeyMutation.isPending}
                           variant="outline"
                           size="sm"
                         >
-                          copy id
+                          <Trash2 className="h-3.5 w-3.5" />
+                          delete
                         </Button>
-                        {canManageMembers && (
-                          <Button
-                            onClick={() => deleteApiKeyMutation.mutate(key.id)}
-                            disabled={deleteApiKeyMutation.isPending}
-                            variant="outline"
-                            size="sm"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            delete
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState label="No API keys" />
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-[12px] border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+                No API keys
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -696,14 +694,6 @@ function Chip({ children, accent }: { children: React.ReactNode; accent?: boolea
     >
       {children}
     </span>
-  );
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="rounded-[12px] border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-      {label}
-    </div>
   );
 }
 

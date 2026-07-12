@@ -17,9 +17,14 @@ import { formatORPCError } from "every-plugin/errors";
 import { onError } from "every-plugin/orpc";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
 import { type Context, Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { proxy } from "hono/proxy";
 import { NONCE, secureHeaders } from "hono/secure-headers";
+import { timeout } from "hono/timeout";
+import { rateLimiter } from "hono-rate-limiter";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import type { AuthVariables } from "./lib/auth";
 import { buildPluginContext, createSessionMiddleware, registerAuthHandler } from "./services/auth";
 import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
@@ -44,6 +49,11 @@ const BOS_VIEWER_RUNTIME_SCRIPT_URL =
   "https://cdn.jsdelivr.net/npm/near-bos-webcomponent@0.0.9/dist/runtime.25b143da327a5371509f.bundle.js";
 const BOS_VIEWER_MAIN_SCRIPT_URL =
   "https://cdn.jsdelivr.net/npm/near-bos-webcomponent@0.0.9/dist/main.1b3f0d7d1017de355a7c.bundle.js";
+
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS) || 900_000;
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 300;
+const BODY_LIMIT_MAX = Number(process.env.BODY_LIMIT_MAX) || 10 * 1024 * 1024;
+const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS) || 30_000;
 
 function normalizeUrl(url?: string | null) {
   if (!url) {
@@ -418,6 +428,21 @@ export function setupApiRoutes(
     return c.json(getHealthStatus());
   });
 
+  app.use(
+    "/api/*",
+    bodyLimit({
+      maxSize: BODY_LIMIT_MAX,
+      onError: (c) => c.json({ error: "Request body too large" }, 413),
+    }),
+  );
+
+  app.use(
+    "/api/*",
+    timeout(API_TIMEOUT_MS, () => {
+      return new HTTPException(408, { message: "Request timeout" });
+    }),
+  );
+
   app.use("/api/*", sessionMiddleware);
 
   const handleOrpc = async (
@@ -551,6 +576,38 @@ export const createStartServer = (onReady?: () => void) =>
           return null;
         },
         credentials: true,
+      }),
+    );
+
+    const staticAssetPattern = /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
+
+    const isHealthPath = (pathname: string) =>
+      pathname === "/health" || pathname === "/api/_health";
+
+    app.use(
+      "/*",
+      rateLimiter({
+        windowMs: RATE_LIMIT_WINDOW_MS,
+        limit: RATE_LIMIT_MAX,
+        keyGenerator: (c) => {
+          const forwarded = c.req.header("x-forwarded-for");
+          if (forwarded) {
+            return forwarded.split(",")[0]!.trim();
+          }
+          try {
+            const info = getConnInfo(c);
+            return info.remote.address ?? "unknown";
+          } catch {
+            return "unknown";
+          }
+        },
+        skip: (c) => {
+          const { pathname } = new URL(c.req.url);
+          if (isHealthPath(pathname)) return true;
+          const lastSegment = pathname.split("/").pop() ?? "";
+          return staticAssetPattern.test(lastSegment);
+        },
+        message: { error: "Too many requests, please try again later." },
       }),
     );
 

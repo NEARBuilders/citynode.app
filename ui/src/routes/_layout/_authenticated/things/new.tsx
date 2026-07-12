@@ -1,9 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Button } from "@/components";
+import { Button, PageContainer } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/things/new")({
   head: () => ({
@@ -39,13 +40,18 @@ function NewThingPage() {
   });
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-2.5 sm:px-6 sm:py-3">
-        <h1 className="text-xl font-semibold text-foreground">New thing</h1>
-      </div>
+    <PageContainer variant="narrow">
+      <div className="space-y-6">
+        <header className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <Sparkles size={14} />
+            <span>Create</span>
+          </div>
+          <h1 className="text-xl font-semibold text-foreground">New thing</h1>
+          <p className="text-sm text-muted-foreground">Create a new thing in the registry.</p>
+        </header>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-lg space-y-4">
+        <div className="space-y-4">
           <div className="space-y-2">
             <label
               htmlFor="plugin-id"
@@ -86,6 +92,6 @@ function NewThingPage() {
           </Button>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

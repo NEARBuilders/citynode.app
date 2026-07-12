@@ -2,12 +2,15 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BosConfig } from "everything-dev/types";
-import { getNetworkIdForAccount } from "../../../packages/everything-dev/src/network";
 import { runServer } from "../../src/program";
 import type { RuntimeConfig } from "../../src/services/config";
 import { startJsonProxyTarget } from "./json-proxy-target";
 import { getAvailablePort } from "./ports";
 import { loadHostTestEnv } from "./test-env";
+
+function getNetworkIdForAccount(account: string): "mainnet" | "testnet" {
+  return account.endsWith(".testnet") ? "testnet" : "mainnet";
+}
 
 export type RuntimeRemoteScenarioName = "remote-client" | "remote-ssr" | "remote-proxy";
 

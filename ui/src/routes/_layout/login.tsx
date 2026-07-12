@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { sessionQueryOptions, useAuthClient } from "@/app";
-import { UnderConstruction } from "@/components/under-construction";
+import { getAppName, sessionQueryOptions, useAuthClient } from "@/app";
+import { BrandElement, UnderConstruction } from "@/components";
 
 type SearchParams = {
   redirect?: string;
@@ -39,6 +39,7 @@ function LoginPage() {
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
   const { redirect } = Route.useSearch();
   const { runtimeConfig } = Route.useRouteContext();
+  const appName = getAppName(runtimeConfig);
   const queryClient = useQueryClient();
 
   const [nearPending, setNearPending] = useState(false);
@@ -106,45 +107,49 @@ function LoginPage() {
   const isPending = nearPending || anonPending;
 
   return (
-    <div className="min-h-[70vh] w-full flex items-start justify-center px-6 pt-[30vh] animate-fade-in">
-      <div className="w-full max-w-sm space-y-8">
+    <div className="min-h-[calc(100dvh-3rem)] w-full flex items-center justify-center px-6">
+      <div className="w-full max-w-sm space-y-6">
+        <BrandElement appName={appName} className="justify-center" />
+
+        <div className="rounded-[12px] border border-border bg-card p-6 sm:p-8">
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={handleNear}
+              disabled={isPending}
+              className="w-full h-11 px-4 inline-flex items-center justify-center gap-2 text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md hover:bg-muted active:border-inset active:shadow-none transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            >
+              {nearPending ? "connecting..." : "connect to everything"}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAnonymous}
+              disabled={isPending}
+              className="w-full h-11 px-4 inline-flex items-center justify-center gap-2 text-sm font-medium border-2 border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground hover:shadow-sm active:shadow-none transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            >
+              {anonPending ? "starting..." : "continue anonymously"}
+            </button>
+          </div>
+
+          <div className="pt-3 border-t border-border mt-3">
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+              Anonymous sessions don't persist after sign out
+            </p>
+          </div>
+        </div>
+
         <div className="flex justify-center">
           <UnderConstruction
             sourceFile="ui/src/routes/_layout/login.tsx"
             runtimeConfig={runtimeConfig}
           />
-        </div>
-
-        <div className="space-y-3 animate-fade-in-up">
-          <button
-            type="button"
-            onClick={handleNear}
-            disabled={isPending}
-            className="w-full h-10 px-4 inline-flex items-center justify-center gap-2 text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md hover:bg-muted active:border-inset active:shadow-none transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-          >
-            {nearPending ? "connecting..." : "connect to everything"}
-          </button>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleAnonymous}
-            disabled={isPending}
-            className="w-full h-10 px-4 inline-flex items-center justify-center gap-2 text-sm font-medium border-2 border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground hover:shadow-sm active:shadow-none transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-          >
-            {anonPending ? "starting..." : "continue anonymously"}
-          </button>
-        </div>
-
-        <div className="pt-2 border-t border-border">
-          <p className="text-xs text-muted-foreground text-center leading-relaxed">
-            Anonymous sessions don't persist after sign out
-          </p>
         </div>
       </div>
     </div>

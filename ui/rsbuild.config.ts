@@ -186,24 +186,35 @@ function createClientConfig() {
       },
     },
     tools: {
-      rspack: {
-        target: "web",
-        output: {
-          uniqueName: normalizedName,
-          chunkFilename: "static/js/async/[name].[contenthash].js",
-        },
-        resolve: {
-          fallback: { bufferutil: false, "utf-8-validate": false },
-        },
-        infrastructureLogging: { level: "error" },
-        stats: "errors-warnings",
-        plugins: [
-          TanStackRouterRspack({
-            target: "react",
-            autoCodeSplitting: true,
-          }),
-          new FixMfDataUriPlugin(),
-        ],
+      rspack: (config) => {
+        const { CssExtractRspackPlugin } = require("@rspack/core");
+        const cssPlugin = config.plugins?.find((p) => p instanceof CssExtractRspackPlugin) as
+          | { options?: Record<string, string> }
+          | undefined;
+        if (cssPlugin) {
+          cssPlugin.options ??= {};
+          cssPlugin.options.chunkFilename = "static/css/async/[name].[contenthash].css";
+        }
+
+        Object.assign(config, {
+          target: "web",
+          output: {
+            ...(config.output ?? {}),
+            uniqueName: normalizedName,
+            chunkFilename: "static/js/async/[name].[contenthash].js",
+          },
+          resolve: {
+            ...(config.resolve ?? {}),
+            fallback: { bufferutil: false, "utf-8-validate": false },
+          },
+          infrastructureLogging: { level: "error" },
+          stats: "errors-warnings",
+          plugins: [
+            ...(config.plugins ?? []),
+            TanStackRouterRspack({ target: "react", autoCodeSplitting: true }),
+            new FixMfDataUriPlugin(),
+          ],
+        });
       },
     },
     output: {

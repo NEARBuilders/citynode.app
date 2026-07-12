@@ -36,7 +36,7 @@
     },
     "api": {
       "name": "api",
-      "version": "2.7.0",
+      "version": "2.7.2",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
@@ -68,7 +68,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.12.1",
+      "version": "1.12.2",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -83,6 +83,7 @@
         "effect": "catalog:",
         "every-plugin": "catalog:",
         "hono": "^4.12.18",
+        "hono-rate-limiter": "^0.5.3",
         "pg": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
@@ -148,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.42.0",
+      "version": "1.42.2",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -379,7 +380,7 @@
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.2",
     "every-plugin": "^2.7.1",
-    "everything-dev": "^1.42.0",
+    "everything-dev": "^1.42.2",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",
@@ -1844,6 +1845,8 @@
     "homedir-polyfill": ["homedir-polyfill@1.0.3", "", { "dependencies": { "parse-passwd": "^1.0.0" } }, "sha512-eSmmWE5bZTK2Nou4g0AI3zZ9rswp7GRKoKXS1BLUkvPviOqs4YTN1djQIqrXy9k5gEtdLPy86JjRwsNM9tnDcA=="],
 
     "hono": ["hono@4.12.24", "", {}, "sha512-I36D1s+HgQc55KbhEr4iybfxv/9o1zdpw+XEM6dJa91LqQD0HCoSGdxpRJCZE+aavs87j4V3Ls2OJzq8C/U4iw=="],
+
+    "hono-rate-limiter": ["hono-rate-limiter@0.5.3", "", { "peerDependencies": { "hono": "^4.10.8", "unstorage": "^1.17.3" }, "optionalPeers": ["unstorage"] }, "sha512-M0DxbVMpPELEzLi0AJg1XyBHLGJXz7GySjsPoK+gc5YeeBsdGDGe+2RvVuCAv8ydINiwlbxqYMNxUEyYfRji/A=="],
 
     "hookable": ["hookable@6.1.1", "", {}, "sha512-U9LYDy1CwhMCnprUfeAZWZGByVbhd54hwepegYTK7Pi5NvqEj63ifz5z+xukznehT7i6NIZRu89Ay1AZmRsLEQ=="],
 
