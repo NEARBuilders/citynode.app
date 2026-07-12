@@ -29,6 +29,21 @@ function createRuntimeConfig(urls: { baseUrl: string; uiAssetsUrl: string }) {
       entry: `${urls.baseUrl}/mf-manifest.json`,
       source: "remote",
     },
+    auth: {
+      name: "auth",
+      url: urls.baseUrl,
+      entry: `${urls.baseUrl}/mf-manifest.json`,
+      source: "remote",
+      variables: {
+        passkey: { rpID: "everything.dev", rpName: "everything.dev" },
+        siwn: {
+          recipients: {
+            mainnet: "dev.everything.near",
+            testnet: "dev.allthethings.testnet",
+          },
+        },
+      },
+    },
   } as const;
 }
 

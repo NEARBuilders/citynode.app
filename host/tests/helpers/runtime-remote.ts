@@ -123,6 +123,8 @@ function buildRuntimeConfig(
     throw new Error(`Scenario ${scenario.name} is missing required remote config`);
   }
 
+  const rawAuth = config.app?.auth as Record<string, unknown> | undefined;
+
   return {
     env: "development",
     account: config.account,
@@ -152,6 +154,26 @@ function buildRuntimeConfig(
       secrets: config.app?.api?.secrets,
       shared: config.app?.api?.shared,
     },
+    auth:
+      rawAuth?.variables
+        ? {
+            name: (rawAuth.name as string) ?? "auth",
+            url: normalizeUrl(
+              (rawAuth.production as string) ??
+                (rawAuth.development as string) ??
+                "http://localhost:3002",
+            ),
+            entry: toMfEntry(
+              normalizeUrl(
+                (rawAuth.production as string) ??
+                  (rawAuth.development as string) ??
+                  "http://localhost:3002",
+              ),
+            ),
+            source: "remote" as const,
+            variables: rawAuth.variables as Record<string, unknown>,
+          }
+        : undefined,
   } as RuntimeConfig;
 }
 
