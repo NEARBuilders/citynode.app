@@ -156,7 +156,6 @@ function buildRuntimeClientConfig(
           url: config.auth.url,
           entry: config.auth.entry,
           integrity: config.auth.integrity,
-          sidebar: config.auth.sidebar,
           ...(config.auth.variables ? { variables: config.auth.variables } : {}),
         }
       : undefined,
@@ -181,7 +180,6 @@ function buildRuntimeClientConfig(
                   },
                 }
               : {}),
-            ...(plugin.sidebar ? { sidebar: plugin.sidebar } : {}),
           },
         ],
       ),

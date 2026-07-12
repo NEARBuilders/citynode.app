@@ -54,17 +54,6 @@ export const FederationEntrySchema = z.object({
 });
 export type FederationEntry = z.infer<typeof FederationEntrySchema>;
 
-export const SidebarRoleSchema = z.enum(["anon", "member", "admin"]);
-export type SidebarRole = z.infer<typeof SidebarRoleSchema>;
-
-export const SidebarItemSchema = z.object({
-  icon: z.string(),
-  label: z.string(),
-  to: z.string().optional(),
-  roleRequired: SidebarRoleSchema.optional(),
-});
-export type SidebarItem = z.infer<typeof SidebarItemSchema>;
-
 export const ComposableAppEntrySchema = z.object({
   extends: ExtendsSchema.optional(),
   name: z.string().optional(),
@@ -74,7 +63,6 @@ export const ComposableAppEntrySchema = z.object({
   proxy: z.string().optional(),
   variables: JsonObjectSchema.optional(),
   secrets: z.array(z.string()).optional(),
-  sidebar: z.array(SidebarItemSchema).optional(),
   routes: z.array(z.string()).optional(),
   shared: SharedDepMapSchema.optional(),
 });
@@ -125,7 +113,6 @@ export const RuntimePluginConfigSchema = z.object({
   integrity: z.string().optional(),
   shared: SharedDepMapSchema.optional(),
   ui: PluginRuntimeUiSchema.optional(),
-  sidebar: z.array(SidebarItemSchema).optional(),
   routes: z.array(z.string()).optional(),
 });
 export type RuntimePluginConfig = z.infer<typeof RuntimePluginConfigSchema>;
@@ -199,7 +186,6 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     variables: JsonObjectSchema.optional(),
     secrets: z.array(z.string()).optional(),
     routes: z.array(z.string()).optional(),
-    sidebar: z.array(SidebarItemSchema).optional(),
     app: z.record(z.string(), BosConfigInputAppEntrySchema).optional(),
     plugins: z.record(z.string(), z.union([z.string(), BosConfigInputSchema])).optional(),
     ci: CiConfigSchema.optional(),
@@ -228,7 +214,6 @@ export interface BosConfigInput {
   variables?: JsonObject;
   secrets?: string[];
   routes?: string[];
-  sidebar?: SidebarItem[];
   app?: Record<string, BosConfigInputAppEntry>;
   plugins?: Record<string, string | BosConfigInput>;
   ci?: CiConfig;
@@ -299,7 +284,6 @@ export const RuntimeConfigSchema = z.object({
     proxy: z.string().optional(),
     variables: JsonObjectSchema.optional(),
     secrets: z.array(z.string()).optional(),
-    sidebar: z.array(SidebarItemSchema).optional(),
     shared: SharedDepMapSchema.optional(),
   }).optional(),
   plugins: z.record(z.string(), RuntimePluginConfigSchema).optional(),
@@ -341,7 +325,6 @@ export const ClientRuntimeConfigSchema = z.object({
       entry: z.string(),
       integrity: z.string().optional(),
       variables: JsonObjectSchema.optional(),
-      sidebar: z.array(SidebarItemSchema).optional(),
     })
     .optional(),
   plugins: z
@@ -362,7 +345,6 @@ export const ClientRuntimeConfigSchema = z.object({
             integrity: z.string().optional(),
           })
           .optional(),
-        sidebar: z.array(SidebarItemSchema).optional(),
       }),
     )
     .optional(),

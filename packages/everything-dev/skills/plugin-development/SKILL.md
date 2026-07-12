@@ -309,15 +309,7 @@ Add a plugin entry:
         "timeout": 5000
       },
       "secrets": ["YOURPLUGIN_API_KEY"],
-      "sidebar": [
-        {
-          "label": "Your Plugin",
-          "icon": "Activity",
-          "to": "/your-plugin",
-          "roleRequired": "member"
-        }
-      ],
-      "routes": ["/your-plugin/*"],
+      "routes": ["ui/src/routes/_layout/_authenticated/your-plugin/**"],
       "shared": {
         "react": { "version": "^19.0.0", "singleton": true },
         "react-dom": { "version": "^19.0.0", "singleton": true }
@@ -458,7 +450,7 @@ Use `createPlugin.withPlugins<PluginsClient>()` to get typed access to other plu
 
 ## Plugin UI
 
-Add a UI remote via the `ui` field in `bos.config.json`. Sidebar entries use `icon` from `lucide-react` and `roleRequired` from `anon`, `member`, `admin`. These merge into `plugin-sidebar.gen.ts` at `ui/src/lib/`.
+Add a UI remote via the `ui` field in `bos.config.json`. Sidebar items are defined manually in `ui/src/routes/_layout.tsx`.
 
 ## Deploy
 

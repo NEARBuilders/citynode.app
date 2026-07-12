@@ -232,7 +232,7 @@ bos types gen --env production    # production mode (remote sources only)
 bos types gen --dry-run           # preview without writing files
 ```
 
-Generated files: `api-types.gen.ts`, `auth-types.gen.ts` (ui, api, host), `plugins-types.gen.ts`, `plugin-sidebar.gen.ts`. Uses `local:` sources in dev and production URLs in production mode.
+Generated files: `api-types.gen.ts`, `auth-types.gen.ts` (ui, api, host), `plugins-types.gen.ts`. Uses `local:` sources in dev and production URLs in production mode.
 
 ### `bos db studio`
 

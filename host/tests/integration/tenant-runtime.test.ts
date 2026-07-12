@@ -83,7 +83,6 @@ function createBaseRuntimeConfig(): RuntimeConfig {
         url: "https://plugins.example.com/apps",
         entry: "https://plugins.example.com/apps/mf-manifest.json",
         source: "remote",
-        sidebar: [{ icon: "Globe", label: "apps", to: "/apps", roleRequired: "anon" }],
         ui: {
           name: "apps-ui",
           url: "https://plugins.example.com/apps-ui",
@@ -466,7 +465,7 @@ describe("resolveRequestRuntime", () => {
     expect(result.config.ui.ssrIntegrity).toBe("sha384-alice-ssr");
   });
 
-  it("applies existing plugin UI and sidebar overrides when plugins are allowed", async () => {
+  it("applies existing plugin UI overrides when plugins are allowed", async () => {
     const baseConfig = createBaseRuntimeConfig();
     process.env.ALLOW_OVERRIDE = "ui,plugins.*";
 
@@ -489,7 +488,6 @@ describe("resolveRequestRuntime", () => {
               production: "https://plugins.example.com/alice-apps-ui",
               integrity: "sha384-apps-alice",
             },
-            sidebar: [{ icon: "Star", label: "alice apps", to: "/apps", roleRequired: "anon" }],
           },
           ignored: {
             production: "https://plugins.example.com/ignored",
@@ -517,7 +515,6 @@ describe("resolveRequestRuntime", () => {
       plugins: {
         apps: {
           ...baseConfig.plugins!.apps,
-          sidebar: [{ icon: "Star", label: "alice apps", to: "/apps", roleRequired: "anon" }],
           ui: {
             ...baseConfig.plugins!.apps.ui!,
             url: "https://plugins.example.com/alice-apps-ui",
@@ -547,9 +544,6 @@ describe("resolveRequestRuntime", () => {
     );
 
     expect(result.config.plugins?.apps.ui?.url).toBe("https://plugins.example.com/alice-apps-ui");
-    expect(result.config.plugins?.apps.sidebar).toEqual([
-      { icon: "Star", label: "alice apps", to: "/apps", roleRequired: "anon" },
-    ]);
     expect(result.config.plugins?.ignored).toBeUndefined();
     expect(verifySriForUrlMock).toHaveBeenCalledWith(
       "https://plugins.example.com/alice-apps-ui",

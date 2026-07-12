@@ -821,11 +821,6 @@ export function buildRuntimeConfig(
         secrets: authConfig.secrets,
         integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
         shared: authConfig.shared,
-        sidebar: authConfig.sidebar?.map((item) => ({
-          ...item,
-          to: item.to ?? "/auth",
-          roleRequired: item.roleRequired ?? ("member" as const),
-        })),
       };
     })(),
     plugins:
@@ -1008,12 +1003,6 @@ function buildRuntimePluginConfig(
         : resolveRuntimeTarget(uiProduction, resolved.providerBaseDir, "remote")
       : undefined;
 
-  const sidebar = source.sidebar?.map((item) => ({
-    ...item,
-    to: item.to ?? `/${pluginId}`,
-    roleRequired: item.roleRequired ?? ("member" as const),
-  }));
-
   const routes = source.routes;
 
   return {
@@ -1047,7 +1036,6 @@ function buildRuntimePluginConfig(
               : undefined,
         }
       : undefined,
-    sidebar,
     routes,
   };
 }

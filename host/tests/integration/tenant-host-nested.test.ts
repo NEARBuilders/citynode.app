@@ -76,7 +76,6 @@ function createBaseConfig() {
         url: "http://127.0.0.1:0/apps",
         entry: "http://127.0.0.1:0/apps/mf-manifest.json",
         source: "remote",
-        sidebar: [{ icon: "Globe", label: "apps", to: "/apps", roleRequired: "anon" }],
         ui: {
           name: "apps-ui",
           url: "http://127.0.0.1:0/apps-ui",
@@ -217,7 +216,6 @@ describe("tenant host nested integration", () => {
               production: "https://plugins.example.com/chicago-apps-ui",
               integrity: "sha384-chicago-apps",
             },
-            sidebar: [{ icon: "Star", label: "chicago apps", to: "/apps", roleRequired: "anon" }],
           },
         },
       },
@@ -246,7 +244,6 @@ describe("tenant host nested integration", () => {
       plugins: {
         apps: {
           ...baseConfig.plugins.apps,
-          sidebar: [{ icon: "Star", label: "chicago apps", to: "/apps", roleRequired: "anon" }],
           ui: {
             ...baseConfig.plugins.apps.ui,
             url: assetServer.baseUrl,

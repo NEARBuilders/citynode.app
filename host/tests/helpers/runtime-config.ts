@@ -94,7 +94,6 @@ export function buildTestClientRuntimeConfig(config: RuntimeConfig): Partial<Cli
           name: config.auth.name,
           url: config.auth.url,
           entry: config.auth.entry,
-          ...(config.auth.sidebar ? { sidebar: config.auth.sidebar } : {}),
           ...(config.auth.variables ? { variables: config.auth.variables } : {}),
         }
       : undefined,

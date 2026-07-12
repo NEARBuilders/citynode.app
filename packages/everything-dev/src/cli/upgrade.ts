@@ -503,7 +503,6 @@ function mergePluginConfigIntoRoot(
       "secrets",
       "variables",
       "routes",
-      "sidebar",
       "production",
       "integrity",
       "proxy",
@@ -530,7 +529,6 @@ function mergePluginConfigIntoRoot(
       "proxy",
       "variables",
       "secrets",
-      "sidebar",
       "routes",
     ] as const) {
       if (apiData[key] !== undefined && entry[key] === undefined) {
@@ -558,18 +556,10 @@ function mergePluginConfigIntoRoot(
       entry.routes = pluginConfig.routes;
       changed = true;
     }
-    if (entry.sidebar === undefined && Array.isArray(pluginConfig.sidebar)) {
-      entry.sidebar = pluginConfig.sidebar;
-      changed = true;
-    }
     const api = getApiEntry(pluginConfig);
     if (api) {
       if (entry.routes === undefined && Array.isArray(api.routes)) {
         entry.routes = api.routes;
-        changed = true;
-      }
-      if (entry.sidebar === undefined && Array.isArray(api.sidebar)) {
-        entry.sidebar = api.sidebar;
         changed = true;
       }
     }
@@ -591,15 +581,8 @@ function extractPluginEntry(
     return (pluginConfig.plugins as Record<string, unknown>)[pluginKey] as Record<string, unknown>;
   }
 
-  const fallback: Record<string, unknown> = {};
-  if (pluginConfig.sidebar !== undefined) {
-    fallback.sidebar = pluginConfig.sidebar;
-  }
   if (pluginConfig.routes !== undefined) {
-    fallback.routes = pluginConfig.routes;
-  }
-  if (Object.keys(fallback).length > 0) {
-    return fallback;
+    return { routes: pluginConfig.routes };
   }
 
   return null;
@@ -611,7 +594,6 @@ function configHasTopLevelFields(
 ): boolean {
   return (
     (pluginConfig.routes !== undefined && Array.isArray(pluginConfig.routes)) ||
-    (pluginConfig.sidebar !== undefined && Array.isArray(pluginConfig.sidebar)) ||
     getApiEntry(pluginConfig) !== null
   );
 }

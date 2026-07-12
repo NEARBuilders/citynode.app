@@ -5,7 +5,16 @@ import builtOnRev from "@/assets/built_on_rev.png";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserNav } from "@/components/user-nav";
-import { pluginSidebarItems, type SidebarItem, type SidebarRole } from "@/lib/plugin-sidebar.gen";
+import { Globe, Home } from "lucide-react";
+
+type SidebarRole = "anon" | "member" | "admin";
+
+interface SidebarItem {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  to: string;
+  roleRequired: SidebarRole;
+}
 
 function filterSidebarByRole(items: SidebarItem[], userRole: SidebarRole): SidebarItem[] {
   return items.filter((item) => {
@@ -46,7 +55,12 @@ function Layout() {
   const account = getAccount(runtimeConfig);
   const isAuthenticated = !!session?.user;
   const userRole = getUserRole(isAuthenticated, session?.user?.role === "admin");
-  const visibleItems = filterSidebarByRole(pluginSidebarItems, userRole);
+
+  const sidebarItems: SidebarItem[] = [
+    { icon: Home, label: "home", to: "/home", roleRequired: "anon" },
+    { icon: Globe, label: "apps", to: "/apps", roleRequired: "anon" },
+  ];
+  const visibleItems = filterSidebarByRole(sidebarItems, userRole);
   const gatewayId = runtime?.gatewayId;
 
   const isActive = (item: SidebarItem) => {

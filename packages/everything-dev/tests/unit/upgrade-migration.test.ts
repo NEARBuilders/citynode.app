@@ -65,7 +65,6 @@ describe("upgrade bos config migration", () => {
               secrets: ["EXAMPLE_DATABASE_URL"],
             },
           },
-          sidebar: [{ icon: "FolderKanban", label: "example" }],
           routes: ["ui/src/routes/_layout/_authenticated/example/**"],
         },
         null,
@@ -87,7 +86,6 @@ describe("upgrade bos config migration", () => {
           development: string;
           production?: string;
           secrets?: string[];
-          sidebar?: Array<{ icon: string; label: string }>;
           routes?: string[];
         };
       };
@@ -100,9 +98,6 @@ describe("upgrade bos config migration", () => {
     expect(rootConfig.plugins.example.development).toBe("local:plugins/example");
     expect(rootConfig.plugins.example.production).toBe("https://example.test.dev");
     expect(rootConfig.plugins.example.secrets).toEqual(["EXAMPLE_DATABASE_URL"]);
-    expect(rootConfig.plugins.example.sidebar).toEqual([
-      { icon: "FolderKanban", label: "example" },
-    ]);
     expect(rootConfig.plugins.example.routes).toEqual([
       "ui/src/routes/_layout/_authenticated/example/**",
     ]);
@@ -205,7 +200,7 @@ describe("upgrade bos config migration", () => {
     expect(rootConfig.plugins.example.development).toBe("local:plugins/example");
   });
 
-  it("merges top-level sidebar and routes from plugin config into root entry", async () => {
+  it("merges top-level routes from plugin config into root entry", async () => {
     const projectDir = makeProjectDir();
     writeFileSync(
       join(projectDir, "bos.config.json"),
@@ -234,7 +229,6 @@ describe("upgrade bos config migration", () => {
       `${JSON.stringify(
         {
           domain: "apps.everything.dev",
-          sidebar: [{ icon: "Globe", label: "apps", roleRequired: "anon" }],
           routes: ["ui/src/routes/_layout/apps/**"],
         },
         null,
@@ -250,15 +244,11 @@ describe("upgrade bos config migration", () => {
       plugins: {
         apps: {
           development: string;
-          sidebar?: unknown;
           routes?: unknown;
         };
       };
     };
 
-    expect(rootConfig.plugins.apps.sidebar).toEqual([
-      { icon: "Globe", label: "apps", roleRequired: "anon" },
-    ]);
     expect(rootConfig.plugins.apps.routes).toEqual(["ui/src/routes/_layout/apps/**"]);
   });
 

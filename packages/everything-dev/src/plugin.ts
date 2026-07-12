@@ -79,7 +79,6 @@ import {
   type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
-import { writePluginSidebarGen } from "./sidebar";
 import type {
   BosConfig,
   BosConfigInput,
@@ -328,7 +327,6 @@ function listPluginAttachments(config: BosConfig | null) {
 }
 
 interface GeneratedArtifacts {
-  sidebarPath: string;
   resolvedConfigPath?: string;
   contractBridgePath: string;
 }
@@ -350,8 +348,6 @@ async function generateCodeArtifacts(
     opts?.runtimeConfig ?? (await loadResolvedConfig({ cwd: configDir }))?.runtime;
   if (!runtimeConfig) return null;
 
-  writePluginSidebarGen(configDir, runtimeConfig);
-
   const bridge = await syncApiContractBridge({
     configDir,
     runtimeConfig,
@@ -359,7 +355,6 @@ async function generateCodeArtifacts(
   });
 
   return {
-    sidebarPath: join(configDir, "ui/src/lib/plugin-sidebar.gen.ts"),
     resolvedConfigPath: opts?.env ? join(configDir, ".bos/bos.resolved-config.json") : undefined,
     contractBridgePath: bridge.bridgePath,
     contractStatus: bridge.status,
@@ -1887,7 +1882,7 @@ export default createPlugin({
         });
 
         const hasLocalApiWorkspace = existsSync(join(projectDir, "api", "src"));
-        const generated = ["ui/src/lib/plugin-sidebar.gen.ts", "ui/src/lib/api-types.gen.ts"];
+        const generated = ["ui/src/lib/api-types.gen.ts"];
         if (hasLocalApiWorkspace) {
           generated.push("api/src/lib/plugins-types.gen.ts", "api/src/lib/auth-types.gen.ts");
         }

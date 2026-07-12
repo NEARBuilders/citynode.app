@@ -181,7 +181,6 @@ describe("tenant host integration", () => {
         plugins: {
           apps: {
             ...createBaseConfig().plugins.apps,
-            sidebar: [{ icon: "Star", label: "alice apps", to: "/apps", roleRequired: "anon" }],
             ui: {
               ...createBaseConfig().plugins.apps.ui,
               url: assetServer.baseUrl,

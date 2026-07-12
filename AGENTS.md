@@ -66,7 +66,7 @@ tanstackIntent:
     for: "bos init, bos sync, and bos upgrade workflows — template download, snapshot-based conflict detection, package version bumps, and how init/sync select and own files. Use when scaffolding new projects, syncing upstream changes, or upgrading framework packages."
   - id: "everything-dev#plugin-development"
     run: "bunx @tanstack/intent@latest load everything-dev#plugin-development"
-    for: "Build, register, and deploy plugins within everything.dev. Covers the _template scaffold, contract/service/index pattern, database setup with Drizzle, bos.config.json registration, plugin UI/sidebar, and CLI workflow. Use when creating new plugins, adding database-backed routes, or deploying plugins to production."
+    for: "Build, register, and deploy plugins within everything.dev. Covers the _template scaffold, contract/service/index pattern, database setup with Drizzle, bos.config.json registration, plugin UI, and CLI workflow. Use when creating new plugins, adding database-backed routes, or deploying plugins to production."
   - id: "everything-dev#publish-sync"
     run: "bunx @tanstack/intent@latest load everything-dev#publish-sync"
     for: "Publish bos.config.json to the FastKV registry, sync from upstream, and upgrade workspace packages. Use when deploying, syncing, or managing runtime configuration across projects."
@@ -75,7 +75,7 @@ tanstackIntent:
     for: "Build shared-host, shared-API super apps with tenant-specific UI composition. Use when setting up a base runtime plus custom tenant apps, configuring fixed-core multi-tenancy, reasoning about extends-based runtime lineage, or deciding what tenants can override today."
   - id: "everything-dev#ui-integration"
     run: "bunx @tanstack/intent@latest load everything-dev#ui-integration"
-    for: "Route creation, API client usage, auth client, SSR hydration, sidebar system, and the @/app module surface. Use when adding new UI routes, fetching data from the API, implementing auth flows, or customizing sidebar navigation."
+    for: "Route creation, API client usage, auth client, SSR hydration, and the @/app module surface. Use when adding new UI routes, fetching data from the API, implementing auth flows, or customizing navigation."
 <!-- intent-skills:end -->
 
 # Agent Instructions
@@ -154,7 +154,7 @@ Tenant model:
 Current fixed-core host rules:
 - the shared host still boots once from one base runtime snapshot
 - child runtime config must extend the active BOS runtime
-- supported request-scoped overrides are `ui`, existing `plugins.<id>.ui`, and existing `plugins.<id>.sidebar`
+- supported request-scoped overrides are `ui` and existing `plugins.<id>.ui`
 - tenant SSR is gated by `TENANT_WHITELIST` and `ALLOW_UNTRUSTED_SSR`
 - nested label routing and account-relative tenant derivation are the intended architecture direction, but not the complete resolver behavior today
 
@@ -241,7 +241,7 @@ If you hand-edit `bos.config.json`, run `bos types gen` or restart `bos dev` to 
 This repo is the parent platform, not a generated child project.
 
 - Prefer changing `host/` and `packages/everything-dev/` when the request is about runtime resolution, domain routing, config loading, CLI behavior, or scaffolding.
-- Prefer changing child project repos when the request is about project-specific content, shell navigation, or app-specific plugin/sidebar composition.
+- Prefer changing child project repos when the request is about project-specific content, shell navigation, or app-specific plugin composition.
 - Do not assume the host is remote-only or out of tree; that is true for many child repos, not for this one.
 
 ## Changesets

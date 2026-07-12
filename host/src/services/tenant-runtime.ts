@@ -379,7 +379,6 @@ function buildEffectivePluginConfig(
 ): RuntimePlugin {
   return {
     ...basePlugin,
-    ...(tenantPlugin.sidebar ? { sidebar: tenantPlugin.sidebar } : {}),
     ...(tenantPlugin.ui ? { ui: tenantPlugin.ui } : {}),
   };
 }
