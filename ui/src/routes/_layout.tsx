@@ -1,11 +1,11 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Globe, Home } from "lucide-react";
 import { getAccount, getActiveRuntime, getAppName, sessionQueryOptions } from "@/app";
 import builtOn from "@/assets/built_on.png";
 import builtOnRev from "@/assets/built_on_rev.png";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserNav } from "@/components/user-nav";
-import { Globe, Home } from "lucide-react";
 
 type SidebarRole = "anon" | "member" | "admin";
 
