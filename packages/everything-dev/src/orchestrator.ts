@@ -177,7 +177,14 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     const entryUrl = yield* Effect.tryPromise({
       try: async () => {
         try {
-          const res = await fetch(manifestUrl);
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          let res: Response;
+          try {
+            res = await fetch(manifestUrl, { signal: controller.signal });
+          } finally {
+            clearTimeout(timer);
+          }
           if (!res.ok) return remoteEntryUrl;
           const json = (await res.json()) as Record<string, unknown>;
           if (
@@ -401,28 +408,36 @@ const spawnRemoteProbe = (
     const entryUrl = `${baseUrl}${descriptor.readinessPath}`;
     const probeUrl = descriptor.readinessPath === "/health" ? `${baseUrl}/health` : manifestUrl;
 
+    const REMOTE_PROBE_TIMEOUT_MS = 5000;
+    const REMOTE_PROBE_BACKOFF_INITIAL_MS = 1000;
+    const REMOTE_PROBE_BACKOFF_MAX_MS = 15_000;
+
     yield* Effect.forkScoped(
       Effect.gen(function* () {
+        yield* Effect.sleep(`${Math.floor(Math.random() * 2000)} millis`);
+
         const deadline = Date.now() + 60_000;
+        let delay = REMOTE_PROBE_BACKOFF_INITIAL_MS;
         while (Date.now() < deadline) {
           const status = yield* Ref.get(statusRef);
           if (status === "ready" || status === "error") return;
 
-          const ok = yield* probeHttpOk(probeUrl, 400);
+          const ok = yield* probeHttpOk(probeUrl, REMOTE_PROBE_TIMEOUT_MS);
 
           if (ok) {
             yield* markReady;
             return;
           }
 
-          const fallbackOk = yield* probeHttpOk(entryUrl, 400);
+          const fallbackOk = yield* probeHttpOk(entryUrl, REMOTE_PROBE_TIMEOUT_MS);
 
           if (fallbackOk) {
             yield* markReady;
             return;
           }
 
-          yield* Effect.sleep("500 millis");
+          yield* Effect.sleep(`${delay} millis`);
+          delay = Math.min(Math.round(delay * 1.5), REMOTE_PROBE_BACKOFF_MAX_MS);
         }
 
         const status = yield* Ref.get(statusRef);

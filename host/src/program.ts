@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { RPCHandler } from "@orpc/server/fetch";
@@ -17,14 +18,13 @@ import { formatORPCError } from "every-plugin/errors";
 import { onError } from "every-plugin/orpc";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
 import { type Context, Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import { proxy } from "hono/proxy";
 import { NONCE, secureHeaders } from "hono/secure-headers";
 import { timeout } from "hono/timeout";
 import { rateLimiter } from "hono-rate-limiter";
-import { getConnInfo } from "@hono/node-server/conninfo";
 import type { AuthVariables } from "./lib/auth";
 import { buildPluginContext, createSessionMiddleware, registerAuthHandler } from "./services/auth";
 import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
@@ -579,7 +579,8 @@ export const createStartServer = (onReady?: () => void) =>
       }),
     );
 
-    const staticAssetPattern = /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
+    const staticAssetPattern =
+      /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
 
     const isHealthPath = (pathname: string) =>
       pathname === "/health" || pathname === "/api/_health";
