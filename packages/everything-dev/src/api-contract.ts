@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { fetchResponse } from "./http-client";
 import type { RuntimeConfig, RuntimePluginConfig } from "./types";
-
-const REMOTE_FETCH_TIMEOUT_MS = 10_000;
 
 export interface ApiPluginManifest {
   schemaVersion: 1;
@@ -70,27 +69,12 @@ function getApiPluginManifestUrl(apiBaseUrl: string): string {
   return `${trimTrailingSlash(apiBaseUrl)}/plugin.manifest.json`;
 }
 
-async function fetchWithTimeout(url: string): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
-
-  try {
-    return await fetch(url, { signal: controller.signal });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Timed out fetching ${url} after ${REMOTE_FETCH_TIMEOUT_MS}ms`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function fetchApiPluginManifest(apiBaseUrl: string): Promise<ApiPluginManifest> {
-  const response = await fetchWithTimeout(getApiPluginManifestUrl(apiBaseUrl));
+  const url = getApiPluginManifestUrl(apiBaseUrl);
+  const response = await fetchResponse(url);
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch API plugin manifest: ${response.status} ${response.statusText}`,
+      `Failed to fetch API plugin manifest from ${url}: ${response.status} ${response.statusText}`,
     );
   }
 
@@ -135,10 +119,10 @@ async function remoteContractSource(opts: {
   }
 
   const contractUrl = `${trimTrailingSlash(opts.baseUrl)}/${manifest.contract.types.path.replace(/^\.\//, "")}`;
-  const contractResponse = await fetchWithTimeout(contractUrl);
+  const contractResponse = await fetchResponse(contractUrl);
   if (!contractResponse.ok) {
     throw new Error(
-      `Failed to fetch contract types: ${contractResponse.status} ${contractResponse.statusText}`,
+      `Failed to fetch contract types from ${contractUrl}: ${contractResponse.status} ${contractResponse.statusText}`,
     );
   }
 
@@ -177,15 +161,15 @@ async function fetchAuthExportTypes(opts: {
   }
 
   const exportUrl = `${trimTrailingSlash(opts.baseUrl)}/${authExportEntry.path.replace(/^\.\//, "")}`;
-  const response = await fetchWithTimeout(exportUrl);
+  const response = await fetchResponse(exportUrl);
   if (!response.ok) {
-    console.warn(`[API Contract] Failed to fetch auth export types: ${response.status}`);
+    console.warn(`[API Contract] Failed to fetch auth export types from ${exportUrl}: ${response.status}`);
     return null;
   }
 
   const content = await response.text();
   if (authExportEntry.sha256 && authExportEntry.sha256 !== sha256(content)) {
-    console.warn("[API Contract] Auth export types checksum mismatch");
+    console.warn(`[API Contract] Auth export types checksum mismatch for ${exportUrl}`);
     return null;
   }
 

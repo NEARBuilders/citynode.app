@@ -16,6 +16,7 @@ import { pipeline } from "node:stream/promises";
 import { execa } from "execa";
 import { glob } from "glob";
 import type { OverrideSection } from "../contract";
+import { fetchResponse } from "../http-client";
 import { fetchBosConfigFromFastKv } from "../fastkv";
 import {
   loadManifestNormalizationSpec,
@@ -324,11 +325,12 @@ export async function downloadTarball(
   let response: Response | null = null;
 
   for (const branch of ["main", "master"]) {
-    const candidate = await fetch(
+    const candidate = await fetchResponse(
       `https://api.github.com/repos/${owner}/${repo}/tarball/${branch}`,
       {
         headers: { "User-Agent": "everything-dev" },
         redirect: "follow",
+        timeout: "60 seconds",
       },
     );
     if (candidate.ok) {

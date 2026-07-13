@@ -6,6 +6,12 @@ type FederationInstance = ReturnType<typeof createInstance>;
 
 let mfInstance: FederationInstance | null = null;
 
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export function patchManifestFetchForSsrPublicPath(mf: FederationInstance): void {
   if (!mf || !(mf as any).loaderHook?.lifecycle?.fetch?.on) return;
   if ((mf as any).__everythingDevPatchedManifestFetch === true) return;
@@ -15,7 +21,7 @@ export function patchManifestFetchForSsrPublicPath(mf: FederationInstance): void
     if (typeof url !== "string" || !url.endsWith("/mf-manifest.json")) {
       return;
     }
-    return fetch(url, init as any)
+    return fetchWithTimeout(url as string, init as RequestInit, 15_000)
       .then((res) => res.json())
       .then((json: any) => {
         json.metaData = json.metaData ?? {};
@@ -48,7 +54,7 @@ export function installIntegrityFetchHook(
     const expectedHash = registry.get(url);
     if (!expectedHash) return;
 
-    return fetch(url, init as any).then(async (res) => {
+    return fetchWithTimeout(url as string, init as RequestInit, 15_000).then(async (res) => {
       const buffer = Buffer.from(await res.arrayBuffer());
       const computed = computeSriHash(buffer);
 

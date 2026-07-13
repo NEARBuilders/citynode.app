@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { fetchResponse } from "./http-client";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 
 const DEFAULT_MAX_SRI_RESPONSE_BYTES = 20 * 1024 * 1024;
@@ -72,7 +73,7 @@ export async function computeSriHashForUrl(
   try {
     const entryUrl = resolveSriTargetUrl(url, options);
 
-    const response = await fetch(entryUrl);
+    const response = await fetchResponse(entryUrl, { timeout: "30 seconds" });
     if (!response.ok) {
       console.warn(`[SRI] Failed to fetch ${entryUrl}: ${response.status} ${response.statusText}`);
       return null;
@@ -101,7 +102,7 @@ export async function verifySriForUrl(
 ): Promise<void> {
   const entryUrl = resolveSriTargetUrl(url, options);
 
-  const response = await fetch(entryUrl);
+  const response = await fetchResponse(entryUrl, { timeout: "30 seconds" });
   if (!response.ok) {
     console.warn(`[SRI] Failed to fetch ${entryUrl} for verification: ${response.status}`);
     return;

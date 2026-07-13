@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fetchJsonOrNull } from "./http-client";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import {
   type BosEnv,
@@ -212,7 +213,10 @@ export async function loadResolvedConfig(options?: {
     };
   } catch (error) {
     resumeWarnings();
-    throw new Error(`Failed to load config from ${configPath}: ${error}`);
+    if (error instanceof Error) {
+      throw new Error(`Failed to load config from ${configPath}: ${error.message}`, { cause: error });
+    }
+    throw new Error(`Failed to load config from ${configPath}: ${String(error)}`);
   }
 }
 
@@ -931,28 +935,13 @@ async function resolveRuntimePlugins(
 }
 
 async function resolveRemotePluginRuntimeName(baseUrl: string, fallback: string): Promise<string> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/plugin.manifest.json`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+  const manifest = await fetchJsonOrNull<{
+    plugin?: { name?: unknown };
+  }>(`${baseUrl.replace(/\/$/, "")}/plugin.manifest.json`, { retries: 0 });
 
-    if (!response.ok) {
-      return fallback;
-    }
-
-    const manifest = (await response.json()) as {
-      plugin?: { name?: unknown };
-    };
-
-    return typeof manifest.plugin?.name === "string" && manifest.plugin.name.length > 0
-      ? manifest.plugin.name
-      : fallback;
-  } catch {
-    return fallback;
-  }
+  return typeof manifest?.plugin?.name === "string" && manifest.plugin.name.length > 0
+    ? manifest.plugin.name
+    : fallback;
 }
 
 function buildRuntimePluginConfig(

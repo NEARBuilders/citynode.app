@@ -8,7 +8,7 @@ interface FastKvListResponse {
   entries?: Array<FastKvEntry | null>;
 }
 
-const FASTKV_TIMEOUT_MS = 10_000;
+import { fetchJsonOrNull } from "./http-client";
 
 function getNetworkIdForAccount(accountId: string): NetworkId {
   return accountId.endsWith(".testnet") ? "testnet" : "mainnet";
@@ -140,64 +140,19 @@ export interface PluginManifest {
 }
 
 export async function fetchRemotePluginManifest(cdnUrl: string): Promise<PluginManifest | null> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FASTKV_TIMEOUT_MS);
-    const baseUrl = cdnUrl.replace(/\/$/, "");
-    const response = await fetch(`${baseUrl}/plugin.manifest.json`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!response.ok) return null;
-    return (await response.json()) as PluginManifest;
-  } catch {
-    return null;
-  }
+  const baseUrl = cdnUrl.replace(/\/$/, "");
+  return fetchJsonOrNull<PluginManifest>(`${baseUrl}/plugin.manifest.json`, { retries: 0 });
 }
 
-const FASTKV_RETRY_MAX = 3;
-const FASTKV_RETRY_BACKOFF_MS = 1000;
-
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= FASTKV_RETRY_MAX; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, FASTKV_RETRY_BACKOFF_MS * 2 ** (attempt - 1)));
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FASTKV_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url, {
-        ...init,
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          ...(init?.headers ?? {}),
-        },
-        signal: controller.signal,
-      });
-
-      if (response.ok) {
-        return (await response.json()) as T;
-      }
-
-      if (response.status >= 400 && response.status < 500) {
-        return null;
-      }
-
-      lastError = new Error(`HTTP ${response.status} from ${url}`);
-    } catch (error) {
-      lastError = error;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  console.error(
-    `[fastkv] Failed after ${FASTKV_RETRY_MAX + 1} attempts: ${url} — ${lastError instanceof Error ? lastError.message : String(lastError)}`,
-  );
-  return null;
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    "content-type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  return fetchJsonOrNull<T>(url, {
+    method: init?.method,
+    headers,
+    body: init?.body ?? undefined,
+  });
 }

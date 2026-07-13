@@ -1539,7 +1539,11 @@ export default createPlugin({
           if (parentConfig?.plugins && typeof parentConfig.plugins === "object") {
             parentPluginKeys = Object.keys(parentConfig.plugins);
           }
-        } catch {}
+        } catch (e) {
+          console.warn(
+            `[init] Failed to fetch parent config from ${extendsAccount}/${extendsGateway}: ${e instanceof Error ? e.message : e}`,
+          );
+        }
 
         overrides = overrides?.length ? overrides : (["ui", "api"] as OverrideSection[]);
         if (overrides.includes("plugins") && plugins === undefined) {
