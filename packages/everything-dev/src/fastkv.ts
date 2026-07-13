@@ -155,27 +155,49 @@ export async function fetchRemotePluginManifest(cdnUrl: string): Promise<PluginM
   }
 }
 
+const FASTKV_RETRY_MAX = 3;
+const FASTKV_RETRY_BACKOFF_MS = 1000;
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FASTKV_TIMEOUT_MS);
+  let lastError: unknown;
 
-  try {
-    const response = await fetch(url, {
-      ...init,
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return null;
+  for (let attempt = 0; attempt <= FASTKV_RETRY_MAX; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, FASTKV_RETRY_BACKOFF_MS * 2 ** (attempt - 1)));
     }
 
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timeout);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FASTKV_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          ...(init?.headers ?? {}),
+        },
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        return (await response.json()) as T;
+      }
+
+      if (response.status >= 400 && response.status < 500) {
+        return null;
+      }
+
+      lastError = new Error(`HTTP ${response.status} from ${url}`);
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  console.error(
+    `[fastkv] Failed after ${FASTKV_RETRY_MAX + 1} attempts: ${url} — ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+  );
+  return null;
 }
