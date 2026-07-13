@@ -68,6 +68,9 @@ describe("integrity", () => {
         resolveEntryUrl: false,
       }),
     ).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledWith("https://cdn.example.com/remoteEntry.server.js");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://cdn.example.com/remoteEntry.server.js",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 });
