@@ -16,8 +16,8 @@ import { pipeline } from "node:stream/promises";
 import { execa } from "execa";
 import { glob } from "glob";
 import type { OverrideSection } from "../contract";
-import { fetchResponse } from "../http-client";
 import { fetchBosConfigFromFastKv } from "../fastkv";
+import { fetchResponse } from "../http-client";
 import {
   loadManifestNormalizationSpec,
   normalizePackageManifestsInTree,

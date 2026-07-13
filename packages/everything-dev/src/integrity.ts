@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { fetchResponse } from "./http-client";
 import { fetchBosConfigFromFastKv } from "./fastkv";
+import { fetchResponse } from "./http-client";
 
 const DEFAULT_MAX_SRI_RESPONSE_BYTES = 20 * 1024 * 1024;
 

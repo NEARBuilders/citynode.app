@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fetchJsonOrNull } from "./http-client";
 import { fetchBosConfigFromFastKv } from "./fastkv";
+import { fetchJsonOrNull } from "./http-client";
 import {
   type BosEnv,
   bosConfigMerger,
@@ -214,7 +214,9 @@ export async function loadResolvedConfig(options?: {
   } catch (error) {
     resumeWarnings();
     if (error instanceof Error) {
-      throw new Error(`Failed to load config from ${configPath}: ${error.message}`, { cause: error });
+      throw new Error(`Failed to load config from ${configPath}: ${error.message}`, {
+        cause: error,
+      });
     }
     throw new Error(`Failed to load config from ${configPath}: ${String(error)}`);
   }

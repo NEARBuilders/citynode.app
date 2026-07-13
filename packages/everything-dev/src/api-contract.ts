@@ -163,7 +163,9 @@ async function fetchAuthExportTypes(opts: {
   const exportUrl = `${trimTrailingSlash(opts.baseUrl)}/${authExportEntry.path.replace(/^\.\//, "")}`;
   const response = await fetchResponse(exportUrl);
   if (!response.ok) {
-    console.warn(`[API Contract] Failed to fetch auth export types from ${exportUrl}: ${response.status}`);
+    console.warn(
+      `[API Contract] Failed to fetch auth export types from ${exportUrl}: ${response.status}`,
+    );
     return null;
   }
 

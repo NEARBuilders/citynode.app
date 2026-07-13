@@ -88,10 +88,7 @@ const fetchRawEff = (
 
 // --- Adds HTTP status checking: non-2xx becomes FetchHttpError ---
 
-const fetchEff = (
-  url: string,
-  options?: FetchOptions,
-): Effect.Effect<Response, FetchError> =>
+const fetchEff = (url: string, options?: FetchOptions): Effect.Effect<Response, FetchError> =>
   fetchRawEff(url, options).pipe(
     Effect.flatMap((response) => {
       if (response.ok) return Effect.succeed(response);
@@ -116,12 +113,13 @@ export const fetchWithRetryEff = (
 
   if (retries <= 0) return fetchEff(url, options);
 
-  const schedule = options?.retries !== undefined
-    ? Schedule.exponential(EXPONENTIAL_BASE).pipe(
-        Schedule.upTo(EXPONENTIAL_CAP),
-        Schedule.intersect(Schedule.recurs(retries)),
-      )
-    : retrySchedule;
+  const schedule =
+    options?.retries !== undefined
+      ? Schedule.exponential(EXPONENTIAL_BASE).pipe(
+          Schedule.upTo(EXPONENTIAL_CAP),
+          Schedule.intersect(Schedule.recurs(retries)),
+        )
+      : retrySchedule;
 
   return fetchEff(url, options).pipe(
     Effect.retry({
@@ -133,31 +131,30 @@ export const fetchWithRetryEff = (
 
 // --- Promise wrappers (bridge for non-Effect code) ---
 
-export const fetchResponse = (
-  url: string,
-  options?: FetchOptions,
-): Promise<Response> =>
+export const fetchResponse = (url: string, options?: FetchOptions): Promise<Response> =>
   Effect.runPromise(fetchRawEff(url, options));
 
 export const fetchJsonOrNull = async <T>(
   url: string,
   options?: FetchWithRetryOptions,
 ): Promise<T | null> => {
-  const eff = options?.retries !== undefined && options.retries >= 0
-    ? fetchWithRetryEff(url, options)
-    : fetchEff(url, options);
+  const eff =
+    options?.retries !== undefined && options.retries >= 0
+      ? fetchWithRetryEff(url, options)
+      : fetchEff(url, options);
 
   try {
     const res = await Effect.runPromise(eff);
     return (await res.json()) as T;
   } catch (error) {
-    const msg = error instanceof FetchNetworkError
-      ? `[http] Network error: ${error.url} — ${String(error.cause)}`
-      : error instanceof FetchTimeoutError
-        ? `[http] Timeout: ${error.url}`
-        : error instanceof FetchHttpError
-          ? `[http] HTTP ${error.status}: ${error.url}`
-          : `[http] Unknown error while fetching ${url}`;
+    const msg =
+      error instanceof FetchNetworkError
+        ? `[http] Network error: ${error.url} — ${String(error.cause)}`
+        : error instanceof FetchTimeoutError
+          ? `[http] Timeout: ${error.url}`
+          : error instanceof FetchHttpError
+            ? `[http] HTTP ${error.status}: ${error.url}`
+            : `[http] Unknown error while fetching ${url}`;
     console.error(msg);
     return null;
   }

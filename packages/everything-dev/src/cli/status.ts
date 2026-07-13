@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fetchJsonOrNull } from "../http-client";
 import type { StatusResult } from "../contract";
 import { fetchBosConfigFromFastKv } from "../fastkv";
+import { fetchJsonOrNull } from "../http-client";
 import { readInstalledFrameworkVersion } from "./framework-version";
 import { readSnapshot } from "./snapshot";
 
@@ -22,10 +22,10 @@ const CATALOG_TOOL_PACKAGES = [
 ] as const;
 
 async function fetchLatestNpmVersion(packageName: string): Promise<string | null> {
-  return fetchJsonOrNull<{ version: string }>(
-    `https://registry.npmjs.org/${packageName}/latest`,
-    { headers: { Accept: "application/json" }, retries: 0 },
-  ).then((data) => data?.version ?? null);
+  return fetchJsonOrNull<{ version: string }>(`https://registry.npmjs.org/${packageName}/latest`, {
+    headers: { Accept: "application/json" },
+    retries: 0,
+  }).then((data) => data?.version ?? null);
 }
 
 function readInstalledVersion(projectDir: string, packageName: string): string | undefined {

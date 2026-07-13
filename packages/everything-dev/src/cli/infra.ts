@@ -96,7 +96,8 @@ function savePortState(configDir: string, state: PortState): void {
 function resolvePort(slug: string, portMap: Record<string, number>, basePort: number): number {
   if (portMap[slug] !== undefined) return portMap[slug];
   const assigned = Object.values(portMap);
-  const next = assigned.length > 0 ? Math.max(...assigned) + 1 : basePort;
+  const maxAssigned = assigned.length > 0 ? Math.max(...assigned) : basePort - 1;
+  const next = Math.max(maxAssigned + 1, basePort);
   portMap[slug] = next;
   return next;
 }
@@ -221,6 +222,15 @@ function buildDatabaseConfigs(
 
   const orderedSecrets = [...databaseSecrets];
 
+  // Prune stale entries from removed plugins
+  const currentSlugs = new Set(orderedSecrets.map(normalizeDatabaseSlug));
+  for (const slug of Object.keys(portMap)) {
+    if (!currentSlugs.has(slug)) delete portMap[slug];
+  }
+
+  // Sort by slug for deterministic assignment order
+  orderedSecrets.sort((a, b) => normalizeDatabaseSlug(a).localeCompare(normalizeDatabaseSlug(b)));
+
   for (const secret of orderedSecrets) {
     const slug = normalizeDatabaseSlug(secret);
     if (secret === API_DATABASE_SECRET) {
@@ -263,13 +273,23 @@ function buildRedisConfigs(
   portMap: Record<string, number>,
 ): RedisSecretConfig[] {
   const redisSecrets = uniqueSecrets(secrets.filter((secret) => secret.endsWith("_REDIS_URL")));
+  const orderedSecrets = [...redisSecrets];
 
-  for (const secret of redisSecrets) {
+  // Prune stale entries from removed plugins
+  const currentSlugs = new Set(orderedSecrets.map(normalizeRedisSlug));
+  for (const slug of Object.keys(portMap)) {
+    if (!currentSlugs.has(slug)) delete portMap[slug];
+  }
+
+  // Sort by slug for deterministic assignment order
+  orderedSecrets.sort((a, b) => normalizeRedisSlug(a).localeCompare(normalizeRedisSlug(b)));
+
+  for (const secret of orderedSecrets) {
     const slug = normalizeRedisSlug(secret);
     resolvePort(slug, portMap, BASE_REDIS_PORT);
   }
 
-  return redisSecrets.map((secret) => {
+  return orderedSecrets.map((secret) => {
     const slug = normalizeRedisSlug(secret);
     const fromKey = originMap.get(secret) ?? "";
     const port = portMap[slug];

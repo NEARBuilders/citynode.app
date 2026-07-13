@@ -233,7 +233,7 @@ describe("generated infra", () => {
     expect(dockerCompose).toContain('"5435:5432"');
   });
 
-  it("preserves insertion order from config (not alphabetical)", () => {
+  it("assigns ports by alphabetical slug order for deterministic fallback", () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-order-"));
     tempDirs.push(dir);
 
@@ -270,9 +270,10 @@ describe("generated infra", () => {
 
     const state = JSON.parse(readFileSync(join(dir, ".bos", "infra-state.json"), "utf-8"));
 
-    expect(state.postgresPorts.zebra).toBe(5434);
-    expect(state.postgresPorts.alpha).toBe(5435);
-    expect(state.postgresPorts.beta).toBe(5436);
+    // Slugs sorted alphabetically: alpha, beta, zebra
+    expect(state.postgresPorts.alpha).toBe(5434);
+    expect(state.postgresPorts.beta).toBe(5435);
+    expect(state.postgresPorts.zebra).toBe(5436);
   });
 
   it("detects stale .env values when ports change", () => {
