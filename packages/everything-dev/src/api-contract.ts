@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { fetchResponse } from "./http-client";
+import { fetchJsonOrNull, fetchResponse } from "./http-client";
 import type { RuntimeConfig, RuntimePluginConfig } from "./types";
 
 export interface ApiPluginManifest {
@@ -71,14 +71,10 @@ function getApiPluginManifestUrl(apiBaseUrl: string): string {
 
 async function fetchApiPluginManifest(apiBaseUrl: string): Promise<ApiPluginManifest> {
   const url = getApiPluginManifestUrl(apiBaseUrl);
-  const response = await fetchResponse(url);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch API plugin manifest from ${url}: ${response.status} ${response.statusText}`,
-    );
+  const manifest = await fetchJsonOrNull<ApiPluginManifest>(url, { retries: 0 });
+  if (!manifest) {
+    throw new Error(`Failed to fetch API plugin manifest from ${url}`);
   }
-
-  const manifest = (await response.json()) as ApiPluginManifest;
   if (manifest.schemaVersion !== 1 || manifest.kind !== "every-plugin/manifest") {
     throw new Error("Unsupported API plugin manifest format");
   }
@@ -599,9 +595,13 @@ export async function syncApiContractBridge(opts: {
       );
       status.push({ key, source: "skipped" });
       excludedPluginKeys.add(key);
-      continue;
     }
-    try {
+  }
+
+  const resolvablePlugins = pluginEntries.filter(([key]) => !excludedPluginKeys.has(key));
+
+  const pluginResults = await Promise.allSettled(
+    resolvablePlugins.map(async ([key, plugin]) => {
       const source = await resolveContractSource({
         configDir: opts.configDir,
         runtimeDir,
@@ -610,22 +610,34 @@ export async function syncApiContractBridge(opts: {
         baseUrl: plugin.url,
         generatedSubdir: `plugins/${key}`,
       });
-      sources.push(source);
+      return {
+        key,
+        source,
+        plugin,
+      };
+    }),
+  );
+
+  pluginResults.forEach((result, index) => {
+    const [key, plugin] = resolvablePlugins[index];
+    if (result.status === "fulfilled") {
+      sources.push(result.value.source);
       status.push({
         key,
         source: plugin.source,
         url: plugin.source !== "local" ? plugin.url : undefined,
       });
-      if (source.generatedPath) {
-        generatedPath = source.generatedPath;
+      if (result.value.source.generatedPath) {
+        generatedPath = result.value.source.generatedPath;
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+    } else {
+      const message =
+        result.reason instanceof Error ? result.reason.message : String(result.reason);
       console.warn(`[API Contract] Failed to resolve plugin "${key}": ${message}`);
       status.push({ key, source: "failed", url: plugin.url || undefined, error: message });
       excludedPluginKeys.add(key);
     }
-  }
+  });
 
   const apiStatus = status.find((s) => s.key === "api");
   if (apiStatus?.source === "failed") {

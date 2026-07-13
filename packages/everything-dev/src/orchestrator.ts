@@ -65,6 +65,14 @@ const probeHttpOk = (url: string, timeoutMs = 400) =>
     catch: () => false,
   });
 
+const LOCAL_PROBE_DEADLINE_MS = 90_000;
+const LOCAL_PROBE_INTERVAL_MS = 200;
+
+const REMOTE_PROBE_TIMEOUT_MS = 5000;
+const REMOTE_PROBE_DEADLINE_MS = 60_000;
+const REMOTE_PROBE_BACKOFF_INITIAL_MS = 1000;
+const REMOTE_PROBE_BACKOFF_MAX_MS = 15_000;
+
 const detectStatus = (
   line: string,
   descriptor: ServiceDescriptor,
@@ -286,13 +294,22 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       yield* Deferred.succeed(readyDeferred, undefined).pipe(Effect.ignore);
     });
 
-    if (port > 0) {
-      const readinessPath = descriptor.readinessPath;
-      const url = `http://127.0.0.1:${port}${readinessPath}`;
+    const markError = (message: string) =>
+      Effect.gen(function* () {
+        const currentStatus = yield* Ref.get(statusRef);
+        if (currentStatus === "ready" || currentStatus === "error") return;
+        yield* Ref.set(statusRef, "error");
+        callbacks.onStatus(name, "error");
+        yield* Deferred.fail(readyDeferred, new Error(message)).pipe(Effect.ignore);
+      });
 
-      yield* Effect.forkScoped(
-        Effect.gen(function* () {
-          const deadline = Date.now() + 90_000;
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        const deadline = Date.now() + LOCAL_PROBE_DEADLINE_MS;
+
+        if (port > 0) {
+          const readinessPath = descriptor.readinessPath;
+          const url = `http://127.0.0.1:${port}${readinessPath}`;
           while (Date.now() < deadline) {
             const status = yield* Ref.get(statusRef);
             if (status === "ready" || status === "error") return;
@@ -301,11 +318,23 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
               yield* markReady;
               return;
             }
-            yield* Effect.sleep("200 millis");
+            yield* Effect.sleep(`${LOCAL_PROBE_INTERVAL_MS} millis`);
           }
-        }),
-      );
-    }
+        } else {
+          while (Date.now() < deadline) {
+            const status = yield* Ref.get(statusRef);
+            if (status === "ready" || status === "error") return;
+            yield* Effect.sleep("500 millis");
+          }
+        }
+
+        const status = yield* Ref.get(statusRef);
+        if (status !== "ready" && status !== "error") {
+          callbacks.onLog(name, "Probe deadline exceeded after 90s", true);
+          yield* markError(`Probe deadline exceeded: ${name}`);
+        }
+      }),
+    );
 
     const pid = Number(proc.pid);
 
@@ -315,11 +344,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         const currentStatus = yield* Ref.get(statusRef);
         if (currentStatus === "ready" || currentStatus === "error") return;
         callbacks.onLog(name, `Process exited before ready (exit code: ${exitCode})`, true);
-        yield* Ref.set(statusRef, "error");
-        callbacks.onStatus(name, "error");
-        yield* Deferred.fail(readyDeferred, new Error(`Process exited before ready: ${name}`)).pipe(
-          Effect.ignore,
-        );
+        yield* markError(`Process exited before ready: ${name}`);
       }),
     );
 
@@ -339,16 +364,10 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
         const detected = detectStatus(line, descriptor);
         if (detected) {
-          yield* Ref.set(statusRef, detected.status);
-          callbacks.onStatus(name, detected.status);
-          if (detected.status === "ready" || detected.status === "error") {
-            if (detected.status === "ready") {
-              yield* Deferred.succeed(readyDeferred, undefined).pipe(Effect.ignore);
-            } else {
-              yield* Deferred.fail(readyDeferred, new Error(`Process failed: ${name}`)).pipe(
-                Effect.ignore,
-              );
-            }
+          if (detected.status === "ready") {
+            yield* markReady;
+          } else {
+            yield* markError(`Process failed: ${name}`);
           }
         }
       });
@@ -392,14 +411,20 @@ const spawnRemoteProbe = (
     const statusRef = yield* Ref.make<ProcessStatus>("starting");
 
     const markReady = Effect.gen(function* () {
+      const currentStatus = yield* Ref.get(statusRef);
+      if (currentStatus === "ready" || currentStatus === "error") return;
       yield* Ref.set(statusRef, "ready");
-      yield* Deferred.succeed(readyDeferred, undefined);
+      yield* Deferred.succeed(readyDeferred, undefined).pipe(Effect.ignore);
       callbacks.onStatus(pkg, "ready", "loaded");
     });
 
     const markError = Effect.gen(function* () {
+      const currentStatus = yield* Ref.get(statusRef);
+      if (currentStatus === "ready" || currentStatus === "error") return;
       yield* Ref.set(statusRef, "error");
-      yield* Deferred.fail(readyDeferred, new Error(`Remote ${pkg} unreachable`));
+      yield* Deferred.fail(readyDeferred, new Error(`Remote ${pkg} unreachable`)).pipe(
+        Effect.ignore,
+      );
       callbacks.onStatus(pkg, "error", "unreachable");
     });
 
@@ -408,15 +433,9 @@ const spawnRemoteProbe = (
     const entryUrl = `${baseUrl}${descriptor.readinessPath}`;
     const probeUrl = descriptor.readinessPath === "/health" ? `${baseUrl}/health` : manifestUrl;
 
-    const REMOTE_PROBE_TIMEOUT_MS = 5000;
-    const REMOTE_PROBE_BACKOFF_INITIAL_MS = 1000;
-    const REMOTE_PROBE_BACKOFF_MAX_MS = 15_000;
-
     yield* Effect.forkScoped(
       Effect.gen(function* () {
-        yield* Effect.sleep(`${Math.floor(Math.random() * 2000)} millis`);
-
-        const deadline = Date.now() + 60_000;
+        const deadline = Date.now() + REMOTE_PROBE_DEADLINE_MS;
         let delay = REMOTE_PROBE_BACKOFF_INITIAL_MS;
         while (Date.now() < deadline) {
           const status = yield* Ref.get(statusRef);

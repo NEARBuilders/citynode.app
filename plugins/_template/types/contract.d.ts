@@ -17,6 +17,11 @@ export declare const BackgroundEventSchema: z.ZodObject<{
     index: z.ZodNumber;
     timestamp: z.ZodNumber;
 }, z.core.$strip>;
+export declare const ThingPayloadSchema: z.ZodObject<{
+    type: z.ZodString;
+    payload: z.ZodUnknown;
+    action: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
 export declare const contract: {
     getById: import("@orpc/contract").ContractProcedure<z.ZodObject<{
         id: z.ZodString;
@@ -75,6 +80,30 @@ export declare const contract: {
         id: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>, z.ZodObject<{
         ok: z.ZodBoolean;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
+    createThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        thingId: z.ZodString;
+        payload: z.ZodUnknown;
+    }, z.core.$strip>, z.ZodObject<{
+        type: z.ZodString;
+        payload: z.ZodUnknown;
+        action: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
+    getThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        thingId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        type: z.ZodString;
+        payload: z.ZodUnknown;
+    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+        NOT_FOUND: {
+            status: number;
+            message: string;
+        };
+    }>>, Record<never, never>>;
+    deleteThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        thingId: z.ZodString;
+    }, z.core.$strip>, z.ZodObject<{
+        success: z.ZodLiteral<true>;
     }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
 };
 export type ContractType = typeof contract;

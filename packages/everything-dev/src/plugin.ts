@@ -587,11 +587,13 @@ async function buildWorkspaceTargets(opts: {
     await run("bun", ["install"], { cwd: opts.configDir });
   }
 
-  if (existing.some((entry) => entry.key === "api")) {
-    await buildEveryPluginQuietly(opts.configDir);
-  }
+  const shouldBuildPlugin = existing.some((entry) => entry.key === "api");
 
-  await buildEverythingDevQuietly(opts.configDir);
+  const buildTasks: Promise<void>[] = [buildEverythingDevQuietly(opts.configDir)];
+  if (shouldBuildPlugin) {
+    buildTasks.push(buildEveryPluginQuietly(opts.configDir));
+  }
+  await Promise.all(buildTasks);
 
   const env: Record<string, string> = {
     ...process.env,
@@ -879,10 +881,10 @@ export default createPlugin({
     }),
 
     dev: builder.dev.handler(async ({ input }) => {
+      const devTimings: PhaseTiming[] = [];
+
       ensureEnvFile(deps.configDir);
       loadProjectEnv(deps.configDir);
-
-      pluginEvents.emit("progress", { phase: "config", status: "running" } satisfies ProgressEvent);
 
       const localPackages = detectLocalPackages(
         deps.bosConfig ?? undefined,
@@ -904,53 +906,51 @@ export default createPlugin({
       const ssr = input.ssr ?? false;
       const proxy = input.proxy ?? false;
 
-      const sharedSync = await syncResolvedSharedDeps({
-        configDir: deps.configDir,
-        hostMode: hostSource,
-        bosConfig: deps.bosConfig ?? undefined,
-        extendsChain: [],
-      });
+      const sharedSync = await timePhase(devTimings, "shared deps", () =>
+        syncResolvedSharedDeps({
+          configDir: deps.configDir,
+          hostMode: hostSource,
+          bosConfig: deps.bosConfig ?? undefined,
+          extendsChain: [],
+        }),
+      );
+      let configMayHaveChanged = false;
       if (sharedSync.catalogChanged) {
-        pluginEvents.emit("progress", {
-          phase: "install",
-          status: "running",
-        } satisfies ProgressEvent);
-        await run("bun", ["install"], { cwd: deps.configDir });
-        pluginEvents.emit("progress", { phase: "install", status: "done" } satisfies ProgressEvent);
+        await timePhase(devTimings, "install", () =>
+          run("bun", ["install"], { cwd: deps.configDir }),
+        );
+        configMayHaveChanged = true;
       }
-      if (
-        (apiSource === "local" && !proxy) ||
-        localPackages.some((pkg) => pkg.startsWith("plugin:"))
-      ) {
-        pluginEvents.emit("progress", {
-          phase: "build plugin",
-          status: "running",
-        } satisfies ProgressEvent);
-        await buildEveryPluginQuietly(deps.configDir);
-        pluginEvents.emit("progress", {
-          phase: "build plugin",
-          status: "done",
-        } satisfies ProgressEvent);
-      }
+      const shouldBuildPlugin =
+        (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
 
-      pluginEvents.emit("progress", { phase: "build", status: "running" } satisfies ProgressEvent);
-      await buildEverythingDevQuietly(deps.configDir);
-      pluginEvents.emit("progress", { phase: "build", status: "done" } satisfies ProgressEvent);
-
-      pluginEvents.emit("progress", { phase: "config", status: "done" } satisfies ProgressEvent);
-
-      const refreshed = await loadResolvedConfig({
-        cwd: deps.configDir,
-        remotePlugins: input.remotePlugins,
+      await timePhase(devTimings, "build", async () => {
+        const buildTasks: Promise<void>[] = [buildEverythingDevQuietly(deps.configDir)];
+        if (shouldBuildPlugin) {
+          buildTasks.push(buildEveryPluginQuietly(deps.configDir));
+        }
+        await Promise.all(buildTasks);
       });
-      deps.bosConfig = refreshed?.config ?? deps.bosConfig;
-      deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
+
+      let devExtendsChain: string[] | undefined;
+      if (configMayHaveChanged || input.remotePlugins?.length) {
+        const refreshed = await timePhase(devTimings, "resolve config", () =>
+          loadResolvedConfig({
+            cwd: deps.configDir,
+            remotePlugins: input.remotePlugins,
+          }),
+        );
+        deps.bosConfig = refreshed?.config ?? deps.bosConfig;
+        deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
+        devExtendsChain = refreshed?.source.extended;
+      }
 
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
           description: "No bos.config.json found",
           processes: [],
+          timings: devTimings,
         };
       }
 
@@ -959,6 +959,7 @@ export default createPlugin({
           status: "error" as const,
           description: "No valid proxy URL configured in bos.config.json",
           processes: [],
+          timings: devTimings,
         };
       }
 
@@ -974,22 +975,24 @@ export default createPlugin({
       });
       drainConfigWarnings();
       resumeWarnings();
-      const runtimeConfig = await prepareDevelopmentRuntimeConfig(developmentRuntime, {
-        hostPort,
-        ssr,
-      });
+      const runtimeConfig = await timePhase(devTimings, "ports", () =>
+        prepareDevelopmentRuntimeConfig(developmentRuntime, {
+          hostPort,
+          ssr,
+        }),
+      );
 
       syncGeneratedInfra(deps.configDir, runtimeConfig);
-      if (!existsSync(join(deps.configDir, ".env"))) {
-        ensureEnvFile(deps.configDir);
-        loadProjectEnv(deps.configDir);
-      }
+      ensureEnvFile(deps.configDir);
+      loadProjectEnv(deps.configDir);
 
-      await generateCodeArtifacts(deps.configDir, deps.bosConfig, {
-        env: "development",
-        extendsChain: refreshed?.source.extended,
-        runtimeConfig,
-      });
+      await timePhase(devTimings, "generate artifacts", () =>
+        generateCodeArtifacts(deps.configDir, deps.bosConfig!, {
+          env: "development",
+          extendsChain: devExtendsChain,
+          runtimeConfig,
+        }),
+      );
 
       const services = buildServiceDescriptorMap(runtimeConfig, { ssr, proxy });
       const packages = [...services.keys()];
@@ -1031,6 +1034,7 @@ export default createPlugin({
         status: "started" as const,
         description: orchestrator.description,
         processes: packages,
+        timings: devTimings,
       };
     }),
 
@@ -1115,10 +1119,8 @@ export default createPlugin({
       }
 
       syncGeneratedInfra(deps.configDir, runtimeConfig);
-      if (!existsSync(join(deps.configDir, ".env"))) {
-        ensureEnvFile(deps.configDir);
-        loadProjectEnv(deps.configDir);
-      }
+      ensureEnvFile(deps.configDir);
+      loadProjectEnv(deps.configDir);
 
       pluginEvents.emit("progress", {
         phase: "generate artifacts",
@@ -1551,6 +1553,20 @@ export default createPlugin({
         }
         plugins = plugins ?? [];
 
+        const pluginDirMap: Record<string, string> = {};
+        if (parentConfig?.plugins) {
+          for (const plugin of plugins) {
+            const entry = (parentConfig.plugins as Record<string, unknown>)?.[plugin];
+            if (entry && typeof entry === "object") {
+              const dev = (entry as Record<string, unknown>).development;
+              if (typeof dev === "string") {
+                const match = dev.match(/^local:plugins\/(.+)$/);
+                if (match?.[1] && match[1] !== plugin) pluginDirMap[plugin] = match[1];
+              }
+            }
+          }
+        }
+
         directory = directory || domain || extendsGateway;
         const targetDir = resolve(directory);
         const extendsRef = `bos://${extendsAccount}/${extendsGateway}`;
@@ -1632,7 +1648,7 @@ export default createPlugin({
               }),
             );
           } else {
-            const patterns = buildInitPatterns(overrides, plugins);
+            const patterns = buildInitPatterns(overrides, plugins, pluginDirMap);
 
             filesCopied = await timePhase(timings, "copy files", () =>
               copyFilteredFiles(sourceDir, targetDir, patterns, {

@@ -154,5 +154,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> 
     method: init?.method,
     headers,
     body: init?.body ?? undefined,
+    retries: 3,
   });
 }

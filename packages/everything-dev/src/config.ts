@@ -71,15 +71,23 @@ function emitConfigWarning(message: string): void {
   }
 }
 
+const configPathCache = new Map<string, string | null>();
+
 export function findConfigPath(cwd?: string): string | null {
-  let dir = cwd ?? process.cwd();
+  const cacheKey = cwd ?? process.cwd();
+  const cached = configPathCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  let dir = cacheKey;
   while (dir !== "/") {
     const configPath = join(dir, "bos.config.json");
     if (existsSync(configPath)) {
+      configPathCache.set(cacheKey, configPath);
       return configPath;
     }
     dir = dirname(dir);
   }
+  configPathCache.set(cacheKey, null);
   return null;
 }
 
@@ -370,15 +378,12 @@ export async function resolveConfigComposableEntries(
   baseDir: string,
   env: BosEnv,
 ): Promise<BosConfig> {
-  const resolvedApi = await resolveComposableReference(
-    config.app.api as BosPluginRef,
-    baseDir,
-    env,
-    "app.api",
-  );
-  const resolvedAuth = config.app.auth
-    ? await resolveComposableReference(config.app.auth as BosPluginRef, baseDir, env, "app.auth")
-    : undefined;
+  const [resolvedApi, resolvedAuth] = await Promise.all([
+    resolveComposableReference(config.app.api as BosPluginRef, baseDir, env, "app.api"),
+    config.app.auth
+      ? resolveComposableReference(config.app.auth as BosPluginRef, baseDir, env, "app.auth")
+      : Promise.resolve(undefined),
+  ]);
 
   const resolvedPlugins = config.plugins
     ? Object.fromEntries(
@@ -814,6 +819,7 @@ export function buildRuntimeConfig(
     },
     auth: (() => {
       if (!authConfig || !authRuntime) return undefined;
+      if (!authRuntime.localPath && !authRuntime.url) return undefined;
       return {
         name: resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth"),
         extendsRef: authExtendsRef,
@@ -898,39 +904,53 @@ async function resolveRuntimePlugins(
   env: BosEnv,
   remotePlugins?: string[],
 ): Promise<Record<string, RuntimePluginConfig>> {
-  const out: Record<string, RuntimePluginConfig> = {};
-
-  for (const [pluginId, rawInput] of Object.entries(plugins)) {
-    const normalized = normalizePluginEntry(rawInput);
-    if (normalized === null || normalized === false) continue;
-
-    const resolvedReference = await resolveComposableReference(
-      normalized,
-      baseDir,
-      env,
-      `plugins.${pluginId}`,
+  const entries = Object.entries(plugins)
+    .map(([pluginId, rawInput]) => ({
+      pluginId,
+      normalized: normalizePluginEntry(rawInput),
+    }))
+    .filter(
+      (entry): entry is { pluginId: string; normalized: BosPluginRef } =>
+        entry.normalized !== null && entry.normalized !== false,
     );
 
-    const forceSource = remotePlugins?.includes(pluginId) ? "remote" : undefined;
-    const pluginRuntime = buildRuntimePluginConfig(pluginId, env, resolvedReference, forceSource);
-
-    if (!pluginRuntime.localPath && !pluginRuntime.url) {
-      continue;
-    }
-
-    if (
-      pluginRuntime.source === "remote" &&
-      pluginRuntime.url &&
-      !pluginRuntime.localPath &&
-      typeof resolvedReference.entry.name !== "string"
-    ) {
-      pluginRuntime.name = await resolveRemotePluginRuntimeName(
-        pluginRuntime.url,
-        pluginRuntime.name,
+  const resolved = await Promise.all(
+    entries.map(async ({ pluginId, normalized }) => {
+      const resolvedReference = await resolveComposableReference(
+        normalized,
+        baseDir,
+        env,
+        `plugins.${pluginId}`,
       );
-    }
 
-    out[pluginId] = pluginRuntime;
+      const forceSource = remotePlugins?.includes(pluginId) ? "remote" : undefined;
+      const pluginRuntime = buildRuntimePluginConfig(pluginId, env, resolvedReference, forceSource);
+
+      if (!pluginRuntime.localPath && !pluginRuntime.url) {
+        return null;
+      }
+
+      if (
+        pluginRuntime.source === "remote" &&
+        pluginRuntime.url &&
+        !pluginRuntime.localPath &&
+        typeof resolvedReference.entry.name !== "string"
+      ) {
+        pluginRuntime.name = await resolveRemotePluginRuntimeName(
+          pluginRuntime.url,
+          pluginRuntime.name,
+        );
+      }
+
+      return [pluginId, pluginRuntime] as const;
+    }),
+  );
+
+  const out: Record<string, RuntimePluginConfig> = {};
+  for (const entry of resolved) {
+    if (entry) {
+      out[entry[0]] = entry[1];
+    }
   }
 
   return out;

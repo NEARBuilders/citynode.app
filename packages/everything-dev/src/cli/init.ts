@@ -222,7 +222,11 @@ export async function resolveSourceDir(opts: {
   };
 }
 
-export function buildInitPatterns(overrides: OverrideSection[], plugins?: string[]): string[] {
+export function buildInitPatterns(
+  overrides: OverrideSection[],
+  plugins?: string[],
+  pluginDirMap?: Record<string, string>,
+): string[] {
   const has = (section: OverrideSection) => overrides.includes(section);
   const patterns: string[] = [...INIT_ROOT_PATTERNS];
 
@@ -231,7 +235,8 @@ export function buildInitPatterns(overrides: OverrideSection[], plugins?: string
   if (has("host")) patterns.push("host/**");
   if (has("plugins")) {
     for (const plugin of plugins ?? []) {
-      patterns.push(`plugins/${plugin}/**`);
+      const dirName = pluginDirMap?.[plugin] ?? plugin;
+      patterns.push(`plugins/${dirName}/**`);
     }
   }
 

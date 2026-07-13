@@ -61,19 +61,20 @@ export async function getStatus(projectDir: string): Promise<StatusResult> {
 
   const config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
 
-  const packages = [];
-  for (const name of FRAMEWORK_PACKAGES) {
-    const installed = readInstalledVersion(projectDir, name);
-    const latest = await fetchLatestNpmVersion(name);
-    packages.push({ name, installed, latest: latest ?? undefined });
+  const packageNames = [...FRAMEWORK_PACKAGES];
+  for (const name of CATALOG_TOOL_PACKAGES) {
+    if (readInstalledVersion(projectDir, name)) {
+      packageNames.push(name);
+    }
   }
 
-  for (const name of CATALOG_TOOL_PACKAGES) {
-    const installed = readInstalledVersion(projectDir, name);
-    if (!installed) continue;
-    const latest = await fetchLatestNpmVersion(name);
-    packages.push({ name, installed, latest: latest ?? undefined });
-  }
+  const packages = await Promise.all(
+    packageNames.map(async (name) => {
+      const installed = readInstalledVersion(projectDir, name);
+      const latest = await fetchLatestNpmVersion(name);
+      return { name, installed, latest: latest ?? undefined };
+    }),
+  );
 
   const snapshot = await readSnapshot(projectDir);
 

@@ -184,7 +184,7 @@ async function main() {
 
   const client = plugin.createClient();
 
-  await warnIfOutdated(client, command);
+  const outdatedWarning = warnIfOutdated(client, command);
 
   try {
     const input = parseCommandInput(descriptor, commandArgs);
@@ -194,10 +194,12 @@ async function main() {
       devSpinner.start("Starting dev environment");
 
       const devPhaseLabels: Record<string, string> = {
-        config: "Preparing config...",
+        "shared deps": "Preparing config...",
         install: "Installing dependencies...",
-        "build plugin": "Building plugin...",
-        build: "Building everything-dev...",
+        build: "Building...",
+        "resolve config": "Resolving config...",
+        ports: "Finding available ports...",
+        "generate artifacts": "Generating code artifacts...",
       };
 
       const onDevProgress = (event: ProgressEvent) => {
@@ -225,6 +227,7 @@ async function main() {
       clearSpinnerStopLine();
 
       const session = consumeDevSession();
+      await outdatedWarning;
       if (session) {
         const { devApp } = await import("./dev-session");
         devApp(session.orchestrator, session.services, session.runtimeConfig);
@@ -265,6 +268,7 @@ async function main() {
       startSpinner.stop("Ready");
 
       const session = consumeDevSession();
+      await outdatedWarning;
       if (session) {
         const summary = session.summary;
         if (summary) {
@@ -433,6 +437,8 @@ async function main() {
 
       return;
     }
+
+    await outdatedWarning;
 
     const result = await (client as any)[descriptor.key](input);
 

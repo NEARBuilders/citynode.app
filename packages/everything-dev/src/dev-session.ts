@@ -179,8 +179,19 @@ export const runDevSession = (
     const startGroup = (packages: string[]) =>
       Effect.forEach(packages, startProcess, { concurrency: "unbounded" });
 
-    const awaitReady = (_pkg: string, handle: ProcessHandle) =>
-      handle.waitForReady.pipe(Effect.catchAll(() => Effect.void));
+    const awaitReady = (pkg: string, handle: ProcessHandle) =>
+      handle.waitForReady.pipe(
+        Effect.timeout("120 seconds"),
+        Effect.catchAll((err) =>
+          Effect.sync(() => {
+            callbacks.onLog(
+              pkg,
+              `Timed out or failed: ${err instanceof Error ? err.message : String(err)}`,
+              true,
+            );
+          }),
+        ),
+      );
 
     const nonHostPackages = orderedPackages.filter((pkg) => pkg !== "host");
     const hostPackages = orderedPackages.filter((pkg) => pkg === "host");

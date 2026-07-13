@@ -21,6 +21,7 @@ import { Route as LayoutThingsLiveRouteImport } from './routes/_layout/things/li
 import { Route as LayoutThingsThingIdRouteImport } from './routes/_layout/things/$thingId'
 import { Route as LayoutAuthenticatedSettingsRouteImport } from './routes/_layout/_authenticated/settings'
 import { Route as LayoutAuthenticatedHomeRouteImport } from './routes/_layout/_authenticated/home'
+import { Route as LayoutAuthenticatedAdminRouteImport } from './routes/_layout/_authenticated/admin'
 import { Route as LayoutAppsAccountIdIndexRouteImport } from './routes/_layout/apps/$accountId/index'
 import { Route as LayoutAuthenticatedSettingsIndexRouteImport } from './routes/_layout/_authenticated/settings/index'
 import { Route as LayoutAuthenticatedOrganizationsIndexRouteImport } from './routes/_layout/_authenticated/organizations/index'
@@ -31,7 +32,6 @@ import { Route as LayoutAuthenticatedSettingsProfileRouteImport } from './routes
 import { Route as LayoutAuthenticatedSettingsAuthMethodsRouteImport } from './routes/_layout/_authenticated/settings/auth-methods'
 import { Route as LayoutAuthenticatedOrganizationsNewRouteImport } from './routes/_layout/_authenticated/organizations/new'
 import { Route as LayoutAuthenticatedOrganizationsSlugRouteImport } from './routes/_layout/_authenticated/organizations/$slug'
-import { Route as LayoutAuthenticatedAdminRouteImport } from './routes/_layout/_authenticated/admin'
 import { Route as LayoutAuthenticatedAcceptInvitationIdRouteImport } from './routes/_layout/_authenticated/accept-invitation.$id'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -93,11 +93,12 @@ const LayoutAuthenticatedHomeRoute = LayoutAuthenticatedHomeRouteImport.update({
   path: '/home',
   getParentRoute: () => LayoutAuthenticatedRoute,
 } as any)
-const LayoutAuthenticatedAdminRoute = LayoutAuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => LayoutAuthenticatedRoute,
-} as any)
+const LayoutAuthenticatedAdminRoute =
+  LayoutAuthenticatedAdminRouteImport.update({
+    id: '/admin',
+    path: '/admin',
+    getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
 const LayoutAppsAccountIdIndexRoute =
   LayoutAppsAccountIdIndexRouteImport.update({
     id: '/apps/$accountId/',
@@ -166,11 +167,11 @@ const LayoutAuthenticatedAcceptInvitationIdRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/admin': typeof LayoutAuthenticatedAdminRoute
   '/': typeof LayoutIndexRoute
   '/about': typeof LayoutAboutRoute
   '/login': typeof LayoutLoginRoute
   '/skill': typeof LayoutSkillRoute
+  '/admin': typeof LayoutAuthenticatedAdminRoute
   '/home': typeof LayoutAuthenticatedHomeRoute
   '/settings': typeof LayoutAuthenticatedSettingsRouteWithChildren
   '/things/$thingId': typeof LayoutThingsThingIdRoute
@@ -190,11 +191,11 @@ export interface FileRoutesByFullPath {
   '/apps/$accountId/': typeof LayoutAppsAccountIdIndexRoute
 }
 export interface FileRoutesByTo {
-  '/admin': typeof LayoutAuthenticatedAdminRoute
   '/': typeof LayoutIndexRoute
   '/about': typeof LayoutAboutRoute
   '/login': typeof LayoutLoginRoute
   '/skill': typeof LayoutSkillRoute
+  '/admin': typeof LayoutAuthenticatedAdminRoute
   '/home': typeof LayoutAuthenticatedHomeRoute
   '/things/$thingId': typeof LayoutThingsThingIdRoute
   '/things/live': typeof LayoutThingsLiveRoute
@@ -215,12 +216,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
-  '/_layout/_authenticated/admin': typeof LayoutAuthenticatedAdminRoute
   '/_layout/_authenticated': typeof LayoutAuthenticatedRouteWithChildren
   '/_layout/about': typeof LayoutAboutRoute
   '/_layout/login': typeof LayoutLoginRoute
   '/_layout/skill': typeof LayoutSkillRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/_authenticated/admin': typeof LayoutAuthenticatedAdminRoute
   '/_layout/_authenticated/home': typeof LayoutAuthenticatedHomeRoute
   '/_layout/_authenticated/settings': typeof LayoutAuthenticatedSettingsRouteWithChildren
   '/_layout/things/$thingId': typeof LayoutThingsThingIdRoute
@@ -242,11 +243,11 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/admin'
     | '/'
     | '/about'
     | '/login'
     | '/skill'
+    | '/admin'
     | '/home'
     | '/settings'
     | '/things/$thingId'
@@ -266,11 +267,11 @@ export interface FileRouteTypes {
     | '/apps/$accountId/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/admin'
     | '/'
     | '/about'
     | '/login'
     | '/skill'
+    | '/admin'
     | '/home'
     | '/things/$thingId'
     | '/things/live'
@@ -290,12 +291,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_layout'
-    | '/_layout/_authenticated/admin'
     | '/_layout/_authenticated'
     | '/_layout/about'
     | '/_layout/login'
     | '/_layout/skill'
     | '/_layout/'
+    | '/_layout/_authenticated/admin'
     | '/_layout/_authenticated/home'
     | '/_layout/_authenticated/settings'
     | '/_layout/things/$thingId'
@@ -398,18 +399,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedSettingsRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
-    '/_layout/_authenticated/admin': {
-      id: '/_layout/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof LayoutAuthenticatedAdminRouteImport
-      parentRoute: typeof LayoutAuthenticatedRoute
-    }
     '/_layout/_authenticated/home': {
       id: '/_layout/_authenticated/home'
       path: '/home'
       fullPath: '/home'
       preLoaderRoute: typeof LayoutAuthenticatedHomeRouteImport
+      parentRoute: typeof LayoutAuthenticatedRoute
+    }
+    '/_layout/_authenticated/admin': {
+      id: '/_layout/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof LayoutAuthenticatedAdminRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
     '/_layout/apps/$accountId/': {

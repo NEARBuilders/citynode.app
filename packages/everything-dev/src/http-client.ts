@@ -129,6 +129,17 @@ export const fetchWithRetryEff = (
   );
 };
 
+// --- In-memory GET cache (per-process, prevents duplicate round trips) ---
+
+const getCache = new Map<string, { data: unknown; expiresAt: number }>();
+const GET_CACHE_TTL_MS = 30_000;
+
+function isCacheable(_url: string, options?: FetchWithRetryOptions): boolean {
+  if (options?.method && options.method !== "GET") return false;
+  if (options?.body) return false;
+  return true;
+}
+
 // --- Promise wrappers (bridge for non-Effect code) ---
 
 export const fetchResponse = (url: string, options?: FetchOptions): Promise<Response> =>
@@ -138,14 +149,24 @@ export const fetchJsonOrNull = async <T>(
   url: string,
   options?: FetchWithRetryOptions,
 ): Promise<T | null> => {
+  if (isCacheable(url, options)) {
+    const cached = getCache.get(url);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as T;
+    }
+  }
+
+  const retries = options?.retries ?? DEFAULT_RETRIES;
   const eff =
-    options?.retries !== undefined && options.retries >= 0
-      ? fetchWithRetryEff(url, options)
-      : fetchEff(url, options);
+    retries > 0 ? fetchWithRetryEff(url, { ...options, retries }) : fetchEff(url, options);
 
   try {
     const res = await Effect.runPromise(eff);
-    return (await res.json()) as T;
+    const data = (await res.json()) as T;
+    if (isCacheable(url, options)) {
+      getCache.set(url, { data, expiresAt: Date.now() + GET_CACHE_TTL_MS });
+    }
+    return data;
   } catch (error) {
     const msg =
       error instanceof FetchNetworkError

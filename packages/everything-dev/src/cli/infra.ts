@@ -547,9 +547,13 @@ export function ensureEnvFile(configDir: string): void {
   p.log.info("Created .env from generated .env.example with generated BETTER_AUTH_SECRET");
 }
 
+let envLoadedDir: string | null = null;
+
 export function loadProjectEnv(configDir: string): void {
+  if (envLoadedDir === configDir) return;
   const envPath = join(configDir, ".env");
   if (!existsSync(envPath)) return;
 
   loadDotenv({ path: envPath, processEnv: process.env, quiet: true });
+  envLoadedDir = configDir;
 }

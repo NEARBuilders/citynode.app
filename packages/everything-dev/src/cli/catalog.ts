@@ -35,11 +35,14 @@ export const commandCatalog: CommandDescriptor[] = (
   };
 });
 
+const sortedCommandCatalog = [...commandCatalog].sort(
+  (a, b) => b.commandPath.length - a.commandPath.length,
+);
+
 export function findCommandDescriptor(
   args: string[],
 ): { descriptor: CommandDescriptor; consumed: number } | null {
-  const sorted = [...commandCatalog].sort((a, b) => b.commandPath.length - a.commandPath.length);
-  for (const descriptor of sorted) {
+  for (const descriptor of sortedCommandCatalog) {
     const parts = args.slice(0, descriptor.commandPath.length).map((part) => part.toLowerCase());
     if (parts.join(" ") === descriptor.commandPath.join(" ")) {
       return { descriptor, consumed: descriptor.commandPath.length };

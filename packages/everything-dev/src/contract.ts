@@ -2,6 +2,11 @@ import * as z from "zod";
 import { oc } from "./sdk";
 import { BosConfigInputSchema, BosConfigSchema, SourceModeSchema } from "./types";
 
+export const PhaseTimingSchema = z.object({
+  name: z.string(),
+  durationMs: z.number(),
+});
+
 export const DevOptionsSchema = z.object({
   host: SourceModeSchema.default("local"),
   ui: SourceModeSchema.default("local"),
@@ -18,6 +23,7 @@ export const DevResultSchema = z.object({
   status: z.enum(["started", "error"]),
   description: z.string(),
   processes: z.array(z.string()),
+  timings: z.array(PhaseTimingSchema).optional(),
 });
 
 export const StartOptionsSchema = z.object({
@@ -190,11 +196,6 @@ export const InitOptionsSchema = z.object({
   overrides: z.array(OverrideSectionSchema).optional(),
   noInteractive: z.boolean().default(false),
   noInstall: z.boolean().default(false),
-});
-
-export const PhaseTimingSchema = z.object({
-  name: z.string(),
-  durationMs: z.number(),
 });
 
 export const InitResultSchema = z.object({

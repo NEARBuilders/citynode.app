@@ -68,7 +68,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.12.2",
+      "version": "1.13.0",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.42.2",
+      "version": "1.43.0",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -252,7 +252,7 @@
     },
     "ui": {
       "name": "ui",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "dependencies": {
         "@better-auth/api-key": "catalog:",
         "@better-auth/core": "catalog:",
@@ -380,7 +380,7 @@
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.2",
     "every-plugin": "^2.7.1",
-    "everything-dev": "^1.42.2",
+    "everything-dev": "^1.43.0",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",
