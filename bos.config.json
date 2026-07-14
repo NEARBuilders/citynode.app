@@ -23,7 +23,7 @@
         "ALLOW_UNTRUSTED_SSR",
         "CSP_STRICT"
       ],
-      "integrity": "sha384-GEBCWMhT7G1ed+MIJcDVHAhjqFcfUBsuY6AXlP8aLgHEWqZyGCMMWKTvaBorqkE1"
+      "integrity": "sha384-N6UNwGCUJ2d02QUJjXXSZRH5aExTe/TzVkEUiRXUn33BKQ5OCliysMGYb0ToJhHp"
     },
     "ui": {
       "development": "local:ui",
@@ -38,7 +38,7 @@
       "secrets": [
         "API_DATABASE_URL"
       ],
-      "integrity": "sha384-aeygj2FGNJ5IJMow5+o0c90nNl1YEZ4MI7TUsDWrcCLR+YUblveVVx3QM7PbX0mQ"
+      "integrity": "sha384-/qapybWiJCi/h2pKo2mRDxKYTGcLv9lgyB8XN7J9X+QJ+i/7wDFFMfw8hYp/nzKt"
     },
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
@@ -67,7 +67,7 @@
         "ui/src/routes/_layout/apps/**",
         "ui/src/routes/_layout/index.tsx"
       ],
-      "integrity": "sha384-y5as26pVYL/eEMFqvH1L4JOZ6sNaE/WOpg3OPhFfzU6OYa1lbKFNZw6zn5Mk/0dU"
+      "integrity": "sha384-mgwW/imMJvw2RsAM7aJ3rcyyeVtrPDvt6XYgyXfu8IF/PZTlOFRtimvmC1dw5XMd"
     },
     "template": {
       "development": "local:plugins/_template",
