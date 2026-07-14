@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+      # Zephyr CI token — see https://docs.zephyr-cloud.io/migrations/ci-token-migration#create-a-ci-token
       ZE_CI_TOKEN: ${{ secrets.ZEPHYR_CI_TOKEN }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
       TARGET_SHA: ${{ github.sha }}
