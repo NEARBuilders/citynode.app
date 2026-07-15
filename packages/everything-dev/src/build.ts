@@ -147,6 +147,10 @@ async function runBuildAttempt(
 
   const deployEntries = parseDeployLines(output);
 
+  if (deployEntries.length > 0) {
+    return { success: true, url: deployEntries[0]?.url, exitCode: 0, output, deployEntries };
+  }
+
   if (exitCode !== 0) {
     const lastLines = output.trim().split("\n").slice(-5).join("\n");
     return {
@@ -154,7 +158,6 @@ async function runBuildAttempt(
       error: `Build failed (exit code ${exitCode})\n${lastLines}`,
       exitCode,
       output,
-      deployEntries,
     };
   }
 
@@ -165,12 +168,7 @@ async function runBuildAttempt(
       error: `Zephyr upload failed (${zeMatch[0]})`,
       exitCode: 0,
       output,
-      deployEntries,
     };
-  }
-
-  if (deployEntries.length > 0) {
-    return { success: true, url: deployEntries[0]?.url, exitCode: 0, output, deployEntries };
   }
 
   const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
