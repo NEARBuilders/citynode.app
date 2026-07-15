@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { dirname } from "node:path";
 import * as p from "@clack/prompts";
 import { findCommandDescriptor } from "./cli/catalog";

@@ -1,4 +1,8 @@
+import { chmod, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { defineConfig } from "tsdown";
+
+const SHEBANG = "#!/usr/bin/env node\n";
 
 export default defineConfig({
   entry: [
@@ -50,5 +54,17 @@ export default defineConfig({
       "defu",
       "openapi-types",
     ],
+  },
+  async onSuccess() {
+    for (const file of ["cli.mjs", "cli.cjs"]) {
+      const filepath = join("dist", file);
+      try {
+        const content = await readFile(filepath, "utf8");
+        if (!content.startsWith("#!")) {
+          await writeFile(filepath, SHEBANG + content);
+        }
+        await chmod(filepath, 0o755);
+      } catch {}
+    }
   },
 });
