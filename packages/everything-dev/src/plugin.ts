@@ -57,7 +57,6 @@ import {
   type OverrideSection,
   type PhaseTiming,
   type PluginListResult,
-  type WorkspaceDeployResult,
 } from "./contract";
 import {
   buildRegistryConfigUrl,
@@ -84,7 +83,7 @@ import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig, SourceMod
 import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
-import { colors, icons } from "./utils/theme";
+import { colors } from "./utils/theme";
 
 export interface DevSessionData {
   orchestrator: AppOrchestrator;

@@ -167,7 +167,7 @@ if (shouldDeploy) {
   plugins.push(
     withZephyr({
       hooks: {
-          onDeployComplete: async (info: { url: string }) => {
+        onDeployComplete: async (info: { url: string }) => {
           console.log("🚀 Host Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
           reportDeployResult({

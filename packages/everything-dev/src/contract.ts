@@ -392,7 +392,6 @@ export type PublishOptions = z.infer<typeof PublishOptionsSchema>;
 export type PublishResult = z.infer<typeof PublishResultSchema>;
 export type DeployOptions = z.infer<typeof DeployOptionsSchema>;
 export type DeployResult = z.infer<typeof DeployResultSchema>;
-export type WorkspaceDeployResult = z.infer<typeof WorkspaceDeployResultSchema>;
 export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
 export type InitOptions = z.infer<typeof InitOptionsSchema>;
