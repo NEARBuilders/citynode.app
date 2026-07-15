@@ -5,7 +5,7 @@ import {
   EveryPluginDevServer,
   FixMfDataUriPlugin,
 } from "every-plugin/build/rspack";
-import { computeSriHashForUrl, findPluginKey, writeDeployResult } from "everything-dev/integrity";
+import { computeSriHashForUrl, findPluginKey, reportDeployResult } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rspack-plugin";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,18 +34,15 @@ export default shouldDeploy
           console.log("🚀 Plugin Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
           const key = findPluginKey(bosConfigPath, __dirname);
-          if (!key) {
-            console.warn("   ⚠️  No matching plugin entry found for", __dirname);
-            return;
+          if (key) {
+            reportDeployResult({
+              url: info.url,
+              integrity,
+              bosConfigPath,
+              urlField: `plugins.${key}.production`,
+              integrityField: `plugins.${key}.integrity`,
+            });
           }
-          writeDeployResult({
-            url: info.url,
-            integrity: integrity ?? undefined,
-            bosConfigPath,
-            urlField: `plugins.${key}.production`,
-            integrityField: `plugins.${key}.integrity`,
-            label: `plugin-${key}`,
-          });
         },
       },
     })(baseConfig)

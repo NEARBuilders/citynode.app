@@ -15,7 +15,7 @@ import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "every-plugin/build/rspack";
-import { computeSriHashForUrl, writeDeployResult } from "everything-dev/integrity";
+import { computeSriHashForUrl, reportDeployResult } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rsbuild-plugin";
 import pkg from "./package.json";
 
@@ -94,6 +94,7 @@ const uiSharedDeps = {
   },
 };
 
+const uiBosConfigPath = path.resolve(__dirname, "../bos.config.json");
 function createClientConfig() {
   const plugins = [
     pluginReact(),
@@ -119,13 +120,12 @@ function createClientConfig() {
           onDeployComplete: async (info) => {
             console.log("🚀 UI Client Deployed:", info.url);
             const integrity = await computeSriHashForUrl(info.url);
-            writeDeployResult({
+            reportDeployResult({
               url: info.url,
-              integrity: integrity ?? undefined,
-              bosConfigPath,
+              integrity,
+              bosConfigPath: uiBosConfigPath,
               urlField: "app.ui.production",
               integrityField: "app.ui.integrity",
-              label: "ui-client",
             });
           },
         },
@@ -232,13 +232,12 @@ function createServerConfig() {
             console.log("🚀 UI SSR Deployed:", info.url);
             const ssrEntryUrl = `${info.url.replace(/\/$/, "")}/remoteEntry.server.js`;
             const integrity = await computeSriHashForUrl(ssrEntryUrl, { resolveEntryUrl: false });
-            writeDeployResult({
+            reportDeployResult({
               url: info.url,
-              integrity: integrity ?? undefined,
-              bosConfigPath,
+              integrity,
+              bosConfigPath: uiBosConfigPath,
               urlField: "app.ui.ssr",
               integrityField: "app.ui.ssrIntegrity",
-              label: "ui-ssr",
             });
           },
         },

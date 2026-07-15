@@ -19,9 +19,18 @@ export async function run(
     reject: false,
   });
 
+  let capturedStdout = "";
+  let capturedStderr = "";
+
   if (options.capture && options.onChunk) {
-    proc.stdout?.on("data", (chunk: Buffer) => options.onChunk!("stdout", chunk));
-    proc.stderr?.on("data", (chunk: Buffer) => options.onChunk!("stderr", chunk));
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      capturedStdout += chunk.toString("utf-8");
+      options.onChunk!("stdout", chunk);
+    });
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      capturedStderr += chunk.toString("utf-8");
+      options.onChunk!("stderr", chunk);
+    });
   }
 
   await proc;
@@ -32,6 +41,14 @@ export async function run(
       throw new Error(`${cmd} ${args.join(" ")} failed with exit code ${exitCode}`);
     }
     return;
+  }
+
+  if (options.onChunk) {
+    return {
+      stdout: capturedStdout,
+      stderr: capturedStderr,
+      exitCode: proc.exitCode ?? 0,
+    };
   }
 
   const result: RunResult = {

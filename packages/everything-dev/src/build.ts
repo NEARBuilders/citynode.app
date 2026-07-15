@@ -1,16 +1,11 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import { formatDuration } from "./cli/timing";
 import { resolveLocalDevelopmentPath } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
-import {
-  applyDeployResults,
-  cleanDeployResultDir,
-  readAllDeployResults,
-  readDeployResults,
-} from "./integrity";
+import { applyDeployResults, type DeployResultEntry, parseDeployLines } from "./integrity";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import type { BosConfig, BosPluginRef, RuntimeConfig } from "./types";
 import { run } from "./utils/run";
@@ -106,6 +101,7 @@ interface BuildAttemptResult {
   error?: string;
   exitCode: number;
   output: string;
+  deployEntries?: DeployResultEntry[];
 }
 
 async function runBuildAttempt(
@@ -115,34 +111,17 @@ async function runBuildAttempt(
   env: Record<string, string>,
   verbose: boolean,
   wsKey: string,
-  resultBaseDir?: string,
 ): Promise<BuildAttemptResult> {
-  if (verbose) {
-    try {
-      await run(cmd, args, { cwd, env, capture: false });
-      if (resultBaseDir) {
-        const results = readDeployResults(join(resultBaseDir, wsKey));
-        if (results.length > 0) {
-          return { success: true, url: results[0]?.url, exitCode: 0, output: "" };
-        }
-      }
-      return { success: true, exitCode: 0, output: "" };
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-        exitCode: 1,
-        output: "",
-      };
-    }
-  }
-
   let zephyrAuthShown = false;
   const result = await run(cmd, args, {
     cwd,
     env,
     capture: true,
-    onChunk: (_stream, chunk) => {
+    onChunk: (stream, chunk) => {
+      if (verbose) {
+        if (stream === "stdout") process.stdout.write(chunk);
+        else process.stderr.write(chunk);
+      }
       if (zephyrAuthShown) return;
       const text = chunk.toString("utf-8");
       if (
@@ -166,6 +145,8 @@ async function runBuildAttempt(
   const exitCode = result?.exitCode ?? 0;
   const output = `${stdout}\n${stderr}`;
 
+  const deployEntries = parseDeployLines(output);
+
   if (exitCode !== 0) {
     const lastLines = output.trim().split("\n").slice(-5).join("\n");
     return {
@@ -173,6 +154,7 @@ async function runBuildAttempt(
       error: `Build failed (exit code ${exitCode})\n${lastLines}`,
       exitCode,
       output,
+      deployEntries,
     };
   }
 
@@ -183,14 +165,12 @@ async function runBuildAttempt(
       error: `Zephyr upload failed (${zeMatch[0]})`,
       exitCode: 0,
       output,
+      deployEntries,
     };
   }
 
-  if (resultBaseDir) {
-    const results = readDeployResults(join(resultBaseDir, wsKey));
-    if (results.length > 0) {
-      return { success: true, url: results[0]?.url, exitCode: 0, output };
-    }
+  if (deployEntries.length > 0) {
+    return { success: true, url: deployEntries[0]?.url, exitCode: 0, output, deployEntries };
   }
 
   const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
@@ -209,12 +189,15 @@ async function runBuildAttempt(
   return { success: true, exitCode: 0, output };
 }
 
+interface InternalWorkspaceResult extends WorkspaceDeployResult {
+  deployEntries?: DeployResultEntry[];
+}
+
 async function buildOneWorkspace(
   ws: WorkspaceTarget,
   env: Record<string, string>,
   opts: { deploy: boolean; verbose?: boolean },
-  resultBaseDir?: string,
-): Promise<WorkspaceDeployResult> {
+): Promise<InternalWorkspaceResult> {
   const pkgJson = await readJsonFile<{
     scripts?: Record<string, string>;
   }>(`${ws.path}/package.json`);
@@ -224,9 +207,6 @@ async function buildOneWorkspace(
     : (buildCommands[ws.key] ?? { cmd: "bun", args: ["run", "build"] });
 
   const wsEnv = { ...env };
-  if (resultBaseDir) {
-    wsEnv.BOS_DEPLOY_RESULT_DIR = join(resultBaseDir, ws.key);
-  }
 
   const startTime = Date.now();
   let attempt = await runBuildAttempt(
@@ -236,7 +216,6 @@ async function buildOneWorkspace(
     wsEnv,
     opts.verbose ?? false,
     ws.key,
-    resultBaseDir,
   );
 
   let retried = false;
@@ -244,12 +223,6 @@ async function buildOneWorkspace(
   if (!attempt.success && attempt.exitCode === 0 && opts.deploy) {
     if (!opts.verbose) {
       console.log(`  ${colors.yellow("↻")} ${padRight(ws.key, 28)} retrying...`);
-    }
-    if (resultBaseDir) {
-      const wsResultDir = join(resultBaseDir, ws.key);
-      if (existsSync(wsResultDir)) {
-        rmSync(wsResultDir, { recursive: true, force: true });
-      }
     }
     retried = true;
     attempt = await runBuildAttempt(
@@ -259,17 +232,17 @@ async function buildOneWorkspace(
       wsEnv,
       opts.verbose ?? false,
       ws.key,
-      resultBaseDir,
     );
   }
 
   const durationMs = Date.now() - startTime;
-  const result: WorkspaceDeployResult = {
+  const result: InternalWorkspaceResult = {
     key: ws.key,
     kind: ws.kind,
     success: attempt.success,
     url: attempt.url,
     error: attempt.error,
+    deployEntries: attempt.deployEntries,
     durationMs,
     retried: retried ? true : undefined,
   };
@@ -354,11 +327,6 @@ export async function buildWorkspaceTargets(opts: {
     delete env.DEPLOY;
   }
 
-  const resultBaseDir = opts.deploy ? join(opts.configDir, ".bos", "deploy-results") : undefined;
-  if (resultBaseDir) {
-    cleanDeployResultDir(resultBaseDir);
-  }
-
   const bosConfigPath = join(opts.configDir, "bos.config.json");
   let configSnapshot: string | undefined;
   if (opts.deploy && existsSync(bosConfigPath)) {
@@ -388,9 +356,10 @@ export async function buildWorkspaceTargets(opts: {
     console.log();
 
     const results = await Promise.allSettled(
-      parallelGroup.map((ws) => buildOneWorkspace(ws, env, opts, resultBaseDir)),
+      parallelGroup.map((ws) => buildOneWorkspace(ws, env, opts)),
     );
 
+    const allDeployEntries: DeployResultEntry[] = [];
     for (let i = 0; i < parallelGroup.length; i++) {
       const ws = parallelGroup[i];
       const result = results[i];
@@ -398,7 +367,11 @@ export async function buildWorkspaceTargets(opts: {
         if (result.value.success) {
           built.push(ws.key);
         }
-        deployResults.push(result.value);
+        if (result.value.deployEntries) {
+          allDeployEntries.push(...result.value.deployEntries);
+        }
+        const { deployEntries: _deployEntries, ...deployResult } = result.value;
+        deployResults.push(deployResult);
       } else {
         deployResults.push({
           key: ws.key,
@@ -409,34 +382,30 @@ export async function buildWorkspaceTargets(opts: {
       }
     }
 
-    if (resultBaseDir && configSnapshot) {
-      const allResults = readAllDeployResults(resultBaseDir);
-      if (allResults.length > 0) {
-        const config = JSON.parse(configSnapshot) as Record<string, unknown>;
-        const merged = applyDeployResults(config, allResults);
-        writeFileSync(bosConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
-      }
+    if (configSnapshot && allDeployEntries.length > 0) {
+      const config = JSON.parse(configSnapshot) as Record<string, unknown>;
+      const merged = applyDeployResults(config, allDeployEntries);
+      writeFileSync(bosConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
     }
 
     for (const ws of sequentialGroup) {
-      const result = await buildOneWorkspace(ws, env, opts, resultBaseDir);
+      const result = await buildOneWorkspace(ws, env, opts);
       if (result.success) {
         built.push(ws.key);
       }
-      deployResults.push(result);
-    }
-
-    if (resultBaseDir && existsSync(bosConfigPath)) {
-      const allResults = readAllDeployResults(resultBaseDir);
-      const currentConfig = JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<
-        string,
-        unknown
-      >;
-      const hostResults = allResults.filter((r) => r.urlField.startsWith("app.host"));
-      if (hostResults.length > 0) {
-        const merged = applyDeployResults(currentConfig, hostResults);
-        writeFileSync(bosConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
+      if (result.deployEntries) {
+        const hostEntries = result.deployEntries.filter((r) => r.urlField.startsWith("app.host"));
+        if (hostEntries.length > 0 && existsSync(bosConfigPath)) {
+          const currentConfig = JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<
+            string,
+            unknown
+          >;
+          const merged = applyDeployResults(currentConfig, hostEntries);
+          writeFileSync(bosConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
+        }
       }
+      const { deployEntries: _deployEntries, ...sequentialResult } = result;
+      deployResults.push(sequentialResult);
     }
 
     console.log();

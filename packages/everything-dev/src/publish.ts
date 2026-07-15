@@ -22,6 +22,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function extractPublishedUrl(output: string): string | null {
+  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
+  if (deployMatch) return deployMatch[1];
   const match = output.match(/https?:\/\/[^\s"'<>]+/g);
   if (!match || match.length === 0) return null;
   return match[match.length - 1] ?? null;

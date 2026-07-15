@@ -67,13 +67,7 @@ import {
   type PluginManifest,
   parseBosUrl,
 } from "./fastkv";
-import {
-  applyDeployResults,
-  cleanDeployResultDir,
-  computeSriHashForUrl,
-  readAllDeployResults,
-  readDeployResults,
-} from "./integrity";
+import { computeSriHashForUrl, parseDeployLines } from "./integrity";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import { addFunctionCallAccessKey, ensureNearCli } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
@@ -494,7 +488,23 @@ export default createPlugin({
       if (stdout.trim()) process.stdout.write(stdout);
       if (stderr.trim()) process.stderr.write(stderr);
 
-      let publishedUrl = extractPublishedUrl(`${stdout}\n${stderr}`);
+      const output = `${stdout}\n${stderr}`;
+      const deployEntries = parseDeployLines(output);
+      const deployEntry = deployEntries.find(
+        (e) => e.urlField === `plugins.${input.key}.production`,
+      );
+
+      let publishedUrl: string | undefined;
+      let integrity: string | undefined;
+      if (deployEntry) {
+        publishedUrl = deployEntry.url;
+        integrity = deployEntry.integrity;
+      } else {
+        publishedUrl = extractPublishedUrl(output) ?? undefined;
+        integrity = publishedUrl
+          ? ((await computeSriHashForUrl(publishedUrl)) ?? undefined)
+          : undefined;
+      }
 
       let manifest: PluginManifest | null = null;
       if (publishedUrl) {
@@ -506,7 +516,6 @@ export default createPlugin({
         }
       }
 
-      const integrity = publishedUrl ? await computeSriHashForUrl(publishedUrl) : null;
       const version = manifest?.plugin.version ?? pkgJson.version;
 
       if (publishedUrl) {

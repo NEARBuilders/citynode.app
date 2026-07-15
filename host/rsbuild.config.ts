@@ -4,7 +4,7 @@ import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
-import { computeSriHashForUrl, writeDeployResult } from "everything-dev/integrity";
+import { computeSriHashForUrl, reportDeployResult } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rsbuild-plugin";
 
 const require = createRequire(import.meta.url);
@@ -167,16 +167,15 @@ if (shouldDeploy) {
   plugins.push(
     withZephyr({
       hooks: {
-        onDeployComplete: async (info: { url: string }) => {
+          onDeployComplete: async (info: { url: string }) => {
           console.log("🚀 Host Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
-          writeDeployResult({
+          reportDeployResult({
             url: info.url,
-            integrity: integrity ?? undefined,
+            integrity,
             bosConfigPath: rootBosConfigPath,
             urlField: "app.host.production",
             integrityField: "app.host.integrity",
-            label: "host",
           });
         },
       },

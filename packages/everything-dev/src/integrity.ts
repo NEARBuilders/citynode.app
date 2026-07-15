@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import process from "node:process";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchResponse } from "./http-client";
 
@@ -207,7 +206,6 @@ export async function verifyConfigAgainstChain(
 }
 
 export interface DeployResultEntry {
-  label: string;
   url: string;
   integrity?: string;
   urlField: string;
@@ -238,34 +236,16 @@ function deleteNestedPath(obj: Record<string, unknown>, dottedPath: string): voi
   delete current[keys[keys.length - 1]!];
 }
 
-function sanitizeFilename(name: string): string {
-  return name.replace(/[^A-Za-z0-9_-]/g, "-");
-}
-
-export function writeDeployResult(opts: {
+export function reportDeployResult(opts: {
   url: string;
   integrity?: string | null;
   bosConfigPath: string;
   urlField: string;
   integrityField?: string;
-  label: string;
 }): void {
-  const resultDir = process.env.BOS_DEPLOY_RESULT_DIR;
-
-  if (resultDir) {
-    mkdirSync(resultDir, { recursive: true });
-    const entry: DeployResultEntry = {
-      label: opts.label,
-      url: opts.url,
-      integrity: opts.integrity ?? undefined,
-      urlField: opts.urlField,
-      integrityField: opts.integrityField,
-    };
-    const resultFile = join(resultDir, `${sanitizeFilename(opts.label)}.json`);
-    writeFileSync(resultFile, JSON.stringify(entry, null, 2));
-    console.log(`   ✅ Deploy result: ${opts.urlField}`);
-    return;
-  }
+  console.log(
+    `[BOS_DEPLOY] url=${opts.url} urlField=${opts.urlField} integrityField=${opts.integrityField ?? ""} integrity=${opts.integrity ?? ""}`,
+  );
 
   try {
     const config = JSON.parse(readFileSync(opts.bosConfigPath, "utf8")) as Record<string, unknown>;
@@ -287,42 +267,21 @@ export function writeDeployResult(opts: {
   }
 }
 
-export function readDeployResults(resultDir: string): DeployResultEntry[] {
-  if (!existsSync(resultDir)) return [];
+export function parseDeployLines(output: string): DeployResultEntry[] {
   const results: DeployResultEntry[] = [];
-  for (const file of readdirSync(resultDir)) {
-    if (!file.endsWith(".json")) continue;
-    try {
-      const content = JSON.parse(readFileSync(join(resultDir, file), "utf8")) as DeployResultEntry;
-      results.push(content);
-    } catch {
-      // skip malformed files
-    }
-  }
-  return results;
-}
-
-export function readAllDeployResults(baseDir: string): DeployResultEntry[] {
-  if (!existsSync(baseDir)) return [];
-  const results: DeployResultEntry[] = [];
-  for (const subdir of readdirSync(baseDir)) {
-    const subdirPath = join(baseDir, subdir);
-    try {
-      const stat = readdirSync(subdirPath);
-      for (const file of stat) {
-        if (!file.endsWith(".json")) continue;
-        try {
-          const content = JSON.parse(
-            readFileSync(join(subdirPath, file), "utf8"),
-          ) as DeployResultEntry;
-          results.push(content);
-        } catch {
-          // skip malformed files
-        }
-      }
-    } catch {
-      // not a directory, skip
-    }
+  for (const line of output.split("\n")) {
+    if (!line.includes("[BOS_DEPLOY]")) continue;
+    const urlMatch = line.match(/url=(\S+)/);
+    const urlFieldMatch = line.match(/urlField=(\S+)/);
+    if (!urlMatch || !urlFieldMatch) continue;
+    const integrityFieldMatch = line.match(/integrityField=(\S+)/);
+    const integrityMatch = line.match(/integrity=(\S+)/);
+    results.push({
+      url: urlMatch[1],
+      urlField: urlFieldMatch[1],
+      integrityField: integrityFieldMatch?.[1] || undefined,
+      integrity: integrityMatch?.[1] || undefined,
+    });
   }
   return results;
 }
@@ -343,13 +302,6 @@ export function applyDeployResults(
     }
   }
   return merged;
-}
-
-export function cleanDeployResultDir(baseDir: string): void {
-  if (existsSync(baseDir)) {
-    rmSync(baseDir, { recursive: true, force: true });
-  }
-  mkdirSync(baseDir, { recursive: true });
 }
 
 export function findPluginKey(bosConfigPath: string, pluginDir: string): string | null {

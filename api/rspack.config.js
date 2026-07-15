@@ -14,7 +14,7 @@ import {
   EveryPluginDevServer,
   FixMfDataUriPlugin,
 } from "every-plugin/build/rspack";
-import { computeSriHashForUrl, writeDeployResult } from "everything-dev/integrity";
+import { computeSriHashForUrl, reportDeployResult } from "everything-dev/integrity";
 import { withZephyr } from "zephyr-rspack-plugin";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -58,13 +58,12 @@ export default shouldDeploy
         onDeployComplete: async (info) => {
           console.log("🚀 API Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
-          writeDeployResult({
+          reportDeployResult({
             url: info.url,
-            integrity: integrity ?? undefined,
-            bosConfigPath,
+            integrity,
+            bosConfigPath: bosConfigPath,
             urlField: "app.api.production",
             integrityField: "app.api.integrity",
-            label: "api",
           });
         },
       },
