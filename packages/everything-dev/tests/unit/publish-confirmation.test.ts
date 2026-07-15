@@ -12,7 +12,7 @@ vi.mock("../../src/fastkv", async (importOriginal) => {
   };
 });
 
-import { waitForPublishedConfig } from "../../src/plugin";
+import { waitForPublishedConfig } from "../../src/publish";
 import type { BosConfig } from "../../src/types";
 
 describe("waitForPublishedConfig", () => {

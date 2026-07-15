@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import process from "node:process";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchResponse } from "./http-client";
 
