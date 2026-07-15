@@ -15,7 +15,7 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-5947-host-everything-dev-nearbuilder-f3eeeef71-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-5953-host-everything-dev-nearbuilder-1586d09b1-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "TENANT_WHITELIST",
@@ -27,14 +27,14 @@
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-5942-ui-everything-dev-nearbuilders-64657e961-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-5946-ui-everything-dev-nearbuilders-0b1da287e-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-5948-ui-everything-dev-nearbuilders-47de5324b-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-5952-ui-everything-dev-nearbuilders-adf9014c4-ze.zephyrcloud.app",
       "integrity": "sha384-5iv0aB87QKy+iZ6gLphfuzhG6P+QypBodRpIyM4oDYwEexNg4agEa+EXfJtYcwLu",
       "ssrIntegrity": "sha384-mI6kM8jTv07rFxvYK8h9JGRL3klOUZsXLC16mFZVWvwdb/QLodRtUhlIgoMOlUdP"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-5945-api-everything-dev-nearbuilders-3a3c213d8-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-5951-api-everything-dev-nearbuilders-370912bf1-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -59,7 +59,7 @@
   "plugins": {
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-5944-everything-dev-apps-plugin-ever-537e26d2b-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-5950-everything-dev-apps-plugin-ever-d596fae74-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
@@ -71,7 +71,7 @@
     },
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-5943-every-plugin-template-everythin-7e1ee302c-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-5949-every-plugin-template-everythin-a2b66ec29-ze.zephyrcloud.app",
       "integrity": "sha384-tGvLjzlz0WZlswb19/MRaR6ed6DL5OoN4ubQQJE6y1JcWCfQx/xdqqL+H/A/LIc5"
     }
   }
