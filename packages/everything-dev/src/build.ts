@@ -148,6 +148,20 @@ async function runBuildAttempt(
   const deployEntries = parseDeployLines(output);
 
   if (deployEntries.length > 0) {
+    if (exitCode !== 0) {
+      const errorLines = output
+        .split("\n")
+        .filter((line) => /\bERROR\b/.test(line) || line.startsWith("Rspack compiled with"))
+        .slice(0, 5);
+      if (errorLines.length > 0 && !verbose) {
+        console.log(
+          `  ${colors.yellow("⚠")} Build completed with errors (exit code ${exitCode}) — Zephyr deployed successfully`,
+        );
+        for (const line of errorLines) {
+          console.log(`    ${colors.dim(line.trim())}`);
+        }
+      }
+    }
     return { success: true, url: deployEntries[0]?.url, exitCode: 0, output, deployEntries };
   }
 

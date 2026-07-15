@@ -28,6 +28,7 @@
     "@rspack/core": "catalog:",
     "@types/node": "catalog:",
     "dotenv": "^17.2.3",
+    "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
     "everything-dev": "catalog:",
     "every-plugin": "catalog:",
     "host": "workspace:*",
