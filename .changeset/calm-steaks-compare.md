@@ -1,17 +1,27 @@
 ---
 "every-plugin": minor
+"api": patch
+"@everything-dev/apps-plugin": patch
+"@every-plugin/template": patch
 ---
 
-Add automatic plugin-aware log annotations via `Effect.annotateLogs` across the full plugin lifecycle (load, instantiate, initialize), so all logs including Module Federation operations and database migrations are tagged with the plugin's registry key.
+**every-plugin:**
+- Broaden `Effect.annotateLogs({ plugin: pluginId })` to cover the full plugin lifecycle — `usePlugin`, `loadPlugin`, `instantiatePlugin`, and `initializePlugin` — so all logs including Module Federation operations and database migrations are tagged with the plugin's registry key
+- Convert Module Federation service `console.log` calls to `Effect.logDebug` (registering/loading) and `Effect.logInfo` (registered/loaded) with proper log levels
+- Refactor `formatORPCError` to return `string | null` instead of calling `console.error` directly, enabling callers to log through Effect's structured system
+- Make `toPluginRuntimeError` and `wrapORPCError` pure functions (no side effects); add `Effect.tapError` with `Effect.logError` at 4 call sites in `plugin-loader.service.ts` for plugin-aware error logging
+- Remove `formatPluginError` (dead code after purity refactor)
+- Remove redundant `Effect.annotateLogs` from `plugin-loader.service.ts` (now covered at runtime level)
 
-Convert `console.log` to Effect structured logging (`Effect.logInfo`/`Effect.logDebug`/`Effect.logError`/`Effect.logWarning`) across the framework:
+**api:**
+- Convert 3 startup `console.log` calls to `Effect.logInfo` so `[API]` startup messages gain the `plugin=api` annotation
+- Convert `Effect.log` to `Effect.logInfo` for shutdown
 
-- **Module Federation service**: Registration and loading progress now use `Effect.logDebug`/`Effect.logInfo` with proper log levels
-- **Error formatting**: `formatORPCError` returns a string instead of calling `console.error` directly, enabling callers to log through Effect's structured system
-- **Error conversion**: `toPluginRuntimeError` and `wrapORPCError` are now pure functions (no side effects); call sites use `Effect.tapError` with `Effect.logError` for plugin-aware error logging
-- **Plugin templates**: Startup/shutdown logs use `Effect.logInfo`; publish failures use `Effect.logWarning`
-- **API startup**: `[API] Services Initialized` and related logs now use `Effect.logInfo` (gain `plugin=api` annotation)
-- **Host `plugins.ts`**: Uses `logger` wrapper instead of raw `console.*`; Effect-gen-context logs use `Effect.logInfo`/`Effect.logError`
-- **Host `program.ts`**: Stray `console.*` calls fixed to use `logger`
+**@everything-dev/apps-plugin:**
+- Convert `console.log` to `Effect.logInfo` for startup message
+- Convert `Effect.log` to `Effect.logInfo` for shutdown
 
-Rename `DatabaseTag` identifier from `"api/Database"` to `"Database"` for generic correctness across API and plugin contexts.
+**@every-plugin/template:**
+- Convert publish failure `console.log` to `Effect.logWarning` for proper log level and annotation
+- Remove `[Event]` debug `console.log` from streaming handler; use `getEventMeta` for meaningful event ID filtering instead
+- Restructure `getById` to `Effect.gen` wrapper with `Effect.logInfo` for service call logging
