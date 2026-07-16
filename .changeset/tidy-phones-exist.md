@@ -1,6 +1,7 @@
 ---
 "every-plugin": minor
 "api": patch
+"host": patch
 "@everything-dev/apps-plugin": patch
 "@every-plugin/template": patch
 ---
@@ -16,6 +17,11 @@
 **api:**
 - Convert 3 startup `console.log` calls to `Effect.logInfo` so `[API]` startup messages gain the `plugin=api` annotation
 - Convert `Effect.log` to `Effect.logInfo` for shutdown
+
+**host:**
+- Import `logger` wrapper in `plugins.ts` and replace all raw `console.*` calls with `logger.*` (for async contexts) or `Effect.log*` (for Effect generator contexts)
+- Restructure `catchAll` block to `Effect.gen` for proper `Effect.logError`/`Effect.logWarning` usage
+- Fix 2 stray `console.*` calls in `program.ts` to use `logger`
 
 **@everything-dev/apps-plugin:**
 - Convert `console.log` to `Effect.logInfo` for startup message
