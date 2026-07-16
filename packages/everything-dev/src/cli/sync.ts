@@ -33,6 +33,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   ".github/workflows/ci.yml",
   ".github/workflows/deploy.yml",
   ".github/workflows/staging.yml",
+  ".github/workflows/release.yml",
   "railway.toml",
   "ui/package.json",
   "ui/postcss.config.mjs",
@@ -53,6 +54,10 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "api/tsconfig.json",
   "api/src/lib/auth.ts",
   "api/src/lib/context.ts",
+  "api/src/db/index.ts",
+  "api/src/db/layer.ts",
+  "api/src/db/migrator.ts",
+  "api/src/db/load-migrations.ts",
 ]);
 
 type PackageJson = Record<string, unknown>;
@@ -64,6 +69,7 @@ function computeHash(content: string | Uint8Array): string {
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/src\/db\/(index|layer|migrator|load-migrations)\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
   return false;
 }
@@ -450,6 +456,16 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
         const sourceFile = `api/src/lib/${libFile}`;
         if (!existsSync(join(sourceDir, sourceFile))) continue;
         destToSource.set(`plugins/${pluginKey}/src/lib/${libFile}`, sourceFile);
+      }
+    }
+
+    // Sync api/src/db/{index,layer,migrator,load-migrations}.ts into each plugin's src/db/
+    for (const pluginKey of childPlugins) {
+      if (!existsSync(join(projectDir, "plugins", pluginKey, "src"))) continue;
+      for (const dbFile of ["index.ts", "layer.ts", "migrator.ts", "load-migrations.ts"]) {
+        const sourceFile = `api/src/db/${dbFile}`;
+        if (!existsSync(join(sourceDir, sourceFile))) continue;
+        destToSource.set(`plugins/${pluginKey}/src/db/${dbFile}`, sourceFile);
       }
     }
 
