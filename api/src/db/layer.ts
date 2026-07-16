@@ -1,7 +1,6 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
-import type { DatabaseDriver } from "./index";
-import { loadMigrations } from "./load-migrations";
-import { migrate } from "./migrator";
+import { createDatabaseDriver, type DatabaseDriver, DatabaseError } from "./index";
+import { loadMigrations, migrate } from "./migrate";
 
 export class DatabaseTag extends Context.Tag("api/Database")<DatabaseDriver, DatabaseDriver>() {}
 
@@ -9,17 +8,23 @@ export const DatabaseLive = (url: string) =>
   Layer.scoped(
     DatabaseTag,
     Effect.acquireRelease(
-      Effect.promise(async () => {
-        const { createDatabaseDriver } = await import("./index");
-        const driver = await createDatabaseDriver(url);
-        const migrations = await loadMigrations();
-        await migrate(driver.db, migrations);
-        console.log("[API] Migrations applied");
+      Effect.gen(function* () {
+        const driver = yield* Effect.tryPromise({
+          try: () => createDatabaseDriver(url),
+          catch: (cause) => new DatabaseError({ stage: "driver", cause }),
+        });
+
+        const migrations = yield* loadMigrations();
+        yield* migrate(driver.db, migrations);
+
+        yield* Effect.logInfo("[Database] Migrations applied");
+
         return driver;
       }),
       (driver) =>
-        Effect.promise(async () => {
-          await driver.close();
-        }),
+        Effect.tryPromise({
+          try: () => driver.close(),
+          catch: (cause) => new DatabaseError({ stage: "close", cause }),
+        }).pipe(Effect.ignore),
     ),
   );

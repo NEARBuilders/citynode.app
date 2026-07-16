@@ -55,6 +55,8 @@ const OBSOLETE_FILES = [
   ".github/workflows/packages-release.yml",
   ".github/workflows/publish.yml",
   ".github/workflows/release-sync.yml",
+  "api/src/db/migrator.ts",
+  "api/src/db/load-migrations.ts",
   "packages/everything-dev/cli.js",
   ".templatekeep",
   ".templatesync-exclude",
@@ -1103,6 +1105,18 @@ export async function upgradeTemplate(
         nextMigratedFiles.push(file);
       }
     }
+
+    const legacyPluginDbFiles = await glob("plugins/*/src/db/{migrator,load-migrations}.ts", {
+      cwd: projectDir,
+      nodir: true,
+      dot: false,
+      absolute: false,
+    });
+    for (const file of legacyPluginDbFiles) {
+      rmSync(join(projectDir, file));
+      nextMigratedFiles.push(file);
+    }
+
     return nextMigratedFiles;
   });
 
