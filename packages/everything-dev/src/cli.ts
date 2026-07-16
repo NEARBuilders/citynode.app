@@ -712,7 +712,7 @@ async function main() {
       return;
     }
 
-    if (result?.status === "error") {
+    if (result?.status === "error" && descriptor.key !== "publish" && descriptor.key !== "deploy") {
       console.error(`[CLI] ${result.error || "Unknown error"}`);
       process.exit(1);
     }
@@ -817,6 +817,16 @@ async function main() {
         if (result.skipped && result.skipped.length > 0) {
           console.log(`  ${colors.dim("Skipped:")} ${result.skipped.join(", ")}`);
         }
+        if (result.deployResults) {
+          const warnings = result.deployResults.flatMap((r: any) => r.warnings ?? []);
+          if (warnings.length > 0) {
+            console.log();
+            console.log(`  ${colors.yellow("⚠")} Build warnings:`);
+            for (const w of warnings) {
+              console.log(`    ${colors.dim(w)}`);
+            }
+          }
+        }
         console.log();
         return;
       }
@@ -864,6 +874,16 @@ async function main() {
         }
         if (deployResult.skipped && deployResult.skipped.length > 0) {
           console.log(`  ${colors.dim("Skipped:")} ${deployResult.skipped.join(", ")}`);
+        }
+        if (deployResult.deployResults) {
+          const warnings = deployResult.deployResults.flatMap((r: any) => r.warnings ?? []);
+          if (warnings.length > 0) {
+            console.log();
+            console.log(`  ${colors.yellow("⚠")} Build warnings:`);
+            for (const w of warnings) {
+              console.log(`    ${colors.dim(w)}`);
+            }
+          }
         }
         if (deployResult.redeployed) {
           console.log(

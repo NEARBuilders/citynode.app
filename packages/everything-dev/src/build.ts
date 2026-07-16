@@ -99,6 +99,7 @@ interface BuildAttemptResult {
   success: boolean;
   url?: string;
   error?: string;
+  warnings?: string[];
   exitCode: number;
   output: string;
   deployEntries?: DeployResultEntry[];
@@ -148,21 +149,31 @@ async function runBuildAttempt(
   const deployEntries = parseDeployLines(output);
 
   if (deployEntries.length > 0) {
+    const result: BuildAttemptResult = {
+      success: true,
+      url: deployEntries[0]?.url,
+      exitCode: 0,
+      output,
+      deployEntries,
+    };
     if (exitCode !== 0) {
       const errorLines = output
         .split("\n")
         .filter((line) => /\bERROR\b/.test(line) || line.startsWith("Rspack compiled with"))
         .slice(0, 5);
-      if (errorLines.length > 0 && !verbose) {
-        console.log(
-          `  ${colors.yellow("⚠")} Build completed with errors (exit code ${exitCode}) — Zephyr deployed successfully`,
-        );
-        for (const line of errorLines) {
-          console.log(`    ${colors.dim(line.trim())}`);
+      if (errorLines.length > 0) {
+        result.warnings = errorLines.map((l) => l.trim());
+        if (!verbose) {
+          console.log(
+            `  ${colors.yellow("⚠")} Build completed with errors (exit code ${exitCode}) — Zephyr deployed successfully`,
+          );
+          for (const line of errorLines) {
+            console.log(`    ${colors.dim(line.trim())}`);
+          }
         }
       }
     }
-    return { success: true, url: deployEntries[0]?.url, exitCode: 0, output, deployEntries };
+    return result;
   }
 
   if (exitCode !== 0) {
@@ -175,7 +186,12 @@ async function runBuildAttempt(
     };
   }
 
-  const zeMatch = output.match(/ZE\d+/);
+  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
+  if (deployMatch) {
+    return { success: true, url: deployMatch[1], exitCode: 0, output };
+  }
+
+  const zeMatch = output.match(/ZE\d{4,}/);
   if (zeMatch) {
     return {
       success: false,
@@ -183,11 +199,6 @@ async function runBuildAttempt(
       exitCode: 0,
       output,
     };
-  }
-
-  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
-  if (deployMatch) {
-    return { success: true, url: deployMatch[1], exitCode: 0, output };
   }
 
   if (env.DEPLOY === "true") {
@@ -231,6 +242,7 @@ async function buildOneWorkspace(
   );
 
   let retried = false;
+  const firstAttempt: BuildAttemptResult | undefined = attempt.success ? undefined : { ...attempt };
 
   if (!attempt.success && attempt.exitCode === 0 && opts.deploy) {
     if (!opts.verbose) {
@@ -245,6 +257,10 @@ async function buildOneWorkspace(
       opts.verbose ?? false,
       ws.key,
     );
+
+    if (!attempt.success && firstAttempt) {
+      attempt.error = `First attempt: ${firstAttempt.error}\nRetry: ${attempt.error}`;
+    }
   }
 
   const durationMs = Date.now() - startTime;
@@ -254,6 +270,7 @@ async function buildOneWorkspace(
     success: attempt.success,
     url: attempt.url,
     error: attempt.error,
+    warnings: attempt.warnings,
     deployEntries: attempt.deployEntries,
     durationMs,
     retried: retried ? true : undefined,
