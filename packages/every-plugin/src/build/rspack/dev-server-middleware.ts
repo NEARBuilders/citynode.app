@@ -74,7 +74,8 @@ export function setupPluginMiddleware(
       handlers.rpc = new RPCHandler(loaded.router, {
         interceptors: [
           onError((error: any) => {
-            formatORPCError(error);
+            const formatted = formatORPCError(error);
+            if (formatted) console.error(formatted);
           }),
         ],
       });
@@ -87,7 +88,8 @@ export function setupPluginMiddleware(
         ],
         interceptors: [
           onError((error: any) => {
-            formatORPCError(error);
+            const formatted = formatORPCError(error);
+            if (formatted) console.error(formatted);
           }),
         ],
       });

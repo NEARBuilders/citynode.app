@@ -1092,7 +1092,7 @@ export const runServerBlocking = async (input: ServerInput) => {
   const handle = runServer(input);
 
   const forceExit = () => {
-    console.log("\n[Server] Force exit");
+    logger.info("\n[Server] Force exit");
     process.exit(0);
   };
 
@@ -1117,7 +1117,7 @@ export const runServerBlocking = async (input: ServerInput) => {
     await handle.ready;
     await new Promise(() => {});
   } catch (err) {
-    console.error("Failed to start server:", err);
+    logger.error("[Server] Failed to start:", err);
     process.exit(1);
   }
 };

@@ -86,7 +86,7 @@ export class ModuleFederationService extends Effect.Service<ModuleFederationServ
       return {
         registerRemote: (pluginId: string, url: string) =>
           Effect.gen(function* () {
-            console.log(`[MF] Registering ${pluginId}`);
+            yield* Effect.logDebug(`[MF] Registering ${pluginId}`);
 
             const remoteName = getNormalizedRemoteName(pluginId);
             const type = url.endsWith("/mf-manifest.json")
@@ -112,16 +112,16 @@ export class ModuleFederationService extends Effect.Service<ModuleFederationServ
                 }),
             });
 
-            console.log(`[MF] ✅ Registered ${pluginId}`);
+            yield* Effect.logInfo(`[MF] ✅ Registered ${pluginId}`);
           }),
 
         loadRemoteConstructor: (pluginId: string, url: string) =>
           Effect.gen(function* () {
             const remoteName = getNormalizedRemoteName(pluginId);
-            console.log(`[MF] Loading remote ${remoteName}`);
+            yield* Effect.logDebug(`[MF] Loading remote ${remoteName}`);
             const modulePath = `${remoteName}/plugin`;
 
-            return yield* Effect.tryPromise({
+            const pluginConstructor = yield* Effect.tryPromise({
               try: async () => {
                 const container = await mf.loadRemote<RemoteModule>(modulePath);
                 if (!container) {
@@ -181,7 +181,6 @@ export class ModuleFederationService extends Effect.Service<ModuleFederationServ
                   );
                 }
 
-                console.log(`[MF] ✅ Loaded constructor for ${pluginId}`);
                 return Constructor;
               },
               catch: (error): ModuleFederationError =>
@@ -191,6 +190,9 @@ export class ModuleFederationService extends Effect.Service<ModuleFederationServ
                   cause: error instanceof Error ? error : new Error(String(error)),
                 }),
             });
+
+            yield* Effect.logInfo(`[MF] ✅ Loaded constructor for ${pluginId}`);
+            return pluginConstructor;
           }),
       };
     }),

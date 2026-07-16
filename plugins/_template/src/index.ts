@@ -79,10 +79,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
               };
 
               yield* Effect.tryPromise(() => publisher.publish("background-updates", event)).pipe(
-                Effect.catchAll((error) => {
-                  console.log(`[TemplatePlugin] Publish failed for event ${i}:`, error);
-                  return Effect.void;
-                }),
+                Effect.catchAll((error) =>
+                  Effect.logWarning(`[TemplatePlugin] Publish failed for event ${i}:`, error).pipe(
+                    Effect.andThen(Effect.void),
+                  ),
+                ),
               );
 
               yield* Effect.sleep(`${config.variables.backgroundIntervalMs} millis`);
@@ -138,11 +139,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
           const meta = getEventMeta(event);
           if (meta?.id) {
-            console.log(`[Event] ID: ${meta.id}, Retry: ${meta.retry}ms`);
+            yield event;
+            count++;
           }
-
-          yield event;
-          count++;
         }
       }),
 

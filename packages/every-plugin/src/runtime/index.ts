@@ -84,7 +84,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
         const initialized = yield* pluginService.initializePlugin(instance, config, plugins);
 
         return initialized;
-      }).pipe(Effect.provide(this.runtime));
+      }).pipe(Effect.annotateLogs({ plugin: pluginId }), Effect.provide(this.runtime));
 
       cachedPlugin = Effect.cached(operation).pipe(Effect.flatten);
       this.pluginCache.set(cacheKey, cachedPlugin);
@@ -112,7 +112,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     const effect = Effect.gen(function* () {
       const pluginService = yield* PluginService;
       return yield* pluginService.loadPlugin(pluginId);
-    });
+    }).pipe(Effect.annotateLogs({ plugin: pluginId }));
     return this.runPromise(effect) as Promise<LoadedPlugin<RegisteredPlugin<K, R>>>;
   }
 
@@ -123,7 +123,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     const effect = Effect.gen(function* () {
       const pluginService = yield* PluginService;
       return yield* pluginService.instantiatePlugin(pluginId, loadedPlugin);
-    });
+    }).pipe(Effect.annotateLogs({ plugin: pluginId }));
     return this.runPromise(effect) as Promise<PluginInstance<RegisteredPlugin<K, R>>>;
   }
 
@@ -135,7 +135,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     const effect = Effect.gen(function* () {
       const pluginService = yield* PluginService;
       return yield* pluginService.initializePlugin(instance, config, plugins);
-    });
+    }).pipe(Effect.annotateLogs({ plugin: instance.plugin.id }));
     return this.runPromise(effect);
   }
 

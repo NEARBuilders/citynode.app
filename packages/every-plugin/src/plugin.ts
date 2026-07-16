@@ -173,7 +173,8 @@ export const createPlugin: CreatePluginFn = function createPlugin<
           throw unwrapped;
         }
 
-        formatORPCError(error);
+        const formatted = formatORPCError(error);
+        if (formatted) console.error(formatted);
         throw error;
       }) as any;
 

@@ -44,9 +44,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
       const publisher = new MemoryPublisher<ThingEvents>({ resumeRetentionSeconds: 120 });
 
       const { auth, ...restPlugins } = plugins;
-      console.log("[API] Services Initialized");
-      console.log("[API] Auth client available:", Boolean(auth));
-      console.log("[API] Plugins available:", Object.keys(restPlugins).join(", ") || "none");
+      yield* Effect.logInfo("[API] Services Initialized");
+      yield* Effect.logInfo(`[API] Auth client available: ${Boolean(auth)}`);
+      yield* Effect.logInfo(
+        `[API] Plugins available: ${Object.keys(restPlugins).join(", ") || "none"}`,
+      );
 
       return {
         auth,
@@ -57,7 +59,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       };
     }),
 
-  shutdown: () => Effect.log("[API] Shutdown"),
+  shutdown: () => Effect.logInfo("[API] Shutdown"),
 
   createRouter: (services, builder) => {
     const { requireAuth, requireAuthOrApiKey, requireAdmin } = createAuthMiddleware(builder);

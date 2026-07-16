@@ -41,30 +41,31 @@ export class TemplateService {
   }
 
   getById(id: string) {
-    return Effect.tryPromise({
-      try: async () => {
-        // In a real plugin, use this.baseUrl, this.apiKey, this.timeout
-        console.log(
-          `[TemplateService] Fetching from ${this.baseUrl} with timeout ${this.timeout}ms`,
-        );
+    return Effect.gen(function* () {
+      yield* Effect.logInfo(
+        `[TemplateService] Fetching from ${this.baseUrl} with timeout ${this.timeout}ms`,
+      );
 
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      return yield* Effect.tryPromise({
+        try: async () => {
+          // Simulate API call
+          await new Promise((resolve) => setTimeout(resolve, 50));
 
-        if (id === "not-found") {
-          throw new Error("Item not found");
-        }
+          if (id === "not-found") {
+            throw new Error("Item not found");
+          }
 
-        return {
-          id,
-          title: `Item ${id}`,
-          createdAt: new Date().toISOString(),
-        } satisfies Item;
-      },
-      catch: (error: unknown) =>
-        new Error(
-          `Failed to fetch item: ${error instanceof Error ? error.message : String(error)}`,
-        ),
+          return {
+            id,
+            title: `Item ${id}`,
+            createdAt: new Date().toISOString(),
+          } satisfies Item;
+        },
+        catch: (error: unknown) =>
+          new Error(
+            `Failed to fetch item: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+      });
     });
   }
 

@@ -36,11 +36,11 @@ export default createPlugin({
 
       const registryService = yield* Effect.provide(RegistryService, RegistryServices);
 
-      console.log("[Registry] Services Initialized");
+      yield* Effect.logInfo("[Registry] Services Initialized");
       return { registryService };
     }),
 
-  shutdown: () => Effect.log("[Registry] Shutdown"),
+  shutdown: () => Effect.logInfo("[Registry] Shutdown"),
 
   createRouter: (services, builder) => {
     const requireNearAccount = builder.middleware(async ({ context, next }) => {

@@ -116,15 +116,14 @@ const formatORPCValidationError = (error: any): string[] | null => {
   return lines;
 };
 
-export const formatORPCError = (error: any): void => {
+export const formatORPCError = (error: any): string | null => {
   if (!(error instanceof ORPCError)) {
-    return;
+    return null;
   }
 
   const validationLines = formatORPCValidationError(error);
   if (validationLines) {
-    console.error(validationLines.join("\n"));
-    return;
+    return validationLines.join("\n");
   }
 
   const lines: string[] = [];
@@ -182,49 +181,7 @@ export const formatORPCError = (error: any): void => {
   }
 
   lines.push(`╰${"─".repeat(50)}\n`);
-  console.error(lines.join("\n"));
-};
-
-const formatPluginError = (
-  pluginId: string | undefined,
-  operation: string | undefined,
-  message: string,
-): void => {
-  const lines: string[] = [];
-
-  lines.push(`\n╭─ Plugin Error ${"─".repeat(40)}`);
-  if (pluginId) lines.push(`│  Plugin: ${pluginId}`);
-  if (operation) lines.push(`│  During: ${operation}`);
-  lines.push(`│`);
-
-  if (message.includes("ECONNREFUSED")) {
-    lines.push(`│  ❌ Connection refused`);
-    lines.push(`│  `);
-    lines.push(`│  A required service is not running.`);
-    lines.push(`│  → Run: docker compose up -d`);
-  } else if (message.includes("ENOTFOUND")) {
-    lines.push(`│  ❌ Host not found`);
-    lines.push(`│  `);
-    lines.push(`│  Check your connection URL or network settings.`);
-  } else if (message.includes("ETIMEDOUT") || message.includes("timeout")) {
-    lines.push(`│  ❌ Connection timeout`);
-    lines.push(`│  `);
-    lines.push(`│  The service took too long to respond.`);
-  } else if (message.includes("EACCES") || message.includes("permission")) {
-    lines.push(`│  ❌ Permission denied`);
-    lines.push(`│  `);
-    lines.push(`│  Check credentials or access permissions.`);
-  } else if (message.includes("401") || message.includes("unauthorized")) {
-    lines.push(`│  ❌ Authentication failed`);
-    lines.push(`│  `);
-    lines.push(`│  Check your API key or credentials.`);
-  } else {
-    lines.push(`│  ❌ ${message}`);
-  }
-
-  lines.push(`╰${"─".repeat(50)}\n`);
-
-  console.error(lines.join("\n"));
+  return lines.join("\n");
 };
 
 const isRetryableError = (message: string): boolean => {
@@ -253,11 +210,6 @@ export const wrapORPCError = (
   procedureName?: string,
   operation?: string,
 ): PluginRuntimeError => {
-  const validationLines = formatORPCValidationError(orpcError);
-  if (validationLines) {
-    console.error(validationLines.join("\n"));
-  }
-
   return new PluginRuntimeError({
     pluginId,
     operation,
@@ -312,14 +264,6 @@ export const toPluginRuntimeError = (
 
   if (error instanceof PluginRuntimeError) {
     return error;
-  }
-
-  const validationLines = formatORPCValidationError(error);
-  if (validationLines) {
-    console.error(validationLines.join("\n"));
-  } else {
-    const message = extractErrorMessage(error);
-    formatPluginError(pluginId, operation, message);
   }
 
   return new PluginRuntimeError({

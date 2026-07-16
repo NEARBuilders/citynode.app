@@ -111,19 +111,23 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
 
             const resolvedUrl = resolveUrl(url);
 
-            yield* moduleFederationService
-              .registerRemote(pluginId, resolvedUrl)
-              .pipe(
-                Effect.mapError((error) =>
-                  toPluginRuntimeError(error, pluginId, undefined, "register-remote", true),
-                ),
-              );
+            yield* moduleFederationService.registerRemote(pluginId, resolvedUrl).pipe(
+              Effect.tapError((_error) =>
+                Effect.logError(`Plugin ${pluginId} failed during register-remote`),
+              ),
+              Effect.mapError((error) =>
+                toPluginRuntimeError(error, pluginId, undefined, "register-remote", true),
+              ),
+            );
 
             yield* Effect.logDebug("Loading plugin from remote", { pluginId, url: resolvedUrl });
 
             const ctor = yield* moduleFederationService
               .loadRemoteConstructor(pluginId, resolvedUrl)
               .pipe(
+                Effect.tapError((_error) =>
+                  Effect.logError(`Plugin ${pluginId} failed during load-remote`),
+                ),
                 Effect.mapError((error) =>
                   toPluginRuntimeError(error, pluginId, undefined, "load-remote", false),
                 ),
@@ -138,6 +142,9 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
         instantiatePlugin: <T extends AnyPlugin>(pluginId: string, loadedPlugin: LoadedPlugin<T>) =>
           Effect.gen(function* () {
             const instance = yield* Effect.try(() => new loadedPlugin.ctor()).pipe(
+              Effect.tapError((_error) =>
+                Effect.logError(`Plugin ${pluginId} failed during instantiate-plugin`),
+              ),
               Effect.mapError((error) =>
                 toPluginRuntimeError(error, pluginId, undefined, "instantiate-plugin", false),
               ),
@@ -234,8 +241,10 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
             const context = yield* plugin
               .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
               .pipe(
-                Effect.annotateLogs({ plugin: plugin.id }),
                 Effect.provideService(Scope.Scope, scope),
+                Effect.tapError((_error) =>
+                  Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin`),
+                ),
                 Effect.mapError((error) =>
                   toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
                 ),
