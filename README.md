@@ -11,7 +11,7 @@
 
 </div>
 
-Runtime apps that compose, verify, and evolve without rebuilding — built on [Module Federation](https://module-federation.io/), [every-plugin](https://plugin.everything.dev/), and [NEAR Protocol](https://near.dev/).
+Runtime apps that compose, verify, and evolve without rebuilding — built on [Module Federation](https://module-federation.io/), [oRPC](https://orpc.dev/), [Tanstack Start](https://tanstack.com/start/latest/docs/framework/react/quick-start), and [NEAR Protocol](https://near.dev/).
 
 A published `bos.config.json` defines how host, UI, and API load together. Changing the config changes the composition. UI and API remotes do not need to be rebuilt for URL changes, though the host still needs a restart to pick up a new runtime config snapshot today. The configuration lives on-chain — inspectable, verifiable, and extendable by anyone.
 
