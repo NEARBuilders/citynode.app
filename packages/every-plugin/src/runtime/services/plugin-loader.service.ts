@@ -234,6 +234,7 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
             const context = yield* plugin
               .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
               .pipe(
+                Effect.annotateLogs({ plugin: plugin.id }),
                 Effect.provideService(Scope.Scope, scope),
                 Effect.mapError((error) =>
                   toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
