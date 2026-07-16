@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import type { Migration } from "virtual:drizzle-migrations.sql";
 import { sql } from "drizzle-orm";
 import { Effect } from "every-plugin/effect";
-import { type ApiDatabase, DatabaseError } from "./index";
+import { type Database, DatabaseError } from "./index";
 
 function normalizeRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
@@ -72,10 +72,7 @@ function loadMigrationsFromDisk(): Effect.Effect<Migration[], DatabaseError> {
   });
 }
 
-export function migrate(
-  db: ApiDatabase,
-  migrations: Migration[],
-): Effect.Effect<void, DatabaseError> {
+export function migrate(db: Database, migrations: Migration[]): Effect.Effect<void, DatabaseError> {
   return Effect.gen(function* () {
     const sorted = [...migrations].sort((a, b) => a.idx - b.idx);
 
@@ -124,7 +121,7 @@ export function migrate(
   });
 }
 
-function ensureMigrationTable(db: ApiDatabase): Effect.Effect<void, DatabaseError> {
+function ensureMigrationTable(db: Database): Effect.Effect<void, DatabaseError> {
   return Effect.gen(function* () {
     yield* Effect.tryPromise({
       try: () => db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`),
@@ -147,7 +144,7 @@ function ensureMigrationTable(db: ApiDatabase): Effect.Effect<void, DatabaseErro
   });
 }
 
-function migrateLegacyTable(db: ApiDatabase): Effect.Effect<void, DatabaseError> {
+function migrateLegacyTable(db: Database): Effect.Effect<void, DatabaseError> {
   return Effect.gen(function* () {
     const result = yield* Effect.tryPromise({
       try: () =>

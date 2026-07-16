@@ -4,10 +4,10 @@ import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { Data } from "every-plugin/effect";
 import * as schema from "./schema";
 
-export type ApiDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
+export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 export interface DatabaseDriver {
-  readonly db: ApiDatabase;
+  readonly db: Database;
   close(): Promise<void>;
 }
 
