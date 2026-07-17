@@ -383,7 +383,8 @@ export function setupApiRoutes(
         plugins: [new BatchHandlerPlugin()],
         interceptors: [
           onError((error: unknown) => {
-            formatORPCError(error);
+            const formatted = formatORPCError(error);
+            if (formatted) console.error(formatted);
             throw error;
           }),
         ],
