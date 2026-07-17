@@ -313,6 +313,41 @@ export const DbStudioResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const DbDoctorOptionsSchema = z.object({
+  plugin: z.string(),
+});
+
+export const DbDoctorResultSchema = z.object({
+  status: z.enum(["success", "error"]),
+  plugin: z.string(),
+  slug: z.string(),
+  journalTable: z.string(),
+  journalSchema: z.string(),
+  diagnosis: z.string(),
+  localMigrationCount: z.number(),
+  appliedHashCount: z.number(),
+  expectedTables: z.array(z.string()),
+  missingTables: z.array(z.string()),
+  legacyCount: z.number(),
+  workspaceDir: z.string().optional(),
+  dbSecret: z.string().optional(),
+  dbUrl: z.string().optional(),
+  error: z.string().optional(),
+});
+
+export const DbRepairOptionsSchema = z.object({
+  plugin: z.string(),
+  mode: z.enum(["history-reset", "recreate"]).default("history-reset"),
+  yes: z.boolean().optional(),
+});
+
+export const DbRepairResultSchema = z.object({
+  status: z.enum(["repaired", "refused", "error"]),
+  message: z.string(),
+  diagnosis: z.any(),
+  error: z.string().optional(),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -373,6 +408,14 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/db/studio" })
     .input(DbStudioOptionsSchema)
     .output(DbStudioResultSchema),
+  dbDoctor: oc
+    .route({ method: "POST", path: "/db/doctor" })
+    .input(DbDoctorOptionsSchema)
+    .output(DbDoctorResultSchema),
+  dbRepair: oc
+    .route({ method: "POST", path: "/db/repair" })
+    .input(DbRepairOptionsSchema)
+    .output(DbRepairResultSchema),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -408,4 +451,8 @@ export type TypesGenOptions = z.infer<typeof TypesGenOptionsSchema>;
 export type TypesGenResult = z.infer<typeof TypesGenResultSchema>;
 export type DbStudioOptions = z.infer<typeof DbStudioOptionsSchema>;
 export type DbStudioResult = z.infer<typeof DbStudioResultSchema>;
+export type DbDoctorOptions = z.infer<typeof DbDoctorOptionsSchema>;
+export type DbDoctorResult = z.infer<typeof DbDoctorResultSchema>;
+export type DbRepairOptions = z.infer<typeof DbRepairOptionsSchema>;
+export type DbRepairResult = z.infer<typeof DbRepairResultSchema>;
 export type RuntimeOverrideTarget = z.infer<typeof RuntimeOverrideTargetSchema>;

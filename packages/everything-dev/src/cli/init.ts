@@ -506,6 +506,8 @@ export function buildChildRootScripts(sections: {
   if (sections.api) {
     scripts["db:push"] = "bun run --cwd api drizzle-kit push";
     scripts["db:studio"] = "node_modules/.bin/bos db:studio";
+    scripts["db:doctor"] = "node_modules/.bin/bos db:doctor";
+    scripts["db:repair"] = "node_modules/.bin/bos db:repair";
     scripts["db:generate"] = "bun run --cwd api drizzle-kit generate";
     scripts["db:migrate"] = "bun run --cwd api drizzle-kit migrate";
     scripts["test:api"] = "cd api && bun run test tests/integration/ tests/unit/";
@@ -752,6 +754,8 @@ export async function personalizeConfig(
       "sync-catalog",
       "db:push",
       "db:studio",
+      "db:doctor",
+      "db:repair",
       "db:generate",
       "db:migrate",
       "test",

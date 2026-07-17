@@ -102,10 +102,15 @@ export async function runStudioLocal(info: PluginDbInfo): Promise<void> {
   });
 }
 
+import { pluginMigrationSlug } from "../db";
+
 export async function runStudioRemote(info: PluginDbInfo): Promise<void> {
   const dbDir = resolve(info.projectDir, ".bos", "db", info.key);
 
   mkdirSync(dbDir, { recursive: true });
+
+  const slug = pluginMigrationSlug(info.key);
+  const journalTable = `__drizzle_migrations_${slug}`;
 
   const configPath = join(dbDir, "drizzle.config.ts");
   const configContent = `import { defineConfig } from "drizzle-kit";
@@ -116,6 +121,10 @@ export default defineConfig({
   dialect: "postgresql",
   dbCredentials: {
     url: "${info.databaseUrl}",
+  },
+  migrations: {
+    schema: "drizzle",
+    table: "${journalTable}",
   },
   verbose: true,
   strict: true,

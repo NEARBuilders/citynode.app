@@ -159,7 +159,16 @@
       "import": "./dist/ui/router.mjs",
       "require": "./dist/ui/router.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./db": {
+      "development": {
+        "types": "./src/db.ts",
+        "import": "./src/db.ts"
+      },
+      "types": "./dist/db.d.mts",
+      "import": "./dist/db.mjs",
+      "require": "./dist/db.cjs"
+    }
   },
   "files": [
     "dist",

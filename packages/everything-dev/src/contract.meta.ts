@@ -168,6 +168,32 @@ export const cliCommandMeta = {
       },
     },
   },
+  dbDoctor: {
+    commandPath: ["db", "doctor"],
+    summary: "Diagnose migration health for a plugin's database",
+    fields: {
+      plugin: {
+        positional: true,
+        description: "Plugin key: api, auth, or a plugin name",
+      },
+    },
+  },
+  dbRepair: {
+    commandPath: ["db", "repair"],
+    summary: "Reset migration history and reapply migrations for a plugin",
+    fields: {
+      plugin: {
+        positional: true,
+        description: "Plugin key: api, auth, or a plugin name",
+      },
+      mode: {
+        description: "Repair mode: history-reset (default) or recreate (not yet supported)",
+      },
+      yes: {
+        description: "Skip confirmation prompt",
+      },
+    },
+  },
   status: {
     commandPath: ["status"],
     summary: "Show project health, versions, and update availability",

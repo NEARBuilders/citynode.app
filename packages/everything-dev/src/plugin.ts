@@ -1690,6 +1690,118 @@ export default createPlugin({
       }
     }),
 
+    dbDoctor: builder.dbDoctor.handler(async ({ input }) => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            plugin: input.plugin,
+            slug: "",
+            journalTable: "",
+            journalSchema: "",
+            diagnosis: "error",
+            localMigrationCount: 0,
+            appliedHashCount: 0,
+            expectedTables: [],
+            missingTables: [],
+            legacyCount: 0,
+            error: "No bos.config.json",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        loadProjectEnv(projectDir);
+        const refreshed = await loadResolvedConfig({ cwd: projectDir });
+        if (!refreshed) {
+          return {
+            status: "error" as const,
+            plugin: input.plugin,
+            slug: "",
+            journalTable: "",
+            journalSchema: "",
+            diagnosis: "error",
+            localMigrationCount: 0,
+            appliedHashCount: 0,
+            expectedTables: [],
+            missingTables: [],
+            legacyCount: 0,
+            error: "Failed to load config",
+          };
+        }
+
+        const { resolvePluginDbInfo } = await import("./cli/db-studio");
+        const info = resolvePluginDbInfo(input.plugin, refreshed.runtime, projectDir);
+
+        const { diagnosePlugin } = await import("./cli/db-doctor");
+        const report = await diagnosePlugin(info);
+
+        return {
+          status: "success" as const,
+          ...report,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          plugin: input.plugin,
+          slug: "",
+          journalTable: "",
+          journalSchema: "",
+          diagnosis: "error",
+          localMigrationCount: 0,
+          appliedHashCount: 0,
+          expectedTables: [],
+          missingTables: [],
+          legacyCount: 0,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    dbRepair: builder.dbRepair.handler(async ({ input }) => {
+      try {
+        const configPath = findConfigPath();
+        if (!configPath) {
+          return {
+            status: "error" as const,
+            message: "No bos.config.json found",
+            diagnosis: null,
+            error: "No config",
+          };
+        }
+
+        const projectDir = resolve(dirname(configPath));
+        loadProjectEnv(projectDir);
+        const refreshed = await loadResolvedConfig({ cwd: projectDir });
+        if (!refreshed) {
+          return {
+            status: "error" as const,
+            message: "Failed to load config",
+            diagnosis: null,
+            error: "Config load failed",
+          };
+        }
+
+        const { resolvePluginDbInfo } = await import("./cli/db-studio");
+        const info = resolvePluginDbInfo(input.plugin, refreshed.runtime, projectDir);
+
+        const { repairPlugin } = await import("./cli/db-repair");
+        const result = await repairPlugin(info, input.mode ?? "history-reset");
+
+        return {
+          ...result,
+          error: result.status === "error" ? result.message : undefined,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          message: error instanceof Error ? error.message : "Unknown error",
+          diagnosis: null,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
     status: builder.status.handler(async () => {
       try {
         const configPath = findConfigPath();
