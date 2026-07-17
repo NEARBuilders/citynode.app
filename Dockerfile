@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM oven/bun:1-alpine AS builder
+FROM oven/bun:1.3.14-alpine AS builder
 WORKDIR /app
 
 COPY . .
@@ -19,7 +19,7 @@ RUN find node_modules -maxdepth 1 -type l ! -exec test -e {} \; -print -delete 2
 RUN node -e "const p=require('./package.json');p.workspaces.packages=p.workspaces.packages.filter(e=>!['api','ui','host'].includes(e)&&e!=='plugins/*');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
 # ── Runtime ──
-FROM oven/bun:1-alpine
+FROM oven/bun:1.3.14-alpine
 WORKDIR /app
 
 RUN apk add --no-cache curl

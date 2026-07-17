@@ -36,7 +36,7 @@
     },
     "api": {
       "name": "api",
-      "version": "2.7.2",
+      "version": "2.7.3",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
@@ -68,7 +68,7 @@
     },
     "host": {
       "name": "host",
-      "version": "1.13.0",
+      "version": "1.13.1",
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@hono/node-server": "^2.0.1",
@@ -108,7 +108,7 @@
     },
     "packages/every-plugin": {
       "name": "every-plugin",
-      "version": "2.7.1",
+      "version": "2.9.0",
       "dependencies": {
         "@module-federation/enhanced": "catalog:",
         "@module-federation/node": "catalog:",
@@ -149,7 +149,7 @@
     },
     "packages/everything-dev": {
       "name": "everything-dev",
-      "version": "1.44.1",
+      "version": "1.47.0",
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
@@ -202,7 +202,7 @@
     },
     "plugins/_template": {
       "name": "@every-plugin/template",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "dependencies": {
         "@orpc/contract": "catalog:",
         "@orpc/server": "catalog:",
@@ -210,6 +210,7 @@
       "devDependencies": {
         "@effect/language-service": "^0.85.1",
         "@module-federation/node": "catalog:",
+        "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
         "@rspack/cli": "catalog:",
         "@rspack/core": "catalog:",
         "@types/node": "catalog:",
@@ -226,7 +227,7 @@
     },
     "plugins/apps": {
       "name": "@everything-dev/apps-plugin",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "dependencies": {
         "@orpc/contract": "^1.13.4",
         "@orpc/server": "^1.13.4",
@@ -235,6 +236,7 @@
       "devDependencies": {
         "@effect/language-service": "^0.85.1",
         "@module-federation/node": "catalog:",
+        "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
         "@rspack/cli": "catalog:",
         "@rspack/core": "catalog:",
         "@types/node": "catalog:",
@@ -379,8 +381,8 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "effect": "3.21.2",
-    "every-plugin": "^2.7.1",
-    "everything-dev": "^1.44.1",
+    "every-plugin": "^2.9.0",
+    "everything-dev": "^1.47.0",
     "near-kit": "^0.14.0",
     "pg": "^8.12.0",
     "react": "19.2.4",
