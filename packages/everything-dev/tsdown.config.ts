@@ -11,6 +11,7 @@ export default defineConfig({
     "src/config.ts",
     "src/fastkv.ts",
     "src/contract.meta.ts",
+    "src/db.ts",
     "src/mf.ts",
     "src/integrity.ts",
     "src/plugin.ts",

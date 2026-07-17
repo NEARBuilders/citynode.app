@@ -4,13 +4,13 @@ import { join, resolve } from "node:path";
 import type { Migration } from "virtual:drizzle-migrations.sql";
 import { sql } from "drizzle-orm";
 import { Effect } from "every-plugin/effect";
-import { type Database, DatabaseError } from "./index";
 import {
   extractExpectedTables,
   getLegacyCandidates,
   getMigrationStorage,
   type MigrationStorage,
-} from "./migration-storage";
+} from "everything-dev/db";
+import { type Database, DatabaseError } from "./index";
 
 function normalizeRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];

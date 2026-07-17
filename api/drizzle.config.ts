@@ -1,5 +1,5 @@
 import { defineConfig } from "drizzle-kit";
-import { getMigrationStorage } from "./src/db/migration-storage";
+import { getMigrationStorage } from "everything-dev/db";
 
 const storage = getMigrationStorage();
 

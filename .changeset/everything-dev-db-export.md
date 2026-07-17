@@ -12,7 +12,11 @@ Extract DB convention helpers into shared `everything-dev/db` package export.
 
 - `packages/everything-dev/package.json` — adds `./db` subpath export.
 
-- `api/src/db/migration-storage.ts` — now re-exports from `everything-dev/db` instead of carrying inline logic.
+- `api/src/db/migration-storage.ts` — removed; `api/drizzle.config.ts`, `api/src/db/migrate.ts`, `api/src/db/layer.ts` now import directly from `everything-dev/db`.
+
+- `api/tests/unit/migration-storage.test.ts` — removed (redundant with package-level tests).
+
+- `packages/everything-dev/tsdown.config.ts` — added `src/db.ts` entry point.
 
 - `packages/everything-dev/src/cli/db-studio.ts` — replaces inline `migrationSlug` with `pluginMigrationSlug` from the shared helper.
 

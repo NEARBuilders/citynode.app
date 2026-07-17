@@ -1,7 +1,7 @@
 import { Context, Effect, Layer } from "every-plugin/effect";
+import { getMigrationStorage } from "everything-dev/db";
 import { createDatabaseDriver, type Database, DatabaseError } from "./index";
 import { detectDrift, loadMigrations, migrate } from "./migrate";
-import { getMigrationStorage } from "./migration-storage";
 
 export class DatabaseTag extends Context.Tag("Database")<Database, Database>() {}
 
