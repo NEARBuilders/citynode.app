@@ -15,7 +15,7 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-6237-host-everything-dev-nearbuilder-3040c5c37-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-6243-host-everything-dev-nearbuilder-41d5ad6b8-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "TENANT_WHITELIST",
@@ -23,22 +23,22 @@
         "ALLOW_UNTRUSTED_SSR",
         "CSP_STRICT"
       ],
-      "integrity": "sha384-oy4TypkCyYHg10gsY16s4tYSVybLbIMvoJRsDdcYZvq9UFZH1qt3f2e1VTnYhNW4"
+      "integrity": "sha384-fRIyLi2rz5PRm7lDUuJOkx6c0jLEL8FJrpFaMxHlPsV4yt0z5x9QOS6iK48bX5UP"
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-6232-ui-everything-dev-nearbuilders-c73be47fb-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-6236-ui-everything-dev-nearbuilders-06e57a1ee-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-6238-ui-everything-dev-nearbuilders-ce99bee8f-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-6242-ui-everything-dev-nearbuilders-ed1c74bf3-ze.zephyrcloud.app",
       "integrity": "sha384-5iv0aB87QKy+iZ6gLphfuzhG6P+QypBodRpIyM4oDYwEexNg4agEa+EXfJtYcwLu",
       "ssrIntegrity": "sha384-mI6kM8jTv07rFxvYK8h9JGRL3klOUZsXLC16mFZVWvwdb/QLodRtUhlIgoMOlUdP"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-6235-api-everything-dev-nearbuilders-8623d5149-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-6241-api-everything-dev-nearbuilders-d92af2b2f-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
-      "integrity": "sha384-bqLl97Es9Sncp7K+LAowiWIOsbMyILG7Oey7uPtx6cW7xvDh4u9pasEokyeK9ST8"
+      "integrity": "sha384-Xvu4HPxKAhPXgkE1BZKeFN83w1LlLksK/NVeQsgBPHCUxfMcvv5wZGzqZLaMwteY"
     },
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
@@ -59,7 +59,7 @@
   "plugins": {
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-6234-everything-dev-apps-plugin-ever-44795e028-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-6240-everything-dev-apps-plugin-ever-d7bb60830-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "dev.everything.near"
       },
@@ -67,12 +67,12 @@
         "ui/src/routes/_layout/apps/**",
         "ui/src/routes/_layout/index.tsx"
       ],
-      "integrity": "sha384-MXT6PcbOx5RiLjKLLkAMZU1mxoyy6V9t9FsMjQFTKSr/KxgYPR97uS1lDNgqBhnd"
+      "integrity": "sha384-o0qElnjFE5/SA9ZQoX1Nt/m8Mo1iPu9NjDnJ8312spmjgeyqCNzvgNOUQ240etqU"
     },
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-6233-every-plugin-template-everythin-911613528-ze.zephyrcloud.app",
-      "integrity": "sha384-lZryhC2PhojEhheEw7GQK3gPI9+iRh6fMciYnFisKc713S5UqLMBj0RFgFmXxVN3"
+      "production": "https://elliot-braem-6239-every-plugin-template-everythin-7aefb9e3f-ze.zephyrcloud.app",
+      "integrity": "sha384-+T2nOgT3o0/A62PhUEPxtQpsf5sHcvcvmIV4dMb3zHXY+TATnpmt8N9FcxYUkm5n"
     }
   }
 }
