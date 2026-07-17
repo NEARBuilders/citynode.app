@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
+import { unwrapDatabaseError } from "../db";
 import { DatabaseTag } from "../db/layer";
 import { things } from "../db/schema";
 
@@ -72,7 +73,7 @@ export const RegistryLive = Layer.effect(
             error instanceof ORPCError
               ? error
               : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: error instanceof Error ? error.message : String(error),
+                  message: unwrapDatabaseError(error),
                 }),
         }),
 
@@ -86,7 +87,7 @@ export const RegistryLive = Layer.effect(
             error instanceof ORPCError
               ? error
               : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: error instanceof Error ? error.message : String(error),
+                  message: unwrapDatabaseError(error),
                 }),
         }),
 
@@ -104,7 +105,7 @@ export const RegistryLive = Layer.effect(
             error instanceof ORPCError
               ? error
               : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: error instanceof Error ? error.message : String(error),
+                  message: unwrapDatabaseError(error),
                 }),
         }),
 
@@ -126,7 +127,7 @@ export const RegistryLive = Layer.effect(
             error instanceof ORPCError
               ? error
               : new ORPCError("INTERNAL_SERVER_ERROR", {
-                  message: error instanceof Error ? error.message : String(error),
+                  message: unwrapDatabaseError(error),
                 }),
         }),
     };
