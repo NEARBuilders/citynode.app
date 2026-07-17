@@ -5,11 +5,11 @@
 This repository uses the following production-facing workflows:
 
 - `CI` — lint, audit, and typecheck
-- `Docker` — Docker build and push after successful `CI` on `main`
+- `Docker` — Docker build and push, called by `Release` after npm publish or on `Dockerfile` changes
 - `Release` — changeset versioning and npm publish for framework packages
-- `Publish` — app deploy (Zephyr CDN + FastKV config publish)
+- `Deploy` — app deploy (Zephyr CDN + FastKV config publish)
 
-The key design: `CI` is the validation workflow. `Release`, `Publish`, and `Docker` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. Docker remains decoupled so long image builds do not delay release or publish.
+The key design: `CI` is the validation workflow. `Release` and `Deploy` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. `Docker` is called by `Release` via `workflow_call` — it only builds when packages are actually published (`should_publish=true`), so merging the "chore: version packages" PR alone does not trigger an image build.
 
 ## Workflows
 
@@ -27,9 +27,9 @@ The key design: `CI` is the validation workflow. `Release`, `Publish`, and `Dock
 
 ### Docker (`docker.yml`)
 
-**Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
+**Trigger:** `workflow_call` from `Release` (only when `should_publish=true`), `push` to `main`/`staging` on `Dockerfile` changes, or `workflow_dispatch`.
 
-**Purpose:** Build and push the Docker image only after validation passes, without blocking `Release` or `Publish`.
+**Purpose:** Build and push the Docker image only when a release actually publishes packages, or when the Dockerfile itself changes.
 
 **Behavior:**
 - Detects whether the repository has a `Dockerfile`
@@ -59,17 +59,16 @@ The key design: `CI` is the validation workflow. `Release`, `Publish`, and `Dock
 
 **npm publishing uses OIDC trusted publishing** — no `NPM_TOKEN` secret needed. `NODE_AUTH_TOKEN` is set to empty string, and `npm publish --provenance` authenticates via the OIDC token provisioned by `id-token: write` permission and `actions/setup-node` with `registry-url`.
 
-### Publish (`publish.yml`)
+### Deploy (`deploy.yml`)
 
 **Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
 
-**Purpose:** Detect whether a commit requires app deploy or just config publish, then run `bos publish` (with optional `--deploy`).
+**Purpose:** Build and deploy all workspaces to Zephyr CDN, publish `bos.config.json` to FastKV, and redeploy Railway.
 
 **Behavior:**
-- Scans `.changeset/` files for changes to deployable packages (ui, api, host, plugins)
-- Checks if `bos.config.json` changed in the commit
-- If deployable changes exist: runs `bos publish --deploy` (Zephyr CDN deploy + FastKV publish)
-- If only config changed (or manual dispatch): runs `bos publish` (FastKV publish only)
+- Runs `bos publish --deploy` (Zephyr CDN deploy + FastKV publish)
+- Redeploys the Railway service
+- Commits and pushes updated `bos.config.json` deployment URLs back to `main`
 
 **Secrets:** `NEAR_PRIVATE_KEY` and `ZEPHYR_CI_TOKEN` come from repository secrets. NEAR for FastKV publish, Zephyr CI token for CDN deploy. If `ZEPHYR_CI_TOKEN` is not set, falls back to `ZEPHYR_AUTH_TOKEN` + `ZEPHYR_USER_EMAIL` (legacy server-token auth).
 
@@ -117,10 +116,10 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 
 | Variable | Where | Purpose |
 |----------|-------|---------|
-| `NEAR_PRIVATE_KEY` | Publish | NEAR key for FastKV config publish |
+| `NEAR_PRIVATE_KEY` | Deploy | NEAR key for FastKV config publish |
 | `ZEPHYR_CI_TOKEN` | Deploy, Staging (as `ZE_CI_TOKEN`) | Zephyr Cloud CI token for CDN deploy (preferred) |
 | `ZEPHYR_AUTH_TOKEN` | Deploy, Staging (as `ZE_SERVER_TOKEN`) | Fallback Zephyr auth when `ZEPHYR_CI_TOKEN` is absent |
 | `ZEPHYR_USER_EMAIL` | Deploy, Staging (as `ZE_USER_EMAIL`) | Fallback Zephyr user email when `ZEPHYR_CI_TOKEN` is absent |
-| `GITHUB_TOKEN` | Release, Publish | Changesets PR creation, GitHub releases |
+| `GITHUB_TOKEN` | Release, Deploy | Changesets PR creation, GitHub releases |
 
 NEAR CLI is installed in a dedicated workflow step before publishing so Actions can apply the PATH update before `bos publish --deploy` runs.

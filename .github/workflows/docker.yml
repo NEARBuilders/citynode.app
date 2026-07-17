@@ -2,13 +2,23 @@ name: Docker
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref or SHA to build"
+        required: false
+        default: ""
+        type: string
   push:
     branches: [main, staging]
     paths:
       - Dockerfile
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref or SHA to build"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,18 +32,11 @@ jobs:
   build-docker:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (
-        github.event_name == 'workflow_run' &&
-        github.event.workflow_run.conclusion == 'success'
-      )
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
       - name: Detect Dockerfile
         id: detect_dockerfile

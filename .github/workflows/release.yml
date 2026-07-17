@@ -41,7 +41,12 @@ jobs:
       TARGET_REF: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
     outputs:
       should_publish: ${{ steps.release_mode.outputs.should_publish }}
+      target_ref: ${{ steps.target_ref.outputs.ref }}
     steps:
+      - name: Capture target ref
+        id: target_ref
+        run: echo "ref=${TARGET_REF}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -178,3 +183,14 @@ jobs:
               --notes "$NOTES" \
               --target main
           done
+
+  docker:
+    name: Build and Push Docker Image
+    needs: release
+    if: needs.release.outputs.should_publish == 'true'
+    uses: ./.github/workflows/docker.yml
+    with:
+      ref: ${{ needs.release.outputs.target_ref }}
+    permissions:
+      contents: read
+      packages: write
