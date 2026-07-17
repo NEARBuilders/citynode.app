@@ -57,6 +57,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "api/src/db/index.ts",
   "api/src/db/layer.ts",
   "api/src/db/migrate.ts",
+  "api/src/global.d.ts",
 ]);
 
 type PackageJson = Record<string, unknown>;
@@ -70,6 +71,7 @@ export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (/^plugins\/[^/]+\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/db\/(index|layer|migrate)\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/src\/global\.d\.ts$/.test(filePath)) return true;
   return false;
 }
 
@@ -456,6 +458,14 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
         if (!existsSync(join(sourceDir, sourceFile))) continue;
         destToSource.set(`plugins/${pluginKey}/src/lib/${libFile}`, sourceFile);
       }
+    }
+
+    // Sync api/src/global.d.ts into each plugin's src/
+    for (const pluginKey of childPlugins) {
+      if (!existsSync(join(projectDir, "plugins", pluginKey, "src"))) continue;
+      const sourceFile = "api/src/global.d.ts";
+      if (!existsSync(join(sourceDir, sourceFile))) continue;
+      destToSource.set(`plugins/${pluginKey}/src/global.d.ts`, sourceFile);
     }
 
     // Sync api/src/db/{index,layer,migrate}.ts into each plugin's src/db/
