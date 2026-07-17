@@ -42,7 +42,7 @@ jobs:
         env:
           AUDIT_STRICT: ${{ secrets.AUDIT_STRICT }}
         run: |
-          set -o pipefail
+          set +e -o pipefail
           timeout 120 bun audit 2>&1 | tee audit-output.txt
           audit_exit=$?
           if [ "$audit_exit" -eq 124 ]; then
