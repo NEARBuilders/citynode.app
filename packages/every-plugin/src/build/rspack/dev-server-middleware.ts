@@ -63,12 +63,12 @@ export function setupPluginMiddleware(
       const loaded = await runtime.usePlugin(pluginId, (devConfig?.config ?? defaultConfig) as any);
 
       cleanup = async () => {
-        if (runtime) await runtime.shutdown();
         handlers.rpc = null;
         handlers.api = null;
         if (devServer.app.locals.handlers) {
           devServer.app.locals.handlers = null;
         }
+        if (runtime) await runtime.shutdown();
       };
 
       handlers.rpc = new RPCHandler(loaded.router, {
