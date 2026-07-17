@@ -9,12 +9,6 @@ on:
       - ".changeset/**"
   pull_request:
   workflow_dispatch:
-    inputs:
-      fail_on_critical_high:
-        description: "Fail the audit step on critical/high vulnerabilities"
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,6 +39,8 @@ jobs:
       - name: Security audit
         id: audit
         timeout-minutes: 5
+        env:
+          AUDIT_STRICT: ${{ secrets.AUDIT_STRICT }}
         run: |
           set -o pipefail
           timeout 120 bun audit 2>&1 | tee audit-output.txt
@@ -58,11 +54,11 @@ jobs:
             exit 0
           fi
           if grep -qiE '(critical|high)' audit-output.txt; then
-            if [ "${{ inputs.fail_on_critical_high }}" = "true" ]; then
+            if [ "$AUDIT_STRICT" = "true" ]; then
               echo "::error::Critical or high vulnerabilities found — failing the audit"
               exit 1
             else
-              echo "::warning::Critical or high vulnerabilities found — see audit output"
+              echo "::warning::Critical or high vulnerabilities found — set AUDIT_STRICT=true secret to fail on these"
             fi
           fi
 

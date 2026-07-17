@@ -345,8 +345,8 @@ Module Federation shares React, TanStack Query, and TanStack Router as singleton
 
 - **Renovate** manages dependency updates for this parent repo (not Dependabot). Config: `.github/renovate.json`. New generated child repos no longer scaffold that config by default.
 - **`--ignore-scripts`** — all CI workflows use `bun install --frozen-lockfile --ignore-scripts`. Lifecycle scripts (the TanStack attack vector) never execute during install.
-- **`dependency-review-action`** runs on every PR to flag known vulnerabilities.
-- **`bun audit`** runs in CI and fails on critical/high findings.
+- **Renovate `vulnerabilityAlerts`** — enabled in `.github/renovate.json`, opens PRs for dependencies with known vulnerabilities.
+- **`bun audit`** runs in CI on every push, PR, and manual dispatch. It fails the build on critical/high findings only when the `AUDIT_STRICT=true` GitHub secret is set; otherwise it emits a warning.
 - **GitHub Actions pinned to commit SHAs** — all `uses:` references are SHA-pinned to prevent tag-hijacking attacks (e.g. tj-actions).
 
 ### Supply Chain Incident Response

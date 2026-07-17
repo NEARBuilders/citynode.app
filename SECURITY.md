@@ -13,17 +13,17 @@
 This repository has implemented protections against the Axios npm supply chain compromise (CVE related to malicious versions 1.14.1 and 0.30.4).
 
 **Current Protections:**
-- Axios pinned to safe version 1.13.6 via `package.json` overrides
-- Lifecycle scripts disabled via `.npmrc` and `bunfig.toml`
-- Security audit integrated into CI/CD pipeline
-- Dependabot configured to block axios updates temporarily
+- Lifecycle scripts disabled via `bunfig.toml` (`ignore-scripts = true`)
+- Security audit integrated into CI/CD pipeline (`bun audit`, gated by `AUDIT_STRICT` secret)
+- Renovate manages dependency updates with `vulnerabilityAlerts` enabled
+- Catalog pinning in root `package.json` locks shared dependency versions across all workspaces
 
 **Review Date:** May 2, 2026 (30 days from implementation)
 
 ### Dependency Update Policy
 
 1. **Manual Review Required:** All dependency updates must be manually reviewed
-2. **No Auto-Updates:** Automated dependency bots are restricted for critical packages
+2. **Renovate Managed:** Renovate opens PRs for updates; minor bumps are never auto-merged
 3. **Security Audits:** Run `bun audit` before merging dependency changes
 4. **Lock File:** Always commit lock file changes with dependency updates
 
