@@ -41,13 +41,13 @@ function toThingRecord(row: {
 export const RegistryLive = Layer.effect(
   RegistryTag,
   Effect.gen(function* () {
-    const driver = yield* DatabaseTag;
+    const db = yield* DatabaseTag;
 
     return {
       createThing: (input) =>
         Effect.tryPromise({
           try: async () => {
-            const [row] = await driver.db
+            const [row] = await db
               .insert(things)
               .values({
                 thingId: input.thingId,
@@ -80,7 +80,7 @@ export const RegistryLive = Layer.effect(
       getThing: (thingId) =>
         Effect.tryPromise({
           try: async () => {
-            const [row] = await driver.db.select().from(things).where(eq(things.thingId, thingId));
+            const [row] = await db.select().from(things).where(eq(things.thingId, thingId));
             return row ? toThingRecord(row) : null;
           },
           catch: (error) =>
@@ -94,7 +94,7 @@ export const RegistryLive = Layer.effect(
       touchThing: (thingId) =>
         Effect.tryPromise({
           try: async () => {
-            const [row] = await driver.db
+            const [row] = await db
               .update(things)
               .set({ updatedAt: new Date() })
               .where(eq(things.thingId, thingId))
@@ -112,7 +112,7 @@ export const RegistryLive = Layer.effect(
       deleteThing: (thingId) =>
         Effect.tryPromise({
           try: async () => {
-            const [row] = await driver.db
+            const [row] = await db
               .delete(things)
               .where(eq(things.thingId, thingId))
               .returning({ thingId: things.thingId });
