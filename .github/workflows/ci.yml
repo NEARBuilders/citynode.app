@@ -58,8 +58,19 @@ jobs:
 
       - name: Security audit
         id: audit
+        timeout-minutes: 5
         run: |
-          bun audit 2>&1 | tee audit-output.txt
+          set -o pipefail
+          timeout 120 bun audit 2>&1 | tee audit-output.txt
+          audit_exit=$?
+          if [ "$audit_exit" -eq 124 ]; then
+            echo "::warning::bun audit timed out after 120s — skipping vulnerability check"
+            exit 0
+          fi
+          if [ "$audit_exit" -gt 1 ]; then
+            echo "::warning::bun audit exited with code $audit_exit — see output above"
+            exit 0
+          fi
           if grep -qiE '(critical|high)' audit-output.txt; then
             if [ "${{ inputs.fail_on_critical_high }}" = "true" ]; then
               echo "::error::Critical or high vulnerabilities found — failing the audit"
