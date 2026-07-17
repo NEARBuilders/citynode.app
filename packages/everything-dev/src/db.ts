@@ -19,7 +19,7 @@ function normalizeSlug(name: string): string {
 
 export function getMigrationSlug(dir?: string): string {
   if (!dir) return normalizeSlug(process.env.npm_package_name ?? "unknown");
-  let current = dirname(dir);
+  let current = dir;
   for (let i = 0; i < 10; i++) {
     const pkgPath = join(current, "package.json");
     if (existsSync(pkgPath)) {
@@ -34,7 +34,7 @@ export function getMigrationSlug(dir?: string): string {
     if (parent === current) break;
     current = parent;
   }
-  return normalizeSlug(dir);
+  return normalizeSlug(dir ?? "unknown");
 }
 
 export function getMigrationStorage(dir?: string): MigrationStorage {
@@ -57,13 +57,7 @@ export function migrateSql(storage: MigrationStorage): MigrationStorage & { qual
 }
 
 export function pluginMigrationSlug(key: string): string {
-  const basename = key.split("/").pop() ?? key;
-  return basename
-    .replace(/^@/, "")
-    .replace(/[^a-zA-Z0-9_-]/g, "_")
-    .replace(/-plugin$/i, "")
-    .replace(/-/g, "_")
-    .toLowerCase();
+  return normalizeSlug(key);
 }
 
 export function getDatabaseUrlSecretName(slug: string): string {
@@ -79,7 +73,7 @@ export function extractExpectedTables(migrations: { sql: string[] }[]): string[]
         const schemaName = match[1];
         const tableName = match[2];
         if (schemaName) {
-          tables.add(schemaName);
+          tables.add(tableName);
         } else if (tableName) {
           tables.add(tableName);
         }

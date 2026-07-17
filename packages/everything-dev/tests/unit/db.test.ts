@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   extractExpectedTables,
@@ -33,6 +36,21 @@ describe("getMigrationStorage", () => {
       process.env.npm_package_name = prev;
     }
   });
+
+  it("derives from a workspace directory", () => {
+    const dir = mkdtempSync(join(tmpdir(), "everything-dev-db-"));
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        `${JSON.stringify({ name: "@everything-dev/foo-plugin" })}\n`,
+      );
+      const storage = getMigrationStorage(dir);
+      expect(storage.slug).toBe("foo");
+      expect(storage.table).toBe("__drizzle_migrations_foo");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("getLegacyCandidates", () => {
@@ -52,7 +70,7 @@ describe("extractExpectedTables", () => {
 
   it("extracts schema-qualified table names", () => {
     expect(extractExpectedTables([{ sql: ['CREATE TABLE "public"."things" (...)'] }])).toEqual([
-      "public",
+      "things",
     ]);
   });
 

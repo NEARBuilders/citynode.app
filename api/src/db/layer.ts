@@ -21,7 +21,7 @@ export const DatabaseLive = (url: string) =>
           }).pipe(Effect.ignore),
       );
 
-      const storage = getMigrationStorage();
+      const storage = getMigrationStorage(import.meta.dirname);
       const { migrations, source } = yield* loadMigrations();
 
       if (migrations.length === 0) {

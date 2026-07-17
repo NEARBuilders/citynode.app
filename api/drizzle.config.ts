@@ -1,14 +1,15 @@
 import { defineConfig } from "drizzle-kit";
-import { getMigrationStorage } from "everything-dev/db";
+import { getDatabaseUrlSecretName, getMigrationStorage } from "everything-dev/db";
 
-const storage = getMigrationStorage();
+const storage = getMigrationStorage(import.meta.dirname);
+const databaseSecret = getDatabaseUrlSecretName(storage.slug);
 
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.API_DATABASE_URL || "pglite:.bos/api/:memory:",
+    url: process.env[databaseSecret] || `pglite:.bos/${storage.slug}/:memory:`,
   },
   migrations: {
     schema: storage.schema,

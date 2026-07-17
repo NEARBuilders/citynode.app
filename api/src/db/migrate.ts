@@ -123,11 +123,7 @@ export function migrate(
 ): Effect.Effect<number, DatabaseError> {
   return Effect.gen(function* () {
     const sorted = [...migrations].sort((a, b) => a.idx - b.idx);
-    const journal = storage ?? {
-      schema: "drizzle",
-      table: "__drizzle_migrations",
-      slug: "default",
-    };
+    const journal = storage ?? getMigrationStorage(import.meta.dirname);
 
     yield* ensureMigrationTable(db, journal);
 
@@ -288,7 +284,7 @@ export function detectDrift(
   storage?: MigrationStorage,
 ): Effect.Effect<DriftReport, DatabaseError> {
   return Effect.gen(function* () {
-    const journal = storage ?? getMigrationStorage();
+    const journal = storage ?? getMigrationStorage(import.meta.dirname);
     const expectedTables = extractExpectedTables(migrations);
     const ref = journalRef(journal);
 
