@@ -1007,17 +1007,6 @@ export const createStartServer = (onReady?: () => void) =>
           moduleLoadError = result.left;
           logger.error("[SSR] Failed to load Router module:", moduleLoadError);
         }
-      } else {
-        try {
-          const result = await Effect.runPromise(
-            loadRouterModule(effectiveConfig).pipe(Effect.either),
-          );
-          if (result._tag === "Right") {
-            ssrRouterModule = result.right;
-          }
-        } catch {
-          // Expected — no SSR URL configured in production
-        }
       }
 
       if (ssrRouterModule && effectiveConfig.ui.ssrUrl) {
