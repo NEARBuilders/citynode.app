@@ -4,6 +4,7 @@ import { getDatabaseUrlSecretName, getMigrationSlug, getMigrationStorage } from 
 const slug = getMigrationSlug(import.meta.dirname);
 const databaseSecret = getDatabaseUrlSecretName(slug);
 const storage = getMigrationStorage(slug);
+const isDrizzleKit = process.argv[1]?.includes("drizzle-kit");
 
 export default defineConfig({
   schema: "./src/db/schema.ts",
@@ -12,7 +13,7 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env[databaseSecret] ??
-      (process.env.NODE_ENV === "production"
+      (process.env.NODE_ENV === "production" && isDrizzleKit
         ? (() => {
             throw new Error(
               `Missing ${databaseSecret} — required in production for drizzle-kit operations`,
