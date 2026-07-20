@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 import {
   extractExpectedTables,
   getDatabaseUrlSecretName,
-  getLegacyCandidates,
   getMigrationSlug,
   getMigrationStorage,
   pluginMigrationSlug,
+  toSqlArray,
 } from "../../src/db";
 
 describe("getMigrationSlug", () => {
@@ -21,43 +21,82 @@ describe("getMigrationSlug", () => {
       process.env.npm_package_name = prev;
     }
   });
-});
 
-describe("getMigrationStorage", () => {
-  it("returns correct storage config", () => {
-    const prev = process.env.npm_package_name;
-    process.env.npm_package_name = "api";
-    try {
-      const storage = getMigrationStorage();
-      expect(storage.schema).toBe("drizzle");
-      expect(storage.table).toBe("__drizzle_migrations_api");
-      expect(storage.slug).toBe("api");
-    } finally {
-      process.env.npm_package_name = prev;
-    }
-  });
-
-  it("derives from a workspace directory", () => {
+  it("derives from a workspace directory's package.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "everything-dev-db-"));
     try {
       writeFileSync(
         join(dir, "package.json"),
         `${JSON.stringify({ name: "@everything-dev/foo-plugin" })}\n`,
       );
-      const storage = getMigrationStorage(dir);
-      expect(storage.slug).toBe("foo");
-      expect(storage.table).toBe("__drizzle_migrations_foo");
+      expect(getMigrationSlug(dir)).toBe("foo");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 });
 
-describe("getLegacyCandidates", () => {
-  it("returns legacy global and public tables", () => {
-    const candidates = getLegacyCandidates();
-    expect(candidates).toContainEqual({ schema: "drizzle", table: "__drizzle_migrations" });
-    expect(candidates).toContainEqual({ schema: "public", table: "drizzle_migrations" });
+describe("getMigrationStorage", () => {
+  it("returns the shared journal coords with the caller's slug (phase 1)", () => {
+    const storage = getMigrationStorage("api");
+    expect(storage.schema).toBe("drizzle");
+    expect(storage.table).toBe("__drizzle_migrations");
+    expect(storage.slug).toBe("api");
+  });
+
+  it("defaults slug to getMigrationSlug() when none provided", () => {
+    const prev = process.env.npm_package_name;
+    process.env.npm_package_name = "api";
+    try {
+      const storage = getMigrationStorage();
+      expect(storage.slug).toBe("api");
+      expect(storage.table).toBe("__drizzle_migrations");
+    } finally {
+      process.env.npm_package_name = prev;
+    }
+  });
+
+  it("normalizes a raw plugin key without pre-normalization", () => {
+    const storage = getMigrationStorage("@everything-dev/foo-plugin");
+    expect(storage.slug).toBe("foo");
+    expect(storage.table).toBe("__drizzle_migrations");
+  });
+});
+
+describe("getMigrationStorage (isolated)", () => {
+  it("returns the per-plugin journal table when isolated: true", () => {
+    const storage = getMigrationStorage("api", { isolated: true });
+    expect(storage.schema).toBe("drizzle");
+    expect(storage.table).toBe("__drizzle_migrations_api");
+    expect(storage.slug).toBe("api");
+  });
+
+  it("normalizes a raw plugin key and applies it to the isolated table name", () => {
+    const storage = getMigrationStorage("@everything-dev/foo-plugin", { isolated: true });
+    expect(storage.slug).toBe("foo");
+    expect(storage.table).toBe("__drizzle_migrations_foo");
+  });
+
+  it("isolated: false explicitly selects the shared journal", () => {
+    const storage = getMigrationStorage("api", { isolated: false });
+    expect(storage.table).toBe("__drizzle_migrations");
+  });
+});
+
+describe("toSqlArray", () => {
+  it("formats a string array as PostgreSQL text array literal", () => {
+    const result = toSqlArray(["abc", "def"]);
+    expect(result).toBe('\'{"abc","def"}\'::text[]');
+  });
+
+  it("escapes double quotes in values", () => {
+    const result = toSqlArray(['has"h']);
+    expect(result).toBe('\'{"has\\"h"}\'::text[]');
+  });
+
+  it("returns empty array literal for empty input", () => {
+    const result = toSqlArray([]);
+    expect(result).toBe("'{}'::text[]");
   });
 });
 

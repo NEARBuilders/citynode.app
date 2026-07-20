@@ -15,8 +15,10 @@ import {
   type ProcessCallbacks,
   type ProcessHandle,
 } from "./orchestrator";
+import { registerStandalone, unregisterPid } from "./process-registry";
 import {
   type AppOrchestrator,
+  DevRuntimeConfig,
   DevRuntimeConfigLive,
   type ServiceDescriptor,
   ServiceDescriptorMap,
@@ -81,6 +83,7 @@ export const runDevSession = (
   Effect.gen(function* () {
     const configDir = getProjectRoot();
     const services = yield* ServiceDescriptorMap;
+    const runtimeConfig = yield* DevRuntimeConfig;
     const orderedPackages = sortByOrder(orchestrator.packages);
     const initialProcesses: ProcessState[] = getProcessStates(
       orderedPackages,
@@ -107,6 +110,37 @@ export const runDevSession = (
     onShutdownReady?.(() => {
       void Effect.runPromise(Deferred.succeed(shutdown, undefined));
     });
+
+    const isWorkspaceChild = process.env.BOS_WORKSPACE_CHILD === "1";
+    if (!isWorkspaceChild) {
+      const regPorts: Record<string, number> = {};
+      const addPort = (key: string, value: number | undefined | null) => {
+        if (value != null) regPorts[key] = value;
+      };
+      addPort("host", runtimeConfig.host.port);
+      addPort("api", runtimeConfig.api.port);
+      addPort("ui", runtimeConfig.ui.port);
+      addPort("auth", runtimeConfig.auth?.port);
+      addPort(
+        "uiSsr",
+        runtimeConfig.ui.ssrUrl
+          ? Number.parseInt(new URL(runtimeConfig.ui.ssrUrl).port, 10)
+          : undefined,
+      );
+      if (runtimeConfig.plugins) {
+        for (const [id, plugin] of Object.entries(runtimeConfig.plugins)) {
+          addPort(`plugin:${id}`, plugin.port);
+          addPort(`plugin-ui:${id}`, plugin.ui?.port);
+        }
+      }
+      registerStandalone({
+        pid: process.pid,
+        configDir,
+        ports: regPorts,
+        startedAt: Date.now(),
+        description: orchestrator.description,
+      });
+    }
 
     const allLogs: LogEntry[] = [];
     let view: DevViewHandle | null = null;
@@ -226,6 +260,14 @@ export const runDevSession = (
         yield* Effect.sleep("200 millis");
 
         view?.unmount();
+
+        if (!isWorkspaceChild) {
+          try {
+            unregisterPid(process.pid);
+          } catch {
+            // best-effort; pruneDead cleans stale entries on next ps/kill
+          }
+        }
 
         if (shouldExportLogs) {
           console.log("\n");

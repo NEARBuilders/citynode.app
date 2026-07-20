@@ -17,7 +17,8 @@ import {
 import { formatORPCError } from "every-plugin/errors";
 import { onError } from "every-plugin/orpc";
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
-import { type Context, Hono } from "hono";
+import { serializeHeadData } from "everything-dev/ui/router";
+import { type Context, Hono, type Next } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
@@ -27,7 +28,13 @@ import { timeout } from "hono/timeout";
 import { rateLimiter } from "hono-rate-limiter";
 import type { AuthVariables } from "./lib/auth";
 import { buildPluginContext, createSessionMiddleware, registerAuthHandler } from "./services/auth";
-import { type ClientRuntimeConfig, ConfigService, type RuntimeConfig } from "./services/config";
+import {
+  type ClientRuntimeConfig,
+  ConfigService,
+  type RuntimeConfig,
+  readCorsOrigins,
+} from "./services/config";
+import type { HeadData, RouterModule } from "./types";
 
 type HonoEnv = { Variables: AuthVariables };
 
@@ -532,8 +539,9 @@ export const createStartServer = (onReady?: () => void) =>
   Effect.gen(function* () {
     const port = Number(process.env.PORT) || 3000;
     const isDev = process.env.NODE_ENV !== "production";
+    const corsOrigins = yield* readCorsOrigins();
 
-    if (!process.env.CORS_ORIGIN && !isDev) {
+    if (corsOrigins.length === 0 && !isDev) {
       logger.warn(
         "[Security] CORS_ORIGIN is not set in production. Auth endpoints will reject cross-origin requests.",
       );
@@ -561,10 +569,61 @@ export const createStartServer = (onReady?: () => void) =>
       return c.json({ error: details.message, cause: details.cause }, 500);
     });
 
-    const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((o: string) => o.trim()) ?? [
-      config.host?.url ?? "",
-      ...(uiConfig.url ? [uiConfig.url] : []),
-    ];
+    const allowedOrigins =
+      corsOrigins.length > 0
+        ? corsOrigins
+        : [config.host?.url ?? "", ...(uiConfig.url ? [uiConfig.url] : [])];
+
+    const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+    const createCsrfMiddleware = (origins: string[]) => {
+      return async (c: Context, next: Next) => {
+        if (SAFE_METHODS.has(c.req.method)) {
+          return next();
+        }
+
+        const origin = c.req.header("origin");
+        const referer = c.req.header("referer");
+
+        const isAllowedOrigin = (o: string): boolean => {
+          try {
+            const parsed = new URL(o);
+            return origins.some((allowed) => {
+              if (!allowed) return false;
+              try {
+                const allowedUrl = new URL(allowed);
+                return (
+                  parsed.protocol === allowedUrl.protocol &&
+                  parsed.hostname === allowedUrl.hostname &&
+                  parsed.port === allowedUrl.port
+                );
+              } catch {
+                return allowed === o;
+              }
+            });
+          } catch {
+            return false;
+          }
+        };
+
+        if (origin && isAllowedOrigin(origin)) {
+          return next();
+        }
+
+        if (referer) {
+          try {
+            const refererOrigin = new URL(referer).origin;
+            if (isAllowedOrigin(refererOrigin)) {
+              return next();
+            }
+          } catch {
+            // invalid referer URL — fall through to rejection
+          }
+        }
+
+        return c.json({ error: "CSRF validation failed: request origin is not allowed" }, 403);
+      };
+    };
 
     app.use(
       "/*",
@@ -580,8 +639,10 @@ export const createStartServer = (onReady?: () => void) =>
       }),
     );
 
+    app.use("/*", createCsrfMiddleware(allowedOrigins));
+
     const staticAssetPattern =
-      /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
+      /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|md|webmanifest|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
 
     const isHealthPath = (pathname: string) =>
       pathname === "/health" || pathname === "/api/_health";
@@ -690,26 +751,24 @@ export const createStartServer = (onReady?: () => void) =>
       runtimeSourceConfig: RuntimeConfig,
       runtimeConfig: ClientRuntimeConfig,
       error?: Error | null,
+      headData?: HeadData | null,
     ) => {
       const nonce = CSP_STRICT ? ctx.get("secureHeadersNonce") : undefined;
       const uiIntegrity = runtimeSourceConfig.ui.integrity;
       const assetsUrl = runtimeConfig.assetsUrl.replace(/\/$/, "");
-      const themeInitScript = (getThemeInitScript() as { children?: string }).children ?? "";
-      const hydrateScript =
-        (
-          getHydrateScript(
-            runtimeConfig as Partial<ClientRuntimeConfig>,
-            undefined,
-            undefined,
-            nonce,
-          ) as {
-            children?: string;
-          }
-        ).children ?? "";
-
-      const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
-      const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
       const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
+      const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
+      const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
+
+      const baseStyles = `
+        ${getBaseStyles()}
+        .shell { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
+        .fade { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .error { color: #fca5a5; }
+      `.trim();
+
+      const themeScript = `<script${nonceAttr}>${(getThemeInitScript() as { children?: string }).children ?? ""}</script>`;
 
       const pluginUiScripts = Object.entries(runtimeSourceConfig.plugins ?? {})
         .filter(([, p]: [string, RuntimePlugin]) => p.ui?.url && p.ui.source === "remote")
@@ -722,42 +781,59 @@ export const createStartServer = (onReady?: () => void) =>
         })
         .join("\n");
 
+      const shellBody = `<div id="root"><div class="shell"><div class="fade">${
+        error
+          ? `<p class="error">SSR unavailable, showing client app.</p><p>${error.message}</p>`
+          : `<p>Loading...</p>`
+      }</div></div></div>`;
+
+      if (headData) {
+        const serialized = serializeHeadData(headData, nonce as string | undefined);
+        return ctx.html(
+          `<!DOCTYPE html>
+            <html lang="en">
+              <head>
+                ${serialized.metaHtml}
+                ${serialized.linkHtml}
+                <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
+                <style>${baseStyles}</style>
+                ${themeScript}
+                ${serialized.scriptHtml}
+                ${pluginUiScripts}
+              </head>
+              <body>${shellBody}</body>
+            </html>`,
+          200,
+        );
+      }
+
+      const title =
+        runtimeConfig.runtime?.title ?? runtimeSourceConfig.title ?? runtimeSourceConfig.account;
+      const hydrateScript =
+        (
+          getHydrateScript(
+            runtimeConfig as Partial<ClientRuntimeConfig>,
+            undefined,
+            undefined,
+            nonce,
+          ) as { children?: string }
+        ).children ?? "";
+
       return ctx.html(
         `<!DOCTYPE html>
           <html lang="en">
             <head>
               <meta charset="utf-8" />
               <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-              <title>${runtimeConfig.runtime?.title ?? runtimeSourceConfig.title ?? runtimeSourceConfig.account}</title>
-              <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-              <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-              <link rel="manifest" href="/manifest.json" />
+              <title>${title}</title>
               <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
-              <style>
-                ${getBaseStyles()}
-                .shell { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
-                .fade { animation: fadeIn 0.3s ease-in; }
-                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                .error { color: #fca5a5; }
-              </style>
+              <style>${baseStyles}</style>
+              ${themeScript}
               <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
               ${pluginUiScripts}
-              <script${nonceAttr}>${themeInitScript}</script>
               <script${nonceAttr}>${hydrateScript}</script>
             </head>
-            <body>
-              <div id="root">
-                <div class="shell">
-                  <div class="fade">
-                    ${
-                      error
-                        ? `<p class="error">SSR unavailable, showing client app.</p><p>${error.message}</p>`
-                        : `<p>Loading...</p>`
-                    }
-                  </div>
-                </div>
-              </div>
-            </body>
+            <body>${shellBody}</body>
           </html>`,
         200,
       );
@@ -790,11 +866,7 @@ export const createStartServer = (onReady?: () => void) =>
       }
 
       const lastSegment = pathname.split("/").pop() ?? "";
-      if (
-        !/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i.test(
-          lastSegment,
-        )
-      ) {
+      if (!staticAssetPattern.test(lastSegment)) {
         return next();
       }
 
@@ -922,68 +994,81 @@ export const createStartServer = (onReady?: () => void) =>
         plugins,
       );
 
-      if (!effectiveConfig.ui.ssrUrl) {
-        return renderClientShell(c, effectiveConfig, runtimeConfig);
+      let ssrRouterModule: RouterModule | null = null;
+      let moduleLoadError: Error | null = null;
+
+      if (effectiveConfig.ui.ssrUrl) {
+        const result = await Effect.runPromise(
+          loadRouterModule(effectiveConfig).pipe(Effect.either),
+        );
+        if (result._tag === "Right") {
+          ssrRouterModule = result.right;
+        } else {
+          moduleLoadError = result.left;
+          logger.error("[SSR] Failed to load Router module:", moduleLoadError);
+        }
+      } else {
+        try {
+          const result = await Effect.runPromise(
+            loadRouterModule(effectiveConfig).pipe(Effect.either),
+          );
+          if (result._tag === "Right") {
+            ssrRouterModule = result.right;
+          }
+        } catch {
+          // Expected — no SSR URL configured in production
+        }
       }
 
-      const routerModuleResult = await Effect.runPromise(
-        loadRouterModule(effectiveConfig).pipe(Effect.either),
-      );
+      if (ssrRouterModule && effectiveConfig.ui.ssrUrl) {
+        try {
+          const pluginContext = buildPluginContext(c);
+          const ssrApiClient = createPluginsClient(plugins, pluginContext);
 
-      if (routerModuleResult._tag === "Left") {
-        logger.error("[SSR] Failed to load Router module:", routerModuleResult.left);
-        return renderClientShell(c, effectiveConfig, runtimeConfig, routerModuleResult.left);
+          const render = () =>
+            ssrRouterModule.renderToStream(c.req.raw, {
+              session: c.get("session") ? { session: c.get("session"), user: c.get("user") } : null,
+              basepath: runtimeConfig.runtime?.runtimeBasePath,
+              runtimeConfig,
+              apiClient: ssrApiClient,
+              cspNonce: nonce,
+            });
+
+          const result = await render();
+          const responseHeaders = new Headers(result?.headers);
+          const cspHeader = c.res.headers.get("Content-Security-Policy");
+          if (cspHeader) {
+            responseHeaders.set("Content-Security-Policy", cspHeader);
+          }
+          return new Response(result?.stream, {
+            status: result?.statusCode,
+            headers: responseHeaders,
+          });
+        } catch (error) {
+          logger.error("[SSR] Streaming error:", error);
+          moduleLoadError = error as Error;
+        }
       }
 
-      const ssrRouterModule = routerModuleResult.right;
-
-      try {
-        const pluginContext = buildPluginContext(c);
-        const ssrApiClient = createPluginsClient(plugins, pluginContext);
-
-        const render = () =>
-          ssrRouterModule?.renderToStream(c.req.raw, {
-            session: c.get("session") ? { session: c.get("session"), user: c.get("user") } : null,
-            basepath: runtimeConfig.runtime?.runtimeBasePath,
+      let headData: HeadData | null = null;
+      if (ssrRouterModule) {
+        try {
+          const pluginContext = buildPluginContext(c);
+          const ssrApiClient = createPluginsClient(plugins, pluginContext);
+          headData = await ssrRouterModule.getRouteHead(c.req.path, {
             runtimeConfig,
             apiClient: ssrApiClient,
+            session: c.get("session")
+              ? ({ session: c.get("session"), user: c.get("user") } as never)
+              : undefined,
             cspNonce: nonce,
           });
-
-        const result = await render();
-        const responseHeaders = new Headers(result?.headers);
-        const cspHeader = c.res.headers.get("Content-Security-Policy");
-        if (cspHeader) {
-          responseHeaders.set("Content-Security-Policy", cspHeader);
+        } catch (e) {
+          logger.warn("[Shell] Failed to get route head data:", e);
         }
-        return new Response(result?.stream, {
-          status: result?.statusCode,
-          headers: responseHeaders,
-        });
-      } catch (error) {
-        logger.error("[SSR] Streaming error:", error);
-        return c.html(
-          `
-        <!DOCTYPE html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8" />
-            <title>Server Error</title>
-            <style>
-              body { font-family: system-ui; padding: 2rem; background: #1c1c1e; color: #fafafa; }
-              pre { background: #2d2d2d; padding: 1rem; border-radius: 8px; overflow-x: auto; }
-            </style>
-          </head>
-          <body>
-            <h1>Server Error</h1>
-            <p>An error occurred during server-side rendering.</p>
-            <pre>${error instanceof Error ? error.stack : String(error)}</pre>
-          </body>
-        </html>
-      `,
-          500,
-        );
       }
+
+      return renderClientShell(c, effectiveConfig, runtimeConfig, moduleLoadError, headData);
     });
 
     const startHttpServer = () => {
@@ -1034,6 +1119,8 @@ export const createStartServer = (onReady?: () => void) =>
 
 export interface ServerInput {
   config: RuntimeConfig;
+  port?: number;
+  env?: Record<string, string>;
 }
 
 export interface ServerHandle {
@@ -1042,6 +1129,14 @@ export interface ServerHandle {
 }
 
 export const runServer = (input: ServerInput): ServerHandle => {
+  if (input.port != null) {
+    process.env.PORT = String(input.port);
+  }
+  if (input.env) {
+    for (const [key, value] of Object.entries(input.env)) {
+      process.env[key] = value;
+    }
+  }
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const ServerLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
 

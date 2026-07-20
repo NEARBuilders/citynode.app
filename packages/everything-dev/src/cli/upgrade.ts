@@ -104,7 +104,7 @@ function readCurrentPackageSpecifier(projectDir: string, packageName: string): s
       );
     }
 
-    if (value.startsWith("workspace:") || value.startsWith("file:")) {
+    if (value.startsWith("workspace:") || value.startsWith("file:") || value.startsWith("link:")) {
       return readInstalledVersion(projectDir, packageName);
     }
 
@@ -196,7 +196,7 @@ function packageObjectNeedsCatalogRefs(
     for (const packageName of packageNames) {
       const value = field[packageName];
       if (!value) continue;
-      if (value !== "catalog:" && !value.startsWith("file:")) {
+      if (value !== "catalog:" && !value.startsWith("file:") && !value.startsWith("link:")) {
         return true;
       }
     }
@@ -630,12 +630,16 @@ export async function migrateBosConfigFiles(projectDir: string): Promise<string[
       try {
         const pluginConfig = JSON.parse(readFileSync(filePath, "utf-8")) as Record<string, unknown>;
         rootChanged = mergePluginConfigIntoRoot(rootConfig, pluginKey, pluginConfig) || rootChanged;
-      } catch {}
+      } catch (e) {
+        console.warn(`[Upgrade] Failed to parse plugin config at ${filePath}: ${e}`);
+      }
 
       try {
         rmSync(filePath);
         migrated.push(relativePath);
-      } catch {}
+      } catch (e) {
+        console.warn(`[Upgrade] Failed to remove migrated plugin config at ${filePath}: ${e}`);
+      }
     }
 
     if (rootConfig.plugins && typeof rootConfig.plugins === "object") {

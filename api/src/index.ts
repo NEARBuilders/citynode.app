@@ -27,7 +27,18 @@ export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({}),
 
   secrets: z.object({
-    API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
+    API_DATABASE_URL: z.string().refine(
+      (val) => {
+        if (process.env.NODE_ENV === "production" && val.startsWith("pglite:")) {
+          return false;
+        }
+        return true;
+      },
+      {
+        message:
+          "API_DATABASE_URL must be a production database URL in production (pglite: is not supported)",
+      },
+    ),
   }),
 
   context: ContextSchema,
@@ -45,10 +56,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       const { auth, ...restPlugins } = plugins;
       yield* Effect.logInfo("[API] Services Initialized");
-      yield* Effect.logInfo(`[API] Auth client available: ${Boolean(auth)}`);
-      yield* Effect.logInfo(
-        `[API] Plugins available: ${Object.keys(restPlugins).join(", ") || "none"}`,
-      );
+      if (Object.keys(plugins).length > 0) {
+        yield* Effect.logInfo(`[API] Auth client available: ${Boolean(auth)}`);
+        yield* Effect.logInfo(
+          `[API] Plugins available: ${Object.keys(restPlugins).join(", ") || "none"}`,
+        );
+      }
 
       return {
         auth,

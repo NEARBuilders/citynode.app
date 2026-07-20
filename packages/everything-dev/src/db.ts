@@ -7,6 +7,13 @@ export interface MigrationStorage {
   slug: string;
 }
 
+const DEFAULT_MIGRATION_JOURNAL = {
+  schema: "drizzle",
+  table: "__drizzle_migrations",
+} as const;
+
+const PER_PLUGIN_ISOLATION = false;
+
 function normalizeSlug(name: string): string {
   const basename = name.split("/").pop() ?? name;
   return basename
@@ -34,26 +41,44 @@ export function getMigrationSlug(dir?: string): string {
     if (parent === current) break;
     current = parent;
   }
-  return normalizeSlug(dir ?? "unknown");
+  return normalizeSlug(dir);
 }
 
-export function getMigrationStorage(dir?: string): MigrationStorage {
+export function getMigrationStorage(
+  slug?: string,
+  options?: { isolated?: boolean },
+): MigrationStorage {
+  const s = normalizeSlug(slug ?? getMigrationSlug());
+  const isolated = options?.isolated ?? PER_PLUGIN_ISOLATION;
+  if (isolated) {
+    return {
+      schema: DEFAULT_MIGRATION_JOURNAL.schema,
+      table: `__drizzle_migrations_${s}`,
+      slug: s,
+    };
+  }
   return {
-    schema: "drizzle",
-    table: `__drizzle_migrations_${getMigrationSlug(dir)}`,
-    slug: getMigrationSlug(dir),
+    schema: DEFAULT_MIGRATION_JOURNAL.schema,
+    table: DEFAULT_MIGRATION_JOURNAL.table,
+    slug: s,
   };
 }
 
-export function getLegacyCandidates(): { schema: string; table: string }[] {
-  return [
-    { schema: "drizzle", table: "__drizzle_migrations" },
-    { schema: "public", table: "drizzle_migrations" },
-  ];
-}
-
-export function migrateSql(storage: MigrationStorage): MigrationStorage & { qualified: string } {
-  return { ...storage, qualified: `"${storage.schema}"."${storage.table}"` };
+/**
+ * Format a JavaScript string array as a PostgreSQL text array literal for use
+ * with Drizzle's `sql` tag. Example return:
+ *   `'{"h1","h2"}'::text[]`
+ *
+ * Usage: sql`WHERE col = ANY(${toSqlArray(values)})`
+ *
+ * Drizzle's default parameter binding does not handle array types correctly
+ * with the pg driver (it emits `ANY(($1))` with a single string, which
+ * Postgres rejects as a malformed array literal).
+ */
+export function toSqlArray(arr: string[]): string {
+  if (arr.length === 0) return `'{}'::text[]`;
+  const escaped = arr.map((v) => v.replace(/\\/g, "\\\\").replace(/"/g, '\\"'));
+  return `'{${escaped.map((v) => `"${v}"`).join(",")}}'::text[]`;
 }
 
 export function pluginMigrationSlug(key: string): string {
@@ -70,11 +95,8 @@ export function extractExpectedTables(migrations: { sql: string[] }[]): string[]
   for (const migration of migrations) {
     for (const stmt of migration.sql) {
       for (const match of stmt.matchAll(re)) {
-        const schemaName = match[1];
         const tableName = match[2];
-        if (schemaName) {
-          tables.add(tableName);
-        } else if (tableName) {
+        if (tableName) {
           tables.add(tableName);
         }
       }

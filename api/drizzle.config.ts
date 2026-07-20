@@ -1,15 +1,24 @@
 import { defineConfig } from "drizzle-kit";
-import { getDatabaseUrlSecretName, getMigrationStorage } from "everything-dev/db";
+import { getDatabaseUrlSecretName, getMigrationSlug, getMigrationStorage } from "everything-dev/db";
 
-const storage = getMigrationStorage(import.meta.dirname);
-const databaseSecret = getDatabaseUrlSecretName(storage.slug);
+const slug = getMigrationSlug(import.meta.dirname);
+const databaseSecret = getDatabaseUrlSecretName(slug);
+const storage = getMigrationStorage(slug);
 
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env[databaseSecret] || `pglite:.bos/${storage.slug}/:memory:`,
+    url:
+      process.env[databaseSecret] ??
+      (process.env.NODE_ENV === "production"
+        ? (() => {
+            throw new Error(
+              `Missing ${databaseSecret} — required in production for drizzle-kit operations`,
+            );
+          })()
+        : `pglite:.bos/${slug}/:memory:`),
   },
   migrations: {
     schema: storage.schema,

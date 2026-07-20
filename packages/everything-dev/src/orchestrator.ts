@@ -100,6 +100,8 @@ interface ServerHandle {
 
 interface ServerInput {
   config: RuntimeConfig;
+  port?: number;
+  env?: Record<string, string>;
 }
 
 const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) => {
@@ -204,7 +206,11 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
           ) {
             return manifestUrl;
           }
-        } catch {}
+        } catch (e) {
+          console.warn(
+            `[Orchestrator] Failed to fetch or parse manifest from ${manifestUrl}, falling back to remoteEntryUrl: ${e}`,
+          );
+        }
         return remoteEntryUrl;
       },
       catch: () => remoteEntryUrl,
@@ -226,7 +232,15 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     }
 
     callbacks.onLog(descriptor.key, "Starting server...");
-    const serverHandle = hostModule.runServer({ config: runtimeConfig });
+    const hostPort = runtimeConfig.host?.port;
+    const hostEnv: Record<string, string> | undefined = hostPort
+      ? { PORT: String(hostPort) }
+      : undefined;
+    const serverHandle = hostModule.runServer({
+      config: runtimeConfig,
+      port: hostPort,
+      env: hostEnv,
+    });
     yield* Effect.tryPromise({
       try: () => serverHandle.ready,
       catch: (e) => new Error(`Server failed to start: ${e}`),

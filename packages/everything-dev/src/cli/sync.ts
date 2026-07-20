@@ -58,7 +58,6 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "api/src/db/index.ts",
   "api/src/db/layer.ts",
   "api/src/db/migrate.ts",
-  "api/src/db/migration-storage.ts",
   "api/src/global.d.ts",
 ]);
 
@@ -71,8 +70,7 @@ function computeHash(content: string | Uint8Array): string {
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
-  if (/^plugins\/[^/]+\/src\/db\/(index|layer|migrate|migration-storage)\.ts$/.test(filePath))
-    return true;
+  if (/^plugins\/[^/]+\/src\/db\/(index|layer|migrate)\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/drizzle\.config\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/global\.d\.ts$/.test(filePath)) return true;
@@ -472,10 +470,10 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       destToSource.set(`plugins/${pluginKey}/src/global.d.ts`, sourceFile);
     }
 
-    // Sync api/src/db/{index,layer,migrate,migration-storage}.ts into each plugin's src/db/
+    // Sync api/src/db/{index,layer,migrate}.ts into each plugin's src/db/
     for (const pluginKey of childPlugins) {
       if (!existsSync(join(projectDir, "plugins", pluginKey, "src", "db"))) continue;
-      for (const dbFile of ["index.ts", "layer.ts", "migrate.ts", "migration-storage.ts"]) {
+      for (const dbFile of ["index.ts", "layer.ts", "migrate.ts"]) {
         const sourceFile = `api/src/db/${dbFile}`;
         if (!existsSync(join(sourceDir, sourceFile))) continue;
         destToSource.set(`plugins/${pluginKey}/src/db/${dbFile}`, sourceFile);

@@ -13,7 +13,7 @@ const HOST_SECRET = "CORS_ORIGIN";
 const BASE_POSTGRES_PORT = 5434;
 const BASE_REDIS_PORT = 6379;
 
-interface DatabaseSecretConfig {
+export interface DatabaseSecretConfig {
   secret: string;
   slug: string;
   fromKey: string;
@@ -25,7 +25,7 @@ interface DatabaseSecretConfig {
   url: string;
 }
 
-interface RedisSecretConfig {
+export interface RedisSecretConfig {
   secret: string;
   slug: string;
   fromKey: string;
@@ -36,17 +36,26 @@ interface RedisSecretConfig {
   url: string;
 }
 
-interface SecretGroup {
+export interface SecretGroup {
   section: string;
   secrets: string[];
 }
 
-interface PortState {
-  postgresPorts: Record<string, number>;
-  redisPorts: Record<string, number>;
+interface DevPortState {
+  host?: number;
+  api?: number;
+  ui?: number;
+  auth?: number;
+  pluginPortStart?: number;
 }
 
-interface GeneratedInfraSpec {
+export interface PortState {
+  postgresPorts: Record<string, number>;
+  redisPorts: Record<string, number>;
+  devPorts?: DevPortState;
+}
+
+export interface GeneratedInfraSpec {
   groups: SecretGroup[];
   databases: DatabaseSecretConfig[];
   redis: RedisSecretConfig[];
@@ -72,7 +81,7 @@ function uniqueSecrets(values: Array<string | undefined>): string[] {
   return secrets;
 }
 
-function loadPortState(configDir?: string): PortState {
+export function loadPortState(configDir?: string): PortState {
   if (!configDir) return { postgresPorts: {}, redisPorts: {} };
   const statePath = join(configDir, ".bos", "infra-state.json");
   if (!existsSync(statePath)) return { postgresPorts: {}, redisPorts: {} };
@@ -81,17 +90,20 @@ function loadPortState(configDir?: string): PortState {
     return {
       postgresPorts: raw.postgresPorts ?? {},
       redisPorts: raw.redisPorts ?? {},
+      devPorts: raw.devPorts,
     };
   } catch {
     return { postgresPorts: {}, redisPorts: {} };
   }
 }
 
-function savePortState(configDir: string, state: PortState): void {
+export function savePortState(configDir: string, state: PortState): void {
   const statePath = join(configDir, ".bos", "infra-state.json");
   mkdirSync(dirname(statePath), { recursive: true });
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
+
+export type { DevPortState };
 
 function resolvePort(slug: string, portMap: Record<string, number>, basePort: number): number {
   if (portMap[slug] !== undefined) return portMap[slug];
@@ -102,11 +114,11 @@ function resolvePort(slug: string, portMap: Record<string, number>, basePort: nu
   return next;
 }
 
-function normalizeRedisSlug(secret: string): string {
+export function normalizeRedisSlug(secret: string): string {
   return secret.replace(/_REDIS_URL$/, "").toLowerCase();
 }
 
-function getSecretGroups(runtimeConfig: RuntimeConfig): SecretGroup[] {
+export function getSecretGroups(runtimeConfig: RuntimeConfig): SecretGroup[] {
   const groups: SecretGroup[] = [];
   const seen = new Set<string>();
 
@@ -155,11 +167,14 @@ function buildGeneratedInfraSpec(
   return { spec: { groups, databases, redis }, portState };
 }
 
-function normalizeDatabaseSlug(secret: string): string {
+export function normalizeDatabaseSlug(secret: string): string {
   return secret.replace(/_DATABASE_URL$/, "").toLowerCase();
 }
 
-function buildOriginMap(configDir: string, runtimeConfig: RuntimeConfig): Map<string, string> {
+export function buildOriginMap(
+  configDir: string,
+  runtimeConfig: RuntimeConfig,
+): Map<string, string> {
   const configPath = join(configDir, "bos.config.json");
 
   const originMap = new Map<string, string>();
@@ -211,7 +226,7 @@ function buildOriginMap(configDir: string, runtimeConfig: RuntimeConfig): Map<st
   return originMap;
 }
 
-function buildDatabaseConfigs(
+export function buildDatabaseConfigs(
   secrets: string[],
   originMap: Map<string, string>,
   portMap: Record<string, number>,
@@ -267,7 +282,7 @@ function buildDatabaseConfigs(
   });
 }
 
-function buildRedisConfigs(
+export function buildRedisConfigs(
   secrets: string[],
   originMap: Map<string, string>,
   portMap: Record<string, number>,
@@ -318,17 +333,30 @@ function extractPortFromUrl(url: string): string | null {
   return match?.[1] ?? null;
 }
 
+function resolveDevHostPort(runtimeConfig: RuntimeConfig): number {
+  if (typeof runtimeConfig.host?.port === "number") return runtimeConfig.host.port;
+  const fromUrl = runtimeConfig.host?.url ? extractPortFromUrl(runtimeConfig.host.url) : null;
+  if (fromUrl) {
+    const parsed = Number.parseInt(fromUrl, 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 3000;
+}
+
 function defaultSecretValue(
   secret: string,
   databases: Map<string, DatabaseSecretConfig>,
   redisConfigs: Map<string, RedisSecretConfig>,
-  options: { forExample: boolean },
+  options: { forExample: boolean; devHostPort?: number },
 ): string {
   if (secret === "BETTER_AUTH_SECRET") {
     return options.forExample ? "" : randomBytes(32).toString("base64url");
   }
 
   if (secret === "CORS_ORIGIN") {
+    if (typeof options.devHostPort === "number") {
+      return `http://localhost:${options.devHostPort}`;
+    }
     return "http://localhost:3000";
   }
 
@@ -339,7 +367,7 @@ function renderEnvFile(
   groups: SecretGroup[],
   databases: DatabaseSecretConfig[],
   redisConfigs: RedisSecretConfig[],
-  options: { forExample: boolean },
+  options: { forExample: boolean; devHostPort?: number },
 ): string {
   const databaseMap = new Map(databases.map((entry) => [entry.secret, entry]));
   const redisMap = new Map(redisConfigs.map((entry) => [entry.secret, entry]));
@@ -437,6 +465,133 @@ function renderDockerCompose(
   return `${lines.join("\n")}\n`;
 }
 
+export function renderEnvFileFromPlan(env: Record<string, string>, devHostPort?: number): string {
+  const lines: string[] = [
+    "# Generated from bos dev infra plan",
+    "# Update values as needed for your local environment",
+    "",
+  ];
+  const sortedKeys = Object.keys(env).sort();
+  for (const key of sortedKeys) {
+    let value = env[key];
+    if (key === "CORS_ORIGIN" && devHostPort && !value) {
+      value = `http://localhost:${devHostPort}`;
+    }
+    lines.push(`${key}=${value}`);
+  }
+  lines.push("");
+  return `${lines.join("\n")}\n`;
+}
+
+export function renderDockerComposeFromPlan(
+  databases: {
+    serviceName: string;
+    containerName: string;
+    port: number;
+    volumeName: string;
+    databaseName: string;
+  }[],
+  redis: { serviceName: string; containerName: string; port: number; volumeName: string }[],
+  projectName: string,
+): string {
+  const lines = [`name: ${projectName}`, ""];
+
+  if (databases.length > 0) {
+    lines.push(
+      "x-pg-common: &pg-common",
+      "  image: postgres:17-alpine",
+      "  environment: &pg-env",
+      `    POSTGRES_USER: ${POSTGRES_USER}`,
+      `    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`,
+      "  healthcheck:",
+      '    test: ["CMD-SHELL", "pg_isready -U everythingdev"]',
+      "    interval: 3s",
+      "    timeout: 3s",
+      "    retries: 5",
+      "",
+    );
+  }
+
+  if (redis.length > 0) {
+    lines.push(
+      "x-redis-common: &redis-common",
+      "  image: redis:7-alpine",
+      "  command: redis-server --appendonly yes",
+      "  healthcheck:",
+      '    test: ["CMD", "redis-cli", "ping"]',
+      "    interval: 3s",
+      "    timeout: 3s",
+      "    retries: 5",
+      "",
+    );
+  }
+
+  lines.push("services:");
+
+  for (const db of databases) {
+    lines.push(`  ${db.serviceName}:`);
+    lines.push("    <<: *pg-common");
+    lines.push(`    container_name: ${db.containerName}`);
+    lines.push("    environment:");
+    lines.push("      <<: *pg-env");
+    lines.push(`      POSTGRES_DB: ${db.databaseName}`);
+    lines.push("    ports:");
+    lines.push(`      - "${db.port}:5432"`);
+    lines.push("    volumes:");
+    lines.push(`      - ${db.volumeName}:/var/lib/postgresql/data`);
+    lines.push("");
+  }
+
+  for (const r of redis) {
+    lines.push(`  ${r.serviceName}:`);
+    lines.push("    <<: *redis-common");
+    lines.push(`    container_name: ${r.containerName}`);
+    lines.push("    ports:");
+    lines.push(`      - "${r.port}:6379"`);
+    lines.push("    volumes:");
+    lines.push(`      - ${r.volumeName}:/data`);
+    lines.push("");
+  }
+
+  lines.push("volumes:");
+  for (const db of databases) {
+    lines.push(`  ${db.volumeName}:`);
+    lines.push(`    name: ${db.volumeName}`);
+  }
+  for (const r of redis) {
+    lines.push(`  ${r.volumeName}:`);
+    lines.push(`    name: ${r.volumeName}`);
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function materializeInfraPlan(
+  configDir: string,
+  planEnv: Record<string, string>,
+  planDatabases: {
+    serviceName: string;
+    containerName: string;
+    port: number;
+    volumeName: string;
+    databaseName: string;
+  }[],
+  planRedis: { serviceName: string; containerName: string; port: number; volumeName: string }[],
+  projectName: string,
+  devHostPort?: number,
+): { envExampleChanged: boolean; dockerComposeChanged: boolean } {
+  const envContent = renderEnvFileFromPlan(planEnv, devHostPort);
+  const dockerContent = renderDockerComposeFromPlan(planDatabases, planRedis, projectName);
+
+  const envExamplePath = join(configDir, ".env.example");
+  const dockerComposePath = join(configDir, "docker-compose.yml");
+
+  return {
+    envExampleChanged: syncTextFile(envExamplePath, envContent),
+    dockerComposeChanged: syncTextFile(dockerComposePath, dockerContent),
+  };
+}
+
 function syncTextFile(filePath: string, nextContent: string): boolean {
   if (existsSync(filePath) && readFileSync(filePath, "utf-8") === nextContent) {
     return false;
@@ -467,9 +622,11 @@ export function syncGeneratedInfra(
 ): SyncGeneratedInfraResult {
   const { spec, portState } = buildGeneratedInfraSpec(runtimeConfig, configDir);
   const secrets = spec.groups.flatMap((group) => group.secrets);
-  const newEnvContent = renderEnvFile(spec.groups, spec.databases, spec.redis, {
-    forExample: true,
-  });
+  const envOptions: { forExample: true; devHostPort?: number } = { forExample: true };
+  if (runtimeConfig.env === "development") {
+    envOptions.devHostPort = resolveDevHostPort(runtimeConfig);
+  }
+  const newEnvContent = renderEnvFile(spec.groups, spec.databases, spec.redis, envOptions);
   const newDockerContent = renderDockerCompose(spec.databases, spec.redis, runtimeConfig.account);
 
   const envExamplePath = join(configDir, ".env.example");
