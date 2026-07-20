@@ -74,6 +74,8 @@ export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/drizzle\.config\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/global\.d\.ts$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/tsconfig\.json$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/tsconfig\.contract\.json$/.test(filePath)) return true;
   return false;
 }
 
@@ -494,6 +496,16 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       const sourceFile = "api/drizzle.config.ts";
       if (!existsSync(join(sourceDir, sourceFile))) continue;
       destToSource.set(`plugins/${pluginKey}/drizzle.config.ts`, sourceFile);
+    }
+
+    // Sync tsconfig files from the template into each plugin
+    for (const pluginKey of childPlugins) {
+      if (!existsSync(join(projectDir, "plugins", pluginKey))) continue;
+      for (const tsconfigFile of ["tsconfig.json", "tsconfig.contract.json"]) {
+        const sourceFile = `plugins/_template/${tsconfigFile}`;
+        if (!existsSync(join(sourceDir, sourceFile))) continue;
+        destToSource.set(`plugins/${pluginKey}/${tsconfigFile}`, sourceFile);
+      }
     }
 
     const updated: string[] = [];
