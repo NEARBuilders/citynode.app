@@ -132,7 +132,10 @@ export const formatORPCError = (error: any): string | null => {
   const message = error.message || "An error occurred";
 
   lines.push(`\n╭─ oRPC Error ${"─".repeat(40)}`);
-  lines.push(`│  ${message}`);
+  const messageLines = message.split("\n");
+  for (const line of messageLines) {
+    lines.push(`│  ${line}`);
+  }
   lines.push(`│  Code: ${code} (${status})`);
   lines.push(`│`);
 
