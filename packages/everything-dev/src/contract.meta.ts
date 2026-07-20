@@ -101,9 +101,9 @@ export const cliCommandMeta = {
     },
   },
   keyPublish: {
-    commandPath: ["key", "publish"],
+    commandPath: ["key", "generate"],
     summary: "Generate a publish access key",
-    interactive: false,
+    interactive: true,
   },
   init: {
     commandPath: ["init"],

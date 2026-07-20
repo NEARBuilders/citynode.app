@@ -180,8 +180,28 @@ export const DeployResultSchema = z.object({
   deployResults: z.array(WorkspaceDeployResultSchema).optional(),
 });
 
+function parseNearAmount(value: string): number {
+  const cleaned = value.replace(/[\s_,]/g, "");
+  const match = cleaned.match(/^(\d+(?:\.\d+)?)near$/i);
+  if (!match) return NaN;
+  return Number.parseFloat(match[1]);
+}
+
+const MIN_PUBLISH_ALLOWANCE_NEAR = 0.3;
+
 export const KeyPublishOptionsSchema = z.object({
-  allowance: z.string().default("0.25NEAR"),
+  allowance: z
+    .string()
+    .default("1NEAR")
+    .refine(
+      (val) => {
+        const amount = parseNearAmount(val);
+        return !Number.isNaN(amount) && amount >= MIN_PUBLISH_ALLOWANCE_NEAR;
+      },
+      {
+        message: `Allowance must be at least ${MIN_PUBLISH_ALLOWANCE_NEAR} NEAR to cover the transaction cost`,
+      },
+    ),
 });
 
 export const KeyPublishResultSchema = z.object({

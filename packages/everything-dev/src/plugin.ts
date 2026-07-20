@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
+import { createInterface } from "node:readline/promises";
 import { Effect } from "effect";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import {
@@ -73,7 +74,12 @@ import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
 import { computeSriHashForUrl, parseDeployLines } from "./integrity";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
-import { addFunctionCallAccessKey, ensureNearCli } from "./near-cli";
+import {
+  addFunctionCallAccessKey,
+  deleteAccessKeys,
+  ensureNearCli,
+  listPublishKeys,
+} from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { extractPublishedUrl, publishToFastKv } from "./publish";
@@ -1223,6 +1229,9 @@ export default createPlugin({
       const contract = getRegistryNamespaceForAccount(account);
       try {
         await Effect.runPromise(ensureNearCli);
+
+        const oldKeys = await listPublishKeys({ account, contract, network });
+
         const keyPair = await addFunctionCallAccessKey({
           account,
           contract,
@@ -1230,6 +1239,38 @@ export default createPlugin({
           functionNames: PUBLISH_FUNCTION_NAMES,
           network,
         });
+
+        if (oldKeys.length > 0) {
+          console.log();
+          console.log(
+            `  Found ${oldKeys.length} existing publish key${oldKeys.length > 1 ? "s" : ""}:`,
+          );
+          for (const k of oldKeys) {
+            console.log(`    ${colors.dim(k)}`);
+          }
+
+          const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+          const answer = await rl.question("  Remove old key(s)? [Y/n] ");
+          rl.close();
+
+          if (answer.toLowerCase() !== "n" && answer.toLowerCase() !== "no") {
+            try {
+              await deleteAccessKeys(account, oldKeys, network);
+              console.log(
+                `  ${colors.green("✓")} Removed ${oldKeys.length} old key${oldKeys.length > 1 ? "s" : ""}`,
+              );
+            } catch {
+              console.log(
+                `  ${colors.yellow("⚠")} Failed to remove old key${oldKeys.length > 1 ? "s" : ""} (new key still active)`,
+              );
+            }
+          } else {
+            console.log(`  ${colors.dim("Old key(s) retained.")}`);
+          }
+        }
 
         return {
           status: "published" as const,

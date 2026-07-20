@@ -892,12 +892,12 @@ async function main() {
     if (descriptor.key === "keyPublish") {
       process.stdout.write(`Generated publish key for ${result.account}\n`);
       process.stdout.write(`  Network: ${result.network}\n`);
-      process.stdout.write(`  Contract: ${result.contract}\n`);
       process.stdout.write(`  Allowance: ${result.allowance}\n`);
-      process.stdout.write(`  Functions: ${result.functionNames.join(", ")}\n`);
-      process.stdout.write(`  Public key: ${result.publicKey}\n`);
-      process.stdout.write(`  Private key: ${result.privateKey}\n`);
-      process.stdout.write(`  Copy: NEAR_PRIVATE_KEY=${result.privateKey}\n`);
+      process.stdout.write(`\n`);
+      process.stdout.write(
+        `  Set this as NEAR_PRIVATE_KEY in GitHub Actions or before calling publish:\n`,
+      );
+      process.stdout.write(`  NEAR_PRIVATE_KEY=${result.privateKey}\n`);
     }
 
     if (descriptor.key === "pluginAdd") {

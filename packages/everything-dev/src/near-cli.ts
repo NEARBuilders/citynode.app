@@ -265,6 +265,57 @@ export const executeTransaction = (
     };
   });
 
+export async function listPublishKeys(config: {
+  account: string;
+  contract: string;
+  network: "mainnet" | "testnet";
+}): Promise<string[]> {
+  const listResult = await execa(
+    "near",
+    ["account", "list-keys", config.account, "network-config", config.network, "now"],
+    { stdout: "pipe", stderr: "pipe", reject: false },
+  );
+
+  if (listResult.exitCode !== 0) {
+    throw new NearTransactionError(
+      `Failed to list account keys: ${listResult.stderr || listResult.stdout || "unknown error"}`,
+    );
+  }
+
+  const output = listResult.stdout ?? "";
+  const oldKeys: string[] = [];
+
+  for (const line of output.split("\n")) {
+    if (line.includes(config.contract) && line.includes("__fastdata_kv")) {
+      const match = line.match(/ed25519:[A-Za-z0-9]+/);
+      if (match) {
+        oldKeys.push(match[0]);
+      }
+    }
+  }
+
+  return oldKeys;
+}
+
+export async function deleteAccessKeys(
+  account: string,
+  publicKeys: string[],
+  network: "mainnet" | "testnet",
+): Promise<void> {
+  const args = [
+    "account",
+    "delete-keys",
+    account,
+    "public-keys",
+    publicKeys.join(","),
+    "network-config",
+    network,
+    "sign-with-keychain",
+    "send",
+  ];
+  await runNearCommand(args);
+}
+
 export async function addFunctionCallAccessKey(
   config: FunctionCallAccessKeyConfig,
 ): Promise<NearKeyPair> {

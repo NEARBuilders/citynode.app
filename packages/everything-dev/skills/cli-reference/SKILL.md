@@ -155,15 +155,16 @@ bos deploy --service my-railway   # override Railway service name
 
 → [`publish-sync`](.) skill and [`super-app`](.) for tenant-aware deploy considerations.
 
-### `bos key publish`
+### `bos key generate`
 
 Generate a publish access key (NEAR function-call key) scoped to the FastKV registry contract.
+If existing publish keys are found on the account, you will be prompted to remove them.
 
-**Flags:** `--allowance <amount>` (default: `0.25NEAR`)
+**Flags:** `--allowance <amount>` (default: `1NEAR`)
 
 ```bash
-bos key publish                    # generate key with default allowance
-bos key publish --allowance 1NEAR  # custom allowance
+bos key generate                    # generate key with default allowance
+bos key generate --allowance 2NEAR  # custom allowance
 ```
 
 Outputs the public key, private key, and registry contract address. The generated key can only call the set and get methods on the BOS registry contract — it cannot transfer funds or call other contracts.

@@ -791,7 +791,10 @@ export function buildRuntimeConfig(
       url: hostListeningUrl,
       entry: `${hostListeningUrl}/mf-manifest.json`,
       localPath: hostRuntime.localPath,
-      port: hostRuntime.port ?? DEFAULT_HOST_PORT,
+      port:
+        env === "development"
+          ? parsePort(hostListeningUrl)
+          : (hostRuntime.port ?? DEFAULT_HOST_PORT),
       secrets: hostConfig.secrets,
       integrity: hostIsRemote ? hostConfig.integrity : undefined,
       source: hostRuntime.source,
