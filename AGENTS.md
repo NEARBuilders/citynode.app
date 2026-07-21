@@ -235,6 +235,8 @@ Each plugin is self-contained with its own:
 
 The UI accesses plugin routes via namespaced clients: `apiClient.registry.listRegistryApps()`, etc.
 
+**Scoped resources**: For plugins using long-lived scoped resources (database pools, repository layers, caches, publishers), use `tools.buildService(tag, layer)` inside `initialize`. This binds resources to the plugin's lifecycle scope. Do NOT use `Effect.provide(Tag, Layer.scoped(...))` for persistent dependencies inside plugin `initialize` — it creates a transient scope that releases the resource immediately. Use `tools` (the third argument of `initialize`) to build scoped services.
+
 ### Plugin Client (pluginsClient)
 
 The API plugin receives typed client factories for all other plugins via `createPlugin.withPlugins<PluginsClient>()`, enabling in-process composition without HTTP roundtrips.

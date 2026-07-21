@@ -78,10 +78,11 @@ export class PluginRuntime<R = RegisteredPlugins> {
         const pluginService = yield* PluginService;
         const validatedId = yield* this.validatePluginId(pluginId);
 
-        // Load → Instantiate → Initialize
+        // Load → Instantiate → Initialize → Register
         const ctor = yield* pluginService.loadPlugin(validatedId);
         const instance = yield* pluginService.instantiatePlugin(pluginId, ctor);
         const initialized = yield* pluginService.initializePlugin(instance, config, plugins);
+        yield* pluginService.registerPlugin(initialized);
 
         return initialized;
       }).pipe(Effect.annotateLogs({ plugin: pluginId }), Effect.provide(this.runtime));
@@ -134,7 +135,9 @@ export class PluginRuntime<R = RegisteredPlugins> {
   ): Promise<InitializedPlugin<T>> {
     const effect = Effect.gen(function* () {
       const pluginService = yield* PluginService;
-      return yield* pluginService.initializePlugin(instance, config, plugins);
+      const initialized = yield* pluginService.initializePlugin(instance, config, plugins);
+      yield* pluginService.registerPlugin(initialized);
+      return initialized;
     }).pipe(Effect.annotateLogs({ plugin: instance.plugin.id }));
     return this.runPromise(effect);
   }
@@ -151,8 +154,9 @@ export class PluginRuntime<R = RegisteredPlugins> {
   async evictPlugin<K extends keyof R & string>(
     pluginId: K,
     config: PluginConfigInput<R[K]>,
+    plugins?: Record<string, unknown>,
   ): Promise<void> {
-    const cacheKey = this.generateCacheKey(pluginId, config);
+    const cacheKey = this.generateCacheKey(pluginId, { ...config, __plugins: plugins ?? {} });
 
     const effect = Effect.gen(this, function* () {
       const pluginService = yield* PluginService;

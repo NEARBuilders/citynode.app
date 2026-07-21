@@ -939,6 +939,11 @@ async function resolveRuntimePlugins(
       const pluginRuntime = buildRuntimePluginConfig(pluginId, env, resolvedReference, forceSource);
 
       if (!pluginRuntime.localPath && !pluginRuntime.url) {
+        if (forceSource === "remote") {
+          emitConfigWarning(
+            `[Config] Plugin "${pluginId}" has no production URL in bos.config.json and cannot be resolved as remote. Add a "production" field or remove it from --remote-plugins.`,
+          );
+        }
         return null;
       }
 

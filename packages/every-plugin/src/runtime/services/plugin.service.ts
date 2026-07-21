@@ -25,6 +25,7 @@ export class PluginService extends Effect.Service<PluginService>()("PluginServic
       loadPlugin: loader.loadPlugin,
       instantiatePlugin: loader.instantiatePlugin,
       initializePlugin: loader.initializePlugin,
+      registerPlugin: (plugin: InitializedPlugin<AnyPlugin>) => lifecycle.register(plugin),
       shutdownPlugin: (plugin: InitializedPlugin<AnyPlugin>) =>
         Effect.gen(function* () {
           yield* plugin.plugin

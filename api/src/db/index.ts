@@ -78,7 +78,10 @@ export async function createDatabaseDriver(url: string): Promise<DatabaseDriver>
       if (closed) return;
       closed = true;
       pool.removeAllListeners("error");
-      console.error("[Database] pool.end() called from:", new Error("pool.end() stack trace").stack);
+      console.error(
+        "[Database] pool.end() called from:",
+        new Error("pool.end() stack trace").stack,
+      );
       await pool.end();
     },
   };

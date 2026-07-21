@@ -17,17 +17,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
   secrets: z.object({ /* typed env vars, defaults for dev */ }),
   context: z.object({ /* per-request context injected by host */ }),
   contract,
-  initialize: (config, plugins) => Effect.promise(async () => {
-    return { db, upvoteService, publisher, auth, plugins };
-  }),
-  shutdown: (services) => Effect.promise(async () => { /* cleanup */ }),
-  createRouter: (services, builder) => ({
+  initialize: (config, plugins, tools) =>
+    Effect.gen(function* () {
+      const registry = yield* tools.buildService(
+        RegistryTag,
+        RegistryLive.pipe(Layer.provide(DatabaseLive(config.secrets.API_DATABASE_URL))),
+      );
+      return { registry, publisher, auth: plugins.auth, plugins };
+    }),
+  shutdown: (deps) => Effect.promise(async () => { /* cleanup */ }),
+  createRouter: (deps, builder) => ({
     ping: builder.ping.handler(async () => ({ status: "ok", timestamp })),
   }),
 });
 ```
 
-Fields: `variables` (public config), `secrets` (private env), `context` (per-request host context), `contract` (oRPC router), `initialize` (startup, returns services), `createRouter` (maps procedures to handlers), `shutdown` (cleanup). `plugins` in `initialize` gives typed factories for all other plugins.
+Fields: `variables` (public config), `secrets` (private env), `context` (per-request host context), `contract` (oRPC router), `initialize` (startup, returns services; third arg `tools` for scoped resources), `createRouter` (maps procedures to handlers), `shutdown` (cleanup). `plugins` in `initialize` gives typed factories for all other plugins. Use `tools.buildService(tag, layer)` for DB-backed services, caches, and other scoped resources.
 
 ## oRPC Contract Design
 
@@ -193,10 +198,11 @@ export function buildPluginContext(c) {
 The API plugin receives `auth` in `initialize`:
 
 ```ts
-initialize: (config, plugins) => Effect.promise(async () => {
-  const { auth, ...restPlugins } = plugins;
-  return { auth, plugins: restPlugins, ... };
-})
+initialize: (config, plugins, _tools) =>
+  Effect.gen(function* () {
+    const { auth, ...restPlugins } = plugins;
+    return { auth, plugins: restPlugins, ... };
+  })
 ```
 
 Use `getAuthClient()` for in-process calls:
@@ -279,11 +285,12 @@ const baseApi = await loadPluginEntry(runtime, apiEntry, integrityRegistry, plug
 The API plugin receives `plugins` in `initialize`:
 
 ```ts
-initialize: (config, plugins) => Effect.promise(async () => {
-  const authClient = plugins.auth({ reqHeaders: someHeaders });
-  const session = await authClient.getSession();
-  return { auth: plugins.auth, plugins, ... };
-})
+initialize: (config, plugins, _tools) =>
+  Effect.gen(function* () {
+    const authClient = plugins.auth({ reqHeaders: someHeaders });
+    const session = await authClient.getSession();
+    return { auth: plugins.auth, plugins, ... };
+  })
 ```
 
 ### API-Owned Registry Pattern
@@ -309,7 +316,22 @@ import { runEffect } from "@/lib/context";
 const result = await runEffect(services.myService.doSomething(input));
 ```
 
-Best practices: Keep service interfaces Effect-native, bridge to async only at the handler boundary via `runEffect()`. Use `Context.Tag` for DI between services. Initialize long-lived resources in `initialize` and return them as services.
+Best practices: Keep service interfaces Effect-native, bridge to async only at the handler boundary via `runEffect()`. Use `Context.Tag` for DI between services.
+
+**Scoped resources** — For DB pools, caches, publishers, or any resource that must live for the plugin's lifetime, build them inside `initialize` using `tools.buildService(tag, layer)`. This binds the resource to the plugin lifecycle scope — it persists until plugin shutdown and is automatically released.
+
+```ts
+initialize: (config, plugins, tools) =>
+  Effect.gen(function* () {
+    const repo = yield* tools.buildService(
+      MyRepoTag,
+      MyRepoLive.pipe(Layer.provide(DatabaseLive(config.secrets.MY_DATABASE_URL))),
+    );
+    return { repo, plugins };
+  }),
+```
+
+Do **not** use `Effect.provide(Tag, Layer.scoped(...))` inside `initialize` for long-lived resources — it creates a transient scope that closes immediately. `tools.buildService(...)` uses the plugin's lifecycle scope instead.
 
 ### SSR Proxy Client
 

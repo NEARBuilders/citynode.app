@@ -124,6 +124,61 @@ describe("API with mock registry", () => {
 });
 ```
 
+## Testing Scope Lifecycle
+
+When a plugin uses `tools.buildService(...)` inside `initialize`, verify that scoped resources persist after initialization and are released during shutdown:
+
+```typescript
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createPlugin, createPluginRuntime } from "every-plugin";
+import { Context, Effect, Layer } from "every-plugin/effect";
+
+let released = false;
+
+class TestTag extends Context.Tag("TestTag")<TestTag, { value: string }>() {}
+
+describe("scope lifecycle", () => {
+  let runtime: ReturnType<typeof createPluginRuntime>;
+
+  beforeAll(async () => {
+    const plugin = createPlugin({
+      // ... variables, secrets, contract ...
+      initialize: (_config, _plugins, tools) =>
+        Effect.gen(function* () {
+          const svc = yield* tools.buildService(TestTag, TestLive);
+          return { svc };
+        }),
+      createRouter: (deps) => ({
+        // ... routes ...
+      }),
+    });
+
+    runtime = createPluginRuntime({
+      registry: { "lifecycle-test": { module: plugin } },
+    });
+
+    await runtime.usePlugin("lifecycle-test", {
+      variables: {}, secrets: {},
+    });
+  });
+
+  it("resource persists after initialization", () => {
+    expect(released).toBe(false);
+  });
+
+  afterAll(async () => {
+    await runtime.shutdown();
+    expect(released).toBe(true);
+  });
+});
+```
+
+Key assertions:
+- Resource should NOT be released after `usePlugin()` completes
+- Resource SHOULD be released after `runtime.shutdown()`
+- Multiple independent plugins have independent scope lifetimes
+- `runtime.shutdown()` calls cleanup for all registered plugins
+
 ## Testing Streaming (eventIterator)
 
 Use `for await` to collect streaming results:

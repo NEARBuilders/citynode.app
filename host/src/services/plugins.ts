@@ -465,8 +465,7 @@ export const initializePlugins = Effect.gen(function* () {
   let baseApi: HostPluginEntry | null = null;
 
   if (config.auth?.url) {
-    yield* Effect.logInfo(`[Plugins] Loading remote auth plugin code into local host process`);
-    yield* Effect.logInfo(`[Plugins] Using local env secrets for auth plugin initialization`);
+    yield* Effect.logInfo(`[Plugins] Loading auth plugin (${config.auth.name})`);
     const authEntry: RuntimePluginEntry = {
       key: "auth",
       runtimeId: config.auth.name,
@@ -497,10 +496,7 @@ export const initializePlugins = Effect.gen(function* () {
   const pluginEntries = registryEntries.filter((e) => e.key !== "api");
 
   for (const entry of pluginEntries) {
-    yield* Effect.logInfo(
-      `[Plugins] Loading remote ${entry.key} plugin code into local host process`,
-    );
-    yield* Effect.logInfo(`[Plugins] Using local env secrets for ${entry.key} initialization`);
+    yield* Effect.logInfo(`[Plugins] Loading plugin (${entry.key})`);
     const result = yield* loadPluginEntryEffect(runtime, entry, integrityRegistry).pipe(
       Effect.catchTag("PluginBootstrapError", (err: PluginBootstrapError) =>
         Effect.gen(function* () {
@@ -517,14 +513,14 @@ export const initializePlugins = Effect.gen(function* () {
       loadedPlugins[entry.key] = result;
       loadedPluginKeys.push(entry.key);
       pluginsClient[entry.key] = result.createClient;
+      yield* Effect.logInfo(`[Plugins] Plugin loaded: ${entry.key}`);
     }
   }
 
   const apiEntry = registryEntries.find((e) => e.key === "api");
 
   if (apiEntry) {
-    yield* Effect.logInfo(`[Plugins] Loading remote api plugin code into local host process`);
-    yield* Effect.logInfo(`[Plugins] Using local env secrets for api initialization`);
+    yield* Effect.logInfo(`[Plugins] Loading API plugin (${apiEntry.config.name})`);
     const apiPluginsClient: Record<string, unknown> = { ...pluginsClient };
     if (authClient) {
       apiPluginsClient.auth = authClient;
@@ -547,8 +543,12 @@ export const initializePlugins = Effect.gen(function* () {
       baseApi = apiResult;
       loadedPlugins.api = apiResult;
       loadedPluginKeys.unshift("api");
+      yield* Effect.logInfo(`[Plugins] API plugin loaded: ${apiResult.name}`);
     }
   }
+
+  const totalPlugins = [authPlugin, ...Object.values(loadedPlugins)].filter(Boolean).length;
+  yield* Effect.logInfo(`[Plugins] ${totalPlugins} plugin(s) loaded`);
 
   return {
     runtime,

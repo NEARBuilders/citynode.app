@@ -159,20 +159,23 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config) =>
+  initialize: (config, _plugins, tools) =>
     Effect.gen(function* () {
       const service = new TemplateService(config.variables.baseUrl, config.secrets.apiKey, config.variables.timeout);
       yield* service.ping(); // health check on startup
 
       const publisher = new MemoryPublisher({ resumeRetentionSeconds: 120 });
 
+      // For scoped resources (DB pools, caches, repositories):
+      // const repo = yield* tools.buildService(MyRepoTag, MyRepoLive.pipe(...))
+
       return { service, publisher };
     }),
 
   shutdown: () => Effect.void,
 
-  createRouter: (context, builder) => {
-    const { service, publisher } = context;
+  createRouter: (deps, builder) => {
+    const { service, publisher } = deps;
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.userId) throw new ORPCError("UNAUTHORIZED", { message: "User ID required" });
       return next({ context: { ...context, userId: context.userId } });
@@ -236,7 +239,8 @@ Good practice:
 **`variables`** — Public config exposed in `bos.config.json` (typed, with defaults).  
 **`secrets`** — Private values from `process.env` (typed, dev defaults).  
 **`context`** — Per-request context injected by the host. See "Request Context Reference" below for all available fields.  
-**`initialize`** — Effect-based startup. Create services, publishers, DB connections. Return value is passed as `context` to `createRouter`.  
+**`initialize`** — Effect-based startup. Create services, publishers, DB connections. Receives an optional third argument `tools` for building scoped resources. Return value is passed as `deps` to `createRouter`.  
+**`tools`** — Framework-provided third argument in `initialize(config, plugins, tools)`. Use `tools.buildService(tag, layer)` to build scoped resources (DB pools, caches, repositories) that live for the plugin's lifetime.  
 **`createRouter`** — Maps contract procedures to handlers. Receives the value returned by `initialize` plus a pre-configured `builder`.
 
 ## Request Context Reference

@@ -109,7 +109,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
           crossOrigin: "anonymous",
         },
         { rel: "shortcut icon", href: "/favicon.ico" },
-        { rel: "icon", type: "image/svg+xml", href: "/near.svg" },
+        { rel: "icon", href: "/favicon.ico" },
         { rel: "icon", type: "image/png", sizes: "96x96", href: "/favicon-96x96.png" },
         {
           rel: "apple-touch-icon",

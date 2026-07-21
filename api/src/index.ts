@@ -34,19 +34,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, plugins) =>
+  initialize: (config, plugins, tools) =>
     Effect.gen(function* () {
-      const database = DatabaseLive(config.secrets.API_DATABASE_URL);
-      const registryLayer = RegistryLive.pipe(Layer.provide(database));
-
-      const thingRegistry = yield* Effect.provide(RegistryTag, registryLayer);
-      const thingVotes = yield* Effect.provide(VotesTag, VotesLive);
+      const thingRegistry = yield* tools!.buildService(
+        RegistryTag,
+        RegistryLive.pipe(Layer.provide(DatabaseLive(config.secrets.API_DATABASE_URL))),
+      );
+      const thingVotes = yield* tools!.buildService(VotesTag, VotesLive);
       const publisher = new MemoryPublisher<ThingEvents>({ resumeRetentionSeconds: 120 });
 
       const { auth, ...restPlugins } = plugins;
       yield* Effect.logInfo("[API] Services Initialized");
-      if (Object.keys(plugins).length > 0) {
-        yield* Effect.logInfo(`[API] Auth client available: ${Boolean(auth)}`);
+      yield* Effect.logInfo(`[API] Auth client available: ${Boolean(auth)}`);
+      if (Object.keys(restPlugins).length > 0) {
         yield* Effect.logInfo(
           `[API] Plugins available: ${Object.keys(restPlugins).join(", ") || "none"}`,
         );

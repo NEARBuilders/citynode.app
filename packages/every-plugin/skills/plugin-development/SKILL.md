@@ -109,7 +109,7 @@ export default createPlugin({
   }),
   contract,
 
-  initialize: (config) =>
+  initialize: (config, _plugins, tools) =>
     Effect.gen(function* () {
       const service = new MyService(config.variables.baseUrl, config.secrets.apiKey);
       yield* service.ping();
@@ -118,8 +118,8 @@ export default createPlugin({
 
   shutdown: () => Effect.void,
 
-  createRouter: (context, builder) => {
-    const { service } = context;
+  createRouter: (deps, builder) => {
+    const { service } = deps;
 
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.userId) throw new ORPCError("UNAUTHORIZED", { message: "Auth required" });
@@ -148,12 +148,12 @@ import type { PluginsClient } from "./lib/plugins-types.gen";
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({ demoMessage: z.string().optional() }),
   contract,
-  initialize: (config, plugins) =>
+  initialize: (config, plugins, _tools) =>
     Effect.sync(() => ({ plugins, demoMessage: config.variables.demoMessage ?? "not configured" })),
-  createRouter: (services, builder) => ({
+  createRouter: (deps, builder) => ({
     pluginDemo: builder.pluginDemo.handler(async () => {
-      const status = await services.plugins.registry().getRegistryStatus();
-      return { apiVariable: services.demoMessage, registryStatus: status };
+      const status = await deps.plugins.registry().getRegistryStatus();
+      return { apiVariable: deps.demoMessage, registryStatus: status };
     }),
   }),
 });
@@ -162,6 +162,51 @@ export default createPlugin.withPlugins<PluginsClient>()({
 - `pluginsClient` is a map of `createClient` factories, typed by the generated `PluginsClient`
 - Call `services.plugins.{key}()` to execute plugin routers in-process — no HTTP roundtrip
 - The host loads non-API plugins first (Phase 1), then loads the API with `pluginsClient` injected (Phase 2)
+
+## Long-Lived Scoped Resources
+
+For database pools, caches, publisher channels, or any resource that should live for the plugin's lifetime, use `tools.buildService(tag, layer)` inside `initialize`:
+
+```typescript
+import { createPlugin } from "every-plugin";
+import { Effect, Layer } from "every-plugin/effect";
+
+export default createPlugin({
+  // ...
+  initialize: (config, _plugins, tools) =>
+    Effect.gen(function* () {
+      const repo = yield* tools.buildService(
+        MyRepoTag,
+        MyRepoLive.pipe(Layer.provide(DatabaseLive(config.secrets.MY_DATABASE_URL))),
+      );
+
+      const publisher = new MemoryPublisher({ resumeRetentionSeconds: 120 });
+
+      return { repo, publisher };
+    }),
+  // ...
+});
+```
+
+`tools.buildService(tag, layer)` binds the layer's resources to the plugin's lifecycle scope.
+Resources persist until the plugin shuts down and are automatically cleaned up during `runtime.shutdown()`.
+
+**Bad — creates a transient scope that closes immediately:**
+```typescript
+const svc = yield* Effect.provide(MyTag, MyLive.pipe(Layer.provide(DatabaseLive(url))))
+```
+
+**Good — resources persist for the plugin's lifetime:**
+```typescript
+const svc = yield* tools.buildService(MyTag, MyLive.pipe(Layer.provide(DatabaseLive(url))))
+```
+
+Key rules:
+- Use `tools.buildService(...)` for any `Layer.scoped(...)` resource that should survive initialization
+- Plain class construction (new Service(...)) is still fine directly in `initialize`
+- `createRouter(deps)` receives whatever `initialize` returns — same mental model as before
+- Do not use `Effect.provide(Tag, Layer.scoped(...))` for persistent dependencies inside `initialize`
+- `tools` is provided by the framework and does not need to be imported
 
 ## Dev Server Config (plugin.dev.ts)
 
@@ -214,3 +259,4 @@ export default {
 - Forgetting `.errors(Errors)` on routes that can throw ORPCError — untyped errors
 - Using `Effect.runPromise` inside `Effect.gen` — use `yield*` instead for proper error channel
 - Putting business logic in `createRouter` — keep it in the service class, router is just glue
+- Using `Effect.provide(Tag, Layer.scoped(...))` inside `initialize` for long-lived resources — creates a transient scope that releases the resource immediately after initialization. Use `tools.buildService(Tag, Layer.scoped(...))` instead

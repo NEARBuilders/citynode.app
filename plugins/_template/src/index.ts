@@ -21,6 +21,7 @@ type BackgroundEvents = {
  *
  * Shows how to:
  * - Initialize a simple service
+ * - Build scoped resources (DB pools, etc.) via tools.buildService when needed
  * - Implement single fetch and streaming procedures
  * - Handle errors with CommonPluginErrors
  *
@@ -52,7 +53,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config) =>
+  initialize: (config, _plugins, _tools) =>
     Effect.gen(function* () {
       const service = new TemplateService(
         config.variables.baseUrl,
@@ -61,6 +62,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
       );
 
       yield* service.ping();
+
+      // For scoped resources (DB pools, caches, repositories):
+      // import { Layer } from "every-plugin/effect";
+      // const repo = yield* tools.buildService(
+      //   MyRepoTag,
+      //   MyRepoLive.pipe(Layer.provide(DatabaseLive(config.secrets.MY_DATABASE_URL))),
+      // );
 
       const publisher = new MemoryPublisher<BackgroundEvents>({
         resumeRetentionSeconds: 60 * 2,

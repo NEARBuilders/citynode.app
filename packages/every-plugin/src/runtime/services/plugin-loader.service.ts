@@ -1,6 +1,7 @@
 import type { InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
-import { Context, Effect, Scope } from "effect";
+import { Context, Effect, Context as EffectContext, Layer, Scope } from "effect";
 import type { z } from "zod";
+import type { PluginServicesTools } from "../../plugin";
 import type {
   AnyPlugin,
   AnyPluginConstructor,
@@ -237,15 +238,31 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
             // Create a long-lived scope for this plugin instance
             const scope = yield* Scope.make();
 
+            // Create a per-plugin MemoMap so tool-built layers are memoized
+            const memoMap = yield* Layer.makeMemoMap;
+
+            const tools: PluginServicesTools = {
+              buildService: (tag: any, layer: any) =>
+                (Layer.buildWithMemoMap(layer, memoMap, scope) as any).pipe(
+                  Effect.map((ctx: any) => EffectContext.get(ctx, tag)) as any,
+                ),
+            };
+
             // Initialize plugin within the scope
-            // Use Scope.extend to ensure any Layer.scoped resources (e.g. database pools)
-            // created inside initialize are tied to the plugin's lifecycle scope,
-            // not a transient scope from Effect.provide.
-            const context = yield* Scope.extend(
-              plugin.initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {}),
-              scope,
-            ).pipe(
-              Effect.tapError((_error) =>
+            // The plugin's initialize method handles:
+            //   1. Building services (DB pools, caches) via tools.buildService
+            //   2. Shaping final deps via initialize
+            // Any Layer.scoped resources built through tools.buildService are
+            // bound to the plugin scope and persist until the plugin is shutdown.
+            const context = yield* plugin
+              .initialize(
+                { variables: _variables, secrets: hydratedConfig.secrets },
+                plugins ?? {},
+                tools,
+              )
+              .pipe(
+                Effect.provideService(Scope.Scope, scope),
+                Effect.tapError((_error) =>
                   Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin`),
                 ),
                 Effect.mapError((error) =>

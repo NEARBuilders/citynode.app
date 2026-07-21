@@ -1,8 +1,8 @@
 import type { AnyContractRouter, AnySchema, InferSchemaOutput } from "@orpc/contract";
 import { ORPCError } from "@orpc/contract";
-import type { Context, Implementer, Router } from "@orpc/server";
+import type { Implementer, Router } from "@orpc/server";
 import { implement, onError } from "@orpc/server";
-import { Effect, type Scope } from "effect";
+import { Effect, type Context as EffectContext, type Layer, type Scope } from "effect";
 import { extractFromFiberFailure, formatORPCError } from "./runtime/errors";
 
 type ContextOutput<T> = T extends AnySchema ? InferSchemaOutput<T> : Record<string, never>;
@@ -22,21 +22,36 @@ type PluginInitializeInput<V extends AnySchema, S extends AnySchema> = {
   secrets: InferSchemaOutput<S>;
 };
 
+/**
+ * Tools provided to plugin initialize/services for building long-lived scoped resources.
+ */
+type ServiceOf<T> = T extends EffectContext.Tag<any, infer S> ? S : never;
+
+export type PluginServicesTools = {
+  buildService: <T>(tag: T, layer: Layer.Layer<any, any, any>) => Effect.Effect<ServiceOf<T>>;
+};
+
 type PluginDefinition<
   V extends AnySchema,
   S extends AnySchema,
   TContract extends AnyContractRouter,
   TRequestContext extends AnySchema | undefined,
-  TDeps extends Context,
+  TDeps extends Record<string, any>,
   P extends Record<string, unknown>,
 > = {
   variables: V;
   secrets: S;
   contract: TContract;
   context?: TRequestContext;
+  /**
+   * Initialize the plugin and build dependencies.
+   * A third argument `tools` is provided for building long-lived scoped resources
+   * (e.g. database pools) via `tools.buildService(tag, layer)`.
+   */
   initialize?: (
     config: PluginInitializeInput<V, S>,
     plugins: P,
+    tools?: PluginServicesTools,
   ) => Effect.Effect<TDeps, Error, Scope.Scope>;
   createRouter: (
     deps: TDeps,
@@ -53,7 +68,7 @@ export interface LoadedPluginWithBinding<
   TVariables extends AnySchema,
   TSecrets extends AnySchema,
   TRequestContext extends AnySchema | undefined,
-  TDeps extends Context = Record<never, never>,
+  TDeps extends Record<string, any> = Record<never, never>,
 > {
   new (): Plugin<TContract, TVariables, TSecrets, TRequestContext, TDeps>;
   binding: {
@@ -72,7 +87,7 @@ export interface Plugin<
   TVariables extends AnySchema,
   TSecrets extends AnySchema,
   TRequestContext extends AnySchema | undefined,
-  TDeps extends Context = Record<never, never>,
+  TDeps extends Record<string, any> = Record<never, never>,
 > {
   readonly id: string;
   readonly contract: TContract;
@@ -81,6 +96,7 @@ export interface Plugin<
   initialize(
     config: PluginInitializeInput<TVariables, TSecrets>,
     plugins: Record<string, unknown>,
+    tools?: PluginServicesTools,
   ): Effect.Effect<TDeps, unknown, Scope.Scope>;
 
   shutdown(): Effect.Effect<void, never>;
@@ -100,7 +116,7 @@ export interface CreatePluginFn {
     S extends AnySchema,
     TContract extends AnyContractRouter,
     TRequestContext extends AnySchema | undefined = undefined,
-    TDeps extends Context = Record<never, never>,
+    TDeps extends Record<string, any> = Record<never, never>,
     P extends Record<string, unknown> = Record<string, never>,
   >(
     config: PluginDefinition<V, S, TContract, TRequestContext, TDeps, P>,
@@ -114,7 +130,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
   S extends AnySchema,
   TContract extends AnyContractRouter,
   TRequestContext extends AnySchema | undefined = undefined,
-  TDeps extends Context = Record<never, never>,
+  TDeps extends Record<string, any> = Record<never, never>,
   P extends Record<string, unknown> = Record<string, never>,
 >(config: PluginDefinition<V, S, TContract, TRequestContext, TDeps, P>) {
   const configSchema: PluginConfigFor<V, S, TRequestContext> = {
@@ -134,10 +150,11 @@ export const createPlugin: CreatePluginFn = function createPlugin<
     initialize(
       pluginConfig: PluginInitializeInput<V, S>,
       plugins: Record<string, unknown> = {},
+      tools?: PluginServicesTools,
     ): Effect.Effect<TDeps, unknown, Scope.Scope> {
       const init = config.initialize ?? (() => Effect.succeed({} as TDeps));
 
-      return init(pluginConfig, plugins as P).pipe(
+      return init(pluginConfig, plugins as P, tools).pipe(
         Effect.tap((deps) =>
           Effect.sync(() => {
             this._deps = deps;
@@ -209,7 +226,7 @@ export type CreatePluginWithPlugins<P extends Record<string, unknown>> = <
   S extends AnySchema,
   TContract extends AnyContractRouter,
   TRequestContext extends AnySchema | undefined = undefined,
-  TDeps extends Context = Record<never, never>,
+  TDeps extends Record<string, any> = Record<never, never>,
 >(
   config: PluginDefinition<V, S, TContract, TRequestContext, TDeps, P>,
 ) => LoadedPluginWithBinding<TContract, V, S, TRequestContext, TDeps>;
@@ -220,7 +237,7 @@ export function withPlugins<P extends Record<string, unknown>>(): CreatePluginWi
     S extends AnySchema,
     TContract extends AnyContractRouter,
     TRequestContext extends AnySchema | undefined = undefined,
-    TDeps extends Context = Record<never, never>,
+    TDeps extends Record<string, any> = Record<never, never>,
   >(
     config: PluginDefinition<V, S, TContract, TRequestContext, TDeps, P>,
   ) => createPlugin<V, S, TContract, TRequestContext, TDeps, P>(config as any);

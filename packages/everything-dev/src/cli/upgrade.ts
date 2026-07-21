@@ -943,6 +943,87 @@ async function rewriteLegacyUiImports(projectDir: string): Promise<string[]> {
   return migrated;
 }
 
+const LEGACY_DIST_IMPORT_REWRITES = [
+  ['from "everything-dev/dist/', 'from "everything-dev/'],
+  ["from 'everything-dev/dist/", "from 'everything-dev/"],
+] as const;
+
+async function rewriteLegacyPluginScopedLayerPatterns(projectDir: string): Promise<string[]> {
+  const files = await glob("plugins/*/src/index.ts", {
+    cwd: projectDir,
+    nodir: true,
+    dot: false,
+    absolute: false,
+  });
+
+  if (files.length === 0) return [];
+
+  const migrated: string[] = [];
+  const effectProvidePattern = /\byield\*\s*Effect\.provide\(/g;
+
+  for (const file of files) {
+    const filePath = join(projectDir, file);
+    const original = readFileSync(filePath, "utf-8");
+    let next = original;
+
+    // Rewrite yield* Effect.provide(Tag, LayerExpr) → yield* tools.buildService(Tag, LayerExpr)
+    next = next.replaceAll(effectProvidePattern, "yield* tools.buildService(");
+
+    // Add tools as third argument to initialize if it only has (config) or (config, plugins)
+    const hasEffectProvideOrServiceBuild = next.includes("tools.buildService(");
+
+    if (hasEffectProvideOrServiceBuild) {
+      // Rewrite initialize: (config, plugins) => or initialize: (config) =>
+      // to include tools
+      next = next.replace(
+        /(initialize:\s*)\((\w+)(?:,\s*(\w+))?\s*\)\s*=>/g,
+        (_match, prefix: string, p1: string, p2: string | undefined) => {
+          if (p2) {
+            return `${prefix}(${p1}, ${p2}, tools) =>`;
+          }
+          return `${prefix}(${p1}, _plugins, tools) =>`;
+        },
+      );
+    }
+
+    if (next !== original) {
+      writeFileSync(filePath, next);
+      migrated.push(file);
+    }
+  }
+
+  return migrated;
+}
+
+async function rewriteLegacyDistImports(projectDir: string): Promise<string[]> {
+  const files = await glob("**/*.{ts,tsx,js,jsx,mjs,cjs}", {
+    cwd: projectDir,
+    nodir: true,
+    dot: false,
+    absolute: false,
+    ignore: ["node_modules/**", "dist/**"],
+  });
+
+  const migrated: string[] = [];
+
+  for (const file of files) {
+    const filePath = join(projectDir, file);
+    const original = readFileSync(filePath, "utf-8");
+    let next = original;
+
+    for (const [from, to] of LEGACY_DIST_IMPORT_REWRITES) {
+      next = next.replaceAll(from, to);
+    }
+
+    if (next !== original) {
+      writeFileSync(filePath, next);
+      migrated.push(file);
+    }
+  }
+
+  return migrated;
+}
+
 export async function upgradeTemplate(
   projectDir: string,
   options: UpgradeOptions,
@@ -1101,6 +1182,8 @@ export async function upgradeTemplate(
       ...migratedBosConfigs,
       ...(migratedRootPackageJson ? ["package.json"] : []),
       ...(await rewriteLegacyUiImports(projectDir)),
+      ...(await rewriteLegacyPluginScopedLayerPatterns(projectDir)),
+      ...(await rewriteLegacyDistImports(projectDir)),
     ];
     for (const file of OBSOLETE_FILES) {
       const filePath = join(projectDir, file);
