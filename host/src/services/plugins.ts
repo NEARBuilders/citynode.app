@@ -16,8 +16,9 @@ function unwrapErrorMessage(error: unknown): string {
     current &&
     typeof current === "object" &&
     "cause" in current &&
-    (current as any)._tag &&
-    (current as any).message === (current as any)._tag
+    (current as any).cause instanceof Error &&
+    typeof (current as any)._tag === "string" &&
+    !(current as any).message
   ) {
     current = (current as any).cause;
   }
