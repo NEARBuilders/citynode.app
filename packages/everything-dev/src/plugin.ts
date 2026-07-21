@@ -627,7 +627,7 @@ export default createPlugin({
       });
 
       let devExtendsChain: string[] | undefined;
-      if (configMayHaveChanged || input.remotePlugins?.length) {
+      if (configMayHaveChanged || input.remotePlugins !== undefined) {
         const refreshed = await timePhase(devTimings, "resolve config", () =>
           loadResolvedConfig({
             cwd: deps.configDir,

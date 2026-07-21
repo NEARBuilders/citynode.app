@@ -108,7 +108,8 @@ export function parseCommandInput(descriptor: CommandDescriptor, argv: string[])
 
       if (isArraySchema(fieldSchema)) {
         if (next === undefined || next.startsWith("--")) {
-          throw new Error(`Missing value for ${flag}`);
+          input[fieldName] = [];
+          continue;
         }
         input[fieldName] = next
           .split(",")

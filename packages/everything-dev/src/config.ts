@@ -930,7 +930,12 @@ async function resolveRuntimePlugins(
         `plugins.${pluginId}`,
       );
 
-      const forceSource = remotePlugins?.includes(pluginId) ? "remote" : undefined;
+      const forceSource =
+        remotePlugins === undefined
+          ? undefined
+          : remotePlugins.length === 0 || remotePlugins.includes(pluginId)
+            ? "remote"
+            : undefined;
       const pluginRuntime = buildRuntimePluginConfig(pluginId, env, resolvedReference, forceSource);
 
       if (!pluginRuntime.localPath && !pluginRuntime.url) {

@@ -238,11 +238,14 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
             const scope = yield* Scope.make();
 
             // Initialize plugin within the scope
-            const context = yield* plugin
-              .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
-              .pipe(
-                Effect.provideService(Scope.Scope, scope),
-                Effect.tapError((_error) =>
+            // Use Scope.extend to ensure any Layer.scoped resources (e.g. database pools)
+            // created inside initialize are tied to the plugin's lifecycle scope,
+            // not a transient scope from Effect.provide.
+            const context = yield* Scope.extend(
+              plugin.initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {}),
+              scope,
+            ).pipe(
+              Effect.tapError((_error) =>
                   Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin`),
                 ),
                 Effect.mapError((error) =>

@@ -49,6 +49,9 @@ export class PluginLifecycleService extends Effect.Service<PluginLifecycleServic
         cleanup: () =>
           Effect.gen(function* () {
             const plugins = yield* Ref.get(activePlugins);
+            yield* Effect.logWarning(
+              `[PluginLifecycle] cleaning up ${plugins.size} active plugin(s)`,
+            );
 
             yield* Effect.forEach(
               plugins,

@@ -313,6 +313,15 @@ export function buildServiceDescriptors(
           localPath: pluginCfg.localPath,
         });
       }
+      if (!pluginIsLocal && pluginCfg.url) {
+        descriptors.push({
+          key: `plugin:${pluginId}`,
+          source: "remote",
+          url: pluginCfg.url,
+          port: undefined,
+          localPath: undefined,
+        });
+      }
       if (pluginIsLocal && p?.ui && pluginCfg.ui?.source === "local") {
         descriptors.push({
           key: `plugin-ui:${pluginId}`,
