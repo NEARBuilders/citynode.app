@@ -9,6 +9,21 @@ import { logger } from "../utils/logger";
 import { ConfigService, readCorsOrigins } from "./config";
 import { PluginError } from "./errors";
 
+function unwrapErrorMessage(error: unknown): string {
+  if (!error) return "";
+  let current: unknown = error;
+  while (
+    current &&
+    typeof current === "object" &&
+    "cause" in current &&
+    (current as any)._tag &&
+    (current as any).message === (current as any)._tag
+  ) {
+    current = (current as any).cause;
+  }
+  return current instanceof Error ? current.message : String(current ?? "");
+}
+
 class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
   pluginKey: string;
   pluginUrl?: string;
@@ -19,7 +34,7 @@ class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
   cause: unknown;
 }> {
   get message() {
-    const raw = this.cause instanceof Error ? this.cause.message : String(this.cause ?? "");
+    const raw = unwrapErrorMessage(this.cause);
     return `Plugin ${this.pluginKey}${this.pluginUrl ? ` at ${this.pluginUrl}` : ""} failed: ${raw}`;
   }
 }
