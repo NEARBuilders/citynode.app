@@ -771,7 +771,7 @@ export function buildRuntimeConfig(
   const hostListeningUrl =
     env === "development"
       ? resolveDevelopmentHostUrl(hostConfig.development)
-      : `http://localhost:${hostRuntime.port ?? DEFAULT_HOST_PORT}`;
+      : `http://localhost:${DEFAULT_HOST_PORT}`;
 
   const hostIsRemote = hostRuntime.source === "remote";
   const uiIsRemote = uiRuntime.source === "remote";
@@ -791,10 +791,7 @@ export function buildRuntimeConfig(
       url: hostListeningUrl,
       entry: `${hostListeningUrl}/mf-manifest.json`,
       localPath: hostRuntime.localPath,
-      port:
-        env === "development"
-          ? parsePort(hostListeningUrl)
-          : (hostRuntime.port ?? DEFAULT_HOST_PORT),
+      port: env === "development" ? parsePort(hostListeningUrl) : DEFAULT_HOST_PORT,
       secrets: hostConfig.secrets,
       integrity: hostIsRemote ? hostConfig.integrity : undefined,
       source: hostRuntime.source,

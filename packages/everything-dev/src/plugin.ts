@@ -928,7 +928,7 @@ export default createPlugin({
         }).pipe(Effect.provide(PortAllocatorLive)),
       );
 
-      const services = buildServiceDescriptorMap(runtimeConfig);
+      const services = buildServiceDescriptorMap(plan.runtimeConfig);
 
       const configSource = remoteConfig
         ? `bos://${account}/${domain}`
@@ -943,10 +943,10 @@ export default createPlugin({
         account: config.account,
         domain: config.domain ?? undefined,
         modules: {
-          host: runtimeConfig.host.remoteUrl ?? runtimeConfig.host.url ?? "local",
-          ui: runtimeConfig.ui.url ?? "local",
-          api: runtimeConfig.api.url ?? "local",
-          auth: runtimeConfig.auth?.url ?? undefined,
+          host: plan.runtimeConfig.host.remoteUrl ?? plan.runtimeConfig.host.url ?? "local",
+          ui: plan.runtimeConfig.ui.url ?? "local",
+          api: plan.runtimeConfig.api.url ?? "local",
+          auth: plan.runtimeConfig.auth?.url ?? undefined,
         },
         warnings,
       };
@@ -965,7 +965,7 @@ export default createPlugin({
         noLogs: true,
       };
 
-      pendingSession = { orchestrator, services, runtimeConfig };
+      pendingSession = { orchestrator, services, runtimeConfig: plan.runtimeConfig };
       pendingStartSummary = summary;
 
       pluginEvents.emit("progress", { phase: "config", status: "done" } satisfies ProgressEvent);
