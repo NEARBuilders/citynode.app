@@ -59,6 +59,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "api/src/db/layer.ts",
   "api/src/db/migrate.ts",
   "api/src/global.d.ts",
+  "api/tests/types.d.ts",
 ]);
 
 type PackageJson = Record<string, unknown>;
@@ -74,6 +75,7 @@ export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/drizzle\.config\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/global\.d\.ts$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/tests\/types\.d\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tsconfig\.json$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tsconfig\.contract\.json$/.test(filePath)) return true;
   return false;
@@ -470,6 +472,14 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       const sourceFile = "api/src/global.d.ts";
       if (!existsSync(join(sourceDir, sourceFile))) continue;
       destToSource.set(`plugins/${pluginKey}/src/global.d.ts`, sourceFile);
+    }
+
+    // Sync tests/types.d.ts into each plugin's tests/
+    for (const pluginKey of childPlugins) {
+      if (!existsSync(join(projectDir, "plugins", pluginKey))) continue;
+      const sourceFile = "plugins/_template/tests/types.d.ts";
+      if (!existsSync(join(sourceDir, sourceFile))) continue;
+      destToSource.set(`plugins/${pluginKey}/tests/types.d.ts`, sourceFile);
     }
 
     // Sync api/src/db/{index,layer,migrate}.ts into each plugin's src/db/

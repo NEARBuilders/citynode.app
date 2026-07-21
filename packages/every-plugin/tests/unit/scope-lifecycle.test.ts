@@ -34,7 +34,7 @@ describe("Scope lifecycle", () => {
       contract: testContract,
       initialize: (_config, _plugins, tools) =>
         Effect.gen(function* () {
-          const svc = yield* tools!.buildService(TestTag, TestLive);
+          const svc = yield* tools.buildService(TestTag, TestLive);
           return { svc };
         }),
       createRouter: (_deps, builder) => ({

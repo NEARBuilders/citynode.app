@@ -36,11 +36,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   initialize: (config, plugins, tools) =>
     Effect.gen(function* () {
-      const thingRegistry = yield* tools!.buildService(
+      const thingRegistry = yield* tools.buildService(
         RegistryTag,
         RegistryLive.pipe(Layer.provide(DatabaseLive(config.secrets.API_DATABASE_URL))),
       );
-      const thingVotes = yield* tools!.buildService(VotesTag, VotesLive);
+      const thingVotes = yield* tools.buildService(VotesTag, VotesLive);
       const publisher = new MemoryPublisher<ThingEvents>({ resumeRetentionSeconds: 120 });
 
       const { auth, ...restPlugins } = plugins;
