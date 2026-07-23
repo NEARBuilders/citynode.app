@@ -187,7 +187,10 @@ jobs:
   notify-deploy:
     name: Notify deploy
     needs: [release, docker]
-    if: needs.release.result == 'success'
+    if: |
+      always() &&
+      needs.release.result == 'success' &&
+      needs.docker.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: write
