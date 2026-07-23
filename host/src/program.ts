@@ -679,8 +679,12 @@ export const createStartServer = (onReady?: () => void) =>
 
       const viewerPath = isViewerFramePath(c.req.path);
 
+      const lastSegment = c.req.path.split("/").pop() ?? "";
+      const isStaticAsset = staticAssetPattern.test(lastSegment);
+
       return secureHeaders({
         crossOriginOpenerPolicy: "same-origin-allow-popups",
+        crossOriginResourcePolicy: isStaticAsset ? "cross-origin" : "same-origin",
         contentSecurityPolicy: {
           defaultSrc: ["'self'"],
           scriptSrc: cspScriptSrc,
