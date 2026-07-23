@@ -37,6 +37,13 @@ import type { RouterModule } from "./types";
 
 type HonoEnv = { Variables: AuthVariables };
 
+import {
+  getHealthStatus,
+  getMemorySnapshot,
+  HEALTH_PATH,
+  MEMORY_PATH,
+  tryGc,
+} from "./routes/health";
 import { loadRouterModule, resetFederationInstance } from "./services/federation.server";
 import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { createPluginsClient, type PluginResult, PluginsService } from "./services/plugins";
@@ -356,28 +363,6 @@ export function setupApiRoutes(
     throw new Error("API config is required to start the host");
   }
 
-  const getHealthStatus = () => {
-    const elapsed = Date.now() - loadingState.startTime;
-    return {
-      status: loadingState.status,
-      ssr: loadingState.ssrEnabled
-        ? loadingState.status === "ready"
-          ? "available"
-          : "unavailable"
-        : "disabled",
-      auth: plugins.auth
-        ? { mounted: true, name: plugins.auth.name }
-        : { mounted: false, name: null },
-      plugins: {
-        loaded: plugins.status.loadedPlugins,
-        ...(plugins.status.error ? { error: plugins.status.error } : {}),
-      },
-      uptime: elapsed,
-      milestones: loadingState.milestones,
-      ...(loadingState.error ? { error: loadingState.error.message } : {}),
-    };
-  };
-
   const isProxyMode = process.argv.includes("--proxy");
 
   const publicRpcRouters = new Map<string, RPCHandler<any>>();
@@ -421,8 +406,12 @@ export function setupApiRoutes(
     logger.info(`[API] Proxy mode enabled → ${proxyTarget}`);
 
     app.all("/api/*", async (c: Context<HonoEnv>) => {
-      if (c.req.path === "/api/_health") {
-        return c.json(getHealthStatus());
+      if (c.req.path === HEALTH_PATH) {
+        return c.json(getHealthStatus(plugins, loadingState));
+      }
+      if (c.req.path === MEMORY_PATH) {
+        const gcRan = c.req.query("gc") === "true" && tryGc();
+        return c.json({ memory: getMemorySnapshot(), gc: gcRan });
       }
       const response = await proxyRequest(c.req.raw, proxyTarget, true);
       return response;
@@ -431,8 +420,13 @@ export function setupApiRoutes(
     return;
   }
 
-  app.get("/api/_health", (c: Context<HonoEnv>) => {
-    return c.json(getHealthStatus());
+  app.get(HEALTH_PATH, (c: Context<HonoEnv>) => {
+    return c.json(getHealthStatus(plugins, loadingState));
+  });
+
+  app.get(MEMORY_PATH, (c: Context<HonoEnv>) => {
+    const gcRan = c.req.query("gc") === "true" && tryGc();
+    return c.json({ memory: getMemorySnapshot(), gc: gcRan });
   });
 
   app.use(
@@ -619,7 +613,7 @@ export const createStartServer = (onReady?: () => void) =>
       /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|md|webmanifest|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
 
     const isHealthPath = (pathname: string) =>
-      pathname === "/health" || pathname === "/api/_health";
+      pathname === "/health" || pathname === HEALTH_PATH || pathname === MEMORY_PATH;
 
     app.use(
       "/*",
