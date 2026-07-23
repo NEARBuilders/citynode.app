@@ -701,16 +701,21 @@ Added new endpoint for user profiles
 
 ### Release Process
 
-This repo uses a two-step release flow:
+This repo uses a `repository_dispatch` chain for releases:
 
-1. **Version PR Creation (`.github/workflows/packages-release.yml`):**
-   - Changesets action creates/updates a "Version Packages" PR
-   - This PR bumps versions and updates CHANGELOG.md files
+1. **CI succeeds on push to main:**
+   - CI sends `repository_dispatch(ci-main-success)` with the commit SHA
+   - `release.yml` triggers from that dispatch
 
-2. **On Merge of Version PR:**
-   - `packages-release.yml` runs again with no pending changesets
-   - It then calls `.github/workflows/release.yml`
-   - `release.yml` runs `bun run deploy`, publishes `bos.config.json` to FastKV, and commits updated production URLs
+2. **Release (`release.yml`):**
+   - If changesets are pending, creates/updates a "Version Packages" PR
+   - If no changesets remain (after version PR merge), publishes to npm
+   - Docker builds only if packages were actually published
+   - Sends `repository_dispatch(release-completed)` to trigger Deploy
+
+3. **Deploy (`deploy.yml`):**
+   - Triggers from `repository_dispatch(release-completed)`
+   - Runs `bos publish --deploy`, publishes `bos.config.json` to FastKV, redeploys Railway
 
 **Local Release Commands (rarely needed):**
 ```bash

@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  repository_dispatch:
+    types: [ci-main-success]
   workflow_dispatch:
     inputs:
       force_release:
@@ -13,9 +15,6 @@ on:
         required: false
         default: ""
         type: string
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -29,19 +28,12 @@ jobs:
   release:
     name: Publish Packages
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'workflow_run' &&
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.head_branch == 'main'
-      )
     env:
-      TARGET_REF: ${{ inputs.ref != '' && inputs.ref || (github.event_name == 'workflow_run' && github.event.workflow_run.head_sha) || github.sha }}
+      TARGET_REF: ${{ inputs.ref != '' && inputs.ref || github.event.client_payload.sha || github.sha }}
     outputs:
       should_publish: ${{ steps.release_mode.outputs.should_publish }}
       target_ref: ${{ steps.target_ref.outputs.ref }}
+      actually_published: ${{ steps.npm_publish.outputs.actually_published }}
     steps:
       - name: Capture target ref
         id: target_ref
@@ -57,6 +49,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.3.14"
+          cache: true
 
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
@@ -66,14 +59,6 @@ jobs:
 
       - name: Run postinstall
         run: bun run postinstall
-
-      - name: Test everything-dev release
-        run: bun run --cwd packages/everything-dev test
-
-      - name: Validate intent skills
-        run: |
-          npx @tanstack/intent@latest validate packages/everything-dev
-          npx @tanstack/intent@latest validate packages/every-plugin
 
       - name: Create release PR when changesets are pending
         id: changesets
@@ -130,10 +115,12 @@ jobs:
         run: bun run scripts/stage-release-packages.ts
 
       - name: Publish packages to npm
+        id: npm_publish
         if: steps.release_mode.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ""
         run: |
+          PUBLISHED=0
           for release_dir in .release/*; do
             if [ ! -f "$release_dir/package.json" ]; then
               continue
@@ -146,8 +133,10 @@ jobs:
               echo "$NAME@$VERSION already published, skipping"
             else
               npm publish --provenance --access public "$release_dir"
+              PUBLISHED=$((PUBLISHED + 1))
             fi
           done
+          echo "actually_published=$([[ $PUBLISHED -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Releases
         if: steps.release_mode.outputs.should_publish == 'true'
@@ -187,10 +176,33 @@ jobs:
   docker:
     name: Build and Push Docker Image
     needs: release
-    if: needs.release.outputs.should_publish == 'true'
+    if: needs.release.outputs.actually_published == 'true'
     uses: ./.github/workflows/docker.yml
     with:
       ref: ${{ needs.release.outputs.target_ref }}
     permissions:
       contents: read
       packages: write
+
+  notify-deploy:
+    name: Notify deploy
+    needs: [release, docker]
+    if: needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Send repository dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in 1 2 3; do
+            if gh api repos/${{ github.repository }}/dispatches \
+              --method POST \
+              -f event_type=release-completed \
+              -f "client_payload[sha]=${{ needs.release.outputs.target_ref }}"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1

@@ -4,12 +4,19 @@
 
 This repository uses the following production-facing workflows:
 
-- `CI` — lint, audit, and typecheck
+- `CI` — lint, audit, typecheck, framework tests, and regression
 - `Docker` — Docker build and push, called by `Release` after npm publish or on `Dockerfile` changes
 - `Release` — changeset versioning and npm publish for framework packages
 - `Deploy` — app deploy (Zephyr CDN + FastKV config publish)
 
-The key design: `CI` is the validation workflow. `Release` and `Deploy` run as standalone workflows after successful `CI` runs on `main` via `workflow_run`. `Docker` is called by `Release` via `workflow_call` — it only builds when packages are actually published (`should_publish=true`), so merging the "chore: version packages" PR alone does not trigger an image build.
+The key design: `CI` is the validation workflow. On successful push to `main`, CI sends a `repository_dispatch` event that triggers `Release`. After `Release` (and `Docker`) complete, `Release` sends a `repository_dispatch` that triggers `Deploy`. This chain ensures:
+
+- No skipped workflow runs (PR CI runs never trigger downstream workflows)
+- SHA is explicitly propagated end-to-end via `client_payload`
+- Deploy always runs after Docker finishes (no stale Railway redeploy)
+- Docker only builds when packages are actually published (not just versioned)
+
+`Docker` is called by `Release` via `workflow_call` — it only builds when packages are actually published (`actually_published=true`), so merging the "chore: version packages" PR alone does not trigger an image build.
 
 ## Workflows
 
@@ -17,17 +24,27 @@ The key design: `CI` is the validation workflow. `Release` and `Deploy` run as s
 
 **Trigger:** Push to `main` (with `paths-ignore` for markdown and changesets) or pull requests. Also `workflow_dispatch`.
 
-**Purpose:** Lint, typecheck, and security audit.
+**Purpose:** Lint, typecheck, security audit, framework tests, regression, and downstream notification.
 
 **Jobs:**
-1. `lint-and-typecheck` — install, build, postinstall, audit, lint, typecheck
+1. `detect-changes` — diffs against base to determine if `packages/everything-dev/` or `packages/every-plugin/` changed
+2. `lint-and-typecheck` — install, build, postinstall, audit, lint, typecheck
+3. `framework-tests` — runs `everything-dev` tests (only if `everything-dev` or `every-plugin` changed)
+4. `plugin-tests` — runs `every-plugin` tests (only if `every-plugin` changed)
+5. `regression` — full stack regression with Playwright + Go HTTP tests (needs `lint-and-typecheck`)
+6. `notify` — sends `repository_dispatch(ci-main-success)` with SHA (only on push to main, all jobs must pass)
 
 **Key design decisions:**
-- `Build every-plugin` runs before `postinstall` in both `release.yml` and `ci.yml` because `postinstall` triggers `types:gen` which needs `every-plugin` to be built first.
+- `Build every-plugin` runs before `postinstall` because `postinstall` triggers `types:gen` which needs `every-plugin` to be built first.
+- `detect-changes` uses native `git diff` (no third-party action). For `workflow_dispatch`, all tests run unconditionally.
+- `notify` requires `actions: write` permission to call the dispatch API. It has a 3-retry backoff.
+- Playwright browsers are cached by `bun.lock` hash — cache hit only installs system deps (~10s), miss does full install (~60-90s).
+- `cancel-in-progress: true` is safe for CI — cancelled runs never send `repository_dispatch` (the `notify` job is blocked).
+- Skipped jobs in `needs` are non-blocking: `notify` runs if `framework-tests`/`plugin-tests` are skipped (no relevant changes), but won't run if any needed job failed.
 
 ### Docker (`docker.yml`)
 
-**Trigger:** `workflow_call` from `Release` (only when `should_publish=true`), `push` to `main`/`staging` on `Dockerfile` changes, or `workflow_dispatch`.
+**Trigger:** `workflow_call` from `Release` (only when `actually_published=true`), `push` to `main`/`staging` on `Dockerfile` changes, or `workflow_dispatch`.
 
 **Purpose:** Build and push the Docker image only when a release actually publishes packages, or when the Dockerfile itself changes.
 
@@ -38,7 +55,7 @@ The key design: `CI` is the validation workflow. `Release` and `Deploy` run as s
 
 ### Release (`release.yml`)
 
-**Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
+**Trigger:** `repository_dispatch(ci-main-success)` from CI, or `workflow_dispatch`.
 
 **Purpose:** Consume changesets, create version PRs, and publish framework packages to npm.
 
@@ -47,30 +64,52 @@ The key design: `CI` is the validation workflow. `Release` and `Deploy` run as s
 ```
 1. Developer creates changeset          →  bun run changeset
 2. Developer merges feature branch      →  Changesets land on main
-3. CI succeeds on main                   →  `workflow_run` triggers Release
-                                            Creates/updates "chore: version packages" PR
+3. CI succeeds on main                   →  repository_dispatch triggers Release
+                                             Creates/updates "chore: version packages" PR
 4. Team merges Version Packages PR      →  CI triggers Release again
-                                            No changesets remain (hasChangesets=false)
-                                           ↓
-                                           npm publish --provenance --access public
-                                           ↓
-                                           GitHub Releases created for each package
+                                             No changesets remain (hasChangesets=false)
+                                            ↓
+                                            npm publish --provenance --access public
+                                            (tracks actually_published output)
+                                            ↓
+                                            GitHub Releases created for each package
+                                            ↓
+                                            Docker build (only if actually_published=true)
+                                            ↓
+                                            repository_dispatch(release-completed) → Deploy
 ```
 
 **npm publishing uses OIDC trusted publishing** — no `NPM_TOKEN` secret needed. `NODE_AUTH_TOKEN` is set to empty string, and `npm publish --provenance` authenticates via the OIDC token provisioned by `id-token: write` permission and `actions/setup-node` with `registry-url`.
 
+**Docker gating:** The `docker` job only runs when `actually_published=true` (packages were actually published to npm, not just versioned). This prevents wasteful Docker builds after the "chore: version packages" merge when all versions were already published.
+
+**Deploy notification:** The `notify-deploy` job runs after both `release` and `docker` complete. It sends `repository_dispatch(release-completed)` with the SHA, triggering Deploy. When Docker is skipped (no publishing), `notify-deploy` still fires — Deploy is needed for Zephyr CDN even without a new Docker image.
+
 ### Deploy (`deploy.yml`)
 
-**Trigger:** successful `workflow_run` from `CI` on `main`, or `workflow_dispatch`.
+**Trigger:** `repository_dispatch(release-completed)` from Release, or `workflow_dispatch`.
 
 **Purpose:** Build and deploy all workspaces to Zephyr CDN, publish `bos.config.json` to FastKV, and redeploy Railway.
 
 **Behavior:**
 - Runs `bos publish --deploy` (Zephyr CDN deploy + FastKV publish)
-- Redeploys the Railway service
+- Redeploys the Railway service (Docker image already built by Release)
 - Commits and pushes updated `bos.config.json` deployment URLs back to `main`
 
 **Secrets:** `NEAR_PRIVATE_KEY` and `ZEPHYR_CI_TOKEN` come from repository secrets. NEAR for FastKV publish, Zephyr CI token for CDN deploy. If `ZEPHYR_CI_TOKEN` is not set, falls back to `ZEPHYR_AUTH_TOKEN` + `ZEPHYR_USER_EMAIL` (legacy server-token auth).
+
+**`cancel-in-progress: false`** — interrupting `bos publish --deploy` mid-flight could leave Zephyr CDN and FastKV in an inconsistent state. Queued deploys pick up the latest main when they run.
+
+## Child Project Flow
+
+Generated child repos use a simpler flow (no npm publish, no Docker):
+
+```
+CI → repository_dispatch(ci-main-success) → Release (version PR + GitHub releases)
+                                         → Deploy (Zephyr CDN + FastKV)
+```
+
+Both Release and Deploy trigger from the same `ci-main-success` dispatch, running concurrently. No `release-completed` dispatch is needed.
 
 ## Docker Image Architecture
 
@@ -120,6 +159,6 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 | `ZEPHYR_CI_TOKEN` | Deploy, Staging (as `ZE_CI_TOKEN`) | Zephyr Cloud CI token for CDN deploy (preferred) |
 | `ZEPHYR_AUTH_TOKEN` | Deploy, Staging (as `ZE_SERVER_TOKEN`) | Fallback Zephyr auth when `ZEPHYR_CI_TOKEN` is absent |
 | `ZEPHYR_USER_EMAIL` | Deploy, Staging (as `ZE_USER_EMAIL`) | Fallback Zephyr user email when `ZEPHYR_CI_TOKEN` is absent |
-| `GITHUB_TOKEN` | Release, Deploy | Changesets PR creation, GitHub releases |
+| `GITHUB_TOKEN` | Release, Deploy, CI notify | Changesets PR creation, GitHub releases, repository_dispatch |
 
 NEAR CLI is installed in a dedicated workflow step before publishing so Actions can apply the PATH update before `bos publish --deploy` runs.

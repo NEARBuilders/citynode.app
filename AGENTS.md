@@ -267,9 +267,11 @@ This repo is the parent platform, not a generated child project.
 - Skip for: docs-only changes, internal refactors, test-only changes
 
 **Release flow:**
-- Parent repo production releases run through `.github/workflows/packages-release.yml`, which creates or updates the `chore: version packages` PR when changesets are pending.
-- After that version PR is merged, `packages-release.yml` calls `.github/workflows/release.yml`, which runs `bun run deploy`, publishes `bos.config.json` to FastKV, and commits the updated deployment URLs.
-- Generated child repos use the same `CI` -> `Packages Release` -> `Release` pattern, but only version and deploy their local workspaces and runtime surfaces.
+- CI is the validation workflow. On successful push to `main`, CI sends a `repository_dispatch(ci-main-success)` event with the commit SHA.
+- `release.yml` triggers from that dispatch: it consumes changesets, creates the `chore: version packages` PR when pending, and publishes to npm when no changesets remain.
+- After Release (and Docker) complete, `release.yml` sends `repository_dispatch(release-completed)` which triggers `deploy.yml`.
+- `deploy.yml` runs `bos publish --deploy`, publishes `bos.config.json` to FastKV, redeploys Railway, and commits updated deployment URLs.
+- Generated child repos use a simpler flow: both Release and Deploy trigger directly from `ci-main-success` (no Release→Deploy chain, no npm publish, no Docker).
 
 **Create changeset:**
 ```bash

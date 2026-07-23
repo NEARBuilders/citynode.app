@@ -124,13 +124,15 @@ bun run changeset
 
 The release workflow (`.github/workflows/release.yml`) handles versioning and GitHub releases automatically on merge to main.
 
-Production releases actually flow through `.github/workflows/packages-release.yml` first:
+Production releases flow through a `repository_dispatch` chain:
 
 1. Push changesets to `main`
-2. `Packages Release` creates or updates the `chore: version packages` PR
-3. Merge that version PR
-4. `Packages Release` runs again with no pending changesets and calls `.github/workflows/release.yml`
-5. `release.yml` runs `bun run deploy`, updates `bos.config.json`, and publishes the config to FastKV
+2. CI passes → sends `repository_dispatch(ci-main-success)` with the commit SHA
+3. `Release` creates or updates the `chore: version packages` PR
+4. Merge that version PR
+5. CI passes again → `Release` runs with no pending changesets → publishes to npm
+6. `Release` (and Docker) complete → sends `repository_dispatch(release-completed)`
+7. `Deploy` runs `bos publish --deploy`, updates `bos.config.json`, and redeploys Railway
 
 ### Git Workflow
 

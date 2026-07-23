@@ -116,12 +116,36 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
   }, 120_000);
 
   it("typechecks successfully", async () => {
-    const result = await runCommand("bun", ["typecheck"], testDir);
+    const typesGenResult = await runCommand("bun", ["run", "types:gen"], testDir);
+    if (typesGenResult.code !== 0) {
+      console.error(
+        `\nUnexpected types:gen output:\n${typesGenResult.stdout}${typesGenResult.stderr}`,
+      );
+    }
+    expect(typesGenResult.code).toBe(0);
 
-    if (result.code !== 0) {
-      console.error(`\nUnexpected full typecheck output:\n${result.stdout}${result.stderr}`);
+    const uiResult = await runCommand("bun", ["run", "--cwd", "ui", "typecheck"], testDir);
+    const apiResult = await runCommand("bun", ["run", "--cwd", "api", "typecheck"], testDir);
+    const pluginResult = await runCommand(
+      "bun",
+      ["run", "--cwd", "plugins/apps", "typecheck"],
+      testDir,
+    );
+
+    if (uiResult.code !== 0) {
+      console.error(`\nUnexpected UI typecheck output:\n${uiResult.stdout}${uiResult.stderr}`);
+    }
+    if (apiResult.code !== 0) {
+      console.error(`\nUnexpected API typecheck output:\n${apiResult.stdout}${apiResult.stderr}`);
+    }
+    if (pluginResult.code !== 0) {
+      console.error(
+        `\nUnexpected plugin typecheck output:\n${pluginResult.stdout}${pluginResult.stderr}`,
+      );
     }
 
-    expect(result.code).toBe(0);
+    expect(uiResult.code).toBe(0);
+    expect(apiResult.code).toBe(0);
+    expect(pluginResult.code).toBe(0);
   }, 120_000);
 });

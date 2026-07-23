@@ -18,6 +18,50 @@ permissions:
   contents: read
 
 jobs:
+  detect-changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      everything-dev: ${{ steps.changes.outputs.everything-dev }}
+      every-plugin: ${{ steps.changes.outputs.everything-plugin }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            BASE="origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "everything-dev=true" >> "$GITHUB_OUTPUT"
+            echo "every-plugin=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE" ]; then
+              BASE="HEAD~1"
+            else
+              git fetch origin "$BEFORE" --depth=1 2>/dev/null || true
+              BASE="$BEFORE"
+            fi
+          fi
+
+          DIFF=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "")
+          if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/'; then
+            echo "everything-dev=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "everything-dev=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$DIFF" | grep -qE '^packages/every-plugin/'; then
+            echo "every-plugin=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "every-plugin=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint-and-typecheck:
     name: Lint and Type Check
     runs-on: ubuntu-latest
@@ -29,6 +73,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.3.14"
+          cache: true
 
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
@@ -71,6 +116,64 @@ jobs:
       - name: Run typecheck
         run: bun typecheck
 
+  framework-tests:
+    name: Framework tests
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.everything-dev == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3.14"
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build every-plugin
+        run: bun run --cwd packages/every-plugin build
+
+      - name: Run postinstall
+        run: bun run postinstall
+
+      - name: Test everything-dev
+        run: bun run --cwd packages/everything-dev test
+
+  plugin-tests:
+    name: Plugin runtime tests
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.every-plugin == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3.14"
+          cache: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build every-plugin
+        run: bun run --cwd packages/every-plugin build
+
+      - name: Test every-plugin
+        run: bun run --cwd packages/every-plugin test:all
+
   regression:
     name: Regression
     runs-on: ubuntu-latest
@@ -111,12 +214,13 @@ jobs:
           --health-retries 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.3.14"
+          cache: true
 
       - name: Setup Go
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00
@@ -132,8 +236,20 @@ jobs:
       - name: Run postinstall
         run: bun run postinstall
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
       - name: Install Playwright browser
-        run: bun run test:regression:browser:install
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
 
       - name: Run regression suite
         run: bun run test:regression
@@ -147,3 +263,26 @@ jobs:
             .bos/logs/**
             playwright-report/**
             test-results/**
+
+  notify:
+    name: Notify downstream workflows
+    needs: [lint-and-typecheck, framework-tests, plugin-tests, regression]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Send repository dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in 1 2 3; do
+            if gh api repos/${{ github.repository }}/dispatches \
+              --method POST \
+              -f event_type=ci-main-success \
+              -f "client_payload[sha]=${{ github.sha }}"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1

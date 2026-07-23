@@ -127,13 +127,30 @@ describe.skipIf(process.env.CI !== "true")(
     }, 120_000);
 
     it("typechecks successfully without apps plugin API namespace", async () => {
-      const result = await runCommand("bun", ["typecheck"], testDir);
+      const typesGenResult = await runCommand("bun", ["run", "types:gen"], testDir);
+      if (typesGenResult.code !== 0) {
+        console.error(
+          `\nUnexpected no-apps types:gen output:\n${typesGenResult.stdout}${typesGenResult.stderr}`,
+        );
+      }
+      expect(typesGenResult.code).toBe(0);
 
-      if (result.code !== 0) {
-        console.error(`\nUnexpected no-apps typecheck output:\n${result.stdout}${result.stderr}`);
+      const uiResult = await runCommand("bun", ["run", "--cwd", "ui", "typecheck"], testDir);
+      const apiResult = await runCommand("bun", ["run", "--cwd", "api", "typecheck"], testDir);
+
+      if (uiResult.code !== 0) {
+        console.error(
+          `\nUnexpected no-apps UI typecheck output:\n${uiResult.stdout}${uiResult.stderr}`,
+        );
+      }
+      if (apiResult.code !== 0) {
+        console.error(
+          `\nUnexpected no-apps API typecheck output:\n${apiResult.stdout}${apiResult.stderr}`,
+        );
       }
 
-      expect(result.code).toBe(0);
+      expect(uiResult.code).toBe(0);
+      expect(apiResult.code).toBe(0);
     }, 120_000);
   },
 );
