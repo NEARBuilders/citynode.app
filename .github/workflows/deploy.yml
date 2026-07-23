@@ -28,12 +28,43 @@ jobs:
         github.event.workflow_run.head_branch == 'main'
       )
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
       ZE_CI_TOKEN: ${{ secrets.ZEPHYR_CI_TOKEN }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       TARGET_BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+      API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5432/api_db
+      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5433/auth_db
+      CORS_ORIGIN: http://127.0.0.1:4100
+    services:
+      postgres-api:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: everythingdev
+          POSTGRES_PASSWORD: everythingdev
+          POSTGRES_DB: api_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U everythingdev"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+      postgres-auth:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: everythingdev
+          POSTGRES_PASSWORD: everythingdev
+          POSTGRES_DB: auth_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U everythingdev"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -91,8 +122,8 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "chore: update deployment URLs [skip ci]"
             for i in 1 2 3; do
-              git pull --rebase origin "$TARGET_BRANCH" && git push origin HEAD:"$TARGET_BRANCH" && exit 0
-              sleep 3
+              git fetch origin "$TARGET_BRANCH" && git rebase --abort 2>/dev/null || true && git rebase "origin/$TARGET_BRANCH" -X theirs && git push origin HEAD:"$TARGET_BRANCH" && exit 0
+              sleep 5
             done
             exit 1
           fi
