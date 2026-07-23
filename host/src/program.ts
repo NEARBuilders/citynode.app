@@ -324,7 +324,7 @@ export async function proxyRequest(
 function buildStaticAssetProxyHeaders(req: Request) {
   const headers = new Headers();
 
-  for (const name of ["accept", "accept-language", "if-none-match", "if-modified-since"]) {
+  for (const name of ["accept", "accept-language"]) {
     const value = req.headers.get(name);
     if (value) {
       headers.set(name, value);
@@ -338,10 +338,16 @@ async function proxyStaticAssetRequest(req: Request, targetBase: string): Promis
   const url = new URL(req.url);
   const targetUrl = `${targetBase}${url.pathname}${url.search}`;
 
-  return proxy(targetUrl, {
+  const response = await proxy(targetUrl, {
     raw: req,
     headers: buildStaticAssetProxyHeaders(req),
   });
+
+  response.headers.delete("etag");
+  response.headers.delete("last-modified");
+  response.headers.set("cache-control", "public, max-age=14400, s-maxage=300");
+
+  return response;
 }
 
 export function setupApiRoutes(

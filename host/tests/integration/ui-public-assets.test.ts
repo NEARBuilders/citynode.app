@@ -96,6 +96,17 @@ describe("UI public assets proxied through host (Cloudflare Error 1000 regressio
       expect(buf.byteLength).toBeGreaterThan(0);
     });
 
+    it("strips etag and sets cache-control on proxied assets", async () => {
+      const response = await fetch(`${baseUrl}/favicon.ico`);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("etag")).toBeNull();
+      expect(response.headers.get("last-modified")).toBeNull();
+      const cc = response.headers.get("cache-control") ?? "";
+      expect(cc).toContain("s-maxage=300");
+      expect(cc).not.toContain("stale-while-revalidate");
+    });
+
     it("proxies /near.svg with 200", async () => {
       const response = await fetch(`${baseUrl}/near.svg`);
 
