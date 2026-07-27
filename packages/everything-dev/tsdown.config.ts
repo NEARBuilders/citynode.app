@@ -54,6 +54,7 @@ export default defineConfig({
       "execa",
       "defu",
       "openapi-types",
+      "pg",
     ],
   },
   async onSuccess() {

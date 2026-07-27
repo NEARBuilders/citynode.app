@@ -1,7 +1,7 @@
 import type { InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
 import { Context, Effect, Context as EffectContext, Exit, Layer, Scope } from "effect";
 import type { z } from "zod";
-import type { PluginServicesTools } from "../../plugin";
+import { PluginIdTag, type PluginServicesTools } from "../../plugin";
 import type {
   AnyPlugin,
   AnyPluginConstructor,
@@ -259,6 +259,7 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
                 tools,
               )
               .pipe(
+                Effect.provideService(PluginIdTag, plugin.id),
                 Effect.provideService(Scope.Scope, scope),
                 Effect.tapError(() =>
                   Scope.close(scope, Exit.succeed(undefined)).pipe(

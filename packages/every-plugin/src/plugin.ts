@@ -2,7 +2,7 @@ import type { AnyContractRouter, AnySchema, InferSchemaOutput } from "@orpc/cont
 import { ORPCError } from "@orpc/contract";
 import type { Implementer, Router } from "@orpc/server";
 import { implement, onError } from "@orpc/server";
-import { Effect, type Context as EffectContext, type Layer, type Scope } from "effect";
+import { Context, Effect, type Context as EffectContext, type Layer, type Scope } from "effect";
 import { extractFromFiberFailure, formatORPCError } from "./runtime/errors";
 
 type ContextOutput<T> = T extends AnySchema ? InferSchemaOutput<T> : Record<string, never>;
@@ -30,6 +30,8 @@ type ServiceOf<T> = T extends EffectContext.Tag<any, infer S> ? S : never;
 export type PluginServicesTools = {
   buildService: <T>(tag: T, layer: Layer.Layer<any, any, any>) => Effect.Effect<ServiceOf<T>>;
 };
+
+export class PluginIdTag extends Context.Tag("PluginId")<PluginIdTag, string>() {}
 
 type PluginDefinition<
   V extends AnySchema,
