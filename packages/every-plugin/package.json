@@ -170,9 +170,9 @@
     "@module-federation/enhanced": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
-    "@orpc/contract": "^1.13.4",
-    "@orpc/experimental-publisher": "^1.13.4",
-    "@orpc/server": "^1.13.4",
+    "@orpc/contract": "catalog:",
+    "@orpc/experimental-publisher": "catalog:",
+    "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "catalog:"
   },
   "keywords": [
@@ -193,8 +193,5 @@
   "bugs": {
     "url": "https://github.com/nearbuilders/everything-dev/issues"
   },
-  "homepage": "https://everything.dev",
-  "workspaces": [
-    "tests/fixtures/*"
-  ]
+  "homepage": "https://everything.dev"
 }

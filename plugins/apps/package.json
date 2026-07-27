@@ -17,8 +17,8 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@orpc/contract": "^1.13.4",
-    "@orpc/server": "^1.13.4",
+    "@orpc/contract": "catalog:",
+    "@orpc/server": "catalog:",
     "near-kit": "catalog:"
   },
   "devDependencies": {
