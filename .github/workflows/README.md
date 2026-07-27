@@ -157,7 +157,7 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 |----------|-------|---------|
 | `NEAR_PRIVATE_KEY` | Deploy | NEAR key for FastKV config publish |
 | `ZEPHYR_CI_TOKEN` | Deploy, Staging (as `ZE_CI_TOKEN`) | Zephyr Cloud CI token for CDN deploy (preferred) |
-| `ZEPHYR_AUTH_TOKEN` | Deploy, Staging (as `ZE_SERVER_TOKEN`) | Fallback Zephyr auth when `ZEPHYR_CI_TOKEN` is absent |
+| `ZEPHYR_AUTH_TOKEN` | Deploy, Staging (as `ZE_SECRET_TOKEN`) | Zephyr auth used as direct bearer token; `ZE_CI_TOKEN` fallback |
 | `ZEPHYR_USER_EMAIL` | Deploy, Staging (as `ZE_USER_EMAIL`) | Fallback Zephyr user email when `ZEPHYR_CI_TOKEN` is absent |
 | `GITHUB_TOKEN` | Release, Deploy, CI notify | Changesets PR creation, GitHub releases, repository_dispatch |
 

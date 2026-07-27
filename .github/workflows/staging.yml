@@ -27,9 +27,9 @@ jobs:
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
       # Zephyr server-token auth. Zephyr directly advised us to retain this flow for
       # our workflow even though server tokens are being deprecated in favor of CI
-      # tokens. We fall back to ZE_CI_TOKEN (below) only if ZEPHYR_AUTH_TOKEN is unset.
-      # See https://docs.zephyr-cloud.io/migrations/ci-token-migration
-      ZE_SERVER_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
+      # ZE_SECRET_TOKEN is used directly as the bearer token — no API exchange needed.
+      # We fall back to ZE_CI_TOKEN (below) only if ZEPHYR_AUTH_TOKEN is unset.
+      ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
       ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
       TARGET_SHA: ${{ github.sha }}
@@ -65,7 +65,7 @@ jobs:
         run: near --version
 
       - name: Configure Zephyr CI token fallback
-        if: ${{ env.ZE_SERVER_TOKEN == '' }}
+        if: ${{ env.ZE_SECRET_TOKEN == '' }}
         env:
           ZEPHYR_CI_TOKEN: ${{ secrets.ZEPHYR_CI_TOKEN }}
         run: |
