@@ -113,31 +113,19 @@ async function runBuildAttempt(
   verbose: boolean,
   wsKey: string,
 ): Promise<BuildAttemptResult> {
-  let zephyrAuthShown = false;
   const result = await run(cmd, args, {
     cwd,
     env,
     capture: true,
     onChunk: (stream, chunk) => {
-      if (verbose) {
-        if (stream === "stdout") process.stdout.write(chunk);
-        else process.stderr.write(chunk);
+      if (stream === "stderr") {
+        process.stderr.write(chunk);
+      } else if (verbose) {
+        process.stdout.write(chunk);
       }
-      if (zephyrAuthShown) return;
       const text = chunk.toString("utf-8");
-      if (
-        /Authentication required.*log in to Zephyr/i.test(text) ||
-        /auth\.zephyr-cloud\.io\/authorize/.test(text)
-      ) {
-        zephyrAuthShown = true;
-        const urlMatch = text.match(/https:\/\/auth\.zephyr-cloud\.io\/authorize\S+/);
-        console.log();
-        console.log(colors.yellow(`  ⚠ Zephyr authentication required for ${wsKey}`));
-        if (urlMatch) {
-          console.log(`    ${colors.cyan(urlMatch[0])}`);
-        }
-        console.log(colors.dim("    Waiting for authentication..."));
-        console.log();
+      if (/ZEPHYR|auth\.zephyr-cloud\.io\/authorize|ZE\d{4,}/.test(text)) {
+        process.stdout.write(chunk);
       }
     },
   });
@@ -193,9 +181,11 @@ async function runBuildAttempt(
 
   const zeMatch = output.match(/ZE\d{4,}/);
   if (zeMatch) {
+    const zeLines = output.split("\n").filter((l) => /ZEPHYR|ZE\d{4,}/.test(l)).slice(0, 5);
+    const detail = zeLines.length > 0 ? `\n${zeLines.join("\n")}` : "";
     return {
       success: false,
-      error: `Zephyr upload failed (${zeMatch[0]})`,
+      error: `Zephyr upload failed (${zeMatch[0]})${detail}`,
       exitCode: 0,
       output,
     };
