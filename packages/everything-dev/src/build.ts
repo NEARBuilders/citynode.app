@@ -111,7 +111,6 @@ async function runBuildAttempt(
   cwd: string,
   env: Record<string, string>,
   verbose: boolean,
-  wsKey: string,
 ): Promise<BuildAttemptResult> {
   const result = await run(cmd, args, {
     cwd,
@@ -181,7 +180,10 @@ async function runBuildAttempt(
 
   const zeMatch = output.match(/ZE\d{4,}/);
   if (zeMatch) {
-    const zeLines = output.split("\n").filter((l) => /ZEPHYR|ZE\d{4,}/.test(l)).slice(0, 5);
+    const zeLines = output
+      .split("\n")
+      .filter((l) => /ZEPHYR|ZE\d{4,}/.test(l))
+      .slice(0, 5);
     const detail = zeLines.length > 0 ? `\n${zeLines.join("\n")}` : "";
     return {
       success: false,
@@ -228,7 +230,6 @@ async function buildOneWorkspace(
     ws.path,
     wsEnv,
     opts.verbose ?? false,
-    ws.key,
   );
 
   let retried = false;
@@ -245,7 +246,6 @@ async function buildOneWorkspace(
       ws.path,
       wsEnv,
       opts.verbose ?? false,
-      ws.key,
     );
 
     if (!attempt.success && firstAttempt) {
