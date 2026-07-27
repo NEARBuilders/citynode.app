@@ -33,6 +33,7 @@ import {
   type RuntimeConfig,
   readCorsOrigins,
 } from "./services/config";
+import { closeMcpServer, mountMcpRoute } from "./services/mcp";
 import type { RouterModule } from "./types";
 
 type HonoEnv = { Variables: AuthVariables };
@@ -350,7 +351,7 @@ async function proxyStaticAssetRequest(req: Request, targetBase: string): Promis
   return response;
 }
 
-export function setupApiRoutes(
+export async function setupApiRoutes(
   app: Hono<HonoEnv>,
   config: RuntimeConfig,
   plugins: PluginResult,
@@ -522,6 +523,14 @@ export function setupApiRoutes(
       }),
     ],
   });
+
+  try {
+    await mountMcpRoute(app, { apiRouter, apiHandler, config });
+  } catch (error) {
+    logger.warn(
+      `[MCP] Failed to mount /api/mcp: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   app.all("/api/rpc", (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, "/api/rpc"));
   app.all("/api/rpc/*", (c: Context<HonoEnv>) => {
@@ -816,7 +825,9 @@ export const createStartServer = (onReady?: () => void) =>
     }
 
     registerAuthHandler(app, plugins);
-    setupApiRoutes(app, config, plugins, sessionMiddleware, loadingState);
+    yield* Effect.promise(() =>
+      setupApiRoutes(app, config, plugins, sessionMiddleware, loadingState),
+    );
 
     app.on(["GET", "HEAD"], "*", async (c: Context<HonoEnv>, next) => {
       const { pathname } = new URL(c.req.url);
@@ -1048,11 +1059,14 @@ export const createStartServer = (onReady?: () => void) =>
     const httpServer = startHttpServer();
 
     yield* Effect.addFinalizer(() =>
-      Effect.async<void, never>((resume) => {
-        logger.info("[Server] Closing HTTP server...");
-        httpServer.close(() => {
-          logger.info("[Server] HTTP server closed");
-          resume(Effect.void);
+      Effect.gen(function* () {
+        yield* Effect.promise(() => closeMcpServer());
+        yield* Effect.async<void, never>((resume) => {
+          logger.info("[Server] Closing HTTP server...");
+          httpServer.close(() => {
+            logger.info("[Server] HTTP server closed");
+            resume(Effect.void);
+          });
         });
       }),
     );
