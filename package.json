@@ -117,7 +117,7 @@
     "node": ">=20.11"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.14",
+    "@biomejs/biome": "2.4.15",
     "@changesets/cli": "^2.29.8",
     "@playwright/test": "^1.58.1",
     "@types/bun": "latest",
