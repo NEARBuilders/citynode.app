@@ -174,9 +174,14 @@ describe("bos init — typecheck", () => {
   it("installs dependencies", async () => {
     await runBunInstall(testDir);
     writeGeneratedAuthStubs(testDir);
-    const typesGen = await runCommand("bun", ["run", "types:gen"], testDir, 120_000);
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
+  }, 180_000);
+
+  it("generates types", async () => {
+    const typesGen = await runCommand("bun", ["run", "types:gen"], testDir, 120_000);
     expect(typesGen.code).toBe(0);
+    expect(existsSync(join(testDir, "ui", "src", "lib", "api-types.gen.ts"))).toBe(true);
+    expect(existsSync(join(testDir, "api", "src", "lib", "plugins-types.gen.ts"))).toBe(true);
   }, 120_000);
 
   it("typechecks api with zero unexpected errors", async () => {
