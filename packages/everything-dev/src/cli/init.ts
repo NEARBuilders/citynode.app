@@ -22,10 +22,10 @@ import {
   loadManifestNormalizationSpec,
   normalizePackageManifestsInTree,
 } from "../internal/manifest-normalizer";
-import { resolveExtendsRef } from "../merge";
 import type { BosConfig, BosConfigInput } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { writeSnapshot } from "./snapshot";
+import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
 
 const require = createRequire(import.meta.url);
 
@@ -64,24 +64,6 @@ export interface CatalogChainSource {
   catalog: Record<string, string>;
   repository?: string;
   extendsChain: string[];
-}
-
-function getExtendsRef(config: Record<string, unknown>): string | undefined {
-  if (typeof config.extends === "string") {
-    return config.extends;
-  }
-
-  if (config.extends && typeof config.extends === "object") {
-    return resolveExtendsRef(config.extends as Record<string, string>, "production");
-  }
-
-  return undefined;
-}
-
-function parseBosRef(ref: string): { account: string; gateway: string } | null {
-  const match = ref.match(/^bos:\/\/([^/]+)\/(.+)$/);
-  if (!match?.[1] || !match[2]) return null;
-  return { account: match[1], gateway: match[2] };
 }
 
 function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
@@ -512,6 +494,25 @@ function buildRootTypecheckScript(sections: {
   return commands.join(" && ");
 }
 
+export function getParentOnlyScriptKeys(projectDir: string): string[] {
+  const parentPkgPath = join(projectDir, "node_modules", "everything-dev", "package.json");
+  if (!existsSync(parentPkgPath)) return [];
+
+  try {
+    const parentPkg = JSON.parse(readFileSync(parentPkgPath, "utf-8")) as Record<string, unknown>;
+    const parentScripts = (parentPkg.scripts ?? {}) as Record<string, string>;
+
+    const allChildKeys = new Set(
+      Object.keys(buildChildRootScripts({ ui: true, api: true, host: true, plugins: true })),
+    );
+    allChildKeys.add("test:integration");
+
+    return Object.keys(parentScripts).filter((key) => !allChildKeys.has(key));
+  } catch {
+    return [];
+  }
+}
+
 export function buildChildRootScripts(sections: {
   ui: boolean;
   api: boolean;
@@ -519,12 +520,12 @@ export function buildChildRootScripts(sections: {
   plugins: boolean;
 }): Record<string, string> {
   const scripts: Record<string, string> = {
-    dev: "node_modules/.bin/bos dev",
-    "dev:proxy": "node_modules/.bin/bos dev --proxy",
-    build: "node_modules/.bin/bos build",
-    deploy: "node_modules/.bin/bos build --deploy",
-    publish: "node_modules/.bin/bos publish",
-    start: "node_modules/.bin/bos start",
+    dev: "bos dev",
+    "dev:proxy": "bos dev --proxy",
+    build: "bos build",
+    deploy: "bos build --deploy",
+    publish: "bos publish",
+    start: "bos start",
     typecheck: buildRootTypecheckScript(sections),
     lint: "biome check .",
     "lint:fix": "biome check --write .",
@@ -533,33 +534,39 @@ export function buildChildRootScripts(sections: {
     changeset: "changeset",
     version: "changeset version",
     release: "echo 'Packages versioned - app release handled by workflow'",
-    postinstall: "node_modules/.bin/bos types gen || true",
-    "types:gen": "node_modules/.bin/bos types gen",
-    bos: "node_modules/.bin/bos",
+    postinstall: "bos types gen || true",
+    "types:gen": "bos types gen",
+    bos: "bos",
   };
 
   if (sections.api) {
     scripts["db:push"] = "bun run --cwd api drizzle-kit push";
-    scripts["db:studio"] = "node_modules/.bin/bos db:studio";
-    scripts["db:doctor"] = "node_modules/.bin/bos db:doctor";
-    scripts["db:repair"] = "node_modules/.bin/bos db:repair";
+    scripts["db:studio"] = "bos db:studio";
+    scripts["db:doctor"] = "bos db:doctor";
+    scripts["db:repair"] = "bos db:repair";
     scripts["db:generate"] = "bun run --cwd api drizzle-kit generate";
     scripts["db:migrate"] = "bun run --cwd api drizzle-kit migrate";
-    scripts["test:api"] = "cd api && bun run test tests/integration/ tests/unit/";
-    scripts["test:integration"] = "cd api && bun run test tests/integration/";
+    scripts["test:api"] = "bun run --cwd api test --if-present";
+    scripts["test:integration"] = "bun run --cwd api test tests/integration/ --if-present";
   }
 
   if (sections.host) {
-    scripts["test:e2e"] = "bun run --cwd host test:e2e";
+    scripts["test:e2e"] = "bun run --cwd host test --if-present";
   }
 
-  if (sections.api && sections.host) {
-    scripts.test = "bun run test:api && bun run test:e2e";
-  } else if (sections.api) {
-    scripts.test = "bun run test:api";
-  } else if (sections.host) {
-    scripts.test = "bun run test:e2e";
+  const testTargets: string[] = [];
+  if (sections.api) testTargets.push("bun run --cwd api test --if-present");
+  if (sections.host) testTargets.push("bun run --cwd host test --if-present");
+  if (sections.ui) testTargets.push("bun run --cwd ui test --if-present");
+  if (sections.plugins) {
+    testTargets.push(
+      'for d in plugins/*; do [ -f "$d/package.json" ] && bun run --cwd "$d" test --if-present; done',
+    );
   }
+  scripts.test =
+    testTargets.length > 0
+      ? testTargets.join(" && ")
+      : 'echo "No workspace directories configured"';
 
   if (sections.api || sections.host) {
     scripts["dev:postgres"] = "docker compose up -d --wait && bun run dev";
@@ -568,10 +575,10 @@ export function buildChildRootScripts(sections: {
   }
 
   if (sections.ui) {
-    scripts["dev:ui"] = "node_modules/.bin/bos dev --ui local --api remote";
+    scripts["dev:ui"] = "bos dev --ui local --api remote";
   }
   if (sections.api) {
-    scripts["dev:api"] = "node_modules/.bin/bos dev --ui remote --api local";
+    scripts["dev:api"] = "bos dev --ui remote --api local";
   }
 
   return scripts;
@@ -739,6 +746,13 @@ export async function personalizeConfig(
     await saveBosConfig(destination, config);
   }
 
+  for (const relPath of ["ui/src/lib/api-types.gen.ts", "api/src/lib/plugins-types.gen.ts"]) {
+    const absolutePath = join(destination, relPath);
+    try {
+      rmSync(absolutePath, { force: true });
+    } catch {}
+  }
+
   const pkgPath = join(destination, "package.json");
   if (existsSync(pkgPath)) {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
@@ -785,6 +799,7 @@ export async function personalizeConfig(
       scripts[key] = value;
     }
     for (const obsoleteScript of [
+      ...getParentOnlyScriptKeys(destination),
       "init",
       "sync-catalog",
       "db:push",
@@ -1015,41 +1030,52 @@ function toRelativeImportPath(fromPath: string, toPath: string): string {
 
 export async function runBunInstall(
   destination: string,
-  spinner?: { message: (msg: string) => void },
+  opts?: {
+    spinner?: { message: (msg: string) => void };
+  },
 ): Promise<void> {
   await runWithProgress(
     "bun",
     ["install", "--ignore-scripts"],
     destination,
-    spinner,
+    opts?.spinner,
     "Installing dependencies",
   );
 }
 
 export async function runBunInstallForUpgrade(
   destination: string,
-  spinner?: { message: (msg: string) => void },
+  opts?: {
+    spinner?: { message: (msg: string) => void };
+  },
 ): Promise<void> {
   await runWithProgress(
     "bun",
     ["install", "--force"],
     destination,
-    spinner,
+    opts?.spinner,
     "Installing dependencies",
   );
 }
 
 export async function runTypesGen(
   destination: string,
-  spinner?: { message: (msg: string) => void },
+  opts?: {
+    spinner?: { message: (msg: string) => void };
+    remotePlugins?: string[];
+  },
 ): Promise<void> {
   const localBosBin = join(destination, "node_modules", ".bin", "bos");
   if (existsSync(localBosBin)) {
+    const args = ["types", "gen"];
+    if (opts?.remotePlugins && opts.remotePlugins.length > 0) {
+      args.push("--remote-plugins", opts.remotePlugins.join(","));
+    }
     await runWithProgress(
       "node_modules/.bin/bos",
-      ["types", "gen"],
+      args,
       destination,
-      spinner,
+      opts?.spinner,
       "Generating types",
     );
     return;
@@ -1070,7 +1096,12 @@ async function runWithProgress(
   label: string,
 ): Promise<void> {
   const timeout = COMMAND_TIMEOUTS[command] ?? 2 * 60_000;
-  const child = execa(command, args, { cwd, stdio: "inherit", timeout });
+  const child = execa(command, args, {
+    cwd,
+    stdio: "inherit",
+    timeout,
+    env: { ...process.env, BOS_NO_BANNER: "1" },
+  });
 
   if (spinner) {
     const start = Date.now();
@@ -1130,10 +1161,6 @@ export function stripOrphanedWorkspacesFromLockfile(
 export function removeInitLockfile(lockfilePath: string): void {
   if (!existsSync(lockfilePath)) return;
   rmSync(lockfilePath, { force: true });
-}
-
-function readJsonFile<T>(filePath: string): T {
-  return JSON.parse(readFileSync(filePath, "utf-8")) as T;
 }
 
 export async function scaffoldMinimalProject(

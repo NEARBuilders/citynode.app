@@ -180,7 +180,9 @@ async function main() {
   const displayVersion = edResolved?.installedVersion
     ? `${edResolved.installedVersion}${edResolved.isLinked ? " (linked)" : ""}`
     : undefined;
-  printBanner("everything-dev", displayVersion);
+  if (!process.env.BOS_NO_BANNER) {
+    printBanner("everything-dev", displayVersion);
+  }
 
   const runtime = createPluginRuntime({
     registry: {
@@ -569,6 +571,10 @@ async function main() {
     }
 
     if (descriptor.key === "sync") {
+      if ((input as any).json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
       console.log();
       if (result.status === "error") {
         console.error(`[CLI] ${result.error || "Unknown error"}`);
@@ -577,48 +583,42 @@ async function main() {
       if (result.status === "dry-run") {
         console.log(colors.cyan(`${icons.ok} Dry run — no files written`));
       } else {
-        console.log(colors.green(`${icons.ok} Template synced`));
+        console.log(colors.green(`${icons.ok} Synced`));
       }
-      if (result.updated.length > 0) {
-        console.log(`  ${colors.dim("Updated:")} ${result.updated.length} file(s)`);
-        for (const f of result.updated) console.log(`    ${colors.dim(f)}`);
-      }
-      if (result.added.length > 0) {
-        console.log(`  ${colors.dim("Added:")} ${result.added.length} file(s)`);
-        for (const f of result.added) console.log(`    ${colors.dim(f)}`);
-      }
-      if (result.skipped.length > 0) {
+      if (result.updated.length > 0 || result.added.length > 0 || result.conflicted.length > 0) {
         console.log(
-          `  ${colors.yellow("Skipped:")} ${result.skipped.length} file(s) (locally modified, use --force to overwrite)`,
+          `  ${colors.dim("Sync results:")} ${result.updated.length} updated, ${result.added.length} added, ${result.conflicted.length} conflicted`,
         );
-        for (const f of result.skipped) console.log(`    ${colors.dim(f)}`);
+        if (result.updated.length > 0) {
+          for (const f of result.updated) console.log(`    ${colors.dim(f)}`);
+        }
+        if (result.added.length > 0) {
+          for (const f of result.added) console.log(`    ${colors.dim(f)}`);
+        }
+        if (result.conflicted.length > 0) {
+          console.log(
+            `  ${colors.yellow("Conflicted")} (template applied, your changes backed up):`,
+          );
+          if (result.backupDir) console.log(`    ${colors.dim(result.backupDir)}`);
+          for (const f of result.conflicted) console.log(`    ${colors.dim(f)}`);
+        }
       }
-      if (result.updated.length === 0 && result.added.length === 0 && result.skipped.length === 0) {
+      if (
+        result.updated.length === 0 &&
+        result.added.length === 0 &&
+        result.conflicted.length === 0
+      ) {
         console.log(`  ${colors.dim("Already up to date")}`);
-      }
-      if (result.status !== "dry-run" && result.updated.length > 0) {
-        console.log();
-        console.log(colors.dim("  Review changes — your customizations take priority:"));
-        console.log(
-          colors.dim(
-            "    • api/src/contract.ts, api/src/index.ts, api/src/db/schema.ts — never overwritten",
-          ),
-        );
-        console.log(
-          colors.dim("    • ui/src/components/**, ui/src/styles.css — never overwritten"),
-        );
-        console.log(
-          colors.dim(
-            "    • Other updated files — accept framework improvements, then restore your changes",
-          ),
-        );
-        console.log(colors.dim("    • Skipped files — yours already, only update with --force"));
       }
       console.log();
       return;
     }
 
     if (descriptor.key === "upgrade") {
+      if ((input as any).json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
       console.log();
       if (result.status === "error") {
         console.error(`[CLI] ${result.error || "Unknown error"}`);
@@ -627,75 +627,85 @@ async function main() {
       if (result.status === "dry-run") {
         console.log(colors.cyan(`${icons.ok} Dry run — no changes applied`));
       } else {
-        console.log(colors.green(`${icons.ok} Upgrade successful`));
+        console.log(colors.green(`${icons.ok} Upgrade complete`));
+      }
+      const mainPkg = result.packages.find(
+        (p: { name: string; from?: string; to: string }) => p.name === "everything-dev",
+      );
+      const versionDelta =
+        mainPkg?.from && mainPkg.from !== mainPkg.to ? `${mainPkg.from} → ${mainPkg.to}` : null;
+      if (versionDelta) {
+        console.log(`  ${colors.dim(`Upgraded everything-dev ${versionDelta}`)}`);
       }
       for (const pkg of result.packages) {
+        if (pkg.name === "everything-dev") continue;
         if (pkg.from && pkg.from !== pkg.to) {
-          console.log(`  ${colors.dim(`${pkg.name}:`)} ${pkg.from} → ${pkg.to}`);
+          console.log(`  ${colors.dim(`${pkg.name}  ${pkg.from} → ${pkg.to}`)}`);
         } else if (!pkg.from) {
-          console.log(`  ${colors.dim(`${pkg.name}:`)} ${pkg.to} (new)`);
+          console.log(`  ${colors.dim(`${pkg.name}  ${pkg.to} (new)`)}`);
         } else {
-          console.log(`  ${colors.dim(`${pkg.name}:`)} ${pkg.to} (up to date)`);
+          console.log(`  ${colors.dim(`${pkg.name}  ${pkg.to} (up to date)`)}`);
         }
       }
       if (result.changelogUrl) {
-        console.log(`  ${colors.dim("Changelog:")} ${result.changelogUrl}`);
-      }
-      if (result.availablePlugins && result.availablePlugins.length > 0) {
-        console.log(`  ${colors.dim("New parent plugins:")} ${result.availablePlugins.join(", ")}`);
+        console.log(`  Changelog: ${result.changelogUrl}`);
       }
       if (result.selectedPlugins && result.selectedPlugins.length > 0) {
-        console.log(`  ${colors.dim("Added plugins:")} ${result.selectedPlugins.join(", ")}`);
+        console.log(`  Added plugins: ${result.selectedPlugins.join(", ")}`);
       }
-      printTimingSummary(result.timings);
       if (result.sync) {
         const sync = result.sync;
-        if (sync.updated.length > 0) {
-          console.log(`  ${colors.dim("Updated:")} ${sync.updated.length} file(s)`);
-          for (const f of sync.updated) console.log(`    ${colors.dim(f)}`);
-        }
-        if (sync.added.length > 0) {
-          console.log(`  ${colors.dim("Added:")} ${sync.added.length} file(s)`);
-          for (const f of sync.added) console.log(`    ${colors.dim(f)}`);
-        }
-        if (sync.skipped.length > 0) {
+        console.log(`  ${colors.dim("Sync results:")}`);
+        if (sync.updated.length > 0 || sync.added.length > 0 || sync.conflicted.length > 0) {
           console.log(
-            `  ${colors.yellow("Skipped:")} ${sync.skipped.length} file(s) (locally modified, use --force to overwrite)`,
+            `  ${sync.updated.length} updated, ${sync.added.length} added, ${sync.conflicted.length} conflicted`,
           );
-          for (const f of sync.skipped) console.log(`    ${colors.dim(f)}`);
-        }
-        if (
-          result.status !== "dry-run" &&
-          (sync.updated.length > 0 || sync.added.length > 0 || sync.skipped.length > 0)
-        ) {
-          console.log();
-          console.log(colors.dim("  Resolve differences — your code takes priority:"));
-          console.log();
-          console.log(colors.dim("  Never overwritten (safe):"));
-          console.log(
-            colors.dim("    • api/src/contract.ts, api/src/index.ts, api/src/db/schema.ts"),
-          );
-          console.log(colors.dim("    • ui/src/components/**, ui/src/styles.css"));
-          console.log();
-          console.log(colors.dim("  Replaced — review and keep your changes:"));
-          console.log(
-            colors.dim(
-              "    • api/drizzle.config.ts, api/tsconfig.json, api/tsconfig.contract.json",
-            ),
-          );
-          console.log(colors.dim("    • api/plugin.dev.ts, api/rspack.config.js"));
-          console.log(colors.dim("    • ui/src/routes/* (core routes only)"));
-          console.log();
-          console.log(colors.dim("  Merged — your deps preserved:"));
-          console.log(colors.dim("    • package.json, api/package.json, ui/package.json"));
-          console.log();
-          console.log(colors.dim("  Skipped — already yours:"));
-          console.log(colors.dim("    • Use --force only if you want framework updates"));
+          if (sync.conflicted.length > 0) {
+            console.log(
+              `  ${colors.yellow("Conflicted")} (template applied, your changes backed up):`,
+            );
+            if (sync.backupDir) console.log(`    ${colors.dim(sync.backupDir)}`);
+            for (const f of sync.conflicted) console.log(`    ${colors.dim(f)}`);
+          }
+        } else {
+          console.log(`  ${colors.dim("Already up to date")}`);
         }
       }
       if (result.migrated && result.migrated.length > 0) {
-        console.log(`  ${colors.yellow("Removed:")} ${result.migrated.length} obsolete file(s)`);
+        console.log(`  Migrated: ${result.migrated.length} file(s)`);
         for (const f of result.migrated) console.log(`    ${colors.dim(f)}`);
+      }
+      if (versionDelta || (result.sync && result.sync.conflicted.length > 0)) {
+        console.log();
+        console.log(colors.dim("  For AI agents:"));
+        const parentRepo = "nearbuilders/everything-dev";
+        const somedelta =
+          mainPkg?.from && mainPkg.to
+            ? `v${mainPkg.from.replace(/^[\^~>=v]+/, "")}...v${mainPkg.to.replace(/^[\^~>=v]+/, "")}`
+            : "";
+        console.log(
+          colors.dim(
+            `  This upgrade applied template changes${somedelta ? ` (${somedelta})` : ""}.`,
+          ),
+        );
+        if (result.sync && result.sync.conflicted.length > 0) {
+          console.log(
+            colors.dim(
+              `  ${result.sync.conflicted.length} file(s) had local conflicts — template version applied, backups at ${result.sync.backupDir || ".bos/sync-backup/"}.`,
+            ),
+          );
+          console.log(
+            colors.dim(
+              `  If local changes should be preserved upstream, open a PR: https://github.com/${parentRepo}${somedelta ? `/compare/${somedelta}` : ""}`,
+            ),
+          );
+        }
+        console.log(
+          colors.dim(
+            "  Load matching intent skills: bunx @tanstack/intent@latest load everything-dev#...",
+          ),
+        );
+        console.log(colors.dim("  Review AGENTS.md — local updates may need merging."));
       }
       console.log();
       return;
@@ -859,26 +869,45 @@ async function main() {
         process.exit(1);
       }
       console.log(colors.green(`${icons.ok} Types generated`));
-      if (result.source) {
-        console.log(
-          `  ${colors.dim("Mode:")} ${result.source === "remote" ? colors.cyan("remote") : colors.dim("local")}`,
-        );
-      }
       if (result.generated.length > 0) {
-        console.log(`  ${colors.dim("Generated:")}`);
+        console.log(`  ${colors.dim("Written:")}`);
         for (const f of result.generated) console.log(`    ${colors.dim(f)}`);
       }
-      if (result.fetched.length > 0) {
-        console.log(`  ${colors.dim("Fetched (remote):")}`);
-        for (const url of result.fetched) console.log(`    ${colors.dim(url)}`);
-      }
-      if (result.skipped.length > 0) {
-        console.log(`  ${colors.dim("Skipped:")}`);
-        for (const s of result.skipped) console.log(`    ${colors.dim(s)}`);
+      if (result.fetched.length > 0 || result.skipped.length > 0 || result.failed.length > 0) {
+        console.log(`  ${colors.dim("Contract sources:")}`);
+        for (const entry of result.fetched) {
+          const space = entry.indexOf(" ");
+          const key = space !== -1 ? entry.slice(0, space) : entry;
+          const rest = space !== -1 ? entry.slice(space + 1) : "";
+          const restSpace = rest.indexOf(" ");
+          const detail = restSpace !== -1 ? rest.slice(restSpace + 1) : "";
+          console.log(
+            `    ${key} ${colors.cyan("remote")}${detail ? ` ${colors.dim(detail)}` : ""}`,
+          );
+        }
+        for (const entry of result.skipped) {
+          const space = entry.indexOf(" ");
+          const key = space !== -1 ? entry.slice(0, space) : entry;
+          const rest = space !== -1 ? entry.slice(space + 1) : "";
+          if (rest === "no URL resolved") {
+            console.log(`    ${key} ${colors.dim("no URL resolved")}`);
+            continue;
+          }
+          const restSpace = rest.indexOf(" ");
+          const detail = restSpace !== -1 ? rest.slice(restSpace + 1) : "";
+          console.log(`    ${key} ${colors.dim("local")}${detail ? ` ${colors.dim(detail)}` : ""}`);
+        }
       }
       if (result.failed.length > 0) {
         console.log(`  ${colors.yellow("Failed:")}`);
-        for (const f of result.failed) console.log(`    ${colors.error(f)}`);
+        for (const f of result.failed) {
+          const colon = f.indexOf(": ");
+          if (colon !== -1) {
+            console.log(`    ${colors.error(f.slice(0, colon))}${colors.dim(f.slice(colon))}`);
+          } else {
+            console.log(`    ${colors.error(f)}`);
+          }
+        }
       }
       console.log();
       return;
