@@ -534,8 +534,8 @@ export function buildChildRootScripts(sections: {
     changeset: "changeset",
     version: "changeset version",
     release: "echo 'Packages versioned - app release handled by workflow'",
-    postinstall: "bos types gen || true",
-    "types:gen": "bos types gen",
+    postinstall: "node node_modules/.bin/bos types gen || true",
+    "types:gen": "node node_modules/.bin/bos types gen",
     bos: "bos",
   };
 
@@ -960,12 +960,12 @@ export type InferOutput<_TRoute extends string> = any;
     for (const plugin of opts.plugins ?? []) {
       const pluginSrcDir = join(destination, "plugins", plugin, "src");
       const pluginIndexPath = join(pluginSrcDir, "index.ts");
-      const pluginClientGenPath = join(pluginSrcDir, "plugins-client.gen.ts");
+      const pluginClientGenPath = join(pluginSrcDir, "lib", "plugins-client.gen.ts");
       if (!existsSync(pluginIndexPath) || existsSync(pluginClientGenPath)) {
         continue;
       }
       const pluginIndex = readFileSync(pluginIndexPath, "utf-8");
-      if (!pluginIndex.includes("./plugins-client.gen")) {
+      if (!pluginIndex.includes("./lib/plugins-client.gen")) {
         continue;
       }
       writeFileSync(pluginClientGenPath, "export type PluginsClient = Record<string, never>;\n");
@@ -1065,19 +1065,13 @@ export async function runTypesGen(
     remotePlugins?: string[];
   },
 ): Promise<void> {
-  const localBosBin = join(destination, "node_modules", ".bin", "bos");
-  if (existsSync(localBosBin)) {
-    const args = ["types", "gen"];
+  const bosModule = join(destination, "node_modules", "everything-dev", "dist", "cli.mjs");
+  if (existsSync(bosModule)) {
+    const args = [bosModule, "types", "gen"];
     if (opts?.remotePlugins && opts.remotePlugins.length > 0) {
       args.push("--remote-plugins", opts.remotePlugins.join(","));
     }
-    await runWithProgress(
-      "node_modules/.bin/bos",
-      args,
-      destination,
-      opts?.spinner,
-      "Generating types",
-    );
+    await runWithProgress(process.execPath, args, destination, opts?.spinner, "Generating types");
     return;
   }
 
