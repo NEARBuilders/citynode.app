@@ -182,6 +182,8 @@ describe("bos init — typecheck", () => {
     expect(typesGen.code).toBe(0);
     expect(existsSync(join(testDir, "ui", "src", "lib", "api-types.gen.ts"))).toBe(true);
     expect(existsSync(join(testDir, "api", "src", "lib", "plugins-types.gen.ts"))).toBe(true);
+
+    writeGeneratedAuthStubs(testDir);
   }, 120_000);
 
   it("typechecks api with zero unexpected errors", async () => {
