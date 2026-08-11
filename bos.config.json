@@ -34,7 +34,7 @@
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-7125-api-everything-dev-nearbuilders-2fdfdc29c-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-6880-api-everything-dev-nearbuilders-649a0258d-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -42,6 +42,10 @@
     },
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
+      "secrets": [
+        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
+        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
+      ],
       "variables": {
         "passkey": {
           "rpID": "everything.dev",
@@ -51,6 +55,18 @@
           "recipients": {
             "mainnet": "dev.everything.near",
             "testnet": "dev.allthethings.testnet"
+          },
+          "subAccount": {
+            "mainnet": {
+              "parentAccount": "dev.everything.near",
+              "parentHasFullAccess": true,
+              "minDeposit": "0.1 NEAR"
+            },
+            "testnet": {
+              "parentAccount": "dev.allthethings.testnet",
+              "parentHasFullAccess": true,
+              "minDeposit": "0.1 NEAR"
+            }
           }
         }
       }
@@ -70,8 +86,11 @@
     },
     "template": {
       "development": "local:plugins/_template",
-      "production": "https://elliot-braem-7123-every-plugin-template-everythin-c1a0071b7-ze.zephyrcloud.app",
-      "integrity": "sha384-vCs+ZeIz0krk6RxY8FODaOP3GM5/qb9BYMb7vD1YxuxB4Cp4ECbzFUihutBbkzyy"
+      "production": "https://elliot-braem-6878-every-plugin-template-everythin-83a69c153-ze.zephyrcloud.app",
+      "secrets": [
+        "TEMPLATE_DATABASE_URL"
+      ],
+      "integrity": "sha384-G4yrA0f+4PEF/lNxB5GIZO8azVCVFne5OHlVNrzWYVnTVczbChroAxZ//DU2uzmT"
     }
   }
 }

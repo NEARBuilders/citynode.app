@@ -65,10 +65,13 @@ export const ComposableAppEntrySchema = z.object({
   secrets: z.array(z.string()).optional(),
   routes: z.array(z.string()).optional(),
   shared: SharedDepMapSchema.optional(),
+  connectSrc: z.array(z.string()).optional(),
 });
 export type ComposableAppEntry = z.infer<typeof ComposableAppEntrySchema>;
 
-export const ApiPluginConfigSchema = ComposableAppEntrySchema;
+export const ApiPluginConfigSchema = ComposableAppEntrySchema.extend({
+  dependsOn: z.array(z.string()).optional(),
+});
 export type ApiPluginConfig = z.infer<typeof ApiPluginConfigSchema>;
 
 export const PluginUiConfigSchema = z.object({
@@ -113,6 +116,7 @@ export const RuntimePluginConfigSchema = z.object({
   secrets: z.array(z.string()).optional(),
   integrity: z.string().optional(),
   shared: SharedDepMapSchema.optional(),
+  connectSrc: z.array(z.string()).optional(),
   ui: PluginRuntimeUiSchema.optional(),
   routes: z.array(z.string()).optional(),
   dependsOn: z.array(z.string()).optional(),
@@ -138,6 +142,7 @@ export const RuntimeDependencyNodeSchema = z.object({
   secrets: z.array(z.string()).optional(),
   integrity: z.string().optional(),
   shared: SharedDepMapSchema.optional(),
+  connectSrc: z.array(z.string()).optional(),
   ui: PluginRuntimeUiSchema.optional(),
   routes: z.array(z.string()).optional(),
   sourceOrigin: z.enum(["config", "manifest"]).optional(),
@@ -196,6 +201,7 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     extends: ExtendsSchema.optional(),
     account: z.string().optional(),
     domain: z.string().optional(),
+    status: z.enum(["active", "suspended", "pending_deletion"]).optional(),
     testnet: z.string().optional(),
     template: z.string().optional(),
     gateway: z
@@ -224,6 +230,7 @@ export interface BosConfigInput {
   extends?: string | ExtendsConfig;
   account?: string;
   domain?: string;
+  status?: "active" | "suspended" | "pending_deletion";
   title?: string;
   description?: string;
   testnet?: string;
@@ -271,7 +278,7 @@ export const BosConfigSchema = z.object({
   app: z.object({
     host: HostConfigSchema,
     ui: UiConfigSchema,
-    api: ComposableAppEntrySchema,
+    api: ApiPluginConfigSchema,
     auth: ComposableAppEntrySchema.optional(),
   }),
 });

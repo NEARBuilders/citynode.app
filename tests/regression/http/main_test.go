@@ -12,6 +12,8 @@ import (
 var baseURL string
 
 func TestMain(m *testing.M) {
+	regtest.ResetTemplateDatabase()
+
 	log.Println("Starting regression test server...")
 	proc := regtest.Start(nil)
 	if proc == nil {

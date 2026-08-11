@@ -823,6 +823,7 @@ export async function buildRuntimeConfig(
       secrets: apiConfig.secrets,
       integrity: apiIsRemote ? apiConfig.integrity : undefined,
       shared: apiConfig.shared,
+      dependsOn: apiConfig.dependsOn ? normalizeStringArray(apiConfig.dependsOn) : undefined,
     },
     auth: (() => {
       if (!authConfig || !authRuntime) return undefined;
@@ -1106,6 +1107,7 @@ function buildRuntimePluginConfig(
     variables: normalizeJsonRecord(source.variables),
     secrets: normalizeStringArray(source.secrets),
     shared: source.shared,
+    connectSrc: normalizeStringArray(source.connectSrc),
     integrity: runtimeTarget.source === "remote" ? source.integrity : undefined,
     ui: uiRuntime
       ? {

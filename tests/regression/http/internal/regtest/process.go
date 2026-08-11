@@ -35,9 +35,13 @@ func Start(t interface{ Fatalf(string, ...any) }) *Process {
 	cmd.Env = append(cmd.Env,
 		"API_DATABASE_URL=postgres://everythingdev:everythingdev@127.0.0.1:5432/api_db",
 		"AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@127.0.0.1:5433/auth_db",
+		"TEMPLATE_DATABASE_URL=postgres://everythingdev:everythingdev@127.0.0.1:5434/template_db",
 		"CORS_ORIGIN=http://localhost:4100",
 		"BETTER_AUTH_SECRET=regression-test-secret-do-not-use-in-production",
 		"CI=true",
+		"RATE_LIMIT_WINDOW_MS=1000",
+		"RATE_LIMIT_MAX=100",
+		"BODY_LIMIT_MAX=65536",
 	)
 
 	logDir := filepath.Join(workdir, ".bos", "logs")
@@ -90,6 +94,15 @@ func (p *Process) Stop() {
 	case <-time.After(10 * time.Second):
 		p.Cmd.Process.Kill()
 		<-p.done
+	}
+}
+
+func ResetTemplateDatabase() {
+	cmd := exec.Command("docker", "exec", "dev.everything.near-postgres-template",
+		"psql", "-U", "everythingdev", "-d", "template_db",
+		"-c", "DROP TABLE IF EXISTS things, drizzle_migrations CASCADE")
+	if err := cmd.Run(); err != nil {
+		log.Printf("WARN: failed to reset template database (container may not be running): %v", err)
 	}
 }
 

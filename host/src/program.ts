@@ -58,12 +58,6 @@ type RuntimeClientConfig = ClientRuntimeConfig & { runtime?: ActiveRuntimeState 
 
 type RuntimePlugin = NonNullable<RuntimeConfig["plugins"]>[string];
 
-const BOS_VIEWER_DEFAULT_PATH = "every.near/widget/index";
-const BOS_VIEWER_RUNTIME_SCRIPT_URL =
-  "https://cdn.jsdelivr.net/npm/near-bos-webcomponent@0.0.9/dist/runtime.25b143da327a5371509f.bundle.js";
-const BOS_VIEWER_MAIN_SCRIPT_URL =
-  "https://cdn.jsdelivr.net/npm/near-bos-webcomponent@0.0.9/dist/main.1b3f0d7d1017de355a7c.bundle.js";
-
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS) || 900_000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 300;
 const BODY_LIMIT_MAX = Number(process.env.BODY_LIMIT_MAX) || 10 * 1024 * 1024;
@@ -81,27 +75,6 @@ function normalizeUrl(url?: string | null) {
   }
 }
 
-function isViewerFramePath(pathname: string) {
-  return pathname === "/_viewer" || /^\/_runtime\/[^/]+\/[^/]+\/_viewer\/?$/.test(pathname);
-}
-
-function getRuntimeOverride(pathname: string) {
-  const match = pathname.match(/^\/_runtime\/([^/]+)\/([^/]+)(?:\/|$)/);
-  if (!match) {
-    return null;
-  }
-
-  const [, encodedAccountId, encodedGatewayId] = match;
-  const accountId = decodeURIComponent(encodedAccountId);
-  const gatewayId = decodeURIComponent(encodedGatewayId);
-
-  return {
-    accountId,
-    gatewayId,
-    runtimeBasePath: `/_runtime/${encodeURIComponent(accountId)}/${encodeURIComponent(gatewayId)}`,
-  };
-}
-
 function getFallbackGatewayId(config: RuntimeConfig) {
   if (config.domain) {
     return config.domain;
@@ -110,21 +83,8 @@ function getFallbackGatewayId(config: RuntimeConfig) {
   return normalizeUrl(config.host?.url)?.replace(/^https?:\/\//, "") ?? "runtime";
 }
 
-async function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
+function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
   const url = new URL(request.url);
-  const override = getRuntimeOverride(url.pathname);
-
-  if (override) {
-    return {
-      accountId: override.accountId,
-      gatewayId: override.gatewayId,
-      runtimeBasePath: override.runtimeBasePath,
-      title: `${override.accountId}/${override.gatewayId}`,
-      description: null,
-      hostUrl: url.origin,
-    } satisfies ActiveRuntimeState;
-  }
-
   const fallbackGatewayId = getFallbackGatewayId(config);
   return {
     accountId: config.account,
@@ -627,9 +587,6 @@ export const createStartServer = (onReady?: () => void) =>
     const staticAssetPattern =
       /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|md|webmanifest|woff2?|ttf|eot|webp|avif|map|txt|xml)$/i;
 
-    const isHealthPath = (pathname: string) =>
-      pathname === "/health" || pathname === HEALTH_PATH || pathname === MEMORY_PATH;
-
     app.use(
       "/*",
       rateLimiter({
@@ -649,7 +606,6 @@ export const createStartServer = (onReady?: () => void) =>
         },
         skip: (c) => {
           const { pathname } = new URL(c.req.url);
-          if (isHealthPath(pathname)) return true;
           const lastSegment = pathname.split("/").pop() ?? "";
           return staticAssetPattern.test(lastSegment);
         },
@@ -662,14 +618,18 @@ export const createStartServer = (onReady?: () => void) =>
       ...(config.api?.url ? [new URL(config.api.url).origin] : []),
       ...(config.auth?.url ? [new URL(config.auth.url).origin] : []),
       ...Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) => {
-        const origins: string[] = [];
-        if (p.url) origins.push(new URL(p.url).origin);
-        if (p.ui?.url) origins.push(new URL(p.ui.url).origin);
-        return origins;
+        if (p.url) return [new URL(p.url).origin];
+        return [];
       }),
     ];
 
     const uniqueOrigins = [...new Set(remoteOrigins)];
+
+    const pluginConnectSrcs = [
+      ...new Set(
+        Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) => p.connectSrc ?? []),
+      ),
+    ];
 
     const wsOrigins = isDev
       ? uniqueOrigins.filter((o) => o.startsWith("http:")).map((o) => o.replace(/^http:/, "ws:"))
@@ -684,9 +644,7 @@ export const createStartServer = (onReady?: () => void) =>
       : ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", ...uniqueOrigins, ...cdnOrigins];
 
     app.use("*", (c, next) => {
-      const frameAncestors = isViewerFramePath(c.req.path) ? ["'self'"] : ["'none'"];
-
-      const viewerPath = isViewerFramePath(c.req.path);
+      const frameAncestors = ["'none'"];
 
       const lastSegment = c.req.path.split("/").pop() ?? "";
       const isStaticAsset = staticAssetPattern.test(lastSegment);
@@ -704,10 +662,15 @@ export const createStartServer = (onReady?: () => void) =>
             ...(isDev ? ["http:"] : ["https:"]),
             ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
           ],
-          connectSrc: ["'self'", "https:", ...uniqueOrigins, ...wsOrigins, ...cdnOrigins],
-          fontSrc: viewerPath
-            ? ["'self'", "data:", "https:", ...uniqueOrigins]
-            : ["'self'", "https:", ...uniqueOrigins],
+          connectSrc: [
+            "'self'",
+            "https:",
+            ...uniqueOrigins,
+            ...wsOrigins,
+            ...cdnOrigins,
+            ...pluginConnectSrcs,
+          ],
+          fontSrc: ["'self'", "https:", ...uniqueOrigins],
           manifestSrc: [
             "'self'",
             "https:",
@@ -756,17 +719,6 @@ export const createStartServer = (onReady?: () => void) =>
 
       const themeScript = `<script${nonceAttr}>${(getThemeInitScript() as { children?: string }).children ?? ""}</script>`;
 
-      const pluginUiScripts = Object.entries(runtimeSourceConfig.plugins ?? {})
-        .filter(([, p]: [string, RuntimePlugin]) => p.ui?.url && p.ui.source === "remote")
-        .map(([pluginKey, p]: [string, RuntimePlugin]) => {
-          const uiSri = p.ui!.integrity
-            ? ` integrity="${p.ui!.integrity}" crossorigin="anonymous"`
-            : "";
-          const pluginVersion = p.ui!.integrity ? `?v=${encodeURIComponent(p.ui!.integrity)}` : "";
-          return `<script${nonceAttr} src="/__mf/plugin-ui/${pluginKey}/remoteEntry.js${pluginVersion}"${uiSri}></script>`;
-        })
-        .join("\n");
-
       const shellBody = `<div id="root"><div class="shell"><div class="fade">${
         error
           ? `<p class="error">SSR unavailable, showing client app.</p><p>${error.message}</p>`
@@ -796,7 +748,6 @@ export const createStartServer = (onReady?: () => void) =>
               <style>${baseStyles}</style>
               ${themeScript}
               <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
-              ${pluginUiScripts}
               <script${nonceAttr}>${hydrateScript}</script>
             </head>
             <body>${shellBody}</body>
@@ -836,8 +787,6 @@ export const createStartServer = (onReady?: () => void) =>
         pathname === "/" ||
         pathname === "/api" ||
         pathname.startsWith("/api/") ||
-        pathname.startsWith("/__mf/") ||
-        pathname.startsWith("/_runtime/") ||
         pathname === "/health"
       ) {
         return next();
@@ -856,98 +805,6 @@ export const createStartServer = (onReady?: () => void) =>
         return c.text(message, { status: status as 404 | 500 | 502 });
       }
     });
-
-    for (const [pluginKey, pluginConfig] of Object.entries(config.plugins ?? {}) as Array<
-      [string, RuntimePlugin]
-    >) {
-      if (!pluginConfig.ui?.url) continue;
-      const proxyPrefix = `/__mf/plugin-ui/${pluginKey}`;
-      app.all(`${proxyPrefix}/*`, async (c: Context<HonoEnv>) => {
-        try {
-          const runtime = await resolveRequestRuntime(config, c.req.raw, {
-            verification: "stale-while-revalidate",
-          });
-          const pluginUiUrl = runtime.config.plugins?.[pluginKey]?.ui?.url;
-          if (!pluginUiUrl) {
-            return c.text(`Plugin UI unavailable for ${pluginKey}`, 404);
-          }
-          return await proxyStaticAssetRequest(c.req.raw, pluginUiUrl);
-        } catch (error) {
-          const { message, status } = getTenantRuntimeErrorResponse(error);
-          logger.error(
-            `[Plugin UI Proxy] ${c.req.method} ${c.req.path} (plugin=${pluginKey}) — ${message}`,
-          );
-          return c.text(message, { status: status as 404 | 500 | 502 });
-        }
-      });
-    }
-
-    const renderBosViewer = (c: Context<HonoEnv>) => {
-      const nonce = CSP_STRICT ? c.get("secureHeadersNonce") : undefined;
-      const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
-      const widgetPath =
-        new URL(c.req.url).searchParams.get("path")?.trim() || BOS_VIEWER_DEFAULT_PATH;
-      const widgetPathJson = JSON.stringify(widgetPath);
-
-      c.header("X-Robots-Tag", "noindex, nofollow");
-
-      return c.html(
-        `<!DOCTYPE html>
-          <html lang="en">
-            <head>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-              <meta name="robots" content="noindex, nofollow" />
-              <title>Viewer</title>
-              <style>
-                html, body, #viewer-root { height: 100%; margin: 0; }
-                body { background: #fff; overflow: hidden; }
-                near-social-viewer { display: block; width: 100%; height: 100%; }
-              </style>
-              <script${nonceAttr}>
-                (function() {
-                  var widgetPath = ${widgetPathJson};
-                  while (widgetPath.startsWith("/")) {
-                    widgetPath = widgetPath.slice(1);
-                  }
-                  history.replaceState(null, "", "/" + widgetPath);
-                })();
-              </script>
-              <script${nonceAttr} src="${BOS_VIEWER_RUNTIME_SCRIPT_URL}"></script>
-              <script${nonceAttr} src="${BOS_VIEWER_MAIN_SCRIPT_URL}"></script>
-            </head>
-            <body>
-              <div id="viewer-root"></div>
-              <script${nonceAttr}>
-                (function() {
-                  var widgetPath = ${widgetPathJson};
-                  while (widgetPath.startsWith("/")) {
-                    widgetPath = widgetPath.slice(1);
-                  }
-                  var mount = function() {
-                    var root = document.getElementById("viewer-root");
-                    if (!root || root.querySelector("near-social-viewer")) return;
-                    var viewer = document.createElement("near-social-viewer");
-                    viewer.setAttribute("src", widgetPath);
-                    viewer.setAttribute("network", "mainnet");
-                    root.appendChild(viewer);
-                  };
-
-                  if (customElements.get("near-social-viewer")) {
-                    mount();
-                    return;
-                  }
-
-                  customElements.whenDefined("near-social-viewer").then(mount);
-                })();
-              </script>
-            </body>
-          </html>`,
-      );
-    };
-
-    app.get("/_viewer", renderBosViewer);
-    app.get("/_runtime/:accountId/:gatewayId/_viewer", renderBosViewer);
 
     app.use("/*", sessionMiddleware);
 

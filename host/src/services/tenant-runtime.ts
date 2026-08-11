@@ -380,6 +380,7 @@ function buildEffectivePluginConfig(
   return {
     ...basePlugin,
     ...(tenantPlugin.ui ? { ui: tenantPlugin.ui } : {}),
+    ...(tenantPlugin.connectSrc ? { connectSrc: tenantPlugin.connectSrc } : {}),
   };
 }
 
@@ -445,6 +446,11 @@ function isSsrAllowed(accountId: string): boolean {
   return false;
 }
 
+function getTenantStatus(remoteConfig: Awaited<ReturnType<typeof getRemoteConfigCached>>): string {
+  const raw = remoteConfig.rawConfig as { status?: string } | undefined;
+  return raw?.status ?? "active";
+}
+
 export async function resolveRequestRuntime(
   baseConfig: RuntimeConfig,
   request: Request,
@@ -452,15 +458,6 @@ export async function resolveRequestRuntime(
 ): Promise<RequestRuntimeResolution> {
   const verificationMode = options?.verification ?? "blocking";
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/_runtime/")) {
-    return {
-      config: baseConfig,
-      tenantAccountId: null,
-      gatewayId: normalizeDomain(baseConfig.domain, baseConfig.host.url),
-      ssrAllowed: Boolean(baseConfig.ui.ssrUrl),
-    };
-  }
-
   const gatewayId = normalizeDomain(baseConfig.domain, baseConfig.host.url);
   const tenantAccountId = resolveTenantAccountId(url.hostname, gatewayId, baseConfig.account);
   if (!tenantAccountId) {
@@ -504,6 +501,14 @@ export async function resolveRequestRuntime(
     tenantAccountId,
     getAllowedOverrides(),
   );
+
+  const tenantStatus = getTenantStatus(remoteConfig);
+  if (tenantStatus === "suspended") {
+    throw new TenantRuntimeError("Tenant is suspended", 503);
+  }
+  if (tenantStatus === "pending_deletion") {
+    throw new TenantRuntimeError("Tenant has been deleted", 410);
+  }
 
   if (effectiveConfig.ui.url !== baseConfig.ui.url) {
     await verifyUiIntegrity(effectiveConfig, verificationMode);
