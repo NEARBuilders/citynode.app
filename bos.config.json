@@ -18,9 +18,6 @@
       "production": "https://elliot-braem-7253-host-everything-dev-nearbuilder-aa7d0803c-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
-        "TENANT_WHITELIST",
-        "ALLOW_OVERRIDE",
-        "ALLOW_UNTRUSTED_SSR",
         "CSP_STRICT"
       ]
     },

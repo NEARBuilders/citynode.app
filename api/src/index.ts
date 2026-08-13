@@ -144,6 +144,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
             accountId: input.accountId,
             orgId: context.organization.activeOrganizationId,
             status: input.status,
+            allowUiOverrides: input.allowUiOverrides,
+            allowBackendOverrides: input.allowBackendOverrides,
+            allowSsr: input.allowSsr,
           });
         }),
 
@@ -159,6 +162,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
             subdomain: input.subdomain,
             accountId: input.accountId,
             status: input.status,
+            allowUiOverrides: input.allowUiOverrides,
+            allowBackendOverrides: input.allowBackendOverrides,
+            allowSsr: input.allowSsr,
           });
         }),
 
@@ -222,6 +228,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
         return tenant;
       }),
+
+      listTenantBindings: builder.listTenantBindings.handler(async () =>
+        services.tenants.listBindings(),
+      ),
 
       tenantPreflight: builder.tenantPreflight.use(requireAuth).handler(async ({ input }) => {
         const subdomainValid = SUBDOMAIN_SEGMENT_REGEX.test(input.subdomain);

@@ -13,9 +13,21 @@ export interface TenantRecord {
   orgId: string;
   name: string;
   status: TenantStatus;
+  allowUiOverrides: boolean;
+  allowBackendOverrides: boolean;
+  allowSsr: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+export interface TenantBinding {
+  hostname: string;
+  accountId: string;
+  allowUiOverrides: boolean;
+  allowBackendOverrides: boolean;
+  allowSsr: boolean;
+  status: TenantStatus;
 }
 
 export interface TenantInput {
@@ -24,14 +36,23 @@ export interface TenantInput {
   accountId: string;
   orgId: string;
   status?: TenantStatus;
+  allowUiOverrides?: boolean;
+  allowBackendOverrides?: boolean;
+  allowSsr?: boolean;
 }
 
 export interface TenantsService {
   listTenantsByOrgIds(orgIds: string[]): Promise<TenantRecord[]>;
+  listBindings(): Promise<TenantBinding[]>;
   createTenant(input: TenantInput): Promise<TenantRecord>;
   updateTenant(
     id: string,
-    input: Partial<Pick<TenantInput, "name" | "subdomain" | "accountId" | "status">>,
+    input: Partial<
+      Pick<
+        TenantInput,
+        "name" | "subdomain" | "accountId" | "status" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
+      >
+    >,
   ): Promise<TenantRecord>;
   softDeleteTenant(id: string): Promise<TenantRecord | null>;
   suspendTenant(id: string): Promise<TenantRecord | null>;
@@ -55,6 +76,9 @@ function toTenantRecord(row: TenantRow): TenantRecord {
     orgId: row.orgId,
     name: row.name,
     status: row.status,
+    allowUiOverrides: row.allowUiOverrides,
+    allowBackendOverrides: row.allowBackendOverrides,
+    allowSsr: row.allowSsr,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
     deletedAt: row.deletedAt instanceof Date ? row.deletedAt.toISOString() : null,
@@ -88,6 +112,27 @@ export const TenantsLive = Layer.effect(
         }
       },
 
+      listBindings: async () => {
+        try {
+          const rows = await db
+            .select({
+              subdomain: tenantsTable.subdomain,
+              accountId: tenantsTable.accountId,
+              allowUiOverrides: tenantsTable.allowUiOverrides,
+              allowBackendOverrides: tenantsTable.allowBackendOverrides,
+              allowSsr: tenantsTable.allowSsr,
+              status: tenantsTable.status,
+            })
+            .from(tenantsTable);
+          return rows.map(({ subdomain, ...binding }) => ({
+            ...binding,
+            hostname: subdomain,
+          }));
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
       createTenant: async (input) => {
         try {
           const [row] = await db
@@ -98,6 +143,11 @@ export const TenantsLive = Layer.effect(
               accountId: input.accountId,
               orgId: input.orgId,
               ...(input.status !== undefined && { status: input.status }),
+              ...(input.allowUiOverrides !== undefined && { allowUiOverrides: input.allowUiOverrides }),
+              ...(input.allowBackendOverrides !== undefined && {
+                allowBackendOverrides: input.allowBackendOverrides,
+              }),
+              ...(input.allowSsr !== undefined && { allowSsr: input.allowSsr }),
             })
             .onConflictDoNothing()
             .returning();
