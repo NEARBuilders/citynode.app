@@ -1,13 +1,13 @@
-import {
-  buildRuntimeConfig,
-  loadRemoteConfig,
-  type RuntimeConfig,
-} from "everything-dev/config";
+import { buildRuntimeConfig, loadRemoteConfig, type RuntimeConfig } from "everything-dev/config";
 import { verifySriForUrl } from "everything-dev/integrity";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
 import { resolveDomain } from "../utils/normalize";
-import { clearBindingResolverCache, createBindingResolver, type BindingResolver } from "./binding-resolver";
+import {
+  type BindingResolver,
+  clearBindingResolverCache,
+  createBindingResolver,
+} from "./binding-resolver";
 
 const REMOTE_CONFIG_TTL_MS = 30_000;
 const VERIFICATION_TTL_MS = 5 * 60_000;

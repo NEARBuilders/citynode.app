@@ -30,11 +30,7 @@ export function clearBindingResolverCache() {
 
 function isBaseHost(hostname: string, gatewayId: string): boolean {
   const normalized = hostname.toLowerCase();
-  return (
-    normalized === gatewayId ||
-    normalized === "localhost" ||
-    normalized === "127.0.0.1"
-  );
+  return normalized === gatewayId || normalized === "localhost" || normalized === "127.0.0.1";
 }
 
 async function fetchBindingsFromApi(apiUrl: string): Promise<TenantBinding[]> {
@@ -69,9 +65,7 @@ function mapBindingsByHostname(
   return entries;
 }
 
-function ensureBindingsLoaded(
-  config: RuntimeConfig,
-): Promise<Map<string, TenantBinding>> {
+function ensureBindingsLoaded(config: RuntimeConfig): Promise<Map<string, TenantBinding>> {
   const apiUrl = config.api?.url;
   if (!apiUrl) {
     return Promise.resolve(new Map());
@@ -91,8 +85,7 @@ function ensureBindingsLoaded(
     return bindingsCache.refetching;
   }
 
-  const staleEntries =
-    bindingsCache?.apiUrl === apiUrl ? bindingsCache.entries : null;
+  const staleEntries = bindingsCache?.apiUrl === apiUrl ? bindingsCache.entries : null;
 
   const fetchPromise = fetchBindingsFromApi(apiUrl)
     .then((bindings) => {

@@ -10,6 +10,9 @@ export const Route = createFileRoute("/_layout")({
 function Layout() {
   const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [betaBannerDismissed, setBetaBannerDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("beta-banner-dismissed") === "true";
@@ -45,7 +48,7 @@ function Layout() {
           </div>
         )}
 
-        {isNavigating && (
+        {mounted && isNavigating && (
           <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">
             <div className="h-full bg-foreground animate-progress-bar" style={{ width: "100%" }} />
           </div>

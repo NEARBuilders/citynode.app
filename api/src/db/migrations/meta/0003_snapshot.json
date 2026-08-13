@@ -1,6 +1,6 @@
 {
-  "id": "7b8a421a-d0c7-414a-96e8-0c259935178b",
-  "prevId": "3e88c17e-53d5-4809-b872-33d2f87a8a90",
+  "id": "85c9d130-a4b6-4026-a2df-890fddfa7518",
+  "prevId": "7b8a421a-d0c7-414a-96e8-0c259935178b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -31,7 +31,7 @@
           "name": "org_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "name": {
           "name": "name",

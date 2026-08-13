@@ -98,7 +98,7 @@
     "test:api": "cd api && bun run test tests/integration/ tests/unit/",
     "test:integration": "cd api && bun run test tests/integration/",
     "test:e2e": "bun run --cwd host test:e2e",
-    "regression:start:dev": "BOS_NO_PERSIST_PORTS=1 bun packages/everything-dev/src/cli.ts dev --no-interactive --port 4100 --api-port 4101 --auth-port 4102 --ui-port 4103 --plugin-port-start 4110",
+    "regression:start:dev": "BOS_NO_PERSIST_PORTS=1 bun packages/everything-dev/src/cli.ts dev --no-interactive --ssr --port 4100 --api-port 4101 --auth-port 4102 --ui-port 4103 --plugin-port-start 4110",
     "regression:start:prod": "BOS_NO_PERSIST_PORTS=1 PORT=4100 bun ./node_modules/everything-dev/dist/cli.mjs start --no-interactive",
     "test:regression:http:dev": "REGRESSION_MODE=dev sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
     "test:regression:http:prod": "REGRESSION_MODE=prod sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",

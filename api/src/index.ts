@@ -89,7 +89,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
     const authorizedTenant = async (
       input: { tenantId: string },
-      context: { organization: { activeOrganizationId: string } },
+      context: {
+        organization: { activeOrganizationId: string };
+        near?: { primaryAccountId: string | null };
+      },
     ) => {
       const activeOrgId = context.organization.activeOrganizationId;
       const tenant = await services.tenants.resolveTenantById(input.tenantId);
@@ -98,6 +101,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
           message: "Tenant not found",
           data: { resource: "tenant", resourceId: input.tenantId },
         });
+      }
+      if (tenant.orgId === null) {
+        const isOwner =
+          !!context.near?.primaryAccountId && context.near.primaryAccountId === tenant.accountId;
+        if (!isOwner) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "You do not own this personal tenant",
+          });
+        }
+        return tenant;
       }
       if (tenant.orgId !== activeOrgId) {
         throw new ORPCError("FORBIDDEN", {

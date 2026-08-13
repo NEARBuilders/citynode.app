@@ -19,6 +19,7 @@ vi.mock("everything-dev/integrity", () => ({
 const { clearTenantRuntimeCaches, resolveRequestRuntime } = await import(
   "../../src/services/tenant-runtime"
 );
+
 import type { BindingResolver } from "../../src/services/binding-resolver";
 
 function createDeferred<T>() {
@@ -121,11 +122,9 @@ describe("resolveRequestRuntime", () => {
   it("returns the base runtime on the bare domain", async () => {
     const baseConfig = createBaseRuntimeConfig();
 
-    const result = await resolveRequestRuntime(
-      baseConfig,
-      new Request("https://linktree.com/"),
-      { bindingResolver: createMockBindingResolver() },
-    );
+    const result = await resolveRequestRuntime(baseConfig, new Request("https://linktree.com/"), {
+      bindingResolver: createMockBindingResolver(),
+    });
 
     expect(result.config).toBe(baseConfig);
     expect(result.tenantAccountId).toBeNull();
@@ -677,17 +676,13 @@ describe("resolveRequestRuntime", () => {
         },
       });
 
-      await resolveRequestRuntime(
-        baseConfig,
-        new Request("https://alice.linktree.com/"),
-        {
-          bindingResolver: createMockBindingResolver({
-            hostname: "alice.linktree.com",
-            allowUiOverrides: true,
-            allowSsr: true,
-          }),
-        },
-      );
+      await resolveRequestRuntime(baseConfig, new Request("https://alice.linktree.com/"), {
+        bindingResolver: createMockBindingResolver({
+          hostname: "alice.linktree.com",
+          allowUiOverrides: true,
+          allowSsr: true,
+        }),
+      });
 
       const refresh = createDeferred<void>();
       verifySriForUrlMock.mockImplementationOnce(() => refresh.promise);
@@ -762,17 +757,13 @@ describe("resolveRequestRuntime", () => {
         },
       });
 
-      await resolveRequestRuntime(
-        baseConfig,
-        new Request("https://alice.linktree.com/"),
-        {
-          bindingResolver: createMockBindingResolver({
-            hostname: "alice.linktree.com",
-            allowUiOverrides: true,
-            allowSsr: true,
-          }),
-        },
-      );
+      await resolveRequestRuntime(baseConfig, new Request("https://alice.linktree.com/"), {
+        bindingResolver: createMockBindingResolver({
+          hostname: "alice.linktree.com",
+          allowUiOverrides: true,
+          allowSsr: true,
+        }),
+      });
 
       const refresh = createDeferred<void>();
       verifySriForUrlMock.mockImplementationOnce(() => refresh.promise);

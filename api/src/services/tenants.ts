@@ -10,7 +10,7 @@ export interface TenantRecord {
   id: string;
   subdomain: string;
   accountId: string;
-  orgId: string;
+  orgId: string | null;
   name: string;
   status: TenantStatus;
   allowUiOverrides: boolean;
@@ -34,7 +34,7 @@ export interface TenantInput {
   subdomain: string;
   name: string;
   accountId: string;
-  orgId: string;
+  orgId: string | null;
   status?: TenantStatus;
   allowUiOverrides?: boolean;
   allowBackendOverrides?: boolean;
@@ -50,7 +50,13 @@ export interface TenantsService {
     input: Partial<
       Pick<
         TenantInput,
-        "name" | "subdomain" | "accountId" | "status" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
+        | "name"
+        | "subdomain"
+        | "accountId"
+        | "status"
+        | "allowUiOverrides"
+        | "allowBackendOverrides"
+        | "allowSsr"
       >
     >,
   ): Promise<TenantRecord>;
@@ -143,7 +149,9 @@ export const TenantsLive = Layer.effect(
               accountId: input.accountId,
               orgId: input.orgId,
               ...(input.status !== undefined && { status: input.status }),
-              ...(input.allowUiOverrides !== undefined && { allowUiOverrides: input.allowUiOverrides }),
+              ...(input.allowUiOverrides !== undefined && {
+                allowUiOverrides: input.allowUiOverrides,
+              }),
               ...(input.allowBackendOverrides !== undefined && {
                 allowBackendOverrides: input.allowBackendOverrides,
               }),
