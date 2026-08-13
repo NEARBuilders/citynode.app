@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_layout/_public/login")({
       queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
 
     if (session?.user) {
-      const redirectTo = search.redirect?.startsWith("/") ? search.redirect : "/home";
+      const redirectTo = search.redirect?.startsWith("/") ? search.redirect : "/dashboard";
       throw redirect({ to: redirectTo, search: {} });
     }
   },
@@ -57,7 +57,7 @@ function LoginPage() {
   }, [auth.near]);
 
   const handleSuccess = async (message: string) => {
-    const redirectTo = redirect?.startsWith("/") ? redirect : "/home";
+    const redirectTo = redirect?.startsWith("/") ? redirect : "/dashboard";
     toast.success(message);
     queryClient.invalidateQueries({ queryKey: ["session"] });
     navigate({ to: redirectTo, replace: true, search: {} });
@@ -110,7 +110,7 @@ function LoginPage() {
   };
 
   if (session?.user) {
-    const redirectTo = redirect?.startsWith("/") ? redirect : "/home";
+    const redirectTo = redirect?.startsWith("/") ? redirect : "/dashboard";
     return <Navigate to={redirectTo} replace search={{}} />;
   }
 

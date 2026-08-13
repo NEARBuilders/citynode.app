@@ -144,7 +144,7 @@ export function UserNav() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link to="/home">
+            <Link to="/dashboard">
               <Home />
               workspace
             </Link>

@@ -13,7 +13,7 @@ import { Card } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { InfoRow } from "@/components/ui/info-row";
 
-export const Route = createFileRoute("/_layout/_authenticated/home")({
+export const Route = createFileRoute("/_layout/_authenticated/dashboard")({
   beforeLoad: async ({ context }) => {
     const { apiClient, runtimeConfig } = context;
     const accountId = getAccount(runtimeConfig);

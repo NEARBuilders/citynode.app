@@ -94,7 +94,7 @@ function AuthenticatedLayout() {
   const isAdmin = session?.user?.role === "admin";
 
   const sidebarItems: SidebarItem[] = [
-    { icon: Home, label: "home", to: "/home", roleRequired: "anon" },
+    { icon: Home, label: "dashboard", to: "/dashboard", roleRequired: "anon" },
     { icon: Shield, label: "admin", to: "/admin", roleRequired: "admin" },
     { icon: MessageSquare, label: "nostr", to: "/nostr", roleRequired: "admin" },
   ];
@@ -221,7 +221,7 @@ function MobileTabBar({
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="flex items-center justify-around px-2 py-1">
-        <TabItem to="/home" icon={Home} label="home" active={tabActive("/home")} />
+        <TabItem to="/dashboard" icon={Home} label="dashboard" active={tabActive("/dashboard")} />
         <TabItem to="/apps" icon={Globe} label="apps" active={tabActive("/apps")} />
         <TabItem to="/explore" icon={Compass} label="explore" active={tabActive("/explore")} />
         <TabItem to="/recent" icon={ClipboardList} label="recent" active={tabActive("/recent")} />
