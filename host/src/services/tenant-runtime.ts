@@ -7,7 +7,7 @@ import { verifySriForUrl } from "everything-dev/integrity";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
 import { resolveDomain } from "../utils/normalize";
-import { createBindingResolver, type BindingResolver } from "./binding-resolver";
+import { clearBindingResolverCache, createBindingResolver, type BindingResolver } from "./binding-resolver";
 
 const REMOTE_CONFIG_TTL_MS = 30_000;
 const VERIFICATION_TTL_MS = 5 * 60_000;
@@ -90,6 +90,7 @@ export function getTenantRuntimeErrorResponse(error: unknown): { status: number;
 export function clearTenantRuntimeCaches() {
   remoteConfigCache.clear();
   verifiedUiCache.clear();
+  clearBindingResolverCache();
 }
 
 function getRemoteConfigCached(bosUrl: string, env: BosEnv) {
