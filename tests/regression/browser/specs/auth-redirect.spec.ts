@@ -26,8 +26,8 @@ test.describe("Auth redirect", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
-  test("unauthenticated /home redirects to /login", async ({ page }) => {
-    await page.goto("/home", { waitUntil: "domcontentloaded" });
+  test("unauthenticated /dashboard redirects to /login", async ({ page }) => {
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
     await page.waitForURL(/\/login/, { timeout: 15000 });
