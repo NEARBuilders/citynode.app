@@ -151,7 +151,7 @@ export function UserNav() {
           </DropdownMenuItem>
           {activeOrg && (
             <DropdownMenuItem asChild>
-              <Link to="/organizations/$slug" params={{ slug: activeOrg.slug }}>
+              <Link to="/orgs/$slug" params={{ slug: activeOrg.slug }}>
                 <Building2 />
                 {activeOrg.name}
               </Link>

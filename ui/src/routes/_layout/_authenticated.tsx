@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
-import { ClipboardList, Compass, Globe, Home, Menu, MessageSquare, Shield } from "lucide-react";
+import { ClipboardList, Compass, Globe, Home, Menu, Shield } from "lucide-react";
 import { useState } from "react";
 import type { SessionData } from "@/app";
 import { getAccount, getActiveRuntime, getAppName, sessionQueryOptions } from "@/app";
@@ -96,7 +96,6 @@ function AuthenticatedLayout() {
   const sidebarItems: SidebarItem[] = [
     { icon: Home, label: "dashboard", to: "/dashboard", roleRequired: "anon" },
     { icon: Shield, label: "admin", to: "/admin", roleRequired: "admin" },
-    { icon: MessageSquare, label: "nostr", to: "/nostr", roleRequired: "admin" },
   ];
   const visibleItems = filterSidebarByRole(sidebarItems, getUserRole(true, isAdmin));
 

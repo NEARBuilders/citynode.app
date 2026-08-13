@@ -55,7 +55,7 @@ function AdminPage() {
               home
             </Link>
             <Link
-              to="/organizations"
+              to="/orgs"
               className="h-10 px-4 inline-flex items-center gap-1.5 text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[12px]"
             >
               organizations
@@ -93,7 +93,7 @@ function AdminPage() {
             label="Organization"
             value={
               <Link
-                to="/organizations/$slug"
+                to="/orgs/$slug"
                 params={{ slug: tenant.subdomain }}
                 className="text-foreground hover:underline font-mono"
               >

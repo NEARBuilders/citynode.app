@@ -11,7 +11,7 @@ type SearchParams = {
   redirect?: string;
 };
 
-export const Route = createFileRoute("/_layout/_public/login")({
+export const Route = createFileRoute("/_layout/_anon/login")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
@@ -200,7 +200,7 @@ function LoginPage() {
           </div>
 
           <UnderConstruction
-            sourceFile="ui/src/routes/_layout/_public/login.tsx"
+            sourceFile="ui/src/routes/_layout/_anon/login.tsx"
             runtimeConfig={runtimeConfig}
           />
         </div>

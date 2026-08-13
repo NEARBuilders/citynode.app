@@ -53,7 +53,7 @@ function AdminDashboard() {
               Manage organizations, members, roles, and invitations.
             </p>
             <Button asChild variant="outline" size="sm">
-              <Link to="/organizations">
+              <Link to="/orgs">
                 <Users className="h-3.5 w-3.5" />
                 open organizations
               </Link>
@@ -105,7 +105,7 @@ function AdminDashboard() {
               there.
             </p>
             <Link
-              to="/organizations/$slug"
+              to="/orgs/$slug"
               params={{ slug: tenant.subdomain }}
               className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[10px]"
             >
