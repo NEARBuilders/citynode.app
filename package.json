@@ -79,7 +79,7 @@
     "publish": "bun packages/everything-dev/src/cli.ts publish",
     "bos": "bun packages/everything-dev/src/cli.ts",
     "types:gen": "bun packages/everything-dev/src/cli.ts types gen",
-    "typecheck": "bun run types:gen && bun run --cwd packages/everything-dev typecheck & bun run --cwd ui tsc --noEmit & bun run --cwd api tsc --noEmit & bun run --cwd host tsc --noEmit & wait",
+    "typecheck": "bun run types:gen && (ERR=0; bun run --cwd packages/everything-dev typecheck || ERR=1; bun run --cwd ui tsc --noEmit || ERR=1; bun run --cwd api tsc --noEmit || ERR=1; bun run --cwd host tsc --noEmit || ERR=1; exit $ERR)",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

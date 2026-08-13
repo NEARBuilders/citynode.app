@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router";
 import { getAppName, sessionQueryOptions } from "@/app";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -6,9 +6,9 @@ export const Route = createFileRoute("/_layout/_anon")({
   beforeLoad: async ({ context }) => {
     const { queryClient, authClient } = context;
     const initialSession = context.session;
-    const session = initialSession ?? queryClient.getQueryData(
-      sessionQueryOptions(authClient, initialSession).queryKey,
-    );
+    const session =
+      initialSession ??
+      queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
     if (session?.user) {
       throw redirect({ to: "/dashboard", search: {} });
     }
@@ -19,7 +19,6 @@ export const Route = createFileRoute("/_layout/_anon")({
 function AnonLayout() {
   const { runtimeConfig } = Route.useRouteContext();
   const appName = getAppName(runtimeConfig);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -48,7 +47,7 @@ function AnonLayout() {
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        <div key={pathname} className="flex-1 flex flex-col animate-fade-in-up">
+        <div className="flex-1 flex flex-col">
           <Outlet />
         </div>
       </div>

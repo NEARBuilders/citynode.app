@@ -151,7 +151,7 @@ function NewOrganization() {
         </section>
       </div>
     </PageContainer>
-  )
+  );
 }
 
 function Field({

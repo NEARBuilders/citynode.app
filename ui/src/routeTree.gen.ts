@@ -24,11 +24,13 @@ import { Route as LayoutAnonLoginRouteImport } from './routes/_layout/_anon/logi
 import { Route as LayoutAdminAdminRouteImport } from './routes/_layout/_admin/admin'
 import { Route as LayoutPublicThingsIndexRouteImport } from './routes/_layout/_public/things/index'
 import { Route as LayoutPublicAppsIndexRouteImport } from './routes/_layout/_public/apps/index'
+import { Route as LayoutPublicAccountIdIndexRouteImport } from './routes/_layout/_public/$accountId/index'
 import { Route as LayoutAuthenticatedSettingsIndexRouteImport } from './routes/_layout/_authenticated/settings/index'
 import { Route as LayoutAuthenticatedOrgsIndexRouteImport } from './routes/_layout/_authenticated/orgs/index'
 import { Route as LayoutAdminAdminIndexRouteImport } from './routes/_layout/_admin/admin/index'
 import { Route as LayoutPublicThingsLiveRouteImport } from './routes/_layout/_public/things/live'
 import { Route as LayoutPublicThingsThingIdRouteImport } from './routes/_layout/_public/things/$thingId'
+import { Route as LayoutPublicAccountIdAppsRouteImport } from './routes/_layout/_public/$accountId/apps'
 import { Route as LayoutAuthenticatedThingsNewRouteImport } from './routes/_layout/_authenticated/things/new'
 import { Route as LayoutAuthenticatedTenantNewRouteImport } from './routes/_layout/_authenticated/tenant/new'
 import { Route as LayoutAuthenticatedTenantTenantIdRouteImport } from './routes/_layout/_authenticated/tenant/$tenantId'
@@ -114,6 +116,12 @@ const LayoutPublicAppsIndexRoute = LayoutPublicAppsIndexRouteImport.update({
   path: '/apps/',
   getParentRoute: () => LayoutPublicRoute,
 } as any)
+const LayoutPublicAccountIdIndexRoute =
+  LayoutPublicAccountIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => LayoutPublicAccountIdRoute,
+  } as any)
 const LayoutAuthenticatedSettingsIndexRoute =
   LayoutAuthenticatedSettingsIndexRouteImport.update({
     id: '/',
@@ -141,6 +149,12 @@ const LayoutPublicThingsThingIdRoute =
     id: '/things/$thingId',
     path: '/things/$thingId',
     getParentRoute: () => LayoutPublicRoute,
+  } as any)
+const LayoutPublicAccountIdAppsRoute =
+  LayoutPublicAccountIdAppsRouteImport.update({
+    id: '/apps',
+    path: '/apps',
+    getParentRoute: () => LayoutPublicAccountIdRoute,
   } as any)
 const LayoutAuthenticatedThingsNewRoute =
   LayoutAuthenticatedThingsNewRouteImport.update({
@@ -220,7 +234,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LayoutAnonLoginRoute
   '/dashboard': typeof LayoutAuthenticatedDashboardRoute
   '/settings': typeof LayoutAuthenticatedSettingsRouteWithChildren
-  '/$accountId': typeof LayoutPublicAccountIdRoute
+  '/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/about': typeof LayoutPublicAboutRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/admin/system': typeof LayoutAdminAdminSystemRoute
@@ -232,11 +246,13 @@ export interface FileRoutesByFullPath {
   '/tenant/$tenantId': typeof LayoutAuthenticatedTenantTenantIdRoute
   '/tenant/new': typeof LayoutAuthenticatedTenantNewRoute
   '/things/new': typeof LayoutAuthenticatedThingsNewRoute
+  '/$accountId/apps': typeof LayoutPublicAccountIdAppsRoute
   '/things/$thingId': typeof LayoutPublicThingsThingIdRoute
   '/things/live': typeof LayoutPublicThingsLiveRoute
   '/admin/': typeof LayoutAdminAdminIndexRoute
   '/orgs/': typeof LayoutAuthenticatedOrgsIndexRoute
   '/settings/': typeof LayoutAuthenticatedSettingsIndexRoute
+  '/$accountId/': typeof LayoutPublicAccountIdIndexRoute
   '/apps/': typeof LayoutPublicAppsIndexRoute
   '/things/': typeof LayoutPublicThingsIndexRoute
   '/orgs/invites/$id': typeof LayoutAuthenticatedOrgsInvitesIdRoute
@@ -247,7 +263,6 @@ export interface FileRoutesByTo {
   '/': typeof LayoutPublicIndexRoute
   '/login': typeof LayoutAnonLoginRoute
   '/dashboard': typeof LayoutAuthenticatedDashboardRoute
-  '/$accountId': typeof LayoutPublicAccountIdRoute
   '/about': typeof LayoutPublicAboutRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/admin/system': typeof LayoutAdminAdminSystemRoute
@@ -259,11 +274,13 @@ export interface FileRoutesByTo {
   '/tenant/$tenantId': typeof LayoutAuthenticatedTenantTenantIdRoute
   '/tenant/new': typeof LayoutAuthenticatedTenantNewRoute
   '/things/new': typeof LayoutAuthenticatedThingsNewRoute
+  '/$accountId/apps': typeof LayoutPublicAccountIdAppsRoute
   '/things/$thingId': typeof LayoutPublicThingsThingIdRoute
   '/things/live': typeof LayoutPublicThingsLiveRoute
   '/admin': typeof LayoutAdminAdminIndexRoute
   '/orgs': typeof LayoutAuthenticatedOrgsIndexRoute
   '/settings': typeof LayoutAuthenticatedSettingsIndexRoute
+  '/$accountId': typeof LayoutPublicAccountIdIndexRoute
   '/apps': typeof LayoutPublicAppsIndexRoute
   '/things': typeof LayoutPublicThingsIndexRoute
   '/orgs/invites/$id': typeof LayoutAuthenticatedOrgsInvitesIdRoute
@@ -281,7 +298,7 @@ export interface FileRoutesById {
   '/_layout/_anon/login': typeof LayoutAnonLoginRoute
   '/_layout/_authenticated/dashboard': typeof LayoutAuthenticatedDashboardRoute
   '/_layout/_authenticated/settings': typeof LayoutAuthenticatedSettingsRouteWithChildren
-  '/_layout/_public/$accountId': typeof LayoutPublicAccountIdRoute
+  '/_layout/_public/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/_layout/_public/about': typeof LayoutPublicAboutRoute
   '/_layout/_public/skill': typeof LayoutPublicSkillRoute
   '/_layout/_public/': typeof LayoutPublicIndexRoute
@@ -294,11 +311,13 @@ export interface FileRoutesById {
   '/_layout/_authenticated/tenant/$tenantId': typeof LayoutAuthenticatedTenantTenantIdRoute
   '/_layout/_authenticated/tenant/new': typeof LayoutAuthenticatedTenantNewRoute
   '/_layout/_authenticated/things/new': typeof LayoutAuthenticatedThingsNewRoute
+  '/_layout/_public/$accountId/apps': typeof LayoutPublicAccountIdAppsRoute
   '/_layout/_public/things/$thingId': typeof LayoutPublicThingsThingIdRoute
   '/_layout/_public/things/live': typeof LayoutPublicThingsLiveRoute
   '/_layout/_admin/admin/': typeof LayoutAdminAdminIndexRoute
   '/_layout/_authenticated/orgs/': typeof LayoutAuthenticatedOrgsIndexRoute
   '/_layout/_authenticated/settings/': typeof LayoutAuthenticatedSettingsIndexRoute
+  '/_layout/_public/$accountId/': typeof LayoutPublicAccountIdIndexRoute
   '/_layout/_public/apps/': typeof LayoutPublicAppsIndexRoute
   '/_layout/_public/things/': typeof LayoutPublicThingsIndexRoute
   '/_layout/_authenticated/orgs/invites/$id': typeof LayoutAuthenticatedOrgsInvitesIdRoute
@@ -325,11 +344,13 @@ export interface FileRouteTypes {
     | '/tenant/$tenantId'
     | '/tenant/new'
     | '/things/new'
+    | '/$accountId/apps'
     | '/things/$thingId'
     | '/things/live'
     | '/admin/'
     | '/orgs/'
     | '/settings/'
+    | '/$accountId/'
     | '/apps/'
     | '/things/'
     | '/orgs/invites/$id'
@@ -340,7 +361,6 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/dashboard'
-    | '/$accountId'
     | '/about'
     | '/skill'
     | '/admin/system'
@@ -352,11 +372,13 @@ export interface FileRouteTypes {
     | '/tenant/$tenantId'
     | '/tenant/new'
     | '/things/new'
+    | '/$accountId/apps'
     | '/things/$thingId'
     | '/things/live'
     | '/admin'
     | '/orgs'
     | '/settings'
+    | '/$accountId'
     | '/apps'
     | '/things'
     | '/orgs/invites/$id'
@@ -386,11 +408,13 @@ export interface FileRouteTypes {
     | '/_layout/_authenticated/tenant/$tenantId'
     | '/_layout/_authenticated/tenant/new'
     | '/_layout/_authenticated/things/new'
+    | '/_layout/_public/$accountId/apps'
     | '/_layout/_public/things/$thingId'
     | '/_layout/_public/things/live'
     | '/_layout/_admin/admin/'
     | '/_layout/_authenticated/orgs/'
     | '/_layout/_authenticated/settings/'
+    | '/_layout/_public/$accountId/'
     | '/_layout/_public/apps/'
     | '/_layout/_public/things/'
     | '/_layout/_authenticated/orgs/invites/$id'
@@ -509,6 +533,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPublicAppsIndexRouteImport
       parentRoute: typeof LayoutPublicRoute
     }
+    '/_layout/_public/$accountId/': {
+      id: '/_layout/_public/$accountId/'
+      path: '/'
+      fullPath: '/$accountId/'
+      preLoaderRoute: typeof LayoutPublicAccountIdIndexRouteImport
+      parentRoute: typeof LayoutPublicAccountIdRoute
+    }
     '/_layout/_authenticated/settings/': {
       id: '/_layout/_authenticated/settings/'
       path: '/'
@@ -543,6 +574,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/things/$thingId'
       preLoaderRoute: typeof LayoutPublicThingsThingIdRouteImport
       parentRoute: typeof LayoutPublicRoute
+    }
+    '/_layout/_public/$accountId/apps': {
+      id: '/_layout/_public/$accountId/apps'
+      path: '/apps'
+      fullPath: '/$accountId/apps'
+      preLoaderRoute: typeof LayoutPublicAccountIdAppsRouteImport
+      parentRoute: typeof LayoutPublicAccountIdRoute
     }
     '/_layout/_authenticated/things/new': {
       id: '/_layout/_authenticated/things/new'
@@ -721,8 +759,23 @@ const LayoutAuthenticatedRouteChildren: LayoutAuthenticatedRouteChildren = {
 const LayoutAuthenticatedRouteWithChildren =
   LayoutAuthenticatedRoute._addFileChildren(LayoutAuthenticatedRouteChildren)
 
+interface LayoutPublicAccountIdRouteChildren {
+  LayoutPublicAccountIdAppsRoute: typeof LayoutPublicAccountIdAppsRoute
+  LayoutPublicAccountIdIndexRoute: typeof LayoutPublicAccountIdIndexRoute
+}
+
+const LayoutPublicAccountIdRouteChildren: LayoutPublicAccountIdRouteChildren = {
+  LayoutPublicAccountIdAppsRoute: LayoutPublicAccountIdAppsRoute,
+  LayoutPublicAccountIdIndexRoute: LayoutPublicAccountIdIndexRoute,
+}
+
+const LayoutPublicAccountIdRouteWithChildren =
+  LayoutPublicAccountIdRoute._addFileChildren(
+    LayoutPublicAccountIdRouteChildren,
+  )
+
 interface LayoutPublicRouteChildren {
-  LayoutPublicAccountIdRoute: typeof LayoutPublicAccountIdRoute
+  LayoutPublicAccountIdRoute: typeof LayoutPublicAccountIdRouteWithChildren
   LayoutPublicAboutRoute: typeof LayoutPublicAboutRoute
   LayoutPublicSkillRoute: typeof LayoutPublicSkillRoute
   LayoutPublicIndexRoute: typeof LayoutPublicIndexRoute
@@ -735,7 +788,7 @@ interface LayoutPublicRouteChildren {
 }
 
 const LayoutPublicRouteChildren: LayoutPublicRouteChildren = {
-  LayoutPublicAccountIdRoute: LayoutPublicAccountIdRoute,
+  LayoutPublicAccountIdRoute: LayoutPublicAccountIdRouteWithChildren,
   LayoutPublicAboutRoute: LayoutPublicAboutRoute,
   LayoutPublicSkillRoute: LayoutPublicSkillRoute,
   LayoutPublicIndexRoute: LayoutPublicIndexRoute,

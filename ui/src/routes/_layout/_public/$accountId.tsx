@@ -1,31 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
-import { ExternalLink, Globe, User } from "lucide-react";
-import { useApiClient, useAuthClient } from "@/app";
-import { Avatar, AvatarFallback, AvatarImage, Badge, PageContainer } from "@/components";
+import { Globe, User } from "lucide-react";
+import { useAuthClient } from "@/app";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  PageContainer,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
 
 export const Route = createFileRoute("/_layout/_public/$accountId")({
   loader: async ({ params, context }) => {
-    const { queryClient, authClient, apiClient, runtimeConfig } = context;
+    const { queryClient, authClient, runtimeConfig } = context;
     const accountId = params.accountId;
 
-    await Promise.all([
-      queryClient.prefetchQuery({
-        queryKey: ["near-profile", accountId],
-        queryFn: async () => {
-          const { data } = await authClient.near.getProfile(accountId);
-          return data ?? null;
-        },
-        staleTime: 5 * 60 * 1000,
-      }),
-      queryClient.prefetchQuery({
-        queryKey: ["apps-account", accountId],
-        queryFn: () => apiClient.apps.getRegistryAppsByAccount({ accountId }),
-        staleTime: 30_000,
-      }),
-    ]);
+    await queryClient.prefetchQuery({
+      queryKey: ["near-profile", accountId],
+      queryFn: async () => {
+        const { data } = await authClient.near.getProfile(accountId);
+        return data ?? null;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
 
     return { accountId, hostUrl: runtimeConfig?.hostUrl ?? "" };
   },
@@ -44,7 +45,6 @@ export const Route = createFileRoute("/_layout/_public/$accountId")({
           imageUrl: hostUrl ? `${hostUrl}/metadata.png` : "/metadata.png",
           title,
           description,
-          siteName: "everything.dev",
           siteUrl,
           type: "profile",
           alt: description,
@@ -52,13 +52,27 @@ export const Route = createFileRoute("/_layout/_public/$accountId")({
       ],
     };
   },
-  component: AccountProfilePage,
+  component: AccountProfileLayout,
 });
 
-function AccountProfilePage() {
+const tabs = [
+  { value: "overview", to: "/$accountId", label: "Overview", exact: true },
+  { value: "apps", to: "/$accountId/apps", label: "Apps", exact: false },
+] as const;
+
+function AccountProfileLayout() {
   const { accountId } = Route.useLoaderData();
   const authClient = useAuthClient();
-  const apiClient = useApiClient();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  const resolveTabPath = (to: string) => to.replace("$accountId", accountId);
+  const activeTab =
+    tabs.find((t) => {
+      const fullPath = resolveTabPath(t.to);
+      return t.exact
+        ? pathname === fullPath
+        : pathname === fullPath || pathname.startsWith(`${fullPath}/`);
+    })?.value ?? "overview";
 
   const { data: profile } = useQuery({
     queryKey: ["near-profile", accountId],
@@ -69,13 +83,6 @@ function AccountProfilePage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: appsData } = useQuery({
-    queryKey: ["apps-account", accountId],
-    queryFn: () => apiClient.apps.getRegistryAppsByAccount({ accountId }),
-    staleTime: 30_000,
-  });
-
-  const apps = appsData?.data ?? [];
   const backgroundUrl = resolveNearImageUrl(profile?.backgroundImage);
   const avatarUrl = resolveNearImageUrl(profile?.image);
   const displayName = profile?.name || accountId;
@@ -136,61 +143,19 @@ function AccountProfilePage() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Published Gateways
-            </h2>
-            {apps.length > 0 && (
-              <Link
-                to="/apps/$accountId"
-                params={{ accountId }}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                view all
-              </Link>
-            )}
-          </div>
-
-          {apps.length === 0 ? (
-            <div className="rounded-[12px] border border-border bg-card px-6 py-10 text-center text-sm text-muted-foreground">
-              No published gateways for{" "}
-              <span className="font-mono text-foreground">{accountId}</span>.
-            </div>
-          ) : (
-            <div className="divide-y divide-border overflow-hidden rounded-[12px] border border-border bg-card">
-              {apps.slice(0, 5).map((app) => (
-                <Link
-                  key={app.gatewayId}
-                  to="/apps/$accountId/$gatewayId"
-                  params={{ accountId, gatewayId: app.gatewayId }}
-                  className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                          app.status === "ready" ? "bg-green-500" : "bg-destructive"
-                        }`}
-                      />
-                      <span className="truncate font-mono text-sm font-semibold text-foreground">
-                        {app.metadata?.title ?? app.gatewayId}
-                      </span>
-                    </div>
-                    {app.domain && (
-                      <Badge variant="secondary" className="font-mono text-[10px]">
-                        {app.domain}
-                      </Badge>
-                    )}
-                  </div>
-                  {app.openUrl && (
-                    <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
-                  )}
+        <Tabs value={activeTab} className="w-full min-w-0">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            {tabs.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} asChild className="shrink-0">
+                <Link to={tab.to} params={{ accountId }} search={{}} preload="intent">
+                  {tab.label}
                 </Link>
-              ))}
-            </div>
-          )}
-        </div>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <Outlet />
       </div>
     </PageContainer>
   );

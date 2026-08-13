@@ -192,7 +192,7 @@ function AuthenticatedLayout() {
         </header>
 
         <main className="flex-1 w-full min-h-0 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6">
-          <div key={pathname} className="min-h-full animate-fade-in">
+          <div className="min-h-full">
             <Outlet />
           </div>
         </main>

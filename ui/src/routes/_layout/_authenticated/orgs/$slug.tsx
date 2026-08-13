@@ -657,7 +657,7 @@ function OrganizationDetail() {
         </Tabs>
       </div>
     </PageContainer>
-  )
+  );
 }
 
 function Chip({ children, accent }: { children: React.ReactNode; accent?: boolean }) {

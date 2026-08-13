@@ -32,9 +32,7 @@ function AdminSystem() {
     <div className="space-y-6">
       <header className="space-y-3">
         <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            System
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">System</h1>
           <p className="text-sm text-muted-foreground">
             Runtime configuration for this deployment.
           </p>

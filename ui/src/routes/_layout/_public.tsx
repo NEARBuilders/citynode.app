@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { getAppName } from "@/app";
 import { NearBranding } from "@/components/near-branding";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/_layout/_public")({
 function PublicLayout() {
   const { runtimeConfig } = Route.useRouteContext();
   const appName = getAppName(runtimeConfig);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -41,7 +40,7 @@ function PublicLayout() {
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        <div key={pathname} className="flex-1 flex flex-col animate-fade-in-up">
+        <div className="flex-1 flex flex-col">
           <Outlet />
         </div>
         <footer className="shrink-0 flex items-center justify-center py-6">
