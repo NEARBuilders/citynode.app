@@ -89,6 +89,61 @@ describe("bos sync — package.json merge", () => {
     expect(merged.workspaces.catalog["everything-dev"]).toBe("^1.2.3");
   });
 
+  it("filters root package scripts to the child script set when provided", () => {
+    const childScripts = {
+      dev: "bos dev",
+      build: "bos build",
+      typecheck: "bun run types:gen && bun run --cwd api typecheck",
+    };
+    const merged = mergePackageJson(
+      "package.json",
+      {
+        name: "my-app",
+        private: true,
+        scripts: {
+          dev: "custom dev",
+          custom: "custom script",
+        },
+      },
+      {
+        name: "monorepo",
+        scripts: {
+          dev: "node_modules/.bin/bos dev",
+          build: "node_modules/.bin/bos build",
+          "regression:start:backcompat": "bos dev --ui remote --api remote",
+          "test:regression:backcompat": "bun run test:regression:http:backcompat",
+        },
+      },
+      childScripts,
+    ) as {
+      name: string;
+      scripts: Record<string, string>;
+    };
+
+    expect(merged.name).toBe("my-app");
+    expect(merged.scripts.dev).toBe("bos dev");
+    expect(merged.scripts.build).toBe("bos build");
+    expect(merged.scripts.typecheck).toBe("bun run types:gen && bun run --cwd api typecheck");
+    expect(merged.scripts.custom).toBe("custom script");
+    expect(merged.scripts["regression:start:backcompat"]).toBeUndefined();
+    expect(merged.scripts["test:regression:backcompat"]).toBeUndefined();
+  });
+
+  it("ignores childScripts for non-root package.json", () => {
+    const childScripts = { dev: "bos dev" };
+    const merged = mergePackageJson(
+      "ui/package.json",
+      { name: "ui", scripts: { build: "custom build" } },
+      { name: "ui", scripts: { build: "bun run build:client" } },
+      childScripts,
+    ) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(merged.scripts.build).toBe("bun run build:client");
+    expect(merged.scripts.dev).toBeUndefined();
+  });
+
   it("preserves custom workspace package data while overwriting scaffold entries", () => {
     const merged = mergePackageJson(
       "ui/package.json",
