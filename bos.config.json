@@ -76,7 +76,7 @@
         "registryNamespace": "dev.everything.near"
       },
       "routes": [
-        "ui/src/routes/_layout/apps/**"
+        "ui/src/routes/_layout/_public/apps/**"
       ],
       "integrity": "sha384-ehJsiIaaGQb5NjyNKWKS1+4ct479UK+n7MGaB6ZVdOsPSZd7hklMLZcIX5EkXECK"
     },

@@ -22,7 +22,7 @@ describe("bos sync — framework-owned files", () => {
     expect(isFrameworkOwnedSyncFile("Dockerfile")).toBe(false);
     expect(isFrameworkOwnedSyncFile(".github/renovate.json")).toBe(false);
     expect(isFrameworkOwnedSyncFile(".opencode/skills/everything-dev/SKILL.md")).toBe(false);
-    expect(isFrameworkOwnedSyncFile("ui/src/routes/_layout/index.tsx")).toBe(false);
+    expect(isFrameworkOwnedSyncFile("ui/src/routes/_layout/_public/index.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("ui/src/components/user-nav.tsx")).toBe(false);
     expect(isFrameworkOwnedSyncFile("api/src/index.ts")).toBe(false);
     expect(isFrameworkOwnedSyncFile("plugins/apps/src/index.ts")).toBe(false);
