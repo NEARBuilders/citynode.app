@@ -239,14 +239,4 @@ export const cliCommandMeta = {
       configDir: { description: "Override config directory" },
     },
   },
-  deployLockInspect: {
-    commandPath: ["deploy", "lock", "inspect"],
-    summary: "Inspect the FastKV deploy lock for the current account/gateway",
-    interactive: false,
-  },
-  deployLockRelease: {
-    commandPath: ["deploy", "lock", "release"],
-    summary: "Force-release the FastKV deploy lock",
-    interactive: false,
-  },
 } as const satisfies Record<string, CliCommandMeta>;

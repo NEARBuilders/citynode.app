@@ -145,35 +145,16 @@ export const PublishOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
-  noDeployLock: z.boolean().default(false),
 });
 
 export const PublishResultSchema = z.object({
-  status: z.enum(["published", "error", "dry-run", "locked"]),
+  status: z.enum(["published", "error", "dry-run"]),
   registryUrl: z.string(),
   txHash: z.string().optional(),
   error: z.string().optional(),
   built: z.array(z.string()).optional(),
   skipped: z.array(z.string()).optional(),
   deployResults: z.array(WorkspaceDeployResultSchema).optional(),
-  lockConflict: z
-    .object({
-      active: z.boolean(),
-      expiresAt: z.number(),
-      reason: z.enum(["active", "verify-mismatch"]),
-      value: z
-        .object({
-          owner: z.string(),
-          pid: z.union([z.number(), z.string()]),
-          startedAt: z.number(),
-          expiresAt: z.number(),
-          network: z.enum(["mainnet", "testnet"]),
-          nonce: z.string(),
-          txHash: z.string().optional(),
-        })
-        .nullable(),
-    })
-    .optional(),
 });
 
 export const DeployOptionsSchema = z.object({
@@ -185,11 +166,10 @@ export const DeployOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   service: z.string().optional(),
-  noDeployLock: z.boolean().default(false),
 });
 
 export const DeployResultSchema = z.object({
-  status: z.enum(["deployed", "published", "error", "dry-run", "locked"]),
+  status: z.enum(["deployed", "published", "error", "dry-run"]),
   registryUrl: z.string(),
   txHash: z.string().optional(),
   built: z.array(z.string()).optional(),
@@ -198,7 +178,6 @@ export const DeployResultSchema = z.object({
   service: z.string().optional(),
   error: z.string().optional(),
   deployResults: z.array(WorkspaceDeployResultSchema).optional(),
-  lockConflict: PublishResultSchema.shape.lockConflict,
 });
 
 function parseNearAmount(value: string): number {
@@ -574,33 +553,6 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/infra/export" })
     .input(InfraExportOptionsSchema)
     .output(InfraExportResultSchema),
-  deployLockInspect: oc.route({ method: "GET", path: "/deploy/lock" }).output(
-    z.object({
-      account: z.string(),
-      gateway: z.string(),
-      network: z.enum(["mainnet", "testnet"]),
-      configRegistryUrl: z.string(),
-      lockRegistryUrl: z.string(),
-      active: z.boolean(),
-      value: z
-        .object({
-          owner: z.string(),
-          pid: z.union([z.number(), z.string()]),
-          startedAt: z.number(),
-          expiresAt: z.number(),
-          network: z.enum(["mainnet", "testnet"]),
-          nonce: z.string(),
-          txHash: z.string().optional(),
-        })
-        .nullable(),
-    }),
-  ),
-  deployLockRelease: oc.route({ method: "POST", path: "/deploy/lock/release" }).output(
-    z.object({
-      released: z.boolean(),
-      txHash: z.string().optional(),
-    }),
-  ),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;

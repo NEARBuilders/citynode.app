@@ -3,12 +3,6 @@ import { join } from "node:path";
 import process from "node:process";
 import { Effect } from "effect";
 import { buildWorkspaceTargets, selectWorkspaceTargets } from "./build";
-import {
-  acquireDeployLock,
-  type DeployLockConflict,
-  fetchDeployLock,
-  releaseDeployLock,
-} from "./cli/deploy-lock";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
@@ -85,12 +79,10 @@ interface PublishToFastKvInput {
   packages: string;
   network?: "mainnet" | "testnet";
   privateKey?: string;
-  skipDeployLock?: boolean;
-  deployLockTtlMs?: number;
 }
 
 interface PublishToFastKvResult {
-  status: "published" | "error" | "dry-run" | "locked";
+  status: "published" | "error" | "dry-run";
   registryUrl: string;
   txHash?: string;
   built?: string[];
@@ -98,7 +90,6 @@ interface PublishToFastKvResult {
   error?: string;
   publishConfig?: BosConfigInput;
   deployResults?: WorkspaceDeployResult[];
-  lockConflict?: DeployLockConflict;
 }
 
 export async function publishToFastKv(input: PublishToFastKvInput): Promise<PublishToFastKvResult> {
@@ -142,55 +133,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     };
   }
 
-  const lockContext = { account, gateway, network };
-  const lockState = await fetchDeployLock(lockContext);
-  if (input.skipDeployLock) {
-    if (lockState.active) {
-      console.log(
-        colors.dim(
-          `  Deploy lock held (nonce=${lockState.value?.nonce ?? "?"}); --no-deploy-lock set, proceeding without waiting`,
-        ),
-      );
-    }
-  } else {
-    const lockResult = await acquireDeployLock({
-      ...lockContext,
-      privateKey,
-      signingMode,
-      ...(input.deployLockTtlMs !== undefined ? { ttlMs: input.deployLockTtlMs } : {}),
-    });
-    if (!lockResult.acquired) {
-      const conflict = lockResult.conflict;
-      console.log();
-      console.log(
-        colors.error(`  ${icons.err} Another deploy is in progress for ${account}/${gateway}.`),
-      );
-      console.log(
-        `    Owner: ${conflict.value?.owner ?? "unknown"}, started ${conflict.value?.startedAt ? new Date(conflict.value.startedAt).toISOString() : "?"}, expires ${conflict.reason === "verify-mismatch" ? "after stale read" : new Date(conflict.expiresAt).toISOString()}`,
-      );
-      if (conflict.value?.txHash) {
-        console.log(`    Tx: ${colors.dim(conflict.value.txHash)}`);
-      }
-      console.log(
-        colors.dim(
-          `    If the lock is stale, release it with: bos deploy lock release --account ${account} --gateway ${gateway}`,
-        ),
-      );
-      console.log();
-      return {
-        status: "locked",
-        registryUrl,
-        error: `Deploy lock held by ${conflict.value?.owner ?? "another process"} (${conflict.value?.nonce ?? "?"})`,
-        lockConflict: conflict,
-      };
-    }
-    console.log(
-      colors.dim(`  Acquired deploy lock for ${account}/${gateway} (nonce=${lockResult.nonce})`),
-    );
-  }
-
-  try {
-    if (input.build) {
+  if (input.build) {
       console.log("  Ensuring NEAR CLI...");
       await Effect.runPromise(ensureNearCli);
       console.log("  NEAR CLI ready");
@@ -343,19 +286,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         deployResults,
       };
     }
-  } finally {
-    if (!input.skipDeployLock) {
-      try {
-        await releaseDeployLock(lockContext, { privateKey, signingMode });
-      } catch (error) {
-        console.log(
-          colors.dim(
-            `  Failed to release deploy lock for ${account}/${gateway}: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
-      }
-    }
-  }
 }
 
 function formatNearError(error: unknown): string {

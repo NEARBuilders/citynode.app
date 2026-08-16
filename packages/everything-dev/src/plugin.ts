@@ -15,7 +15,6 @@ import {
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
-import { inspectDeployLock, releaseDeployLock } from "./cli/deploy-lock";
 import {
   buildCiInfraPlan,
   type CiInfraPlan,
@@ -1042,8 +1041,6 @@ export default createPlugin({
         packages: input.packages,
         network: input.network,
         privateKey: input.privateKey,
-        skipDeployLock: input.noDeployLock,
-        deployLockTtlMs: resolveDeployLockTtlFromEnv(),
       });
 
       if (result.publishConfig) {
@@ -1062,7 +1059,6 @@ export default createPlugin({
         built: result.built,
         skipped: result.skipped,
         deployResults: result.deployResults,
-        lockConflict: result.lockConflict,
       };
     }),
 
@@ -1087,8 +1083,6 @@ export default createPlugin({
         packages: input.packages,
         network: input.network,
         privateKey: input.privateKey,
-        skipDeployLock: input.noDeployLock,
-        deployLockTtlMs: resolveDeployLockTtlFromEnv({ extended: true }),
       });
 
       if (result.status === "error") {
@@ -1101,7 +1095,6 @@ export default createPlugin({
           redeployed: false,
           error: result.error,
           deployResults: result.deployResults,
-          lockConflict: result.lockConflict,
         };
       }
 
@@ -1112,20 +1105,6 @@ export default createPlugin({
           built: result.built,
           skipped: result.skipped,
           redeployed: false,
-        };
-      }
-
-      if (result.status === "locked") {
-        return {
-          status: "locked" as const,
-          registryUrl: result.registryUrl,
-          txHash: result.txHash,
-          built: result.built,
-          skipped: result.skipped,
-          redeployed: false,
-          error: result.error,
-          deployResults: result.deployResults,
-          lockConflict: result.lockConflict,
         };
       }
 
@@ -2172,54 +2151,8 @@ export default createPlugin({
       };
       return result;
     }),
-
-    deployLockInspect: builder.deployLockInspect.handler(async () => {
-      if (!deps.bosConfig) {
-        throw new Error("No bos.config.json found");
-      }
-      const account = deps.bosConfig.account;
-      const gateway = deps.bosConfig.staging?.domain ?? deps.bosConfig.domain ?? account;
-      if (!gateway) {
-        throw new Error("bos.config.json must define domain to inspect deploy lock");
-      }
-      const network = getNetworkIdForAccount(account);
-      return inspectDeployLock({ account, gateway, network });
-    }),
-
-    deployLockRelease: builder.deployLockRelease.handler(async () => {
-      if (!deps.bosConfig) {
-        throw new Error("No bos.config.json found");
-      }
-      const account = deps.bosConfig.account;
-      const gateway = deps.bosConfig.staging?.domain ?? deps.bosConfig.domain ?? account;
-      if (!gateway) {
-        throw new Error("bos.config.json must define domain to release deploy lock");
-      }
-      const network = getNetworkIdForAccount(account);
-      const privateKey = process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
-      const result = await releaseDeployLock(
-        { account, gateway, network },
-        { privateKey, force: true },
-      );
-      return { released: result.released, txHash: result.txHash };
-    }),
   }),
 });
-
-const PUBLISH_LOCK_TTL_MS = 10 * 60 * 1000;
-const DEPLOY_LOCK_TTL_MS = 25 * 60 * 1000;
-
-export function resolveDeployLockTtlFromEnv(opts: { extended?: boolean } = {}): number {
-  const raw = process.env.BOS_DEPLOY_LOCK_TTL_MS;
-  if (raw !== undefined && raw !== "") {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return opts.extended ? DEPLOY_LOCK_TTL_MS : PUBLISH_LOCK_TTL_MS;
-}
-
-export const PUBLISH_LOCK_TTL_DEFAULT_MS = PUBLISH_LOCK_TTL_MS;
-export const DEPLOY_LOCK_TTL_DEFAULT_MS = DEPLOY_LOCK_TTL_MS;
 
 function computeAllowedWorkspaces(overrides: string[], plugins?: string[]): string[] {
   const workspaces: string[] = [];
