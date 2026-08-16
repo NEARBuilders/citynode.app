@@ -38,9 +38,13 @@ export const Route = createFileRoute("/_layout/_authenticated/orgs/")({
     await context.queryClient.ensureQueryData({
       queryKey: ["user-invitations"],
       queryFn: async (): Promise<UserInvitationItem[]> => {
-        const { data, error } = await context.authClient.organization.listUserInvitations();
-        if (error) throw new Error(error.message);
-        return (data ?? []) as UserInvitationItem[];
+        try {
+          const { data, error } = await context.authClient.organization.listUserInvitations();
+          if (error) throw new Error(error.message);
+          return (data ?? []) as UserInvitationItem[];
+        } catch {
+          return [];
+        }
       },
       staleTime: 30 * 1000,
     });
@@ -53,14 +57,7 @@ function OrganizationsList() {
   const apiClient = useApiClient();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery<SessionData | null>({
-    queryKey: ["session"],
-    queryFn: async () => {
-      const { data } = await auth.getSession();
-      return data ?? null;
-    },
-    staleTime: 60 * 1000,
-  });
+  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const { data: organizations, isLoading } = useQuery({
     queryKey: ["organizations"],
     queryFn: async () => {
@@ -73,9 +70,13 @@ function OrganizationsList() {
   const { data: userInvitations = [] } = useQuery({
     queryKey: ["user-invitations"],
     queryFn: async (): Promise<UserInvitationItem[]> => {
-      const { data, error } = await auth.organization.listUserInvitations();
-      if (error) throw new Error(error.message);
-      return (data ?? []) as UserInvitationItem[];
+      try {
+        const { data, error } = await auth.organization.listUserInvitations();
+        if (error) throw new Error(error.message);
+        return (data ?? []) as UserInvitationItem[];
+      } catch {
+        return [];
+      }
     },
     staleTime: 30 * 1000,
   });

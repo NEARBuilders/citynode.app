@@ -41,6 +41,21 @@ export const TenantBindingSchema = z.object({
   status: TenantStatusSchema,
 });
 
+export const CityNodeSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  orgId: z.string(),
+  validatorPool: z.string(),
+  hostname: z.string(),
+  accountId: z.string(),
+  name: z.string(),
+  tenantStatus: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type CityNode = z.infer<typeof CityNodeSchema>;
+
 const ThingSchema = z.object({
   thingId: z.string().describe("Unique identifier for the thing"),
   type: z.string().describe("Plugin-derived thing type"),
@@ -179,6 +194,53 @@ export const contract = oc.router({
       }),
     )
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
+
+  listCityNodes: oc
+    .route({
+      method: "GET",
+      path: "/citynodes",
+      summary: "List all city nodes",
+      description: "Public — returns all city nodes with their linked tenant bindings.",
+    })
+    .output(z.array(CityNodeSchema)),
+
+  resolveCityNode: oc
+    .route({
+      method: "GET",
+      path: "/citynodes/resolve",
+      summary: "Resolve a city node by tenant account ID",
+      description: "Public — returns the city node for a tenant account (used by the stake route).",
+    })
+    .input(z.object({ accountId: z.string() }))
+    .output(CityNodeSchema.nullable()),
+
+  createCityNode: oc
+    .route({ method: "POST", path: "/citynodes" })
+    .input(
+      z.object({
+        tenantId: z.string(),
+        validatorPool: z.string(),
+      }),
+    )
+    .output(CityNodeSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+
+  updateCityNode: oc
+    .route({ method: "PATCH", path: "/citynodes/{cityNodeId}" })
+    .input(
+      z.object({
+        cityNodeId: z.string(),
+        validatorPool: z.string().optional(),
+      }),
+    )
+    .output(CityNodeSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  deleteCityNode: oc
+    .route({ method: "POST", path: "/citynodes/{cityNodeId}/delete" })
+    .input(z.object({ cityNodeId: z.string() }))
+    .output(z.object({ success: z.literal(true) }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   createThing: oc
     .route({

@@ -29,6 +29,13 @@
       "when": 1786653436589,
       "tag": "0003_brief_freak",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786721978147,
+      "tag": "0004_majestic_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

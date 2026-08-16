@@ -1,4 +1,4 @@
-name: dev.everything.near
+name: v1.citynode.near
 
 x-pg-common: &pg-common
   image: postgres:17-alpine
@@ -14,14 +14,14 @@ x-pg-common: &pg-common
 services:
   postgres-api:
     <<: *pg-common
-    container_name: dev.everything.near-postgres-api
+    container_name: v1.citynode.near-postgres-api
     environment:
       <<: *pg-env
       POSTGRES_DB: api_db
     ports:
       - "5432:5432"
     volumes:
-      - dev_everything_near_postgres_api_data:/var/lib/postgresql/data
+      - v1_citynode_near_postgres_api_data:/var/lib/postgresql/data
 
   postgres-auth:
     <<: *pg-common
@@ -34,21 +34,8 @@ services:
     volumes:
       - auth_everything_near_postgres_auth_data:/var/lib/postgresql/data
 
-  postgres-template:
-    <<: *pg-common
-    container_name: dev.everything.near-postgres-template
-    environment:
-      <<: *pg-env
-      POSTGRES_DB: template_db
-    ports:
-      - "5434:5432"
-    volumes:
-      - dev_everything_near_postgres_template_data:/var/lib/postgresql/data
-
 volumes:
-  dev_everything_near_postgres_api_data:
-    name: dev_everything_near_postgres_api_data
+  v1_citynode_near_postgres_api_data:
+    name: v1_citynode_near_postgres_api_data
   auth_everything_near_postgres_auth_data:
     name: auth_everything_near_postgres_auth_data
-  dev_everything_near_postgres_template_data:
-    name: dev_everything_near_postgres_template_data

@@ -13,6 +13,7 @@ export default defineConfig({
   timeout: 60000,
   fullyParallel: false,
   workers: 1,
+  globalSetup: "./helpers/global-setup.ts",
   use: {
     browserName: "chromium",
     headless: true,

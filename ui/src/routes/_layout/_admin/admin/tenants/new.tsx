@@ -9,7 +9,7 @@ import { Button, Card, CardContent, Field, FieldLabel, Input } from "@/component
 import { PageContainer } from "@/components/layout/page-container";
 import { StepList, useStepper } from "@/components/ui/stepper";
 
-export const Route = createFileRoute("/_layout/_authenticated/tenant/new")({
+export const Route = createFileRoute("/_layout/_admin/admin/tenants/new")({
   head: () => ({
     title: "New Tenant | app",
     meta: [{ name: "description", content: "Create a new tenant." }],
@@ -240,7 +240,7 @@ function NewTenantPage() {
 
         return auth.near
           .getNearClient()
-          .transaction(accountId)
+          .transaction(nearAccountId)
           .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
             gas: METADATA_GAS,
             attachedDeposit: 0n,
@@ -286,7 +286,7 @@ function NewTenantPage() {
 
         return auth.near
           .getNearClient()
-          .transaction(accountId)
+          .transaction(nearAccountId)
           .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
             gas: CONFIG_GAS,
             attachedDeposit: 0n,

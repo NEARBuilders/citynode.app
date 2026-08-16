@@ -22,6 +22,7 @@ interface SeedData {
 }
 
 const COOKIES_PATH = ".bos/regression/cookies.json";
+const ADMIN_COOKIES_PATH = ".bos/regression/admin-cookies.json";
 const SEED_PATH = ".bos/regression/seed.json";
 
 function readJsonFile(filePath: string) {
@@ -34,6 +35,11 @@ function readJsonFile(filePath: string) {
 
 export async function injectCookies(page: Page) {
   const cookies: CookieEntry[] = readJsonFile(COOKIES_PATH);
+  await page.context().addCookies(cookies);
+}
+
+export async function injectAdminCookies(page: Page) {
+  const cookies: CookieEntry[] = readJsonFile(ADMIN_COOKIES_PATH);
   await page.context().addCookies(cookies);
 }
 

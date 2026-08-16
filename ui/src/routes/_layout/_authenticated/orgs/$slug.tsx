@@ -86,14 +86,7 @@ function OrganizationDetail() {
   const { slug: orgSlug } = Route.useParams();
   const auth = useAuthClient();
 
-  const { data: session } = useQuery<SessionData | null>({
-    queryKey: ["session"],
-    queryFn: async () => {
-      const { data } = await auth.getSession();
-      return data ?? null;
-    },
-    staleTime: 60 * 1000,
-  });
+  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
 
   const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery({
     queryKey: ["organizations"],

@@ -1,8 +1,11 @@
-import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router";
-import { Shield } from "lucide-react";
-import { getAccount } from "@/app";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Building2, Fuel, LayoutDashboard, Settings, Shield } from "lucide-react";
+import { getAccount, useAuthClient } from "@/app";
+import { Badge } from "@/components";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_layout/_admin/admin")({
   head: () => ({
@@ -17,9 +20,6 @@ export const Route = createFileRoute("/_layout/_admin/admin")({
     } catch {
       tenant = null;
     }
-    if (!tenant) {
-      throw redirect({ to: "/" });
-    }
     return { tenant };
   },
   component: AdminPage,
@@ -27,15 +27,26 @@ export const Route = createFileRoute("/_layout/_admin/admin")({
 
 function AdminPage() {
   const { tenant, session } = Route.useRouteContext();
+  const auth = useAuthClient();
 
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
   const isMember = !!tenant && !!activeOrgId && activeOrgId === tenant.orgId;
   const isAdmin = session?.user?.role === "admin";
   const authorized = isMember || isAdmin;
 
-  if (!tenant) return null;
+  const { data: relayerInfo } = useQuery({
+    queryKey: ["relayer-info"],
+    queryFn: async () => {
+      const { data } = await auth.near.getRelayerInfo();
+      return data ?? null;
+    },
+    refetchInterval: 60_000,
+  });
 
-  if (!authorized) {
+  const relayerNeedsFunding =
+    relayerInfo && relayerInfo.enabled === false && !!relayerInfo.accountId;
+
+  if (tenant && !authorized) {
     return (
       <EmptyState
         icon={Shield}
@@ -69,47 +80,110 @@ function AdminPage() {
   return (
     <PageContainer variant="wide">
       <div className="space-y-8">
-        <header className="space-y-3">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Shield className="h-3 w-3" />
-            Admin
-          </div>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                {tenant.name}
-              </h1>
-              <p className="text-[11px] font-mono text-muted-foreground">
-                {tenant.subdomain} · {tenant.accountId}
-              </p>
+        {tenant && (
+          <header className="space-y-3">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <Shield className="h-3 w-3" />
+              Admin
             </div>
-          </div>
-        </header>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="space-y-1">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  {tenant.name}
+                </h1>
+                <p className="text-[11px] font-mono text-muted-foreground">
+                  {tenant.subdomain} · {tenant.accountId}
+                </p>
+              </div>
+            </div>
+          </header>
+        )}
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Subdomain" value={tenant.subdomain} mono />
-          <StatCard label="Account" value={tenant.accountId} mono />
-          <StatCard
-            label="Organization"
-            value={
-              <Link
-                to="/orgs/$slug"
-                params={{ slug: tenant.subdomain }}
-                className="text-foreground hover:underline font-mono"
-              >
-                {tenant.subdomain}
-              </Link>
-            }
-          />
-          <StatCard
-            label="Created"
-            value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-          />
-        </section>
+        {tenant && (
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Subdomain" value={tenant.subdomain} mono />
+            <StatCard label="Account" value={tenant.accountId} mono />
+            <StatCard
+              label="Organization"
+              value={
+                <Link
+                  to="/orgs/$slug"
+                  params={{ slug: tenant.subdomain }}
+                  className="text-foreground hover:underline font-mono"
+                >
+                  {tenant.subdomain}
+                </Link>
+              }
+            />
+            <StatCard
+              label="Created"
+              value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
+            />
+          </section>
+        )}
+
+        {relayerNeedsFunding && (
+          <Link
+            to="/admin/relayer"
+            className="block border-2 border-outset border-destructive/40 bg-destructive/5 hover:bg-destructive/10 p-4 rounded-[12px] shadow-sm transition-all duration-200"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Fuel className="h-5 w-5 text-destructive mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">Relayer needs funding</p>
+                  <p className="text-xs text-muted-foreground">
+                    The ephemeral relayer{" "}
+                    <span className="font-mono text-foreground">{relayerInfo?.accountId}</span> has
+                    zero balance — gasless relay is disabled. Fund it with NEAR to enable tenant +
+                    app meta publishes.
+                  </p>
+                </div>
+              </div>
+              <Badge variant="destructive">action needed</Badge>
+            </div>
+          </Link>
+        )}
+
+        <AdminNav />
 
         <Outlet />
       </div>
     </PageContainer>
+  );
+}
+
+const NAV_ITEMS = [
+  { label: "dashboard", to: "/admin", icon: LayoutDashboard },
+  { label: "tenants", to: "/admin/tenants", icon: Building2 },
+  { label: "relayer", to: "/admin/relayer", icon: Fuel },
+  { label: "system", to: "/admin/system", icon: Settings },
+] as const;
+
+function AdminNav() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isActive = (to: string) =>
+    to === "/admin" ? pathname === "/admin" || pathname === "/admin/" : pathname.startsWith(to);
+
+  return (
+    <nav className="flex flex-wrap gap-2">
+      {NAV_ITEMS.map(({ label, to, icon: Icon }) => {
+        const active = isActive(to);
+        return (
+          <Link
+            key={to}
+            to={to}
+            className={cn(
+              "inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium border-2 border-outset border-border-strong rounded-[10px] shadow-sm transition-all duration-200 hover:shadow-md",
+              active ? "bg-foreground text-background" : "bg-card text-foreground",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 

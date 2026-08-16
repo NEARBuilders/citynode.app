@@ -28,3 +28,15 @@ export const tenants = pgTable(
     accountIdIdx: uniqueIndex("tenants_account_id_idx").on(table.accountId),
   }),
 );
+
+export const citynodes = pgTable("citynodes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
+  orgId: text("org_id").notNull(),
+  validatorPool: text("validator_pool").notNull(),
+  createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+});

@@ -1,11 +1,8 @@
 {
-  "account": "dev.everything.near",
-  "domain": "dev.everything.dev",
-  "title": "everything.dev",
-  "description": "Open runtime for apps on NEAR, composed from published config and loaded through a shared host, UI, and API runtime.",
-  "staging": {
-    "domain": "dev.everything.dev"
-  },
+  "account": "v1.citynode.near",
+  "domain": "citynode.app",
+  "title": "City Nodes",
+  "description": "Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.",
   "repository": "https://github.com/nearbuilders/everything-dev",
   "ci": {
     "railway": {
@@ -15,51 +12,58 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-7253-host-everything-dev-nearbuilder-aa7d0803c-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7375-host-everything-dev-nearbuilder-5ef47f16d-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"
-      ]
+      ],
+      "integrity": "sha384-P+nSquVEC2WgC57dgScP8BYvBEyBoHQYz5XjQE62U+ZM3LzVBg5NvZ8yGjW+7NfK"
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-7248-ui-everything-dev-nearbuilders-3ca152b89-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-7252-ui-everything-dev-nearbuilders-cf9ebe900-ze.zephyrcloud.app",
-      "integrity": "sha384-YIdODKfCUjfFZe6M/QaXxylOp6Skko79Rw0CSUi51VTU5aWGCWa0q45M8ftORaOE",
-      "ssrIntegrity": "sha384-Iz+Xgf2eA5DAVSP052AvrLw9I9V1eA1PTiMkc79BF+F5uKB4q3ATgyRCx5600guP"
+      "production": "https://elliot-braem-7371-ui-everything-dev-nearbuilders-0423ed3a2-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-7374-ui-everything-dev-nearbuilders-6460adb8d-ze.zephyrcloud.app",
+      "integrity": "sha384-QdZZu1hwpHi1qImC2jVp9QmIYYKpDBZBXh1FPTDDxtegZT3yUXs4xfd+j01xQyo9",
+      "ssrIntegrity": "sha384-olwa4R7LwVK2cMJg2IdR7a5yDPaypwjHlVwjpxNNtCHF7y8LMv0VlrOHYCVo7kqx"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-7251-api-everything-dev-nearbuilders-4d144331e-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7373-api-everything-dev-nearbuilders-3c3b45512-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
-      "integrity": "sha384-g5kMC6dA5l7l9NBq2U5yWgntreOEqT4+ifIH7a6RMC2JSj6tIuGPG6Xq3ZIAPUAi"
+      "integrity": "sha384-uvl8gDlaWJ15msNwsloiR0fUP+cvikNVR1YnZPr7T6ojvpkw4gPogwy0AbaSRm27"
     },
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
       "secrets": [
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
+        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET"
       ],
       "variables": {
         "passkey": {
-          "rpID": "everything.dev",
-          "rpName": "everything.dev"
+          "rpID": "citynode.app",
+          "rpName": "City Nodes"
         },
         "siwn": {
           "recipients": {
-            "mainnet": "dev.everything.near",
-            "testnet": "dev.allthethings.testnet"
+            "mainnet": "v1.citynode.near",
+            "testnet": "v1.citynode.testnet"
+          },
+          "relayer": {
+            "whitelistedContracts": [
+              "v1.citynode.near"
+            ],
+            "maxGasPerTransaction": "300000000000000",
+            "maxDepositPerTransaction": "0"
           },
           "subAccount": {
             "mainnet": {
-              "parentAccount": "dev.everything.near",
+              "parentAccount": "v1.citynode.near",
               "parentHasFullAccess": true,
               "minDeposit": "0.1 NEAR"
             },
             "testnet": {
-              "parentAccount": "dev.allthethings.testnet",
+              "parentAccount": "v1.citynode.testnet",
               "parentHasFullAccess": true,
               "minDeposit": "0.1 NEAR"
             }
@@ -71,22 +75,11 @@
   "plugins": {
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-7250-everything-dev-apps-plugin-ever-5d7ad5daa-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7372-everything-dev-apps-plugin-ever-39050cf2b-ze.zephyrcloud.app",
       "variables": {
-        "registryNamespace": "dev.everything.near"
+        "registryNamespace": "v1.citynode.near"
       },
-      "routes": [
-        "ui/src/routes/_layout/_public/apps/**"
-      ],
-      "integrity": "sha384-ehJsiIaaGQb5NjyNKWKS1+4ct479UK+n7MGaB6ZVdOsPSZd7hklMLZcIX5EkXECK"
-    },
-    "template": {
-      "development": "local:plugins/_template",
-      "production": "https://elliot-braem-7249-every-plugin-template-everythin-85724dd94-ze.zephyrcloud.app",
-      "secrets": [
-        "TEMPLATE_DATABASE_URL"
-      ],
-      "integrity": "sha384-7LAf3x/t4S0nQI0l0rtuvPzpJC81tAHljZOpa1Bc3Lr5pma9jEaM/eClDCvWpnVK"
+      "integrity": "sha384-3pCa9PXMHz3uCE20GEoLeewt0sBZ1otg8CN7GOQromcQcX0Dfurp42kRDA7aYNCO"
     }
   }
 }

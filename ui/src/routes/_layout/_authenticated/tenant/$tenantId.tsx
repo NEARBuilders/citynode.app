@@ -37,18 +37,42 @@ async function publishTenantConfig(
     config: tenantConfig,
   });
 
-  const signed = await auth.near.buildSignedDelegateAction(
-    prepared.data.contractId,
-    (builder: TransactionBuilder) =>
-      builder.functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
-        gas: CONFIG_GAS,
-        attachedDeposit: 0n,
-      }),
-  );
+  const relayerInfo = await auth.near.getRelayerInfo();
+  const hasRelayer = relayerInfo.data?.enabled === true;
 
-  const relayed = await auth.near.relayTransaction({ payload: signed });
-  if (relayed.error) throw new Error(relayed.error.message);
-  return relayed;
+  if (hasRelayer) {
+    const signed = await auth.near.buildSignedDelegateAction(
+      prepared.data.contractId,
+      (builder: TransactionBuilder) =>
+        builder.functionCall(
+          prepared.data.contractId,
+          prepared.data.methodName,
+          prepared.data.args,
+          {
+            gas: CONFIG_GAS,
+            attachedDeposit: 0n,
+          },
+        ),
+    );
+
+    const relayed = await auth.near.relayTransaction({ payload: signed });
+    if (relayed.error) throw new Error(relayed.error.message);
+    return relayed;
+  }
+
+  const signerAccountId = auth.near.getAccountId();
+  if (!signerAccountId) {
+    throw new Error("Connect a NEAR wallet first");
+  }
+
+  return auth.near
+    .getNearClient()
+    .transaction(signerAccountId)
+    .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
+      gas: CONFIG_GAS,
+      attachedDeposit: 0n,
+    })
+    .send({ waitUntil: "EXECUTED" });
 }
 
 export const Route = createFileRoute("/_layout/_authenticated/tenant/$tenantId")({

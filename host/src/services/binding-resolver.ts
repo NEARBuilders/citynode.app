@@ -66,7 +66,7 @@ function mapBindingsByHostname(
 }
 
 function ensureBindingsLoaded(config: RuntimeConfig): Promise<Map<string, TenantBinding>> {
-  const apiUrl = config.api?.url;
+  const apiUrl = config.host.url;
   if (!apiUrl) {
     return Promise.resolve(new Map());
   }

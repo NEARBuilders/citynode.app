@@ -82,6 +82,7 @@ export function UserNav() {
   const handleOrgSwitch = async () => {
     await queryClient.invalidateQueries({ queryKey: ["session"] });
     await queryClient.invalidateQueries({ queryKey: ["organizations"] });
+    await router.invalidate();
   };
 
   const avatarSrc = resolveNearImageUrl(nearProfile?.image) ?? user.image ?? undefined;

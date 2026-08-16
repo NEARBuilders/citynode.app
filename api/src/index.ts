@@ -7,6 +7,7 @@ import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
+import { CityNodesLive, CityNodesTag } from "./services/citynodes";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 
 const SUBDOMAIN_SEGMENT_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
@@ -53,6 +54,15 @@ function validateAccountId(accountId: string): void {
   }
 }
 
+function validateValidatorPool(pool: string): void {
+  if (!ACCOUNT_ID_REGEX.test(pool)) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "Invalid validator pool",
+      data: { hint: "Must be a valid NEAR staking pool account ID, e.g. city-node-3.pool.near" },
+    });
+  }
+}
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({}),
 
@@ -68,8 +78,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
       const tenantsLayer = TenantsLive.pipe(Layer.provide(database));
+      const cityNodesLayer = CityNodesLive.pipe(Layer.provide(database));
 
       const tenantsService = yield* tools.buildService(TenantsTag, tenantsLayer);
+      const cityNodesService = yield* tools.buildService(CityNodesTag, cityNodesLayer);
 
       const templateClient = plugins.template?.();
 
@@ -77,6 +89,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       return {
         tenants: tenantsService,
+        cityNodes: cityNodesService,
         templateClient,
       };
     }),
@@ -86,6 +99,26 @@ export default createPlugin.withPlugins<PluginsClient>()({
   createRouter: (services, builder) => {
     const { templateClient } = services;
     const { requireAuth, requireOrganization, requireOrgRole } = createAuthMiddleware(builder);
+
+    const authorizedCityNode = async (
+      input: { cityNodeId: string },
+      context: { organization: { activeOrganizationId: string } },
+    ) => {
+      const activeOrgId = context.organization.activeOrganizationId;
+      const cityNode = await services.cityNodes.resolveById(input.cityNodeId);
+      if (!cityNode) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "City node not found",
+          data: { resource: "citynode", resourceId: input.cityNodeId },
+        });
+      }
+      if (cityNode.orgId !== activeOrgId) {
+        throw new ORPCError("FORBIDDEN", {
+          message: "You are not a member of this city node's organization",
+        });
+      }
+      return cityNode;
+    };
 
     const authorizedTenant = async (
       input: { tenantId: string },
@@ -267,6 +300,66 @@ export default createPlugin.withPlugins<PluginsClient>()({
           accountId: { format: accountFormat, available: accountAvailable },
         };
       }),
+
+      listCityNodes: builder.listCityNodes.handler(async () => services.cityNodes.list()),
+
+      resolveCityNode: builder.resolveCityNode.handler(async ({ input }) => {
+        const cityNode = await services.cityNodes.resolveByAccountId(input.accountId);
+        return cityNode ?? null;
+      }),
+
+      createCityNode: builder.createCityNode
+        .use(requireAuth)
+        .use(requireOrganization)
+        .use(requireOrgRole("admin"))
+        .handler(async ({ input, context }) => {
+          validateValidatorPool(input.validatorPool);
+          const tenant = await services.tenants.resolveTenantById(input.tenantId);
+          if (!tenant) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: input.tenantId },
+            });
+          }
+          if (tenant.orgId !== context.organization.activeOrganizationId) {
+            throw new ORPCError("FORBIDDEN", {
+              message: "This tenant does not belong to your organization",
+            });
+          }
+          return await services.cityNodes.create({
+            tenantId: input.tenantId,
+            orgId: context.organization.activeOrganizationId,
+            validatorPool: input.validatorPool,
+          });
+        }),
+
+      updateCityNode: builder.updateCityNode
+        .use(requireAuth)
+        .use(requireOrganization)
+        .use(requireOrgRole("admin"))
+        .handler(async ({ input, context }) => {
+          if (input.validatorPool !== undefined) validateValidatorPool(input.validatorPool);
+          const cityNode = await authorizedCityNode(input, context);
+          return await services.cityNodes.update(cityNode.id, {
+            validatorPool: input.validatorPool,
+          });
+        }),
+
+      deleteCityNode: builder.deleteCityNode
+        .use(requireAuth)
+        .use(requireOrganization)
+        .use(requireOrgRole("admin"))
+        .handler(async ({ input, context }) => {
+          const cityNode = await authorizedCityNode(input, context);
+          const deleted = await services.cityNodes.delete(cityNode.id);
+          if (!deleted) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "City node not found",
+              data: { resource: "citynode", resourceId: input.cityNodeId },
+            });
+          }
+          return { success: true as const };
+        }),
 
       createThing: builder.createThing.use(requireAuth).handler(async ({ input }) => {
         if (!templateClient) {

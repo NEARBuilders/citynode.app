@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Settings, Users } from "lucide-react";
+import { Building2, LayoutDashboard, Settings, Users } from "lucide-react";
 import { getAccount } from "@/app";
 import { Button, Card } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
@@ -44,6 +44,22 @@ function AdminDashboard() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Manage</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Card className="p-6 space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+              <LayoutDashboard className="h-4 w-4" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">Tenants</h3>
+            <p className="text-sm text-muted-foreground">
+              Create and manage tenant deployments for your organization.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/tenants">
+                <Building2 className="h-3.5 w-3.5" />
+                open tenants
+              </Link>
+            </Button>
+          </Card>
+
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
               <Building2 className="h-4 w-4" />

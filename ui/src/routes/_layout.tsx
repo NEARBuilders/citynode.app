@@ -9,9 +9,16 @@ export const Route = createFileRoute("/_layout")({
 
 function Layout() {
   const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
+  const [showBar, setShowBar] = useState(false);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (!isNavigating) {
+      setShowBar(false);
+      return;
+    }
+    const t = setTimeout(() => setShowBar(true), 150);
+    return () => clearTimeout(t);
+  }, [isNavigating]);
 
   const [betaBannerDismissed, setBetaBannerDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -48,7 +55,7 @@ function Layout() {
           </div>
         )}
 
-        {mounted && isNavigating && (
+        {showBar && (
           <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">
             <div className="h-full bg-foreground animate-progress-bar" style={{ width: "100%" }} />
           </div>
