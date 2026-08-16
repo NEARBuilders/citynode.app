@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ClientRuntimeConfig } from "@/app";
 import { getAppName } from "@/app";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 interface SimpleHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
@@ -30,10 +29,7 @@ export function SimpleHeader({ runtimeConfig, rightSlot }: SimpleHeaderProps) {
           </svg>
         </Link>
 
-        <div className="flex items-center gap-2">
-          <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground transition-colors shadow-sm" />
-          {rightSlot}
-        </div>
+        <div className="flex items-center gap-2">{rightSlot}</div>
       </div>
     </header>
   );

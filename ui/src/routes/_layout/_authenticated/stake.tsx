@@ -23,7 +23,7 @@ const STAKE_GAS = "300000000000000";
 
 type StakeSearch = { city?: string };
 
-export const Route = createFileRoute("/_layout/_public/stake")({
+export const Route = createFileRoute("/_layout/_authenticated/stake")({
   validateSearch: (search: Record<string, unknown>): StakeSearch => ({
     city: typeof search.city === "string" ? search.city : undefined,
   }),
@@ -593,7 +593,7 @@ function CityNodeCard({
         <StatBlock label="Members" value={memberCount} />
       </div>
     </Card>
-  );
+  )
 }
 
 function StatBlock({ label, value }: { label: string; value: string | number }) {

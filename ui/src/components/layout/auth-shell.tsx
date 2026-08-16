@@ -1,10 +1,9 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { ClipboardList, Compass, Globe, Home, Landmark, Menu, Shield } from "lucide-react";
+import { Building2, Home, Landmark, Menu, Shield } from "lucide-react";
 import { useState } from "react";
 import type { ClientRuntimeConfig, SessionData } from "@/app";
 import { getAccount, getActiveRuntime, getAppName } from "@/app";
 import { NearBranding } from "@/components/near-branding";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserNav } from "@/components/user-nav";
@@ -105,7 +104,7 @@ export function AuthShell({ session, runtimeConfig, isAdmin = false }: AuthShell
         </div>
 
         <div className="shrink-0 w-full flex justify-center py-3 bg-card border-t border-border z-10">
-          <ThemeToggle className="transition-colors duration-300 hover:opacity-80" />
+          <NearBranding />
         </div>
       </aside>
 
@@ -175,9 +174,8 @@ function MobileTabBar({
     >
       <div className="flex items-center justify-around px-2 py-1">
         <TabItem to="/dashboard" icon={Home} label="dashboard" active={tabActive("/dashboard")} />
-        <TabItem to="/apps" icon={Globe} label="apps" active={tabActive("/apps")} />
-        <TabItem to="/explore" icon={Compass} label="explore" active={tabActive("/explore")} />
-        <TabItem to="/recent" icon={ClipboardList} label="recent" active={tabActive("/recent")} />
+        <TabItem to="/stake" icon={Landmark} label="stake" active={tabActive("/stake")} />
+        <TabItem to="/orgs" icon={Building2} label="orgs" active={tabActive("/orgs")} />
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetTrigger asChild>
             <button
@@ -217,11 +215,8 @@ function MobileTabBar({
                 })}
               </div>
             </div>
-            <div className="shrink-0 px-4 pt-2 pb-0.5 flex justify-center">
+            <div className="shrink-0 px-4 py-2 border-t border-border">
               <NearBranding />
-            </div>
-            <div className="shrink-0 px-4 pb-3 pt-2 border-t border-border">
-              <ThemeToggle className="relative flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground transition-colors" />
             </div>
           </SheetContent>
         </Sheet>

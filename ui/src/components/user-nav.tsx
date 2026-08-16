@@ -4,7 +4,7 @@ import { Building2, Home, LogOut, Settings, User } from "lucide-react";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
-import { Avatar, AvatarFallback, AvatarImage, OrgSwitcher } from "@/components";
+import { Avatar, AvatarFallback, AvatarImage, OrgSwitcher, ThemeToggle } from "@/components";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -163,6 +163,15 @@ export function UserNav() {
               <Settings />
               settings
             </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <ThemeToggle className="relative flex items-center justify-center w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+                theme
+              </span>
+            </div>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
