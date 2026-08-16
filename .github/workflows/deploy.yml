@@ -32,9 +32,7 @@ jobs:
       ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       TARGET_BRANCH: ${{ github.ref_name }}
-      API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5432/api_db
-      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5433/auth_db
-      CORS_ORIGIN: http://127.0.0.1:4100
+      BOS_CI_HOST_PORT: "4100"
     services:
       postgres-api:
         image: postgres:17-alpine
@@ -94,6 +92,14 @@ jobs:
           ZEPHYR_CI_TOKEN: ${{ secrets.ZEPHYR_CI_TOKEN }}
         run: |
           echo "ZE_CI_TOKEN=$ZEPHYR_CI_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Emit CI infra plan
+        id: infra
+        run: |
+          bun run bos infra export --target ci --network mainnet > .ci-infra.json
+          jq -r '.env | to_entries[] | "\(.key)=\(.value)"' .ci-infra.json >> "$GITHUB_ENV"
+          echo "## CI infra plan" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"Services: " + (.services | length | tostring) + "\nEnv vars: " + (.env | keys | length | tostring)' .ci-infra.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish with deploy
         timeout-minutes: 20

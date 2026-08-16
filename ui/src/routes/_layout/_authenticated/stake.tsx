@@ -593,7 +593,7 @@ function CityNodeCard({
         <StatBlock label="Members" value={memberCount} />
       </div>
     </Card>
-  )
+  );
 }
 
 function StatBlock({ label, value }: { label: string; value: string | number }) {

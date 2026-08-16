@@ -145,16 +145,35 @@ export const PublishOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
+  noDeployLock: z.boolean().default(false),
 });
 
 export const PublishResultSchema = z.object({
-  status: z.enum(["published", "error", "dry-run"]),
+  status: z.enum(["published", "error", "dry-run", "locked"]),
   registryUrl: z.string(),
   txHash: z.string().optional(),
   error: z.string().optional(),
   built: z.array(z.string()).optional(),
   skipped: z.array(z.string()).optional(),
   deployResults: z.array(WorkspaceDeployResultSchema).optional(),
+  lockConflict: z
+    .object({
+      active: z.boolean(),
+      expiresAt: z.number(),
+      reason: z.enum(["active", "verify-mismatch"]),
+      value: z
+        .object({
+          owner: z.string(),
+          pid: z.union([z.number(), z.string()]),
+          startedAt: z.number(),
+          expiresAt: z.number(),
+          network: z.enum(["mainnet", "testnet"]),
+          nonce: z.string(),
+          txHash: z.string().optional(),
+        })
+        .nullable(),
+    })
+    .optional(),
 });
 
 export const DeployOptionsSchema = z.object({
@@ -166,10 +185,11 @@ export const DeployOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   service: z.string().optional(),
+  noDeployLock: z.boolean().default(false),
 });
 
 export const DeployResultSchema = z.object({
-  status: z.enum(["deployed", "published", "error", "dry-run"]),
+  status: z.enum(["deployed", "published", "error", "dry-run", "locked"]),
   registryUrl: z.string(),
   txHash: z.string().optional(),
   built: z.array(z.string()).optional(),
@@ -178,6 +198,7 @@ export const DeployResultSchema = z.object({
   service: z.string().optional(),
   error: z.string().optional(),
   deployResults: z.array(WorkspaceDeployResultSchema).optional(),
+  lockConflict: PublishResultSchema.shape.lockConflict,
 });
 
 function parseNearAmount(value: string): number {
@@ -441,6 +462,37 @@ export const TypecheckResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const InfraExportServiceSchema = z.object({
+  key: z.string(),
+  image: z.string(),
+  env: z.record(z.string(), z.string()).default({}),
+  ports: z.array(z.string()),
+  healthcheck: z
+    .object({
+      test: z.array(z.string()),
+      interval: z.string(),
+      timeout: z.string(),
+      retries: z.number(),
+    })
+    .optional(),
+  volumes: z.array(z.string()).default([]),
+});
+
+export const InfraExportOptionsSchema = z.object({
+  target: z.enum(["ci", "local"]).default("ci"),
+  network: z.enum(["mainnet", "testnet"]).optional(),
+  configDir: z.string().optional(),
+});
+
+export const InfraExportResultSchema = z.object({
+  env: z.record(z.string(), z.string()),
+  services: z.array(InfraExportServiceSchema),
+  generatedAt: z.string(),
+  project: z.string(),
+  account: z.string(),
+  gateway: z.string(),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -518,6 +570,37 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/typecheck" })
     .input(TypecheckOptionsSchema)
     .output(TypecheckResultSchema),
+  infraExport: oc
+    .route({ method: "POST", path: "/infra/export" })
+    .input(InfraExportOptionsSchema)
+    .output(InfraExportResultSchema),
+  deployLockInspect: oc.route({ method: "GET", path: "/deploy/lock" }).output(
+    z.object({
+      account: z.string(),
+      gateway: z.string(),
+      network: z.enum(["mainnet", "testnet"]),
+      configRegistryUrl: z.string(),
+      lockRegistryUrl: z.string(),
+      active: z.boolean(),
+      value: z
+        .object({
+          owner: z.string(),
+          pid: z.union([z.number(), z.string()]),
+          startedAt: z.number(),
+          expiresAt: z.number(),
+          network: z.enum(["mainnet", "testnet"]),
+          nonce: z.string(),
+          txHash: z.string().optional(),
+        })
+        .nullable(),
+    }),
+  ),
+  deployLockRelease: oc.route({ method: "POST", path: "/deploy/lock/release" }).output(
+    z.object({
+      released: z.boolean(),
+      txHash: z.string().optional(),
+    }),
+  ),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -566,3 +649,6 @@ export type KillResult = z.infer<typeof KillResultSchema>;
 export type TypecheckOptions = z.infer<typeof TypecheckOptionsSchema>;
 export type TypecheckResult = z.infer<typeof TypecheckResultSchema>;
 export type TypecheckWorkspaceResult = z.infer<typeof TypecheckWorkspaceResultSchema>;
+export type InfraExportOptions = z.infer<typeof InfraExportOptionsSchema>;
+export type InfraExportResult = z.infer<typeof InfraExportResultSchema>;
+export type InfraExportService = z.infer<typeof InfraExportServiceSchema>;

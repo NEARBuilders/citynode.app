@@ -229,4 +229,24 @@ export const cliCommandMeta = {
       all: { description: "Kill processes across all config directories" },
     },
   },
+  infraExport: {
+    commandPath: ["infra", "export"],
+    summary: "Emit the resolved CI infra plan (env + services) for the current runtime",
+    interactive: false,
+    fields: {
+      target: { description: "Export target: ci (default) or local" },
+      network: { description: "NEAR network: mainnet or testnet" },
+      configDir: { description: "Override config directory" },
+    },
+  },
+  deployLockInspect: {
+    commandPath: ["deploy", "lock", "inspect"],
+    summary: "Inspect the FastKV deploy lock for the current account/gateway",
+    interactive: false,
+  },
+  deployLockRelease: {
+    commandPath: ["deploy", "lock", "release"],
+    summary: "Force-release the FastKV deploy lock",
+    interactive: false,
+  },
 } as const satisfies Record<string, CliCommandMeta>;

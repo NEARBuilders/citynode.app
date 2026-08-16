@@ -1019,11 +1019,23 @@ async function main() {
         return;
       }
 
-      if (result.status === "error") {
+      if (result.status === "error" || result.status === "locked") {
         console.log();
-        console.log(colors.error(`${icons.err} Publish failed`));
+        console.log(
+          colors.error(
+            `${icons.err} ${result.status === "locked" ? "Deploy lock blocks publish" : "Publish failed"}`,
+          ),
+        );
         if (result.error) {
           console.log(`  ${colors.dim("Error:")} ${result.error}`);
+        }
+        if (result.lockConflict?.value) {
+          const owner = result.lockConflict.value.owner;
+          const nonce = result.lockConflict.value.nonce;
+          const expiresAt = result.lockConflict.value.expiresAt;
+          console.log(`  ${colors.dim("Lock owner:")} ${owner}`);
+          console.log(`  ${colors.dim("Lock nonce:")} ${nonce}`);
+          console.log(`  ${colors.dim("Lock expires:")} ${new Date(expiresAt).toISOString()}`);
         }
         if (result.deployResults && result.deployResults.length > 0) {
           const failures = result.deployResults.filter((r: any) => !r.success);
@@ -1077,11 +1089,23 @@ async function main() {
         return;
       }
 
-      if (deployResult.status === "error") {
+      if (deployResult.status === "error" || deployResult.status === "locked") {
         console.log();
-        console.log(colors.error(`${icons.err} Deploy failed`));
+        console.log(
+          colors.error(
+            `${icons.err} ${deployResult.status === "locked" ? "Deploy lock blocks publish" : "Deploy failed"}`,
+          ),
+        );
         if (deployResult.error) {
           console.log(`  ${colors.dim("Error:")} ${deployResult.error}`);
+        }
+        if (deployResult.lockConflict?.value) {
+          const owner = deployResult.lockConflict.value.owner;
+          const nonce = deployResult.lockConflict.value.nonce;
+          const expiresAt = deployResult.lockConflict.value.expiresAt;
+          console.log(`  ${colors.dim("Lock owner:")} ${owner}`);
+          console.log(`  ${colors.dim("Lock nonce:")} ${nonce}`);
+          console.log(`  ${colors.dim("Lock expires:")} ${new Date(expiresAt).toISOString()}`);
         }
         if (deployResult.deployResults && deployResult.deployResults.length > 0) {
           const failures = deployResult.deployResults.filter((r: any) => !r.success);
@@ -1144,6 +1168,54 @@ async function main() {
         console.log();
         process.exit(1);
       }
+    }
+
+    if (descriptor.key === "infraExport") {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+
+    if (descriptor.key === "deployLockInspect") {
+      const inspect = result as any;
+      console.log();
+      console.log(`  ${colors.dim("Account:")} ${inspect.account}`);
+      console.log(`  ${colors.dim("Gateway:")} ${inspect.gateway}`);
+      console.log(`  ${colors.dim("Network:")} ${inspect.network}`);
+      console.log(`  ${colors.dim("Config:")} ${inspect.configRegistryUrl}`);
+      console.log(`  ${colors.dim("Lock:")} ${inspect.lockRegistryUrl}`);
+      console.log(
+        `  ${colors.dim("Status:")} ${inspect.active ? colors.yellow("ACTIVE") : colors.green("free")}`,
+      );
+      if (inspect.value) {
+        console.log(`  ${colors.dim("Owner:")} ${inspect.value.owner}`);
+        console.log(`  ${colors.dim("Nonce:")} ${inspect.value.nonce}`);
+        console.log(
+          `  ${colors.dim("Started:")} ${new Date(inspect.value.startedAt).toISOString()}`,
+        );
+        console.log(
+          `  ${colors.dim("Expires:")} ${new Date(inspect.value.expiresAt).toISOString()}`,
+        );
+        if (inspect.value.txHash) {
+          console.log(`  ${colors.dim("Tx:")} ${inspect.value.txHash}`);
+        }
+      }
+      console.log();
+      return;
+    }
+
+    if (descriptor.key === "deployLockRelease") {
+      const release = result as { released: boolean; txHash?: string };
+      console.log();
+      if (release.released) {
+        console.log(colors.green(`${icons.ok} Deploy lock released`));
+        if (release.txHash) {
+          console.log(`  ${colors.dim("Transaction:")} ${release.txHash}`);
+        }
+      } else {
+        console.log(colors.dim("  No active deploy lock to release."));
+      }
+      console.log();
+      return;
     }
   } catch (error) {
     console.error(`[CLI] ${error instanceof Error ? error.message : String(error)}`);

@@ -118,6 +118,12 @@ export function normalizeRedisSlug(secret: string): string {
   return secret.replace(/_REDIS_URL$/, "").toLowerCase();
 }
 
+function extendsRefAccount(extendsRef: string | undefined): string | null {
+  if (!extendsRef || typeof extendsRef !== "string") return null;
+  const match = extendsRef.match(/^bos:\/\/([^/]+)\//);
+  return match?.[1] ?? null;
+}
+
 export function getSecretGroups(runtimeConfig: RuntimeConfig): SecretGroup[] {
   const groups: SecretGroup[] = [];
   const seen = new Set<string>();
@@ -172,48 +178,23 @@ export function normalizeDatabaseSlug(secret: string): string {
 }
 
 export function buildOriginMap(
-  configDir: string,
+  _configDir: string,
   runtimeConfig: RuntimeConfig,
 ): Map<string, string> {
-  const configPath = join(configDir, "bos.config.json");
-
   const originMap = new Map<string, string>();
   const account = runtimeConfig.account;
-
-  const resolveOrigin = (extendsRef: unknown): string | null => {
-    if (typeof extendsRef === "string") {
-      const match = extendsRef.match(/^bos:\/\/([^/]+)\//);
-      return match?.[1] ?? null;
-    }
-    return null;
-  };
-
-  const rawConfig = existsSync(configPath)
-    ? (JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>)
-    : null;
-  const rawPlugins = rawConfig?.plugins as Record<string, unknown> | undefined;
 
   for (const secret of runtimeConfig.api.secrets ?? []) {
     if (!originMap.has(secret)) originMap.set(secret, account);
   }
 
-  const rawApp = rawConfig?.app as Record<string, unknown> | undefined;
-  const authExtends = (rawApp?.auth as Record<string, unknown> | undefined)?.extends;
-  const authOrigin = resolveOrigin(authExtends) ?? account;
+  const authOrigin = extendsRefAccount(runtimeConfig.auth?.extendsRef) ?? account;
   for (const secret of runtimeConfig.auth?.secrets ?? []) {
     if (!originMap.has(secret)) originMap.set(secret, authOrigin);
   }
 
   for (const [pluginKey, pluginEntry] of Object.entries(runtimeConfig.plugins ?? {})) {
-    const rawPlugin = rawPlugins?.[pluginKey];
-    let pluginOrigin: string;
-    if (typeof rawPlugin === "string") {
-      pluginOrigin = resolveOrigin(rawPlugin) ?? account;
-    } else if (rawPlugin && typeof rawPlugin === "object") {
-      pluginOrigin = resolveOrigin((rawPlugin as Record<string, unknown>).extends) ?? account;
-    } else {
-      pluginOrigin = account;
-    }
+    const pluginOrigin = extendsRefAccount(pluginEntry.extendsRef) ?? account;
     for (const secret of pluginEntry.secrets ?? []) {
       if (!originMap.has(secret)) originMap.set(secret, pluginOrigin);
     }
@@ -713,4 +694,147 @@ export function loadProjectEnv(configDir: string): void {
 
   loadDotenv({ path: envPath, processEnv: process.env, quiet: true });
   envLoadedDir = configDir;
+}
+
+export interface CiServiceSpec {
+  key: string;
+  slug: string;
+  image: string;
+  env: Record<string, string>;
+  ports: string[];
+  healthcheck?: { test: string[]; interval: string; timeout: string; retries: number };
+  volumes: string[];
+  database?: { user: string; password: string; name: string };
+}
+
+export interface CiInfraPlan {
+  account: string;
+  gateway: string;
+  project: string;
+  env: Record<string, string>;
+  services: CiServiceSpec[];
+  generatedAt: string;
+}
+
+export function buildCiInfraPlan(
+  runtimeConfig: RuntimeConfig,
+  options: { configDir?: string; hostPortOverride?: number } = {},
+): CiInfraPlan {
+  const configDir = options.configDir;
+  const originMap = configDir
+    ? buildOriginMap(configDir, runtimeConfig)
+    : new Map<string, string>();
+  const portState = loadPortState(configDir);
+  const allDatabaseSecrets = uniqueSecrets(
+    collectAllSecrets(runtimeConfig).filter((s) => s.endsWith("_DATABASE_URL")),
+  );
+  const allDatabaseConfigs = buildDatabaseConfigs(
+    allDatabaseSecrets,
+    originMap,
+    portState.postgresPorts,
+  );
+  const allRedisSecrets = uniqueSecrets(
+    collectAllSecrets(runtimeConfig).filter((s) => s.endsWith("_REDIS_URL")),
+  );
+  const allRedisConfigs = buildRedisConfigs(allRedisSecrets, originMap, portState.redisPorts);
+  if (configDir) savePortState(configDir, portState);
+
+  const hostPort =
+    options.hostPortOverride ??
+    (Number.isFinite(Number(process.env.BOS_CI_HOST_PORT))
+      ? Number(process.env.BOS_CI_HOST_PORT)
+      : undefined) ??
+    resolveDevHostPort(runtimeConfig);
+  const env: Record<string, string> = {};
+  const envBySecret = new Map<string, string>();
+  for (const db of allDatabaseConfigs) envBySecret.set(db.secret, db.url);
+  for (const r of allRedisConfigs) envBySecret.set(r.secret, r.url);
+
+  const groups = getSecretGroups(runtimeConfig);
+  for (const group of groups) {
+    for (const secret of group.secrets) {
+      const value = envBySecret.get(secret);
+      if (value) env[secret] = value;
+    }
+  }
+
+  env["CORS_ORIGIN"] = `http://127.0.0.1:${hostPort}`;
+  if (!env["BETTER_AUTH_SECRET"]) env["BETTER_AUTH_SECRET"] = "";
+
+  const services: CiServiceSpec[] = [];
+
+  for (const db of allDatabaseConfigs) {
+    const fromKey = db.fromKey || runtimeConfig.account;
+    services.push({
+      key: db.slug,
+      slug: db.slug,
+      image: "postgres:17-alpine",
+      env: {
+        POSTGRES_USER: POSTGRES_USER,
+        POSTGRES_PASSWORD: POSTGRES_PASSWORD,
+        POSTGRES_DB: db.databaseName,
+      },
+      ports: [`${db.port}:5432`],
+      healthcheck: {
+        test: ["CMD-SHELL", `pg_isready -U ${POSTGRES_USER}`],
+        interval: "3s",
+        timeout: "3s",
+        retries: 10,
+      },
+      volumes: [`${fromKey.replace(/\./g, "_")}_postgres_${db.slug}_data:/var/lib/postgresql/data`],
+      database: { user: POSTGRES_USER, password: POSTGRES_PASSWORD, name: db.databaseName },
+    });
+  }
+
+  for (const r of allRedisConfigs) {
+    services.push({
+      key: r.slug,
+      slug: r.slug,
+      image: "redis:7-alpine",
+      env: {},
+      ports: [`${r.port}:6379`],
+      healthcheck: {
+        test: ["CMD", "redis-cli", "ping"],
+        interval: "3s",
+        timeout: "3s",
+        retries: 10,
+      },
+      volumes: [
+        `${(r.fromKey || runtimeConfig.account).replace(/\./g, "_")}_redis_${r.slug}_data:/data`,
+      ],
+    });
+  }
+
+  return {
+    account: runtimeConfig.account,
+    gateway: runtimeConfig.domain ?? runtimeConfig.account,
+    project: runtimeConfig.account,
+    env,
+    services,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function collectAllSecrets(runtimeConfig: RuntimeConfig): string[] {
+  const all: string[] = [];
+  all.push(...(runtimeConfig.host.secrets ?? []));
+  all.push(...(runtimeConfig.api.secrets ?? []));
+  if (runtimeConfig.auth) all.push(...(runtimeConfig.auth.secrets ?? []));
+  if (runtimeConfig.plugins) {
+    for (const plugin of Object.values(runtimeConfig.plugins)) {
+      if (plugin.secrets) all.push(...plugin.secrets);
+    }
+  }
+  return all;
+}
+
+function uniqueSlugs<T extends { slug: string }>(entries: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.slug)) continue;
+    seen.add(entry.slug);
+    out.push(entry);
+  }
+  return out;
 }
