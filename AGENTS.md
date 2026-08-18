@@ -351,6 +351,21 @@ const { runtimeConfig } = Route.useLoaderData();
 const appName = getActiveRuntime(runtimeConfig)?.title ?? getAccount(runtimeConfig);
 ```
 
+### SIWN Auth Relayer (gasless NEP-366 relay)
+
+The auth plugin's `siwn({ relayer: ... })` block in `bos.config.json → app.auth.variables.siwn` is **ephemeral mode** — the rich-object shape with `whitelistedContracts`, `maxGasPerTransaction`, and `maxDepositPerTransaction` but no `accountId` / `privateKey`. From the better-near-auth skill: that's `RelayerEphemeralConfig` ("Ephemeral with settings").
+
+**Operational rules:**
+
+- On first startup the server generates an ED25519 keypair per network, derives an implicit hex account from the public key, and encrypts the private key with `BETTER_AUTH_SECRET` (HKDF-SHA256 → AES-256-GCM) into the `relayerKey` table. Same keypair recovers on every restart.
+- After first startup the server logs the implicit account id. **Fund that account with NEAR** to enable relay — otherwise every relay attempt fails with insufficient balance from the RPC.
+- Funding workflow: admins hit `getRelayerInfo`; the `/admin/relayer` page surfaces a "needs funding" banner on `/admin` when `enabled === false` and `accountId` is set, then the admin's connected wallet transfers NEAR to the implicit account via `authClient.near.getNearClient().transfer()`.
+- The implicit relayer account is *not* a `.near` named account, so it cannot own sub-accounts. `siwn.subAccount.parentAccount` must be a named account (this project uses `v1.citynode.near` / `v1.citynode.testnet`), and the parent key is supplied via `NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET` / `NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET` secrets. Without the parent key the sub-account endpoint explains why in the error message and returns a `not-configured` reason.
+- `NEAR_RELAYER_PRIVATE_KEY` is vestigial in ephemeral mode and is omitted from `.env.example`. Only reintroduce (plus explicit `relayer: { accountId, privateKey }`) when moving to `RelayerExplicitConfig`.
+- The mode is observable at runtime: `getRelayerInfo()` returns `{ accountId, mode: "ephemeral", publicKey, balance, enabled }`.
+
+To switch to `RelayerExplicitConfig`, replace the rich-object shape with `relayer: { accountId: "relayer.<your-domain>.near", privateKey: process.env.RELAYER_PRIVATE_KEY, whitelistedContracts: [...], maxGasPerTransaction: "...", maxDepositPerTransaction: "0" }` and re-add the env var. The ephemeral key in the `relayerKey` table is ignored once an explicit key is provided.
+
 ## Security
 
 ### Shared Singleton Trust Model

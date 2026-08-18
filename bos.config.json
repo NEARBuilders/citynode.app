@@ -12,7 +12,7 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-7380-host-everything-dev-nearbuilder-58d75d144-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7404-host-everything-dev-nearbuilder-171db3e27-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"
@@ -21,14 +21,14 @@
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-7376-ui-everything-dev-nearbuilders-640fbb40f-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-7379-ui-everything-dev-nearbuilders-9e2e0e650-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7400-ui-everything-dev-nearbuilders-1b6dbfe53-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-7398-ui-everything-dev-nearbuilders-e8019531b-ze.zephyrcloud.app",
       "integrity": "sha384-UQX/yKubluHrdSEKhNtBs39QAbtXHs/iJ0aqkyPIW/ey/k26xRVvCEKsL2iK+cmb",
-      "ssrIntegrity": "sha384-V8ObgdJVdJ/jwU5xZbwX0R0+APdf2pli4B+ApUAfkB9vtzpxGVrFNDC3qS0FsL+i"
+      "ssrIntegrity": "sha384-99Rxrhwagd4U98ryETO5m987SDaqG2DBzRA76gh5bJHqP1x1rTJlapRhC6zASS6j"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-7377-api-everything-dev-nearbuilders-d0f1039d8-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7402-api-everything-dev-nearbuilders-79d1a502b-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -50,6 +50,7 @@
             "testnet": "v1.citynode.testnet"
           },
           "relayer": {
+            "ephemeral": true,
             "whitelistedContracts": [
               "v1.citynode.near"
             ],
@@ -75,7 +76,7 @@
   "plugins": {
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-7378-everything-dev-apps-plugin-ever-bd36fe158-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7401-everything-dev-apps-plugin-ever-e71038daa-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "v1.citynode.near"
       },
