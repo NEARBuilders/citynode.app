@@ -12,23 +12,23 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-7404-host-everything-dev-nearbuilder-171db3e27-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7431-host-everything-dev-nearbuilder-27b9b3d9d-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"
       ],
-      "integrity": "sha384-P+nSquVEC2WgC57dgScP8BYvBEyBoHQYz5XjQE62U+ZM3LzVBg5NvZ8yGjW+7NfK"
+      "integrity": "sha384-XDirkyVnVTW0xaAoGeWS2YtjzvHsBmWgSBLDxqROLAMZbq2gyxrUKjd+K2ixqB6H"
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-7400-ui-everything-dev-nearbuilders-1b6dbfe53-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-7398-ui-everything-dev-nearbuilders-e8019531b-ze.zephyrcloud.app",
-      "integrity": "sha384-UQX/yKubluHrdSEKhNtBs39QAbtXHs/iJ0aqkyPIW/ey/k26xRVvCEKsL2iK+cmb",
-      "ssrIntegrity": "sha384-99Rxrhwagd4U98ryETO5m987SDaqG2DBzRA76gh5bJHqP1x1rTJlapRhC6zASS6j"
+      "production": "https://elliot-braem-7426-ui-everything-dev-nearbuilders-3c312f82c-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-7430-ui-everything-dev-nearbuilders-a7e526d68-ze.zephyrcloud.app",
+      "integrity": "sha384-Px7RaJw6XF5/DtNxM5efGxF6voOjJxWm5ly6tG16ECWcc2eYM6SIXryP/KOOp4Ho",
+      "ssrIntegrity": "sha384-+L5gUWnjDhP7bKyKQ6e8JNDpGOSUu0E9Z7UiFfRgm7WdZj6FK39zRiq4T2WIhY23"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-7402-api-everything-dev-nearbuilders-79d1a502b-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7429-api-everything-dev-nearbuilders-0015a0f03-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -76,11 +76,22 @@
   "plugins": {
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-7401-everything-dev-apps-plugin-ever-e71038daa-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7428-everything-dev-apps-plugin-ever-d486f8e30-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "v1.citynode.near"
       },
-      "integrity": "sha384-3pCa9PXMHz3uCE20GEoLeewt0sBZ1otg8CN7GOQromcQcX0Dfurp42kRDA7aYNCO"
+      "routes": [
+        "ui/src/routes/_layout/apps/**"
+      ],
+      "integrity": "sha384-ehJsiIaaGQb5NjyNKWKS1+4ct479UK+n7MGaB6ZVdOsPSZd7hklMLZcIX5EkXECK"
+    },
+    "template": {
+      "development": "local:plugins/_template",
+      "production": "https://elliot-braem-7427-every-plugin-template-everythin-7a18ac30e-ze.zephyrcloud.app",
+      "secrets": [
+        "TEMPLATE_DATABASE_URL"
+      ],
+      "integrity": "sha384-7LAf3x/t4S0nQI0l0rtuvPzpJC81tAHljZOpa1Bc3Lr5pma9jEaM/eClDCvWpnVK"
     }
   }
 }
