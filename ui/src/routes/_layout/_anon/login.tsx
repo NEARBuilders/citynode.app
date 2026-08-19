@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { getAppName, sessionQueryOptions, useAuthClient } from "@/app";
 import { BrandElement } from "@/components/brand-element";
 import { Button } from "@/components/ui/button";
+import { NetworkToggle } from "@/components/ui/network-toggle";
 import { UnderConstruction } from "@/components/under-construction";
 
 type SearchParams = {
@@ -118,6 +119,9 @@ function LoginPage() {
 
   return (
     <div className="relative min-h-full w-full flex flex-col">
+      <div className="absolute top-4 right-4">
+        <NetworkToggle />
+      </div>
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="w-full max-w-sm flex flex-col items-center gap-5">
           <BrandElement appName={appName} size="lg" />

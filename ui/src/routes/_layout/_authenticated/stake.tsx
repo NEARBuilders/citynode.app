@@ -17,6 +17,7 @@ import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
 import { Badge, Button, Card, Field, FieldLabel, Input } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { getNearAccountId } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const STAKE_GAS = "300000000000000";

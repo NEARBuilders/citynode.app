@@ -1,16 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Coins, Fuel, Wallet } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useAuthClient } from "@/app";
+import { sessionQueryOptions, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Field, FieldLabel, Input } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
-import {
-  formatYocto,
-  relayerInfoQueryKey,
-  useRelayerFund,
-  useRelayerInfoQuery,
-} from "@/lib/use-relayer-fund";
+import { getNearAccountId } from "@/lib/auth";
+import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 
 export const Route = createFileRoute("/_layout/_admin/admin/relayer")({
   head: () => ({
@@ -24,17 +21,65 @@ const FUND_PRESETS = ["1", "5", "10"] as const;
 function AdminRelayerPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const nearAccountId = auth.near.getAccountId();
+  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const connectedAccountId = auth.near.getAccountId();
+  const siwnAccountId = getNearAccountId(
+    (session?.user?.linkedAccounts ?? []) as Array<{ providerId?: unknown; accountId?: unknown; network?: unknown }>,
+  );
+  const nearAccountId = connectedAccountId ?? siwnAccountId;
 
   const relayerInfoQuery = useRelayerInfoQuery();
   const info = relayerInfoQuery.data;
 
-  const fund = useRelayerFund(info, {
-    onSuccess: () => {
+  const [amount, setAmount] = useState("5");
+  const [sending, setSending] = useState(false);
+
+  const parsedAmount = useMemo(() => {
+    const value = Number(amount);
+    if (!amount || Number.isNaN(value) || value <= 0) return null;
+    return value;
+  }, [amount]);
+
+  const sendFund = useCallback(async () => {
+    const target = info?.accountId;
+    if (!target) {
+      toast.error("Relayer not configured on the server.");
+      return;
+    }
+    if (parsedAmount === null) {
+      toast.error("Enter a valid amount in NEAR.");
+      return;
+    }
+    const connected = await auth.near.ensureConnected();
+    if (!connected) {
+      toast.error("Connect a NEAR wallet first");
+      return;
+    }
+    const signer = auth.near.getAccountId();
+    if (!signer) {
+      toast.error("Connect a NEAR wallet first");
+      return;
+    }
+    setSending(true);
+    try {
+      const result = await auth.near
+        .getNearClient()
+        .transaction(signer)
+        .transfer(target, `${parsedAmount} NEAR`)
+        .send({ waitUntil: "FINAL" });
+      toast.success("Relayer funded", {
+        description: result.transaction?.hash
+          ? `tx: ${result.transaction.hash}`
+          : `Sent ${parsedAmount} NEAR → ${target}`,
+      });
       relayerInfoQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ["relay-history"] });
-    },
-  });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Funding failed");
+    } finally {
+      setSending(false);
+    }
+  }, [auth, info?.accountId, parsedAmount, queryClient, relayerInfoQuery]);
 
   const relayHistoryQuery = useQuery({
     queryKey: ["relay-history"],
@@ -117,13 +162,17 @@ function AdminRelayerPage() {
               ) : (
                 "Restart the auth service to complete ephemeral keypair generation."
               )}
+              {info.error && (
+                <span className="block mt-2 text-destructive">error: {info.error}</span>
+              )}
             </p>
           ) : (
             <div className="space-y-1">
               <InfoRow label="account" value={info.accountId} mono />
-              <InfoRow label="balance" value={formatYocto(info.balance) ?? "—"} mono />
-              <InfoRow label="network" value={info.network ?? "—"} mono />
-              <InfoRow label="available" value={formatYocto(info.available) ?? "—"} mono />
+              <InfoRow label="balance" value={`${info.balance} NEAR`} mono />
+              <InfoRow label="available" value={`${info.available} NEAR`} mono />
+              <InfoRow label="network" value={info.network} mono />
+              <InfoRow label="public key" value={info.publicKey} mono />
             </div>
           )}
 
@@ -166,9 +215,9 @@ function AdminRelayerPage() {
                   type="number"
                   min="0"
                   step="0.1"
-                  value={fund.amount}
-                  onChange={(e) => fund.setAmount(e.target.value)}
-                  disabled={fund.sending}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  disabled={sending}
                 />
               </Field>
               <div className="flex flex-wrap gap-1">
@@ -178,8 +227,8 @@ function AdminRelayerPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => fund.setAmount(preset)}
-                    disabled={fund.sending}
+                    onClick={() => setAmount(preset)}
+                    disabled={sending}
                   >
                     {preset} NEAR
                   </Button>
@@ -188,11 +237,11 @@ function AdminRelayerPage() {
               <Button
                 type="button"
                 size="sm"
-                onClick={fund.sendFund}
-                disabled={fund.sending || fund.parsedAmount === null}
+                onClick={sendFund}
+                disabled={sending || parsedAmount === null}
               >
                 <Coins className="h-3.5 w-3.5" />
-                {fund.sending ? "sending…" : "fund relayer"}
+                {sending ? "sending…" : "fund relayer"}
               </Button>
             </div>
           )}

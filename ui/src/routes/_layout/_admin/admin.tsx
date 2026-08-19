@@ -1,10 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Building2, Fuel, LayoutDashboard, Settings, Shield } from "lucide-react";
-import { getAccount, useAuthClient } from "@/app";
+import { getAccount } from "@/app";
 import { Badge } from "@/components";
 import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
+import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_layout/_admin/admin")({
@@ -27,21 +27,13 @@ export const Route = createFileRoute("/_layout/_admin/admin")({
 
 function AdminPage() {
   const { tenant, session } = Route.useRouteContext();
-  const auth = useAuthClient();
 
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
   const isMember = !!tenant && !!activeOrgId && activeOrgId === tenant.orgId;
   const isAdmin = session?.user?.role === "admin";
   const authorized = isMember || isAdmin;
 
-  const { data: relayerInfo } = useQuery({
-    queryKey: ["relayer-info"],
-    queryFn: async () => {
-      const { data } = await auth.near.getRelayerInfo();
-      return data ?? null;
-    },
-    refetchInterval: 60_000,
-  });
+  const { data: relayerInfo } = useRelayerInfoQuery();
 
   const relayerNeedsFunding =
     relayerInfo && relayerInfo.enabled === false && !!relayerInfo.accountId;

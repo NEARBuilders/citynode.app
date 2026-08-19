@@ -8,6 +8,7 @@ export { BrandElement } from "./brand-element";
 export { ConfirmDialog } from "./confirm-dialog";
 export { EmptyState } from "./empty-state";
 export { PageContainer } from "./layout/page-container";
+export { NetworkToggle } from "./ui/network-toggle";
 export { OrgSwitcher } from "./org-switcher";
 export { ThemeToggle } from "./theme-toggle";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";

@@ -4,7 +4,7 @@ import { Building2, Home, LogOut, Settings, User } from "lucide-react";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
-import { Avatar, AvatarFallback, AvatarImage, OrgSwitcher, ThemeToggle } from "@/components";
+import { Avatar, AvatarFallback, AvatarImage, NetworkToggle, OrgSwitcher, ThemeToggle } from "@/components";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,12 +70,15 @@ export function UserNav() {
 
   if (!user) {
     return (
-      <Link
-        to="/login"
-        className="h-9 px-4 inline-flex items-center justify-center text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md hover:bg-muted active:border-inset active:shadow-none transition-all duration-200 ease-out cursor-pointer"
-      >
-        connect
-      </Link>
+      <div className="flex items-center gap-2">
+        <NetworkToggle />
+        <Link
+          to="/login"
+          className="h-9 px-4 inline-flex items-center justify-center text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md hover:bg-muted active:border-inset active:shadow-none transition-all duration-200 ease-out cursor-pointer"
+        >
+          connect
+        </Link>
+      </div>
     );
   }
 
