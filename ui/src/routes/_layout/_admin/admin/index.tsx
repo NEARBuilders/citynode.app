@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building2, LayoutDashboard, Settings, Users } from "lucide-react";
-import { getAccount } from "@/app";
-import { getNearAccountId } from "@/lib/auth";
+import { getAccount, useAuthClient } from "@/app";
 import { Button, Card } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
 
@@ -14,12 +13,11 @@ export const Route = createFileRoute("/_layout/_admin/admin/")({
 
 function AdminDashboard() {
   const { auth, tenant } = Route.useRouteContext();
+  const authClient = useAuthClient();
   const platformAccount = getAccount();
   const user = auth?.user ?? null;
-  const siwnAccount = getNearAccountId(
-    (user?.linkedAccounts ?? []) as Array<{ providerId?: unknown; accountId?: unknown; network?: unknown }>,
-  );
-  const signedInAs = siwnAccount ?? user?.name ?? user?.email ?? "—";
+  const walletAccount = authClient.near.getAccountId();
+  const signedInAs = walletAccount ?? user?.name ?? user?.email ?? "—";
 
   return (
     <div className="space-y-8">
@@ -37,14 +35,10 @@ function AdminDashboard() {
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Wallet" value={siwnAccount ?? user?.name ?? "—"} mono />
+        <StatCard label="Wallet" value={walletAccount ?? user?.name ?? "—"} mono />
         <StatCard label="Name" value={user?.name || user?.email || "—"} />
         <StatCard label="Role" value={user?.role ?? "—"} />
-        <StatCard
-          label="Platform account"
-          value={platformAccount}
-          mono
-        />
+        <StatCard label="Platform account" value={platformAccount} mono />
       </section>
 
       <section className="space-y-3">

@@ -100,6 +100,9 @@ function NewTenantPage() {
     mutationFn: async () => {
       resetSteps();
 
+      const connected = await auth.near.ensureConnected();
+      if (!connected) throw new Error("Connect a NEAR wallet first");
+
       const nearAccountId = auth.near.getAccountId();
       if (!nearAccountId) {
         throw new Error("Connect a NEAR wallet first");

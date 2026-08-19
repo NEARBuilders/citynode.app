@@ -3,10 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Coins, Fuel, Wallet } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { sessionQueryOptions, useAuthClient } from "@/app";
+import { useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Field, FieldLabel, Input } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
-import { getNearAccountId } from "@/lib/auth";
 import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 
 export const Route = createFileRoute("/_layout/_admin/admin/relayer")({
@@ -21,12 +20,7 @@ const FUND_PRESETS = ["1", "5", "10"] as const;
 function AdminRelayerPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
-  const connectedAccountId = auth.near.getAccountId();
-  const siwnAccountId = getNearAccountId(
-    (session?.user?.linkedAccounts ?? []) as Array<{ providerId?: unknown; accountId?: unknown; network?: unknown }>,
-  );
-  const nearAccountId = connectedAccountId ?? siwnAccountId;
+  const nearAccountId = auth.near.getAccountId();
 
   const relayerInfoQuery = useRelayerInfoQuery();
   const info = relayerInfoQuery.data;

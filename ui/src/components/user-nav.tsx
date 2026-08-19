@@ -4,7 +4,14 @@ import { Building2, Home, LogOut, Settings, User } from "lucide-react";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
-import { Avatar, AvatarFallback, AvatarImage, NetworkToggle, OrgSwitcher, ThemeToggle } from "@/components";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  NetworkToggle,
+  OrgSwitcher,
+  ThemeToggle,
+} from "@/components";
 import {
   DropdownMenu,
   DropdownMenuContent,

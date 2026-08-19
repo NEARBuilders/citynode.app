@@ -17,7 +17,6 @@ import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
 import { Badge, Button, Card, Field, FieldLabel, Input } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getNearAccountId } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const STAKE_GAS = "300000000000000";
@@ -183,12 +182,16 @@ function StakePage() {
 
   const stakeMutation = useMutation({
     mutationFn: async () => {
-      if (!nearAccountId) throw new Error("Connect a NEAR wallet to stake.");
+      const connected = await auth.near.ensureConnected();
+      if (!connected) throw new Error("Connect a NEAR wallet to stake.");
+      const signer = auth.near.getAccountId();
+      if (!signer) throw new Error("Connect a NEAR wallet to stake.");
+      setNearAccountId(signer);
       if (!selectedCityNode) throw new Error("Select a city to stake to.");
       if (!parsedYocto) throw new Error("Enter a valid amount to stake.");
       const near = auth.near.getNearClient();
       const result = await near
-        .transaction(nearAccountId)
+        .transaction(signer)
         .functionCall(
           selectedCityNode.validatorPool,
           "deposit_and_stake",

@@ -134,158 +134,156 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   }
 
   if (input.build) {
-      console.log("  Ensuring NEAR CLI...");
-      await Effect.runPromise(ensureNearCli);
-      console.log("  NEAR CLI ready");
+    console.log("  Ensuring NEAR CLI...");
+    await Effect.runPromise(ensureNearCli);
+    console.log("  NEAR CLI ready");
 
-      await generateCodeArtifacts(configDir, bosConfig, {
-        env: "production",
-        runtimeConfig: runtimeConfig ?? undefined,
-      });
+    await generateCodeArtifacts(configDir, bosConfig, {
+      env: "production",
+      runtimeConfig: runtimeConfig ?? undefined,
+    });
 
-      const result = await buildWorkspaceTargets({
-        configDir,
-        bosConfig,
-        runtimeConfig,
-        targets,
-        deploy: true,
-        verbose: input.verbose,
-      });
-      built = result.built;
-      skipped = result.skipped;
-      deployResults = result.deployResults;
+    const result = await buildWorkspaceTargets({
+      configDir,
+      bosConfig,
+      runtimeConfig,
+      targets,
+      deploy: true,
+      verbose: input.verbose,
+    });
+    built = result.built;
+    skipped = result.skipped;
+    deployResults = result.deployResults;
 
-      if (deployResults) {
-        const failures = deployResults.filter((r) => !r.success);
-        if (failures.length > 0) {
-          const total = deployResults.length;
-          console.log();
-          console.log(
-            colors.error(
-              `  ${icons.err} Deploy failed — ${failures.length} of ${total} workspace${total > 1 ? "s" : ""} failed`,
-            ),
-          );
-          console.log();
-          for (const f of failures) {
-            const errorLine = (f.error ?? "Failed").split("\n")[0];
-            console.log(`    ${colors.error(icons.err)} ${padRight(f.key, 28)} ${errorLine}`);
-          }
-          console.log();
-          if (!input.verbose) {
-            console.log(colors.dim("  Run with --verbose for full build output."));
-            console.log();
-          }
-          return {
-            status: "error" as const,
-            registryUrl,
-            built,
-            skipped,
-            deployResults,
-            error: `${failures.length} of ${total} workspaces failed to deploy`,
-          };
+    if (deployResults) {
+      const failures = deployResults.filter((r) => !r.success);
+      if (failures.length > 0) {
+        const total = deployResults.length;
+        console.log();
+        console.log(
+          colors.error(
+            `  ${icons.err} Deploy failed — ${failures.length} of ${total} workspace${total > 1 ? "s" : ""} failed`,
+          ),
+        );
+        console.log();
+        for (const f of failures) {
+          const errorLine = (f.error ?? "Failed").split("\n")[0];
+          console.log(`    ${colors.error(icons.err)} ${padRight(f.key, 28)} ${errorLine}`);
         }
-      }
-
-      const refreshed = await loadResolvedConfig({ cwd: configDir });
-      if (!refreshed?.config) {
+        console.log();
+        if (!input.verbose) {
+          console.log(colors.dim("  Run with --verbose for full build output."));
+          console.log();
+        }
         return {
-          status: "error",
+          status: "error" as const,
           registryUrl,
           built,
           skipped,
           deployResults,
-          error: "Failed to reload bos.config.json after build",
+          error: `${failures.length} of ${total} workspaces failed to deploy`,
         };
       }
-
-      bosConfig = refreshed.config;
     }
 
-    const rawConfigPath = join(configDir, "bos.config.json");
-    const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
-    const publishPayload: BosConfigInput = isStaging
-      ? { ...rawConfig, domain: gateway }
-      : rawConfig;
-
-    const registryEntries: Record<string, string> = {
-      [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishPayload),
-    };
-
-    const payload = JSON.stringify(registryEntries);
-    const argsBase64 = Buffer.from(payload).toString("base64");
-
-    console.log();
-    console.log("  Publishing to:");
-    console.log(`    ${colors.cyan(registryUrl)}`);
-
-    try {
-      let txHash: string | undefined;
-
-      console.log(`  Submitting transaction on ${network}...`);
-
-      try {
-        const tx = await Effect.runPromise(
-          executeTransaction(
-            {
-              account,
-              contract: getRegistryNamespaceForNetwork(network),
-              method: "__fastdata_kv",
-              argsBase64,
-              network,
-              privateKey: signingMode._tag === "privateKey" ? signingMode.privateKey : undefined,
-              gas: "300Tgas",
-              deposit: "0NEAR",
-              verbose: input.verbose,
-            },
-            signingMode,
-          ),
-        );
-        txHash = tx.txHash;
-        if (txHash && !tx.output?.includes("CodeDoesNotExist")) {
-          console.log(`  Transaction submitted: ${colors.dim(txHash)}`);
-        }
-      } catch (error) {
-        console.log(colors.dim("  Transaction reported an error — verifying publish..."));
-        try {
-          await waitForPublishedConfig({
-            account,
-            gateway,
-            publishConfig: publishPayload,
-            timeoutMs: 30_000,
-            intervalMs: 2_000,
-          });
-          txHash = extractTransactionHash(error);
-        } catch {
-          throw error;
-        }
-      }
-
-      console.log("  Waiting for publish confirmation...");
-      await waitForPublishedConfig({
-        account,
-        gateway,
-        publishConfig: publishPayload,
-      });
-
-      return {
-        status: "published",
-        registryUrl,
-        txHash,
-        built,
-        skipped,
-        deployResults,
-        publishConfig: publishPayload,
-      };
-    } catch (error) {
+    const refreshed = await loadResolvedConfig({ cwd: configDir });
+    if (!refreshed?.config) {
       return {
         status: "error",
         registryUrl,
-        error: formatNearError(error),
         built,
         skipped,
         deployResults,
+        error: "Failed to reload bos.config.json after build",
       };
     }
+
+    bosConfig = refreshed.config;
+  }
+
+  const rawConfigPath = join(configDir, "bos.config.json");
+  const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
+  const publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
+
+  const registryEntries: Record<string, string> = {
+    [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishPayload),
+  };
+
+  const payload = JSON.stringify(registryEntries);
+  const argsBase64 = Buffer.from(payload).toString("base64");
+
+  console.log();
+  console.log("  Publishing to:");
+  console.log(`    ${colors.cyan(registryUrl)}`);
+
+  try {
+    let txHash: string | undefined;
+
+    console.log(`  Submitting transaction on ${network}...`);
+
+    try {
+      const tx = await Effect.runPromise(
+        executeTransaction(
+          {
+            account,
+            contract: getRegistryNamespaceForNetwork(network),
+            method: "__fastdata_kv",
+            argsBase64,
+            network,
+            privateKey: signingMode._tag === "privateKey" ? signingMode.privateKey : undefined,
+            gas: "300Tgas",
+            deposit: "0NEAR",
+            verbose: input.verbose,
+          },
+          signingMode,
+        ),
+      );
+      txHash = tx.txHash;
+      if (txHash && !tx.output?.includes("CodeDoesNotExist")) {
+        console.log(`  Transaction submitted: ${colors.dim(txHash)}`);
+      }
+    } catch (error) {
+      console.log(colors.dim("  Transaction reported an error — verifying publish..."));
+      try {
+        await waitForPublishedConfig({
+          account,
+          gateway,
+          publishConfig: publishPayload,
+          timeoutMs: 30_000,
+          intervalMs: 2_000,
+        });
+        txHash = extractTransactionHash(error);
+      } catch {
+        throw error;
+      }
+    }
+
+    console.log("  Waiting for publish confirmation...");
+    await waitForPublishedConfig({
+      account,
+      gateway,
+      publishConfig: publishPayload,
+    });
+
+    return {
+      status: "published",
+      registryUrl,
+      txHash,
+      built,
+      skipped,
+      deployResults,
+      publishConfig: publishPayload,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      registryUrl,
+      error: formatNearError(error),
+      built,
+      skipped,
+      deployResults,
+    };
+  }
 }
 
 function formatNearError(error: unknown): string {
