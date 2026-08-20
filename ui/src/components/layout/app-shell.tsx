@@ -16,10 +16,7 @@ export function AppShell({ session, runtimeConfig, isAdmin = false }: AppShellPr
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const appName = getAppName(runtimeConfig);
 
-  const visibleItems = filterSidebarByRole(
-    NAV_ITEMS,
-    getUserRole(!!session?.user, isAdmin),
-  );
+  const visibleItems = filterSidebarByRole(NAV_ITEMS, getUserRole(!!session?.user, isAdmin));
 
   const isActive = (item: SidebarItem) =>
     pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`));

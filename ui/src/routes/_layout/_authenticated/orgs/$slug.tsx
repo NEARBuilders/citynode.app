@@ -693,7 +693,7 @@ function MemberCard({
               <img
                 src={user.image}
                 alt=""
-                className="w-9 h-9 rounded-full object-cover border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)]"
+                className="w-9 h-9 rounded-full object-cover border-2 border-outset border-border-strong"
               />
             ) : (
               <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium">

@@ -245,7 +245,7 @@ function TenantDetail() {
 
   if (!tenant) {
     return (
-      <PageContainer variant="narrow">
+      <PageContainer variant="wide">
         <div className="text-muted-foreground text-sm py-12">Loading tenant…</div>
       </PageContainer>
     );
@@ -387,15 +387,12 @@ function TenantDetail() {
               Your tenant is served at the subdomain below. The site resolves through the parent
               gateway's host.
             </p>
-            <a
-              href={`https://${tenantHostname}.${gatewayId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[10px] w-fit"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              open {tenantHostname}.{gatewayId}
-            </a>
+            <Button asChild variant="outline" size="sm">
+              <a href={`https://${tenantHostname}.${gatewayId}`} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                open {tenantHostname}.{gatewayId}
+              </a>
+            </Button>
             <Button
               variant="outline"
               size="sm"

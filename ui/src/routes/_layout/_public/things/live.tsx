@@ -2,7 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useApiClient } from "@/app";
-import { Badge, PageContainer, PageHeader } from "@/components";
+import { Badge, Button, PageContainer, PageHeader } from "@/components";
 
 export const Route = createFileRoute("/_layout/_public/things/live")({
   head: () => ({
@@ -66,20 +66,20 @@ function LiveStreamPage() {
           actions={
             <div className="flex items-center gap-2">
               {canGoBack ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="icon-sm"
                   onClick={() => router.history.back()}
-                  className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm rounded-[10px] hover:bg-muted"
                 >
-                  <ArrowLeft size={14} />
-                </button>
+                  <ArrowLeft />
+                </Button>
               ) : (
-                <a
-                  href="/things"
-                  className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm rounded-[10px] hover:bg-muted"
-                >
-                  <ArrowLeft size={14} />
-                </a>
+                <Button asChild variant="outline" size="icon-sm">
+                  <a href="/things">
+                    <ArrowLeft />
+                  </a>
+                </Button>
               )}
               <span
                 className={`inline-block w-2 h-2 rounded-full shrink-0 ${

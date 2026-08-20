@@ -2,10 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { getAppName, sessionQueryOptions, useAuthClient } from "@/app";
-import { BrandElement } from "@/components/brand-element";
+import { sessionQueryOptions, useAuthClient } from "@/app";
 import { Button } from "@/components/ui/button";
-import { NetworkToggle } from "@/components/ui/network-toggle";
 import { UnderConstruction } from "@/components/under-construction";
 
 type SearchParams = {
@@ -43,14 +41,12 @@ function LoginPage() {
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
   const { redirect } = Route.useSearch();
   const { runtimeConfig } = Route.useRouteContext();
-  const appName = getAppName(runtimeConfig);
 
   const [nearPending, setNearPending] = useState(false);
-  const [anonPending, setAnonPending] = useState(false);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
 
   useEffect(() => {
-    auth.near.detectNearAccount().then((result) => {
+    auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
       if (result?.accountId) {
         setDetectedAccount(result.accountId);
       }
@@ -90,124 +86,76 @@ function LoginPage() {
     });
   };
 
-  const handleAnonymous = async () => {
-    setAnonPending(true);
-    try {
-      await auth.signIn.anonymous({
-        fetchOptions: {
-          onSuccess: async () => {
-            setAnonPending(false);
-            await handleSuccess("Started anonymous session");
-          },
-          onError: (ctx: { error?: { message?: string } }) => {
-            setAnonPending(false);
-            handleError(new Error(ctx.error?.message || "Anonymous sign in failed"));
-          },
-        },
-      });
-    } catch {
-      setAnonPending(false);
-    }
-  };
-
   if (session?.user) {
     const redirectTo = redirect?.startsWith("/") ? redirect : "/dashboard";
     return <Navigate to={redirectTo} replace search={{}} />;
   }
 
-  const isPending = nearPending || anonPending;
-
   return (
-    <div className="relative min-h-full w-full flex flex-col">
-      <div className="absolute top-4 right-4">
-        <NetworkToggle />
-      </div>
-      <div className="flex-1 flex items-center justify-center px-6">
-        <div className="w-full max-w-sm flex flex-col items-center gap-5">
-          <BrandElement appName={appName} size="lg" />
-
-          <div className="w-full rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
-            <div className="space-y-3">
-              {detectedAccount ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="default"
-                    onClick={handleNear}
-                    disabled={isPending}
-                    className="w-full"
-                  >
-                    {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={async () => {
-                      setNearPending(true);
-                      try {
-                        await auth.near.disconnect();
-                        await auth.signIn.near({
-                          onSuccess: async () => {
-                            setNearPending(false);
-                            await handleSuccess("Signed in with NEAR");
-                          },
-                          onError: (error: { code?: string; message?: string }) => {
-                            setNearPending(false);
-                            handleError(error);
-                          },
-                        });
-                      } catch {
-                        setNearPending(false);
-                        toast.error("Failed to disconnect wallet");
-                      }
-                    }}
-                    disabled={isPending}
-                    className="w-full"
-                  >
-                    Use another wallet
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleNear}
-                  disabled={isPending}
-                  className="w-full"
-                >
-                  {nearPending ? "connecting..." : "connect to everything"}
-                </Button>
-              )}
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleAnonymous}
-                disabled={isPending}
-                className="w-full text-muted-foreground hover:text-foreground"
-              >
-                {anonPending ? "starting..." : "continue anonymously"}
-              </Button>
-            </div>
-
-            <div className="pt-3 border-t border-border">
-              <p className="text-xs text-muted-foreground text-center leading-relaxed">
-                Anonymous sessions don't persist after sign out
-              </p>
-            </div>
+    <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <div className="w-full max-w-sm flex flex-col items-center gap-5">
+        <div className="w-full rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
+          <div className="space-y-1 text-center">
+            <h1 className="text-xl font-semibold text-foreground">Sign in</h1>
+            <p className="text-sm text-muted-foreground">Connect your NEAR wallet to continue.</p>
           </div>
 
-          <UnderConstruction
-            sourceFile="ui/src/routes/_layout/_anon/login.tsx"
-            runtimeConfig={runtimeConfig}
-          />
+          {detectedAccount ? (
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="default"
+                onClick={handleNear}
+                disabled={nearPending}
+                className="w-full"
+              >
+                {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  setNearPending(true);
+                  try {
+                    await auth.near.disconnect();
+                    await auth.signIn.near({
+                      onSuccess: async () => {
+                        setNearPending(false);
+                        await handleSuccess("Signed in with NEAR");
+                      },
+                      onError: (error: { code?: string; message?: string }) => {
+                        setNearPending(false);
+                        handleError(error);
+                      },
+                    });
+                  } catch {
+                    setNearPending(false);
+                    toast.error("Failed to disconnect wallet");
+                  }
+                }}
+                disabled={nearPending}
+                className="w-full"
+              >
+                Use another wallet
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="default"
+              onClick={handleNear}
+              disabled={nearPending}
+              className="w-full"
+            >
+              {nearPending ? "connecting..." : "connect with NEAR"}
+            </Button>
+          )}
         </div>
+
+        <UnderConstruction
+          sourceFile="ui/src/routes/_layout/_anon/login.tsx"
+          runtimeConfig={runtimeConfig}
+        />
       </div>
     </div>
   );

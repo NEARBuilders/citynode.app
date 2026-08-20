@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowRight, Globe, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Badge, Card } from "@/components";
+import { Badge, Button } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NodeDirectory } from "./-node-directory";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
   loader: async ({ params, context }) => {
@@ -77,7 +78,7 @@ function NodePage() {
 
   if (nodeLoading) {
     return (
-      <PageContainer variant="wide">
+      <PageContainer variant="default">
         <NodeSkeleton />
       </PageContainer>
     );
@@ -85,10 +86,8 @@ function NodePage() {
 
   if (!node) {
     return (
-      <PageContainer variant="narrow">
-        <Card className="p-10 text-center">
-          <p className="text-sm text-muted-foreground">Node not found.</p>
-        </Card>
+      <PageContainer variant="default">
+        <p className="py-16 text-sm text-muted-foreground">Node not found.</p>
       </PageContainer>
     );
   }
@@ -96,13 +95,12 @@ function NodePage() {
   const validators = staking?.validators ?? [];
   const hasOwnValidator = staking?.sourceNodeId === node.id;
   const validatorNodeIds = new Set(validators.map((v) => v.nodeId));
-  const ownValidator = validators.find((v) => v.nodeId === node.id);
   const childrenWithValidators = children.filter((c) => validatorNodeIds.has(c.id));
 
   return (
-    <PageContainer variant="wide">
+    <PageContainer variant="default">
       <div className="space-y-12">
-        <header className="space-y-3 pt-8">
+        <header className="space-y-3 pt-4 sm:pt-8">
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             <Sparkles className="h-3 w-3" />
             {gateway}
@@ -132,102 +130,53 @@ function NodePage() {
               {children.length} {children.length === 1 ? "node" : "nodes"}
             </span>
           </div>
-
-          {childrenLoading ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} className="p-6 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-[10px]" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-3 w-32" />
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : children.length === 0 ? (
-            <Card className="p-10 text-center">
-              <p className="text-sm text-muted-foreground">No child nodes yet.</p>
-            </Card>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {children.map((child) => {
-                const hasValidator = validatorNodeIds.has(child.id);
-                return (
-                  <Card key={child.id} className="p-6 space-y-3">
-                    <a href={`https://${child.slug}.${gateway}/`} className="block space-y-3 group">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-                          <Globe className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-base font-semibold text-foreground capitalize truncate group-hover:underline">
-                            {child.name}
-                          </h3>
-                          <p className="text-[11px] font-mono text-muted-foreground truncate">
-                            {child.slug}.{gateway}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="capitalize">
-                          {child.kind}
-                        </Badge>
-                        {hasValidator && (
-                          <Badge variant="outline" className="text-[10px]">
-                            validator
-                          </Badge>
-                        )}
-                      </div>
-                    </a>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          <NodeDirectory
+            nodes={children}
+            gateway={gateway}
+            validatorNodeIds={validatorNodeIds}
+            isLoading={childrenLoading}
+            emptyMessage="No child nodes yet."
+          />
         </section>
 
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-foreground">Stake</h2>
-          {hasOwnValidator && ownValidator ? (
-            <Card className="p-6 space-y-3">
+          {hasOwnValidator ? (
+            <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 {node.name} runs its own validator pool.
               </p>
-              <a
-                href={`https://${node.slug}.${gateway}/stake`}
-                className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-foreground px-5 text-sm font-semibold text-background transition-colors hover:bg-foreground/90"
-              >
-                Stake to {node.name}
-                <ArrowRight className="h-4 w-4" />
-              </a>
-            </Card>
+              <Button asChild>
+                <a href={`https://${node.slug}.${gateway}/stake`}>
+                  Stake to {node.name}
+                  <ArrowRight />
+                </a>
+              </Button>
+            </div>
           ) : childrenWithValidators.length > 0 ? (
-            <Card className="p-6 space-y-4">
+            <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 {node.name} doesn&apos;t run its own validator — stake to a city that does.
               </p>
-              <div className="flex flex-col gap-2">
+              <div>
                 {childrenWithValidators.map((child) => (
                   <a
                     key={child.id}
                     href={`https://${child.slug}.${gateway}/stake`}
-                    className="inline-flex h-10 items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                    className="group flex items-center gap-4 border-b border-border px-2 py-4 last:border-0 transition-colors hover:bg-muted/50"
                   >
-                    <span className="capitalize">{child.name}</span>
-                    <ArrowRight className="h-4 w-4" />
+                    <span className="capitalize text-base font-semibold text-foreground group-hover:underline">
+                      {child.name}
+                    </span>
+                    <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                   </a>
                 ))}
               </div>
-            </Card>
+            </div>
           ) : (
-            <Card className="p-6">
-              <p className="text-sm text-muted-foreground">
-                This node doesn&apos;t run a validator yet.
-              </p>
-            </Card>
+            <p className="text-sm text-muted-foreground">
+              This node doesn&apos;t run a validator yet.
+            </p>
           )}
         </section>
       </div>
@@ -238,7 +187,7 @@ function NodePage() {
 function NodeSkeleton() {
   return (
     <div className="space-y-12">
-      <header className="space-y-3 pt-8">
+      <header className="space-y-3 pt-4 sm:pt-8">
         <Skeleton className="h-3 w-24" />
         <div className="flex items-center gap-3">
           <Skeleton className="h-9 w-48" />
@@ -248,17 +197,18 @@ function NodeSkeleton() {
       </header>
       <section className="space-y-6">
         <Skeleton className="h-5 w-32" />
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div>
           {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="p-6 space-y-3">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-[10px]" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
+            <div
+              key={i}
+              className="flex items-center gap-4 border-b border-border py-4 last:border-0"
+            >
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-44" />
               </div>
-            </Card>
+              <Skeleton className="ml-auto h-5 w-16" />
+            </div>
           ))}
         </div>
       </section>

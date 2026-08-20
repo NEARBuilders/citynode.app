@@ -68,26 +68,26 @@ function ThingDetailPage() {
   }
 
   return (
-    <PageContainer variant="narrow">
+    <PageContainer variant="default">
       <div className="space-y-4">
         <PageHeader
           title={<span className="font-mono truncate">{thing.thingId}</span>}
           actions={
             canGoBack ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon-sm"
                 onClick={() => router.history.back()}
-                className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm rounded-[10px] hover:bg-muted"
               >
-                <ArrowLeft size={14} />
-              </button>
+                <ArrowLeft />
+              </Button>
             ) : (
-              <a
-                href="/things"
-                className="flex items-center justify-center w-8 h-8 border-2 border-outset border-border-strong bg-card shadow-sm rounded-[10px] hover:bg-muted"
-              >
-                <ArrowLeft size={14} />
-              </a>
+              <Button asChild variant="outline" size="icon-sm">
+                <a href="/things">
+                  <ArrowLeft />
+                </a>
+              </Button>
             )
           }
         />

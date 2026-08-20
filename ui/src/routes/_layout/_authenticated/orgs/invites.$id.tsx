@@ -85,7 +85,7 @@ function AcceptInvitation() {
 
   if (isLoading) {
     return (
-      <PageContainer variant="narrow">
+      <PageContainer variant="wide">
         <div className="flex items-center justify-center min-h-[40vh]">
           <p className="text-sm text-muted-foreground">Loading invitation...</p>
         </div>
@@ -95,7 +95,7 @@ function AcceptInvitation() {
 
   if (!invitation) {
     return (
-      <PageContainer variant="narrow">
+      <PageContainer variant="wide">
         <Card className="mt-12">
           <CardContent className="p-8 text-center space-y-4">
             <XCircle className="h-8 w-8 mx-auto text-muted-foreground" />
@@ -114,7 +114,7 @@ function AcceptInvitation() {
   const isPending_ = acceptMutation.isPending || rejectMutation.isPending;
 
   return (
-    <PageContainer variant="narrow">
+    <PageContainer variant="wide">
       <div className="space-y-6">
         <PageHeader title="You've been invited" />
         <Card>

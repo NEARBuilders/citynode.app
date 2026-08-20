@@ -4,15 +4,8 @@ import { Building2, Home, LogOut, Settings, User } from "lucide-react";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Button,
-  NetworkToggle,
-  OrgSwitcher,
-  ThemeToggle,
-} from "@/components";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,9 +13,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NetworkToggle } from "@/components/ui/network-toggle";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { OrgSwitcher } from "./org-switcher";
+import { ThemeToggle } from "./theme-toggle";
 
-export function UserNav() {
+export function UserNav({ showConnect = true }: { showConnect?: boolean }) {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -81,9 +77,11 @@ export function UserNav() {
       <div className="flex items-center gap-2">
         <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
         <NetworkToggle />
-        <Button asChild variant="outline">
-          <Link to="/login">connect</Link>
-        </Button>
+        {showConnect && (
+          <Button asChild variant="outline">
+            <Link to="/login">connect</Link>
+          </Button>
+        )}
       </div>
     );
   }

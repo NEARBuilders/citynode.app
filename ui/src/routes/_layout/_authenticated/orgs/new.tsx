@@ -70,7 +70,7 @@ function NewOrganization() {
   };
 
   return (
-    <PageContainer variant="narrow">
+    <PageContainer variant="wide">
       <div className="space-y-6">
         <PageHeader
           icon={Users}

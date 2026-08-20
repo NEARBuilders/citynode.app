@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Building2, Fuel, LayoutDashboard, Settings, Shield } from "lucide-react";
 import { getAccount } from "@/app";
-import { Badge, EmptyState, PageContainer, PageHeader } from "@/components";
+import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { cn } from "@/lib/utils";
 
@@ -49,18 +49,12 @@ function AdminPage() {
         }
         action={
           <div className="flex justify-center gap-2">
-            <Link
-              to="/"
-              className="h-10 px-4 inline-flex items-center gap-1.5 text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[12px]"
-            >
-              home
-            </Link>
-            <Link
-              to="/orgs"
-              className="h-10 px-4 inline-flex items-center gap-1.5 text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[12px]"
-            >
-              organizations
-            </Link>
+            <Button asChild variant="outline">
+              <Link to="/">home</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/orgs">organizations</Link>
+            </Button>
           </div>
         }
       />
