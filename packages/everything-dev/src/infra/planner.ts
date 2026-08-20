@@ -199,8 +199,15 @@ function allocateDatabases(
 
     const postgres: Record<string, number> = {};
     const dbs: DatabasePlan[] = [];
+    const allocatedByDesired = new Map<number, number>();
     for (const db of infraDatabases) {
-      const port = yield* allocator.pickAvailable(db.port);
+      let port: number;
+      if (allocatedByDesired.has(db.port)) {
+        port = allocatedByDesired.get(db.port)!;
+      } else {
+        port = yield* allocator.pickAvailable(db.port);
+        allocatedByDesired.set(db.port, port);
+      }
       postgres[db.slug] = port;
       dbs.push({
         secret: db.secret,
@@ -209,7 +216,7 @@ function allocateDatabases(
         dbName: db.databaseName,
         containerName: db.containerName,
         volumeName: db.volumeName,
-        url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${port}/${db.slug}_db`,
+        url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${port}/${db.databaseName}`,
       });
     }
 
@@ -360,7 +367,13 @@ export function buildLaunchSpec(
 }
 
 export function buildComposeModel(dbs: DatabasePlan[], redisPlans: RedisPlan[]): ComposeModelPlan {
-  return { databases: dbs, redis: redisPlans };
+  const seenContainers = new Set<string>();
+  const uniqueDbs = dbs.filter((db) => {
+    if (seenContainers.has(db.containerName)) return false;
+    seenContainers.add(db.containerName);
+    return true;
+  });
+  return { databases: uniqueDbs, redis: redisPlans };
 }
 
 export function buildEnvGenerated(

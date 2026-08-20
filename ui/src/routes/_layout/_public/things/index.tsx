@@ -6,13 +6,9 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface Thing {
-  thingId: string;
-  type: string;
-  payload: unknown;
-  createdAt: string;
-  updatedAt: string;
-}
+type Thing = Awaited<
+  ReturnType<ReturnType<typeof useApiClient>["template"]["listThings"]>
+>["data"][number];
 
 export const Route = createFileRoute("/_layout/_public/things/")({
   head: () => ({

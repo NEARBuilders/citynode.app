@@ -102,11 +102,11 @@ The **entire system** is configured via `bos.config.json` - a runtime-loaded JSO
 
 **Implementation:** See `host/src/config.ts` for the loader.
 
-### Auth Plugin (plugins/auth/)
+### Auth Plugin (Extended Remote)
 
 **Technology:** Rspack + `every-plugin`
 
-The auth plugin is a standalone **every-plugin** that provides authentication and authorization. It runs as a separate service loaded by the host via Module Federation.
+The auth plugin is an extended remote plugin from `bos://auth.everything.near/auth.everything.dev#app.auth`. It provides authentication and authorization, running as a separate service loaded by the host via Module Federation. It is NOT a local directory under `plugins/`.
 
 **Features:**
 - Better-Auth with NEAR SIWN (Sign-In-With-NEAR)
@@ -116,7 +116,7 @@ The auth plugin is a standalone **every-plugin** that provides authentication an
 - API keys (scoped, rate-limited, organization-aware)
 - NEAR relay (meta-transactions via built-in relayer)
 - NEAR view calls (contract read methods)
-- Multi-database driver (libsql, better-sqlite3, bun, node)
+- PostgreSQL via `pg` + Drizzle ORM
 
 **oRPC Contract Routes:**
 - Session: `getSession`, `getContext`, `getActiveMember`
@@ -143,10 +143,11 @@ The UI is a **React 19 application** built with:
 **Exposed Modules:**
 ```typescript
 exposes: {
-  './App': './src/bootstrap.tsx',        // Main application
-  './Router': './src/router.tsx',        // TanStack Router instance
+  './Router': './src/router.tsx',          // TanStack Router instance
+  './Hydrate': './src/hydrate.tsx',         // SSR hydration
   './components': './src/components/index.ts',  // Reusable components
   './providers': './src/providers/index.tsx',   // Context providers
+  './hooks': './src/hooks/index.ts',        // Shared hooks
 }
 ```
 
@@ -162,18 +163,18 @@ exposes: {
 
 **How Host Loads UI:**
 ```typescript
-// host/src/main.tsx
+// host loads the UI remote via Module Federation
 const config = await loadBosConfig();  // Reads bos.config.json
 
 createInstance({
   name: 'host',
   remotes: [{
     name: config.ui.name,              // "ui"
-    entry: `${config.ui.url}/remoteEntry.js`  // From config!
+    entry: `${config.ui.url}/mf-manifest.json`  // From config!
   }]
 });
 
-const RemoteApp = await loadRemote(`${config.ui.name}/App`);
+const RemoteRouter = await loadRemote(`${config.ui.name}/Router`);
 ```
 
 **Key Point:** No hardcoded URLs. Everything derived from `bos.config.json`.
@@ -348,7 +349,7 @@ import { admin, anonymous } from "better-auth/plugins";
 import { siwn } from "better-near-auth";
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: "sqlite", schema }),
+  database: drizzleAdapter(db, { provider: "pg", schema }),
   plugins: [
     siwn({ recipient: "your-account.near" }),
     admin({ defaultRole: "user", adminRoles: ["admin"] }),
@@ -495,7 +496,7 @@ See [better-near-auth LLM.txt](https://github.com/elliotBraem/better-near-auth/b
 **API Database**:
 - `api/src/db/schema.ts` - Application-specific data
 
-Both use **Drizzle ORM** with **SQLite** (libsql).
+Both use **Drizzle ORM** with **PostgreSQL** (`pg`).
 
 **Migrations:**
 ```bash
@@ -524,16 +525,15 @@ bun dev
 ```bash
 bun dev:api   # API only (port 3001)
 bun dev:ui    # UI only (port 3003)
-bun dev:host  # Host only (port 3000)
 ```
 
 **Environment switching:**
 ```bash
 # Use local remotes (default)
-bun dev:host
+bos dev
 
 # Use production remotes
-NODE_ENV=production bun dev:host
+NODE_ENV=production bos dev
 ```
 
 The host reads `NODE_ENV` and loads URLs from `bos.config.json`:
@@ -906,7 +906,7 @@ function MyPage() {
 type Environment = 'development' | 'production' | 'staging';
 ```
 
-3. **Use**: `NODE_ENV=staging bun dev:host`
+3. **Use**: `NODE_ENV=staging bos dev`
 
 ## Security
 

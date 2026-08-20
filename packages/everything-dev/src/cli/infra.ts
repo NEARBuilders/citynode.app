@@ -10,8 +10,11 @@ const POSTGRES_PASSWORD = "everythingdev";
 const API_DATABASE_SECRET = "API_DATABASE_URL";
 const AUTH_DATABASE_SECRET = "AUTH_DATABASE_URL";
 const HOST_SECRET = "CORS_ORIGIN";
-const BASE_POSTGRES_PORT = 5434;
 const BASE_REDIS_PORT = 6379;
+const VESTIGIAL_SECRETS = new Set([
+  "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
+  "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
+]);
 
 export interface DatabaseSecretConfig {
   secret: string;
@@ -130,6 +133,7 @@ export function getSecretGroups(runtimeConfig: RuntimeConfig): SecretGroup[] {
 
   const addGroup = (section: string, secrets: string[]) => {
     const filtered = secrets.filter((s) => {
+      if (VESTIGIAL_SECRETS.has(s)) return false;
       if (seen.has(s)) return false;
       seen.add(s);
       return true;
@@ -227,38 +231,55 @@ export function buildDatabaseConfigs(
   // Sort by slug for deterministic assignment order
   orderedSecrets.sort((a, b) => normalizeDatabaseSlug(a).localeCompare(normalizeDatabaseSlug(b)));
 
+  const apiFromKey = originMap.get(API_DATABASE_SECRET) ?? "";
+  const apiVolumeName = apiFromKey
+    ? `${apiFromKey.replace(/\./g, "_")}_postgres_api_data`
+    : `postgres_api_data`;
+  const apiContainerName = apiFromKey ? `${apiFromKey}-postgres-api` : `postgres-api`;
+
   for (const secret of orderedSecrets) {
     const slug = normalizeDatabaseSlug(secret);
-    if (secret === API_DATABASE_SECRET) {
-      portMap[slug] = 5432;
-    } else if (secret === AUTH_DATABASE_SECRET) {
+    if (secret === AUTH_DATABASE_SECRET) {
       portMap[slug] = 5433;
     } else {
-      resolvePort(slug, portMap, BASE_POSTGRES_PORT);
+      portMap[slug] = 5432;
     }
   }
 
   return orderedSecrets.map((secret) => {
     const slug = normalizeDatabaseSlug(secret);
     const fromKey = originMap.get(secret) ?? "";
+    const isAuth = secret === AUTH_DATABASE_SECRET;
     const port = portMap[slug];
 
-    const volumeName = fromKey
-      ? `${fromKey.replace(/\./g, "_")}_postgres_${slug}_data`
-      : `postgres_${slug}_data`;
-
-    const containerName = fromKey ? `${fromKey}-postgres-${slug}` : `postgres-${slug}`;
+    if (isAuth) {
+      const volumeName = fromKey
+        ? `${fromKey.replace(/\./g, "_")}_postgres_${slug}_data`
+        : `postgres_${slug}_data`;
+      const containerName = fromKey ? `${fromKey}-postgres-${slug}` : `postgres-${slug}`;
+      return {
+        secret,
+        slug,
+        fromKey,
+        port,
+        serviceName: `postgres-${slug.replace(/_/g, "-")}`,
+        containerName,
+        databaseName: `${slug}_db`,
+        volumeName,
+        url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${port}/${slug}_db`,
+      };
+    }
 
     return {
       secret,
       slug,
       fromKey,
-      port,
-      serviceName: `postgres-${slug.replace(/_/g, "-")}`,
-      containerName,
-      databaseName: `${slug}_db`,
-      volumeName,
-      url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${port}/${slug}_db`,
+      port: 5432,
+      serviceName: "postgres-api",
+      containerName: apiContainerName,
+      databaseName: "api_db",
+      volumeName: apiVolumeName,
+      url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/api_db`,
     };
   });
 }
@@ -369,14 +390,24 @@ function renderEnvFile(
   return `${lines.join("\n")}\n`;
 }
 
+function uniqueDatabaseServices<T extends { serviceName: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.serviceName)) return false;
+    seen.add(item.serviceName);
+    return true;
+  });
+}
+
 function renderDockerCompose(
   databases: DatabaseSecretConfig[],
   redisConfigs: RedisSecretConfig[],
   projectName: string,
 ): string {
   const lines = [`name: ${projectName}`, ""];
+  const uniqueDbs = uniqueDatabaseServices(databases);
 
-  if (databases.length > 0) {
+  if (uniqueDbs.length > 0) {
     lines.push(
       "x-pg-common: &pg-common",
       "  image: postgres:17-alpine",
@@ -408,7 +439,7 @@ function renderDockerCompose(
 
   lines.push("services:");
 
-  for (const database of databases) {
+  for (const database of uniqueDbs) {
     lines.push(`  ${database.serviceName}:`);
     lines.push("    <<: *pg-common");
     lines.push(`    container_name: ${database.containerName}`);
@@ -434,7 +465,7 @@ function renderDockerCompose(
   }
 
   lines.push("volumes:");
-  for (const database of databases) {
+  for (const database of uniqueDbs) {
     lines.push(`  ${database.volumeName}:`);
     lines.push(`    name: ${database.volumeName}`);
   }
@@ -476,8 +507,9 @@ export function renderDockerComposeFromPlan(
   projectName: string,
 ): string {
   const lines = [`name: ${projectName}`, ""];
+  const uniqueDbs = uniqueDatabaseServices(databases);
 
-  if (databases.length > 0) {
+  if (uniqueDbs.length > 0) {
     lines.push(
       "x-pg-common: &pg-common",
       "  image: postgres:17-alpine",
@@ -509,7 +541,7 @@ export function renderDockerComposeFromPlan(
 
   lines.push("services:");
 
-  for (const db of databases) {
+  for (const db of uniqueDbs) {
     lines.push(`  ${db.serviceName}:`);
     lines.push("    <<: *pg-common");
     lines.push(`    container_name: ${db.containerName}`);
@@ -535,7 +567,7 @@ export function renderDockerComposeFromPlan(
   }
 
   lines.push("volumes:");
-  for (const db of databases) {
+  for (const db of uniqueDbs) {
     lines.push(`  ${db.volumeName}:`);
     lines.push(`    name: ${db.volumeName}`);
   }
@@ -762,9 +794,12 @@ export function buildCiInfraPlan(
   if (!env["BETTER_AUTH_SECRET"]) env["BETTER_AUTH_SECRET"] = "";
 
   const services: CiServiceSpec[] = [];
+  const seenPorts = new Set<string>();
 
   for (const db of allDatabaseConfigs) {
-    const fromKey = db.fromKey || runtimeConfig.account;
+    const portKey = `${db.port}:5432`;
+    if (seenPorts.has(portKey)) continue;
+    seenPorts.add(portKey);
     services.push({
       key: db.slug,
       slug: db.slug,
@@ -781,7 +816,7 @@ export function buildCiInfraPlan(
         timeout: "3s",
         retries: 10,
       },
-      volumes: [`${fromKey.replace(/\./g, "_")}_postgres_${db.slug}_data:/var/lib/postgresql/data`],
+      volumes: [`${db.volumeName}:/var/lib/postgresql/data`],
       database: { user: POSTGRES_USER, password: POSTGRES_PASSWORD, name: db.databaseName },
     });
   }
@@ -825,7 +860,7 @@ function collectAllSecrets(runtimeConfig: RuntimeConfig): string[] {
       if (plugin.secrets) all.push(...plugin.secrets);
     }
   }
-  return all;
+  return all.filter((s) => !VESTIGIAL_SECRETS.has(s));
 }
 
 function uniqueSlugs<T extends { slug: string }>(entries: T[]): T[] {

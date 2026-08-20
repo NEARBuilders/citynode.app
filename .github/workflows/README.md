@@ -117,23 +117,28 @@ Docker images are built in `docker.yml`. The image uses a multi-stage build:
 
 ```
 Builder stage:
-  COPY . .                              # Full repo (including packages/)
-  RUN bun run scripts/resolve-workspace-refs.ts   # normalize framework refs for install
-  RUN bun install                       # Installs from npm + remaining workspaces
+  COPY . .                                    # Full repo
+  RUN bun install --frozen-lockfile --ignore-scripts
+  RUN bun run --cwd packages/every-plugin build
+  RUN bun run --cwd packages/everything-dev build
+  RUN bun run postinstall                     # types:gen needs every-plugin built first
+  RUN bun run scripts/resolve-workspace-refs.ts  # normalize workspace refs
+  RUN rm -rf host api ui plugins              # App code loaded remotely at runtime
 
 Final stage:
-  COPY --from=builder node_modules      # Pre-installed deps (from npm)
-  COPY --from=builder bos.config.json   # Runtime config
-  COPY --from=builder package.json      # Start script
-  COPY --from=builder host/ api/ ui/ plugins/  # App code only
-  # packages/ is NOT copied — excluded from final image
+  COPY --from=builder node_modules            # Pre-installed deps
+  COPY --from=builder package.json bun.lock bunfig.toml
+  COPY --from=builder bos.config.json         # Runtime config
+  COPY --from=builder packages/everything-dev  # Framework CLI (bos)
+  COPY --from=builder packages/every-plugin    # Plugin runtime
+  # host/ api/ ui/ plugins/ are NOT copied — loaded remotely at runtime
 ```
 
 **Why this design:**
-- `packages/everything-dev` and `packages/every-plugin` are framework packages published to npm. The Docker image installs them from the registry, not from local source.
+- `packages/everything-dev` and `packages/every-plugin` are framework packages needed at runtime for the `bos` CLI and plugin runtime.
 - The normalize script rewrites `workspace:*` references to concrete package versions before install.
-- The final image excludes `packages/` source code, producing a smaller image.
-- The start command uses `bos` from `node_modules/.bin/bos` instead of `bun packages/everything-dev/cli.js`.
+- App code (`host/`, `api/`, `ui/`, `plugins/`) is removed — the host loads UI, API, and plugins from remote URLs at runtime via Module Federation.
+- The start command uses `bos` from `node_modules/.bin/bos`.
 
 ## npm Trusted Publishing (OIDC)
 

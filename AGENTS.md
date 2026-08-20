@@ -171,7 +171,7 @@ Current fixed-core host rules:
 - tenant SSR is gated per-tenant by the `allowSsr` column on the tenant record; the host's BindingResolver reads permissions from the API's `GET /tenants/bindings` endpoint (cached for 30s)
 - nested label routing and account-relative tenant derivation are the intended architecture direction, but not the complete resolver behavior today
 
-For full per-request host/plugin/auth/api swapping, start from `plans/runtime-config-hot-swap.md`.
+For full per-request host/plugin/auth/api swapping, see `plans/` for design docs.
 
 ## Development Workflow
 
@@ -223,10 +223,11 @@ For full per-request host/plugin/auth/api swapping, start from `plans/runtime-co
 
 Business logic is organized into independent plugins loaded via Module Federation:
 - **`api/`** — Thin structural shell: ping, authHealth, error routes, middleware definitions
-- **`plugins/auth/`** — Authentication and authorization (Better-Auth, NEAR SIWN, organizations, API keys)
-- **`plugins/registry/`** — FastKV app discovery, metadata publish/relay (no database)
-- **`plugins/projects/`** — Project and organization management
+- **`plugins/apps/`** — Registry/discovery, FastKV app metadata (local in dev)
 - **`plugins/_template/`** — Scaffold for creating new plugins
+- **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
+- **`plugins/proposals/`** — Proposals plugin (remote in dev, production only)
+- **`plugins/votes/`** — Votes plugin (remote in dev, production only)
 
 Each plugin is self-contained with its own:
 - `contract.ts` — oRPC route definitions and Zod schemas

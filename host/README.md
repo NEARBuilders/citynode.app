@@ -34,11 +34,11 @@ Today the host boots from one base `RuntimeConfig` snapshot and keeps auth, API,
 On top of that fixed server core, the host now supports request-scoped tenant UI resolution:
 
 - base config boots the host, auth, API, and plugin routers once
-- subdomains resolve tenants by convention, for example `alice.linktree.com -> alice.near`
+- subdomains resolve tenants by convention, for example `alice.citynode.app -> alice.near`
 - tenant config must extend the base BOS runtime
 - tenant requests may override UI-facing remotes and sidebar metadata without changing the server core
 
-For full host/plugin/auth/api hot-swap, see [`../plans/runtime-config-hot-swap.md`](../plans/runtime-config-hot-swap.md). That is still a larger future design than the fixed-core tenant mode implemented now.
+For full host/plugin/auth/api hot-swap, see `plans/` for design docs. That is still a larger future design than the fixed-core tenant mode implemented now.
 
 ## Development
 
@@ -68,21 +68,9 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
       "development": "local:host",
       "production": "https://example.zephyrcloud.app",
       "secrets": [
-        "HOST_DATABASE_URL",
-        "HOST_DATABASE_AUTH_TOKEN",
-        "BETTER_AUTH_SECRET",
-        "BETTER_AUTH_URL"
-      ],
-      "template": "near-everything/every-plugin/demo/host",
-      "files": [
-        "rsbuild.config.ts",
-        "tsconfig.json",
-        "vitest.config.ts",
-        "drizzle.config.ts"
-      ],
-      "sync": {
-        "scripts": ["dev", "build", "test"]
-      }
+        "CORS_ORIGIN",
+        "CSP_STRICT"
+      ]
     }
   }
 }
@@ -96,10 +84,8 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
 | `API_SOURCE` | `local` or `remote` | Based on NODE_ENV |
 | `API_PROXY` | Proxy API requests to another host URL | - |
 | `NETWORK_ID` | Tenant account suffix resolution: `mainnet` or `testnet` | `mainnet` |
-| `HOST_DATABASE_URL` | SQLite database URL for auth | `file:./database.db` |
-| `HOST_DATABASE_AUTH_TOKEN` | Auth token for remote database | - |
+| `AUTH_DATABASE_URL` | PostgreSQL URL for auth | `postgres://everythingdev:everythingdev@localhost:5433/auth_db` |
 | `BETTER_AUTH_SECRET` | Secret for session encryption | - |
-| `BETTER_AUTH_URL` | Base URL for auth endpoints | - |
 | `CORS_ORIGIN` | Comma-separated allowed origins | Host + UI URLs |
 
 ## Multi-Tenant Status
@@ -118,17 +104,17 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
 Example deployment:
 
 ```bash
-BOS_ACCOUNT=linktree.near
-BOS_GATEWAY=linktree.com
+BOS_ACCOUNT=v1.citynode.near
+BOS_GATEWAY=citynode.app
 bos start --no-interactive
 ```
 
 Example tenant behavior:
 
-- `linktree.com` serves the base runtime
-- `alice.linktree.com` resolves `bos://alice.linktree.near/linktree.com`
-- `bob.linktree.com` resolves `bos://bob.linktree.near/linktree.com`
-- nested labels compose too, such as `chicago.alice.linktree.com` -> `bos://chicago.alice.linktree.near/linktree.com`
+- `citynode.app` serves the base runtime
+- `alice.citynode.app` resolves `bos://alice.citynode.near/citynode.app`
+- `bob.citynode.app` resolves `bos://bob.citynode.near/citynode.app`
+- nested labels compose too, such as `chicago.alice.citynode.app` -> `bos://chicago.alice.citynode.near/citynode.app`
 
 Tenant config rules:
 
@@ -158,7 +144,7 @@ API_PROXY=https://production.example.com bos dev
 - **Server**: Hono.js + @hono/node-server
 - **API**: oRPC (RPC + OpenAPI)
 - **Auth**: Better-Auth + better-near-auth (SIWN)
-- **Database**: SQLite (libsql) + Drizzle ORM
+- **Database**: PostgreSQL (`pg`) + Drizzle ORM
 - **Build**: Rsbuild + Module Federation
 - **Plugins**: every-plugin runtime
 
@@ -166,10 +152,9 @@ API_PROXY=https://production.example.com bos dev
 
 - `bun dev` - Start dev server (port 3000)
 - `bun build` - Build MF bundle for production
-- `bun bootstrap` - Run host from remote MF URL
 - `bun preview` - Run production server locally
-- `bun db:migrate` - Run migrations
-- `bun db:studio` - Open Drizzle Studio
+- `bun test` - Run tests
+- `bun typecheck` - Type check
 
 ## Remote Host Mode
 
@@ -179,9 +164,6 @@ The host can be deployed as a Module Federation remote:
 # Build and deploy
 bos build host
 bos deploy host
-
-# Others can run from the remote URL
-HOST_REMOTE_URL=https://your-zephyr-url.zephyrcloud.app bun bootstrap
 ```
 
 ## API Routes
