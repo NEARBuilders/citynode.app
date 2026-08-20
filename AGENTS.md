@@ -578,7 +578,7 @@ The `x-api-key` header works for all API surfaces. The session middleware resolv
 
 ### MCP tool generation
 
-The MCP server (`host/src/services/mcp.ts`) generates tools from the API's OpenAPI spec. Every non-SSE API operation becomes an MCP tool with its `operationId` as the tool name. Auth context flows through `AsyncLocalStorage` into every tool invocation.
+The MCP server (`host/src/services/mcp.ts`) generates tools from the API's OpenAPI spec. The base API router composes all plugin routes (auth, registry, proposals, votes) via `pluginsClient`, so every API operation — including auth, NEAR SIWN, relay, and API key management — becomes an MCP tool. Auth context flows through `AsyncLocalStorage` into every tool invocation.
 
 ### Agent entry points (URL-served)
 

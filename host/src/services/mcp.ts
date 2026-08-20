@@ -5,7 +5,7 @@ import {
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { OpenAPIGenerator } from "@orpc/openapi";
-import { OpenAPIHandler } from "@orpc/openapi/fetch";
+import type { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import type { Context, Hono } from "hono";
 import type { AuthPluginContext, HonoEnv } from "../lib/auth";
@@ -29,37 +29,33 @@ export function closeMcpServer(): Promise<void> {
   return t.close();
 }
 
-interface PluginRouterSource {
-  router: unknown;
-  prefix: `/${string}`;
-  label: string;
-}
-
-async function registerToolsFromRouter(
-  server: McpServer,
-  source: PluginRouterSource,
-  handler: OpenAPIHandler<any>,
-  config: RuntimeConfig,
+export async function mountMcpRoute(
+  app: Hono<HonoEnv>,
+  options: {
+    apiRouter: unknown;
+    apiHandler: OpenAPIHandler<any>;
+    config: RuntimeConfig;
+  },
 ) {
+  const { apiRouter, apiHandler, config } = options;
+
   const generator = new OpenAPIGenerator({
     schemaConverters: [new ZodToJsonSchemaConverter()],
   });
 
-  let spec: any;
-  try {
-    spec = await generator.generate(source.router as any, {
-      info: {
-        title: `${config.title ?? config.account} ${source.label}`,
-        version: "1.0.0",
-      },
-    });
-  } catch (error) {
-    logger.warn(
-      `[MCP] Failed to generate OpenAPI spec for ${source.label}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return;
-  }
+  const spec = await generator.generate(apiRouter as any, {
+    info: {
+      title: `${config.title ?? config.account} API`,
+      version: "1.0.0",
+    },
+  });
 
+  const server = new McpServer({
+    name: `${config.title ?? config.account} MCP`,
+    version: "1.0.0",
+  });
+
+  const registeredTools = new Set<string>();
   const paths = (spec as any).paths ?? {};
 
   for (const [path, methods] of Object.entries(paths)) {
@@ -72,6 +68,12 @@ async function registerToolsFromRouter(
         (resp: any) => resp?.content && "text/event-stream" in resp.content,
       );
       if (hasSseResponse) continue;
+
+      if (registeredTools.has(operationId)) {
+        logger.warn(`[MCP] Skipping duplicate tool "${operationId}"`);
+        continue;
+      }
+      registeredTools.add(operationId);
 
       const methodUpper = method.toUpperCase();
       const isBodyMethod = ["POST", "PUT", "PATCH"].includes(methodUpper);
@@ -113,10 +115,9 @@ async function registerToolsFromRouter(
       };
 
       const description = operation.description ?? operation.summary ?? `${methodUpper} ${path}`;
-      const toolName = source.prefix === "/api" ? operationId : `${source.prefix.replace("/api/rpc/", "")}_${operationId}`;
 
       server.registerTool(
-        toolName,
+        operationId,
         {
           description,
           inputSchema: fromJsonSchema(inputSchema as any) as any,
@@ -167,8 +168,8 @@ async function registerToolsFromRouter(
           });
 
           try {
-            const result = await handler.handle(req, {
-              prefix: source.prefix,
+            const result = await apiHandler.handle(req, {
+              prefix: "/api",
               context: store.context,
             });
 
@@ -192,7 +193,7 @@ async function registerToolsFromRouter(
             };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            logger.error(`[MCP] Tool "${toolName}" failed: ${message}`);
+            logger.error(`[MCP] Tool "${operationId}" failed: ${message}`);
             return {
               content: [{ type: "text" as const, text: message }],
               isError: true,
@@ -201,36 +202,6 @@ async function registerToolsFromRouter(
         },
       );
     }
-  }
-}
-
-export async function mountMcpRoute(
-  app: Hono<HonoEnv>,
-  options: {
-    apiRouter: unknown;
-    apiHandler: OpenAPIHandler<any>;
-    config: RuntimeConfig;
-    pluginRouters?: Array<{ router: unknown; prefix: string; label: string }>;
-  },
-) {
-  const { apiRouter, apiHandler, config } = options;
-
-  const server = new McpServer({
-    name: `${config.title ?? config.account} MCP`,
-    version: "1.0.0",
-  });
-
-  await registerToolsFromRouter(server, {
-    router: apiRouter,
-    prefix: "/api",
-    label: "API",
-  }, apiHandler, config);
-
-  for (const pluginSource of options.pluginRouters ?? []) {
-    const pluginHandler = new OpenAPIHandler(pluginSource.router as any, {
-      interceptors: [],
-    });
-    await registerToolsFromRouter(server, pluginSource, pluginHandler, config);
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({

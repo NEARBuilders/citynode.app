@@ -145,12 +145,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
         timestamp: new Date().toISOString(),
       })),
 
-      authHealth: builder.authHealth.use(requireAuth).handler(async () => ({
-        status: "ok",
-        emailConfigured: !!process.env.EMAIL_PROVIDER,
-        smsConfigured: !!process.env.SMS_PROVIDER,
-      })),
-
       listTenants: builder.listTenants
         .use(requireAuth)
         .use(requireOrganization)

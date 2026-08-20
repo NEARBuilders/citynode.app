@@ -142,17 +142,6 @@ export const contract = oc.router({
     }),
   ),
 
-  authHealth: oc
-    .route({ method: "GET", path: "/auth/health" })
-    .output(
-      z.object({
-        status: z.string(),
-        emailConfigured: z.boolean(),
-        smsConfigured: z.boolean(),
-      }),
-    )
-    .errors({ UNAUTHORIZED }),
-
   listTenants: oc
     .route({ method: "GET", path: "/tenants" })
     .output(z.array(TenantSchema))
