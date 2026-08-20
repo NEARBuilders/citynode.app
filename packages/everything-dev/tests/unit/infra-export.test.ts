@@ -71,17 +71,17 @@ describe("buildCiInfraPlan", () => {
     };
     const plan = buildCiInfraPlan(runtime, { configDir: dir });
 
-    expect(plan.env["API_DATABASE_URL"]).toBe(
+    expect(plan.env.API_DATABASE_URL).toBe(
       "postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
-    expect(plan.env["AUTH_DATABASE_URL"]).toBe(
+    expect(plan.env.AUTH_DATABASE_URL).toBe(
       "postgres://everythingdev:everythingdev@localhost:5433/auth_db",
     );
-    expect(plan.env["EXAMPLE_DATABASE_URL"]).toBe(
+    expect(plan.env.EXAMPLE_DATABASE_URL).toBe(
       "postgres://everythingdev:everythingdev@localhost:5434/example_db",
     );
-    expect(plan.env["BETTER_AUTH_SECRET"]).toBe("");
-    expect(plan.env["CORS_ORIGIN"]).toBe("http://127.0.0.1:4100");
+    expect(plan.env.BETTER_AUTH_SECRET).toBe("");
+    expect(plan.env.CORS_ORIGIN).toBe("http://127.0.0.1:4100");
 
     expect(plan.services.length).toBeGreaterThanOrEqual(3);
     const serviceKeys = plan.services.map((s) => s.key);
@@ -104,10 +104,10 @@ describe("buildCiInfraPlan", () => {
     try {
       process.env.BOS_CI_HOST_PORT = "5173";
       const plan = buildCiInfraPlan(buildRuntimeConfig(), {});
-      expect(plan.env["CORS_ORIGIN"]).toBe("http://127.0.0.1:5173");
+      expect(plan.env.CORS_ORIGIN).toBe("http://127.0.0.1:5173");
 
       const override = buildCiInfraPlan(buildRuntimeConfig(), { hostPortOverride: 8080 });
-      expect(override.env["CORS_ORIGIN"]).toBe("http://127.0.0.1:8080");
+      expect(override.env.CORS_ORIGIN).toBe("http://127.0.0.1:8080");
     } finally {
       if (previous === undefined) delete process.env.BOS_CI_HOST_PORT;
       else process.env.BOS_CI_HOST_PORT = previous;

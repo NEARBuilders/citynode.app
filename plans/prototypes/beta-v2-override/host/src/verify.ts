@@ -1,12 +1,12 @@
 import {
-  importUiTree,
-  importDashboardApi,
   buildApiClient,
+  composeApp,
+  importDashboardApi,
+  importUiTree,
+  makeContext,
   match,
   renderRoute,
-  makeContext,
   runChecks,
-  composeApp,
 } from "./verify-helpers";
 
 /**
@@ -32,16 +32,28 @@ async function main() {
   const stats = await dashboardApi.getStats();
 
   runChecks("BASE CONFIG — dashboard default UI + apiClient injection", [
-    [composed.mountCounts.public === 2, `mountCounts.public === 2 (got ${composed.mountCounts.public})`],
-    [dash.leaf.includes("dashboard__public"), `GET /dashboard → leaf "${dash.leaf}" (namespaced id)`],
-    [dash.branch.includes("/public") && dash.branch.indexOf("/public") < dash.branch.indexOf(dash.leaf),
-      `host mount /public precedes dashboard leaf in branch (${dash.branch.join(" → ")})`],
+    [
+      composed.mountCounts.public === 2,
+      `mountCounts.public === 2 (got ${composed.mountCounts.public})`,
+    ],
+    [
+      dash.leaf.includes("dashboard__public"),
+      `GET /dashboard → leaf "${dash.leaf}" (namespaced id)`,
+    ],
+    [
+      dash.branch.includes("/public") &&
+        dash.branch.indexOf("/public") < dash.branch.indexOf(dash.leaf),
+      `host mount /public precedes dashboard leaf in branch (${dash.branch.join(" → ")})`,
+    ],
     [home.leaf.includes("landing__public"), `GET / → leaf "${home.leaf}"`],
     [dashHtml.includes('data-testid="dashboard-base"'), "dashboard renders BASE UI marker"],
     [!dashHtml.includes("dashboard-tenant"), "dashboard does NOT render tenant marker"],
     [dashHtml.includes("apiClient:ok"), "apiClient injected into dashboard component"],
     [homeHtml.includes("apiClient:ok"), "apiClient injected into landing (UI-only plugin)"],
-    [stats.users === 42 && stats.projects === 7, `apiClient.dashboard.getStats() → ${stats.users} users / ${stats.projects} projects`],
+    [
+      stats.users === 42 && stats.projects === 7,
+      `apiClient.dashboard.getStats() → ${stats.users} users / ${stats.projects} projects`,
+    ],
   ]);
 }
 

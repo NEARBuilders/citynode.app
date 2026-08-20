@@ -1,8 +1,7 @@
-import { registerRemotes, loadRemote } from "@module-federation/enhanced/runtime";
-import { createRouter } from "@tanstack/react-router";
-import { createRoot } from "react-dom/client";
+import { loadRemote, registerRemotes } from "@module-federation/enhanced/runtime";
+import { createRouter, RouterProvider } from "@tanstack/react-router";
 import React from "react";
-import { RouterProvider } from "@tanstack/react-router";
+import { createRoot } from "react-dom/client";
 import { composeApp, type WebPluginModule } from "./compose";
 import { MOCK_ADMIN_USER } from "./mount-registry";
 
@@ -15,9 +14,7 @@ const REMOTES: Array<{ name: string; entry: string }> = [
 ];
 
 async function loadPlugins(): Promise<WebPluginModule[]> {
-  registerRemotes(
-    REMOTES.map((r) => ({ name: r.name, entry: r.entry })),
-  );
+  registerRemotes(REMOTES.map((r) => ({ name: r.name, entry: r.entry })));
 
   const results = await Promise.all(
     REMOTES.map(async (remote) => {

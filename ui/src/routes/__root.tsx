@@ -153,7 +153,7 @@ function RootComponent() {
         <style nonce={cspNonce} dangerouslySetInnerHTML={{ __html: getBaseStyles() }} />
       </head>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={cspNonce}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={cspNonce}>
           <div id="root">
             <Outlet />
           </div>

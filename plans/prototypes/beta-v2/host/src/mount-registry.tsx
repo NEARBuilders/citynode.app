@@ -41,7 +41,11 @@ export type AuthContext = { user?: MockUser };
 
 export const MOCK_ADMIN_USER: AuthContext = { user: { id: "u1", name: "Ada", isAdmin: true } };
 
-type BeforeLoadArgs = { context: AuthContext; params: Record<string, unknown>; location: { pathname: string } };
+type BeforeLoadArgs = {
+  context: AuthContext;
+  params: Record<string, unknown>;
+  location: { pathname: string };
+};
 
 const requireSession =
   () =>
@@ -154,7 +158,9 @@ export function createMountRegistry(rootRoute: AnyRoute): Record<string, MountEn
       }
     },
     ssr: false,
-    loader: ({ params }) => ({ org: { slug: String(params.orgSlug ?? ""), name: `Org "${params.orgSlug}"` } }),
+    loader: ({ params }) => ({
+      org: { slug: String(params.orgSlug ?? ""), name: `Org "${params.orgSlug}"` },
+    }),
     component: () => {
       const data = useLoaderData({ from: orgSlugRoute.id }) as {
         org: { slug: string; name: string };
@@ -168,6 +174,10 @@ export function createMountRegistry(rootRoute: AnyRoute): Record<string, MountEn
     anon: { kind: "static", route: anonMount },
     authenticated: { kind: "static", route: authenticatedMount },
     admin: { kind: "static", route: adminMount },
-    organization: { kind: "parameterized", parentRoute: organizationRoot, paramRoute: orgSlugRoute },
+    organization: {
+      kind: "parameterized",
+      parentRoute: organizationRoot,
+      paramRoute: orgSlugRoute,
+    },
   };
 }

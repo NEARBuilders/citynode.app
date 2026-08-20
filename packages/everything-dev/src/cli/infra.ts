@@ -197,7 +197,7 @@ export function buildOriginMap(
     if (!originMap.has(secret)) originMap.set(secret, authOrigin);
   }
 
-  for (const [pluginKey, pluginEntry] of Object.entries(runtimeConfig.plugins ?? {})) {
+  for (const [_pluginKey, pluginEntry] of Object.entries(runtimeConfig.plugins ?? {})) {
     const pluginOrigin = extendsRefAccount(pluginEntry.extendsRef) ?? account;
     for (const secret of pluginEntry.secrets ?? []) {
       if (!originMap.has(secret)) originMap.set(secret, pluginOrigin);
@@ -790,8 +790,8 @@ export function buildCiInfraPlan(
     }
   }
 
-  env["CORS_ORIGIN"] = `http://127.0.0.1:${hostPort}`;
-  if (!env["BETTER_AUTH_SECRET"]) env["BETTER_AUTH_SECRET"] = "";
+  env.CORS_ORIGIN = `http://127.0.0.1:${hostPort}`;
+  if (!env.BETTER_AUTH_SECRET) env.BETTER_AUTH_SECRET = "";
 
   const services: CiServiceSpec[] = [];
   const seenPorts = new Set<string>();
@@ -863,7 +863,7 @@ function collectAllSecrets(runtimeConfig: RuntimeConfig): string[] {
   return all.filter((s) => !VESTIGIAL_SECRETS.has(s));
 }
 
-function uniqueSlugs<T extends { slug: string }>(entries: T[]): T[] {
+function _uniqueSlugs<T extends { slug: string }>(entries: T[]): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const entry of entries) {

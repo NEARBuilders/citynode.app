@@ -3,7 +3,15 @@ import { createRootRoute, createRoute, Outlet } from "@tanstack/react-router";
 export function LandingChrome() {
   return (
     <div style={{ border: "2px solid #4ade80", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, color: "#4ade80", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#4ade80",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         remote-landing
       </div>
       <Outlet />

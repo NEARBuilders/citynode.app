@@ -1,6 +1,6 @@
-import { resolveApp, resolveSource, parseBosRef } from "./resolver";
-import type { ResolveContext } from "./resolver";
 import { apps } from "./configs";
+import type { ResolveContext } from "./resolver";
+import { parseBosRef, resolveApp, resolveSource } from "./resolver";
 import { runChecks } from "./verify-helpers";
 
 const REMOTE_NAMES: Record<string, string> = {
@@ -36,15 +36,34 @@ async function main() {
   const apiByNs = (ns: string, app: typeof base) => app.api.find((a) => a.ns === ns);
 
   checks.push(
-    [base.api.length === 1 && base.api[0].ns === "dashboard", "base resolves 1 API namespace (dashboard)"],
+    [
+      base.api.length === 1 && base.api[0].ns === "dashboard",
+      "base resolves 1 API namespace (dashboard)",
+    ],
     [base.ui.length === 2, "base resolves 2 UI namespaces (dashboard, landing)"],
-    [apiByNs("dashboard", base)!.url === "http://localhost:3101", "local://dashboard api → port 3101"],
-    [apiByNs("dashboard", base)!.entry === "http://localhost:3101/mf-manifest.json", "entry = url + /mf-manifest.json"],
-    [apiByNs("dashboard", base)!.name === "remote_dashboard_api", "remote name from static nameOf map"],
+    [
+      apiByNs("dashboard", base)!.url === "http://localhost:3101",
+      "local://dashboard api → port 3101",
+    ],
+    [
+      apiByNs("dashboard", base)!.entry === "http://localhost:3101/mf-manifest.json",
+      "entry = url + /mf-manifest.json",
+    ],
+    [
+      apiByNs("dashboard", base)!.name === "remote_dashboard_api",
+      "remote name from static nameOf map",
+    ],
     [uiUrl("dashboard", base) === "http://localhost:3102", "local://dashboard ui → port 3102"],
     [uiUrl("landing", base) === "http://localhost:3103", "local://landing (ui-only) → port 3103"],
-    [apiByNs("dashboard", tenant)!.url === "http://localhost:3101" && apiByNs("dashboard", tenant)!.name === "remote_dashboard_api", "tenant inherits SAME dashboard api"],
-    [uiUrl("dashboard", tenant) === "http://localhost:3104", "tenant overrides dashboard UI → tenant remote port"],
+    [
+      apiByNs("dashboard", tenant)!.url === "http://localhost:3101" &&
+        apiByNs("dashboard", tenant)!.name === "remote_dashboard_api",
+      "tenant inherits SAME dashboard api",
+    ],
+    [
+      uiUrl("dashboard", tenant) === "http://localhost:3104",
+      "tenant overrides dashboard UI → tenant remote port",
+    ],
     [uiUrl("landing", tenant) === "http://localhost:3103", "tenant inherits landing UI unchanged"],
   );
 
@@ -61,7 +80,10 @@ async function main() {
   const prodBase = await resolveApp(apps.base, prodCtx);
   const prodUi = (ns: string) => prodBase.ui.find((u) => u.ns === ns)?.url;
   checks.push(
-    [prodBase.api[0].url === "https://api-abc.zephyr.app", "prod: local:// → CDN url from deployMap"],
+    [
+      prodBase.api[0].url === "https://api-abc.zephyr.app",
+      "prod: local:// → CDN url from deployMap",
+    ],
     [prodBase.api[0].integrity === "sha384-aaa", "prod: integrity captured from deploy record"],
     [prodUi("dashboard") === "https://ui-def.zephyr.app", "prod: dashboard UI → CDN url"],
     [prodUi("landing") === "https://landing-ghi.zephyr.app", "prod: landing UI → CDN url"],
@@ -72,19 +94,24 @@ async function main() {
     configDir: ".",
     extendsResolver: async (ref) =>
       ref === "bos://auth.near/auth.dev#app.auth"
-        ? { name: "remote_auth", url: "https://auth.zephyr.app", entry: "https://auth.zephyr.app/mf-manifest.json" }
+        ? {
+            name: "remote_auth",
+            url: "https://auth.zephyr.app",
+            entry: "https://auth.zephyr.app/mf-manifest.json",
+          }
         : null,
     nameOf: (p) => p,
   };
   const bosModule = await resolveSource("bos://auth.near/auth.dev#app.auth", bosCtx);
   checks.push(
-    [bosModule.url === "https://auth.zephyr.app", "bos:// ref resolved via extendsResolver strategy"],
+    [
+      bosModule.url === "https://auth.zephyr.app",
+      "bos:// ref resolved via extendsResolver strategy",
+    ],
     [bosModule.name === "remote_auth", "bos:// resolved module carries its own name"],
   );
 
-  const parseCheck = parseBosRef(
-    "bos://dev.everything.near/dev.everything.dev#app.auth",
-  );
+  const parseCheck = parseBosRef("bos://dev.everything.near/dev.everything.dev#app.auth");
   checks.push(
     [parseCheck.account === "dev.everything.near", "parseBosRef extracts account"],
     [parseCheck.domain === "dev.everything.dev", "parseBosRef extracts domain"],

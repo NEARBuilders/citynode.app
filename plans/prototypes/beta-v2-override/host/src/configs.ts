@@ -1,4 +1,4 @@
-import { resolveApp, type AppDescriptor, type ResolvedApp } from "./resolver";
+import { type AppDescriptor, type ResolvedApp, resolveApp } from "./resolver";
 
 /**
  * App configurations — the prototype stand-in for `app.ts` / `bos.config.json`
@@ -44,7 +44,7 @@ export const apps: Record<string, AppDescriptor> = {
   },
 };
 
-export { resolveApp };
 export type { AppDescriptor, ResolvedApp };
+export { resolveApp };
 
 export const configs: Record<string, ResolvedApp> = {};

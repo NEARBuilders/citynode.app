@@ -1,9 +1,9 @@
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import type { AnyRoute } from "@tanstack/react-router";
-import { renderToString } from "react-dom/server";
-import React from "react";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { AnyRoute } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import React from "react";
+import { renderToString } from "react-dom/server";
 import { composeApp, type WebPluginModule } from "./compose";
 import { MOCK_USER } from "./mount-registry";
 
@@ -59,13 +59,15 @@ export async function match(routeTree: AnyRoute, target: string): Promise<MatchR
     history: createMemoryHistory({ initialEntries: [target] }),
   });
   await router.load();
-  const api = (router as unknown as {
-    getMatchedRoutes: (p: string) => {
-      foundRoute: { id: string } | undefined;
-      matchedRoutes: Array<{ id: string }>;
-      routeParams: Record<string, string>;
-    };
-  }).getMatchedRoutes;
+  const api = (
+    router as unknown as {
+      getMatchedRoutes: (p: string) => {
+        foundRoute: { id: string } | undefined;
+        matchedRoutes: Array<{ id: string }>;
+        routeParams: Record<string, string>;
+      };
+    }
+  ).getMatchedRoutes;
   const res = api(target);
   if (res.foundRoute === undefined) throw new Error(`no match for ${target}`);
   return {

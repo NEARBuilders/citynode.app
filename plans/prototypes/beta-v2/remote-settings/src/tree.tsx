@@ -3,7 +3,15 @@ import { createRootRoute, createRoute, Outlet } from "@tanstack/react-router";
 export function SettingsChrome() {
   return (
     <div style={{ border: "2px solid #a78bfa", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, color: "#a78bfa", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#a78bfa",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         remote-settings
       </div>
       <Outlet />
@@ -14,7 +22,15 @@ export function SettingsChrome() {
 export function AdminChrome() {
   return (
     <div style={{ border: "2px solid #fb7185", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, color: "#fb7185", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#fb7185",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         remote-settings · admin chrome
       </div>
       <Outlet />

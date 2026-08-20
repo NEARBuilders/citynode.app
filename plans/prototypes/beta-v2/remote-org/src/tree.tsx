@@ -3,7 +3,15 @@ import { createRootRoute, createRoute, Outlet, useParams } from "@tanstack/react
 export function OrgChrome() {
   return (
     <div style={{ border: "2px solid #34d399", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, color: "#059669", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#059669",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         remote-org
       </div>
       <Outlet />

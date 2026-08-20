@@ -1,7 +1,7 @@
-import { createMemoryHistory, createRouter } from "@tanstack/react-router";
-import type { AnyRoute } from "@tanstack/react-router";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { AnyRoute } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { composeApp, type WebPluginModule } from "./compose";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,13 +58,15 @@ async function main() {
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
 
-  const matched = (router as unknown as {
-    getMatchedRoutes: (p: string) => {
-      foundRoute: { id: string } | undefined;
-      matchedRoutes: Array<{ id: string }>;
-      routeParams: Record<string, string>;
-    };
-  }).getMatchedRoutes;
+  const matched = (
+    router as unknown as {
+      getMatchedRoutes: (p: string) => {
+        foundRoute: { id: string } | undefined;
+        matchedRoutes: Array<{ id: string }>;
+        routeParams: Record<string, string>;
+      };
+    }
+  ).getMatchedRoutes;
 
   console.log("\n=== route matching (cross-remote URLs) ===");
   let failures = 0;
@@ -130,7 +132,9 @@ async function main() {
     const leafIndex = ids.indexOf(leaf);
     const ok = mountIndex >= 0 && leafIndex > mountIndex;
     if (!ok) branchFailures += 1;
-    console.log(`  ${ok ? "ok" : "FAIL"}  ${expected.path.padEnd(24)} host mount ${mountId} before ${leaf}`);
+    console.log(
+      `  ${ok ? "ok" : "FAIL"}  ${expected.path.padEnd(24)} host mount ${mountId} before ${leaf}`,
+    );
   }
 
   const totalFailures = failures + branchFailures + paramFailures;

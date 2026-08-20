@@ -49,16 +49,15 @@ function LandingPage() {
         </section>
 
         <section className="space-y-6">
-          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
-            Directory
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+              Directory
+            </h2>
+            <Button asChild size="sm">
+              <Link to="/apply">Apply</Link>
+            </Button>
+          </div>
           <NodeDirectory nodes={rootNodes} gateway={gateway} isLoading={isLoading} />
-        </section>
-
-        <section className="flex justify-start">
-          <Button asChild size="lg">
-            <Link to="/apply">Apply</Link>
-          </Button>
         </section>
       </div>
     </PageContainer>

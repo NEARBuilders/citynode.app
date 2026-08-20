@@ -19,10 +19,7 @@ async function main() {
     console.log("module exports:", Object.keys(module));
     console.log("has tree:", module.tree !== undefined);
     const children = (module.tree?.children ?? []) as Array<{ options?: { id?: string } }>;
-    console.log(
-      "tree children ids:",
-      children.map((c) => c.options?.id).join(", "),
-    );
+    console.log("tree children ids:", children.map((c) => c.options?.id).join(", "));
   }
 }
 
