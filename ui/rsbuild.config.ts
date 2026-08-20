@@ -227,6 +227,7 @@ function createServerConfig() {
   if (shouldDeploy) {
     plugins.push(
       withZephyr({
+        snapshotType: "csr",
         hooks: {
           onDeployComplete: async (info) => {
             console.log("🚀 UI SSR Deployed:", info.url);
