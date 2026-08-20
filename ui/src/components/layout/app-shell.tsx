@@ -1,9 +1,9 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
 import type { ClientRuntimeConfig, SessionData } from "@/app";
 import { getAppName } from "@/app";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
-import { MobileTabBar } from "./mobile-tab-bar";
 import { filterSidebarByRole, getUserRole, NAV_ITEMS, type SidebarItem } from "./nav-items";
 
 interface AppShellProps {
@@ -22,19 +22,16 @@ export function AppShell({ session, runtimeConfig, isAdmin = false }: AppShellPr
     pathname === item.to || (item.to !== "/" && pathname.startsWith(`${item.to}/`));
 
   return (
-    <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden">
+    <SidebarProvider className="flex-1 min-h-0">
       <AppSidebar items={visibleItems} appName={appName} isActive={isActive} />
-
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+      <SidebarInset className="min-h-0">
         <AppHeader runtimeConfig={runtimeConfig} />
-        <main className="flex-1 w-full min-h-0 overflow-y-auto pb-20 sm:pb-6">
+        <main className="flex-1 w-full min-h-0 overflow-y-auto">
           <div className="min-h-full">
             <Outlet />
           </div>
         </main>
-      </div>
-
-      <MobileTabBar items={visibleItems} isActive={isActive} />
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

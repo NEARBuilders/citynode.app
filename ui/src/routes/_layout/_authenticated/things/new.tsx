@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
+import { PublicShell } from "@/components/layout/public-shell";
 
 export const Route = createFileRoute("/_layout/_authenticated/things/new")({
   head: () => ({
@@ -41,58 +42,60 @@ function NewThingPage() {
   });
 
   return (
-    <PageContainer variant="wide">
-      <div className="space-y-6">
-        <PageHeader
-          icon={Sparkles}
-          label="Create"
-          title="New thing"
-          description="Create a new thing in the registry."
-        />
+    <PublicShell>
+      <PageContainer variant="wide">
+        <div className="space-y-6">
+          <PageHeader
+            icon={Sparkles}
+            label="Create"
+            title="New thing"
+            description="Create a new thing in the registry."
+          />
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label
-              htmlFor="thing-id"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label
+                htmlFor="thing-id"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Thing ID
+              </label>
+              <input
+                id="thing-id"
+                type="text"
+                value={thingId}
+                onChange={(e) => setThingId(e.target.value)}
+                placeholder="thing-123"
+                className="w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">Unique identifier for the thing.</p>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="payload-json"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Payload (JSON)
+              </label>
+              <textarea
+                id="payload-json"
+                value={payloadRaw}
+                onChange={(e) => setPayloadRaw(e.target.value)}
+                rows={8}
+                className="w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-xs font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={createMutation.isPending || !thingId.trim()}
             >
-              Thing ID
-            </label>
-            <input
-              id="thing-id"
-              type="text"
-              value={thingId}
-              onChange={(e) => setThingId(e.target.value)}
-              placeholder="thing-123"
-              className="w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
-            />
-            <p className="text-xs text-muted-foreground">Unique identifier for the thing.</p>
+              {createMutation.isPending ? "Creating..." : "Create thing"}
+            </Button>
           </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="payload-json"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Payload (JSON)
-            </label>
-            <textarea
-              id="payload-json"
-              value={payloadRaw}
-              onChange={(e) => setPayloadRaw(e.target.value)}
-              rows={8}
-              className="w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-xs font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || !thingId.trim()}
-          >
-            {createMutation.isPending ? "Creating..." : "Create thing"}
-          </Button>
         </div>
-      </div>
-    </PageContainer>
+      </PageContainer>
+    </PublicShell>
   );
 }

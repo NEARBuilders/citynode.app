@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { sessionQueryOptions } from "@/app";
+import { PublicShell, PublicShellFooter } from "@/components/layout/public-shell";
 
 export const Route = createFileRoute("/_layout/_anon")({
   beforeLoad: async ({ context }) => {
@@ -16,5 +17,9 @@ export const Route = createFileRoute("/_layout/_anon")({
 });
 
 function AnonLayout() {
-  return <Outlet />;
+  return (
+    <PublicShell footer={<PublicShellFooter />}>
+      <Outlet />
+    </PublicShell>
+  );
 }
