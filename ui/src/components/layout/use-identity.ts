@@ -59,12 +59,6 @@ export function useIdentity() {
     },
   });
 
-  const handleOrgSwitch = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["session"] });
-    await queryClient.invalidateQueries({ queryKey: ["organizations"] });
-    await router.invalidate();
-  };
-
   const avatarSrc = resolveNearImageUrl(nearProfile?.image) ?? user?.image ?? undefined;
   const validEmail = user && !user.isAnonymous && user.email ? user.email : null;
   const displayName = nearProfile?.name || user?.name || nearAccountId || validEmail || "guest";
@@ -81,7 +75,6 @@ export function useIdentity() {
     activeOrg,
     nearProfile,
     signOutMutation,
-    handleOrgSwitch,
     avatarSrc,
     validEmail,
     displayName,

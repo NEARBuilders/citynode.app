@@ -1201,6 +1201,7 @@ export default createPlugin({
           status: "error" as const,
           account: "",
           network: "mainnet" as const,
+          env: input.env,
           contract: "",
           allowance: input.allowance,
           functionNames: PUBLISH_FUNCTION_NAMES,
@@ -1208,7 +1209,10 @@ export default createPlugin({
         };
       }
 
-      const account = deps.bosConfig.account;
+      const account =
+        input.env === "staging"
+          ? (deps.bosConfig.staging?.account ?? deps.bosConfig.account)
+          : deps.bosConfig.account;
       const network = getNetworkIdForAccount(account);
       const contract = getRegistryNamespaceForAccount(account);
       try {
@@ -1260,6 +1264,7 @@ export default createPlugin({
           status: "published" as const,
           account,
           network,
+          env: input.env,
           contract,
           allowance: input.allowance,
           functionNames: PUBLISH_FUNCTION_NAMES,
@@ -1271,6 +1276,7 @@ export default createPlugin({
           status: "error" as const,
           account,
           network,
+          env: input.env,
           contract,
           allowance: input.allowance,
           functionNames: PUBLISH_FUNCTION_NAMES,

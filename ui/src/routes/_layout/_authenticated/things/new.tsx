@@ -18,6 +18,7 @@ export const Route = createFileRoute("/_layout/_authenticated/things/new")({
 });
 
 function NewThingPage() {
+  const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
   const navigate = useNavigate();
   const [thingId, setThingId] = useState("");
@@ -42,7 +43,7 @@ function NewThingPage() {
   });
 
   return (
-    <PublicShell>
+    <PublicShell runtimeConfig={runtimeConfig}>
       <PageContainer variant="wide">
         <div className="space-y-6">
           <PageHeader

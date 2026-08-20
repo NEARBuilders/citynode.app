@@ -10,6 +10,7 @@ import {
   useAuthClient,
 } from "@/app";
 import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
+import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 
 type AuthClientType = import("@/app").AuthClient;
 type UserInvitationsResponse = Awaited<
@@ -137,17 +138,7 @@ function OrganizationsList() {
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
 
-  const switchOrgMutation = useMutation({
-    mutationFn: async (orgId: string) => {
-      const { error } = await auth.organization.setActive({ organizationId: orgId });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
-      toast.success("Switched organization");
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to switch organization"),
-  });
+  const switchOrgMutation = useSwitchOrganization();
 
   return (
     <PageContainer variant="wide">

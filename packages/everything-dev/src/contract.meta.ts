@@ -104,6 +104,10 @@ export const cliCommandMeta = {
     commandPath: ["key", "generate"],
     summary: "Generate a publish access key",
     interactive: true,
+    fields: {
+      env: { description: "Environment: production or staging" },
+      allowance: { description: "NEAR allowance for the key (default: 1NEAR, min: 0.3NEAR)" },
+    },
   },
   init: {
     commandPath: ["init"],

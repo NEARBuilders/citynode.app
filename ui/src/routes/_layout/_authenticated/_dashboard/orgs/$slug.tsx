@@ -36,6 +36,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
+import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 
 type AuthClientType = import("@/app").AuthClient;
 
@@ -162,17 +163,7 @@ function OrganizationDetail() {
     }
   };
 
-  const switchOrgMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await auth.organization.setActive({ organizationId: orgId });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
-      toast.success("Switched to this organization");
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to switch organization"),
-  });
+  const switchOrg = useSwitchOrganization();
 
   const inviteMutation = useMutation({
     mutationFn: async () => {
@@ -405,11 +396,8 @@ function OrganizationDetail() {
           </div>
           <div className="flex flex-wrap gap-2">
             {!isActive && (
-              <Button
-                onClick={() => switchOrgMutation.mutate()}
-                disabled={switchOrgMutation.isPending}
-              >
-                {switchOrgMutation.isPending ? "switching..." : "switch to org"}
+              <Button onClick={() => switchOrg.mutate(orgId)} disabled={switchOrg.isPending}>
+                {switchOrg.isPending ? "switching..." : "switch to org"}
               </Button>
             )}
             {isOwner && !isPersonal && (

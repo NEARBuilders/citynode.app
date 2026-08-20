@@ -202,12 +202,14 @@ export const KeyPublishOptionsSchema = z.object({
         message: `Allowance must be at least ${MIN_PUBLISH_ALLOWANCE_NEAR} NEAR to cover the transaction cost`,
       },
     ),
+  env: z.enum(["production", "staging"]).default("production"),
 });
 
 export const KeyPublishResultSchema = z.object({
   status: z.enum(["published", "error"]),
   account: z.string(),
   network: z.enum(["mainnet", "testnet"]),
+  env: z.enum(["production", "staging"]),
   contract: z.string(),
   allowance: z.string(),
   functionNames: z.array(z.string()),

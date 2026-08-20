@@ -22,7 +22,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ items, appName, isActive }: AppSidebarProps) {
-  const { organizations, activeOrgId, handleOrgSwitch } = useIdentity();
+  const { organizations, activeOrgId } = useIdentity();
 
   return (
     <Sidebar collapsible="icon">
@@ -31,7 +31,6 @@ export function AppSidebar({ items, appName, isActive }: AppSidebarProps) {
           appName={appName}
           organizations={organizations}
           activeOrgId={activeOrgId}
-          onSwitch={handleOrgSwitch}
         />
       </SidebarHeader>
 

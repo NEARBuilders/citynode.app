@@ -24,6 +24,7 @@ export { NetworkToggle } from "./layout/network-toggle";
 export { OrgSwitcher } from "./layout/org-switcher";
 export { PageContainer } from "./layout/page-container";
 export { PageHeader } from "./layout/page-header";
+export { PublicHeader } from "./layout/public-header";
 export { PublicShell, PublicShellFooter } from "./layout/public-shell";
 export { SectionHeader } from "./layout/section-header";
 export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";

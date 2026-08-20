@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
-import { injectCookies, verifyAuthenticated } from "../helpers/seeded";
+import { injectCookies } from "../helpers/seeded";
 
 test.describe("Settings → API Keys", () => {
   let pageErrors: string[];

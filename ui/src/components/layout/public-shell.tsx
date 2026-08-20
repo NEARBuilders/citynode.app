@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { ClientRuntimeConfig } from "@/app";
 import { NearBranding } from "@/components/layout/near-branding";
-import { UserNav } from "./user-nav";
+import { PublicHeader } from "./public-header";
 
 interface PublicShellProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
@@ -10,14 +10,15 @@ interface PublicShellProps {
   showConnect?: boolean;
 }
 
-export function PublicShell({ children, footer, showConnect = true }: PublicShellProps) {
+export function PublicShell({
+  runtimeConfig,
+  children,
+  footer,
+  showConnect = true,
+}: PublicShellProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <header className="shrink-0">
-        <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3">
-          <UserNav showConnect={showConnect} />
-        </div>
-      </header>
+      <PublicHeader runtimeConfig={runtimeConfig} showConnect={showConnect} />
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         <div className="flex-1 flex flex-col">{children}</div>

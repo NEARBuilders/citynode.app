@@ -909,9 +909,8 @@ export async function personalizeConfig(
     const skillMdPath = join(publicDir, "skill.md");
     if (!existsSync(skillMdPath)) {
       const title = opts.title ?? opts.account ?? "app";
-      const account = opts.account ?? "<your-account>.near";
       const repository = opts.repository ?? "";
-      writeFileSync(skillMdPath, buildChildSkillMd(title, account, repository));
+      writeFileSync(skillMdPath, buildChildSkillMd(title, repository));
     }
   }
 
@@ -1679,7 +1678,7 @@ The \`x-api-key\` header works for \`/api/*\` (REST), \`/api/rpc/*\` (oRPC), and
 `;
 }
 
-export function buildChildSkillMd(title: string, account: string, repository: string): string {
+export function buildChildSkillMd(title: string, repository: string): string {
   const repoLink = repository
     ? `- [Repository](${repository}): Clone and read \`AGENTS.md\` for full development instructions.`
     : `- Clone the repository and read \`AGENTS.md\` for full development instructions.`;
