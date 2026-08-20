@@ -30,15 +30,6 @@ function AdminSystem() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">System</h1>
-          <p className="text-sm text-muted-foreground">
-            Runtime configuration for this deployment.
-          </p>
-        </div>
-      </header>
-
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="p-6 space-y-4">
           <h2 className="text-sm font-semibold text-foreground">Runtime</h2>

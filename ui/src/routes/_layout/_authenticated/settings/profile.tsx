@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { sessionQueryOptions, useAuthClient } from "@/app";
-import { Button, Card, Input } from "@/components";
+import { Button, Card, InfoRow, Input } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/settings/profile")({
   component: ProfileSettings,
@@ -78,18 +78,5 @@ function IdentityCard({
         </div>
       </div>
     </Card>
-  );
-}
-
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-[100px_1fr] gap-4 rounded-[8px] border border-border bg-muted px-3.5 py-2.5 items-center">
-      <span className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-        {label}
-      </span>
-      <span className={`text-foreground text-[13px] break-all ${mono ? "font-mono text-xs" : ""}`}>
-        {value}
-      </span>
-    </div>
   );
 }

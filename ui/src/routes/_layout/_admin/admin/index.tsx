@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building2, LayoutDashboard, Settings, Users } from "lucide-react";
 import { getAccount, useAuthClient } from "@/app";
-import { Button, Card } from "@/components";
+import { Button, Card, SectionHeader } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
 
 export const Route = createFileRoute("/_layout/_admin/admin/")({
@@ -17,23 +17,9 @@ function AdminDashboard() {
   const platformAccount = getAccount();
   const user = auth?.user ?? null;
   const walletAccount = authClient.near.getAccountId();
-  const signedInAs = walletAccount ?? user?.name ?? user?.email ?? "—";
 
   return (
     <div className="space-y-8">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Dashboard
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Signed in as <span className="font-mono">{signedInAs}</span>
-            </p>
-          </div>
-        </div>
-      </header>
-
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Wallet" value={walletAccount ?? user?.name ?? "—"} mono />
         <StatCard label="Name" value={user?.name || user?.email || "—"} />
@@ -42,7 +28,7 @@ function AdminDashboard() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-foreground">Manage</h2>
+        <SectionHeader title="Manage" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
@@ -120,14 +106,12 @@ function AdminDashboard() {
               This tenant is backed by an organization. Manage members, roles, and invitations
               there.
             </p>
-            <Link
-              to="/orgs/$slug"
-              params={{ slug: tenant.id.slice(0, 8) }}
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[10px]"
-            >
-              <Users className="h-3.5 w-3.5" />
-              open organization
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/orgs/$slug" params={{ slug: tenant.id.slice(0, 8) }}>
+                <Users className="h-3.5 w-3.5" />
+                open organization
+              </Link>
+            </Button>
           </Card>
         </section>
       )}
@@ -154,15 +138,6 @@ function StatCard({
       >
         {value}
       </div>
-    </div>
-  );
-}
-
-function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
-  return (
-    <div className="flex items-end justify-between gap-3">
-      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-      {action}
     </div>
   );
 }

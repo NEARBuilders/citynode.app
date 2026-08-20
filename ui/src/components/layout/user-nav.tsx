@@ -4,14 +4,8 @@ import { Building2, Home, LogOut, Settings, User } from "lucide-react";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  NetworkToggle,
-  OrgSwitcher,
-  ThemeToggle,
-} from "@/components";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,9 +13,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NetworkToggle } from "@/components/ui/network-toggle";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { OrgSwitcher } from "./org-switcher";
+import { ThemeToggle } from "./theme-toggle";
 
-export function UserNav() {
+export function UserNav({ showConnect = true }: { showConnect?: boolean }) {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -78,13 +75,13 @@ export function UserNav() {
   if (!user) {
     return (
       <div className="flex items-center gap-2">
+        <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
         <NetworkToggle />
-        <Link
-          to="/login"
-          className="h-9 px-4 inline-flex items-center justify-center text-sm font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md hover:bg-muted active:border-inset active:shadow-none transition-all duration-200 ease-out cursor-pointer"
-        >
-          connect
-        </Link>
+        {showConnect && (
+          <Button asChild variant="outline">
+            <Link to="/login">connect</Link>
+          </Button>
+        )}
       </div>
     );
   }
@@ -119,6 +116,7 @@ export function UserNav() {
 
   return (
     <div className="flex items-center gap-2">
+      <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
       {organizations && organizations.length > 0 && (
         <OrgSwitcher
           organizations={organizations}
@@ -173,15 +171,6 @@ export function UserNav() {
               <Settings />
               settings
             </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2">
-                <ThemeToggle className="relative flex items-center justify-center w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
-                theme
-              </span>
-            </div>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

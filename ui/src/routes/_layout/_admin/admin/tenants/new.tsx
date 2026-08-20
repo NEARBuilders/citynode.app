@@ -13,10 +13,10 @@ import {
   Field,
   FieldLabel,
   Input,
+  PageHeader,
   StepList,
   useStepper,
 } from "@/components";
-import { PageContainer } from "@/components/layout/page-container";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -283,349 +283,335 @@ function NewTenantPage() {
     const hasFailure = stepper.steps.some((s) => s.state === "failed");
 
     return (
-      <PageContainer variant="narrow">
-        <div className="space-y-8">
-          <header className="space-y-2">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Sparkles className="h-3 w-3" />
-              Deploying
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {allDone ? "Deployment complete" : "Deploying tenant…"}
-            </h1>
-          </header>
+      <div className="space-y-8">
+        <PageHeader
+          icon={Sparkles}
+          label="Deploying"
+          title={allDone ? "Deployment complete" : "Deploying tenant…"}
+        />
 
-          <Card>
-            <CardContent className="p-6 space-y-6">
-              <StepList steps={stepper.steps} />
+        <Card>
+          <CardContent className="p-6 space-y-6">
+            <StepList steps={stepper.steps} />
 
-              {stepper.steps[0].state === "success" && stepper.steps[1].state === "pending" && (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    API records created. Now deploying on-chain — these steps are non-blocking and
-                    can be retried later from the tenant page.
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => deploySubaccount.mutate()}
-                      disabled={deploySubaccount.isPending}
-                    >
-                      create NEAR subaccount
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deployPublish.mutate()}
-                      disabled={deployPublish.isPending}
-                    >
-                      publish config
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {(stepper.steps[1].state === "success" || stepper.steps[1].state === "failed") &&
-                stepper.steps[2].state === "pending" && (
+            {stepper.steps[0].state === "success" && stepper.steps[1].state === "pending" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  API records created. Now deploying on-chain — these steps are non-blocking and can
+                  be retried later from the tenant page.
+                </p>
+                <div className="flex gap-2">
                   <Button
+                    size="sm"
+                    onClick={() => deploySubaccount.mutate()}
+                    disabled={deploySubaccount.isPending}
+                  >
+                    create NEAR subaccount
+                  </Button>
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => deployPublish.mutate()}
                     disabled={deployPublish.isPending}
                   >
-                    publish registry config
+                    publish config
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {(stepper.steps[1].state === "success" || stepper.steps[1].state === "failed") &&
+              stepper.steps[2].state === "pending" && (
+                <Button
+                  size="sm"
+                  onClick={() => deployPublish.mutate()}
+                  disabled={deployPublish.isPending}
+                >
+                  publish registry config
+                </Button>
+              )}
+
+            {stepper.steps[1].state === "failed" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  stepper.updateStep(1, "pending");
+                  deploySubaccount.reset();
+                }}
+              >
+                retry subaccount
+              </Button>
+            )}
+
+            {stepper.steps[2].state === "failed" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  stepper.updateStep(2, "pending");
+                  deployPublish.reset();
+                }}
+              >
+                retry publish
+              </Button>
+            )}
+
+            {allDone && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  Tenant deployed at <code className="font-mono text-xs">{hostname}</code>
+                </div>
+                {createdTenantId && (
+                  <Button asChild size="sm">
+                    <Link to="/tenant/$tenantId" params={{ tenantId: createdTenantId }}>
+                      open tenant
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
                   </Button>
                 )}
+              </div>
+            )}
 
-              {stepper.steps[1].state === "failed" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    stepper.updateStep(1, "pending");
-                    deploySubaccount.reset();
-                  }}
-                >
-                  retry subaccount
-                </Button>
-              )}
-
-              {stepper.steps[2].state === "failed" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    stepper.updateStep(2, "pending");
-                    deployPublish.reset();
-                  }}
-                >
-                  retry publish
-                </Button>
-              )}
-
-              {allDone && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-foreground">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    Tenant deployed at <code className="font-mono text-xs">{hostname}</code>
-                  </div>
-                  {createdTenantId && (
-                    <Button asChild size="sm">
-                      <Link to="/tenant/$tenantId" params={{ tenantId: createdTenantId }}>
-                        open tenant
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {hasFailure && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Some steps failed. API records were created — you can retry on-chain steps from
-                    the tenant detail page.
-                  </p>
-                  {createdTenantId && (
-                    <Button asChild variant="outline" size="sm">
-                      <Link to="/tenant/$tenantId" params={{ tenantId: createdTenantId }}>
-                        go to tenant
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </PageContainer>
+            {hasFailure && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Some steps failed. API records were created — you can retry on-chain steps from
+                  the tenant detail page.
+                </p>
+                {createdTenantId && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/tenant/$tenantId" params={{ tenantId: createdTenantId }}>
+                      go to tenant
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <PageContainer variant="narrow">
-      <div className="space-y-8">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="h-3 w-3" />
-            New tenant
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            Tenant + node creation
-          </h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Create a tenant, a geographic node, and a primary domain binding in one flow.
-          </p>
-        </header>
+    <div className="space-y-8">
+      <PageHeader
+        icon={Sparkles}
+        label="New tenant"
+        title="Tenant + node creation"
+        description="Create a tenant, a geographic node, and a primary domain binding in one flow."
+      />
 
-        {!hasOrg && (
+      {!hasOrg && (
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">
+                Create an organization first
+              </h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tenants belong to an organization. Create one to continue.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                orgMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <Field>
+                <FieldLabel htmlFor="org-name">name</FieldLabel>
+                <Input
+                  id="org-name"
+                  value={orgName}
+                  onChange={(e) => {
+                    setOrgName(e.target.value);
+                    if (!orgSlug) setOrgSlug(generateSlug(e.target.value));
+                  }}
+                  placeholder="My Organization"
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="org-slug">slug</FieldLabel>
+                <Input
+                  id="org-slug"
+                  value={orgSlug}
+                  onChange={(e) => setOrgSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="my-organization"
+                  pattern="[a-z0-9-]+"
+                  required
+                />
+              </Field>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={orgMutation.isPending || !orgName || !orgSlug}
+              >
+                {orgMutation.isPending ? "creating…" : "create organization"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasOrg && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitMutation.mutate();
+          }}
+          className="space-y-6"
+        >
           <Card>
             <CardContent className="p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Create an organization first
-                </h2>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Tenants belong to an organization. Create one to continue.
-              </p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  orgMutation.mutate();
-                }}
-                className="space-y-4"
-              >
-                <Field>
-                  <FieldLabel htmlFor="org-name">name</FieldLabel>
-                  <Input
-                    id="org-name"
-                    value={orgName}
-                    onChange={(e) => {
-                      setOrgName(e.target.value);
-                      if (!orgSlug) setOrgSlug(generateSlug(e.target.value));
-                    }}
-                    placeholder="My Organization"
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-slug">slug</FieldLabel>
-                  <Input
-                    id="org-slug"
-                    value={orgSlug}
-                    onChange={(e) => setOrgSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                    placeholder="my-organization"
-                    pattern="[a-z0-9-]+"
-                    required
-                  />
-                </Field>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={orgMutation.isPending || !orgName || !orgSlug}
-                >
-                  {orgMutation.isPending ? "creating…" : "create organization"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
+              <h2 className="text-sm font-semibold text-foreground">Node details</h2>
 
-        {hasOrg && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitMutation.mutate();
-            }}
-            className="space-y-6"
-          >
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-sm font-semibold text-foreground">Node details</h2>
-
-                <Field>
-                  <FieldLabel>kind</FieldLabel>
-                  <div className="flex gap-2">
-                    {(["country", "state", "city"] as const).map((k) => (
-                      <Button
-                        key={k}
-                        type="button"
-                        variant={kind === k ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setKind(k);
-                          setRootParentId("");
-                          setStateParentId("");
-                        }}
-                      >
-                        {k}
-                      </Button>
-                    ))}
-                  </div>
-                </Field>
-
-                {kind !== "country" && (
-                  <Field>
-                    <FieldLabel htmlFor="parent-root">parent country</FieldLabel>
-                    <select
-                      id="parent-root"
-                      value={rootParentId}
-                      onChange={(e) => {
-                        setRootParentId(e.target.value);
+              <Field>
+                <FieldLabel>kind</FieldLabel>
+                <div className="flex gap-2">
+                  {(["country", "state", "city"] as const).map((k) => (
+                    <Button
+                      key={k}
+                      type="button"
+                      variant={kind === k ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setKind(k);
+                        setRootParentId("");
                         setStateParentId("");
                       }}
-                      className="w-full h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-3 text-sm text-foreground"
-                      required
                     >
-                      <option value="">select a country…</option>
-                      {rootNodes.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.name} ({n.slug})
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
+                      {k}
+                    </Button>
+                  ))}
+                </div>
+              </Field>
 
-                {kind === "city" && rootParentId && stateNodes.length > 0 && (
-                  <Field>
-                    <FieldLabel htmlFor="parent-state">parent state (optional)</FieldLabel>
-                    <select
-                      id="parent-state"
-                      value={stateParentId}
-                      onChange={(e) => setStateParentId(e.target.value)}
-                      className="w-full h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-3 text-sm text-foreground"
-                    >
-                      <option value="">directly under country</option>
-                      {stateNodes.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.name} ({n.slug})
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
-
+              {kind !== "country" && (
                 <Field>
-                  <FieldLabel htmlFor="node-name">name</FieldLabel>
-                  <Input
-                    id="node-name"
-                    value={name}
-                    onChange={(e) => handleNameChange(e.target.value)}
-                    placeholder="Chicago"
+                  <FieldLabel htmlFor="parent-root">parent country</FieldLabel>
+                  <select
+                    id="parent-root"
+                    value={rootParentId}
+                    onChange={(e) => {
+                      setRootParentId(e.target.value);
+                      setStateParentId("");
+                    }}
+                    className="w-full h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-3 text-sm text-foreground"
                     required
-                  />
+                  >
+                    <option value="">select a country…</option>
+                    {rootNodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name} ({n.slug})
+                      </option>
+                    ))}
+                  </select>
                 </Field>
+              )}
 
+              {kind === "city" && rootParentId && stateNodes.length > 0 && (
                 <Field>
-                  <FieldLabel htmlFor="node-slug">slug</FieldLabel>
-                  <Input
-                    id="node-slug"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                    placeholder="chicago"
-                    pattern="[a-z0-9-]+"
-                    required
-                  />
+                  <FieldLabel htmlFor="parent-state">parent state (optional)</FieldLabel>
+                  <select
+                    id="parent-state"
+                    value={stateParentId}
+                    onChange={(e) => setStateParentId(e.target.value)}
+                    className="w-full h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-3 text-sm text-foreground"
+                  >
+                    <option value="">directly under country</option>
+                    {stateNodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name} ({n.slug})
+                      </option>
+                    ))}
+                  </select>
                 </Field>
-              </CardContent>
-            </Card>
+              )}
 
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-sm font-semibold text-foreground">Tenant + binding</h2>
+              <Field>
+                <FieldLabel htmlFor="node-name">name</FieldLabel>
+                <Input
+                  id="node-name"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="Chicago"
+                  required
+                />
+              </Field>
 
-                <Field>
-                  <FieldLabel htmlFor="tenant-name">tenant name</FieldLabel>
-                  <Input
-                    id="tenant-name"
-                    value={tenantName}
-                    onChange={(e) => setTenantName(e.target.value)}
-                    placeholder="Chicago City Node"
-                    required
-                  />
-                </Field>
+              <Field>
+                <FieldLabel htmlFor="node-slug">slug</FieldLabel>
+                <Input
+                  id="node-slug"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="chicago"
+                  pattern="[a-z0-9-]+"
+                  required
+                />
+              </Field>
+            </CardContent>
+          </Card>
 
-                <Field>
-                  <FieldLabel htmlFor="account-id">NEAR account id</FieldLabel>
-                  <Input
-                    id="account-id"
-                    value={accountId}
-                    onChange={(e) => setAccountId(e.target.value)}
-                    placeholder="chicago.v1.citynode.near"
-                    className="font-mono text-xs"
-                    required
-                  />
-                </Field>
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <h2 className="text-sm font-semibold text-foreground">Tenant + binding</h2>
 
-                <Field>
-                  <FieldLabel>hostname</FieldLabel>
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                    <code className="font-mono text-sm text-foreground">{hostname || "—"}</code>
-                    {preflight?.hostname.available === true && (
-                      <Badge variant="secondary">available</Badge>
-                    )}
-                    {preflight?.hostname.available === false && (
-                      <Badge variant="destructive">taken</Badge>
-                    )}
-                  </div>
-                </Field>
-              </CardContent>
-            </Card>
+              <Field>
+                <FieldLabel htmlFor="tenant-name">tenant name</FieldLabel>
+                <Input
+                  id="tenant-name"
+                  value={tenantName}
+                  onChange={(e) => setTenantName(e.target.value)}
+                  placeholder="Chicago City Node"
+                  required
+                />
+              </Field>
 
-            <div className="flex gap-2">
-              <Button asChild variant="outline">
-                <Link to="/admin/tenants">cancel</Link>
-              </Button>
-              <Button type="submit" disabled={submitMutation.isPending || !canSubmit}>
-                {submitMutation.isPending ? "creating…" : "create tenant + node"}
-              </Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </PageContainer>
+              <Field>
+                <FieldLabel htmlFor="account-id">NEAR account id</FieldLabel>
+                <Input
+                  id="account-id"
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  placeholder="chicago.v1.citynode.near"
+                  className="font-mono text-xs"
+                  required
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel>hostname</FieldLabel>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <code className="font-mono text-sm text-foreground">{hostname || "—"}</code>
+                  {preflight?.hostname.available === true && (
+                    <Badge variant="secondary">available</Badge>
+                  )}
+                  {preflight?.hostname.available === false && (
+                    <Badge variant="destructive">taken</Badge>
+                  )}
+                </div>
+              </Field>
+            </CardContent>
+          </Card>
+
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link to="/admin/tenants">cancel</Link>
+            </Button>
+            <Button type="submit" disabled={submitMutation.isPending || !canSubmit}>
+              {submitMutation.isPending ? "creating…" : "create tenant + node"}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Building2, Check, Plus } from "lucide-react";
 import type { Organization } from "@/app";
 import { useAuthClient } from "@/app";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 
 interface OrgSwitcherProps {
   organizations: Organization[];

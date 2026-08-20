@@ -7,8 +7,16 @@ import { toast } from "sonner";
 import { useApiClient, useAuthClient } from "@/app";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
 import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
-import { Badge, Button, Card, Field, FieldLabel, Input } from "@/components";
-import { PageContainer } from "@/components/layout/page-container";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  FieldLabel,
+  Input,
+  PageContainer,
+  PageHeader,
+} from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -174,21 +182,19 @@ function StakePage() {
   }, []);
 
   return (
-    <PageContainer variant="narrow">
+    <PageContainer variant="wide">
       <div className="space-y-8">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Landmark className="h-3 w-3" />
-            Stake
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            {node ? `Stake NEAR to ${node.name}` : "Stake NEAR to a city"}
-          </h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Deposits are staked directly to the validator pool via{" "}
-            <code className="font-mono text-xs">deposit_and_stake</code>.
-          </p>
-        </header>
+        <PageHeader
+          icon={Landmark}
+          label="Stake"
+          title={node ? `Stake NEAR to ${node.name}` : "Stake NEAR to a city"}
+          description={
+            <>
+              Deposits are staked directly to the validator pool via{" "}
+              <code className="font-mono text-xs">deposit_and_stake</code>.
+            </>
+          }
+        />
 
         {!slug ? (
           <Card className="p-10 text-center">

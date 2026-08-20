@@ -5,8 +5,18 @@ import type { TransactionBuilder } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
-import { Badge, Button, Card, CardContent, ConfirmDialog, InfoRow, Input } from "@/components";
-import { PageContainer } from "@/components/layout/page-container";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
+  InfoRow,
+  Input,
+  PageContainer,
+  PageHeader,
+  SectionHeader,
+} from "@/components";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -235,7 +245,7 @@ function TenantDetail() {
 
   if (!tenant) {
     return (
-      <PageContainer variant="narrow">
+      <PageContainer variant="wide">
         <div className="text-muted-foreground text-sm py-12">Loading tenant…</div>
       </PageContainer>
     );
@@ -251,21 +261,12 @@ function TenantDetail() {
   return (
     <PageContainer variant="wide">
       <div className="space-y-8">
-        <header className="space-y-3">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Building2 className="h-3 w-3" />
-            Tenant
-          </div>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                {tenant.name}
-              </h1>
-              <p className="text-[11px] font-mono text-muted-foreground">
-                {tenantHostname}.{gatewayId} · {tenant.accountId}
-              </p>
-            </div>
-
+        <PageHeader
+          icon={Building2}
+          label="Tenant"
+          title={tenant.name}
+          subtitle={`${tenantHostname}.${gatewayId} · ${tenant.accountId}`}
+          actions={
             <div className="flex gap-2">
               <Badge variant={statusVariant as "default" | "destructive" | "secondary"}>
                 {tenant.status}
@@ -302,26 +303,28 @@ function TenantDetail() {
                 </Button>
               )}
             </div>
-          </div>
-        </header>
+          }
+        />
 
         <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Details</h2>
-            {isOwner && !editing && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setName(tenant.name);
-                  setEditing(true);
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                edit
-              </Button>
-            )}
-          </div>
+          <SectionHeader
+            title="Details"
+            action={
+              isOwner && !editing ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setName(tenant.name);
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  edit
+                </Button>
+              ) : undefined
+            }
+          />
           <Card>
             <CardContent className="p-6 space-y-4">
               {editing ? (
@@ -378,23 +381,18 @@ function TenantDetail() {
         </section>
 
         <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Live site</h2>
-          </div>
+          <SectionHeader title="Live site" />
           <Card className="p-4 space-y-3">
             <p className="text-sm text-muted-foreground">
               Your tenant is served at the subdomain below. The site resolves through the parent
               gateway's host.
             </p>
-            <a
-              href={`https://${tenantHostname}.${gatewayId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[10px] w-fit"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              open {tenantHostname}.{gatewayId}
-            </a>
+            <Button asChild variant="outline" size="sm">
+              <a href={`https://${tenantHostname}.${gatewayId}`} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                open {tenantHostname}.{gatewayId}
+              </a>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -407,9 +405,7 @@ function TenantDetail() {
         </section>
 
         <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Members & permissions</h2>
-          </div>
+          <SectionHeader title="Members & permissions" />
           <Card className="p-4 space-y-3">
             <p className="text-sm text-muted-foreground">
               This tenant is backed by an organization. Manage members, roles, and invitations
@@ -426,9 +422,7 @@ function TenantDetail() {
 
         {isOwner && (
           <section className="space-y-3">
-            <div className="flex items-end justify-between gap-3">
-              <h2 className="text-lg font-semibold text-foreground">Danger zone</h2>
-            </div>
+            <SectionHeader title="Danger zone" />
             <Card className="p-4 space-y-3">
               <p className="text-sm text-muted-foreground">
                 Deleting a tenant suspends it immediately and permanently removes it after a 30-day

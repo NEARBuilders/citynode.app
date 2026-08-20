@@ -4,7 +4,7 @@ import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Button, PageContainer } from "@/components";
+import { Button, PageContainer, PageHeader } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/things/new")({
   head: () => ({
@@ -41,16 +41,14 @@ function NewThingPage() {
   });
 
   return (
-    <PageContainer variant="narrow">
+    <PageContainer variant="wide">
       <div className="space-y-6">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <Sparkles size={14} />
-            <span>Create</span>
-          </div>
-          <h1 className="text-xl font-semibold text-foreground">New thing</h1>
-          <p className="text-sm text-muted-foreground">Create a new thing in the registry.</p>
-        </header>
+        <PageHeader
+          icon={Sparkles}
+          label="Create"
+          title="New thing"
+          description="Create a new thing in the registry."
+        />
 
         <div className="space-y-4">
           <div className="space-y-2">

@@ -16,18 +16,19 @@ import { Route as LayoutAnonRouteImport } from './routes/_layout/_anon'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/_admin'
 import { Route as LayoutPublicIndexRouteImport } from './routes/_layout/_public/index'
 import { Route as LayoutPublicSkillRouteImport } from './routes/_layout/_public/skill'
-import { Route as LayoutPublicApplyRouteImport } from './routes/_layout/_public/apply'
 import { Route as LayoutPublicAboutRouteImport } from './routes/_layout/_public/about'
 import { Route as LayoutPublicAccountIdRouteImport } from './routes/_layout/_public/$accountId'
 import { Route as LayoutAuthenticatedStakeRouteImport } from './routes/_layout/_authenticated/stake'
 import { Route as LayoutAuthenticatedSettingsRouteImport } from './routes/_layout/_authenticated/settings'
 import { Route as LayoutAuthenticatedDashboardRouteImport } from './routes/_layout/_authenticated/dashboard'
+import { Route as LayoutAuthenticatedApplyRouteImport } from './routes/_layout/_authenticated/apply'
 import { Route as LayoutAnonLoginRouteImport } from './routes/_layout/_anon/login'
 import { Route as LayoutAdminAdminRouteImport } from './routes/_layout/_admin/admin'
 import { Route as LayoutPublicThingsIndexRouteImport } from './routes/_layout/_public/things/index'
 import { Route as LayoutPublicAccountIdIndexRouteImport } from './routes/_layout/_public/$accountId/index'
 import { Route as LayoutAuthenticatedSettingsIndexRouteImport } from './routes/_layout/_authenticated/settings/index'
 import { Route as LayoutAuthenticatedOrgsIndexRouteImport } from './routes/_layout/_authenticated/orgs/index'
+import { Route as LayoutAuthenticatedDashboardIndexRouteImport } from './routes/_layout/_authenticated/dashboard/index'
 import { Route as LayoutAdminAdminIndexRouteImport } from './routes/_layout/_admin/admin/index'
 import { Route as LayoutPublicThingsLiveRouteImport } from './routes/_layout/_public/things/live'
 import { Route as LayoutPublicThingsThingIdRouteImport } from './routes/_layout/_public/things/$thingId'
@@ -76,11 +77,6 @@ const LayoutPublicSkillRoute = LayoutPublicSkillRouteImport.update({
   path: '/skill',
   getParentRoute: () => LayoutPublicRoute,
 } as any)
-const LayoutPublicApplyRoute = LayoutPublicApplyRouteImport.update({
-  id: '/apply',
-  path: '/apply',
-  getParentRoute: () => LayoutPublicRoute,
-} as any)
 const LayoutPublicAboutRoute = LayoutPublicAboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -107,6 +103,12 @@ const LayoutAuthenticatedDashboardRoute =
   LayoutAuthenticatedDashboardRouteImport.update({
     id: '/dashboard',
     path: '/dashboard',
+    getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
+const LayoutAuthenticatedApplyRoute =
+  LayoutAuthenticatedApplyRouteImport.update({
+    id: '/apply',
+    path: '/apply',
     getParentRoute: () => LayoutAuthenticatedRoute,
   } as any)
 const LayoutAnonLoginRoute = LayoutAnonLoginRouteImport.update({
@@ -141,6 +143,12 @@ const LayoutAuthenticatedOrgsIndexRoute =
     id: '/orgs/',
     path: '/orgs/',
     getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
+const LayoutAuthenticatedDashboardIndexRoute =
+  LayoutAuthenticatedDashboardIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => LayoutAuthenticatedDashboardRoute,
   } as any)
 const LayoutAdminAdminIndexRoute = LayoutAdminAdminIndexRouteImport.update({
   id: '/',
@@ -243,12 +251,12 @@ export interface FileRoutesByFullPath {
   '/': typeof LayoutPublicIndexRoute
   '/admin': typeof LayoutAdminAdminRouteWithChildren
   '/login': typeof LayoutAnonLoginRoute
-  '/dashboard': typeof LayoutAuthenticatedDashboardRoute
+  '/apply': typeof LayoutAuthenticatedApplyRoute
+  '/dashboard': typeof LayoutAuthenticatedDashboardRouteWithChildren
   '/settings': typeof LayoutAuthenticatedSettingsRouteWithChildren
   '/stake': typeof LayoutAuthenticatedStakeRoute
   '/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/about': typeof LayoutPublicAboutRoute
-  '/apply': typeof LayoutPublicApplyRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/admin/relayer': typeof LayoutAdminAdminRelayerRoute
   '/admin/system': typeof LayoutAdminAdminSystemRoute
@@ -264,6 +272,7 @@ export interface FileRoutesByFullPath {
   '/things/$thingId': typeof LayoutPublicThingsThingIdRoute
   '/things/live': typeof LayoutPublicThingsLiveRoute
   '/admin/': typeof LayoutAdminAdminIndexRoute
+  '/dashboard/': typeof LayoutAuthenticatedDashboardIndexRoute
   '/orgs/': typeof LayoutAuthenticatedOrgsIndexRoute
   '/settings/': typeof LayoutAuthenticatedSettingsIndexRoute
   '/$accountId/': typeof LayoutPublicAccountIdIndexRoute
@@ -275,10 +284,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof LayoutPublicIndexRoute
   '/login': typeof LayoutAnonLoginRoute
-  '/dashboard': typeof LayoutAuthenticatedDashboardRoute
+  '/apply': typeof LayoutAuthenticatedApplyRoute
   '/stake': typeof LayoutAuthenticatedStakeRoute
   '/about': typeof LayoutPublicAboutRoute
-  '/apply': typeof LayoutPublicApplyRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/admin/relayer': typeof LayoutAdminAdminRelayerRoute
   '/admin/system': typeof LayoutAdminAdminSystemRoute
@@ -293,6 +301,7 @@ export interface FileRoutesByTo {
   '/things/$thingId': typeof LayoutPublicThingsThingIdRoute
   '/things/live': typeof LayoutPublicThingsLiveRoute
   '/admin': typeof LayoutAdminAdminIndexRoute
+  '/dashboard': typeof LayoutAuthenticatedDashboardIndexRoute
   '/orgs': typeof LayoutAuthenticatedOrgsIndexRoute
   '/settings': typeof LayoutAuthenticatedSettingsIndexRoute
   '/$accountId': typeof LayoutPublicAccountIdIndexRoute
@@ -310,12 +319,12 @@ export interface FileRoutesById {
   '/_layout/_public': typeof LayoutPublicRouteWithChildren
   '/_layout/_admin/admin': typeof LayoutAdminAdminRouteWithChildren
   '/_layout/_anon/login': typeof LayoutAnonLoginRoute
-  '/_layout/_authenticated/dashboard': typeof LayoutAuthenticatedDashboardRoute
+  '/_layout/_authenticated/apply': typeof LayoutAuthenticatedApplyRoute
+  '/_layout/_authenticated/dashboard': typeof LayoutAuthenticatedDashboardRouteWithChildren
   '/_layout/_authenticated/settings': typeof LayoutAuthenticatedSettingsRouteWithChildren
   '/_layout/_authenticated/stake': typeof LayoutAuthenticatedStakeRoute
   '/_layout/_public/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/_layout/_public/about': typeof LayoutPublicAboutRoute
-  '/_layout/_public/apply': typeof LayoutPublicApplyRoute
   '/_layout/_public/skill': typeof LayoutPublicSkillRoute
   '/_layout/_public/': typeof LayoutPublicIndexRoute
   '/_layout/_admin/admin/relayer': typeof LayoutAdminAdminRelayerRoute
@@ -332,6 +341,7 @@ export interface FileRoutesById {
   '/_layout/_public/things/$thingId': typeof LayoutPublicThingsThingIdRoute
   '/_layout/_public/things/live': typeof LayoutPublicThingsLiveRoute
   '/_layout/_admin/admin/': typeof LayoutAdminAdminIndexRoute
+  '/_layout/_authenticated/dashboard/': typeof LayoutAuthenticatedDashboardIndexRoute
   '/_layout/_authenticated/orgs/': typeof LayoutAuthenticatedOrgsIndexRoute
   '/_layout/_authenticated/settings/': typeof LayoutAuthenticatedSettingsIndexRoute
   '/_layout/_public/$accountId/': typeof LayoutPublicAccountIdIndexRoute
@@ -346,12 +356,12 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/apply'
     | '/dashboard'
     | '/settings'
     | '/stake'
     | '/$accountId'
     | '/about'
-    | '/apply'
     | '/skill'
     | '/admin/relayer'
     | '/admin/system'
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
     | '/things/$thingId'
     | '/things/live'
     | '/admin/'
+    | '/dashboard/'
     | '/orgs/'
     | '/settings/'
     | '/$accountId/'
@@ -378,10 +389,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/dashboard'
+    | '/apply'
     | '/stake'
     | '/about'
-    | '/apply'
     | '/skill'
     | '/admin/relayer'
     | '/admin/system'
@@ -396,6 +406,7 @@ export interface FileRouteTypes {
     | '/things/$thingId'
     | '/things/live'
     | '/admin'
+    | '/dashboard'
     | '/orgs'
     | '/settings'
     | '/$accountId'
@@ -412,12 +423,12 @@ export interface FileRouteTypes {
     | '/_layout/_public'
     | '/_layout/_admin/admin'
     | '/_layout/_anon/login'
+    | '/_layout/_authenticated/apply'
     | '/_layout/_authenticated/dashboard'
     | '/_layout/_authenticated/settings'
     | '/_layout/_authenticated/stake'
     | '/_layout/_public/$accountId'
     | '/_layout/_public/about'
-    | '/_layout/_public/apply'
     | '/_layout/_public/skill'
     | '/_layout/_public/'
     | '/_layout/_admin/admin/relayer'
@@ -434,6 +445,7 @@ export interface FileRouteTypes {
     | '/_layout/_public/things/$thingId'
     | '/_layout/_public/things/live'
     | '/_layout/_admin/admin/'
+    | '/_layout/_authenticated/dashboard/'
     | '/_layout/_authenticated/orgs/'
     | '/_layout/_authenticated/settings/'
     | '/_layout/_public/$accountId/'
@@ -498,13 +510,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPublicSkillRouteImport
       parentRoute: typeof LayoutPublicRoute
     }
-    '/_layout/_public/apply': {
-      id: '/_layout/_public/apply'
-      path: '/apply'
-      fullPath: '/apply'
-      preLoaderRoute: typeof LayoutPublicApplyRouteImport
-      parentRoute: typeof LayoutPublicRoute
-    }
     '/_layout/_public/about': {
       id: '/_layout/_public/about'
       path: '/about'
@@ -538,6 +543,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof LayoutAuthenticatedDashboardRouteImport
+      parentRoute: typeof LayoutAuthenticatedRoute
+    }
+    '/_layout/_authenticated/apply': {
+      id: '/_layout/_authenticated/apply'
+      path: '/apply'
+      fullPath: '/apply'
+      preLoaderRoute: typeof LayoutAuthenticatedApplyRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
     '/_layout/_anon/login': {
@@ -581,6 +593,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/orgs/'
       preLoaderRoute: typeof LayoutAuthenticatedOrgsIndexRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
+    }
+    '/_layout/_authenticated/dashboard/': {
+      id: '/_layout/_authenticated/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof LayoutAuthenticatedDashboardIndexRouteImport
+      parentRoute: typeof LayoutAuthenticatedDashboardRoute
     }
     '/_layout/_admin/admin/': {
       id: '/_layout/_admin/admin/'
@@ -761,6 +780,21 @@ const LayoutAnonRouteWithChildren = LayoutAnonRoute._addFileChildren(
   LayoutAnonRouteChildren,
 )
 
+interface LayoutAuthenticatedDashboardRouteChildren {
+  LayoutAuthenticatedDashboardIndexRoute: typeof LayoutAuthenticatedDashboardIndexRoute
+}
+
+const LayoutAuthenticatedDashboardRouteChildren: LayoutAuthenticatedDashboardRouteChildren =
+  {
+    LayoutAuthenticatedDashboardIndexRoute:
+      LayoutAuthenticatedDashboardIndexRoute,
+  }
+
+const LayoutAuthenticatedDashboardRouteWithChildren =
+  LayoutAuthenticatedDashboardRoute._addFileChildren(
+    LayoutAuthenticatedDashboardRouteChildren,
+  )
+
 interface LayoutAuthenticatedSettingsRouteChildren {
   LayoutAuthenticatedSettingsAuthMethodsRoute: typeof LayoutAuthenticatedSettingsAuthMethodsRoute
   LayoutAuthenticatedSettingsProfileRoute: typeof LayoutAuthenticatedSettingsProfileRoute
@@ -786,7 +820,8 @@ const LayoutAuthenticatedSettingsRouteWithChildren =
   )
 
 interface LayoutAuthenticatedRouteChildren {
-  LayoutAuthenticatedDashboardRoute: typeof LayoutAuthenticatedDashboardRoute
+  LayoutAuthenticatedApplyRoute: typeof LayoutAuthenticatedApplyRoute
+  LayoutAuthenticatedDashboardRoute: typeof LayoutAuthenticatedDashboardRouteWithChildren
   LayoutAuthenticatedSettingsRoute: typeof LayoutAuthenticatedSettingsRouteWithChildren
   LayoutAuthenticatedStakeRoute: typeof LayoutAuthenticatedStakeRoute
   LayoutAuthenticatedOrgsSlugRoute: typeof LayoutAuthenticatedOrgsSlugRoute
@@ -798,7 +833,9 @@ interface LayoutAuthenticatedRouteChildren {
 }
 
 const LayoutAuthenticatedRouteChildren: LayoutAuthenticatedRouteChildren = {
-  LayoutAuthenticatedDashboardRoute: LayoutAuthenticatedDashboardRoute,
+  LayoutAuthenticatedApplyRoute: LayoutAuthenticatedApplyRoute,
+  LayoutAuthenticatedDashboardRoute:
+    LayoutAuthenticatedDashboardRouteWithChildren,
   LayoutAuthenticatedSettingsRoute:
     LayoutAuthenticatedSettingsRouteWithChildren,
   LayoutAuthenticatedStakeRoute: LayoutAuthenticatedStakeRoute,
@@ -830,7 +867,6 @@ const LayoutPublicAccountIdRouteWithChildren =
 interface LayoutPublicRouteChildren {
   LayoutPublicAccountIdRoute: typeof LayoutPublicAccountIdRouteWithChildren
   LayoutPublicAboutRoute: typeof LayoutPublicAboutRoute
-  LayoutPublicApplyRoute: typeof LayoutPublicApplyRoute
   LayoutPublicSkillRoute: typeof LayoutPublicSkillRoute
   LayoutPublicIndexRoute: typeof LayoutPublicIndexRoute
   LayoutPublicNSlugRoute: typeof LayoutPublicNSlugRoute
@@ -842,7 +878,6 @@ interface LayoutPublicRouteChildren {
 const LayoutPublicRouteChildren: LayoutPublicRouteChildren = {
   LayoutPublicAccountIdRoute: LayoutPublicAccountIdRouteWithChildren,
   LayoutPublicAboutRoute: LayoutPublicAboutRoute,
-  LayoutPublicApplyRoute: LayoutPublicApplyRoute,
   LayoutPublicSkillRoute: LayoutPublicSkillRoute,
   LayoutPublicIndexRoute: LayoutPublicIndexRoute,
   LayoutPublicNSlugRoute: LayoutPublicNSlugRoute,

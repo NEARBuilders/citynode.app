@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
-import { Button, Card, Input } from "@/components";
+import { Button, Card, Field, FieldLabel, Input } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/settings/security")({
   component: SecuritySettings,
@@ -77,7 +77,8 @@ function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean |
             Change password
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="current">
+            <Field>
+              <FieldLabel>current</FieldLabel>
               <Input
                 type="password"
                 value={currentPassword}
@@ -85,7 +86,8 @@ function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean |
                 placeholder="Current password"
               />
             </Field>
-            <Field label="new">
+            <Field>
+              <FieldLabel>new</FieldLabel>
               <Input
                 type="password"
                 value={newPassword}
@@ -93,7 +95,8 @@ function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean |
                 placeholder="New password"
               />
             </Field>
-            <Field label="confirm">
+            <Field>
+              <FieldLabel>confirm</FieldLabel>
               <Input
                 type="password"
                 value={confirmPassword}
@@ -137,17 +140,6 @@ function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean |
           disabled={signOutMutation.isPending}
         />
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      {children}
     </div>
   );
 }
