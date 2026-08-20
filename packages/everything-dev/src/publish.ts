@@ -98,7 +98,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const runtimeConfig = input.runtimeConfig;
 
   const isStaging = env === "staging";
-  const account = bosConfig.account;
+  const account = isStaging ? (bosConfig.staging?.account ?? bosConfig.account) : bosConfig.account;
   const gateway = isStaging ? (bosConfig.staging?.domain ?? bosConfig.domain) : bosConfig.domain;
   if (!gateway) {
     return {

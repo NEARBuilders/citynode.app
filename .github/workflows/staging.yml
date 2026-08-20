@@ -24,7 +24,7 @@ jobs:
     name: Deploy Staging
     runs-on: ubuntu-latest
     env:
-      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
+      NEAR_PRIVATE_KEY: ${{ secrets.NEAR_TESTNET_PRIVATE_KEY }}
       # Zephyr server-token auth. Zephyr directly advised us to retain this flow for
       # our workflow even though server tokens are being deprecated in favor of CI
       # ZE_SECRET_TOKEN is used directly as the bearer token — no API exchange needed.
@@ -68,7 +68,7 @@ jobs:
 
       - name: Publish with deploy
         timeout-minutes: 20
-        run: bun run bos publish --deploy --env staging${{ inputs.verbose == true && ' --verbose' || '' }}
+        run: bun run bos publish --deploy --env staging --packages ui,api,apps,proposals,votes${{ inputs.verbose == true && ' --verbose' || '' }}
 
       - name: Install Railway CLI
         run: npm i -g @railway/cli

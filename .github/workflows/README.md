@@ -2,21 +2,21 @@
 
 ## Overview
 
-This repository uses the following production-facing workflows:
+This is a **downstream child project** — it deploys the app (UI, API, plugins) but not the host or framework packages. Those are deployed by the parent `everything.dev` repo.
+
+This repository uses the following workflows:
 
 - `CI` — lint, audit, typecheck, framework tests, and regression
-- `Docker` — Docker build and push, called by `Release` after npm publish or on `Dockerfile` changes
-- `Release` — changeset versioning and npm publish for framework packages
-- `Deploy` — app deploy (Zephyr CDN + FastKV config publish)
+- `Deploy` — app deploy to Zephyr CDN + FastKV config publish (production, triggered directly by CI)
+- `Staging` — app deploy to Zephyr CDN + FastKV config publish (staging/testnet, triggered by push to `staging` branch)
+- `Release` — changeset versioning and npm publish (manual only, for framework packages)
+- `Docker` — Docker build and push (manual or via Release only)
 
-The key design: `CI` is the validation workflow. On successful push to `main`, CI sends a `repository_dispatch` event that triggers `Release`. After `Release` (and `Docker`) complete, `Release` sends a `repository_dispatch` that triggers `Deploy`. This chain ensures:
+The key design: `CI` is the validation workflow. On successful push to `main`, CI sends a `repository_dispatch(ci-main-success)` event that triggers `Deploy` directly. No Release or Docker in between — this is a downstream project that only deploys its own app workspaces.
 
-- No skipped workflow runs (PR CI runs never trigger downstream workflows)
-- SHA is explicitly propagated end-to-end via `client_payload`
-- Deploy always runs after Docker finishes (no stale Railway redeploy)
-- Docker only builds when packages are actually published (not just versioned)
+`Staging` runs independently on push to the `staging` branch, deploying to testnet using `v1.citynode.testnet` as the signing account.
 
-`Docker` is called by `Release` via `workflow_call` — it only builds when packages are actually published (`actually_published=true`), so merging the "chore: version packages" PR alone does not trigger an image build.
+Host is never deployed from this repo — it's loaded from a remote URL at runtime via Module Federation.
 
 ## Workflows
 
@@ -44,9 +44,9 @@ The key design: `CI` is the validation workflow. On successful push to `main`, C
 
 ### Docker (`docker.yml`)
 
-**Trigger:** `workflow_call` from `Release` (only when `actually_published=true`), `push` to `main`/`staging` on `Dockerfile` changes, or `workflow_dispatch`.
+**Trigger:** `workflow_call` from `Release`, or `workflow_dispatch`.
 
-**Purpose:** Build and push the Docker image only when a release actually publishes packages, or when the Dockerfile itself changes.
+**Purpose:** Build and push the Docker image when a release actually publishes packages, or when manually triggered.
 
 **Behavior:**
 - Detects whether the repository has a `Dockerfile`
@@ -55,61 +55,64 @@ The key design: `CI` is the validation workflow. On successful push to `main`, C
 
 ### Release (`release.yml`)
 
-**Trigger:** `repository_dispatch(ci-main-success)` from CI, or `workflow_dispatch`.
+**Trigger:** `workflow_dispatch` only (manual).
 
-**Purpose:** Consume changesets, create version PRs, and publish framework packages to npm.
+**Purpose:** Consume changesets, create version PRs, and publish framework packages to npm. This is manual in downstream projects — CI no longer triggers it automatically.
 
 **Lifecycle:**
 
 ```
 1. Developer creates changeset          →  bun run changeset
 2. Developer merges feature branch      →  Changesets land on main
-3. CI succeeds on main                   →  repository_dispatch triggers Release
-                                             Creates/updates "chore: version packages" PR
-4. Team merges Version Packages PR      →  CI triggers Release again
+3. CI succeeds on main                   →  repository_dispatch triggers Deploy directly
+                                             (Release is NOT triggered automatically)
+4. Developer manually triggers Release  →  Creates/updates "chore: version packages" PR
+5. Team merges Version Packages PR      →  CI triggers Release again via workflow_dispatch
                                              No changesets remain (hasChangesets=false)
-                                            ↓
-                                            npm publish --provenance --access public
-                                            (tracks actually_published output)
-                                            ↓
-                                            GitHub Releases created for each package
-                                            ↓
-                                            Docker build (only if actually_published=true)
-                                            ↓
-                                            repository_dispatch(release-completed) → Deploy
+                                             ↓
+                                             npm publish --provenance --access public
+                                             ↓
+                                             GitHub Releases created for each package
 ```
 
 **npm publishing uses OIDC trusted publishing** — no `NPM_TOKEN` secret needed. `NODE_AUTH_TOKEN` is set to empty string, and `npm publish --provenance` authenticates via the OIDC token provisioned by `id-token: write` permission and `actions/setup-node` with `registry-url`.
 
-**Docker gating:** The `docker` job only runs when `actually_published=true` (packages were actually published to npm, not just versioned). This prevents wasteful Docker builds after the "chore: version packages" merge when all versions were already published.
-
-**Deploy notification:** The `notify-deploy` job runs after both `release` and `docker` complete. It sends `repository_dispatch(release-completed)` with the SHA, triggering Deploy. When Docker is skipped (no publishing), `notify-deploy` still fires — Deploy is needed for Zephyr CDN even without a new Docker image.
-
 ### Deploy (`deploy.yml`)
 
-**Trigger:** `repository_dispatch(release-completed)` from Release, or `workflow_dispatch`.
+**Trigger:** `repository_dispatch(ci-main-success)` from CI, or `workflow_dispatch`.
 
-**Purpose:** Build and deploy all workspaces to Zephyr CDN, publish `bos.config.json` to FastKV, and redeploy Railway.
+**Purpose:** Build and deploy app workspaces (UI, API, plugins) to Zephyr CDN, publish `bos.config.json` to FastKV, and redeploy Railway.
 
 **Behavior:**
-- Runs `bos publish --deploy` (Zephyr CDN deploy + FastKV publish)
-- Redeploys the Railway service (Docker image already built by Release)
+- Runs `bos publish --deploy --packages ui,api,apps,proposals,votes` (excludes host — host is loaded from a remote URL)
+- Redeploys the Railway service
 - Commits and pushes updated `bos.config.json` deployment URLs back to `main`
 
 **Secrets:** `NEAR_PRIVATE_KEY` and `ZEPHYR_CI_TOKEN` come from repository secrets. NEAR for FastKV publish, Zephyr CI token for CDN deploy. If `ZEPHYR_CI_TOKEN` is not set, falls back to `ZEPHYR_AUTH_TOKEN` + `ZEPHYR_USER_EMAIL` (legacy server-token auth).
 
 **`cancel-in-progress: false`** — interrupting `bos publish --deploy` mid-flight could leave Zephyr CDN and FastKV in an inconsistent state. Queued deploys pick up the latest main when they run.
 
-## Child Project Flow
+## Downstream Project Flow
 
-Generated child repos use a simpler flow (no npm publish, no Docker):
+This repo is a downstream child project. The flow is simplified — no Release or Docker in the automatic path:
 
 ```
-CI → repository_dispatch(ci-main-success) → Release (version PR + GitHub releases)
-                                         → Deploy (Zephyr CDN + FastKV)
+main branch push → CI (lint, typecheck, regression)
+                 → ci-main-success dispatch → Deploy (Zephyr CDN + FastKV, excludes host)
+
+staging branch push → Staging (Zephyr CDN + FastKV on testnet, excludes host)
 ```
 
-Both Release and Deploy trigger from the same `ci-main-success` dispatch, running concurrently. No `release-completed` dispatch is needed.
+Release and Docker are manual-only (`workflow_dispatch`). When this repo is merged to the parent `everything.dev`, the parent's own workflows handle framework packages and host deployment.
+
+### Staging
+
+The `staging` branch deploys to testnet using `v1.citynode.testnet` as the signing account (configured via `staging.account` in `bos.config.json`). The `--env staging` flag on `bos publish` switches both the account and the gateway domain automatically.
+
+**Required GitHub secrets for staging:**
+- `NEAR_TESTNET_PRIVATE_KEY` — NEAR key for `v1.citynode.testnet`
+- `RAILWAY_STAGING_TOKEN` — Railway token scoped to the staging environment
+- `ZEPHYR_AUTH_TOKEN` / `ZEPHYR_CI_TOKEN` — Zephyr auth (shared with production)
 
 ## Docker Image Architecture
 

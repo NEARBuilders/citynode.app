@@ -190,6 +190,7 @@ export type RuntimeLineage = z.infer<typeof RuntimeLineageSchema>;
 
 export const BosStagingSchema = z.object({
   domain: z.string(),
+  account: z.string().optional(),
 });
 export type BosStaging = z.infer<typeof BosStagingSchema>;
 

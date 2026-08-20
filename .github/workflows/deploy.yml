@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   repository_dispatch:
-    types: [release-completed]
+    types: [ci-main-success]
   workflow_dispatch:
     inputs:
       verbose:
@@ -32,34 +32,6 @@ jobs:
       ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       TARGET_BRANCH: ${{ github.ref_name }}
-      BOS_CI_HOST_PORT: "4100"
-    services:
-      postgres-api:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: everythingdev
-          POSTGRES_PASSWORD: everythingdev
-          POSTGRES_DB: api_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U everythingdev"
-          --health-interval 3s
-          --health-timeout 3s
-          --health-retries 10
-      postgres-auth:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: everythingdev
-          POSTGRES_PASSWORD: everythingdev
-          POSTGRES_DB: auth_db
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U everythingdev"
-          --health-interval 3s
-          --health-timeout 3s
-          --health-retries 10
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (Node 24)
@@ -93,17 +65,9 @@ jobs:
         run: |
           echo "ZE_CI_TOKEN=$ZEPHYR_CI_TOKEN" >> "$GITHUB_ENV"
 
-      - name: Emit CI infra plan
-        id: infra
-        run: |
-          bun run bos infra export --target ci --network mainnet > .ci-infra.json
-          jq -r '.env | to_entries[] | "\(.key)=\(.value)"' .ci-infra.json >> "$GITHUB_ENV"
-          echo "## CI infra plan" >> "$GITHUB_STEP_SUMMARY"
-          jq -r '"Services: " + (.services | length | tostring) + "\nEnv vars: " + (.env | keys | length | tostring)' .ci-infra.json >> "$GITHUB_STEP_SUMMARY"
-
       - name: Publish with deploy
         timeout-minutes: 20
-        run: bun run bos publish --deploy${{ inputs.verbose == true && ' --verbose' || '' }}
+        run: bun run bos publish --deploy --packages ui,api,apps,proposals,votes${{ inputs.verbose == true && ' --verbose' || '' }}
 
       - name: Install Railway CLI
         run: npm i -g @railway/cli
