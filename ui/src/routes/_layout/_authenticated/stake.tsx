@@ -1,31 +1,25 @@
 import { PingpayOnramp, PingpayOnrampError } from "@pingpay/onramp-sdk";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { Landmark, Pencil, Plus, Server, Trash2, Wallet } from "lucide-react";
-import { formatAmount } from "near-kit";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, Globe, Landmark, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  getAccount,
-  getActiveRuntime,
-  sessionQueryOptions,
-  useApiClient,
-  useAuthClient,
-} from "@/app";
+import { useApiClient, useAuthClient } from "@/app";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
 import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
-import { Button, Card, Field, FieldLabel, Input } from "@/components";
+import { Badge, Button, Card, Field, FieldLabel, Input } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const STAKE_GAS = "300000000000000";
 
-type StakeSearch = { city?: string };
+type StakeSearch = { node?: string };
 
 export const Route = createFileRoute("/_layout/_authenticated/stake")({
   validateSearch: (search: Record<string, unknown>): StakeSearch => ({
-    city: typeof search.city === "string" ? search.city : undefined,
+    node: typeof search.node === "string" ? search.node : undefined,
   }),
   head: () => ({
     meta: [
@@ -36,19 +30,28 @@ export const Route = createFileRoute("/_layout/_authenticated/stake")({
   component: StakePage,
 });
 
+function getSlugFromHostname(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname;
+  if (host === "localhost" || host.includes("localhost")) return null;
+  const parts = host.split(".");
+  if (parts.length <= 2) return null;
+  const slug = parts[0];
+  if (slug === "www") return null;
+  return slug;
+}
+
 function StakePage() {
   const apiClient = useApiClient();
   const auth = useAuthClient();
-  const queryClient = useQueryClient();
-  const { runtimeConfig } = Route.useRouteContext();
-  const { city: cityFromSearch } = Route.useSearch();
-  const account = getAccount(runtimeConfig);
-  const gatewayId = getActiveRuntime()?.gatewayId ?? "citynode.app";
+  const { node: nodeSlug } = Route.useSearch();
 
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const slug = nodeSlug ?? getSlugFromHostname();
 
   const [nearAccountId, setNearAccountId] = useState<string | null>(() => auth.near.getAccountId());
   const [connectingWallet, setConnectingWallet] = useState(false);
+  const [amount, setAmount] = useState("1");
+  const [selectedValidatorId, setSelectedValidatorId] = useState<string | null>(null);
 
   const handleConnectWallet = async () => {
     setConnectingWallet(true);
@@ -66,109 +69,45 @@ function StakePage() {
     }
   };
 
-  const { data: activeMember } = useQuery({
-    queryKey: ["active-member"],
-    queryFn: async () => {
-      const { data } = await auth.organization.getActiveMember();
-      return data ?? null;
-    },
-    enabled: !!session?.session?.activeOrganizationId,
+  const { data: node, isLoading: nodeLoading } = useQuery({
+    queryKey: ["node", "slug", slug],
+    queryFn: () => apiClient.resolveNodeBySlug({ slug: slug as string }),
+    enabled: !!slug,
     staleTime: 30 * 1000,
   });
 
-  const [amount, setAmount] = useState("1");
-  const [selectedCity, setSelectedCity] = useState<string>(() => cityFromSearch ?? "");
-  const [editingPool, setEditingPool] = useState(false);
-  const [poolInput, setPoolInput] = useState("");
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newTenantId, setNewTenantId] = useState("");
-  const [newPool, setNewPool] = useState("");
+  const nodeId = node?.id;
 
-  const { data: resolvedValidator } = useQuery({
-    queryKey: ["validator", "resolve", account],
-    queryFn: () => apiClient.resolveValidatorByAccountId({ accountId: account }),
+  const { data: staking, isLoading: stakingLoading } = useQuery({
+    queryKey: ["staking-validators", nodeId],
+    queryFn: () => apiClient.resolveStakingValidators({ nodeId: nodeId as string }),
+    enabled: !!nodeId,
     staleTime: 30 * 1000,
   });
 
-  const { data: allValidators = [] } = useQuery({
-    queryKey: ["validators"],
-    queryFn: () => apiClient.listValidators({}),
+  const validators = staking?.validators ?? [];
+  const isInherited = !!node && !!staking?.sourceNodeId && staking.sourceNodeId !== node.id;
+
+  const { data: sourceNode } = useQuery({
+    queryKey: ["node", "id", staking?.sourceNodeId],
+    queryFn: () => apiClient.getNode({ nodeId: staking?.sourceNodeId as string }),
+    enabled: isInherited,
     staleTime: 30 * 1000,
   });
 
-  const isValidatorResolved = !!resolvedValidator;
+  const { data: children = [] } = useQuery({
+    queryKey: ["node", "children", nodeId],
+    queryFn: () => apiClient.listChildren({ nodeId: nodeId as string }),
+    enabled: !!nodeId && validators.length === 0,
+    staleTime: 30 * 1000,
+  });
+
+  const defaultValidator = useMemo(
+    () => validators.find((v) => v.isDefault) ?? validators[0] ?? null,
+    [validators],
+  );
   const selectedValidator =
-    resolvedValidator ?? allValidators.find((v) => v.accountId === selectedCity) ?? null;
-
-  const selectedOrgId = (selectedValidator as { orgId?: string } | null)?.orgId;
-  const { data: members = [] } = useQuery({
-    queryKey: ["org-members", selectedOrgId],
-    queryFn: async () => {
-      if (!selectedOrgId) return [];
-      const { data, error } = await auth.organization.listMembers({
-        query: { organizationId: selectedOrgId },
-      });
-      if (error) throw new Error(error.message);
-      return (data?.members ?? []) as Array<{ userId: string; role: string }>;
-    },
-    enabled: !!selectedOrgId,
-  });
-
-  const { data: totalStaked, isLoading: totalStakedLoading } = useQuery({
-    queryKey: ["pool-total-staked", selectedValidator?.accountId],
-    queryFn: () =>
-      auth.near
-        .getNearClient()
-        .view<string>(selectedValidator?.accountId as string, "get_total_staked_balance"),
-    enabled: !!selectedValidator?.accountId,
-    staleTime: 30 * 1000,
-    retry: 1,
-  });
-
-  const { data: numDelegators, isLoading: numDelegatorsLoading } = useQuery({
-    queryKey: ["pool-num-accounts", selectedValidator?.accountId],
-    queryFn: () =>
-      auth.near
-        .getNearClient()
-        .view<number>(selectedValidator?.accountId as string, "get_number_of_accounts"),
-    enabled: !!selectedValidator?.accountId,
-    staleTime: 30 * 1000,
-    retry: 1,
-  });
-
-  const myRole = members.find((m) => m.userId === session?.user?.id)?.role;
-  const activeOrgId = session?.session?.activeOrganizationId;
-  const activeOrgRole = activeMember?.role;
-  const isActiveOrgAdmin = activeOrgRole === "admin" || activeOrgRole === "owner";
-  const isOrgAdmin =
-    !!selectedValidator &&
-    (selectedValidator as { orgId?: string }).orgId === activeOrgId &&
-    (myRole === "admin" || myRole === "owner");
-
-  const { data: orgTenants = [] } = useQuery({
-    queryKey: ["org-tenants", activeOrgId],
-    queryFn: () => apiClient.listTenants(),
-    enabled: !!activeOrgId && !isValidatorResolved,
-    staleTime: 30 * 1000,
-  });
-
-  const tenantAlreadyLinked = new Set(allValidators.map((v) => v.nodeId));
-  const availableTenants = orgTenants.filter((t) => !tenantAlreadyLinked.has(t.id));
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      throw new Error(
-        "City node creation flow is being redesigned — see issue 04 (tenant + node creation wizard).",
-      );
-    },
-    onSuccess: async () => {
-      setCreating(false);
-      setNewTenantId("");
-      setNewPool("");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+    validators.find((v) => v.id === selectedValidatorId) ?? defaultValidator;
 
   const parsedYocto = useMemo(() => {
     const value = Number(amount);
@@ -183,7 +122,7 @@ function StakePage() {
       const signer = auth.near.getAccountId();
       if (!signer) throw new Error("Connect a NEAR wallet to stake.");
       setNearAccountId(signer);
-      if (!selectedValidator) throw new Error("Select a city to stake to.");
+      if (!selectedValidator) throw new Error("Select a validator to stake to.");
       if (!parsedYocto) throw new Error("Enter a valid amount to stake.");
       const near = auth.near.getNearClient();
       const result = await near
@@ -234,33 +173,6 @@ function StakePage() {
     return () => onrampRef.current?.close();
   }, []);
 
-  const updatePoolMutation = useMutation({
-    mutationFn: async () => {
-      throw new Error(
-        "Validator updates are being redesigned — see issue 02 (validators service rewrite).",
-      );
-    },
-    onSuccess: async () => {
-      toast.success("Validator pool updated");
-      setEditingPool(false);
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to update validator pool"),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedValidator) throw new Error("No city node selected");
-      return apiClient.deleteNode({ nodeId: selectedValidator.id });
-    },
-    onSuccess: async () => {
-      toast.success("Validator removed");
-      setDeleteOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["validator", "resolve", account] });
-      await queryClient.invalidateQueries({ queryKey: ["validators"] });
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to delete validator"),
-  });
-
   return (
     <PageContainer variant="narrow">
       <div className="space-y-8">
@@ -270,321 +182,201 @@ function StakePage() {
             Stake
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            Stake NEAR to a city
+            {node ? `Stake NEAR to ${node.name}` : "Stake NEAR to a city"}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Deposits are staked directly to the city&apos;s validator pool via{" "}
+            Deposits are staked directly to the validator pool via{" "}
             <code className="font-mono text-xs">deposit_and_stake</code>.
           </p>
         </header>
 
-        {isValidatorResolved && resolvedValidator ? (
-          <div className="space-y-3">
-            <ValidatorCard
-              validator={resolvedValidator}
-              gatewayId={gatewayId}
-              isAdmin={isOrgAdmin}
-              memberCount={members.length}
-              totalStaked={totalStaked}
-              totalStakedLoading={totalStakedLoading}
-              numDelegators={numDelegators}
-              numDelegatorsLoading={numDelegatorsLoading}
-              onEdit={() => {
-                setPoolInput(resolvedValidator.accountId);
-                setEditingPool(true);
-              }}
-              onDelete={() => setDeleteOpen(true)}
-            />
-            {editingPool && (
-              <Card className="p-4 space-y-3">
-                <Field>
-                  <FieldLabel htmlFor="pool-input">Validator pool</FieldLabel>
-                  <Input
-                    id="pool-input"
-                    value={poolInput}
-                    onChange={(e) => setPoolInput(e.target.value)}
-                    placeholder="city-node-3.pool.near"
-                    className="h-9 text-sm font-mono"
-                  />
-                </Field>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => updatePoolMutation.mutate()}
-                    disabled={updatePoolMutation.isPending || !poolInput.trim()}
+        {!slug ? (
+          <Card className="p-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              No node selected. Browse the{" "}
+              <Link to="/" className="underline">
+                directory
+              </Link>{" "}
+              and pick a city to stake to.
+            </p>
+          </Card>
+        ) : nodeLoading || stakingLoading ? (
+          <StakeSkeleton />
+        ) : !node ? (
+          <Card className="p-10 text-center">
+            <p className="text-sm text-muted-foreground">Node not found.</p>
+          </Card>
+        ) : validators.length === 0 ? (
+          <Card className="p-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This node doesn&apos;t run a validator — browse child nodes that might.
+            </p>
+            {children.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {children.map((child) => (
+                  <Link
+                    key={child.id}
+                    to="/stake"
+                    search={{ node: child.slug }}
+                    className="inline-flex h-10 items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   >
-                    save pool
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditingPool(false)}>
-                    cancel
-                  </Button>
-                </div>
+                    <span className="capitalize">{child.name}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No child nodes either.</p>
+            )}
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {isInherited && sourceNode && (
+              <Card className="p-4">
+                <p className="text-sm text-muted-foreground">
+                  {node.name} doesn&apos;t run its own validator — staking to{" "}
+                  <span className="font-semibold text-foreground">{sourceNode.name}</span>
+                  &apos;s inherited validator.
+                </p>
               </Card>
             )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <Field>
-              <FieldLabel htmlFor="city-select">City</FieldLabel>
-              <select
-                id="city-select"
-                value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                className="h-9 w-full rounded-[8px] border-2 border-border-strong bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Select a city…</option>
-                {allValidators.map((validator) => (
-                  <option key={validator.id} value={validator.accountId}>
-                    {validator.accountId} — {validator.accountId}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {selectedValidator && (
-              <ValidatorCard
-                validator={selectedValidator}
-                gatewayId={gatewayId}
-                isAdmin={isOrgAdmin}
-                memberCount={members.length}
-                totalStaked={totalStaked}
-                totalStakedLoading={totalStakedLoading}
-                numDelegators={numDelegators}
-                numDelegatorsLoading={numDelegatorsLoading}
-                onEdit={() => {
-                  setPoolInput(selectedValidator.accountId);
-                  setEditingPool(true);
-                }}
-                onDelete={() => setDeleteOpen(true)}
-              />
-            )}
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Validators
+              </p>
+              {validators.map((validator) => {
+                const isSelected = selectedValidator?.id === validator.id;
+                const isCommunity = validator.role === "community";
+                return (
+                  <button
+                    key={validator.id}
+                    type="button"
+                    onClick={() => setSelectedValidatorId(validator.id)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-[10px] border-2 p-4 text-left transition-colors",
+                      isSelected
+                        ? "border-foreground bg-card"
+                        : "border-border bg-card hover:bg-muted",
+                      isCommunity && !isSelected && "opacity-80",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]",
+                        isCommunity
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-foreground text-background",
+                      )}
+                    >
+                      <Globe className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground truncate">
+                          {validator.accountId}
+                        </span>
+                        {validator.isDefault && (
+                          <Badge variant="default" className="text-[10px]">
+                            default
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <Badge
+                          variant={isCommunity ? "outline" : "secondary"}
+                          className="capitalize text-[10px]"
+                        >
+                          {validator.role}
+                        </Badge>
+                        {validator.protocol && validator.protocol !== "near" && (
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {validator.protocol}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+                        isSelected
+                          ? "border-foreground bg-foreground"
+                          : "border-border bg-transparent",
+                      )}
+                    >
+                      {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-background" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {!isValidatorResolved && isActiveOrgAdmin && (
-          <div className="space-y-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreating((v) => !v)}
-              className="w-full"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {creating ? "cancel" : "create a city node"}
-            </Button>
-            {creating && (
-              <Card className="p-4 space-y-3">
+        {selectedValidator && (
+          <Card className="p-6 space-y-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Stake
+            </div>
+            {!nearAccountId ? (
+              <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Link a validator pool to one of your organization&apos;s tenants.
+                  No NEAR wallet linked. Connect one to stake.
                 </p>
+                <Button variant="outline" onClick={handleConnectWallet} disabled={connectingWallet}>
+                  {connectingWallet ? "connecting…" : "connect wallet"}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Wallet className="h-4 w-4" />
+                  <span className="font-mono text-xs">{nearAccountId}</span>
+                </div>
                 <Field>
-                  <FieldLabel htmlFor="tenant-select">Tenant</FieldLabel>
-                  <select
-                    id="tenant-select"
-                    value={newTenantId}
-                    onChange={(e) => setNewTenantId(e.target.value)}
-                    className="h-9 w-full rounded-[8px] border-2 border-border-strong bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Select a tenant…</option>
-                    {availableTenants.map((tenant) => (
-                      <option key={tenant.id} value={tenant.id}>
-                        {tenant.name} — {tenant.id.slice(0, 8)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="pool-input">Validator pool</FieldLabel>
+                  <FieldLabel htmlFor="amount-input">Amount (NEAR)</FieldLabel>
                   <Input
-                    id="pool-input"
-                    value={newPool}
-                    onChange={(e) => setNewPool(e.target.value)}
-                    placeholder="city-node-3.pool.near"
-                    className="h-9 text-sm font-mono"
+                    id="amount-input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="h-9 text-sm"
                   />
                 </Field>
                 <Button
-                  size="sm"
-                  onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending || !newTenantId || !newPool.trim()}
+                  onClick={() => stakeMutation.mutate()}
+                  disabled={!selectedValidator || !parsedYocto || stakeMutation.isPending}
+                  className="w-full"
                 >
-                  {createMutation.isPending ? "Creating…" : "create city node"}
+                  {stakeMutation.isPending ? "Staking…" : `Stake ${amount || "0"} NEAR`}
                 </Button>
-                {availableTenants.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    No tenants available. Create a tenant first, then link it to a pool.
-                  </p>
-                )}
-              </Card>
+                <p className="text-xs text-muted-foreground">
+                  Staking sends NEAR to the pool contract — your stake stays under your account.
+                </p>
+              </>
             )}
-          </div>
+          </Card>
         )}
-
-        <Card className="p-6 space-y-4">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Stake
-          </div>
-          {!nearAccountId ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                No NEAR wallet linked. Connect one to stake.
-              </p>
-              <Button variant="outline" onClick={handleConnectWallet} disabled={connectingWallet}>
-                {connectingWallet ? "connecting…" : "connect wallet"}
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Wallet className="h-4 w-4" />
-                <span className="font-mono text-xs">{nearAccountId}</span>
-              </div>
-              <Field>
-                <FieldLabel htmlFor="amount-input">Amount (NEAR)</FieldLabel>
-                <Input
-                  id="amount-input"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </Field>
-              <Button
-                onClick={() => stakeMutation.mutate()}
-                disabled={!selectedValidator || !parsedYocto || stakeMutation.isPending}
-                className="w-full"
-              >
-                {stakeMutation.isPending
-                  ? "Staking…"
-                  : selectedValidator
-                    ? `Stake ${amount || "0"} NEAR`
-                    : "Select a city first"}
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Staking sends NEAR to the pool contract — your stake stays under your account.
-              </p>
-            </>
-          )}
-        </Card>
 
         <PingOnrampBanner
           disabled={!nearAccountId}
           pending={onrampMutation.isPending}
           onBuy={() => onrampMutation.mutate()}
         />
-
-        {deleteOpen && selectedValidator && (
-          <Card className="p-4 space-y-3 border-destructive/40">
-            <p className="text-sm text-foreground">
-              Delete validator <span className="font-mono">{selectedValidator.accountId}</span>?
-              This unlinks it from its validator pool.
-            </p>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-              >
-                delete
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setDeleteOpen(false)}>
-                cancel
-              </Button>
-            </div>
-          </Card>
-        )}
       </div>
     </PageContainer>
   );
 }
 
-function ValidatorCard({
-  validator,
-  gatewayId: _gatewayId,
-  isAdmin,
-  memberCount,
-  totalStaked,
-  totalStakedLoading,
-  numDelegators,
-  numDelegatorsLoading,
-  onEdit,
-  onDelete,
-}: {
-  validator: {
-    id: string;
-    accountId: string;
-  };
-  gatewayId: string;
-  isAdmin: boolean;
-  memberCount: number;
-  totalStaked: string | undefined;
-  totalStakedLoading: boolean;
-  numDelegators: number | undefined;
-  numDelegatorsLoading: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
+function StakeSkeleton() {
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background shrink-0">
-            <Landmark className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-foreground truncate">
-                {validator.accountId}
-              </h2>
-            </div>
-            <p className="text-[11px] font-mono text-muted-foreground truncate">
-              {validator.accountId}
-            </p>
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Pencil className="h-3.5 w-3.5" />
-              edit
-            </Button>
-            <Button size="sm" variant="destructive" onClick={onDelete}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Server className="h-4 w-4 shrink-0" />
-        <span className="font-mono text-xs truncate">{validator.accountId}</span>
-      </div>
-      <div className="grid grid-cols-3 gap-3 border-t border-border pt-3">
-        <StatBlock
-          label="Total staked"
-          value={
-            totalStaked
-              ? `${formatAmount(totalStaked, { precision: 0, trimZeros: true })} NEAR`
-              : totalStakedLoading
-                ? "…"
-                : "—"
-          }
-        />
-        <StatBlock label="Delegators" value={numDelegators ?? (numDelegatorsLoading ? "…" : "—")} />
-        <StatBlock label="Members" value={memberCount} />
-      </div>
-    </Card>
-  );
-}
-
-function StatBlock({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate">
-        {label}
-      </p>
-      <p className="text-sm font-semibold text-foreground truncate">{value}</p>
+    <div className="space-y-4">
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="h-16 w-full rounded-[10px]" />
+      <Skeleton className="h-16 w-full rounded-[10px]" />
+      <Skeleton className="h-40 w-full rounded-[10px]" />
     </div>
   );
 }

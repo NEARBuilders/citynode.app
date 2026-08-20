@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Landmark, Server, Sparkles } from "lucide-react";
+import { ArrowRight, Globe, Sparkles } from "lucide-react";
 import { getAccount, getActiveRuntime, getAppName, useApiClient } from "@/app";
-import { Button, Card } from "@/components";
+import { Badge, Button, Card } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_layout/_public/")({
   loader: async ({ context }) => ({
@@ -30,11 +31,13 @@ function LandingPage() {
 
   const accountId = runtime?.accountId ?? account;
 
-  const { data: validators = [] } = useQuery({
-    queryKey: ["validators"],
-    queryFn: () => apiClient.listValidators({}),
+  const { data: rootNodes = [], isLoading } = useQuery({
+    queryKey: ["root-nodes"],
+    queryFn: () => apiClient.listRootNodes(),
     staleTime: 30 * 1000,
   });
+
+  const gateway = runtime?.gatewayId ?? "citynode.app";
 
   return (
     <PageContainer variant="wide">
@@ -68,48 +71,59 @@ function LandingPage() {
         <section className="space-y-6">
           <div className="flex items-end justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="text-xl font-semibold text-foreground">Live cities</h2>
+              <h2 className="text-xl font-semibold text-foreground">Directory</h2>
               <p className="text-sm text-muted-foreground">
-                Stake to a city&apos;s validator pool from its subdomain.
+                Browse geographic nodes and stake from their subdomain.
               </p>
             </div>
             <span className="text-xs font-mono text-muted-foreground">
-              {validators.length} {validators.length === 1 ? "city" : "cities"}
+              {rootNodes.length} {rootNodes.length === 1 ? "node" : "nodes"}
             </span>
           </div>
 
-          {validators.length === 0 ? (
+          {isLoading ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="p-6 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-[10px]" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-8 w-full" />
+                </Card>
+              ))}
+            </div>
+          ) : rootNodes.length === 0 ? (
             <Card className="p-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                No city nodes yet. Create a tenant and publish the first one.
-              </p>
+              <p className="text-sm text-muted-foreground">No nodes yet.</p>
             </Card>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {validators.map((validator) => (
-                <Card key={validator.id} className="p-6 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-                      <Landmark className="h-4 w-4" />
+              {rootNodes.map((node) => (
+                <Card key={node.id} className="p-6 space-y-3">
+                  <a href={`https://${node.slug}.${gateway}/`} className="block space-y-3 group">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+                        <Globe className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold text-foreground capitalize truncate group-hover:underline">
+                          {node.name}
+                        </h3>
+                        <p className="text-[11px] font-mono text-muted-foreground truncate">
+                          {node.slug}.{gateway}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="text-base font-semibold text-foreground capitalize truncate">
-                        {validator.accountId}
-                      </h3>
-                      <p className="text-[11px] font-mono text-muted-foreground truncate">
-                        {validator.accountId}.{runtime?.gatewayId ?? "citynode.app"}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="capitalize">
+                        {node.kind}
+                      </Badge>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Server className="h-3.5 w-3.5 shrink-0" />
-                    <span className="font-mono text-xs truncate">{validator.accountId}</span>
-                  </div>
-                  <Button asChild variant="outline" size="sm" className="w-full">
-                    <Link to="/stake" search={{ city: validator.accountId }}>
-                      stake to {validator.accountId}
-                    </Link>
-                  </Button>
+                  </a>
                 </Card>
               ))}
             </div>
