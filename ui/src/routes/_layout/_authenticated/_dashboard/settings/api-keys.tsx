@@ -126,9 +126,9 @@ function ApiKeysSettings() {
 
       <Card className="p-6 space-y-3">
         <div className="text-sm text-muted-foreground leading-relaxed">
-          API keys allow programmatic access to the API via the <code className="font-mono">x-api-key</code> header.
-          Use them for MCP clients, scripts, and integrations. The full key is shown only once at creation — store it
-          securely.
+          API keys allow programmatic access to the API via the{" "}
+          <code className="font-mono">x-api-key</code> header. Use them for MCP clients, scripts,
+          and integrations. The full key is shown only once at creation — store it securely.
         </div>
       </Card>
 
@@ -148,18 +148,14 @@ function ApiKeysSettings() {
           {apiKeys.map((key) => (
             <Card key={key.id} className="p-5 space-y-3 hover:shadow-md">
               <div className="space-y-1 min-w-0">
-                <div className="font-medium text-foreground break-all">
-                  {key.name ?? "unnamed"}
-                </div>
+                <div className="font-medium text-foreground break-all">{key.name ?? "unnamed"}</div>
                 <div className="text-xs text-muted-foreground font-mono">
                   {key.prefix ?? "api_"}...{key.start ?? ""}
                 </div>
               </div>
               <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                 <div>created {new Date(key.createdAt).toLocaleString()}</div>
-                {key.expiresAt && (
-                  <div>expires {new Date(key.expiresAt).toLocaleString()}</div>
-                )}
+                {key.expiresAt && <div>expires {new Date(key.expiresAt).toLocaleString()}</div>}
               </div>
               <div className="flex gap-2">
                 <Button
