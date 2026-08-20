@@ -52,6 +52,25 @@ Lineage model:
 - `domain` is the public ingress for that runtime
 - a child runtime can extend a parent and still become a new tenant root on its own domain
 
+### Self-Deployed / Tenant Publishing
+
+You don't need to wait for CI/CD to see changes in production. Publish your own config on-chain under your own NEAR account and run your own host instance, inheriting the base platform via `extends`.
+
+**Same gateway, own account:**
+
+`BOS_GATEWAY` (`domain` in `bos.config.json`) is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping `BOS_GATEWAY` the same as the parent while using your own `BOS_ACCOUNT`, your config lives at a separate FastKV path (`bos://<your-account>/<gateway>`) that `extends` the base runtime. You inherit the full platform — host, API, auth, plugins — and override only what you change. Your Railway URL is the ingress.
+
+**Step-by-step:**
+
+1. Install near-cli-rs (v0.23.5) — the `bos` CLI shells out to it for `bos publish` and `bos key generate`
+2. Create a NEAR account via near-cli-rs (testnet or mainnet; named accounts can own subaccounts, implicit hex accounts cannot)
+3. `bos key generate` — generates a function-call key scoped to the FastKV registry contract; set the output as `NEAR_PRIVATE_KEY`
+4. Update `bos.config.json`: set `account` to your NEAR account, add `"extends": "bos://<parent-account>/<parent-gateway>"`, keep `domain` as the parent gateway
+5. `bos publish --deploy` — builds workspaces, deploys to Zephyr CDN, publishes config to FastKV at `bos://<your-account>/<gateway>`
+6. Deploy to Railway (one-click template or `railway up`), set `BOS_ACCOUNT`, `BOS_GATEWAY` (same as parent), `BETTER_AUTH_SECRET` — the host fetches your config from FastKV and serves live
+
+**Subaccount creation** (for the tenant wizard) requires a named NEAR account with a full access key. Export the key via `near account export-account <account> explicitly-provide-private-key`, set `NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET` / `_TESTNET`, and point `siwn.subAccount.parentAccount`, `siwn.recipients`, and `siwn.relayer.*.whitelistedContracts` to your account.
+
 ## Sync
 
 Pull template updates from the parent referenced by local `bos.config.json`:

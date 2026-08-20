@@ -205,6 +205,121 @@ For full per-request host/plugin/auth/api swapping, see `plans/` for design docs
 - Run `bun typecheck`
 - Ensure `api/src/contract.ts` is in sync with UI usage
 
+### Self-Deployed Development
+
+You don't need to wait for a PR to merge and run through CI/CD to see your changes in production. The architecture supports independent self-deployment: publish your own config on-chain under your own NEAR account and run your own host instance, all while inheriting the base platform via `extends`.
+
+**Local dev (no NEAR account needed):**
+
+```bash
+bun run dev    # hot reload, all services local
+```
+
+**Self-deployed production (step-by-step):**
+
+1. **Install near-cli-rs** (the `bos` CLI shells out to it for `bos publish` and `bos key generate`):
+   ```bash
+   curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh
+   near --version    # verify
+   ```
+
+2. **Create a NEAR account** via near-cli-rs (testnet for experimentation, mainnet for production). Named accounts (e.g. `myorg.near`) can own subaccounts; implicit hex accounts cannot:
+   ```bash
+   near account create-account fund-my-account <your-account>.testnet use-faucet network-config testnet
+   # or for mainnet, fund via a wallet transfer
+   ```
+
+3. **Generate a publish access key** — a function-call key scoped to the FastKV registry contract (`__fastdata_kv` on `dev.everything.near`). This is the key that signs `bos publish` transactions:
+   ```bash
+   bos key generate
+   # Output includes: NEAR_PRIVATE_KEY=ed25519:...
+   ```
+   Add the key to your account via near-cli-rs (interactive keychain signing). Then set `NEAR_PRIVATE_KEY` in your `.env` or CI secrets.
+
+4. **Update `bos.config.json`** — set `account` to your NEAR account and add `extends` to inherit the base platform:
+   ```json
+   {
+     "extends": "bos://v1.citynode.near/citynode.app",
+     "account": "<your-account>.near",
+     "domain": "citynode.app"
+   }
+   ```
+   Keep `domain` as `citynode.app` (the gateway). See "Same gateway, own account" below.
+
+5. **Publish your config on-chain:**
+   ```bash
+   bos publish --deploy
+   # builds workspaces → deploys to Zephyr CDN → publishes bos.config.json to FastKV at bos://<your-account>/citynode.app
+   ```
+
+6. **Deploy to Railway** — use the one-click template (button in `README.md`) or `railway up` with the committed `railway.toml` (which references the generic `ghcr.io/nearbuilders/everything-dev:latest` image). Set these environment variables on your Railway service:
+   | Variable | Value |
+   |----------|-------|
+   | `BOS_ACCOUNT` | `<your-account>.near` |
+   | `BOS_GATEWAY` | `citynode.app` |
+   | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
+
+7. **Your Railway host boots** `bos start`, fetches your published config from FastKV at `bos://<your-account>/citynode.app`, and serves your version live at the Railway-assigned URL. Changes take minutes, not hours.
+
+**Same gateway, own account:**
+
+`BOS_GATEWAY` (`domain` in `bos.config.json`) is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping `BOS_GATEWAY=citynode.app` while using your own `BOS_ACCOUNT`, your config lives at a separate FastKV path (`bos://<your-account>/citynode.app`) that `extends` the base runtime (`bos://v1.citynode.near/citynode.app`). You inherit the full platform — host, API, auth, plugins — and override only what you change. Your Railway URL is the ingress; point your own domain's DNS at it if you want a custom domain.
+
+**Setting up subaccount creation with near-cli-rs:**
+
+The auth plugin's subaccount creation flow (used by the tenant wizard) requires a named NEAR account with a full access key. Implicit hex accounts cannot own subaccounts.
+
+1. **Create a named NEAR account** via near-cli-rs (if you don't already have one):
+   ```bash
+   # testnet
+   near account create-account fund-my-account <parent>.testnet use-faucet network-config testnet
+   # mainnet — fund via wallet transfer first
+   near account create-account fund-my-account <parent>.near manually-sign network-config mainnet
+   ```
+
+2. **Export the full access key** for that account (needed as `NEAR_SUB_ACCOUNT_PARENT_KEY`):
+   ```bash
+   near account export-account <parent>.testnet explicitly-provide-private-key network-config testnet
+   ```
+
+3. **Set the parent key secrets** in `.env`:
+   ```
+   NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET=ed25519:...
+   NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET=ed25519:...
+   ```
+
+4. **Update `bos.config.json` auth variables** — point `siwn.subAccount.parentAccount`, `siwn.recipients`, and `siwn.relayer.*.whitelistedContracts` to your own account:
+   ```json
+   "variables": {
+     "siwn": {
+       "recipients": { "mainnet": "<your-account>.near", "testnet": "<your-account>.testnet" },
+       "relayer": {
+         "mainnet": { "whitelistedContracts": ["<your-account>.near"], "maxGasPerTransaction": "300000000000000", "maxDepositPerTransaction": "0" },
+         "testnet": { "whitelistedContracts": ["<your-account>.testnet"], "maxGasPerTransaction": "300000000000000", "maxDepositPerTransaction": "0" }
+       },
+       "subAccount": {
+         "mainnet": { "parentAccount": "<your-account>.near", "parentHasFullAccess": true, "minDeposit": "0.1 NEAR" },
+         "testnet": { "parentAccount": "<your-account>.testnet", "parentHasFullAccess": true, "minDeposit": "0.1 NEAR" }
+       }
+     }
+   }
+   ```
+
+5. After restarting, the auth plugin can create subaccounts (e.g. `chicago.<your-account>.near`) and the ephemeral relayer can relay transactions for your whitelisted contracts. Fund the relayer's implicit account with NEAR (see "SIWN Auth Relayer" below for the funding workflow).
+
+**near-cli-rs quick reference:**
+
+| Command | Purpose |
+|---------|---------|
+| `near account create-account fund-my-account <id> ...` | Create a new NEAR account |
+| `near account list-keys <id> network-config <net> now` | List access keys on an account |
+| `near account add-key <id> grant-function-call-access ...` | Add a function-call access key (used by `bos key generate`) |
+| `near account delete-keys <id> public-keys <keys> ...` | Remove access keys |
+| `near account export-account <id> explicitly-provide-private-key ...` | Export a full access key |
+| `near contract call-function as-transaction <contract> <method> ...` | Submit a contract call (used internally by `bos publish`) |
+
+The `bos` CLI wraps near-cli-rs — you normally don't invoke `near` directly except for account creation and key export. `bos publish` and `bos key generate` handle the transaction signing automatically.
+
 ## Code Changes
 
 ### Making Changes
