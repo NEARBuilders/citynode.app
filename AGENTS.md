@@ -345,13 +345,13 @@ The `bos` CLI wraps near-cli-rs — you normally don't invoke `near` directly ex
 
 ### Plugin Architecture
 
-Business logic is organized into independent plugins loaded via Module Federation:
+Business logic is organized into independent plugins loaded via Module Federation. A plugin entry in `bos.config.json` can be **remote-only** (no `development: local:…` key) — the host/API consume it via `pluginsClient` and HTTP, and types resolve from the deployed manifest (see "Generated types" below). Plugin source does not need to live in this repo.
 - **`api/`** — Thin structural shell: ping, authHealth, error routes, middleware definitions
 - **`plugins/apps/`** — Registry/discovery, FastKV app metadata (local in dev)
 - **`plugins/_template/`** — Scaffold for creating new plugins
 - **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
-- **`plugins/proposals/`** — Proposals plugin (remote in dev, production only)
-- **`plugins/votes/`** — Votes plugin (remote in dev, production only)
+- **Proposals** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
+- **Votes** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
 
 Each plugin is self-contained with its own:
 - `contract.ts` — oRPC route definitions and Zod schemas

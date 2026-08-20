@@ -8,7 +8,7 @@ import { Badge, Button, Card, CardContent, Field, FieldLabel, Input } from "@/co
 import { InfoRow } from "@/components/ui/info-row";
 import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 
-export const Route = createFileRoute("/_layout/_admin/admin/relayer")({
+export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/relayer")({
   head: () => ({
     meta: [{ title: "Relayer | app" }],
   }),

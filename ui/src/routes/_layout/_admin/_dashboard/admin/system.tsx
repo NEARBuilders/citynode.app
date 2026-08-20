@@ -3,7 +3,7 @@ import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Card } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
 
-export const Route = createFileRoute("/_layout/_admin/admin/system")({
+export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/system")({
   loader: async ({ context }) => ({
     runtimeConfig: context.runtimeConfig,
   }),

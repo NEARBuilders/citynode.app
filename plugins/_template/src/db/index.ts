@@ -10,16 +10,6 @@ export interface DatabaseDriver {
   close(): Promise<void>;
 }
 
-interface PoolLike {
-  on(event: "error", listener: (err: Error) => void): this;
-  on(
-    event: "connect",
-    listener: (client: { query: (sql: string) => Promise<unknown> }) => void,
-  ): this;
-  removeAllListeners(event?: string | symbol): this;
-  end(): Promise<void>;
-}
-
 export async function createDatabaseDriver(
   url: string,
   schemaName?: string,

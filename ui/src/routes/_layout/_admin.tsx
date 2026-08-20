@@ -1,7 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import type { SessionData } from "@/app";
 import { sessionQueryOptions } from "@/app";
-import { AppShell } from "@/components/layout/app-shell";
 
 interface AuthContext {
   isAuthenticated: boolean;
@@ -59,7 +58,5 @@ export const Route = createFileRoute("/_layout/_admin")({
 });
 
 function AdminGate() {
-  const { runtimeConfig, session } = Route.useRouteContext();
-  const isAdmin = session?.user?.role === "admin";
-  return <AppShell runtimeConfig={runtimeConfig} session={session} isAdmin={isAdmin} />;
+  return <Outlet />;
 }

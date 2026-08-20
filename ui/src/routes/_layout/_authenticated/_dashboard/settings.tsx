@@ -3,7 +3,7 @@ import { Settings } from "lucide-react";
 import { sessionQueryOptions } from "@/app";
 import { PageContainer, PageHeader, Tabs, TabsList, TabsTrigger } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/settings")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/settings")({
   head: () => ({
     meta: [
       { title: "Settings | auth.everything.dev" },

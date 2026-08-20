@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { sessionQueryOptions, useAuthClient } from "@/app";
 import { Button, Card, InfoRow, Input } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/settings/profile")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/settings/profile")({
   component: ProfileSettings,
 });
 

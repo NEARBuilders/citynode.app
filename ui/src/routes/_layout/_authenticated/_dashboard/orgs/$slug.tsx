@@ -61,7 +61,7 @@ const orgMembersQueryKey = (orgId: string) => ["org-members", orgId] as const;
 const orgInvitationsQueryKey = (orgId: string) => ["org-invitations", orgId] as const;
 const orgApiKeysQueryKey = (orgId: string) => ["org-api-keys", orgId] as const;
 
-export const Route = createFileRoute("/_layout/_authenticated/orgs/$slug")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/$slug")({
   head: () => ({
     title: "Organization | auth.everything.dev",
     meta: [{ name: "description", content: "Manage organization details and members." }],

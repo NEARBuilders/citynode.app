@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { Button, PageContainer, PageHeader } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/apply")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/apply")({
   head: () => ({
     meta: [{ title: "Apply | app" }, { name: "description", content: "Apply to run a City Node." }],
   }),
@@ -18,7 +18,7 @@ function ApplyPage() {
           description="City Nodes are NEAR Protocol validators tied to a real place. Apply to bring a node to your city, state, or country."
         />
         <Button asChild>
-          <a href="https://citynode.app/apply" target="_blank" rel="noopener noreferrer">
+          <a href="https://nearlegion.com/host-event" target="_blank" rel="noopener noreferrer">
             Open application
             <ExternalLink />
           </a>

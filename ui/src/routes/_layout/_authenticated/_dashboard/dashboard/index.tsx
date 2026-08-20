@@ -12,7 +12,7 @@ import {
 import { Button, Card, Chip, PageHeader } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
 
-export const Route = createFileRoute("/_layout/_authenticated/dashboard/")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/")({
   beforeLoad: async ({ context }) => {
     const { apiClient, runtimeConfig } = context;
     const accountId = getAccount(runtimeConfig);

@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BetaBanner } from "@/components/layout/beta-banner";
+import { GlobalHeader } from "@/components/layout/global-header";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export const Route = createFileRoute("/_layout")({
@@ -31,6 +32,8 @@ function Layout() {
         }}
       >
         <BetaBanner />
+
+        <GlobalHeader />
 
         {showBar && (
           <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">

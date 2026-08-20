@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
 import { Button, Card, Chip, ConfirmDialog, Input } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/settings/auth-methods")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/settings/auth-methods")({
   component: AuthMethodsSettings,
 });
 

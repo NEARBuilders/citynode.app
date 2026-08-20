@@ -1,7 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ClientRuntimeConfig } from "@/app";
 import { getAccount, getActiveRuntime, getAppName } from "@/app";
-import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
@@ -41,10 +40,6 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
               {pathname === "/" ? "home" : pathname.slice(1).split("/").join(" / ")}
             </span>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <UserNav />
         </div>
       </div>
     </header>

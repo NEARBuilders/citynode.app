@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
 import { Button, Card, Field, FieldLabel, Input } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/settings/security")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/settings/security")({
   component: SecuritySettings,
 });
 

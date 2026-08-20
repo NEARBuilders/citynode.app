@@ -5,7 +5,7 @@ import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/componen
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_layout/_admin/admin")({
+export const Route = createFileRoute("/_layout/_admin/_dashboard/admin")({
   head: () => ({
     meta: [{ title: "Admin | app" }],
   }),

@@ -4,7 +4,7 @@ import { getAccount, useAuthClient } from "@/app";
 import { Button, Card, SectionHeader } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
 
-export const Route = createFileRoute("/_layout/_admin/admin/")({
+export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/")({
   head: () => ({
     meta: [{ title: "Admin Dashboard | app" }],
   }),

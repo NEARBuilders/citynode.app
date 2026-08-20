@@ -37,13 +37,13 @@ Visit http://localhost:3003 (UI), http://localhost:3001 (API), and http://localh
 
 ### Plugin Architecture
 
-Business logic lives in independent plugins under `plugins/`:
+Business logic lives in independent plugins. A plugin entry in `bos.config.json` can be **remote-only** (no `development: local:…` key) — the host/API consume it via `pluginsClient` and HTTP, and types resolve from the deployed manifest. Plugin source does not need to live in this repo.
 
 - **`plugins/apps/`** — Registry/discovery, FastKV app metadata (local in dev)
 - **`plugins/_template/`** — Scaffold for new plugins
 - **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
-- **`plugins/proposals/`** — Proposals plugin (remote in dev, production only)
-- **`plugins/votes/`** — Votes plugin (remote in dev, production only)
+- **Proposals** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
+- **Votes** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
 
 Each plugin has its own `contract.ts`, `index.ts`, `rspack.config.js`, and `package.json`. Routes are namespaced in the UI: `apiClient.apps.*()`, `apiClient.proposals.*()`, etc.
 

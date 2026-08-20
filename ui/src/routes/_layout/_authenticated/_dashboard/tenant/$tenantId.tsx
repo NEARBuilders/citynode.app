@@ -85,7 +85,7 @@ async function publishTenantConfig(
     .send({ waitUntil: "EXECUTED" });
 }
 
-export const Route = createFileRoute("/_layout/_authenticated/tenant/$tenantId")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/tenant/$tenantId")({
   head: () => ({
     meta: [{ title: "Tenant | app" }],
   }),

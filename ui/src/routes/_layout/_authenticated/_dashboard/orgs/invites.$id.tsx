@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { getAppName, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/orgs/invites/$id")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/invites/$id")({
   head: () => ({
     meta: [{ title: `Accept Invitation | ${getAppName()}` }],
   }),

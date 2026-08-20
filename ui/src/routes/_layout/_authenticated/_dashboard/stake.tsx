@@ -25,7 +25,7 @@ const STAKE_GAS = "300000000000000";
 
 type StakeSearch = { node?: string };
 
-export const Route = createFileRoute("/_layout/_authenticated/stake")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/stake")({
   validateSearch: (search: Record<string, unknown>): StakeSearch => ({
     node: typeof search.node === "string" ? search.node : undefined,
   }),

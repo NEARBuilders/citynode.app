@@ -10,7 +10,7 @@ import { DataTable } from "@/components/ui/data-table";
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
 
-export const Route = createFileRoute("/_layout/_admin/admin/tenants/")({
+export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/tenants/")({
   head: () => ({
     meta: [{ title: "Tenants | app" }],
   }),

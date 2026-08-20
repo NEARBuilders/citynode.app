@@ -84,7 +84,7 @@ function generateSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export const Route = createFileRoute("/_layout/_admin/admin/tenants/new")({
+export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/tenants/new")({
   head: () => ({
     title: "New Tenant | app",
     meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],

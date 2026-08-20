@@ -44,7 +44,16 @@ function LandingPage() {
           </h1>
           <p className="max-w-2xl text-base sm:text-lg text-muted-foreground leading-relaxed">
             A City Node is a NEAR Protocol validator tied to a real place — a city, state, or
-            country. Stake NEAR to help keep your city's validator online and securing the network.
+            country. Stake NEAR to help keep your city's validator online and securing the network.{" "}
+            <Button asChild variant="link" className="px-0">
+              <a
+                href="https://www.near.org/blog/legion-city-nodes"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Learn More
+              </a>
+            </Button>
           </p>
         </section>
 
@@ -53,7 +62,7 @@ function LandingPage() {
             <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
               Directory
             </h2>
-            <Button asChild size="sm">
+            <Button asChild size="lg">
               <Link to="/apply">Apply</Link>
             </Button>
           </div>

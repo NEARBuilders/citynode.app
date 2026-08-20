@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Cause, Effect, Exit, Layer } from "every-plugin/effect";
+import { PluginIdTag } from "every-plugin";
+import { Cause, type Context, Effect, Exit, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive } from "@/db/layer";
@@ -19,49 +20,13 @@ afterEach(() => {
 function freshLayer() {
   const dir = mkdtempSync(join(tmpdir(), "template-things-"));
   activeDir = dir;
-  return ThingsService.Live.pipe(Layer.provide(DatabaseLive(`pglite:${dir}`)));
+  return ThingsService.Live.pipe(
+    Layer.provide(DatabaseLive(`pglite:${dir}`)),
+    Layer.provide(Layer.succeed(PluginIdTag, "template")),
+  );
 }
 
-interface ThingsSvc {
-  createThing: (
-    thingId: string,
-    payload: unknown,
-  ) => Effect.Effect<
-    {
-      thingId: string;
-      type: string;
-      payload: unknown;
-      action: string;
-      createdAt: string;
-      updatedAt: string;
-    },
-    unknown
-  >;
-  getThing: (thingId: string) => Effect.Effect<
-    {
-      thingId: string;
-      type: string;
-      payload: unknown;
-      createdAt: string;
-      updatedAt: string;
-    },
-    unknown
-  >;
-  deleteThing: (thingId: string) => Effect.Effect<{ success: true }, unknown>;
-  listThings: (input: { type?: string; limit?: number; cursor?: string }) => Effect.Effect<
-    {
-      data: {
-        thingId: string;
-        type: string;
-        payload: unknown;
-        createdAt: string;
-        updatedAt: string;
-      }[];
-      meta: { total: number; hasMore: boolean; nextCursor: string | null };
-    },
-    unknown
-  >;
-}
+type ThingsSvc = Context.Tag.Service<typeof ThingsService>;
 
 async function runService<A>(
   layer: Layer.Layer<ThingsService, never, never>,

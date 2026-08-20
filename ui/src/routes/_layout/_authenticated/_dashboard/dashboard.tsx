@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { PageContainer } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/dashboard")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard")({
   component: DashboardLayout,
 });
 

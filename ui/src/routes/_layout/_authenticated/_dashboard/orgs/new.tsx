@@ -15,7 +15,7 @@ import {
   PageHeader,
 } from "@/components";
 
-export const Route = createFileRoute("/_layout/_authenticated/orgs/new")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/new")({
   head: () => ({
     title: "New Organization | auth.everything.dev",
     meta: [{ name: "description", content: "Create a new organization." }],
