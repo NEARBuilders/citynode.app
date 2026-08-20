@@ -429,3 +429,17 @@ bun run db:studio # Open Drizzle Studio
 **Key ports:**
 - 3003 - UI dev server
 - 3001 - API dev server
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/<feature>/`; published to GitHub (repo read fresh from `bos.config.json` `repository`) once ready. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles map to labels of the same name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `CONTEXT-MAP.md` pointing to per-context `CONTEXT.md` files, with `docs/adr/` at the root for system-wide decisions. See `docs/agents/domain.md`.

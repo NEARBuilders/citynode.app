@@ -144,7 +144,7 @@ export function AuthShell({ session, runtimeConfig, isAdmin = false }: AuthShell
           </div>
         </header>
 
-        <main className="flex-1 w-full min-h-0 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6">
+        <main className="flex-1 w-full min-h-0 overflow-y-auto pb-20 sm:pb-6">
           <div className="min-h-full">
             <Outlet />
           </div>

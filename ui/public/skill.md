@@ -1,6 +1,6 @@
-# everything.dev skill
+# City Nodes skill
 
-Use this when you want an agent to scaffold, run, edit, and publish an `everything.dev` app or a tenant UI that extends a base runtime.
+Use this when you want an agent to run, edit, and publish the **City Nodes** app — a decentralized network of NEAR validator nodes organized by geography. City Nodes is an `everything.dev` app: it runs on the everything.dev runtime platform (Module Federation host + oRPC API + Better-Auth with NEAR SIWN) and is composed at runtime from `bos.config.json`.
 
 ## TanStack Intent
 
@@ -8,66 +8,47 @@ Use this when you want an agent to scaffold, run, edit, and publish an `everythi
 - Load with TanStack Intent: `npx @tanstack/intent@latest load everything-dev`
 - If the agent supports registry URLs directly, point it at the registry entry above.
 
-## What this project is
+## What this app is
 
-- `everything.dev` is a runtime-composed app platform on NEAR.
-- `bos.config.json` is the canonical runtime manifest.
-- The host is the runtime shell and trust boundary.
-- The UI is loaded at runtime through Module Federation.
-- The API is loaded at runtime through `every-plugin`.
+- **City Nodes** is a product, not a platform. The product surface: visitors browse a directory of geographic nodes (countries, states, cities), drill into a node's subdomain, and stake NEAR to that node's validator pool.
+- A **node** is a NEAR validator tied to a real place. Each node has its own subdomain (`chicago.citynode.app`), its own NEAR treasury account, and 0..N validator pools. Nodes form a geography tree (country → state → city); a node's **subtree** aggregates validators for staking.
+- A **validator** is the staking target: `account_id`, `protocol` (today: NEAR), `role` (`official` or `community`), and `is_default`. A node with no validators inherits from its parent chain.
+- The **platform tenant** (`v1.citynode.near`) serves `citynode.app` — the root directory. It has a tenant record but no node record; it is the deployment surface, not a place.
+- `bos.config.json` is the canonical runtime manifest. The host loads UI, API, and auth at runtime from URLs in the config.
+- The host is the runtime shell and trust boundary. The UI is loaded through Module Federation. The API is loaded through `every-plugin`.
+
+## Simplified route structure
+
+Public routes (no auth):
+
+- `/` — landing: "What are CityNodes?" hero + directory of root nodes + Apply button
+- `/about` — renders the repo `README.md` (the CityNodes product explainer) via a README-fetching loader
+- `/apply` — internal route that redirects externally to `https://citynode.app/apply`
+- `/skill` — renders this `skill.md`
+- `/skill.md`, `/README.md`, `/llms.txt` — raw doc endpoints
+- `/things`, `/things/$thingId`, `/things/new`, `/things/live` — generic typed table demo (durable store + SSE)
+- `/$accountId` — NEAR account profile overview (public)
+
+Authed routes (behind `_authenticated`):
+
+- `/login` — NEAR wallet sign-in entry (SIWN)
+- `/dashboard` — authenticated landing
+- `/stake` — stake page: subtree validators with selector (official/community, `is_default` pre-selected)
+- `/orgs` — Better-Auth organizations (node management orgs)
+- `/settings/*` — user settings (profile, etc.)
+- `/admin/*` — admin surface: tenants, nodes, relayer, system (admin role only)
+
+Keep `_layout` and `_authenticated` generic. Do not bake tenant-specific product concepts into the scaffold shell.
 
 ## Parent vs child repo
 
-Be explicit about which repo you are editing.
+This repo is the **City Nodes app** running on the everything.dev runtime. The runtime platform itself (host, CLI, plugin framework) lives at [`NEARBuilders/everything-dev`](https://github.com/NEARBuilders/everything-dev).
 
-- In the parent `everything.dev` repo, work across `host/`, `api/`, `ui/`, `plugins/`, and `packages/`.
-- In a generated child repo created by `bos init`, work primarily in `ui/src/` and `bos.config.json`.
+- Here, work across `host/`, `api/`, `ui/`, `plugins/`, and `packages/` as needed — this repo contains the full runtime plus the City Nodes product surface.
+- A generated child repo created by `bos init` works primarily in `ui/src/` and `bos.config.json`, inheriting the upstream host, auth, and API.
 - Do not describe a generated child repo as the upstream runtime monorepo.
-- A UI-only child tenant inherits the upstream host, auth, and API unless it explicitly overrides more surfaces.
 
-## White-label starter app contract
-
-The default scaffold should stay generic.
-
-- `ui/src/routes/_layout.tsx` is the public shell boundary.
-- `ui/src/routes/_layout/login.tsx` is the login entry.
-- `ui/src/routes/_layout/_authenticated.tsx` is the auth gate.
-- routes under `ui/src/routes/_layout/_authenticated/` are protected pages.
-- app-specific branding, navigation, and concepts should stay outside that contract.
-
-This lets different apps keep their own style system and product language while preserving the same route and auth structure.
-
-## Core model
-
-- The base runtime owns the shared host, auth, API, and base plugin set.
-- Tenant apps extend that base runtime and override UI-facing pieces.
-- In fixed-core mode today, tenants can override:
-  - `app.ui`
-  - existing `plugins.<id>.ui`
-  - existing `plugins.<id>.sidebar`
-- In fixed-core mode today, these stay fixed to the base runtime:
-  - `app.host`
-  - `app.api`
-  - `app.auth`
-  - server-side plugin loading and router mounting
-
-## Super app mental model
-
-- bare domain -> base runtime
-- `extends` -> lineage edge
-- `account` -> tenant namespace root for the active runtime
-- `domain` -> public ingress for that runtime
-- subdomains compose onto the active runtime account namespace
-- tenant config must extend the base runtime
-- tenant UI integrity must be present for trusted overrides
-
-Example:
-
-- `bos://dev.everything.near/everything.dev` is the base runtime
-- `bos://pizza.pingpayio.near/pizza.com` can extend `bos://pingpayio.near/pingpay.io` and still become its own tenant root on `pizza.com`
-- `bos://chicago.pizza.pingpayio.near/pizza.com` is a descendant runtime inside the `pizza.pingpayio.near` namespace
-
-## Scaffold a UI-only tenant starter
+## Scaffold a new everything.dev app
 
 Use `bos init` for new child apps.
 
@@ -100,11 +81,6 @@ Keep these route boundaries intact:
 - `ui/src/routes/_layout/login.tsx`
 - `ui/src/routes/_layout/_authenticated.tsx`
 
-Current caveat:
-
-- today the scaffold may still copy showcase routes from the parent UI
-- for a true white-label child app, treat those routes as starter material to replace, not as the final app shape
-
 ## Run locally
 
 ```bash
@@ -116,98 +92,50 @@ bos dev
 Useful variants:
 
 ```bash
-bos dev --api remote
-bos start --no-interactive
+bos dev --api remote    # isolate UI work
+bos dev --ui remote      # isolate API work
+bos start --no-interactive   # production URLs
 ```
 
 ## Edit the UI
 
 - main UI code lives in `ui/src/`
-- routes live in `ui/src/routes/`
-- reusable components live in `ui/src/components/`
-- runtime helpers live in `ui/src/app.ts`
-- root document wiring lives in `ui/src/routes/__root.tsx`
-- use semantic Tailwind classes such as `bg-background`, `bg-card`, `text-foreground`, and `text-muted-foreground`
+- routes live in `ui/src/routes/` (TanStack file-based router; `routeTree.gen.ts` regenerates automatically)
+- reusable components live in `ui/src/components/` (`@/components` barrel) and `ui/src/components/ui/` (primitives like `data-table`, `button`, `select` — import these directly)
+- runtime helpers live in `ui/src/app.ts` (`getAppName`, `getAccount`, `getActiveRuntime`, `getRuntimeConfig`, `useApiClient`, `useAuthClient`)
+- use semantic Tailwind classes: `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`. No hardcoded colors.
 
-For the default starter app:
+## Edit the API / plugins
 
-- keep `_layout` and `_authenticated` generic
-- keep `user-nav` generic
-- avoid baking tenant-specific product concepts into the scaffold shell
+- API contract: `api/src/contract.ts` (oRPC route definitions + Zod schemas)
+- API router: `api/src/index.ts` (`createRouter`)
+- Plugins live under `plugins/<name>/` with `contract.ts` + `index.ts` + rspack config
+- UI calls plugins via namespaced clients: `apiClient.template.listThings(...)`, `apiClient.registry.listRegistryApps(...)`, etc.
 
-Canonical starter shell recipe:
-
-- keep one public landing page at `/`
-- keep `/about` and `/skill` as public documentation routes
-- keep one authenticated landing page under `_authenticated/`
-- simplify navigation before adding app-specific sections
-- remove showcase routes such as projects, organizations, apps, or settings unless the child app actually needs them
-
-## Post-init cleanup for `--overrides ui`
-
-After scaffold:
-
-- replace copied showcase routes with starter routes
-- remove non-essential demo routes if present
-- update `README.md`, `AGENTS.md`, and `skill.md` to describe the child app, not the parent runtime repo
-- replace placeholder `account`, `domain`, `title`, and `description`
-- keep the shared runtime relationship clear in `bos.config.json`
-
-## Generated types in UI-only children
-
-- `bos types gen` may still generate API and auth client types in a UI-only child
-- those types can come from the upstream remote runtime
-- the absence of a local `api/` workspace is normal for a UI-only tenant
-- if your local installed CLI version behaves differently from the latest framework code, prefer `bunx everything-dev@latest` while validating the scaffold flow
-
-## Verify the child app
-
-Recommended success criteria:
+## Publish
 
 ```bash
-bun run types:gen
-bun run typecheck
-bun run lint
+bos build               # build all packages (updates bos.config.json)
+bos publish             # publish config to the FastKV registry
+bos publish --deploy    # build/deploy all workspaces, then publish
+bos sync                # sync from upstream
 ```
 
-## Publish a tenant UI
-
-```bash
-bos publish --deploy
-bos publish
-```
-
-After `bos publish --deploy`, the child app `bos.config.json` gets the deployed UI URL and integrity.
-
-## Tenant runtime rules
-
-- publish the base runtime first
-- publish the tenant runtime that extends it
-- use your own NEAR account in `account`
-- keep the same gateway or domain when you want the shared-host tenant model
-- tenant SSR is gated by `TENANT_WHITELIST` unless `ALLOW_UNTRUSTED_SSR=true`
-
-## Host env for fixed-core tenant mode
-
-```bash
-NETWORK_ID=mainnet
-ALLOW_OVERRIDE=ui,plugins.*
-TENANT_WHITELIST=your-account.near
-ALLOW_UNTRUSTED_SSR=false
-```
+After `bos publish --deploy`, `bos.config.json` gets deployed URLs + integrity.
 
 ## Good tasks for an agent
 
-- scaffold a white-label starter app with `bos init --overrides ui`
-- explain runtime inheritance and fixed-core tenant behavior
-- wire new pages into the `_layout` and `_authenticated` route structure
-- publish a tenant UI without changing the shared host
+- add or edit a public route under `_public/`
+- wire a new API endpoint into `contract.ts` + `index.ts` and call it from the UI via `useApiClient()`
+- add a node/validator admin flow under `_admin/`
+- publish a UI update without changing the shared host
 - debug why a tenant UI override is not loading
 
 ## Public entry points
 
 - `/`
 - `/about`
+- `/apply` (redirects to `https://citynode.app/apply`)
 - `/skill`
 - `/skill.md`
 - `/README.md`
@@ -215,6 +143,4 @@ ALLOW_UNTRUSTED_SSR=false
 
 ## Tone
 
-Prefer runtime-first explanations.
-Treat the project as a living runtime surface, not a fixed demo.
-Keep NEAR and Module Federation context intact.
+Prefer product-first explanations for visitors (what a City Node is, why stake), and runtime-first explanations for builders (how the host, UI, and API compose from `bos.config.json`). Keep NEAR and Module Federation context intact.

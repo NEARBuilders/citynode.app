@@ -1,17 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
 import { Globe, User } from "lucide-react";
 import { useAuthClient } from "@/app";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  PageContainer,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components";
+import { Avatar, AvatarFallback, AvatarImage, PageContainer } from "@/components";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
 
 export const Route = createFileRoute("/_layout/_public/$accountId")({
@@ -55,24 +47,9 @@ export const Route = createFileRoute("/_layout/_public/$accountId")({
   component: AccountProfileLayout,
 });
 
-const tabs = [
-  { value: "overview", to: "/$accountId", label: "Overview", exact: true },
-  { value: "apps", to: "/$accountId/apps", label: "Apps", exact: false },
-] as const;
-
 function AccountProfileLayout() {
   const { accountId } = Route.useLoaderData();
   const authClient = useAuthClient();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-
-  const resolveTabPath = (to: string) => to.replace("$accountId", accountId);
-  const activeTab =
-    tabs.find((t) => {
-      const fullPath = resolveTabPath(t.to);
-      return t.exact
-        ? pathname === fullPath
-        : pathname === fullPath || pathname.startsWith(`${fullPath}/`);
-    })?.value ?? "overview";
 
   const { data: profile } = useQuery({
     queryKey: ["near-profile", accountId],
@@ -142,18 +119,6 @@ function AccountProfileLayout() {
             )}
           </div>
         </div>
-
-        <Tabs value={activeTab} className="w-full min-w-0">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            {tabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} asChild className="shrink-0">
-                <Link to={tab.to} params={{ accountId }} search={{}} preload="intent">
-                  {tab.label}
-                </Link>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
 
         <Outlet />
       </div>

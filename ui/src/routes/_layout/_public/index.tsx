@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Globe, Sparkles } from "lucide-react";
-import { getAccount, getActiveRuntime, getAppName, useApiClient } from "@/app";
+import { Globe } from "lucide-react";
+import { getActiveRuntime, getAppName, useApiClient } from "@/app";
 import { Badge, Button, Card } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,8 @@ export const Route = createFileRoute("/_layout/_public/")({
       { title: "City Nodes | app" },
       {
         name: "description",
-        content: "Stake NEAR to city validator pools and help run decentralized city nodes.",
+        content:
+          "What are CityNodes? A decentralized network of NEAR validator nodes organized by geography. Stake NEAR to keep your city's node online.",
       },
     ],
   }),
@@ -26,10 +27,7 @@ function LandingPage() {
   const { runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
   const appName = getAppName(runtimeConfig);
-  const account = getAccount(runtimeConfig);
   const runtime = getActiveRuntime(runtimeConfig);
-
-  const accountId = runtime?.accountId ?? account;
 
   const { data: rootNodes = [], isLoading } = useQuery({
     queryKey: ["root-nodes"],
@@ -43,44 +41,19 @@ function LandingPage() {
     <PageContainer variant="wide">
       <div className="space-y-16">
         <section className="flex flex-col items-center gap-6 pt-12 pb-8 text-center">
-          <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5" />
-            {accountId}
-          </div>
-
           <div className="space-y-3">
             <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-foreground">
               {appName}
             </h1>
             <p className="mx-auto max-w-2xl text-base sm:text-lg text-muted-foreground leading-relaxed">
-              Every city runs its own validator pool on NEAR. Pick a city, sign in with your wallet,
-              and stake NEAR to help keep it online.
+              A City Node is a NEAR Protocol validator tied to a real place — a city, state, or
+              country. Stake NEAR to help keep your city's validator online and securing the
+              network.
             </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button asChild size="lg">
-              <Link to="/login">
-                Get started
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
           </div>
         </section>
 
         <section className="space-y-6">
-          <div className="flex items-end justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold text-foreground">Directory</h2>
-              <p className="text-sm text-muted-foreground">
-                Browse geographic nodes and stake from their subdomain.
-              </p>
-            </div>
-            <span className="text-xs font-mono text-muted-foreground">
-              {rootNodes.length} {rootNodes.length === 1 ? "node" : "nodes"}
-            </span>
-          </div>
-
           {isLoading ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -128,6 +101,12 @@ function LandingPage() {
               ))}
             </div>
           )}
+        </section>
+
+        <section className="flex justify-center pt-4">
+          <Button asChild size="lg">
+            <Link to="/apply">Apply</Link>
+          </Button>
         </section>
       </div>
     </PageContainer>
