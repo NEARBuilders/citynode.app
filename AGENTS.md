@@ -91,11 +91,20 @@ This document provides operational guidance for AI agents working in the parent 
 ```bash
 cp .env.example .env   # First time only
 bun install
+docker compose up -d --wait   # Start local Postgres (api_db:5432, auth_db:5433)
 bun run dev
+
+# Or combined: bun run dev:postgres  ==  docker compose up -d --wait && bun run dev
 
 # Pin individual service ports (unset flags are auto-picked and persisted in .bos/infra-state.json)
 bos dev --port 3100 --api-port 3101 --ui-port 3103 --auth-port 3102 --plugin-port-start 3110
 ```
+
+`docker-compose.yml` is committed and provisions two Postgres 17 services:
+- `postgres-api` (port 5432, db `api_db`) — shared by the API and all local plugins; each plugin isolates its tables in a `plugin_<pluginId>` schema (set via `search_path` on every connection, see `api/src/db/layer.ts`).
+- `postgres-auth` (port 5433, db `auth_db`) — auth database.
+
+The API and plugins auto-apply migrations on boot, so `bun db:migrate` is optional (use it to migrate without starting the dev server). `bun run dev` runs `bos dev`'s preflight, which probes the localhost DB ports and exits with a clear `docker compose up -d --wait` hint if Postgres isn't up.
 
 Dev ports are persisted to `.bos/infra-state.json` under `devPorts` and reused across restarts.
 `CORS_ORIGIN` in `.env.example` is derived from the actual resolved host port in development.

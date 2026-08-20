@@ -86,7 +86,6 @@
     "format:check": "biome format .",
     "start": "bun ./node_modules/everything-dev/dist/cli.mjs start --no-interactive",
     "changeset": "changeset",
-    "postinstall": "bun run types:gen",
     "version": "changeset version && bun run sync-catalog",
     "sync-catalog": "bun scripts/sync-catalog-versions.ts",
     "release": "echo 'Packages versioned - skipping npm publish'",
