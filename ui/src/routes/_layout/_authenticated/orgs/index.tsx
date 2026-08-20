@@ -157,13 +157,12 @@ function OrganizationsList() {
           label="Teams"
           title="Organizations"
           actions={
-            <Link
-              to="/orgs/new"
-              className="h-10 px-4 inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-outset border-border-strong bg-foreground text-background shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[12px]"
-            >
-              <Plus size={14} />
-              new
-            </Link>
+            <Button asChild>
+              <Link to="/orgs/new">
+                <Plus />
+                new
+              </Link>
+            </Button>
           }
         />
 
@@ -246,12 +245,9 @@ function OrganizationsList() {
             <Card className="p-10 text-center space-y-4 items-center">
               <Building2 className="h-10 w-10 mx-auto text-muted-foreground" />
               <p className="text-base font-semibold text-foreground">No organizations yet.</p>
-              <Link
-                to="/orgs/new"
-                className="h-10 px-4 inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-outset border-border-strong bg-foreground text-background shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[12px]"
-              >
-                create your first org
-              </Link>
+              <Button asChild>
+                <Link to="/orgs/new">create your first org</Link>
+              </Button>
             </Card>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">

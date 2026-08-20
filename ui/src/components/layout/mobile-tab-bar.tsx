@@ -34,7 +34,9 @@ export function MobileTabBar({ items, isActive }: MobileTabBarProps) {
               preload="intent"
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 p-2 min-w-[56px] rounded-[10px] transition-colors duration-200",
-                active ? "text-foreground bg-foreground/10" : "text-muted-foreground hover:text-foreground",
+                active
+                  ? "text-foreground bg-foreground/10"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon className="w-5 h-5" />

@@ -106,14 +106,12 @@ function AdminDashboard() {
               This tenant is backed by an organization. Manage members, roles, and invitations
               there.
             </p>
-            <Link
-              to="/orgs/$slug"
-              params={{ slug: tenant.id.slice(0, 8) }}
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[10px]"
-            >
-              <Users className="h-3.5 w-3.5" />
-              open organization
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/orgs/$slug" params={{ slug: tenant.id.slice(0, 8) }}>
+                <Users className="h-3.5 w-3.5" />
+                open organization
+              </Link>
+            </Button>
           </Card>
         </section>
       )}

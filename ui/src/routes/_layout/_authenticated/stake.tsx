@@ -182,7 +182,7 @@ function StakePage() {
   }, []);
 
   return (
-    <PageContainer variant="narrow">
+    <PageContainer variant="wide">
       <div className="space-y-8">
         <PageHeader
           icon={Landmark}

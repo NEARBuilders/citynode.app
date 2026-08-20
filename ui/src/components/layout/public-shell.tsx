@@ -9,9 +9,15 @@ interface PublicShellProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
   children: ReactNode;
   footer?: ReactNode;
+  showConnect?: boolean;
 }
 
-export function PublicShell({ runtimeConfig, children, footer }: PublicShellProps) {
+export function PublicShell({
+  runtimeConfig,
+  children,
+  footer,
+  showConnect = true,
+}: PublicShellProps) {
   const appName = getAppName(runtimeConfig);
 
   return (
@@ -35,7 +41,7 @@ export function PublicShell({ runtimeConfig, children, footer }: PublicShellProp
           </Link>
 
           <div className="flex items-center gap-2 min-w-0 shrink-0">
-            <UserNav />
+            <UserNav showConnect={showConnect} />
           </div>
         </div>
       </header>

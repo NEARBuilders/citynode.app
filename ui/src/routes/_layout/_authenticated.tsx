@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import type { SessionData } from "@/app";
 import { sessionQueryOptions } from "@/app";
-import { AuthShell } from "@/components/layout/auth-shell";
+import { AppShell } from "@/components/layout/app-shell";
 
 interface AuthContext {
   isAuthenticated: boolean;
@@ -57,5 +57,5 @@ export const Route = createFileRoute("/_layout/_authenticated")({
 function AuthenticatedLayout() {
   const { runtimeConfig, session } = Route.useRouteContext();
   const isAdmin = session?.user?.role === "admin";
-  return <AuthShell runtimeConfig={runtimeConfig} session={session} isAdmin={isAdmin} />;
+  return <AppShell runtimeConfig={runtimeConfig} session={session} isAdmin={isAdmin} />;
 }

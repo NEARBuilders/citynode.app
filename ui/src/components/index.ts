@@ -7,12 +7,27 @@ export {
 export { BrandElement } from "./brand-element";
 export { ConfirmDialog } from "./confirm-dialog";
 export { EmptyState } from "./empty-state";
+export { AppHeader } from "./layout/app-header";
+export { AppShell } from "./layout/app-shell";
+export { AppSidebar } from "./layout/app-sidebar";
+export { BetaBanner } from "./layout/beta-banner";
 export { Chip } from "./layout/chip";
+export { MobileTabBar } from "./layout/mobile-tab-bar";
+export {
+  filterSidebarByRole,
+  getUserRole,
+  NAV_ITEMS,
+  type SidebarItem,
+  type SidebarRole,
+} from "./layout/nav-items";
+export { NearBranding } from "./layout/near-branding";
+export { OrgSwitcher } from "./layout/org-switcher";
 export { PageContainer } from "./layout/page-container";
 export { PageHeader } from "./layout/page-header";
+export { PublicShell, PublicShellFooter } from "./layout/public-shell";
 export { SectionHeader } from "./layout/section-header";
-export { OrgSwitcher } from "./org-switcher";
-export { ThemeToggle } from "./theme-toggle";
+export { ThemeToggle } from "./layout/theme-toggle";
+export { UserNav } from "./layout/user-nav";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
 export { Button } from "./ui/button";
