@@ -7,43 +7,15 @@ import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
-import { CityNodesLive, CityNodesTag } from "./services/citynodes";
+import { NodesLive, NodesTag } from "./services/nodes";
 import { TenantsLive, TenantsTag } from "./services/tenants";
+import { ValidatorsLive, ValidatorsTag } from "./services/validators";
 
-const SUBDOMAIN_SEGMENT_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
-const RESERVED_SUBDOMAINS = new Set([
-  "root",
-  "www",
-  "admin",
-  "api",
-  "dashboard",
-  "mail",
-  "status",
-  "help",
-  "support",
-  "docs",
-  "blog",
-  "dev",
-  "test",
-  "app",
-  "beta",
-  "demo",
-  "staging",
-  "internal",
-  "moderation",
-  "abuse",
-]);
 
-function validateSubdomain(subdomain: string): void {
-  if (!SUBDOMAIN_SEGMENT_REGEX.test(subdomain)) {
-    throw new ORPCError("BAD_REQUEST", {
-      message: "Invalid subdomain format",
-      data: { hint: "Lowercase alphanumeric with hyphens or underscores only" },
-    });
-  }
-}
+const HOSTNAME_REGEX =
+  /^(?=.{1,253}$)(?=.{1,64}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.?$/;
 
 function validateAccountId(accountId: string): void {
   if (!ACCOUNT_ID_REGEX.test(accountId)) {
@@ -54,11 +26,12 @@ function validateAccountId(accountId: string): void {
   }
 }
 
-function validateValidatorPool(pool: string): void {
-  if (!ACCOUNT_ID_REGEX.test(pool)) {
+function validateHostname(hostname: string): void {
+  const normalized = hostname.toLowerCase();
+  if (!HOSTNAME_REGEX.test(normalized)) {
     throw new ORPCError("BAD_REQUEST", {
-      message: "Invalid validator pool",
-      data: { hint: "Must be a valid NEAR staking pool account ID, e.g. city-node-3.pool.near" },
+      message: "Invalid hostname format",
+      data: { hint: "Must be a valid DNS hostname" },
     });
   }
 }
@@ -78,18 +51,51 @@ export default createPlugin.withPlugins<PluginsClient>()({
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
       const tenantsLayer = TenantsLive.pipe(Layer.provide(database));
-      const cityNodesLayer = CityNodesLive.pipe(Layer.provide(database));
+      const nodesLayer = NodesLive.pipe(Layer.provide(database));
+      const validatorsLayer = ValidatorsLive.pipe(Layer.provide(database));
 
       const tenantsService = yield* tools.buildService(TenantsTag, tenantsLayer);
-      const cityNodesService = yield* tools.buildService(CityNodesTag, cityNodesLayer);
+      const nodesService = yield* tools.buildService(NodesTag, nodesLayer);
+      const validatorsService = yield* tools.buildService(ValidatorsTag, validatorsLayer);
 
-      const templateClient = plugins.template?.();
+      const templateFactory = (plugins as Record<string, unknown>).template as
+        | (() => {
+            createThing: (input: { thingId: string; payload: unknown }) => Promise<{
+              thingId: string;
+              type: string;
+              payload: unknown;
+              createdAt: string;
+              updatedAt: string;
+              action: string;
+            }>;
+            getThing: (input: { thingId: string }) => Promise<{
+              thingId: string;
+              type: string;
+              payload: unknown;
+              createdAt: string;
+              updatedAt: string;
+            }>;
+            listThings: (input: { type?: string; limit: number; cursor?: string }) => Promise<{
+              data: Array<{
+                thingId: string;
+                type: string;
+                payload: unknown;
+                createdAt: string;
+                updatedAt: string;
+              }>;
+              meta: { total: number; hasMore: boolean; nextCursor: string | null };
+            }>;
+            deleteThing: (input: { thingId: string }) => Promise<{ success: true }>;
+          })
+        | undefined;
+      const templateClient = templateFactory?.();
 
       console.log("[API] Services Initialized");
 
       return {
         tenants: tenantsService,
-        cityNodes: cityNodesService,
+        nodes: nodesService,
+        validators: validatorsService,
         templateClient,
       };
     }),
@@ -100,34 +106,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const { templateClient } = services;
     const { requireAuth, requireOrganization, requireOrgRole } = createAuthMiddleware(builder);
 
-    const authorizedCityNode = async (
-      input: { cityNodeId: string },
-      context: { organization: { activeOrganizationId: string } },
-    ) => {
-      const activeOrgId = context.organization.activeOrganizationId;
-      const cityNode = await services.cityNodes.resolveById(input.cityNodeId);
-      if (!cityNode) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "City node not found",
-          data: { resource: "citynode", resourceId: input.cityNodeId },
-        });
-      }
-      if (cityNode.orgId !== activeOrgId) {
-        throw new ORPCError("FORBIDDEN", {
-          message: "You are not a member of this city node's organization",
-        });
-      }
-      return cityNode;
-    };
-
     const authorizedTenant = async (
       input: { tenantId: string },
       context: {
-        organization: { activeOrganizationId: string };
+        organization?: { activeOrganizationId: string | null };
         near?: { primaryAccountId: string | null };
       },
     ) => {
-      const activeOrgId = context.organization.activeOrganizationId;
       const tenant = await services.tenants.resolveTenantById(input.tenantId);
       if (!tenant) {
         throw new ORPCError("NOT_FOUND", {
@@ -145,7 +130,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
         return tenant;
       }
-      if (tenant.orgId !== activeOrgId) {
+      const activeOrgId = context.organization?.activeOrganizationId;
+      if (!activeOrgId || tenant.orgId !== activeOrgId) {
         throw new ORPCError("FORBIDDEN", {
           message: "You are not a member of this tenant's organization",
         });
@@ -176,16 +162,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrganization)
         .handler(async ({ input, context }) => {
-          validateSubdomain(input.subdomain);
           validateAccountId(input.accountId);
-          if (!input.accountId.startsWith(`${input.subdomain}.`)) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "accountId must start with subdomain",
-              data: { subdomain: input.subdomain, accountId: input.accountId },
-            });
-          }
           return await services.tenants.createTenant({
-            subdomain: input.subdomain,
             name: input.name,
             accountId: input.accountId,
             orgId: context.organization.activeOrganizationId,
@@ -201,11 +179,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireOrgRole("owner"))
         .handler(async ({ input, context }) => {
           const tenant = await authorizedTenant(input, context);
-          if (input.subdomain !== undefined) validateSubdomain(input.subdomain);
           if (input.accountId !== undefined) validateAccountId(input.accountId);
           return await services.tenants.updateTenant(tenant.id, {
             name: input.name,
-            subdomain: input.subdomain,
             accountId: input.accountId,
             status: input.status,
             allowUiOverrides: input.allowUiOverrides,
@@ -279,41 +255,69 @@ export default createPlugin.withPlugins<PluginsClient>()({
         services.tenants.listBindings(),
       ),
 
-      tenantPreflight: builder.tenantPreflight.use(requireAuth).handler(async ({ input }) => {
-        const subdomainValid = SUBDOMAIN_SEGMENT_REGEX.test(input.subdomain);
-        const accountId = `${input.subdomain}.${input.parentAccount}`;
-        const accountFormat = ACCOUNT_ID_REGEX.test(accountId)
+      listTenantBindingsForTenant: builder.listTenantBindingsForTenant
+        .use(requireAuth)
+        .handler(async ({ input }) => services.tenants.listBindingsForTenant(input.tenantId)),
+
+      createBinding: builder.createBinding.use(requireAuth).handler(async ({ input, context }) => {
+        await authorizedTenant(input, context);
+        validateHostname(input.hostname);
+        return await services.tenants.createBinding({
+          tenantId: input.tenantId,
+          hostname: input.hostname.toLowerCase(),
+          isPrimary: input.isPrimary,
+        });
+      }),
+
+      verifyCustomDomain: builder.verifyCustomDomain
+        .use(requireAuth)
+        .handler(async ({ input, context }) => {
+          await authorizedTenant(input, context);
+          return await services.tenants.verifyCustomDomain(input.bindingId);
+        }),
+
+      setPrimaryBinding: builder.setPrimaryBinding
+        .use(requireAuth)
+        .use(requireOrgRole("admin"))
+        .handler(async ({ input, context }) => {
+          await authorizedTenant(input, context);
+          return await services.tenants.setPrimaryBinding(input.tenantId, input.bindingId);
+        }),
+
+      resolveBindingByHostname: builder.resolveBindingByHostname.handler(async ({ input }) => {
+        const binding = await services.tenants.resolveBindingByHostname(input.hostname);
+        return binding ?? null;
+      }),
+
+      bindingPreflight: builder.bindingPreflight.use(requireAuth).handler(async ({ input }) => {
+        const format = HOSTNAME_REGEX.test(input.hostname.toLowerCase())
           ? ("valid" as const)
           : ("invalid" as const);
-
-        const reserved = RESERVED_SUBDOMAINS.has(input.subdomain);
-        const existingSubdomain = subdomainValid
-          ? await services.tenants.resolveTenantBySubdomain(input.subdomain)
-          : null;
-        const existingAccount = subdomainValid
-          ? await services.tenants.resolveTenantByAccountId(accountId)
-          : null;
-        const accountAvailable = accountFormat === "valid" && !existingAccount;
-
+        const existing =
+          format === "valid"
+            ? await services.tenants.resolveBindingByHostname(input.hostname.toLowerCase())
+            : null;
         return {
-          subdomain: { available: !reserved && !existingSubdomain, reserved },
-          accountId: { format: accountFormat, available: accountAvailable },
+          hostname: { available: format === "valid" && !existing, format },
         };
       }),
 
-      listCityNodes: builder.listCityNodes.handler(async () => services.cityNodes.list()),
+      listNodes: builder.listNodes.handler(async ({ input }) =>
+        services.nodes.list({
+          ...(input.kind !== undefined && { kind: input.kind }),
+          ...(input.parentId !== undefined && { parentId: input.parentId }),
+        }),
+      ),
 
-      resolveCityNode: builder.resolveCityNode.handler(async ({ input }) => {
-        const cityNode = await services.cityNodes.resolveByAccountId(input.accountId);
-        return cityNode ?? null;
+      getNode: builder.getNode.handler(async ({ input }) => {
+        const node = await services.nodes.getById(input.nodeId);
+        return node ?? null;
       }),
 
-      createCityNode: builder.createCityNode
+      createNode: builder.createNode
         .use(requireAuth)
         .use(requireOrganization)
-        .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
-          validateValidatorPool(input.validatorPool);
           const tenant = await services.tenants.resolveTenantById(input.tenantId);
           if (!tenant) {
             throw new ORPCError("NOT_FOUND", {
@@ -326,39 +330,161 @@ export default createPlugin.withPlugins<PluginsClient>()({
               message: "This tenant does not belong to your organization",
             });
           }
-          return await services.cityNodes.create({
+          return await services.nodes.create({
+            kind: input.kind,
+            slug: input.slug,
+            name: input.name,
+            parentId: input.parentId ?? null,
             tenantId: input.tenantId,
-            orgId: context.organization.activeOrganizationId,
-            validatorPool: input.validatorPool,
+            ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
         }),
 
-      updateCityNode: builder.updateCityNode
+      updateNode: builder.updateNode
         .use(requireAuth)
         .use(requireOrganization)
-        .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
-          if (input.validatorPool !== undefined) validateValidatorPool(input.validatorPool);
-          const cityNode = await authorizedCityNode(input, context);
-          return await services.cityNodes.update(cityNode.id, {
-            validatorPool: input.validatorPool,
+          const node = await services.nodes.getById(input.nodeId);
+          if (!node) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Node not found",
+              data: { resource: "node", resourceId: input.nodeId },
+            });
+          }
+          const tenant = await services.tenants.resolveTenantById(node.tenantId);
+          if (!tenant) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: node.tenantId },
+            });
+          }
+          if (tenant.orgId !== context.organization.activeOrganizationId) {
+            throw new ORPCError("FORBIDDEN", {
+              message: "This node does not belong to your organization",
+            });
+          }
+          return await services.nodes.update(input.nodeId, {
+            ...(input.kind !== undefined && { kind: input.kind }),
+            ...(input.slug !== undefined && { slug: input.slug }),
+            ...(input.name !== undefined && { name: input.name }),
+            ...(input.parentId !== undefined && { parentId: input.parentId }),
+            ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
         }),
 
-      deleteCityNode: builder.deleteCityNode
+      deleteNode: builder.deleteNode
         .use(requireAuth)
-        .use(requireOrganization)
         .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
-          const cityNode = await authorizedCityNode(input, context);
-          const deleted = await services.cityNodes.delete(cityNode.id);
+          const node = await services.nodes.getById(input.nodeId);
+          if (!node) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Node not found",
+              data: { resource: "node", resourceId: input.nodeId },
+            });
+          }
+          const tenant = await services.tenants.resolveTenantById(node.tenantId);
+          if (!tenant) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: node.tenantId },
+            });
+          }
+          if (tenant.orgId !== context.organization.activeOrganizationId) {
+            throw new ORPCError("FORBIDDEN", {
+              message: "This node does not belong to your organization",
+            });
+          }
+          const deleted = await services.nodes.delete(input.nodeId);
           if (!deleted) {
             throw new ORPCError("NOT_FOUND", {
-              message: "City node not found",
-              data: { resource: "citynode", resourceId: input.cityNodeId },
+              message: "Node not found",
+              data: { resource: "node", resourceId: input.nodeId },
             });
           }
           return { success: true as const };
+        }),
+
+      listRootNodes: builder.listRootNodes.handler(async () => services.nodes.listRootNodes()),
+
+      listChildren: builder.listChildren.handler(async ({ input }) =>
+        services.nodes.listChildren(input.nodeId),
+      ),
+
+      resolveNodeBySlug: builder.resolveNodeBySlug.handler(async ({ input }) => {
+        const node = await services.nodes.resolveBySlug(
+          input.slug,
+          input.parentId === undefined ? undefined : input.parentId,
+        );
+        return node ?? null;
+      }),
+
+      listValidators: builder.listValidators.handler(async ({ input }) =>
+        services.validators.list({
+          ...(input.nodeId !== undefined && { nodeId: input.nodeId }),
+          ...(input.role !== undefined && { role: input.role }),
+        }),
+      ),
+
+      listValidatorsByNode: builder.listValidatorsByNode.handler(async ({ input }) =>
+        services.validators.listByNode(input.nodeId),
+      ),
+
+      getValidator: builder.getValidator.handler(async ({ input }) => {
+        const validator = await services.validators.getById(input.validatorId);
+        return validator ?? null;
+      }),
+
+      resolveValidatorByAccountId: builder.resolveValidatorByAccountId.handler(
+        async ({ input }) => {
+          const validator = await services.validators.resolveByAccountId(input.accountId);
+          return validator ?? null;
+        },
+      ),
+
+      resolveStakingValidators: builder.resolveStakingValidators.handler(async ({ input }) =>
+        services.validators.resolveForStaking(input.nodeId),
+      ),
+
+      createValidator: builder.createValidator.use(requireAuth).handler(async ({ input }) =>
+        services.validators.create({
+          nodeId: input.nodeId,
+          accountId: input.accountId,
+          network: input.network,
+          protocol: input.protocol,
+          role: input.role,
+          isDefault: input.isDefault,
+          ...(input.metadata !== undefined && { metadata: input.metadata }),
+        }),
+      ),
+
+      updateValidator: builder.updateValidator.use(requireAuth).handler(async ({ input }) =>
+        services.validators.update(input.validatorId, {
+          ...(input.accountId !== undefined && { accountId: input.accountId }),
+          ...(input.network !== undefined && { network: input.network }),
+          ...(input.protocol !== undefined && { protocol: input.protocol }),
+          ...(input.role !== undefined && { role: input.role }),
+          ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
+          ...(input.metadata !== undefined && { metadata: input.metadata }),
+        }),
+      ),
+
+      deleteValidator: builder.deleteValidator.use(requireAuth).handler(async ({ input }) => {
+        const ok = await services.validators.delete(input.validatorId);
+        return { success: ok as true };
+      }),
+
+      setDefaultValidator: builder.setDefaultValidator
+        .use(requireAuth)
+        .handler(async ({ input }) => {
+          const target = await services.validators.getById(input.validatorId);
+          if (!target) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Validator not found",
+              data: { resource: "validator", resourceId: input.validatorId },
+            });
+          }
+          return await services.validators.setDefault(target.nodeId, input.validatorId);
         }),
 
       createThing: builder.createThing.use(requireAuth).handler(async ({ input }) => {

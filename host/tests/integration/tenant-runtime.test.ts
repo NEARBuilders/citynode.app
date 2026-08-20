@@ -33,6 +33,7 @@ function createDeferred<T>() {
 function createMockBindingResolver(
   ...hostnames: Array<{
     hostname: string;
+    tenantId?: string;
     allowUiOverrides?: boolean;
     allowBackendOverrides?: boolean;
     allowSsr?: boolean;
@@ -44,6 +45,7 @@ function createMockBindingResolver(
       entry.hostname,
       {
         hostname: entry.hostname,
+        tenantId: entry.tenantId ?? "tenant-" + entry.hostname,
         accountId: entry.hostname.replace(/\.com$/, ".near"),
         allowUiOverrides: entry.allowUiOverrides ?? true,
         allowBackendOverrides: entry.allowBackendOverrides ?? false,

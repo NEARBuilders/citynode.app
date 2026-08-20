@@ -41,13 +41,11 @@ describe("API Plugin Integration Tests", () => {
       const client = await getPluginClient(orgContext());
 
       const created = await client.createTenant({
-        subdomain: "acme",
         name: "Acme Corp",
         accountId: "acme.example.near",
         status: "active",
       });
       expect(created).toMatchObject({
-        subdomain: "acme",
         name: "Acme Corp",
         accountId: "acme.example.near",
         orgId: "org-1",
@@ -62,37 +60,151 @@ describe("API Plugin Integration Tests", () => {
       const client = await getPluginClient(orgContext());
       await expect(
         client.createTenant({
-          subdomain: "acme",
-          name: "Acme Corp",
+          name: "Acme",
           accountId: "NOT-A-VALID-ACCOUNT",
         }),
       ).rejects.toThrow("Invalid accountId format");
     });
   });
 
-  describe("tenantPreflight", () => {
-    it("reports availability for a fresh subdomain", async () => {
-      const client = await getPluginClient(authedContext());
-      const result = await client.tenantPreflight({
-        subdomain: "acmename",
-        parentAccount: "example.near",
+  describe("nodes", () => {
+    it("creates a root country node and lists root nodes", async () => {
+      const client = await getPluginClient(orgContext());
+
+      const tenant = await client.createTenant({
+        name: "Country Holder",
+        accountId: "countryholder.example.near",
+        status: "active",
       });
 
-      expect(result.subdomain.available).toBe(true);
-      expect(result.subdomain.reserved).toBe(false);
-      expect(result.accountId.format).toBe("valid");
-      expect(result.accountId.available).toBe(true);
+      const before = await client.listRootNodes();
+      expect(before).toEqual([]);
+
+      const created = await client.createNode({
+        kind: "country",
+        slug: "usa",
+        name: "United States",
+        parentId: null,
+        tenantId: tenant.id,
+        metadata: { population: 330_000_000 },
+      });
+      expect(created).toMatchObject({
+        kind: "country",
+        slug: "usa",
+        name: "United States",
+        parentId: null,
+        tenantId: tenant.id,
+        metadata: { population: 330_000_000 },
+      });
+
+      const after = await client.listRootNodes();
+      expect(after.map((n) => n.slug)).toEqual(["usa"]);
+
+      const fetched = await client.getNode({ nodeId: created.id });
+      expect(fetched?.id).toBe(created.id);
     });
 
-    it("flags reserved subdomains", async () => {
-      const client = await getPluginClient(authedContext());
-      const result = await client.tenantPreflight({
-        subdomain: "admin",
-        parentAccount: "example.near",
+    it("creates a nested node tree (country → state → city)", async () => {
+      const client = await getPluginClient(orgContext());
+
+      const tenant = await client.createTenant({
+        name: "Tree Holder",
+        accountId: "treeholder.example.near",
+        status: "active",
       });
 
-      expect(result.subdomain.reserved).toBe(true);
-      expect(result.subdomain.available).toBe(false);
+      const usa = await client.createNode({
+        kind: "country",
+        slug: "usa-tree",
+        name: "USA",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      const illinois = await client.createNode({
+        kind: "state",
+        slug: "illinois",
+        name: "Illinois",
+        parentId: usa.id,
+        tenantId: tenant.id,
+      });
+      const chicago = await client.createNode({
+        kind: "city",
+        slug: "chicago",
+        name: "Chicago",
+        parentId: illinois.id,
+        tenantId: tenant.id,
+      });
+
+      const children = await client.listChildren({ nodeId: illinois.id });
+      expect(children.map((c) => c.slug)).toEqual(["chicago"]);
+
+      const resolved = await client.resolveNodeBySlug({ slug: "chicago", parentId: illinois.id });
+      expect(resolved?.id).toBe(chicago.id);
+    });
+  });
+
+  describe("bindingPreflight", () => {
+    it("reports availability for a fresh hostname", async () => {
+      const client = await getPluginClient(authedContext());
+      const result = await client.bindingPreflight({ hostname: "fresh.example.com" });
+
+      expect(result.hostname.available).toBe(true);
+      expect(result.hostname.format).toBe("valid");
+    });
+
+    it("flags invalid hostname format", async () => {
+      const client = await getPluginClient(authedContext());
+      const result = await client.bindingPreflight({ hostname: "INVALID HOSTNAME!" });
+
+      expect(result.hostname.format).toBe("invalid");
+      expect(result.hostname.available).toBe(false);
+    });
+  });
+
+  describe("validators", () => {
+    it("creates a validator and resolves it for staking from descendants", async () => {
+      const client = await getPluginClient(orgContext());
+
+      const tenant = await client.createTenant({
+        name: "Validator Holder",
+        accountId: "validatorholder.example.near",
+        status: "active",
+      });
+
+      const country = await client.createNode({
+        kind: "country",
+        slug: "validatorland",
+        name: "Validatorland",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      const state = await client.createNode({
+        kind: "state",
+        slug: "val-state",
+        name: "Validator State",
+        parentId: country.id,
+        tenantId: tenant.id,
+      });
+
+      const validator = await client.createValidator({
+        nodeId: country.id,
+        accountId: "val1.near",
+        role: "official",
+        isDefault: true,
+      });
+      expect(validator).toMatchObject({
+        nodeId: country.id,
+        accountId: "val1.near",
+        role: "official",
+        isDefault: true,
+      });
+
+      const resolved = await client.resolveStakingValidators({ nodeId: state.id });
+      expect(resolved.sourceNodeId).toBe(country.id);
+      expect(resolved.validators.map((v) => v.accountId)).toEqual(["val1.near"]);
+
+      const fetched = await client.getValidator({ validatorId: validator.id });
+      expect(fetched?.id).toBe(validator.id);
     });
   });
 

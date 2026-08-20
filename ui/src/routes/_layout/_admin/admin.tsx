@@ -45,7 +45,7 @@ function AdminPage() {
         title="Not authorized"
         description={
           <>
-            You need to be a member of <span className="font-mono">{tenant.subdomain}</span>'s
+            You need to be a member of <span className="font-mono">{tenant.id.slice(0, 8)}</span>'s
             organization to access tenant admin.
           </>
         }
@@ -84,7 +84,7 @@ function AdminPage() {
                   {tenant.name}
                 </h1>
                 <p className="text-[11px] font-mono text-muted-foreground">
-                  {tenant.subdomain} · {tenant.accountId}
+                  {tenant.id.slice(0, 8)} · {tenant.accountId}
                 </p>
               </div>
             </div>
@@ -93,17 +93,17 @@ function AdminPage() {
 
         {tenant && (
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Subdomain" value={tenant.subdomain} mono />
+            <StatCard label="Subdomain" value={tenant.id.slice(0, 8)} mono />
             <StatCard label="Account" value={tenant.accountId} mono />
             <StatCard
               label="Organization"
               value={
                 <Link
                   to="/orgs/$slug"
-                  params={{ slug: tenant.subdomain }}
+                  params={{ slug: tenant.id.slice(0, 8) }}
                   className="text-foreground hover:underline font-mono"
                 >
-                  {tenant.subdomain}
+                  {tenant.id.slice(0, 8)}
                 </Link>
               }
             />

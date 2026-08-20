@@ -151,7 +151,7 @@ function Home() {
             </div>
             <div className="flex flex-col gap-2">
               <InfoRow label="name" value={tenant.name} />
-              <InfoRow label="subdomain" value={tenant.subdomain} mono />
+              <InfoRow label="id" value={tenant.id} mono />
               <InfoRow label="account" value={tenant.accountId} mono />
               <InfoRow
                 label="created"

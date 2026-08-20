@@ -56,19 +56,19 @@ function AdminTenants() {
         ),
       },
       {
-        accessorKey: "subdomain",
-        header: "Subdomain",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            {row.original.subdomain}.{gatewayId}
-          </span>
-        ),
-      },
-      {
         accessorKey: "accountId",
         header: "Account",
         cell: ({ row }) => (
           <span className="font-mono text-xs text-muted-foreground">{row.original.accountId}</span>
+        ),
+      },
+      {
+        accessorKey: "subdomain",
+        header: "ID",
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-muted-foreground">
+            {row.original.id.slice(0, 8)}
+          </span>
         ),
       },
       {

@@ -8,7 +8,6 @@ export { BrandElement } from "./brand-element";
 export { ConfirmDialog } from "./confirm-dialog";
 export { EmptyState } from "./empty-state";
 export { PageContainer } from "./layout/page-container";
-export { NetworkToggle } from "./ui/network-toggle";
 export { OrgSwitcher } from "./org-switcher";
 export { ThemeToggle } from "./theme-toggle";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -42,6 +41,7 @@ export {
 export { InfoRow } from "./ui/info-row";
 export { Input } from "./ui/input";
 export { Label } from "./ui/label";
+export { NetworkToggle } from "./ui/network-toggle";
 export { ScrollArea, ScrollBar } from "./ui/scroll-area";
 export { Skeleton } from "./ui/skeleton";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";

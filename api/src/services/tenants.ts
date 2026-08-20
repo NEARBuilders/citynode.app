@@ -1,14 +1,19 @@
+import { randomBytes } from "node:crypto";
 import { and, eq, inArray, not } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { DatabaseTag } from "../db/layer";
-import { type tenantStatus, tenants as tenantsTable } from "../db/schema";
+import {
+  domainBindings as domainBindingsTable,
+  type tenantStatus,
+  tenants as tenantsTable,
+} from "../db/schema";
+import { isUniqueViolation, toOrpcError } from "../lib/errors";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
 export interface TenantRecord {
   id: string;
-  subdomain: string;
   accountId: string;
   orgId: string | null;
   name: string;
@@ -23,6 +28,7 @@ export interface TenantRecord {
 
 export interface TenantBinding {
   hostname: string;
+  tenantId: string;
   accountId: string;
   allowUiOverrides: boolean;
   allowBackendOverrides: boolean;
@@ -30,8 +36,19 @@ export interface TenantBinding {
   status: TenantStatus;
 }
 
+export interface TenantBindingRecord {
+  id: string;
+  tenantId: string;
+  hostname: string;
+  isPrimary: boolean;
+  isVerified: boolean;
+  verificationToken: string;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TenantInput {
-  subdomain: string;
   name: string;
   accountId: string;
   orgId: string | null;
@@ -41,22 +58,27 @@ export interface TenantInput {
   allowSsr?: boolean;
 }
 
+export interface CreateBindingInput {
+  tenantId: string;
+  hostname: string;
+  isPrimary?: boolean;
+}
+
 export interface TenantsService {
   listTenantsByOrgIds(orgIds: string[]): Promise<TenantRecord[]>;
   listBindings(): Promise<TenantBinding[]>;
+  listBindingsForTenant(tenantId: string): Promise<TenantBindingRecord[]>;
+  createBinding(input: CreateBindingInput): Promise<TenantBindingRecord>;
+  verifyCustomDomain(bindingId: string): Promise<TenantBindingRecord>;
+  setPrimaryBinding(tenantId: string, bindingId: string): Promise<TenantBindingRecord>;
+  resolveBindingByHostname(hostname: string): Promise<TenantBindingRecord | null>;
   createTenant(input: TenantInput): Promise<TenantRecord>;
   updateTenant(
     id: string,
     input: Partial<
       Pick<
         TenantInput,
-        | "name"
-        | "subdomain"
-        | "accountId"
-        | "status"
-        | "allowUiOverrides"
-        | "allowBackendOverrides"
-        | "allowSsr"
+        "name" | "accountId" | "status" | "allowUiOverrides" | "allowBackendOverrides" | "allowSsr"
       >
     >,
   ): Promise<TenantRecord>;
@@ -66,18 +88,17 @@ export interface TenantsService {
   resolveTenantByAccountId(accountId: string): Promise<TenantRecord | null>;
   resolveTenantById(id: string): Promise<TenantRecord | null>;
   resolveTenantByOrgId(orgId: string): Promise<TenantRecord | null>;
-  resolveTenantBySubdomain(subdomain: string): Promise<TenantRecord | null>;
   deleteTenantById(id: string): Promise<boolean>;
 }
 
 export class TenantsTag extends Context.Tag("api/Tenants")<TenantsService, TenantsService>() {}
 
 type TenantRow = typeof tenantsTable.$inferSelect;
+type BindingRow = typeof domainBindingsTable.$inferSelect;
 
 function toTenantRecord(row: TenantRow): TenantRecord {
   return {
     id: row.id,
-    subdomain: row.subdomain,
     accountId: row.accountId,
     orgId: row.orgId,
     name: row.name,
@@ -91,12 +112,22 @@ function toTenantRecord(row: TenantRow): TenantRecord {
   };
 }
 
-function toOrpcError(error: unknown): ORPCError<string, unknown> {
-  return error instanceof ORPCError
-    ? error
-    : new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: error instanceof Error ? error.message : String(error),
-      });
+function toBindingRecord(row: BindingRow): TenantBindingRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    hostname: row.hostname,
+    isPrimary: row.isPrimary,
+    isVerified: row.isVerified,
+    verificationToken: row.verificationToken,
+    verifiedAt: row.verifiedAt instanceof Date ? row.verifiedAt.toISOString() : null,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+  };
+}
+
+function generateVerificationToken(): string {
+  return randomBytes(24).toString("hex");
 }
 
 export const TenantsLive = Layer.effect(
@@ -122,18 +153,162 @@ export const TenantsLive = Layer.effect(
         try {
           const rows = await db
             .select({
-              subdomain: tenantsTable.subdomain,
+              hostname: domainBindingsTable.hostname,
+              tenantId: domainBindingsTable.tenantId,
               accountId: tenantsTable.accountId,
               allowUiOverrides: tenantsTable.allowUiOverrides,
               allowBackendOverrides: tenantsTable.allowBackendOverrides,
               allowSsr: tenantsTable.allowSsr,
               status: tenantsTable.status,
             })
-            .from(tenantsTable);
-          return rows.map(({ subdomain, ...binding }) => ({
-            ...binding,
-            hostname: subdomain,
-          }));
+            .from(domainBindingsTable)
+            .innerJoin(tenantsTable, eq(domainBindingsTable.tenantId, tenantsTable.id));
+          return rows;
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      listBindingsForTenant: async (tenantId) => {
+        try {
+          const rows = await db
+            .select()
+            .from(domainBindingsTable)
+            .where(eq(domainBindingsTable.tenantId, tenantId));
+          return rows.map(toBindingRecord);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      createBinding: async (input) => {
+        try {
+          const tenant = await db
+            .select({ id: tenantsTable.id })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, input.tenantId))
+            .limit(1);
+          if (tenant.length === 0) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: input.tenantId },
+            });
+          }
+
+          try {
+            const [row] = await db
+              .insert(domainBindingsTable)
+              .values({
+                tenantId: input.tenantId,
+                hostname: input.hostname,
+                isPrimary: input.isPrimary ?? false,
+                isVerified: false,
+                verificationToken: generateVerificationToken(),
+              })
+              .returning();
+
+            if (!row) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Domain binding creation failed",
+              });
+            }
+            return toBindingRecord(row);
+          } catch (error) {
+            if (isUniqueViolation(error)) {
+              throw new ORPCError("CONFLICT", {
+                message: "Hostname already in use",
+                data: { hostname: input.hostname },
+              });
+            }
+            throw error;
+          }
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      verifyCustomDomain: async (bindingId) => {
+        try {
+          const [row] = await db
+            .update(domainBindingsTable)
+            .set({
+              isVerified: true,
+              verifiedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(domainBindingsTable.id, bindingId))
+            .returning();
+
+          if (!row) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Domain binding not found",
+              data: { resource: "domainBinding", resourceId: bindingId },
+            });
+          }
+
+          return toBindingRecord(row);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      setPrimaryBinding: async (tenantId, bindingId) => {
+        try {
+          return await db.transaction(async (tx) => {
+            const [binding] = await tx
+              .select()
+              .from(domainBindingsTable)
+              .where(
+                and(
+                  eq(domainBindingsTable.id, bindingId),
+                  eq(domainBindingsTable.tenantId, tenantId),
+                ),
+              )
+              .limit(1);
+            if (!binding) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Domain binding not found for tenant",
+                data: { resource: "domainBinding", resourceId: bindingId, tenantId },
+              });
+            }
+
+            await tx
+              .update(domainBindingsTable)
+              .set({ isPrimary: false, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(domainBindingsTable.tenantId, tenantId),
+                  not(eq(domainBindingsTable.id, bindingId)),
+                ),
+              );
+
+            const [updated] = await tx
+              .update(domainBindingsTable)
+              .set({ isPrimary: true, updatedAt: new Date() })
+              .where(eq(domainBindingsTable.id, bindingId))
+              .returning();
+
+            if (!updated) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to set primary binding",
+              });
+            }
+
+            return toBindingRecord(updated);
+          });
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      resolveBindingByHostname: async (hostname) => {
+        try {
+          const [row] = await db
+            .select()
+            .from(domainBindingsTable)
+            .where(eq(domainBindingsTable.hostname, hostname))
+            .limit(1);
+          return row ? toBindingRecord(row) : null;
         } catch (error) {
           throw toOrpcError(error);
         }
@@ -141,33 +316,42 @@ export const TenantsLive = Layer.effect(
 
       createTenant: async (input) => {
         try {
-          const [row] = await db
-            .insert(tenantsTable)
-            .values({
-              subdomain: input.subdomain,
-              name: input.name,
-              accountId: input.accountId,
-              orgId: input.orgId,
-              ...(input.status !== undefined && { status: input.status }),
-              ...(input.allowUiOverrides !== undefined && {
-                allowUiOverrides: input.allowUiOverrides,
-              }),
-              ...(input.allowBackendOverrides !== undefined && {
-                allowBackendOverrides: input.allowBackendOverrides,
-              }),
-              ...(input.allowSsr !== undefined && { allowSsr: input.allowSsr }),
-            })
-            .onConflictDoNothing()
-            .returning();
+          try {
+            const [row] = await db
+              .insert(tenantsTable)
+              .values({
+                name: input.name,
+                accountId: input.accountId,
+                orgId: input.orgId,
+                ...(input.status !== undefined && { status: input.status }),
+                ...(input.allowUiOverrides !== undefined && {
+                  allowUiOverrides: input.allowUiOverrides,
+                }),
+                ...(input.allowBackendOverrides !== undefined && {
+                  allowBackendOverrides: input.allowBackendOverrides,
+                }),
+                ...(input.allowSsr !== undefined && { allowSsr: input.allowSsr }),
+              })
+              .onConflictDoNothing({ target: tenantsTable.accountId })
+              .returning();
 
-          if (!row) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "Tenant with this subdomain, account ID, or org ID already exists",
-              data: { invalidFields: ["subdomain", "accountId", "orgId"] },
-            });
+            if (!row) {
+              throw new ORPCError("CONFLICT", {
+                message: "Tenant with this accountId already exists",
+                data: { accountId: input.accountId },
+              });
+            }
+            return toTenantRecord(row);
+          } catch (error) {
+            if (error instanceof ORPCError) throw error;
+            if (isUniqueViolation(error)) {
+              throw new ORPCError("CONFLICT", {
+                message: "Tenant with this accountId already exists",
+                data: { accountId: input.accountId },
+              });
+            }
+            throw error;
           }
-
-          return toTenantRecord(row);
         } catch (error) {
           throw toOrpcError(error);
         }
@@ -175,20 +359,6 @@ export const TenantsLive = Layer.effect(
 
       updateTenant: async (id, input) => {
         try {
-          if (input.subdomain !== undefined) {
-            const conflicting = await db
-              .select({ id: tenantsTable.id })
-              .from(tenantsTable)
-              .where(and(eq(tenantsTable.subdomain, input.subdomain), not(eq(tenantsTable.id, id))))
-              .limit(1);
-            if (conflicting.length > 0) {
-              throw new ORPCError("BAD_REQUEST", {
-                message: "Another tenant already uses this subdomain",
-                data: { invalidFields: ["subdomain"] },
-              });
-            }
-          }
-
           const [row] = await db
             .update(tenantsTable)
             .set({ ...input, updatedAt: new Date() })
@@ -279,19 +449,6 @@ export const TenantsLive = Layer.effect(
             .select()
             .from(tenantsTable)
             .where(eq(tenantsTable.orgId, orgId))
-            .limit(1);
-          return row ? toTenantRecord(row) : null;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
-
-      resolveTenantBySubdomain: async (subdomain) => {
-        try {
-          const [row] = await db
-            .select()
-            .from(tenantsTable)
-            .where(eq(tenantsTable.subdomain, subdomain))
             .limit(1);
           return row ? toTenantRecord(row) : null;
         } catch (error) {

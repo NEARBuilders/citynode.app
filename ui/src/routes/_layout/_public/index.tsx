@@ -30,9 +30,9 @@ function LandingPage() {
 
   const accountId = runtime?.accountId ?? account;
 
-  const { data: cityNodes = [] } = useQuery({
-    queryKey: ["citynodes"],
-    queryFn: () => apiClient.listCityNodes(),
+  const { data: validators = [] } = useQuery({
+    queryKey: ["validators"],
+    queryFn: () => apiClient.listValidators({}),
     staleTime: 30 * 1000,
   });
 
@@ -74,11 +74,11 @@ function LandingPage() {
               </p>
             </div>
             <span className="text-xs font-mono text-muted-foreground">
-              {cityNodes.length} {cityNodes.length === 1 ? "city" : "cities"}
+              {validators.length} {validators.length === 1 ? "city" : "cities"}
             </span>
           </div>
 
-          {cityNodes.length === 0 ? (
+          {validators.length === 0 ? (
             <Card className="p-10 text-center">
               <p className="text-sm text-muted-foreground">
                 No city nodes yet. Create a tenant and publish the first one.
@@ -86,28 +86,28 @@ function LandingPage() {
             </Card>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {cityNodes.map((cityNode) => (
-                <Card key={cityNode.id} className="p-6 space-y-3">
+              {validators.map((validator) => (
+                <Card key={validator.id} className="p-6 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
                       <Landmark className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-base font-semibold text-foreground capitalize truncate">
-                        {cityNode.name}
+                        {validator.accountId}
                       </h3>
                       <p className="text-[11px] font-mono text-muted-foreground truncate">
-                        {cityNode.hostname}.{runtime?.gatewayId ?? "citynode.app"}
+                        {validator.accountId}.{runtime?.gatewayId ?? "citynode.app"}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Server className="h-3.5 w-3.5 shrink-0" />
-                    <span className="font-mono text-xs truncate">{cityNode.validatorPool}</span>
+                    <span className="font-mono text-xs truncate">{validator.accountId}</span>
                   </div>
                   <Button asChild variant="outline" size="sm" className="w-full">
-                    <Link to="/stake" search={{ city: cityNode.hostname }}>
-                      stake to {cityNode.hostname}
+                    <Link to="/stake" search={{ city: validator.accountId }}>
+                      stake to {validator.accountId}
                     </Link>
                   </Button>
                 </Card>

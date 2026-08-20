@@ -13,9 +13,36 @@ const ErrorTestKindSchema = z.enum([
 
 export const TenantStatusSchema = z.enum(["active", "pending", "suspended", "pending_deletion"]);
 
+export const NodeKindSchema = z.enum(["country", "state", "city"]);
+
+export const ValidatorRoleSchema = z.enum(["official", "community"]);
+
+export const ProtocolSchema = z.string().default("near");
+
+export const ValidatorSchema = z.object({
+  id: z.string(),
+  nodeId: z.string(),
+  accountId: z.string(),
+  network: z.string(),
+  protocol: z.string(),
+  role: ValidatorRoleSchema,
+  isDefault: z.boolean(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type Validator = z.infer<typeof ValidatorSchema>;
+
+export const StakingValidatorsSchema = z.object({
+  validators: z.array(ValidatorSchema),
+  sourceNodeId: z.string(),
+});
+
+export type StakingValidators = z.infer<typeof StakingValidatorsSchema>;
+
 export const TenantSchema = z.object({
   id: z.string(),
-  subdomain: z.string(),
   accountId: z.string(),
   orgId: z.string().nullable(),
   name: z.string(),
@@ -33,7 +60,8 @@ export type Tenant = z.infer<typeof TenantSchema>;
 export const TenantBindingSchema = z.object({
   hostname: z
     .string()
-    .describe("Subdomain hostname that routes to this tenant on the parent domain"),
+    .describe("Hostname that routes to this tenant (subdomain, custom domain, or alias)"),
+  tenantId: z.string().describe("ID of the tenant that owns this binding"),
   accountId: z.string(),
   allowUiOverrides: z.boolean(),
   allowBackendOverrides: z.boolean(),
@@ -41,20 +69,49 @@ export const TenantBindingSchema = z.object({
   status: TenantStatusSchema,
 });
 
-export const CityNodeSchema = z.object({
+export const TenantBindingRecordSchema = z.object({
   id: z.string(),
   tenantId: z.string(),
-  orgId: z.string(),
-  validatorPool: z.string(),
   hostname: z.string(),
-  accountId: z.string(),
-  name: z.string(),
-  tenantStatus: z.string(),
+  isPrimary: z.boolean(),
+  isVerified: z.boolean(),
+  verificationToken: z.string(),
+  verifiedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 
-export type CityNode = z.infer<typeof CityNodeSchema>;
+export const NodeSchema = z.object({
+  id: z.string(),
+  kind: NodeKindSchema,
+  slug: z.string(),
+  name: z.string(),
+  parentId: z.string().nullable(),
+  tenantId: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type Node = z.infer<typeof NodeSchema>;
+
+export const SubtreeValidatorSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  network: z.string(),
+  protocol: z.string(),
+  role: ValidatorRoleSchema,
+  isDefault: z.boolean(),
+});
+
+export const SubtreeNodeSchema = z.object({
+  id: z.string(),
+  kind: NodeKindSchema,
+  slug: z.string(),
+  name: z.string(),
+  parentId: z.string().nullable(),
+  validators: z.array(SubtreeValidatorSchema),
+});
 
 const ThingSchema = z.object({
   thingId: z.string().describe("Unique identifier for the thing"),
@@ -105,7 +162,6 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/tenants" })
     .input(
       z.object({
-        subdomain: z.string(),
         name: z.string(),
         accountId: z.string(),
         status: z.enum(["active", "pending"]).optional(),
@@ -115,7 +171,12 @@ export const contract = oc.router({
       }),
     )
     .output(TenantSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      CONFLICT: { status: 409, message: "Tenant with this accountId already exists" },
+    }),
 
   updateTenant: oc
     .route({ method: "PATCH", path: "/tenants/{tenantId}" })
@@ -123,7 +184,6 @@ export const contract = oc.router({
       z.object({
         tenantId: z.string(),
         name: z.string().optional(),
-        subdomain: z.string().optional(),
         accountId: z.string().optional(),
         status: TenantStatusSchema.optional(),
         allowUiOverrides: z.boolean().optional(),
@@ -169,77 +229,243 @@ export const contract = oc.router({
       path: "/tenants/bindings",
       summary: "List all active tenant domain bindings",
       description:
-        "Public — returns the subdomain-to-config mapping used by the host's BindingResolver.",
+        "Public — returns hostname-to-tenant mapping used by the host's BindingResolver.",
     })
     .output(z.array(TenantBindingSchema)),
 
-  tenantPreflight: oc
-    .route({ method: "POST", path: "/tenants/preflight" })
+  listTenantBindingsForTenant: oc
+    .route({
+      method: "GET",
+      path: "/tenants/{tenantId}/bindings",
+      summary: "List domain bindings for a specific tenant",
+    })
+    .input(z.object({ tenantId: z.string() }))
+    .output(z.array(TenantBindingRecordSchema))
+    .errors({ UNAUTHORIZED, NOT_FOUND }),
+
+  createBinding: oc
+    .route({ method: "POST", path: "/tenants/{tenantId}/bindings" })
     .input(
       z.object({
-        subdomain: z.string(),
-        parentAccount: z.string(),
+        tenantId: z.string(),
+        hostname: z.string(),
+        isPrimary: z.boolean().default(false),
       }),
     )
+    .output(TenantBindingRecordSchema)
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      NOT_FOUND,
+      CONFLICT: { status: 409, message: "Hostname already in use" },
+    }),
+
+  verifyCustomDomain: oc
+    .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/verify" })
+    .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
+    .output(TenantBindingRecordSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  setPrimaryBinding: oc
+    .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/primary" })
+    .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
+    .output(TenantBindingRecordSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  resolveBindingByHostname: oc
+    .route({
+      method: "GET",
+      path: "/tenants/bindings/resolve",
+      summary: "Resolve a binding by hostname",
+      description:
+        "Public — returns the binding record for a hostname (used by the host resolver).",
+    })
+    .input(z.object({ hostname: z.string() }))
+    .output(TenantBindingRecordSchema.nullable()),
+
+  bindingPreflight: oc
+    .route({
+      method: "POST",
+      path: "/tenants/bindings/preflight",
+      summary: "Check hostname availability for a new domain binding",
+    })
+    .input(z.object({ hostname: z.string() }))
     .output(
       z.object({
-        subdomain: z.object({
+        hostname: z.object({
           available: z.boolean(),
-          reserved: z.boolean(),
-        }),
-        accountId: z.object({
           format: z.enum(["valid", "invalid"]),
-          available: z.boolean(),
         }),
       }),
     )
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
 
-  listCityNodes: oc
-    .route({
-      method: "GET",
-      path: "/citynodes",
-      summary: "List all city nodes",
-      description: "Public — returns all city nodes with their linked tenant bindings.",
-    })
-    .output(z.array(CityNodeSchema)),
-
-  resolveCityNode: oc
-    .route({
-      method: "GET",
-      path: "/citynodes/resolve",
-      summary: "Resolve a city node by tenant account ID",
-      description: "Public — returns the city node for a tenant account (used by the stake route).",
-    })
-    .input(z.object({ accountId: z.string() }))
-    .output(CityNodeSchema.nullable()),
-
-  createCityNode: oc
-    .route({ method: "POST", path: "/citynodes" })
+  listNodes: oc
+    .route({ method: "GET", path: "/nodes" })
     .input(
       z.object({
+        kind: NodeKindSchema.optional(),
+        parentId: z.string().nullable().optional(),
+      }),
+    )
+    .output(z.array(NodeSchema)),
+
+  getNode: oc
+    .route({ method: "GET", path: "/nodes/{nodeId}" })
+    .input(z.object({ nodeId: z.string() }))
+    .output(NodeSchema.nullable()),
+
+  createNode: oc
+    .route({ method: "POST", path: "/nodes" })
+    .input(
+      z.object({
+        kind: NodeKindSchema,
+        slug: z.string(),
+        name: z.string(),
+        parentId: z.string().nullable().optional(),
         tenantId: z.string(),
-        validatorPool: z.string(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
-    .output(CityNodeSchema)
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
+    .output(NodeSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
 
-  updateCityNode: oc
-    .route({ method: "PATCH", path: "/citynodes/{cityNodeId}" })
+  updateNode: oc
+    .route({ method: "PATCH", path: "/nodes/{nodeId}" })
     .input(
       z.object({
-        cityNodeId: z.string(),
-        validatorPool: z.string().optional(),
+        nodeId: z.string(),
+        kind: NodeKindSchema.optional(),
+        slug: z.string().optional(),
+        name: z.string().optional(),
+        parentId: z.string().nullable().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
-    .output(CityNodeSchema)
+    .output(NodeSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
 
-  deleteCityNode: oc
-    .route({ method: "POST", path: "/citynodes/{cityNodeId}/delete" })
-    .input(z.object({ cityNodeId: z.string() }))
+  deleteNode: oc
+    .route({ method: "POST", path: "/nodes/{nodeId}/delete" })
+    .input(z.object({ nodeId: z.string() }))
     .output(z.object({ success: z.literal(true) }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  listRootNodes: oc
+    .route({
+      method: "GET",
+      path: "/nodes/roots",
+      summary: "List root nodes (no parent)",
+      description: "Public — returns top-level nodes such as countries or city-states.",
+    })
+    .output(z.array(NodeSchema)),
+
+  listChildren: oc
+    .route({ method: "GET", path: "/nodes/{nodeId}/children" })
+    .input(z.object({ nodeId: z.string() }))
+    .output(z.array(NodeSchema)),
+
+  resolveNodeBySlug: oc
+    .route({ method: "GET", path: "/nodes/resolve" })
+    .input(
+      z.object({
+        slug: z.string(),
+        parentId: z.string().nullable().optional(),
+      }),
+    )
+    .output(NodeSchema.nullable()),
+
+  listValidators: oc
+    .route({
+      method: "GET",
+      path: "/validators",
+      summary: "List validators with optional filters",
+    })
+    .input(
+      z.object({
+        nodeId: z.string().optional(),
+        role: ValidatorRoleSchema.optional(),
+      }),
+    )
+    .output(z.array(ValidatorSchema)),
+
+  listValidatorsByNode: oc
+    .route({
+      method: "GET",
+      path: "/validators/by-node/{nodeId}",
+      summary: "List all validators directly attached to a node",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(z.array(ValidatorSchema)),
+
+  getValidator: oc
+    .route({ method: "GET", path: "/validators/{validatorId}" })
+    .input(z.object({ validatorId: z.string() }))
+    .output(ValidatorSchema.nullable()),
+
+  resolveValidatorByAccountId: oc
+    .route({
+      method: "GET",
+      path: "/validators/resolve",
+      summary: "Resolve a validator by accountId",
+    })
+    .input(z.object({ accountId: z.string() }))
+    .output(ValidatorSchema.nullable()),
+
+  resolveStakingValidators: oc
+    .route({
+      method: "GET",
+      path: "/validators/staking/{nodeId}",
+      summary: "Resolve validators for staking from a node (subtree + ancestor walk-up)",
+      description:
+        "Returns the validators that should be used for staking from this node. First searches the node's subtree (self + descendants). If empty, walks up parent_id until validators are found.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(StakingValidatorsSchema),
+
+  createValidator: oc
+    .route({ method: "POST", path: "/validators" })
+    .input(
+      z.object({
+        nodeId: z.string(),
+        accountId: z.string(),
+        network: z.string().default("mainnet"),
+        protocol: ProtocolSchema,
+        role: ValidatorRoleSchema.default("official"),
+        isDefault: z.boolean().default(false),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .output(ValidatorSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  updateValidator: oc
+    .route({ method: "PATCH", path: "/validators/{validatorId}" })
+    .input(
+      z.object({
+        validatorId: z.string(),
+        accountId: z.string().optional(),
+        network: z.string().optional(),
+        protocol: z.string().optional(),
+        role: ValidatorRoleSchema.optional(),
+        isDefault: z.boolean().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .output(ValidatorSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  deleteValidator: oc
+    .route({ method: "POST", path: "/validators/{validatorId}/delete" })
+    .input(z.object({ validatorId: z.string() }))
+    .output(z.object({ success: z.literal(true) }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+
+  setDefaultValidator: oc
+    .route({ method: "POST", path: "/validators/{validatorId}/default" })
+    .input(z.object({ validatorId: z.string() }))
+    .output(ValidatorSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   createThing: oc
@@ -306,14 +532,10 @@ export const contract = oc.router({
       method: "DELETE",
       path: "/things/{thingId}",
       summary: "Delete a thing",
-      description: "Removes a DB-backed thing by ID via the template plugin.",
+      description: "Removes a DB-backed thing via the template plugin.",
       tags: ["Things"],
     })
-    .input(
-      z.object({
-        thingId: z.string().min(1, "Thing ID is required"),
-      }),
-    )
+    .input(z.object({ thingId: z.string().min(1, "Thing ID is required") }))
     .output(z.object({ success: z.literal(true) }))
     .errors({ UNAUTHORIZED, NOT_FOUND }),
 

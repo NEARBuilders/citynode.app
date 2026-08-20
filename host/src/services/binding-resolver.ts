@@ -6,6 +6,7 @@ export type TenantBindingStatus = "active" | "pending" | "suspended" | "pending_
 
 export interface TenantBinding {
   hostname: string;
+  tenantId: string;
   accountId: string;
   allowUiOverrides: boolean;
   allowBackendOverrides: boolean;

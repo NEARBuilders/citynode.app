@@ -90,7 +90,6 @@ function TenantDetail() {
   const { tenantId } = Route.useParams();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
-  const [subdomain, setSubdomain] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const gatewayId = getActiveRuntime()?.gatewayId ?? "everything.dev";
 
@@ -134,18 +133,19 @@ function TenantDetail() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
 
+  const tenantHostname = tenant?.id ? tenant.id.slice(0, 8) : "";
+
   const updateMutation = useMutation({
     mutationFn: async () => {
       const updated = await apiClient.updateTenant({
         tenantId,
         name,
-        subdomain,
       });
-      if (name !== updated.name || subdomain !== updated.subdomain) {
+      if (name !== updated.name) {
         await publishTenantConfig(apiClient, auth, {
           accountId: updated.accountId,
           gatewayId,
-          subdomain: updated.subdomain,
+          subdomain: tenantHostname,
           name: updated.name,
           status: updated.status === "active" ? "active" : undefined,
         });
@@ -166,7 +166,7 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
-        subdomain: updated.subdomain,
+        subdomain: tenantHostname,
         name: updated.name,
         status: "suspended",
       });
@@ -184,7 +184,7 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
-        subdomain: updated.subdomain,
+        subdomain: tenantHostname,
         name: updated.name,
         status: "active",
       });
@@ -201,7 +201,7 @@ function TenantDetail() {
       return publishTenantConfig(apiClient, auth, {
         accountId: tenant?.accountId ?? "",
         gatewayId,
-        subdomain: tenant?.subdomain ?? "",
+        subdomain: tenantHostname,
         name: tenant?.name ?? "",
         status:
           tenant?.status === "suspended" || tenant?.status === "pending_deletion"
@@ -219,7 +219,7 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
-        subdomain: updated.subdomain,
+        subdomain: tenantHostname,
         name: updated.name,
         status: "pending_deletion",
       });
@@ -262,7 +262,7 @@ function TenantDetail() {
                 {tenant.name}
               </h1>
               <p className="text-[11px] font-mono text-muted-foreground">
-                {tenant.subdomain}.{gatewayId} · {tenant.accountId}
+                {tenantHostname}.{gatewayId} · {tenant.accountId}
               </p>
             </div>
 
@@ -314,7 +314,6 @@ function TenantDetail() {
                 size="sm"
                 onClick={() => {
                   setName(tenant.name);
-                  setSubdomain(tenant.subdomain);
                   setEditing(true);
                 }}
               >
@@ -343,16 +342,6 @@ function TenantDetail() {
                       />
                     }
                   />
-                  <InfoRow
-                    label="subdomain"
-                    value={
-                      <Input
-                        value={subdomain}
-                        onChange={(e) => setSubdomain(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                        className="max-w-xs"
-                      />
-                    }
-                  />
                   <div className="flex gap-2 pt-1">
                     <Button type="submit" size="sm" disabled={updateMutation.isPending}>
                       save
@@ -370,7 +359,7 @@ function TenantDetail() {
               ) : (
                 <>
                   <InfoRow label="name" value={tenant.name} />
-                  <InfoRow label="subdomain" value={`${tenant.subdomain}.${gatewayId}`} mono />
+                  <InfoRow label="hostname" value={`${tenantHostname}.${gatewayId}`} mono />
                   <InfoRow label="account" value={tenant.accountId} mono />
                   <InfoRow label="org id" value={tenant.orgId} mono />
                   <InfoRow label="status" value={tenant.status} />
@@ -398,13 +387,13 @@ function TenantDetail() {
               gateway's host.
             </p>
             <a
-              href={`https://${tenant.subdomain}.${gatewayId}`}
+              href={`https://${tenantHostname}.${gatewayId}`}
               target="_blank"
               rel="noreferrer"
               className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-medium border-2 border-outset border-border-strong bg-card text-foreground shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[10px] w-fit"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              open {tenant.subdomain}.{gatewayId}
+              open {tenantHostname}.{gatewayId}
             </a>
             <Button
               variant="outline"
@@ -427,7 +416,7 @@ function TenantDetail() {
               there.
             </p>
             <Button asChild variant="outline" size="sm">
-              <Link to="/orgs/$slug" params={{ slug: tenant.subdomain }}>
+              <Link to="/orgs/$slug" params={{ slug: tenantHostname }}>
                 <Users className="h-3.5 w-3.5" />
                 open organization
               </Link>
