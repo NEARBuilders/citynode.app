@@ -1361,7 +1361,43 @@ The Railway template deploys the everything.dev Docker image. Set these variable
 |----------|-------------|---------|
 | \`BOS_ACCOUNT\` | The NEAR account that owns this app's published configuration on-chain | \`myapp.near\` |
 | \`BOS_GATEWAY\` | The core domain where this app is served | \`myapp.com\` |
-| \`BETTER_AUTH_SECRET\` | Secret for session encryption — generate with \`openssl rand -base64 32\` | (random) |`);
+| \`BETTER_AUTH_SECRET\` | Secret for session encryption — generate with \`openssl rand -base64 32\` | (random) |
+
+**Self-deployed production:**
+
+You don't need to wait for a PR to merge and run through CI/CD. Publish your own config on-chain under your own NEAR account and run your own host instance, inheriting the base platform via \`extends\`.
+
+1. **Install near-cli-rs** (the \`bos\` CLI shells out to it for \`bos publish\` and \`bos key generate\`):
+   \`\`\`bash
+   curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh
+   \`\`\`
+2. **Create a NEAR account** (testnet or mainnet). Named accounts can own subaccounts; implicit hex accounts cannot:
+   \`\`\`bash
+   near account create-account fund-my-account <your-account>.testnet use-faucet network-config testnet
+   \`\`\`
+3. **Generate a publish key** — a function-call key scoped to the FastKV registry contract:
+   \`\`\`bash
+   bos key generate
+   # Output: NEAR_PRIVATE_KEY=ed25519:...
+   \`\`\`
+   Add the key to your account via near-cli-rs, then set \`NEAR_PRIVATE_KEY\` in \`.env\` or CI secrets.
+4. **Update \`bos.config.json\`** — set \`account\` to your NEAR account, add \`extends\` to inherit the base platform, keep \`domain\` as the gateway:
+   \`\`\`json
+   { "extends": "bos://<parent-account>/<parent-gateway>", "account": "<your-account>.near", "domain": "<parent-gateway>" }
+   \`\`\`
+5. **Publish and deploy:**
+   \`\`\`bash
+   bos publish --deploy    # builds → Zephyr CDN → publishes config to FastKV at bos://<your-account>/<gateway>
+   \`\`\`
+6. **Deploy to Railway** (one-click template or \`railway up\`), set \`BOS_ACCOUNT\`, \`BOS_GATEWAY\` (same gateway as parent), and \`BETTER_AUTH_SECRET\`. Your Railway host fetches your config from FastKV and serves live.
+
+\`BOS_GATEWAY\` is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping the same gateway while using your own \`BOS_ACCOUNT\`, your config lives at a separate FastKV path that \`extends\` the base runtime — you inherit the full platform and override only what you change.
+
+**Subaccount creation** (for the tenant wizard) requires a named NEAR account with a full access key:
+1. Create a named account via near-cli-rs (implicit accounts cannot own subaccounts)
+2. Export the full access key: \`near account export-account <account> explicitly-provide-private-key network-config <net>\`
+3. Set \`NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET\` / \`NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET\` in \`.env\`
+4. Update \`bos.config.json\` auth variables: \`siwn.subAccount.parentAccount\`, \`siwn.recipients\`, and \`siwn.relayer.*.whitelistedContracts\` → your account`);
 
   const archLines = [
     "This is an everything.dev child project. Depending on your overrides, it may include:",
