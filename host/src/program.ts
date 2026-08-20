@@ -246,6 +246,14 @@ export const runServerBlocking = async (input: ServerInput) => {
       });
   };
 
+  process.on("uncaughtException", (err) => {
+    logger.error("[Server] Uncaught exception:", err);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error("[Server] Unhandled rejection:", reason);
+  });
+
   process.on("SIGINT", gracefulShutdown);
   process.on("SIGTERM", gracefulShutdown);
 
