@@ -43,7 +43,7 @@ A node with no validators of its own **inherits** from its parent chain. Kuala L
 3. Sign in with your NEAR wallet.
 4. Choose a validator (official or community) and stake NEAR.
 
-Staking helps keep that place's validator online and securing the NEAR network. Rewards flow back to stakers. There's no minimum place loyalty — stake to any node's validator.
+Staking helps keep that place's validator online and securing the NEAR network.
 
 ## Apply to run a node
 
@@ -51,7 +51,7 @@ Want to set up a node for your city, state, or country? [Apply to run a City Nod
 
 ## For builders
 
-City Nodes runs on [everything.dev](https://github.com/NEARBuilders/everything-dev) — a Module Federation runtime platform with oRPC contracts, Better-Auth + NEAR SIWN, and an every-plugin API. See that repo for the host, the `bos` CLI, plugin architecture, and deployment flow.
+City Nodes runs on [everything.dev](https://github.com/NEARBuilders/everything-dev) — a Module Federation runtime platform with oRPC contracts, Better-Auth + NEAR SIWN, and an every-plugin API. A fork of this framework exists within this repository, so feel free to make changes to it.
 
 ## Deploy
 
