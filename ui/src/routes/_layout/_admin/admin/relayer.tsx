@@ -114,15 +114,6 @@ function AdminRelayerPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Relayer</h1>
-          <p className="text-sm text-muted-foreground">
-            Gasless NEP-366 delegate action relay for tenant config + app metadata writes.
-          </p>
-        </div>
-      </header>
-
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-6 lg:col-span-2 space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">

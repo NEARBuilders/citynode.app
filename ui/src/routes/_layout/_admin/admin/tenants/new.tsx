@@ -13,10 +13,11 @@ import {
   Field,
   FieldLabel,
   Input,
+  PageContainer,
+  PageHeader,
   StepList,
   useStepper,
 } from "@/components";
-import { PageContainer } from "@/components/layout/page-container";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -285,15 +286,11 @@ function NewTenantPage() {
     return (
       <PageContainer variant="narrow">
         <div className="space-y-8">
-          <header className="space-y-2">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Sparkles className="h-3 w-3" />
-              Deploying
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {allDone ? "Deployment complete" : "Deploying tenant…"}
-            </h1>
-          </header>
+          <PageHeader
+            icon={Sparkles}
+            label="Deploying"
+            title={allDone ? "Deployment complete" : "Deploying tenant…"}
+          />
 
           <Card>
             <CardContent className="p-6 space-y-6">
@@ -404,18 +401,12 @@ function NewTenantPage() {
   return (
     <PageContainer variant="narrow">
       <div className="space-y-8">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="h-3 w-3" />
-            New tenant
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            Tenant + node creation
-          </h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Create a tenant, a geographic node, and a primary domain binding in one flow.
-          </p>
-        </header>
+        <PageHeader
+          icon={Sparkles}
+          label="New tenant"
+          title="Tenant + node creation"
+          description="Create a tenant, a geographic node, and a primary domain binding in one flow."
+        />
 
         {!hasOrg && (
           <Card>

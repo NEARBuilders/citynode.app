@@ -4,8 +4,16 @@ import { Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { Button, Card, CardContent, Input } from "@/components";
-import { PageContainer } from "@/components/layout/page-container";
+import {
+  Button,
+  Card,
+  CardContent,
+  Field,
+  FieldLabel,
+  Input,
+  PageContainer,
+  PageHeader,
+} from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/orgs/new")({
   head: () => ({
@@ -64,22 +72,16 @@ function NewOrganization() {
   return (
     <PageContainer variant="narrow">
       <div className="space-y-6">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Users className="h-3 w-3" />
-            Teams
-          </div>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                New Organization
-              </h1>
-            </div>
+        <PageHeader
+          icon={Users}
+          label="Teams"
+          title="New Organization"
+          actions={
             <Button asChild variant="outline">
               <Link to="/orgs">back to organizations</Link>
             </Button>
-          </div>
-        </header>
+          }
+        />
 
         <form
           onSubmit={(e) => {
@@ -90,7 +92,8 @@ function NewOrganization() {
         >
           <Card>
             <CardContent className="p-6 space-y-4">
-              <Field label="name" htmlFor="organization-name">
+              <Field>
+                <FieldLabel htmlFor="organization-name">name</FieldLabel>
                 <Input
                   id="organization-name"
                   type="text"
@@ -100,7 +103,8 @@ function NewOrganization() {
                   required
                 />
               </Field>
-              <Field label="slug" htmlFor="organization-slug">
+              <Field>
+                <FieldLabel htmlFor="organization-slug">slug</FieldLabel>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">@</span>
                   <Input
@@ -151,24 +155,5 @@ function NewOrganization() {
         </section>
       </div>
     </PageContainer>
-  );
-}
-
-function Field({
-  label,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <label htmlFor={htmlFor} className="text-xs uppercase tracking-wide text-muted-foreground">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }

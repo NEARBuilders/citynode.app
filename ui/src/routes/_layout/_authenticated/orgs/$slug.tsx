@@ -25,15 +25,17 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   InfoRow,
   Input,
+  PageContainer,
+  PageHeader,
+  EmptyState as SharedEmptyState,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { EmptyState as SharedEmptyState } from "@/components/empty-state";
-import { PageContainer } from "@/components/layout/page-container";
 
 type AuthClientType = import("@/app").AuthClient;
 
@@ -373,23 +375,19 @@ function OrganizationDetail() {
   return (
     <PageContainer variant="wide">
       <div className="space-y-6">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Users className="h-3 w-3" />
-            <Link to="/orgs" className="hover:text-foreground transition-colors">
-              Organizations
-            </Link>
-            <span>/</span>
-            <span className="text-foreground">{org.slug}</span>
-          </div>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                {org.name}
-              </h1>
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          icon={Users}
+          label={
+            <>
+              <Link to="/orgs" className="hover:text-foreground transition-colors">
+                Organizations
+              </Link>
+              <span>/</span>
+              <span className="text-foreground">{org.slug}</span>
+            </>
+          }
+          title={org.name}
+        />
 
         <Card className="p-6 space-y-4 hover:shadow-md">
           <div className="flex flex-wrap items-center gap-2">
@@ -650,16 +648,6 @@ function OrganizationDetail() {
         </Tabs>
       </div>
     </PageContainer>
-  );
-}
-
-function Chip({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-[6px] px-2.5 py-0.5 text-[11px] font-semibold border ${accent ? "bg-brand-accent-light border-brand-accent-border" : "bg-secondary border-border"} text-foreground`}
-    >
-      {children}
-    </span>
   );
 }
 

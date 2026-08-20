@@ -4,8 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Building2, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Badge, Button, Card, Skeleton } from "@/components";
-import { EmptyState } from "@/components/empty-state";
+import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
 import { DataTable } from "@/components/ui/data-table";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -101,28 +100,17 @@ function AdminTenants() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Building2 className="h-3 w-3" />
-              Tenants
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Tenants
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Manage tenant deployments for your organization.
-            </p>
-          </div>
+      <SectionHeader
+        title="Tenants"
+        action={
           <Button asChild>
             <Link to="/admin/tenants/new">
               <Plus size={14} />
               new tenant
             </Link>
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       {isLoading ? (
         <Card className="p-6 space-y-3">

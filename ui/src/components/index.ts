@@ -7,7 +7,10 @@ export {
 export { BrandElement } from "./brand-element";
 export { ConfirmDialog } from "./confirm-dialog";
 export { EmptyState } from "./empty-state";
+export { Chip } from "./layout/chip";
 export { PageContainer } from "./layout/page-container";
+export { PageHeader } from "./layout/page-header";
+export { SectionHeader } from "./layout/section-header";
 export { OrgSwitcher } from "./org-switcher";
 export { ThemeToggle } from "./theme-toggle";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";

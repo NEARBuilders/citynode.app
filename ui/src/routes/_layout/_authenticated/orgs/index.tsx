@@ -9,8 +9,7 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import { Button, Card } from "@/components";
-import { PageContainer } from "@/components/layout/page-container";
+import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
 
 type AuthClientType = import("@/app").AuthClient;
 type UserInvitationsResponse = Awaited<
@@ -153,17 +152,11 @@ function OrganizationsList() {
   return (
     <PageContainer variant="wide">
       <div className="space-y-8">
-        <header className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Users className="h-3 w-3" />
-            Teams
-          </div>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Organizations
-              </h1>
-            </div>
+        <PageHeader
+          icon={Users}
+          label="Teams"
+          title="Organizations"
+          actions={
             <Link
               to="/orgs/new"
               className="h-10 px-4 inline-flex items-center gap-1.5 text-sm font-semibold border-2 border-outset border-border-strong bg-foreground text-background shadow-sm hover:shadow-md active:border-inset active:shadow-none transition-all duration-200 ease-out rounded-[12px]"
@@ -171,8 +164,8 @@ function OrganizationsList() {
               <Plus size={14} />
               new
             </Link>
-          </div>
-        </header>
+          }
+        />
 
         <div className="space-y-6">
           {pendingInvitations.length > 0 && (
@@ -332,13 +325,5 @@ function OrganizationsList() {
         </div>
       </div>
     </PageContainer>
-  );
-}
-
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-[6px] px-2.5 py-0.5 text-[11px] font-semibold border bg-secondary border-border text-foreground">
-      {children}
-    </span>
   );
 }

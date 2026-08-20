@@ -1,9 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Building2, Fuel, LayoutDashboard, Settings, Shield } from "lucide-react";
 import { getAccount } from "@/app";
-import { Badge } from "@/components";
-import { EmptyState } from "@/components/empty-state";
-import { PageContainer } from "@/components/layout/page-container";
+import { Badge, EmptyState, PageContainer, PageHeader } from "@/components";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { cn } from "@/lib/utils";
 
@@ -73,22 +71,12 @@ function AdminPage() {
     <PageContainer variant="wide">
       <div className="space-y-8">
         {tenant && (
-          <header className="space-y-3">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Shield className="h-3 w-3" />
-              Admin
-            </div>
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="space-y-1">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                  {tenant.name}
-                </h1>
-                <p className="text-[11px] font-mono text-muted-foreground">
-                  {tenant.id.slice(0, 8)} · {tenant.accountId}
-                </p>
-              </div>
-            </div>
-          </header>
+          <PageHeader
+            icon={Shield}
+            label="Admin"
+            title={tenant.name}
+            subtitle={`${tenant.id.slice(0, 8)} · ${tenant.accountId}`}
+          />
         )}
 
         {tenant && (

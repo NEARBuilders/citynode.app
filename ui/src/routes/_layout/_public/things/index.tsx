@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useApiClient } from "@/app";
-import { Button } from "@/components/ui/button";
+import { Button, PageContainer, PageHeader } from "@/components";
 import { DataTable } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -83,48 +83,48 @@ function ThingsIndex() {
   const things: Thing[] = data?.data ?? [];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-2.5 sm:px-6 sm:py-3">
-        <h1 className="text-xl font-semibold text-foreground">Things</h1>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/things/live"
-            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
-          >
-            Live stream
-          </Link>
-          <Link
-            to="/things/new"
-            className="h-9 rounded-[12px] bg-primary px-4 text-sm font-bold text-primary-foreground inline-flex items-center no-underline transition-colors duration-150 hover:opacity-90"
-          >
-            New thing
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <div className="mx-auto max-w-4xl space-y-4">
-          <p className="text-sm text-muted-foreground">
-            The thing registry is a generic API-owned durable store. Each thing has a plugin-owned
-            type and payload, supports real-time SSE events, and is rendered here through the typed{" "}
-            <code className="font-mono text-xs">DataTable</code> component.
-          </p>
-
-          {isLoading ? (
-            <div className="rounded-md border border-border p-4 space-y-3">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
+    <PageContainer variant="default">
+      <div className="space-y-4">
+        <PageHeader
+          title="Things"
+          actions={
+            <div className="flex items-center gap-2">
+              <Link
+                to="/things/live"
+                className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+              >
+                Live stream
+              </Link>
+              <Link
+                to="/things/new"
+                className="h-9 rounded-[12px] bg-primary px-4 text-sm font-bold text-primary-foreground inline-flex items-center no-underline transition-colors duration-150 hover:opacity-90"
+              >
+                New thing
+              </Link>
             </div>
-          ) : error ? (
-            <div className="rounded-[12px] border border-border bg-card p-6 text-sm text-muted-foreground">
-              Couldn't load things: <span className="font-mono">{String(error.message)}</span>
-            </div>
-          ) : (
-            <DataTable columns={columns} data={things} />
-          )}
-        </div>
+          }
+        />
+
+        <p className="text-sm text-muted-foreground">
+          The thing registry is a generic API-owned durable store. Each thing has a plugin-owned
+          type and payload, supports real-time SSE events, and is rendered here through the typed{" "}
+          <code className="font-mono text-xs">DataTable</code> component.
+        </p>
+
+        {isLoading ? (
+          <div className="rounded-md border border-border p-4 space-y-3">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        ) : error ? (
+          <div className="rounded-[12px] border border-border bg-card p-6 text-sm text-muted-foreground">
+            Couldn't load things: <span className="font-mono">{String(error.message)}</span>
+          </div>
+        ) : (
+          <DataTable columns={columns} data={things} />
+        )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
