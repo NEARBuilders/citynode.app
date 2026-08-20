@@ -27,9 +27,12 @@ let server: ReturnType<typeof createServer> | null = null;
 let baseUrl = "";
 let port = 0;
 
-export async function getPluginClient(context?: Record<string, unknown>) {
+export async function getPluginClient(
+  context?: Record<string, unknown>,
+  plugins?: Record<string, () => unknown>,
+) {
   if (!server) {
-    const { router } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG);
+    const { router } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
     const rpcHandler = new RPCHandler(router);
 
     // Find an available port
@@ -94,6 +97,7 @@ export function authedContext(userId = "user-1"): Record<string, unknown> {
 export function orgContext(
   userId = "user-1",
   activeOrganizationId = "org-1",
+  role = "owner",
 ): Record<string, unknown> {
   return {
     ...authedContext(userId),
@@ -103,6 +107,10 @@ export function orgContext(
         id: activeOrganizationId,
         slug: activeOrganizationId,
         metadata: null,
+      },
+      member: {
+        id: "member-1",
+        role,
       },
     },
   };

@@ -44,6 +44,12 @@ export { Label } from "./ui/label";
 export { NetworkToggle } from "./ui/network-toggle";
 export { ScrollArea, ScrollBar } from "./ui/scroll-area";
 export { Skeleton } from "./ui/skeleton";
+export {
+  type Step,
+  StepList,
+  type StepState,
+  useStepper,
+} from "./ui/stepper";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 export { Textarea } from "./ui/textarea";
 export { UnderConstruction } from "./under-construction";
