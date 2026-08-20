@@ -2,13 +2,25 @@
 
 Thank you for contributing to everything-dev! 🎉
 
+## Join the Community
+
+New here? Get onboarded and plugged in:
+
+1. **Onboard at [nearbuilders.org/join](https://nearbuilders.org/join)** — complete the builder onboarding flow to join NEAR Builders.
+2. **Join the Telegram group [@nearbuilderschat](https://t.me/nearbuilderschat)** to discuss, ask questions, and coordinate with other contributors.
+
+> **Note:** This onboarding flow is actively taking recommended improvements. If you spot gaps or have suggestions, share them in the Telegram group, open a PR, and advocate to get it merged.
+
 ## Quick Setup
 
 ```bash
-bun install              # Install dependencies
-bun db:migrate           # Run database migrations
-bos dev                  # Start development (host mode auto-detected)
+cp .env.example .env      # First time only
+bun install               # Install dependencies
+docker compose up -d --wait   # Start local Postgres (api_db:5432, auth_db:5433)
+bun run dev               # Start development (host mode auto-detected)
 ```
+
+`bun db:migrate` is optional — the API and plugins auto-apply migrations on boot. Run it only to migrate without starting the dev server.
 
 Visit http://localhost:3003 (UI), http://localhost:3001 (API), and http://localhost:3002 (Auth).
 
