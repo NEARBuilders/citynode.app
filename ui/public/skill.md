@@ -25,7 +25,7 @@ Public routes (no auth):
 - `/about` — renders the repo `README.md` (the CityNodes product explainer) via a README-fetching loader
 - `/apply` — internal route that redirects externally to `https://citynode.app/apply`
 - `/skill` — renders this `skill.md`
-- `/skill.md`, `/README.md`, `/llms.txt` — raw doc endpoints
+- `/skill.md`, `/llms.txt` — raw doc endpoints
 - `/things`, `/things/$thingId`, `/things/new`, `/things/live` — generic typed table demo (durable store + SSE)
 - `/$accountId` — NEAR account profile overview (public)
 
@@ -138,7 +138,6 @@ After `bos publish --deploy`, `bos.config.json` gets deployed URLs + integrity.
 - `/apply` (redirects to `https://citynode.app/apply`)
 - `/skill`
 - `/skill.md`
-- `/README.md`
 - `/llms.txt`
 
 ## Tone
