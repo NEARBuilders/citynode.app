@@ -163,21 +163,6 @@ async function runBuildAttempt(
     return result;
   }
 
-  if (exitCode !== 0) {
-    const lastLines = output.trim().split("\n").slice(-5).join("\n");
-    return {
-      success: false,
-      error: `Build failed (exit code ${exitCode})\n${lastLines}`,
-      exitCode,
-      output,
-    };
-  }
-
-  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
-  if (deployMatch) {
-    return { success: true, url: deployMatch[1], exitCode: 0, output };
-  }
-
   const zeMatch = output.match(/ZE\d{4,}/);
   if (zeMatch) {
     const zeLines = output
@@ -191,6 +176,21 @@ async function runBuildAttempt(
       exitCode: 0,
       output,
     };
+  }
+
+  if (exitCode !== 0) {
+    const lastLines = output.trim().split("\n").slice(-5).join("\n");
+    return {
+      success: false,
+      error: `Build failed (exit code ${exitCode})\n${lastLines}`,
+      exitCode,
+      output,
+    };
+  }
+
+  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
+  if (deployMatch) {
+    return { success: true, url: deployMatch[1], exitCode: 0, output };
   }
 
   if (env.DEPLOY === "true") {
@@ -232,12 +232,31 @@ async function buildOneWorkspace(
     opts.verbose ?? false,
   );
 
+  const MAX_RETRIES = 3;
+  const ZEPHYR_BACKOFF_MS = [2000, 5000, 10000];
   let retried = false;
-  const firstAttempt: BuildAttemptResult | undefined = attempt.success ? undefined : { ...attempt };
+  const errors: string[] = [];
 
-  if (!attempt.success && attempt.exitCode === 0 && opts.deploy) {
+  for (let retry = 0; retry < MAX_RETRIES; retry++) {
+    if (attempt.success || attempt.exitCode !== 0 || !opts.deploy) break;
+
+    if (errors.length === 0) errors.push(`Attempt 1: ${attempt.error ?? "Failed"}`);
+
+    const isZephyrError = /Zephyr upload failed/.test(attempt.error ?? "");
+    if (isZephyrError) {
+      const delayMs = ZEPHYR_BACKOFF_MS[retry] ?? ZEPHYR_BACKOFF_MS[ZEPHYR_BACKOFF_MS.length - 1]!;
+      if (opts.verbose) {
+        console.log(
+          `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} waiting ${delayMs / 1000}s before retry ${retry + 2}/${MAX_RETRIES + 1} (Zephyr edge provider)...`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
     if (!opts.verbose) {
-      console.log(`  ${colors.yellow("↻")} ${padRight(ws.key, 28)} retrying...`);
+      console.log(
+        `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} retrying... (${retry + 2}/${MAX_RETRIES + 1})`,
+      );
     }
     retried = true;
     attempt = await runBuildAttempt(
@@ -248,9 +267,12 @@ async function buildOneWorkspace(
       opts.verbose ?? false,
     );
 
-    if (!attempt.success && firstAttempt) {
-      attempt.error = `First attempt: ${firstAttempt.error}\nRetry: ${attempt.error}`;
-    }
+    if (attempt.success) break;
+    errors.push(`Attempt ${retry + 2}: ${attempt.error ?? "Failed"}`);
+  }
+
+  if (!attempt.success && errors.length > 0) {
+    attempt.error = errors.join("\n");
   }
 
   const durationMs = Date.now() - startTime;

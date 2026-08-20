@@ -166,6 +166,7 @@ const plugins = [pluginReact()];
 if (shouldDeploy) {
   plugins.push(
     withZephyr({
+      snapshotType: "csr",
       hooks: {
         onDeployComplete: async (info: { url: string }) => {
           console.log("🚀 Host Deployed:", info.url);
