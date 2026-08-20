@@ -80,12 +80,14 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `BOS_ACCOUNT` | The NEAR account that owns this app's published configuration on-chain — signs `bos publish` transactions and namespaces the FastKV registry | From `bos.config.json` |
+| `BOS_GATEWAY` | The core domain where this app is served — combined with `BOS_ACCOUNT`, forms the registry lookup path `bos://<account>/<gateway>` | From `bos.config.json` |
 | `UI_SOURCE` | `local` or `remote` | Based on NODE_ENV |
 | `API_SOURCE` | `local` or `remote` | Based on NODE_ENV |
 | `API_PROXY` | Proxy API requests to another host URL | - |
 | `NETWORK_ID` | Tenant account suffix resolution: `mainnet` or `testnet` | `mainnet` |
 | `AUTH_DATABASE_URL` | PostgreSQL URL for auth | `postgres://everythingdev:everythingdev@localhost:5433/auth_db` |
-| `BETTER_AUTH_SECRET` | Secret for session encryption | - |
+| `BETTER_AUTH_SECRET` | Secret used for session encryption and key derivation | - |
 | `CORS_ORIGIN` | Comma-separated allowed origins | Host + UI URLs |
 
 ## Multi-Tenant Status
@@ -101,12 +103,12 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
 
 ## Tenant Mode
 
-Example deployment:
+Set `BOS_ACCOUNT` and `BOS_GATEWAY` to fetch the published config from FastKV instead of using the local `bos.config.json`:
 
 ```bash
-BOS_ACCOUNT=v1.citynode.near
-BOS_GATEWAY=citynode.app
-bos start --no-interactive
+# BOS_ACCOUNT: the NEAR account that owns the published config on-chain
+# BOS_GATEWAY: the core domain this app is served on
+BOS_ACCOUNT=v1.citynode.near BOS_GATEWAY=citynode.app bos start --no-interactive
 ```
 
 Example tenant behavior:

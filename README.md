@@ -53,6 +53,18 @@ Want to set up a node for your city, state, or country? [Apply to run a City Nod
 
 City Nodes runs on [everything.dev](https://github.com/NEARBuilders/everything-dev) — a Module Federation runtime platform with oRPC contracts, Better-Auth + NEAR SIWN, and an every-plugin API. See that repo for the host, the `bos` CLI, plugin architecture, and deployment flow.
 
+## Deploy
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/everything-dev-template?referralCode=MuB_vg&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+The Railway template deploys the everything.dev Docker image. You'll need to provide:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `BOS_ACCOUNT` | The NEAR account that owns this app's published configuration on-chain — it signs `bos publish` transactions and namespaces the FastKV registry | `myapp.near` |
+| `BOS_GATEWAY` | The core domain where this app is served — combined with `BOS_ACCOUNT`, it forms the registry lookup path `bos://<account>/<gateway>` | `myapp.com` |
+| `BETTER_AUTH_SECRET` | Secret used for session encryption and key derivation — generate with `openssl rand -base64 32` | (random) |
+
 ## License
 
 MIT

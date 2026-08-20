@@ -1349,7 +1349,19 @@ bun run dev
 bos ps        # List running processes
 bos status    # Project health check
 bos info      # Show configuration
-\`\`\``);
+\`\`\`
+
+**Deploy:**
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/everything-dev-template?referralCode=MuB_vg&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+The Railway template deploys the everything.dev Docker image. Set these variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| \`BOS_ACCOUNT\` | The NEAR account that owns this app's published configuration on-chain | \`myapp.near\` |
+| \`BOS_GATEWAY\` | The core domain where this app is served | \`myapp.com\` |
+| \`BETTER_AUTH_SECRET\` | Secret for session encryption — generate with \`openssl rand -base64 32\` | (random) |`);
 
   const archLines = [
     "This is an everything.dev child project. Depending on your overrides, it may include:",
