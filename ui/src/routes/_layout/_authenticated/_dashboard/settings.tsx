@@ -21,6 +21,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/setting
 const tabs = [
   { value: "profile", to: "/settings/profile", label: "Profile" },
   { value: "auth-methods", to: "/settings/auth-methods", label: "Auth Methods" },
+  { value: "api-keys", to: "/settings/api-keys", label: "API Keys" },
   { value: "security", to: "/settings/security", label: "Security" },
 ] as const;
 

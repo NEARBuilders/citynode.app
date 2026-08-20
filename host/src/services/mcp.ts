@@ -5,7 +5,7 @@ import {
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { OpenAPIGenerator } from "@orpc/openapi";
-import type { OpenAPIHandler } from "@orpc/openapi/fetch";
+import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import type { Context, Hono } from "hono";
 import type { AuthPluginContext, HonoEnv } from "../lib/auth";
@@ -29,31 +29,36 @@ export function closeMcpServer(): Promise<void> {
   return t.close();
 }
 
-export async function mountMcpRoute(
-  app: Hono<HonoEnv>,
-  options: {
-    apiRouter: unknown;
-    apiHandler: OpenAPIHandler<any>;
-    config: RuntimeConfig;
-  },
-) {
-  const { apiRouter, apiHandler, config } = options;
+interface PluginRouterSource {
+  router: unknown;
+  prefix: `/${string}`;
+  label: string;
+}
 
+async function registerToolsFromRouter(
+  server: McpServer,
+  source: PluginRouterSource,
+  handler: OpenAPIHandler<any>,
+  config: RuntimeConfig,
+) {
   const generator = new OpenAPIGenerator({
     schemaConverters: [new ZodToJsonSchemaConverter()],
   });
 
-  const spec = await generator.generate(apiRouter as any, {
-    info: {
-      title: `${config.title ?? config.account} API`,
-      version: "1.0.0",
-    },
-  });
-
-  const server = new McpServer({
-    name: `${config.title ?? config.account} MCP`,
-    version: "1.0.0",
-  });
+  let spec: any;
+  try {
+    spec = await generator.generate(source.router as any, {
+      info: {
+        title: `${config.title ?? config.account} ${source.label}`,
+        version: "1.0.0",
+      },
+    });
+  } catch (error) {
+    logger.warn(
+      `[MCP] Failed to generate OpenAPI spec for ${source.label}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
 
   const paths = (spec as any).paths ?? {};
 
@@ -108,9 +113,10 @@ export async function mountMcpRoute(
       };
 
       const description = operation.description ?? operation.summary ?? `${methodUpper} ${path}`;
+      const toolName = source.prefix === "/api" ? operationId : `${source.prefix.replace("/api/rpc/", "")}_${operationId}`;
 
       server.registerTool(
-        operationId,
+        toolName,
         {
           description,
           inputSchema: fromJsonSchema(inputSchema as any) as any,
@@ -161,8 +167,8 @@ export async function mountMcpRoute(
           });
 
           try {
-            const result = await apiHandler.handle(req, {
-              prefix: "/api",
+            const result = await handler.handle(req, {
+              prefix: source.prefix,
               context: store.context,
             });
 
@@ -186,7 +192,7 @@ export async function mountMcpRoute(
             };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            logger.error(`[MCP] Tool "${operationId}" failed: ${message}`);
+            logger.error(`[MCP] Tool "${toolName}" failed: ${message}`);
             return {
               content: [{ type: "text" as const, text: message }],
               isError: true,
@@ -195,6 +201,36 @@ export async function mountMcpRoute(
         },
       );
     }
+  }
+}
+
+export async function mountMcpRoute(
+  app: Hono<HonoEnv>,
+  options: {
+    apiRouter: unknown;
+    apiHandler: OpenAPIHandler<any>;
+    config: RuntimeConfig;
+    pluginRouters?: Array<{ router: unknown; prefix: string; label: string }>;
+  },
+) {
+  const { apiRouter, apiHandler, config } = options;
+
+  const server = new McpServer({
+    name: `${config.title ?? config.account} MCP`,
+    version: "1.0.0",
+  });
+
+  await registerToolsFromRouter(server, {
+    router: apiRouter,
+    prefix: "/api",
+    label: "API",
+  }, apiHandler, config);
+
+  for (const pluginSource of options.pluginRouters ?? []) {
+    const pluginHandler = new OpenAPIHandler(pluginSource.router as any, {
+      interceptors: [],
+    });
+    await registerToolsFromRouter(server, pluginSource, pluginHandler, config);
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({

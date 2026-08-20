@@ -331,6 +331,7 @@ node_modules/.federation
 !**/README.md
 !**/CHANGELOG.md
 !.changeset/**/*.md
+!docs/agents/**/*.md
 # Plans are tracked design documents — see plans/README.md
 !plans/**/*.md
 # Prototype source files (plans/prototypes/ has its own .gitignore for dist/, node_modules/)

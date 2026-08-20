@@ -40,6 +40,7 @@ import { Route as LayoutAuthenticatedDashboardTenantTenantIdRouteImport } from '
 import { Route as LayoutAuthenticatedDashboardSettingsSecurityRouteImport } from './routes/_layout/_authenticated/_dashboard/settings/security'
 import { Route as LayoutAuthenticatedDashboardSettingsProfileRouteImport } from './routes/_layout/_authenticated/_dashboard/settings/profile'
 import { Route as LayoutAuthenticatedDashboardSettingsAuthMethodsRouteImport } from './routes/_layout/_authenticated/_dashboard/settings/auth-methods'
+import { Route as LayoutAuthenticatedDashboardSettingsApiKeysRouteImport } from './routes/_layout/_authenticated/_dashboard/settings/api-keys'
 import { Route as LayoutAuthenticatedDashboardOrgsNewRouteImport } from './routes/_layout/_authenticated/_dashboard/orgs/new'
 import { Route as LayoutAuthenticatedDashboardOrgsSlugRouteImport } from './routes/_layout/_authenticated/_dashboard/orgs/$slug'
 import { Route as LayoutAdminDashboardAdminTenantsRouteImport } from './routes/_layout/_admin/_dashboard/admin/tenants'
@@ -214,6 +215,12 @@ const LayoutAuthenticatedDashboardSettingsAuthMethodsRoute =
     path: '/auth-methods',
     getParentRoute: () => LayoutAuthenticatedDashboardSettingsRoute,
   } as any)
+const LayoutAuthenticatedDashboardSettingsApiKeysRoute =
+  LayoutAuthenticatedDashboardSettingsApiKeysRouteImport.update({
+    id: '/api-keys',
+    path: '/api-keys',
+    getParentRoute: () => LayoutAuthenticatedDashboardSettingsRoute,
+  } as any)
 const LayoutAuthenticatedDashboardOrgsNewRoute =
   LayoutAuthenticatedDashboardOrgsNewRouteImport.update({
     id: '/orgs/new',
@@ -285,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/admin/tenants': typeof LayoutAdminDashboardAdminTenantsRouteWithChildren
   '/orgs/$slug': typeof LayoutAuthenticatedDashboardOrgsSlugRoute
   '/orgs/new': typeof LayoutAuthenticatedDashboardOrgsNewRoute
+  '/settings/api-keys': typeof LayoutAuthenticatedDashboardSettingsApiKeysRoute
   '/settings/auth-methods': typeof LayoutAuthenticatedDashboardSettingsAuthMethodsRoute
   '/settings/profile': typeof LayoutAuthenticatedDashboardSettingsProfileRoute
   '/settings/security': typeof LayoutAuthenticatedDashboardSettingsSecurityRoute
@@ -314,6 +322,7 @@ export interface FileRoutesByTo {
   '/admin/system': typeof LayoutAdminDashboardAdminSystemRoute
   '/orgs/$slug': typeof LayoutAuthenticatedDashboardOrgsSlugRoute
   '/orgs/new': typeof LayoutAuthenticatedDashboardOrgsNewRoute
+  '/settings/api-keys': typeof LayoutAuthenticatedDashboardSettingsApiKeysRoute
   '/settings/auth-methods': typeof LayoutAuthenticatedDashboardSettingsAuthMethodsRoute
   '/settings/profile': typeof LayoutAuthenticatedDashboardSettingsProfileRoute
   '/settings/security': typeof LayoutAuthenticatedDashboardSettingsSecurityRoute
@@ -356,6 +365,7 @@ export interface FileRoutesById {
   '/_layout/_admin/_dashboard/admin/tenants': typeof LayoutAdminDashboardAdminTenantsRouteWithChildren
   '/_layout/_authenticated/_dashboard/orgs/$slug': typeof LayoutAuthenticatedDashboardOrgsSlugRoute
   '/_layout/_authenticated/_dashboard/orgs/new': typeof LayoutAuthenticatedDashboardOrgsNewRoute
+  '/_layout/_authenticated/_dashboard/settings/api-keys': typeof LayoutAuthenticatedDashboardSettingsApiKeysRoute
   '/_layout/_authenticated/_dashboard/settings/auth-methods': typeof LayoutAuthenticatedDashboardSettingsAuthMethodsRoute
   '/_layout/_authenticated/_dashboard/settings/profile': typeof LayoutAuthenticatedDashboardSettingsProfileRoute
   '/_layout/_authenticated/_dashboard/settings/security': typeof LayoutAuthenticatedDashboardSettingsSecurityRoute
@@ -392,6 +402,7 @@ export interface FileRouteTypes {
     | '/admin/tenants'
     | '/orgs/$slug'
     | '/orgs/new'
+    | '/settings/api-keys'
     | '/settings/auth-methods'
     | '/settings/profile'
     | '/settings/security'
@@ -421,6 +432,7 @@ export interface FileRouteTypes {
     | '/admin/system'
     | '/orgs/$slug'
     | '/orgs/new'
+    | '/settings/api-keys'
     | '/settings/auth-methods'
     | '/settings/profile'
     | '/settings/security'
@@ -462,6 +474,7 @@ export interface FileRouteTypes {
     | '/_layout/_admin/_dashboard/admin/tenants'
     | '/_layout/_authenticated/_dashboard/orgs/$slug'
     | '/_layout/_authenticated/_dashboard/orgs/new'
+    | '/_layout/_authenticated/_dashboard/settings/api-keys'
     | '/_layout/_authenticated/_dashboard/settings/auth-methods'
     | '/_layout/_authenticated/_dashboard/settings/profile'
     | '/_layout/_authenticated/_dashboard/settings/security'
@@ -698,6 +711,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedDashboardSettingsAuthMethodsRouteImport
       parentRoute: typeof LayoutAuthenticatedDashboardSettingsRoute
     }
+    '/_layout/_authenticated/_dashboard/settings/api-keys': {
+      id: '/_layout/_authenticated/_dashboard/settings/api-keys'
+      path: '/api-keys'
+      fullPath: '/settings/api-keys'
+      preLoaderRoute: typeof LayoutAuthenticatedDashboardSettingsApiKeysRouteImport
+      parentRoute: typeof LayoutAuthenticatedDashboardSettingsRoute
+    }
     '/_layout/_authenticated/_dashboard/orgs/new': {
       id: '/_layout/_authenticated/_dashboard/orgs/new'
       path: '/orgs/new'
@@ -848,6 +868,7 @@ const LayoutAuthenticatedDashboardDashboardRouteWithChildren =
   )
 
 interface LayoutAuthenticatedDashboardSettingsRouteChildren {
+  LayoutAuthenticatedDashboardSettingsApiKeysRoute: typeof LayoutAuthenticatedDashboardSettingsApiKeysRoute
   LayoutAuthenticatedDashboardSettingsAuthMethodsRoute: typeof LayoutAuthenticatedDashboardSettingsAuthMethodsRoute
   LayoutAuthenticatedDashboardSettingsProfileRoute: typeof LayoutAuthenticatedDashboardSettingsProfileRoute
   LayoutAuthenticatedDashboardSettingsSecurityRoute: typeof LayoutAuthenticatedDashboardSettingsSecurityRoute
@@ -856,6 +877,8 @@ interface LayoutAuthenticatedDashboardSettingsRouteChildren {
 
 const LayoutAuthenticatedDashboardSettingsRouteChildren: LayoutAuthenticatedDashboardSettingsRouteChildren =
   {
+    LayoutAuthenticatedDashboardSettingsApiKeysRoute:
+      LayoutAuthenticatedDashboardSettingsApiKeysRoute,
     LayoutAuthenticatedDashboardSettingsAuthMethodsRoute:
       LayoutAuthenticatedDashboardSettingsAuthMethodsRoute,
     LayoutAuthenticatedDashboardSettingsProfileRoute:

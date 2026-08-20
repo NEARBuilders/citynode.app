@@ -59,6 +59,23 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.get("/health", (c: Context<HonoEnv>) => c.text("OK"));
 
+    app.get("/.well-known/mcp.json", (c: Context<HonoEnv>) => {
+      const url = new URL(c.req.url);
+      return c.json({
+        name: `${config.title ?? config.account} MCP`,
+        endpoint: `${url.origin}/api/mcp`,
+        transport: "streamable-http",
+        auth: {
+          type: "api-key",
+          header: "x-api-key",
+          description:
+            "Pass an API key via the x-api-key header. Create one at /settings/api-keys after signing in with your NEAR wallet.",
+        },
+        docs: `${url.origin}/api`,
+        spec: `${url.origin}/api/spec.json`,
+      });
+    });
+
     const loadingState: HealthLoadingState = {
       status: "ready",
       startTime: Date.now(),

@@ -894,6 +894,25 @@ export async function personalizeConfig(
       mkdirSync(dirname(genContractPath), { recursive: true });
       writeFileSync(genContractPath, `export type ApiContract = Record<string, never>;\n`);
     }
+
+    const publicDir = join(destination, "ui", "public");
+    if (!existsSync(publicDir)) {
+      mkdirSync(publicDir, { recursive: true });
+    }
+
+    const llmsTxtPath = join(publicDir, "llms.txt");
+    if (!existsSync(llmsTxtPath)) {
+      const title = opts.title ?? opts.account ?? "app";
+      writeFileSync(llmsTxtPath, buildChildLlmsTxt(title));
+    }
+
+    const skillMdPath = join(publicDir, "skill.md");
+    if (!existsSync(skillMdPath)) {
+      const title = opts.title ?? opts.account ?? "app";
+      const account = opts.account ?? "<your-account>.near";
+      const repository = opts.repository ?? "";
+      writeFileSync(skillMdPath, buildChildSkillMd(title, account, repository));
+    }
   }
 
   if (has("api")) {
@@ -1531,6 +1550,29 @@ function MyComponent() {
 \`\`\``);
   }
 
+  parts.push(`## Agent Communication Surface
+
+The host exposes several surfaces for programmatic agent access:
+
+| Surface | Endpoint | Auth | Use |
+|---------|----------|------|-----|
+| MCP | \`POST /api/mcp\` | \`x-api-key\` header or session cookie | MCP clients — auto-generated tools from OpenAPI spec, stateless Streamable HTTP transport |
+| REST/OpenAPI | \`GET/POST/... /api/{path}\` | \`x-api-key\` header or session cookie | Standard REST; Scalar docs at \`GET /api\`, spec at \`GET /api/spec.json\` |
+| oRPC RPC | \`POST /api/rpc/{procedure}\` | \`x-api-key\` header or session cookie | Typed JSON-RPC for all API procedures |
+| Plugin RPC | \`POST /api/rpc/{plugin}/{procedure}\` | \`x-api-key\` header or session cookie | Per-plugin RPC (e.g. \`/api/rpc/auth/getSession\`) |
+| MCP discovery | \`GET /.well-known/mcp.json\` | None | JSON descriptor with server name, endpoint, and auth scheme |
+
+### Authentication for agents
+
+1. Sign in with your NEAR wallet (SIWN) at the website.
+2. Navigate to **Settings → API Keys** at \`/settings/api-keys\`.
+3. Create a new key — the full secret (\`edk_...\`) is shown once. Copy it immediately.
+4. Pass it on every request: \`x-api-key: edk_your_key_here\`
+
+### Architecture note: remotes are code bundles
+
+Remotes in \`bos.config.json\` are **not hosted APIs** — they are code bundles loaded via Module Federation at runtime. The UI, API, auth, and plugins all run in the same host process. There is no remote server to call; everything is loaded in-process through Module Federation and \`every-plugin\`.`);
+
   parts.push(`## Troubleshooting
 
 **Process won't start:**
@@ -1598,3 +1640,119 @@ docker-compose.yml
 *.gen.tsx
 `;
 }
+
+export function buildChildLlmsTxt(title: string): string {
+  return `# ${title}
+
+> Application running on the everything.dev runtime.
+
+## Skills
+
+- [Skill](/skill.md): Agent-ready prompt for talking to, running, editing, and publishing this runtime.
+
+## API
+
+- [OpenAPI docs](/api): Interactive API reference (Scalar)
+- [OpenAPI spec](/api/spec.json): Machine-readable OpenAPI JSON
+- [oRPC RPC](/api/rpc): Typed JSON-RPC endpoint for all API procedures
+- [Plugin RPC](/api/rpc/auth): Auth plugin RPC (session, NEAR SIWN, relay, API keys, organizations)
+
+## MCP
+
+- [MCP server](/api/mcp): Model Context Protocol server (Streamable HTTP, stateless). Auto-generates tools from the API's OpenAPI spec.
+- [MCP discovery](/.well-known/mcp.json): JSON descriptor with server name, endpoint URL, and auth scheme.
+
+## Auth
+
+Authenticate to the API using an API key:
+
+1. Sign in with your NEAR wallet (SIWN) at the website.
+2. Go to **Settings → API Keys** at \`/settings/api-keys\`.
+3. Create a key — the full secret (\`edk_...\`) is shown once.
+4. Pass it on every request: \`x-api-key: edk_your_key_here\`
+
+The \`x-api-key\` header works for \`/api/*\` (REST), \`/api/rpc/*\` (oRPC), and \`/api/mcp\` (MCP).
+
+## Source
+
+- [Repository](https://github.com/NEARBuilders/everything-dev): Clone and read \`AGENTS.md\` for full development instructions, TanStack Intent skills, and workflow guidance.
+`;
+}
+
+export function buildChildSkillMd(title: string, account: string, repository: string): string {
+  const repoLink = repository
+    ? `- [Repository](${repository}): Clone and read \`AGENTS.md\` for full development instructions.`
+    : `- Clone the repository and read \`AGENTS.md\` for full development instructions.`;
+
+  return `# ${title} skill
+
+Use this when you want an agent to run, edit, and publish **${title}** — an everything.dev app composed at runtime from \`bos.config.json\`.
+
+There are two ways to work with this app:
+
+1. **Talk to the app** — use the API via MCP or REST to read/write data without cloning anything.
+2. **Clone and modify** — clone the repository, run locally, edit code, and publish.
+
+## Mode 1: Talk to the app
+
+### MCP endpoint
+
+\`\`\`
+POST /api/mcp
+\`\`\`
+
+Transport: Streamable HTTP (stateless). Connect your MCP client to \`{origin}/api/mcp\` to discover all available tools automatically.
+
+### Authentication
+
+Use an **API key**:
+
+1. Sign in with your NEAR wallet at the website (SIWN).
+2. Navigate to **Settings → API Keys** at \`/settings/api-keys\`.
+3. Create a key — the full secret (\`edk_...\`) is shown once.
+4. Pass it on every request: \`x-api-key: edk_your_key_here\`
+
+### REST / OpenAPI
+
+- **API docs**: \`GET /api\`
+- **OpenAPI spec**: \`GET /api/spec.json\`
+- **oRPC RPC**: \`POST /api/rpc/{procedure}\`
+- **MCP discovery**: \`GET /.well-known/mcp.json\`
+
+## Mode 2: Clone and modify
+
+### TanStack Intent
+
+- Registry entry: \`https://tanstack.com/intent/registry/everything-dev\`
+- Load with TanStack Intent: \`npx @tanstack/intent@latest load everything-dev\`
+
+### Read AGENTS.md first
+
+After cloning, read **\`AGENTS.md\`** at the repo root. It contains operational guidance, TanStack Intent skills, and workflow instructions.
+
+### Architecture note
+
+Remotes in \`bos.config.json\` are **not hosted APIs** — they are code bundles loaded via Module Federation at runtime. Everything runs in the same host process.
+
+### Run locally
+
+\`\`\`bash
+cp .env.example .env
+bun install
+docker compose up -d --wait
+bos dev
+\`\`\`
+
+### Publish
+
+\`\`\`bash
+bos build
+bos publish --deploy
+\`\`\`
+
+## Source
+
+${repoLink}
+`;
+}
+

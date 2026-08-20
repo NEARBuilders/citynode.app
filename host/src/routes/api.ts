@@ -200,7 +200,20 @@ export async function setupApiRoutes(
   });
 
   try {
-    await mountMcpRoute(app, { apiRouter, apiHandler, config });
+    const pluginRouters: Array<{ router: unknown; prefix: string; label: string }> = [];
+    if (plugins.auth?.router) {
+      pluginRouters.push({ router: plugins.auth.router, prefix: "/api/rpc/auth", label: "Auth" });
+    }
+    for (const [pluginKey, plugin] of Object.entries(plugins.plugins)) {
+      if (plugin.router) {
+        pluginRouters.push({
+          router: plugin.router,
+          prefix: `/api/rpc/${pluginKey}`,
+          label: pluginKey,
+        });
+      }
+    }
+    await mountMcpRoute(app, { apiRouter, apiHandler, config, pluginRouters });
   } catch (error) {
     logger.warn(
       `[MCP] Failed to mount /api/mcp: ${error instanceof Error ? error.message : String(error)}`,
