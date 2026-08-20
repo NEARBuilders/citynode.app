@@ -296,7 +296,7 @@ export function buildServiceDescriptors(
       port: isLocal ? resolvedPorts.ui : undefined,
       localPath: isLocal ? runtimeConfig.ui.localPath : undefined,
     });
-    if (isLocal && resolvedPorts.uiSsr) {
+    if (isLocal && resolvedPorts.uiSsr && runtimeConfig.ui.ssrUrl) {
       descriptors.push({
         key: "ui-ssr",
         source: "local",
