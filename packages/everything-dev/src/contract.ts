@@ -36,6 +36,7 @@ export const StartOptionsSchema = z.object({
   account: z.string().optional(),
   domain: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
 });
 
 export const StartResultSchema = z.object({
@@ -145,6 +146,7 @@ export const PublishOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
 });
 
 export const PublishResultSchema = z.object({
@@ -166,6 +168,7 @@ export const DeployOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   service: z.string().optional(),
+  registry: z.string().optional(),
 });
 
 export const DeployResultSchema = z.object({
@@ -202,12 +205,15 @@ export const KeyPublishOptionsSchema = z.object({
         message: `Allowance must be at least ${MIN_PUBLISH_ALLOWANCE_NEAR} NEAR to cover the transaction cost`,
       },
     ),
+  env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
 });
 
 export const KeyPublishResultSchema = z.object({
   status: z.enum(["published", "error"]),
   account: z.string(),
   network: z.enum(["mainnet", "testnet"]),
+  env: z.enum(["production", "staging"]),
   contract: z.string(),
   allowance: z.string(),
   functionNames: z.array(z.string()),

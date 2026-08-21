@@ -14,10 +14,10 @@ export interface DatabaseDriver {
 
 interface PoolLike {
   on(event: "error", listener: (err: Error) => void): this;
-  on(
-    event: "connect",
-    listener: (client: { query: (sql: string) => Promise<unknown> }) => void,
-  ): this;
+  connect(): Promise<{
+    query: (sql: string) => Promise<unknown>;
+    release: () => void;
+  }>;
   removeAllListeners(event?: string | symbol): this;
   end(): Promise<void>;
 }
@@ -48,7 +48,7 @@ export function unwrapDatabaseError(error: unknown): string {
   return parts.join(": ");
 }
 
-function buildPoolConfig(url: string): PoolConfig {
+function buildPoolConfig(url: string, schemaName: string | undefined): PoolConfig {
   const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
   return {
     connectionString: url,
@@ -58,18 +58,22 @@ function buildPoolConfig(url: string): PoolConfig {
     max: Number(process.env.DB_POOL_MAX) || 10,
     connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 30_000,
     idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS) || 30_000,
+    ...(schemaName ? { options: `-c search_path="${schemaName}",public` } : {}),
   };
 }
 
-function attachPoolSchemaHandlers(pool: PoolLike, schemaName: string | undefined): void {
+function attachPoolErrorHandler(pool: PoolLike): void {
   pool.on("error", (err: Error) => {
     console.error("[Database] Unexpected pool error:", err.message);
   });
-  if (schemaName) {
-    pool.on("connect", async (client) => {
-      await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-      await client.query(`SET search_path TO "${schemaName}", public`);
-    });
+}
+
+async function ensureSchemaExists(pool: PoolLike, schemaName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+  } finally {
+    client.release();
   }
 }
 
@@ -112,8 +116,13 @@ export async function createDatabaseDriver(
 
   const { Pool } = await import("pg");
   const { drizzle } = await import("drizzle-orm/node-postgres");
-  const pool = new Pool(buildPoolConfig(url));
-  attachPoolSchemaHandlers(pool, schemaName);
+  const pool = new Pool(buildPoolConfig(url, schemaName));
+  attachPoolErrorHandler(pool);
+
+  if (schemaName) {
+    await ensureSchemaExists(pool, schemaName);
+  }
+
   return {
     db: drizzle(pool, { schema }),
     close: createCloseHandler(pool),

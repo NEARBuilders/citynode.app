@@ -54,12 +54,9 @@ export function composeApp(plugins: WebPluginModule[]): ComposedApp {
     component: () => (
       <div style={{ fontFamily: "system-ui, sans-serif" }}>
         <header style={{ padding: 8, borderBottom: "1px solid #333" }}>
-          <Link to="/">Home</Link>{" "}
-          <Link to="/about">About</Link>{" "}
-          <Link to="/dashboard">Dashboard</Link>{" "}
-          <Link to="/settings">Settings</Link>{" "}
-          <Link to="/admin/users">Admin</Link>{" "}
-          <Link to="/organization/acme/dashboard">Org</Link>
+          <Link to="/">Home</Link> <Link to="/about">About</Link>{" "}
+          <Link to="/dashboard">Dashboard</Link> <Link to="/settings">Settings</Link>{" "}
+          <Link to="/admin/users">Admin</Link> <Link to="/organization/acme/dashboard">Org</Link>
         </header>
         <Outlet />
       </div>

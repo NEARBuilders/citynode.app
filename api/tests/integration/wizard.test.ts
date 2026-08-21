@@ -56,7 +56,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
       const bindings = await c.listTenantBindingsForTenant({ tenantId: tenant.id });
       expect(bindings).toHaveLength(1);
-      expect(bindings[0].hostname).toBe("chicago-wiz.citynode.app");
+      expect(bindings[0]?.hostname).toBe("chicago-wiz.citynode.app");
     });
   });
 
@@ -179,7 +179,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
       expect(bindings).toHaveLength(3);
       const primaryBindings = bindings.filter((b) => b.isPrimary);
       expect(primaryBindings).toHaveLength(1);
-      expect(primaryBindings[0].hostname).toBe("nested-usa.citynode.app");
+      expect(primaryBindings[0]?.hostname).toBe("nested-usa.citynode.app");
     });
   });
 

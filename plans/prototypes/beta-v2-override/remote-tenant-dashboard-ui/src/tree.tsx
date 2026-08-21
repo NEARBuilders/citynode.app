@@ -12,7 +12,15 @@ interface HostContext {
 function TenantDashboardChrome() {
   return (
     <div style={{ border: "2px solid #f472b6", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, color: "#f472b6", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#f472b6",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         remote-tenant-dashboard-ui · TENANT override
       </div>
       <Outlet />
@@ -30,7 +38,9 @@ const publicSubtreeRoot = createRoute({
 
 function DashboardPage() {
   const { apiClient } = useRouteContext({ strict: false }) as HostContext;
-  const [stats, setStats] = useState<{ users: number; projects: number; revenue: number } | null>(null);
+  const [stats, setStats] = useState<{ users: number; projects: number; revenue: number } | null>(
+    null,
+  );
   const apiOk = apiClient?.dashboard?.getStats ? "apiClient:ok" : "apiClient:missing";
 
   useEffect(() => {
@@ -42,7 +52,10 @@ function DashboardPage() {
       <h1>Custom Dashboard (/dashboard) — TENANT UI</h1>
       <p>From remote-tenant-dashboard-ui · the tenant's OWN frontend for the SAME dashboard API.</p>
       <p>
-        stats: {stats ? `${stats.users} users · ${stats.projects} projects · $${stats.revenue}` : "loading…"}
+        stats:{" "}
+        {stats
+          ? `${stats.users} users · ${stats.projects} projects · $${stats.revenue}`
+          : "loading…"}
       </p>
       <span data-testid="api-client-status" style={{ display: "none" }}>
         {apiOk}

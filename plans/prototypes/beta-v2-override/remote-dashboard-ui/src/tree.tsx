@@ -12,7 +12,15 @@ interface HostContext {
 function DashboardChrome() {
   return (
     <div style={{ border: "2px solid #f59e0b", padding: 12, borderRadius: 8 }}>
-      <div style={{ fontSize: 12, color: "#f59e0b", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#f59e0b",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         remote-dashboard-ui · base
       </div>
       <Outlet />
@@ -30,7 +38,9 @@ const publicSubtreeRoot = createRoute({
 
 function DashboardPage() {
   const { apiClient } = useRouteContext({ strict: false }) as HostContext;
-  const [stats, setStats] = useState<{ users: number; projects: number; revenue: number } | null>(null);
+  const [stats, setStats] = useState<{ users: number; projects: number; revenue: number } | null>(
+    null,
+  );
   const apiOk = apiClient?.dashboard?.getStats ? "apiClient:ok" : "apiClient:missing";
 
   useEffect(() => {
@@ -42,7 +52,10 @@ function DashboardPage() {
       <h1>Dashboard (/dashboard) — BASE UI</h1>
       <p>From remote-dashboard-ui · the DEFAULT dashboard frontend.</p>
       <p>
-        stats: {stats ? `${stats.users} users · ${stats.projects} projects · $${stats.revenue}` : "loading…"}
+        stats:{" "}
+        {stats
+          ? `${stats.users} users · ${stats.projects} projects · $${stats.revenue}`
+          : "loading…"}
       </p>
       <span data-testid="api-client-status" style={{ display: "none" }}>
         {apiOk}

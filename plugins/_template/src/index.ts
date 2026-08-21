@@ -6,7 +6,7 @@ import { z } from "every-plugin/zod";
 import { contract } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { ContextSchema, runEffect } from "./lib/context";
-import type { PluginsClient } from "./plugins-client.gen";
+import type { PluginsClient } from "./lib/plugins-client.gen";
 import { TemplateService } from "./service";
 import { ThingsService } from "./services/things";
 
@@ -200,8 +200,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
             throw new ORPCError("CONFLICT", { message: "test conflict error" });
           case "bad_request":
             throw new ORPCError("BAD_REQUEST", { message: "test bad request error" });
+          case "internal":
+            throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "test internal server error" });
           default:
-            throw new Error("test internal server error");
+            throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "test internal server error" });
         }
       }),
     };

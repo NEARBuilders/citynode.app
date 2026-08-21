@@ -31,7 +31,15 @@ const requireSession =
 function MountChrome({ mountId, accent }: { mountId: string; accent: string }) {
   return (
     <div style={{ border: `2px dashed ${accent}`, padding: 12, borderRadius: 8, margin: 12 }}>
-      <div style={{ fontSize: 12, color: accent, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: accent,
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontWeight: 700,
+        }}
+      >
         host · mount point: {mountId}
       </div>
       <Outlet />

@@ -51,21 +51,29 @@ async function findFreePort(start: number): Promise<number> {
 
 async function main() {
   const port = await findFreePort(9222);
-  const chrome = spawn(CHROME, [
-    "--headless=new",
-    `--remote-debugging-port=${port}`,
-    "--no-first-run",
-    "--disable-gpu",
-    "--user-data-dir=/tmp/mf-override-chrome-" + Date.now(),
-    "about:blank",
-  ], { stdio: "ignore" });
+  const chrome = spawn(
+    CHROME,
+    [
+      "--headless=new",
+      `--remote-debugging-port=${port}`,
+      "--no-first-run",
+      "--disable-gpu",
+      "--user-data-dir=/tmp/mf-override-chrome-" + Date.now(),
+      "about:blank",
+    ],
+    { stdio: "ignore" },
+  );
 
   try {
     const versionUrl = `http://localhost:${port}/json/version`;
     let version;
     for (let i = 0; i < 40; i++) {
-      try { version = await (await fetch(versionUrl)).json(); break; }
-      catch { await new Promise((r) => setTimeout(r, 250)); }
+      try {
+        version = await (await fetch(versionUrl)).json();
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 250));
+      }
     }
     if (!version) throw new Error("chrome debug port not ready");
     const targets = await (await fetch(`http://localhost:${port}/json/list`)).json();
@@ -79,7 +87,10 @@ async function main() {
     let failures = 0;
     const check = (cond: boolean, label: string) => {
       if (cond) console.log(`  ok    ${label}`);
-      else { failures += 1; console.log(`  FAIL  ${label}`); }
+      else {
+        failures += 1;
+        console.log(`  FAIL  ${label}`);
+      }
     };
 
     const loadAndInspect = async (url: string) => {
@@ -93,50 +104,88 @@ async function main() {
         await new Promise((r) => setTimeout(r, 200));
       }
       const text = await cdp.send("Runtime.evaluate", {
-        expression: "document.body.innerText", returnByValue: true,
+        expression: "document.body.innerText",
+        returnByValue: true,
       });
       const compose = await cdp.send("Runtime.evaluate", {
-        expression: "JSON.stringify(window.__COMPOSE_RESULT__ ?? null)", returnByValue: true,
+        expression: "JSON.stringify(window.__COMPOSE_RESULT__ ?? null)",
+        returnByValue: true,
       });
-      return { text: String(text.result?.value ?? ""), compose: String(compose.result?.value ?? "") };
+      return {
+        text: String(text.result?.value ?? ""),
+        compose: String(compose.result?.value ?? ""),
+      };
     };
 
     console.log("\n=== BASE CONFIG (?config=base) ===");
     const base = await loadAndInspect("http://localhost:3000/dashboard?config=base");
-    check(base.text.includes("Dashboard (/dashboard) — BASE UI"), "dashboard renders BASE UI marker");
+    check(
+      base.text.includes("Dashboard (/dashboard) — BASE UI"),
+      "dashboard renders BASE UI marker",
+    );
     check(!base.text.includes("TENANT UI"), "dashboard does NOT render tenant marker");
-    check(base.text.includes("42 users"), "dashboard stats loaded via apiClient.dashboard.getStats()");
-    check(base.compose.includes('"apiClientKeys":["dashboard"]'), "apiClient has dashboard namespace");
+    check(
+      base.text.includes("42 users"),
+      "dashboard stats loaded via apiClient.dashboard.getStats()",
+    );
+    check(
+      base.compose.includes('"apiClientKeys":["dashboard"]'),
+      "apiClient has dashboard namespace",
+    );
     console.log("compose result:", base.compose);
 
     console.log("\n=== TENANT CONFIG (?config=tenant) ===");
     const tenant = await loadAndInspect("http://localhost:3000/dashboard?config=tenant");
-    check(tenant.text.includes("Custom Dashboard (/dashboard) — TENANT UI"), "dashboard renders TENANT UI marker");
+    check(
+      tenant.text.includes("Custom Dashboard (/dashboard) — TENANT UI"),
+      "dashboard renders TENANT UI marker",
+    );
     check(!tenant.text.includes("BASE UI"), "dashboard does NOT render base marker (override won)");
     check(tenant.text.includes("42 users"), "shared dashboard API stats still loaded");
-    check(tenant.compose.includes('"apiClientKeys":["dashboard"]'), "apiClient has dashboard namespace");
+    check(
+      tenant.compose.includes('"apiClientKeys":["dashboard"]'),
+      "apiClient has dashboard namespace",
+    );
     console.log("compose result:", tenant.compose);
 
     console.log("\n=== CROSS-PLUGIN ACCESS (UI-only landing reads dashboard API) ===");
     const home = await loadAndInspect("http://localhost:3000/?config=tenant");
-    check(home.text.includes("Landing index (/)"), "landing renders (inherited unchanged in tenant)");
-    check(home.text.includes("dashboard API reports 42 users"), "UI-only plugin calls apiClient.dashboard via injected context");
+    check(
+      home.text.includes("Landing index (/)"),
+      "landing renders (inherited unchanged in tenant)",
+    );
+    check(
+      home.text.includes("dashboard API reports 42 users"),
+      "UI-only plugin calls apiClient.dashboard via injected context",
+    );
 
     console.log("\n=== TENANT-ONLY ROUTE (/dashboard/revenue) ===");
-    await cdp.send("Page.navigate", { url: "http://localhost:3000/dashboard/revenue?config=tenant" });
+    await cdp.send("Page.navigate", {
+      url: "http://localhost:3000/dashboard/revenue?config=tenant",
+    });
     await new Promise((r) => setTimeout(r, 1200));
     const revenue = await cdp.send("Runtime.evaluate", {
-      expression: "document.body.innerText", returnByValue: true,
+      expression: "document.body.innerText",
+      returnByValue: true,
     });
-    check(String(revenue.result?.value ?? "").includes("TENANT UI"), "tenant-only /dashboard/revenue renders");
+    check(
+      String(revenue.result?.value ?? "").includes("TENANT UI"),
+      "tenant-only /dashboard/revenue renders",
+    );
 
     console.log("\n=== BASE UI on /dashboard/analytics (base-only route) ===");
-    await cdp.send("Page.navigate", { url: "http://localhost:3000/dashboard/analytics?config=base" });
+    await cdp.send("Page.navigate", {
+      url: "http://localhost:3000/dashboard/analytics?config=base",
+    });
     await new Promise((r) => setTimeout(r, 1200));
     const analytics = await cdp.send("Runtime.evaluate", {
-      expression: "document.body.innerText", returnByValue: true,
+      expression: "document.body.innerText",
+      returnByValue: true,
     });
-    check(String(analytics.result?.value ?? "").includes("Analytics (/dashboard/analytics) — BASE UI"), "base-only /dashboard/analytics renders");
+    check(
+      String(analytics.result?.value ?? "").includes("Analytics (/dashboard/analytics) — BASE UI"),
+      "base-only /dashboard/analytics renders",
+    );
 
     console.log(`\n=== FINAL: ${failures === 0 ? "PASS" : `${failures} FAILURES`} ===`);
     cdp.close();

@@ -1,11 +1,11 @@
 import {
-  importUiTree,
-  importDashboardApi,
   buildApiClient,
-  renderRoute,
-  makeContext,
-  runChecks,
   composeApp,
+  importDashboardApi,
+  importUiTree,
+  makeContext,
+  renderRoute,
+  runChecks,
 } from "./verify-helpers";
 
 /**
@@ -41,12 +41,26 @@ async function main() {
   const items = await apiClient.dashboard.listItems();
 
   runChecks("API INJECTION — one apiClient flows to every federated UI", [
-    [baseDash.includes("apiClient:ok"), "apiClient injected into BASE dashboard UI (useRouteContext)"],
-    [tenantDash.includes("apiClient:ok"), "apiClient injected into TENANT dashboard UI (same mechanism)"],
-    [landingHtml.includes("apiClient:ok"), "apiClient injected into UI-only plugin (cross-plugin access)"],
-    [baseDash.includes("apiClient:ok") && tenantDash.includes("apiClient:ok"),
-      "identical injection shape across base and tenant UIs — host is source-agnostic"],
-    [items.length === 3 && items[0]?.name === "Alpha", `apiClient.dashboard.listItems() → ${items.length} items (${items.map((i) => i.name).join(", ")})`],
+    [
+      baseDash.includes("apiClient:ok"),
+      "apiClient injected into BASE dashboard UI (useRouteContext)",
+    ],
+    [
+      tenantDash.includes("apiClient:ok"),
+      "apiClient injected into TENANT dashboard UI (same mechanism)",
+    ],
+    [
+      landingHtml.includes("apiClient:ok"),
+      "apiClient injected into UI-only plugin (cross-plugin access)",
+    ],
+    [
+      baseDash.includes("apiClient:ok") && tenantDash.includes("apiClient:ok"),
+      "identical injection shape across base and tenant UIs — host is source-agnostic",
+    ],
+    [
+      items.length === 3 && items[0]?.name === "Alpha",
+      `apiClient.dashboard.listItems() → ${items.length} items (${items.map((i) => i.name).join(", ")})`,
+    ],
   ]);
 }
 

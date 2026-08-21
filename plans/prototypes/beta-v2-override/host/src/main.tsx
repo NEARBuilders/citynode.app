@@ -1,11 +1,11 @@
-import { registerRemotes, loadRemote } from "@module-federation/enhanced/runtime";
+import { loadRemote, registerRemotes } from "@module-federation/enhanced/runtime";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
-import { createRoot } from "react-dom/client";
 import React from "react";
+import { createRoot } from "react-dom/client";
+import { type ApiClient, loadApiClient } from "./api-client";
 import { composeApp, type WebPluginModule } from "./compose";
+import { apps, type ResolvedApp, resolveApp } from "./configs";
 import { MOCK_USER } from "./mount-registry";
-import { apps, resolveApp, type ResolvedApp } from "./configs";
-import { loadApiClient, type ApiClient } from "./api-client";
 import type { ResolveContext } from "./resolver";
 
 const PORTS: Record<string, number> = {
@@ -55,9 +55,7 @@ async function boot() {
     const configId = activeConfigId();
     const config = await resolveApp(apps[configId], devContext());
 
-    registerRemotes(
-      [...config.api, ...config.ui].map((r) => ({ name: r.name, entry: r.entry })),
-    );
+    registerRemotes([...config.api, ...config.ui].map((r) => ({ name: r.name, entry: r.entry })));
 
     const [apiClient, plugins] = await Promise.all([loadApiClient(config), loadPlugins(config)]);
     const { routeTree, mountCounts, pluginTreeChildren } = composeApp(plugins);

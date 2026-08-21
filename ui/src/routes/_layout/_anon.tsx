@@ -20,7 +20,7 @@ function AnonLayout() {
   const { runtimeConfig } = Route.useRouteContext();
 
   return (
-    <PublicShell runtimeConfig={runtimeConfig} footer={<PublicShellFooter />} showConnect={false}>
+    <PublicShell runtimeConfig={runtimeConfig} footer={<PublicShellFooter />}>
       <Outlet />
     </PublicShell>
   );

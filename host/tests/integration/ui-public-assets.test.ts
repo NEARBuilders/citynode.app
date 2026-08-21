@@ -107,8 +107,8 @@ describe("UI public assets proxied through host (Cloudflare Error 1000 regressio
       expect(cc).not.toContain("stale-while-revalidate");
     });
 
-    it("proxies /near.svg with 200", async () => {
-      const response = await fetch(`${baseUrl}/near.svg`);
+    it("proxies /icon.svg with 200", async () => {
+      const response = await fetch(`${baseUrl}/icon.svg`);
 
       expect(response.status).toBe(200);
       const buf = await response.arrayBuffer();

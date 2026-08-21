@@ -28,6 +28,10 @@ export const cliCommandMeta = {
     longRunning: true,
     fields: {
       env: { description: "Environment: production or staging" },
+      registry: {
+        description:
+          "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
+      },
     },
   },
   build: {
@@ -86,6 +90,10 @@ export const cliCommandMeta = {
       verbose: { description: "Show full build output instead of clean summary" },
       env: { description: "Environment: production or staging" },
       network: { description: "NEAR network: mainnet or testnet" },
+      registry: {
+        description:
+          "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
+      },
     },
   },
   deploy: {
@@ -98,12 +106,24 @@ export const cliCommandMeta = {
       dryRun: { description: "Preview what would be deployed without writing" },
       verbose: { description: "Show full build output instead of clean summary" },
       service: { description: "Override Railway service name from config" },
+      registry: {
+        description:
+          "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
+      },
     },
   },
   keyPublish: {
     commandPath: ["key", "generate"],
     summary: "Generate a publish access key",
     interactive: true,
+    fields: {
+      env: { description: "Environment: production or staging" },
+      allowance: { description: "NEAR allowance for the key (default: 1NEAR, min: 0.3NEAR)" },
+      registry: {
+        description:
+          "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
+      },
+    },
   },
   init: {
     commandPath: ["init"],

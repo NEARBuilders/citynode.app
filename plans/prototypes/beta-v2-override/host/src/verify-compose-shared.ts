@@ -1,9 +1,4 @@
-import {
-  importUiTree,
-  match,
-  runChecks,
-  composeApp,
-} from "./verify-helpers";
+import { composeApp, importUiTree, match, runChecks } from "./verify-helpers";
 
 /**
  * COMPOSE SHARED — proves `composeApp()` is fully source-agnostic. Both the
@@ -27,13 +22,23 @@ async function main() {
   const tenantMatch = await match(tenantComposed.routeTree, "/dashboard");
 
   runChecks("COMPOSE SHARED — composeApp is source-agnostic", [
-    [JSON.stringify(baseComposed.mountCounts) === JSON.stringify(tenantComposed.mountCounts),
-      `identical mountCounts across configs (${JSON.stringify(baseComposed.mountCounts)})`],
-    [baseMatch.leaf === tenantMatch.leaf, `identical leaf id "${baseMatch.leaf}" from different remotes`],
-    [JSON.stringify(baseMatch.branch) === JSON.stringify(tenantMatch.branch),
-      `identical render branch (${baseMatch.branch.join(" → ")})`],
-    [baseComposed.pluginTreeChildren.dashboard === 1 && tenantComposed.pluginTreeChildren.dashboard === 1,
-      "pluginTreeChildren identical (1 mount root per plugin)"],
+    [
+      JSON.stringify(baseComposed.mountCounts) === JSON.stringify(tenantComposed.mountCounts),
+      `identical mountCounts across configs (${JSON.stringify(baseComposed.mountCounts)})`,
+    ],
+    [
+      baseMatch.leaf === tenantMatch.leaf,
+      `identical leaf id "${baseMatch.leaf}" from different remotes`,
+    ],
+    [
+      JSON.stringify(baseMatch.branch) === JSON.stringify(tenantMatch.branch),
+      `identical render branch (${baseMatch.branch.join(" → ")})`,
+    ],
+    [
+      baseComposed.pluginTreeChildren.dashboard === 1 &&
+        tenantComposed.pluginTreeChildren.dashboard === 1,
+      "pluginTreeChildren identical (1 mount root per plugin)",
+    ],
   ]);
 }
 

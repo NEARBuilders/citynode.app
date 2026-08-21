@@ -345,13 +345,13 @@ The `bos` CLI wraps near-cli-rs — you normally don't invoke `near` directly ex
 
 ### Plugin Architecture
 
-Business logic is organized into independent plugins loaded via Module Federation:
+Business logic is organized into independent plugins loaded via Module Federation. A plugin entry in `bos.config.json` can be **remote-only** (no `development: local:…` key) — the host/API consume it via `pluginsClient` and HTTP, and types resolve from the deployed manifest (see "Generated types" below). Plugin source does not need to live in this repo.
 - **`api/`** — Thin structural shell: ping, authHealth, error routes, middleware definitions
 - **`plugins/apps/`** — Registry/discovery, FastKV app metadata (local in dev)
 - **`plugins/_template/`** — Scaffold for creating new plugins
 - **Auth** — Extended remote plugin from `bos://auth.everything.near` (Better-Auth, NEAR SIWN, organizations, API keys)
-- **`plugins/proposals/`** — Proposals plugin (remote in dev, production only)
-- **`plugins/votes/`** — Votes plugin (remote in dev, production only)
+- **Proposals** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
+- **Votes** — Remote-only plugin (production URL in `bos.config.json`); source lives in `NEARBuilders/nearbuilders.org`
 
 Each plugin is self-contained with its own:
 - `contract.ts` — oRPC route definitions and Zod schemas
@@ -555,6 +555,40 @@ bun run db:studio # Open Drizzle Studio
 - 3003 - UI dev server
 - 3001 - API dev server
 
+## Agent communication surface
+
+The host exposes several surfaces for programmatic agent access:
+
+| Surface | Endpoint | Auth | Use |
+|---------|----------|------|-----|
+| MCP | `POST /api/mcp` | `x-api-key` header or session cookie | MCP clients (Claude, etc.) — auto-generated tools from OpenAPI spec, stateless Streamable HTTP transport |
+| REST/OpenAPI | `GET/POST/... /api/{path}` | `x-api-key` header or session cookie | Standard REST; Scalar docs at `GET /api`, spec at `GET /api/spec.json` |
+| oRPC RPC | `POST /api/rpc/{procedure}` | `x-api-key` header or session cookie | Typed JSON-RPC for all API procedures |
+| Plugin RPC | `POST /api/rpc/{plugin}/{procedure}` | `x-api-key` header or session cookie | Per-plugin RPC (e.g. `/api/rpc/auth/getSession`) |
+| MCP discovery | `GET /.well-known/mcp.json` | None | JSON descriptor with server name, endpoint, and auth scheme |
+
+### Authentication for agents
+
+1. Sign in with your NEAR wallet (SIWN) at the website.
+2. Navigate to **Settings → API Keys** at `/settings/api-keys`.
+3. Create a new key — the full secret (`edk_...`) is shown once. Copy it immediately.
+4. Pass it on every request: `x-api-key: edk_your_key_here`
+
+The `x-api-key` header works for all API surfaces. The session middleware resolves the key via Better-Auth `getContext()`, populating `context.apiKey` with `{ id, name, permissions }`.
+
+### MCP tool generation
+
+The MCP server (`host/src/services/mcp.ts`) generates tools from the API's OpenAPI spec. The base API router composes all plugin routes (auth, registry, proposals, votes) via `pluginsClient`, so every API operation — including auth, NEAR SIWN, relay, and API key management — becomes an MCP tool. Auth context flows through `AsyncLocalStorage` into every tool invocation.
+
+### Agent entry points (URL-served)
+
+- `/llms.txt` — LLM overview (links to `/skill.md`)
+- `/skill.md` — full agent skill prompt (two modes: talk via MCP, clone & modify)
+- `/skill` — HTML rendering of skill.md
+- `/.well-known/mcp.json` — MCP discovery descriptor
+- `/api` — Scalar OpenAPI docs
+- `/api/spec.json` — OpenAPI JSON spec
+
 ## Agent skills
 
 ### Issue tracker
@@ -568,3 +602,16 @@ Five canonical triage roles map to labels of the same name (`needs-triage`, `nee
 ### Domain docs
 
 Multi-context: root `CONTEXT-MAP.md` pointing to per-context `CONTEXT.md` files, with `docs/adr/` at the root for system-wide decisions. See `docs/agents/domain.md`.
+
+### Workflow skills
+
+This repo includes ~35 Matt Pocock workflow skills in `.agents/skills/`. These are general-purpose agent skills for TDD, code review, bug diagnosis, planning, and more. Run `/setup-matt-pocock-skills` before first use to configure the issue tracker, triage labels, and domain doc layout. Key skills:
+
+- `/grill-with-docs` — sharpen an idea by interview, leaving a paper trail in `CONTEXT.md` and ADRs
+- `/implement` — build a piece of work based on a spec or ticket, driving TDD internally
+- `/code-review` — two-axis review (Standards + Spec) of the diff since a fixed point
+- `/tdd` — test-driven development, red-green-refactor
+- `/diagnosing-bugs` — diagnosis loop for hard bugs and performance regressions
+- `/wayfinder` — chart a shared map of decision tickets for huge, foggy efforts
+
+See `.agents/skills/ask-matt/SKILL.md` for the full flow map.

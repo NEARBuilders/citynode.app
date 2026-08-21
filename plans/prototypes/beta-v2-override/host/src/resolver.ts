@@ -75,10 +75,7 @@ function fallbackName(path: string): string {
  * the port map (dev) or deploy map (prod); bos sources delegate to the
  * extendsResolver strategy.
  */
-export async function resolveSource(
-  source: string,
-  ctx: ResolveContext,
-): Promise<ResolvedModule> {
+export async function resolveSource(source: string, ctx: ResolveContext): Promise<ResolvedModule> {
   if (isLocalSource(source)) {
     const path = parseLocalSource(source);
     const name = ctx.nameOf ? ctx.nameOf(path) : fallbackName(path);
@@ -90,7 +87,12 @@ export async function resolveSource(
           `[resolver] no deploy record for "${source}" (built "local://${path}" but deployMap has no entry)`,
         );
       }
-      return { name, url: deploy.url, entry: `${deploy.url}/${MF_MANIFEST}`, integrity: deploy.integrity };
+      return {
+        name,
+        url: deploy.url,
+        entry: `${deploy.url}/${MF_MANIFEST}`,
+        integrity: deploy.integrity,
+      };
     }
 
     const port = ctx.portMap?.get(path);
@@ -146,10 +148,7 @@ export interface ResolvedApp {
  * for the production `resolveApp()` (which reads `bos.config.json` and merges
  * extends chains — the URI semantics are identical).
  */
-export async function resolveApp(
-  app: AppDescriptor,
-  ctx: ResolveContext,
-): Promise<ResolvedApp> {
+export async function resolveApp(app: AppDescriptor, ctx: ResolveContext): Promise<ResolvedApp> {
   const api: ResolvedApp["api"] = [];
   const ui: ResolvedApp["ui"] = [];
 

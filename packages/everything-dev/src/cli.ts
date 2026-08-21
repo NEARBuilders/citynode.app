@@ -957,10 +957,11 @@ async function main() {
       process.stdout.write(`  Network: ${result.network}\n`);
       process.stdout.write(`  Allowance: ${result.allowance}\n`);
       process.stdout.write(`\n`);
+      const secretName = result.env === "staging" ? "NEAR_TESTNET_PRIVATE_KEY" : "NEAR_PRIVATE_KEY";
       process.stdout.write(
-        `  Set this as NEAR_PRIVATE_KEY in GitHub Actions or before calling publish:\n`,
+        `  Set this as ${secretName} in GitHub Actions or before calling publish:\n`,
       );
-      process.stdout.write(`  NEAR_PRIVATE_KEY=${result.privateKey}\n`);
+      process.stdout.write(`${secretName}=${result.privateKey}\n`);
     }
 
     if (descriptor.key === "pluginAdd") {

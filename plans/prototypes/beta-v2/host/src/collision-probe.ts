@@ -1,4 +1,9 @@
-import { createMemoryHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { composeApp } from "./compose";
 
 /**
@@ -44,7 +49,9 @@ async function main() {
     console.log("ROUTER BUILT OK (no duplicate-id error)");
     console.log("matched branch:", branch);
     console.log("found leaf:", leaf);
-    console.log("=> policy: FIRST-WINS, no error. The id-namespaced subtree roots keep ids unique; the duplicate leaf path silently resolves to one match.");
+    console.log(
+      "=> policy: FIRST-WINS, no error. The id-namespaced subtree roots keep ids unique; the duplicate leaf path silently resolves to one match.",
+    );
   } catch (err) {
     console.log("ROUTER THREW:");
     console.log((err as Error).message);

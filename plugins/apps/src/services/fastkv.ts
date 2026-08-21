@@ -42,10 +42,7 @@ export class RegistryConfigService extends Context.Tag("registry/RegistryConfigS
     relayNetwork?: NetworkId;
   }) =>
     Layer.succeed(RegistryConfigService, {
-      namespace:
-        config.namespace ??
-        process.env.REGISTRY_FASTKV_MAINNET_NAMESPACE ??
-        DEFAULT_REGISTRY_NAMESPACE,
+      namespace: config.namespace ?? DEFAULT_REGISTRY_NAMESPACE,
       relayAccountId: config.relayAccountId,
       relayPrivateKey: config.relayPrivateKey,
       relayNetwork: config.relayNetwork,
@@ -57,9 +54,7 @@ export function getNetworkIdForAccount(accountId: string): NetworkId {
 }
 
 export function getFastKvBaseUrlForNetwork(network: NetworkId): string {
-  return network === "testnet"
-    ? process.env.REGISTRY_FASTKV_TESTNET_URL || "https://kv.test.fastnear.com"
-    : process.env.REGISTRY_FASTKV_MAINNET_URL || "https://kv.main.fastnear.com";
+  return network === "testnet" ? "https://kv.test.fastnear.com" : "https://kv.main.fastnear.com";
 }
 
 export function getFastKvBaseUrlForAccount(accountId: string): string {

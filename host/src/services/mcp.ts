@@ -55,6 +55,7 @@ export async function mountMcpRoute(
     version: "1.0.0",
   });
 
+  const registeredTools = new Set<string>();
   const paths = (spec as any).paths ?? {};
 
   for (const [path, methods] of Object.entries(paths)) {
@@ -67,6 +68,12 @@ export async function mountMcpRoute(
         (resp: any) => resp?.content && "text/event-stream" in resp.content,
       );
       if (hasSseResponse) continue;
+
+      if (registeredTools.has(operationId)) {
+        logger.warn(`[MCP] Skipping duplicate tool "${operationId}"`);
+        continue;
+      }
+      registeredTools.add(operationId);
 
       const methodUpper = method.toUpperCase();
       const isBodyMethod = ["POST", "PUT", "PATCH"].includes(methodUpper);

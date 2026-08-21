@@ -1,8 +1,12 @@
-import { createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { RouterServer, createRequestHandler, renderRouterToStream } from "@tanstack/react-router/ssr/server";
-import type { AnyRoute } from "@tanstack/react-router";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { AnyRoute } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
+import {
+  createRequestHandler,
+  RouterServer,
+  renderRouterToStream,
+} from "@tanstack/react-router/ssr/server";
 import { composeApp, type WebPluginModule } from "./compose";
 import { MOCK_ADMIN_USER } from "./mount-registry";
 
@@ -74,11 +78,21 @@ async function main() {
     ["/", "Landing index (/)", "host · mount point: public", true],
     ["/about", "About (/about)", "host · mount point: public", true],
     ["/dashboard", "Dashboard (/dashboard)", "host · mount point: public", true],
-    ["/dashboard/analytics", "Analytics (/dashboard/analytics)", "host · mount point: public", true],
+    [
+      "/dashboard/analytics",
+      "Analytics (/dashboard/analytics)",
+      "host · mount point: public",
+      true,
+    ],
     ["/blog", "File-based blog index (/blog)", "host · mount point: public", true],
     ["/blog/hello-world", "Blog post: hello-world", "host · mount point: public", true],
     ["/settings", "Settings (/settings)", "host · mount point: authenticated", false],
-    ["/settings/profile", "Profile (/settings/profile)", "host · mount point: authenticated", false],
+    [
+      "/settings/profile",
+      "Profile (/settings/profile)",
+      "host · mount point: authenticated",
+      false,
+    ],
     ["/admin/users", "Admin Users (/admin/users)", "host · mount point: admin", false],
     ["/account", "Account (/account)", "host · mount point: authenticated", false],
     ["/organization/acme/dashboard", "Org Dashboard", "host · mount point: organization", false],

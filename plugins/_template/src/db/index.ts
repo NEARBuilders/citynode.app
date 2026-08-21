@@ -10,16 +10,6 @@ export interface DatabaseDriver {
   close(): Promise<void>;
 }
 
-interface PoolLike {
-  on(event: "error", listener: (err: Error) => void): this;
-  on(
-    event: "connect",
-    listener: (client: { query: (sql: string) => Promise<unknown> }) => void,
-  ): this;
-  removeAllListeners(event?: string | symbol): this;
-  end(): Promise<void>;
-}
-
 export async function createDatabaseDriver(
   url: string,
   schemaName?: string,
@@ -54,15 +44,20 @@ export async function createDatabaseDriver(
       url.includes("localhost") || url.includes("127.0.0.1")
         ? false
         : { rejectUnauthorized: false },
+    connectionTimeoutMillis: 30_000,
+    idleTimeoutMillis: 30_000,
+    ...(schemaName ? { options: `-c search_path="${schemaName}",public` } : {}),
   });
   pool.on("error", (err: Error) => {
     console.error("[Template] Unexpected pool error:", err.message);
   });
   if (schemaName) {
-    pool.on("connect", async (client) => {
+    const client = await pool.connect();
+    try {
       await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-      await client.query(`SET search_path TO "${schemaName}", public`);
-    });
+    } finally {
+      client.release();
+    }
   }
   let closed = false;
   return {

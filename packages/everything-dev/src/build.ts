@@ -105,38 +105,18 @@ interface BuildAttemptResult {
   deployEntries?: DeployResultEntry[];
 }
 
-async function runBuildAttempt(
-  cmd: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string>,
+function classifyBuildResult(
+  stdout: string,
+  stderr: string,
+  exitCode: number,
+  deploy: boolean,
   verbose: boolean,
-): Promise<BuildAttemptResult> {
-  const result = await run(cmd, args, {
-    cwd,
-    env,
-    capture: true,
-    onChunk: (stream, chunk) => {
-      if (stream === "stderr") {
-        process.stderr.write(chunk);
-      } else if (verbose) {
-        process.stdout.write(chunk);
-      }
-      const text = chunk.toString("utf-8");
-      if (/ZEPHYR|auth\.zephyr-cloud\.io\/authorize|ZE\d{4,}/.test(text)) {
-        process.stdout.write(chunk);
-      }
-    },
-  });
-  const stdout = result?.stdout ?? "";
-  const stderr = result?.stderr ?? "";
-  const exitCode = result?.exitCode ?? 0;
+): BuildAttemptResult {
   const output = `${stdout}\n${stderr}`;
-
   const deployEntries = parseDeployLines(output);
 
   if (deployEntries.length > 0) {
-    const result: BuildAttemptResult = {
+    const attemptResult: BuildAttemptResult = {
       success: true,
       url: deployEntries[0]?.url,
       exitCode: 0,
@@ -149,7 +129,7 @@ async function runBuildAttempt(
         .filter((line) => /\bERROR\b/.test(line) || line.startsWith("Rspack compiled with"))
         .slice(0, 5);
       if (errorLines.length > 0) {
-        result.warnings = errorLines.map((l) => l.trim());
+        attemptResult.warnings = errorLines.map((l) => l.trim());
         if (!verbose) {
           console.log(
             `  ${colors.yellow("⚠")} Build completed with errors (exit code ${exitCode}) — Zephyr deployed successfully`,
@@ -160,7 +140,7 @@ async function runBuildAttempt(
         }
       }
     }
-    return result;
+    return attemptResult;
   }
 
   const zeMatch = output.match(/ZE\d{4,}/);
@@ -193,7 +173,7 @@ async function runBuildAttempt(
     return { success: true, url: deployMatch[1], exitCode: 0, output };
   }
 
-  if (env.DEPLOY === "true") {
+  if (deploy) {
     return {
       success: false,
       error: "No deploy URL found (Zephyr may have failed)",
@@ -204,9 +184,41 @@ async function runBuildAttempt(
   return { success: true, exitCode: 0, output };
 }
 
+async function runBuildAttempt(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  verbose: boolean,
+  deploy: boolean,
+): Promise<BuildAttemptResult> {
+  const proc = await run(cmd, args, {
+    cwd,
+    env,
+    capture: true,
+    onChunk: (stream, chunk) => {
+      if (stream === "stderr") {
+        process.stderr.write(chunk);
+      } else if (verbose || deploy) {
+        process.stdout.write(chunk);
+      }
+    },
+  });
+  return classifyBuildResult(
+    proc?.stdout ?? "",
+    proc?.stderr ?? "",
+    proc?.exitCode ?? 0,
+    deploy,
+    verbose,
+  );
+}
+
 interface InternalWorkspaceResult extends WorkspaceDeployResult {
   deployEntries?: DeployResultEntry[];
 }
+
+const MAX_RETRIES = 3;
+const ZEPHYR_BACKOFF_MS = [2000, 5000, 10000];
 
 async function buildOneWorkspace(
   ws: WorkspaceTarget,
@@ -221,57 +233,44 @@ async function buildOneWorkspace(
     ? { cmd: "bun", args: ["run", "deploy"] }
     : (buildCommands[ws.key] ?? { cmd: "bun", args: ["run", "build"] });
 
-  const wsEnv = { ...env };
-
+  const verbose = opts.verbose ?? false;
   const startTime = Date.now();
-  let attempt = await runBuildAttempt(
-    buildConfig.cmd,
-    buildConfig.args,
-    ws.path,
-    wsEnv,
-    opts.verbose ?? false,
-  );
-
-  const MAX_RETRIES = 3;
-  const ZEPHYR_BACKOFF_MS = [2000, 5000, 10000];
+  let attempt: BuildAttemptResult | undefined;
   let retried = false;
   const errors: string[] = [];
 
-  for (let retry = 0; retry < MAX_RETRIES; retry++) {
-    if (attempt.success || attempt.exitCode !== 0 || !opts.deploy) break;
-
-    if (errors.length === 0) errors.push(`Attempt 1: ${attempt.error ?? "Failed"}`);
-
-    const isZephyrError = /Zephyr upload failed/.test(attempt.error ?? "");
-    if (isZephyrError) {
-      const delayMs = ZEPHYR_BACKOFF_MS[retry] ?? ZEPHYR_BACKOFF_MS[ZEPHYR_BACKOFF_MS.length - 1]!;
-      if (opts.verbose) {
-        console.log(
-          `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} waiting ${delayMs / 1000}s before retry ${retry + 2}/${MAX_RETRIES + 1} (Zephyr edge provider)...`,
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-
-    if (!opts.verbose) {
-      console.log(
-        `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} retrying... (${retry + 2}/${MAX_RETRIES + 1})`,
-      );
-    }
-    retried = true;
+  for (let i = 0; i <= MAX_RETRIES; i++) {
     attempt = await runBuildAttempt(
       buildConfig.cmd,
       buildConfig.args,
       ws.path,
-      wsEnv,
-      opts.verbose ?? false,
+      env,
+      verbose,
+      opts.deploy,
     );
 
-    if (attempt.success) break;
-    errors.push(`Attempt ${retry + 2}: ${attempt.error ?? "Failed"}`);
+    if (attempt.success || attempt.exitCode !== 0 || !opts.deploy) break;
+    if (i === MAX_RETRIES) break;
+
+    errors.push(`Attempt ${i + 1}: ${attempt.error ?? "Failed"}`);
+
+    const isZephyrError = /Zephyr upload failed/.test(attempt.error ?? "");
+    const delayMs = isZephyrError ? (ZEPHYR_BACKOFF_MS[i] ?? ZEPHYR_BACKOFF_MS.at(-1)!) : 1000;
+
+    if (verbose) {
+      console.log(
+        `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} waiting ${delayMs / 1000}s before retry ${i + 2}/${MAX_RETRIES + 1}${isZephyrError ? " (Zephyr edge provider)" : ""}...`,
+      );
+    } else {
+      console.log(
+        `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} retrying... (${i + 2}/${MAX_RETRIES + 1})`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    retried = true;
   }
 
-  if (!attempt.success && errors.length > 0) {
+  if (attempt && !attempt.success && errors.length > 0) {
     attempt.error = errors.join("\n");
   }
 
@@ -279,16 +278,16 @@ async function buildOneWorkspace(
   const result: InternalWorkspaceResult = {
     key: ws.key,
     kind: ws.kind,
-    success: attempt.success,
-    url: attempt.url,
-    error: attempt.error,
-    warnings: attempt.warnings,
-    deployEntries: attempt.deployEntries,
+    success: attempt?.success ?? false,
+    url: attempt?.url,
+    error: attempt?.error,
+    warnings: attempt?.warnings,
+    deployEntries: attempt?.deployEntries,
     durationMs,
     retried: retried ? true : undefined,
   };
 
-  if (!opts.verbose) {
+  if (!verbose) {
     const name = padRight(ws.key, 28);
     if (result.success) {
       const duration = formatDuration(durationMs);
@@ -364,6 +363,7 @@ export async function buildWorkspaceTargets(opts: {
   };
   if (opts.deploy) {
     env.DEPLOY = "true";
+    env.FORCE_COLOR = "1";
   } else {
     delete env.DEPLOY;
   }

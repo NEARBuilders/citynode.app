@@ -12,7 +12,6 @@ export { AppShell } from "./layout/app-shell";
 export { AppSidebar } from "./layout/app-sidebar";
 export { BetaBanner } from "./layout/beta-banner";
 export { Chip } from "./layout/chip";
-export { MobileTabBar } from "./layout/mobile-tab-bar";
 export {
   filterSidebarByRole,
   getUserRole,
@@ -21,11 +20,15 @@ export {
   type SidebarRole,
 } from "./layout/nav-items";
 export { NearBranding } from "./layout/near-branding";
+export { NetworkToggle } from "./layout/network-toggle";
 export { OrgSwitcher } from "./layout/org-switcher";
 export { PageContainer } from "./layout/page-container";
 export { PageHeader } from "./layout/page-header";
+export { PublicHeader } from "./layout/public-header";
 export { PublicShell, PublicShellFooter } from "./layout/public-shell";
 export { SectionHeader } from "./layout/section-header";
+export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
+export { SidebarUserNav } from "./layout/sidebar-user-nav";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -59,7 +62,6 @@ export {
 export { InfoRow } from "./ui/info-row";
 export { Input } from "./ui/input";
 export { Label } from "./ui/label";
-export { NetworkToggle } from "./ui/network-toggle";
 export { ScrollArea, ScrollBar } from "./ui/scroll-area";
 export { Skeleton } from "./ui/skeleton";
 export {

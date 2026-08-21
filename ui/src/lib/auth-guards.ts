@@ -17,7 +17,7 @@ interface GuardArgs {
   location: { href: string };
 }
 
-async function ensureSession(context: RouterContext): Promise<SessionData> {
+async function ensureSession(context: RouterContext): Promise<SessionData | null> {
   const { queryClient, authClient } = context;
   return queryClient.ensureQueryData(sessionQueryOptions(authClient, context.session));
 }

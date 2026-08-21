@@ -37,14 +37,18 @@ async function connect(wsUrl: string): Promise<CDP> {
 
 async function main() {
   const port = 9222 + Math.floor(Math.random() * 1000);
-  const chrome = spawn(CHROME, [
-    "--headless=new",
-    `--remote-debugging-port=${port}`,
-    "--no-first-run",
-    "--disable-gpu",
-    "--user-data-dir=/tmp/mf-chrome-profile-" + Date.now(),
-    "about:blank",
-  ], { stdio: "ignore" });
+  const chrome = spawn(
+    CHROME,
+    [
+      "--headless=new",
+      `--remote-debugging-port=${port}`,
+      "--no-first-run",
+      "--disable-gpu",
+      "--user-data-dir=/tmp/mf-chrome-profile-" + Date.now(),
+      "about:blank",
+    ],
+    { stdio: "ignore" },
+  );
 
   try {
     const versionUrl = `http://localhost:${port}/json/version`;
@@ -164,11 +168,11 @@ async function main() {
       const ok = text.includes(expected) && text.includes("HOST · MOUNT POINT:");
       if (!ok) failures += 1;
       const mount = text.match(/HOST · MOUNT POINT: (\w+)/)?.[1] ?? "?";
-      console.log(
-        `  ${ok ? "ok" : "FAIL"}  ${url.padEnd(22)} [${mount}] contains "${expected}"`,
-      );
+      console.log(`  ${ok ? "ok" : "FAIL"}  ${url.padEnd(22)} [${mount}] contains "${expected}"`);
     }
-    console.log(`\n=== NAVIGATION: ${failures === 0 ? `PASS — ${routes.length}/${routes.length} cross-remote routes render` : `${failures} FAILURES`} ===`);
+    console.log(
+      `\n=== NAVIGATION: ${failures === 0 ? `PASS — ${routes.length}/${routes.length} cross-remote routes render` : `${failures} FAILURES`} ===`,
+    );
 
     // SPA navigation: click an <a> and confirm the router handles it without reload
     console.log("\n=== SPA client-side navigation (no reload) ===");
@@ -196,11 +200,14 @@ async function main() {
       });
       await new Promise((r) => setTimeout(r, 800));
       const spa = await cdp.send("Runtime.evaluate", {
-        expression: "({ text: document.body.innerText.includes('Settings (/settings)'), navCount: window.__NAV_COUNT__ })",
+        expression:
+          "({ text: document.body.innerText.includes('Settings (/settings)'), navCount: window.__NAV_COUNT__ })",
         returnByValue: true,
       });
       const ok = spa.result?.value?.text === true && spa.result?.value?.navCount === 0;
-      console.log(`  ${ok ? "ok" : "FAIL"}  SPA nav to /settings, reloads=${spa.result?.value?.navCount ?? "?"}`);
+      console.log(
+        `  ${ok ? "ok" : "FAIL"}  SPA nav to /settings, reloads=${spa.result?.value?.navCount ?? "?"}`,
+      );
       if (!ok) failures += 1;
     } catch (err) {
       failures += 1;
