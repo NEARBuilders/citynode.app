@@ -124,30 +124,42 @@ export function getLinkedProviders(
 }
 
 function getSiwnClientConfig(options: CreateAuthClientOptions): SiwnClientConfig {
-  const runtimeConfig = readRuntimeConfig(options.runtimeConfig);
   const variables = getAuthVariables(options.runtimeConfig);
   const siwn = variables.siwn;
 
-  const mainnetRecipient = siwn.recipients?.mainnet ?? siwn.recipient;
-  if (!mainnetRecipient) {
+  const testnetRecipient = siwn.recipients?.testnet ?? siwn.recipient;
+  if (!testnetRecipient) {
     throw new Error("Missing auth SIWN recipient");
   }
 
-  const networkId =
-    runtimeConfig?.networkId ?? (mainnetRecipient.endsWith(".testnet") ? "testnet" : "mainnet");
-  const testnetRecipient = siwn.recipients?.testnet;
+  // hardcoding testnet during staging period
+  return {
+    recipient: testnetRecipient,
+    networkId: "testnet",
+    cspNonce: options.cspNonce,
+  };
 
-  if (testnetRecipient) {
-    return {
-      recipients: { mainnet: mainnetRecipient, testnet: testnetRecipient },
-      networkId,
-      cspNonce: options.cspNonce,
-    };
-  }
-
-  const recipient =
-    networkId === "testnet" && testnetRecipient ? testnetRecipient : mainnetRecipient;
-  return { recipient, networkId, cspNonce: options.cspNonce };
+  // const runtimeConfig = readRuntimeConfig(options.runtimeConfig);
+  // const mainnetRecipient = siwn.recipients?.mainnet ?? siwn.recipient;
+  // if (!mainnetRecipient) {
+  //   throw new Error("Missing auth SIWN recipient");
+  // }
+  //
+  // const networkId =
+  //   runtimeConfig?.networkId ?? (mainnetRecipient.endsWith(".testnet") ? "testnet" : "mainnet");
+  // const testnetRecipient = siwn.recipients?.testnet;
+  //
+  // if (testnetRecipient) {
+  //   return {
+  //     recipients: { mainnet: mainnetRecipient, testnet: testnetRecipient },
+  //     networkId,
+  //     cspNonce: options.cspNonce,
+  //   };
+  // }
+  //
+  // const recipient =
+  //   networkId === "testnet" && testnetRecipient ? testnetRecipient : mainnetRecipient;
+  // return { recipient, networkId, cspNonce: options.cspNonce };
 }
 
 function getHostUrl(config?: Partial<ClientRuntimeConfig>) {
