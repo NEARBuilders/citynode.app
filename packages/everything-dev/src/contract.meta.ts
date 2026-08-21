@@ -28,6 +28,7 @@ export const cliCommandMeta = {
     longRunning: true,
     fields: {
       env: { description: "Environment: production or staging" },
+      registry: { description: "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)" },
     },
   },
   build: {

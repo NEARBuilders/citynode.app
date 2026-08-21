@@ -270,6 +270,7 @@ export async function resolveRemoteConfigChain(
   accountId: string,
   gatewayId: string,
   visited: Set<string>,
+  registry?: string,
 ): Promise<BosConfig> {
   const selfRef = `bos://${accountId}/${gatewayId}`;
   if (visited.has(selfRef)) {
@@ -279,7 +280,7 @@ export async function resolveRemoteConfigChain(
   const nextVisited = new Set(visited);
   nextVisited.add(selfRef);
 
-  const config = await fetchBosConfigFromFastKv<BosConfigInput>(selfRef);
+  const config = await fetchBosConfigFromFastKv<BosConfigInput>(selfRef, registry);
   const parentRef = config.extends
     ? resolveExtendsRef(config.extends as string | ExtendsConfig, "production")
     : undefined;
@@ -293,6 +294,7 @@ export async function resolveRemoteConfigChain(
       parentAccountId,
       parentGatewayId,
       nextVisited,
+      registry,
     );
     merged = mergeBosConfigWithExtends(parentResolved as BosConfigInput, config);
   }
@@ -303,9 +305,10 @@ export async function resolveRemoteConfigChain(
 async function fetchPublishedConfig(
   accountId: string,
   gatewayId: string,
+  registry?: string,
 ): Promise<BosConfig | null> {
   try {
-    return await resolveRemoteConfigChain(accountId, gatewayId, new Set());
+    return await resolveRemoteConfigChain(accountId, gatewayId, new Set(), registry);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("No config found")) {
       return null;
@@ -765,21 +768,21 @@ export default createPlugin({
 
       if (account && domain) {
         try {
-          remoteConfig = await fetchPublishedConfig(account, domain);
+          remoteConfig = await fetchPublishedConfig(account, domain, input.registry);
           if (remoteConfig) {
             config = remoteConfig;
           } else {
             return {
               status: "error" as const,
               url: "",
-              error: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${buildRegistryConfigUrl(account, domain)}`,
+              error: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${buildRegistryConfigUrl(account, domain, input.registry)}`,
             };
           }
         } catch (error) {
           return {
             status: "error" as const,
             url: "",
-            error: `Failed to fetch config for bos://${account}/${domain}: ${error instanceof Error ? error.message : "Unknown error"}\nExpected URL: ${buildRegistryConfigUrl(account, domain)}`,
+            error: `Failed to fetch config for bos://${account}/${domain}: ${error instanceof Error ? error.message : "Unknown error"}\nExpected URL: ${buildRegistryConfigUrl(account, domain, input.registry)}`,
           };
         }
       } else {
@@ -919,7 +922,7 @@ export default createPlugin({
         : (findConfigPath() ?? "bos.config.json");
 
       const configSourceHttp =
-        remoteConfig && account && domain ? buildRegistryConfigUrl(account, domain) : undefined;
+        remoteConfig && account && domain ? buildRegistryConfigUrl(account, domain, input.registry) : undefined;
 
       const summary: StartSummary = {
         configSource,

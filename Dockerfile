@@ -8,7 +8,6 @@ COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --cwd packages/every-plugin build
 RUN bun run --cwd packages/everything-dev build
-RUN bun run postinstall
 RUN bun run scripts/resolve-workspace-refs.ts
 
 # Remove source dirs — everything is loaded remotely at runtime
