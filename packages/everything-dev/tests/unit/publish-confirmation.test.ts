@@ -60,10 +60,12 @@ describe("waitForPublishedConfig", () => {
     expect(fetchBosConfigFromFastKvMock).toHaveBeenNthCalledWith(
       1,
       "bos://dev.everything.near/dev.everything.dev",
+      undefined,
     );
     expect(fetchBosConfigFromFastKvMock).toHaveBeenNthCalledWith(
       2,
       "bos://dev.everything.near/dev.everything.dev",
+      undefined,
     );
   });
 

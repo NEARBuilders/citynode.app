@@ -1041,6 +1041,7 @@ export default createPlugin({
         packages: input.packages,
         network: input.network,
         privateKey: input.privateKey,
+        registry: input.registry,
       });
 
       if (result.publishConfig) {
@@ -1083,6 +1084,7 @@ export default createPlugin({
         packages: input.packages,
         network: input.network,
         privateKey: input.privateKey,
+        registry: input.registry,
       });
 
       if (result.status === "error") {
@@ -1214,7 +1216,7 @@ export default createPlugin({
           ? (deps.bosConfig.staging?.account ?? deps.bosConfig.account)
           : deps.bosConfig.account;
       const network = getNetworkIdForAccount(account);
-      const contract = getRegistryNamespaceForAccount(account);
+      const contract = getRegistryNamespaceForAccount(account, input.registry);
       try {
         await Effect.runPromise(ensureNearCli);
 

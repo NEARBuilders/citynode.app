@@ -86,6 +86,7 @@ export const cliCommandMeta = {
       verbose: { description: "Show full build output instead of clean summary" },
       env: { description: "Environment: production or staging" },
       network: { description: "NEAR network: mainnet or testnet" },
+      registry: { description: "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)" },
     },
   },
   deploy: {
@@ -98,6 +99,7 @@ export const cliCommandMeta = {
       dryRun: { description: "Preview what would be deployed without writing" },
       verbose: { description: "Show full build output instead of clean summary" },
       service: { description: "Override Railway service name from config" },
+      registry: { description: "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)" },
     },
   },
   keyPublish: {
@@ -107,6 +109,7 @@ export const cliCommandMeta = {
     fields: {
       env: { description: "Environment: production or staging" },
       allowance: { description: "NEAR allowance for the key (default: 1NEAR, min: 0.3NEAR)" },
+      registry: { description: "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)" },
     },
   },
   init: {

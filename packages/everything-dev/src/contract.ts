@@ -145,6 +145,7 @@ export const PublishOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
 });
 
 export const PublishResultSchema = z.object({
@@ -166,6 +167,7 @@ export const DeployOptionsSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   service: z.string().optional(),
+  registry: z.string().optional(),
 });
 
 export const DeployResultSchema = z.object({
@@ -203,6 +205,7 @@ export const KeyPublishOptionsSchema = z.object({
       },
     ),
   env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
 });
 
 export const KeyPublishResultSchema = z.object({

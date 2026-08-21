@@ -34,6 +34,7 @@ export async function waitForPublishedConfig(opts: {
   account: string;
   gateway: string;
   publishConfig: BosConfigInput;
+  registry?: string;
   timeoutMs?: number;
   intervalMs?: number;
 }): Promise<void> {
@@ -50,6 +51,7 @@ export async function waitForPublishedConfig(opts: {
     try {
       const verifiedConfig = await fetchBosConfigFromFastKv<BosConfigInput>(
         `bos://${opts.account}/${opts.gateway}`,
+        opts.registry,
       );
 
       if (JSON.stringify(verifiedConfig) === JSON.stringify(opts.publishConfig)) {
@@ -79,6 +81,7 @@ interface PublishToFastKvInput {
   packages: string;
   network?: "mainnet" | "testnet";
   privateKey?: string;
+  registry?: string;
 }
 
 interface PublishToFastKvResult {
@@ -109,7 +112,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   }
 
   const network: NetworkId = input.network ?? getNetworkIdForAccount(account);
-  const registryUrl = buildRegistryConfigUrlForNetwork(network, account, gateway);
+  const registryUrl = buildRegistryConfigUrlForNetwork(network, account, gateway, input.registry);
   const targets = selectWorkspaceTargets(input.packages, bosConfig);
 
   let built: string[] | undefined;
@@ -226,7 +229,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         executeTransaction(
           {
             account,
-            contract: getRegistryNamespaceForNetwork(network),
+            contract: getRegistryNamespaceForNetwork(network, input.registry),
             method: "__fastdata_kv",
             argsBase64,
             network,
@@ -249,6 +252,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           account,
           gateway,
           publishConfig: publishPayload,
+          registry: input.registry,
           timeoutMs: 30_000,
           intervalMs: 2_000,
         });
@@ -263,6 +267,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       account,
       gateway,
       publishConfig: publishPayload,
+      registry: input.registry,
     });
 
     return {
