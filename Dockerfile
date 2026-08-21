@@ -45,7 +45,7 @@ ENV HOST=0.0.0.0
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
 USER appuser
-CMD ["sh", "-c", "bun run start"]
+CMD ["sh", "-c", "bun run start --port ${PORT:-3000}"]
