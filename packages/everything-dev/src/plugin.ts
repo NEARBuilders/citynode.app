@@ -922,7 +922,9 @@ export default createPlugin({
         : (findConfigPath() ?? "bos.config.json");
 
       const configSourceHttp =
-        remoteConfig && account && domain ? buildRegistryConfigUrl(account, domain, input.registry) : undefined;
+        remoteConfig && account && domain
+          ? buildRegistryConfigUrl(account, domain, input.registry)
+          : undefined;
 
       const summary: StartSummary = {
         configSource,

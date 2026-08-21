@@ -42,9 +42,7 @@ export class RegistryConfigService extends Context.Tag("registry/RegistryConfigS
     relayNetwork?: NetworkId;
   }) =>
     Layer.succeed(RegistryConfigService, {
-      namespace:
-        config.namespace ??
-        DEFAULT_REGISTRY_NAMESPACE,
+      namespace: config.namespace ?? DEFAULT_REGISTRY_NAMESPACE,
       relayAccountId: config.relayAccountId,
       relayPrivateKey: config.relayPrivateKey,
       relayNetwork: config.relayNetwork,

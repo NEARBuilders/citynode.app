@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "BOS_CONFIG_PATH=../bos.config.json tsx server.ts",
     "build": "rsbuild build",
-    "deploy": "DEPLOY=true rsbuild build",
+    "deploy": "DEPLOY=true FORCE_COLOR=1 rsbuild build",
     "preview": "NODE_ENV=production BOS_CONFIG_PATH=../bos.config.json tsx server.ts",
     "test": "NODE_ENV=production BOS_CONFIG_PATH=../bos.config.json vitest run",
     "test:e2e": "BOS_CONFIG_PATH=../bos.config.json playwright test -c ./playwright.config.mjs",

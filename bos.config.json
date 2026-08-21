@@ -1,5 +1,5 @@
 {
-  "account": "v1.citynode.testnet",
+  "account": "v1.citynode.near",
   "domain": "citynode.app",
   "title": "City Nodes",
   "description": "Decentralized city nodes on NEAR — each city is a tenant with its own validator pool you can stake to.",
@@ -16,23 +16,23 @@
   "app": {
     "host": {
       "development": "local:host",
-      "production": "https://elliot-braem-7621-host-citynode-app-nearbuilders-c7a3db77c-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7656-host-citynode-app-nearbuilders-b2405ba6e-ze.zephyrcloud.app",
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"
       ],
-      "integrity": "sha384-N40eK4Z802sikKLbZ2dgJcN6gVP4Lv7AbUzM7ZCAxJzNNE8aFntYN+t2Kl27SkB0"
+      "integrity": "sha384-aQcVjfQDvZmBtmzGJiFXKsjCLstV89WNKDv0ot3tfaRI+hdKXUl8Mv09dbKK94p1"
     },
     "ui": {
       "development": "local:ui",
-      "production": "https://elliot-braem-7619-ui-citynode-app-nearbuilders-1d1eed327-ze.zephyrcloud.app",
-      "ssr": "https://elliot-braem-7620-ui-citynode-app-nearbuilders-1c86df4c9-ze.zephyrcloud.app",
-      "integrity": "sha384-gryPuAKq/gq50ZAhq1bvPXjqC341wMJRf3WdCD2bPK1HdFI4k9X3E+aKVGz9JIVU",
-      "ssrIntegrity": "sha384-dpC53+AGDJi5L4ibOs+YCosppTo+cWFdzP+ZeFgLYhXgDtTFJo1mYbxncUI22HM8"
+      "production": "https://elliot-braem-7651-ui-citynode-app-nearbuilders-dc81ada57-ze.zephyrcloud.app",
+      "ssr": "https://elliot-braem-7655-ui-citynode-app-nearbuilders-8eb939521-ze.zephyrcloud.app",
+      "integrity": "sha384-tOY6EOmh6T9myvVujq+vEXslWDGkSf8Wx8z4OJRI6m/CFYRi+Ai37LHwiklNcoVH",
+      "ssrIntegrity": "sha384-LQ1/95YO/rlN1CsSVk29UfcEdms7PmTmW6f3p65bk9aB7M9LQF8wOcRVYoWu5uPi"
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-7618-api-citynode-app-nearbuilders-754c76b66-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7654-api-citynode-app-nearbuilders-b03836ef0-ze.zephyrcloud.app",
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -92,16 +92,16 @@
       "secrets": [
         "TEMPLATE_DATABASE_URL"
       ],
-      "production": "https://elliot-braem-7616-every-plugin-template-citynode--eb1c6401e-ze.zephyrcloud.app",
-      "integrity": "sha384-J7SW8jNYZ9cUuQUKM/lNeSYq52Ft/W0i9iXuZ0xhutT7/nY8i8rtoaeHqgTYi9P1"
+      "production": "https://elliot-braem-7652-every-plugin-template-citynode--ebd343e35-ze.zephyrcloud.app",
+      "integrity": "sha384-3kwWxavu+O8pDjOLlsN1cB6NGhBxxhxeSdNPgKHEDtE1s8Oi8Km+k0PU68wieVY3"
     },
     "apps": {
       "development": "local:plugins/apps",
-      "production": "https://elliot-braem-7617-everything-dev-apps-plugin-city-e264cb255-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7653-everything-dev-apps-plugin-city-662cd0b28-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "v1.citynode.near"
       },
-      "integrity": "sha384-T+vM3ZIikLQhQFzLeYE8AD5jysvTJKxL89FFmIAqg/uC/OWbJ/aQqwTWUYP52FI1"
+      "integrity": "sha384-/XPaFJEj8gHp3WaUXJrXL7yAztBmIYTykb47j5ZJYtljsIfG7ZAUDyAl0UPhAmjR"
     },
     "proposals": {
       "variables": {

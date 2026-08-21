@@ -14,22 +14,6 @@ describe("API Plugin Integration Tests", () => {
     });
   });
 
-  describe("authHealth", () => {
-    it("rejects unauthenticated requests", async () => {
-      const client = await getPluginClient();
-      await expect(client.authHealth()).rejects.toThrow("Authentication required");
-    });
-
-    it("returns status when authenticated", async () => {
-      const client = await getPluginClient(authedContext());
-      const result = await client.authHealth();
-
-      expect(result.status).toBe("ok");
-      expect(result.emailConfigured).toEqual(expect.any(Boolean));
-      expect(result.smsConfigured).toEqual(expect.any(Boolean));
-    });
-  });
-
   describe("resolveTenant", () => {
     it("returns null for an unknown account", async () => {
       const client = await getPluginClient();

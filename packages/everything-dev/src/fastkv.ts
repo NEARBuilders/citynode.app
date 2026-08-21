@@ -104,10 +104,7 @@ export function parseBosUrl(bosUrl: string): {
   };
 }
 
-export async function fetchBosConfigFromFastKv<T>(
-  bosUrl: string,
-  registry?: string,
-): Promise<T> {
+export async function fetchBosConfigFromFastKv<T>(bosUrl: string, registry?: string): Promise<T> {
   const { accountId, gatewayId, pathSegments } = parseBosUrl(bosUrl);
   const key = encodeURIComponent(getRegistryConfigKey(accountId, gatewayId, pathSegments));
   const payload = await fetchJson<FastKvListResponse>(
