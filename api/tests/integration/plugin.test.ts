@@ -125,6 +125,211 @@ describe("API Plugin Integration Tests", () => {
       const resolved = await client.resolveNodeBySlug({ slug: "chicago", parentId: illinois.id });
       expect(resolved?.id).toBe(chicago.id);
     });
+
+    it("returns a node subtree with validators through the public client", async () => {
+      const client = await getPluginClient(orgContext());
+
+      const tenant = await client.createTenant({
+        name: "Subtree Holder",
+        accountId: "subtreeholder.example.near",
+        status: "active",
+      });
+      const country = await client.createNode({
+        kind: "country",
+        slug: "subtree-country",
+        name: "Subtree Country",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      const state = await client.createNode({
+        kind: "state",
+        slug: "subtree-state",
+        name: "Subtree State",
+        parentId: country.id,
+        tenantId: tenant.id,
+      });
+      const city = await client.createNode({
+        kind: "city",
+        slug: "subtree-city",
+        name: "Subtree City",
+        parentId: state.id,
+        tenantId: tenant.id,
+      });
+
+      await client.createValidator({
+        nodeId: country.id,
+        accountId: "subtree-official.near",
+        role: "official",
+        isDefault: true,
+      });
+      await client.createValidator({
+        nodeId: city.id,
+        accountId: "subtree-community.near",
+        role: "community",
+      });
+
+      const publicClient = await getPluginClient();
+      const subtree = await publicClient.getSubtree({ nodeId: country.id });
+      const bySlug = Object.fromEntries(subtree.map((node) => [node.slug, node]));
+
+      expect(Object.keys(bySlug).sort()).toEqual([
+        "subtree-city",
+        "subtree-country",
+        "subtree-state",
+      ]);
+      expect(bySlug["subtree-country"]?.validators).toEqual([
+        expect.objectContaining({
+          accountId: "subtree-official.near",
+          role: "official",
+          isDefault: true,
+        }),
+      ]);
+      expect(bySlug["subtree-state"]?.validators).toEqual([]);
+      expect(bySlug["subtree-city"]?.validators).toEqual([
+        expect.objectContaining({
+          accountId: "subtree-community.near",
+          role: "community",
+          isDefault: false,
+        }),
+      ]);
+    });
+
+    it("returns an aggregated summary for a node", async () => {
+      const client = await getPluginClient(orgContext());
+
+      const tenant = await client.createTenant({
+        name: "Summary Holder",
+        accountId: "summaryholder.example.near",
+        status: "active",
+      });
+      const country = await client.createNode({
+        kind: "country",
+        slug: "summary-country",
+        name: "Summary Country",
+        parentId: null,
+        tenantId: tenant.id,
+        metadata: { population: 1_000_000 },
+      });
+      const state = await client.createNode({
+        kind: "state",
+        slug: "summary-state",
+        name: "Summary State",
+        parentId: country.id,
+        tenantId: tenant.id,
+      });
+      await client.createNode({
+        kind: "city",
+        slug: "summary-city",
+        name: "Summary City",
+        parentId: state.id,
+        tenantId: tenant.id,
+      });
+
+      await client.createValidator({
+        nodeId: country.id,
+        accountId: "summary-official.near",
+        role: "official",
+        isDefault: true,
+      });
+      await client.createValidator({
+        nodeId: state.id,
+        accountId: "summary-community.near",
+        role: "community",
+      });
+
+      const publicClient = await getPluginClient();
+      const summary = await publicClient.getNodeSummary({ nodeId: country.id });
+
+      expect(summary.node).toEqual(country);
+      expect(summary.childrenCount).toBe(1);
+      expect(summary.subtreeNodeCount).toBe(3);
+      expect(summary.validators).toEqual([
+        expect.objectContaining({
+          nodeId: country.id,
+          accountId: "summary-official.near",
+          role: "official",
+        }),
+      ]);
+      expect(summary.subtreeValidatorCount).toBe(2);
+      expect(summary.subtreeValidatorCountsByRole).toEqual({ official: 1, community: 1 });
+      expect(summary.stakingValidators.sourceNodeId).toBe(country.id);
+      expect(
+        summary.stakingValidators.validators.map((validator) => validator.accountId).sort(),
+      ).toEqual(["summary-community.near", "summary-official.near"]);
+      expect(summary.children).toEqual([
+        {
+          id: state.id,
+          kind: "state",
+          slug: "summary-state",
+          name: "Summary State",
+        },
+      ]);
+    });
+
+    it("summarizes a leaf and resolves staking from its nearest ancestor", async () => {
+      const client = await getPluginClient(orgContext());
+
+      const tenant = await client.createTenant({
+        name: "Leaf Summary Holder",
+        accountId: "leafsummaryholder.example.near",
+        status: "active",
+      });
+      const country = await client.createNode({
+        kind: "country",
+        slug: "leaf-summary-country",
+        name: "Leaf Summary Country",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      const state = await client.createNode({
+        kind: "state",
+        slug: "leaf-summary-state",
+        name: "Leaf Summary State",
+        parentId: country.id,
+        tenantId: tenant.id,
+      });
+      const city = await client.createNode({
+        kind: "city",
+        slug: "leaf-summary-city",
+        name: "Leaf Summary City",
+        parentId: state.id,
+        tenantId: tenant.id,
+      });
+
+      await client.createValidator({
+        nodeId: state.id,
+        accountId: "leaf-summary-validator.near",
+        role: "official",
+        isDefault: true,
+      });
+
+      const summary = await client.getNodeSummary({ nodeId: city.id });
+
+      expect(summary.childrenCount).toBe(0);
+      expect(summary.subtreeNodeCount).toBe(1);
+      expect(summary.validators).toEqual([]);
+      expect(summary.subtreeValidatorCount).toBe(0);
+      expect(summary.subtreeValidatorCountsByRole).toEqual({ official: 0, community: 0 });
+      expect(summary.children).toEqual([]);
+      expect(summary.stakingValidators.sourceNodeId).toBe(state.id);
+      expect(summary.stakingValidators.validators).toEqual([
+        expect.objectContaining({ accountId: "leaf-summary-validator.near" }),
+      ]);
+    });
+
+    it("rejects aggregation requests for an unknown node", async () => {
+      const client = await getPluginClient();
+      const nodeId = "00000000-0000-0000-0000-000000000000";
+
+      await expect(client.getSubtree({ nodeId })).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: "Node not found",
+      });
+      await expect(client.getNodeSummary({ nodeId })).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: "Node not found",
+      });
+    });
   });
 
   describe("bindingPreflight", () => {

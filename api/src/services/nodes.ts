@@ -6,11 +6,13 @@ import {
   type nodeKind as nodeKindEnum,
   nodes as nodesTable,
   tenants as tenantsTable,
+  type validatorRole as validatorRoleEnum,
   validators as validatorsTable,
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
 
 export type NodeKind = (typeof nodeKindEnum)["enumValues"][number];
+type ValidatorRole = (typeof validatorRoleEnum)["enumValues"][number];
 
 export interface NodeRecord {
   id: string;
@@ -51,7 +53,7 @@ export interface SubtreeValidator {
   accountId: string;
   network: string;
   protocol: string;
-  role: string;
+  role: ValidatorRole;
   isDefault: boolean;
 }
 
