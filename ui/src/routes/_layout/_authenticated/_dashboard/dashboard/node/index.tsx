@@ -1,8 +1,10 @@
+import type { InferClientOutputs } from "@orpc/client";
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
-import { getActiveRuntime } from "@/app";
+import { type ApiClient, getActiveRuntime } from "@/app";
 import { Badge, Card, SectionHeader } from "@/components";
-import type { Validator } from "../../../../../../../../api/src/contract";
+
+type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][number];
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,

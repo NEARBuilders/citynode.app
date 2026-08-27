@@ -3,6 +3,7 @@ import { ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { cn } from "@/lib/utils";
+import { hasNodeProposalReviewPermission } from "./node/node-access";
 
 type NodeDashboardSearch = { nodeId?: string };
 
@@ -63,16 +64,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboa
             nodeId: summary.stakingValidators.sourceNodeId,
           });
 
-    let canReview = context.auth.isAdmin;
-    if (!canReview && context.auth.user) {
-      const members = await context.authClient.organization
-        .listMembers({ query: { organizationId: activeOrganizationId } })
-        .catch(() => null);
-      const membership = members?.data?.members.find(
-        (member: { userId: string }) => member.userId === context.auth.user?.id,
-      );
-      canReview = membership?.role === "owner" || membership?.role === "admin";
-    }
+    const canReview = hasNodeProposalReviewPermission(context.auth.user?.role);
 
     return {
       tenant,
