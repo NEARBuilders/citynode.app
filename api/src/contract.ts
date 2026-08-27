@@ -319,6 +319,7 @@ export const contract = oc.router({
       z.object({
         kind: NodeKindSchema.optional(),
         parentId: z.string().nullable().optional(),
+        tenantId: z.string().optional(),
       }),
     )
     .output(z.array(NodeSchema)),

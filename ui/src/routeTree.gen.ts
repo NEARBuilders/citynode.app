@@ -43,12 +43,15 @@ import { Route as LayoutAuthenticatedDashboardSettingsAuthMethodsRouteImport } f
 import { Route as LayoutAuthenticatedDashboardSettingsApiKeysRouteImport } from './routes/_layout/_authenticated/_dashboard/settings/api-keys'
 import { Route as LayoutAuthenticatedDashboardOrgsNewRouteImport } from './routes/_layout/_authenticated/_dashboard/orgs/new'
 import { Route as LayoutAuthenticatedDashboardOrgsSlugRouteImport } from './routes/_layout/_authenticated/_dashboard/orgs/$slug'
+import { Route as LayoutAuthenticatedDashboardDashboardNodeRouteImport } from './routes/_layout/_authenticated/_dashboard/dashboard/node'
 import { Route as LayoutAdminDashboardAdminTenantsRouteImport } from './routes/_layout/_admin/_dashboard/admin/tenants'
 import { Route as LayoutAdminDashboardAdminSystemRouteImport } from './routes/_layout/_admin/_dashboard/admin/system'
 import { Route as LayoutAdminDashboardAdminRelayerRouteImport } from './routes/_layout/_admin/_dashboard/admin/relayer'
+import { Route as LayoutAuthenticatedDashboardDashboardNodeIndexRouteImport } from './routes/_layout/_authenticated/_dashboard/dashboard/node/index'
 import { Route as LayoutAdminDashboardAdminTenantsIndexRouteImport } from './routes/_layout/_admin/_dashboard/admin/tenants/index'
 import { Route as LayoutAuthenticatedDashboardOrgsInvitesIdRouteImport } from './routes/_layout/_authenticated/_dashboard/orgs/invites.$id'
 import { Route as LayoutAdminDashboardAdminTenantsNewRouteImport } from './routes/_layout/_admin/_dashboard/admin/tenants/new'
+import { Route as LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRouteImport } from './routes/_layout/_authenticated/_dashboard/dashboard/node/proposals/index'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -233,6 +236,12 @@ const LayoutAuthenticatedDashboardOrgsSlugRoute =
     path: '/orgs/$slug',
     getParentRoute: () => LayoutAuthenticatedDashboardRoute,
   } as any)
+const LayoutAuthenticatedDashboardDashboardNodeRoute =
+  LayoutAuthenticatedDashboardDashboardNodeRouteImport.update({
+    id: '/node',
+    path: '/node',
+    getParentRoute: () => LayoutAuthenticatedDashboardDashboardRoute,
+  } as any)
 const LayoutAdminDashboardAdminTenantsRoute =
   LayoutAdminDashboardAdminTenantsRouteImport.update({
     id: '/tenants',
@@ -251,6 +260,12 @@ const LayoutAdminDashboardAdminRelayerRoute =
     path: '/relayer',
     getParentRoute: () => LayoutAdminDashboardAdminRoute,
   } as any)
+const LayoutAuthenticatedDashboardDashboardNodeIndexRoute =
+  LayoutAuthenticatedDashboardDashboardNodeIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => LayoutAuthenticatedDashboardDashboardNodeRoute,
+  } as any)
 const LayoutAdminDashboardAdminTenantsIndexRoute =
   LayoutAdminDashboardAdminTenantsIndexRouteImport.update({
     id: '/',
@@ -268,6 +283,12 @@ const LayoutAdminDashboardAdminTenantsNewRoute =
     id: '/new',
     path: '/new',
     getParentRoute: () => LayoutAdminDashboardAdminTenantsRoute,
+  } as any)
+const LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute =
+  LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRouteImport.update({
+    id: '/proposals/',
+    path: '/proposals/',
+    getParentRoute: () => LayoutAuthenticatedDashboardDashboardNodeRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -290,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/admin/relayer': typeof LayoutAdminDashboardAdminRelayerRoute
   '/admin/system': typeof LayoutAdminDashboardAdminSystemRoute
   '/admin/tenants': typeof LayoutAdminDashboardAdminTenantsRouteWithChildren
+  '/dashboard/node': typeof LayoutAuthenticatedDashboardDashboardNodeRouteWithChildren
   '/orgs/$slug': typeof LayoutAuthenticatedDashboardOrgsSlugRoute
   '/orgs/new': typeof LayoutAuthenticatedDashboardOrgsNewRoute
   '/settings/api-keys': typeof LayoutAuthenticatedDashboardSettingsApiKeysRoute
@@ -304,6 +326,8 @@ export interface FileRoutesByFullPath {
   '/admin/tenants/new': typeof LayoutAdminDashboardAdminTenantsNewRoute
   '/orgs/invites/$id': typeof LayoutAuthenticatedDashboardOrgsInvitesIdRoute
   '/admin/tenants/': typeof LayoutAdminDashboardAdminTenantsIndexRoute
+  '/dashboard/node/': typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
+  '/dashboard/node/proposals/': typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof LayoutPublicIndexRoute
@@ -334,6 +358,8 @@ export interface FileRoutesByTo {
   '/admin/tenants/new': typeof LayoutAdminDashboardAdminTenantsNewRoute
   '/orgs/invites/$id': typeof LayoutAuthenticatedDashboardOrgsInvitesIdRoute
   '/admin/tenants': typeof LayoutAdminDashboardAdminTenantsIndexRoute
+  '/dashboard/node': typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
+  '/dashboard/node/proposals': typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -363,6 +389,7 @@ export interface FileRoutesById {
   '/_layout/_admin/_dashboard/admin/relayer': typeof LayoutAdminDashboardAdminRelayerRoute
   '/_layout/_admin/_dashboard/admin/system': typeof LayoutAdminDashboardAdminSystemRoute
   '/_layout/_admin/_dashboard/admin/tenants': typeof LayoutAdminDashboardAdminTenantsRouteWithChildren
+  '/_layout/_authenticated/_dashboard/dashboard/node': typeof LayoutAuthenticatedDashboardDashboardNodeRouteWithChildren
   '/_layout/_authenticated/_dashboard/orgs/$slug': typeof LayoutAuthenticatedDashboardOrgsSlugRoute
   '/_layout/_authenticated/_dashboard/orgs/new': typeof LayoutAuthenticatedDashboardOrgsNewRoute
   '/_layout/_authenticated/_dashboard/settings/api-keys': typeof LayoutAuthenticatedDashboardSettingsApiKeysRoute
@@ -377,6 +404,8 @@ export interface FileRoutesById {
   '/_layout/_admin/_dashboard/admin/tenants/new': typeof LayoutAdminDashboardAdminTenantsNewRoute
   '/_layout/_authenticated/_dashboard/orgs/invites/$id': typeof LayoutAuthenticatedDashboardOrgsInvitesIdRoute
   '/_layout/_admin/_dashboard/admin/tenants/': typeof LayoutAdminDashboardAdminTenantsIndexRoute
+  '/_layout/_authenticated/_dashboard/dashboard/node/': typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
+  '/_layout/_authenticated/_dashboard/dashboard/node/proposals/': typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -400,6 +429,7 @@ export interface FileRouteTypes {
     | '/admin/relayer'
     | '/admin/system'
     | '/admin/tenants'
+    | '/dashboard/node'
     | '/orgs/$slug'
     | '/orgs/new'
     | '/settings/api-keys'
@@ -414,6 +444,8 @@ export interface FileRouteTypes {
     | '/admin/tenants/new'
     | '/orgs/invites/$id'
     | '/admin/tenants/'
+    | '/dashboard/node/'
+    | '/dashboard/node/proposals/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -444,6 +476,8 @@ export interface FileRouteTypes {
     | '/admin/tenants/new'
     | '/orgs/invites/$id'
     | '/admin/tenants'
+    | '/dashboard/node'
+    | '/dashboard/node/proposals'
   id:
     | '__root__'
     | '/_layout'
@@ -472,6 +506,7 @@ export interface FileRouteTypes {
     | '/_layout/_admin/_dashboard/admin/relayer'
     | '/_layout/_admin/_dashboard/admin/system'
     | '/_layout/_admin/_dashboard/admin/tenants'
+    | '/_layout/_authenticated/_dashboard/dashboard/node'
     | '/_layout/_authenticated/_dashboard/orgs/$slug'
     | '/_layout/_authenticated/_dashboard/orgs/new'
     | '/_layout/_authenticated/_dashboard/settings/api-keys'
@@ -486,6 +521,8 @@ export interface FileRouteTypes {
     | '/_layout/_admin/_dashboard/admin/tenants/new'
     | '/_layout/_authenticated/_dashboard/orgs/invites/$id'
     | '/_layout/_admin/_dashboard/admin/tenants/'
+    | '/_layout/_authenticated/_dashboard/dashboard/node/'
+    | '/_layout/_authenticated/_dashboard/dashboard/node/proposals/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -732,6 +769,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedDashboardOrgsSlugRouteImport
       parentRoute: typeof LayoutAuthenticatedDashboardRoute
     }
+    '/_layout/_authenticated/_dashboard/dashboard/node': {
+      id: '/_layout/_authenticated/_dashboard/dashboard/node'
+      path: '/node'
+      fullPath: '/dashboard/node'
+      preLoaderRoute: typeof LayoutAuthenticatedDashboardDashboardNodeRouteImport
+      parentRoute: typeof LayoutAuthenticatedDashboardDashboardRoute
+    }
     '/_layout/_admin/_dashboard/admin/tenants': {
       id: '/_layout/_admin/_dashboard/admin/tenants'
       path: '/tenants'
@@ -753,6 +797,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminDashboardAdminRelayerRouteImport
       parentRoute: typeof LayoutAdminDashboardAdminRoute
     }
+    '/_layout/_authenticated/_dashboard/dashboard/node/': {
+      id: '/_layout/_authenticated/_dashboard/dashboard/node/'
+      path: '/'
+      fullPath: '/dashboard/node/'
+      preLoaderRoute: typeof LayoutAuthenticatedDashboardDashboardNodeIndexRouteImport
+      parentRoute: typeof LayoutAuthenticatedDashboardDashboardNodeRoute
+    }
     '/_layout/_admin/_dashboard/admin/tenants/': {
       id: '/_layout/_admin/_dashboard/admin/tenants/'
       path: '/'
@@ -773,6 +824,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/tenants/new'
       preLoaderRoute: typeof LayoutAdminDashboardAdminTenantsNewRouteImport
       parentRoute: typeof LayoutAdminDashboardAdminTenantsRoute
+    }
+    '/_layout/_authenticated/_dashboard/dashboard/node/proposals/': {
+      id: '/_layout/_authenticated/_dashboard/dashboard/node/proposals/'
+      path: '/proposals'
+      fullPath: '/dashboard/node/proposals/'
+      preLoaderRoute: typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRouteImport
+      parentRoute: typeof LayoutAuthenticatedDashboardDashboardNodeRoute
     }
   }
 }
@@ -852,12 +910,33 @@ const LayoutAnonRouteWithChildren = LayoutAnonRoute._addFileChildren(
   LayoutAnonRouteChildren,
 )
 
+interface LayoutAuthenticatedDashboardDashboardNodeRouteChildren {
+  LayoutAuthenticatedDashboardDashboardNodeIndexRoute: typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
+  LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute: typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
+}
+
+const LayoutAuthenticatedDashboardDashboardNodeRouteChildren: LayoutAuthenticatedDashboardDashboardNodeRouteChildren =
+  {
+    LayoutAuthenticatedDashboardDashboardNodeIndexRoute:
+      LayoutAuthenticatedDashboardDashboardNodeIndexRoute,
+    LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute:
+      LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute,
+  }
+
+const LayoutAuthenticatedDashboardDashboardNodeRouteWithChildren =
+  LayoutAuthenticatedDashboardDashboardNodeRoute._addFileChildren(
+    LayoutAuthenticatedDashboardDashboardNodeRouteChildren,
+  )
+
 interface LayoutAuthenticatedDashboardDashboardRouteChildren {
+  LayoutAuthenticatedDashboardDashboardNodeRoute: typeof LayoutAuthenticatedDashboardDashboardNodeRouteWithChildren
   LayoutAuthenticatedDashboardDashboardIndexRoute: typeof LayoutAuthenticatedDashboardDashboardIndexRoute
 }
 
 const LayoutAuthenticatedDashboardDashboardRouteChildren: LayoutAuthenticatedDashboardDashboardRouteChildren =
   {
+    LayoutAuthenticatedDashboardDashboardNodeRoute:
+      LayoutAuthenticatedDashboardDashboardNodeRouteWithChildren,
     LayoutAuthenticatedDashboardDashboardIndexRoute:
       LayoutAuthenticatedDashboardDashboardIndexRoute,
   }

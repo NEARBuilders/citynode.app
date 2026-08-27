@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useAuthClient } from "@/app";
+import { sessionQueryKey, useAuthClient } from "@/app";
 
 export function useSwitchOrganization() {
   const auth = useAuthClient();
@@ -14,10 +14,12 @@ export function useSwitchOrganization() {
       if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
-        queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-      ]);
+      const { data: session, error } = await auth.getSession({
+        query: { disableCookieCache: true },
+      });
+      if (error) throw new Error(error.message);
+      queryClient.setQueryData(sessionQueryKey, session ?? null);
+      await queryClient.invalidateQueries({ queryKey: ["organizations"] });
       await router.invalidate();
       toast.success("Switched organization");
     },

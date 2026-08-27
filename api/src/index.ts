@@ -300,6 +300,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         services.nodes.list({
           ...(input.kind !== undefined && { kind: input.kind }),
           ...(input.parentId !== undefined && { parentId: input.parentId }),
+          ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         }),
       ),
 

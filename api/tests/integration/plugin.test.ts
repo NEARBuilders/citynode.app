@@ -88,6 +88,44 @@ describe("API Plugin Integration Tests", () => {
       expect(fetched?.id).toBe(created.id);
     });
 
+    it("filters nodes by tenant", async () => {
+      const firstClient = await getPluginClient(
+        orgContext("tenant-filter-user-a", "tenant-filter-org-a", "owner"),
+      );
+      const secondClient = await getPluginClient(
+        orgContext("tenant-filter-user-b", "tenant-filter-org-b", "owner"),
+      );
+      const firstTenant = await firstClient.createTenant({
+        name: "Tenant Filter A",
+        accountId: "tenant-filter-a.example.near",
+        status: "active",
+      });
+      const secondTenant = await secondClient.createTenant({
+        name: "Tenant Filter B",
+        accountId: "tenant-filter-b.example.near",
+        status: "active",
+      });
+      const firstNode = await firstClient.createNode({
+        kind: "city",
+        slug: "tenant-filter-a",
+        name: "Tenant Filter A",
+        parentId: null,
+        tenantId: firstTenant.id,
+      });
+      await secondClient.createNode({
+        kind: "city",
+        slug: "tenant-filter-b",
+        name: "Tenant Filter B",
+        parentId: null,
+        tenantId: secondTenant.id,
+      });
+
+      const publicClient = await getPluginClient();
+      const nodes = await publicClient.listNodes({ tenantId: firstTenant.id });
+
+      expect(nodes).toEqual([firstNode]);
+    });
+
     it("creates a nested node tree (country → state → city)", async () => {
       const client = await getPluginClient(orgContext());
 
