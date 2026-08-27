@@ -41,8 +41,7 @@
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
       "secrets": [
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
+        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET"
       ],
       "variables": {
         "passkey": {
