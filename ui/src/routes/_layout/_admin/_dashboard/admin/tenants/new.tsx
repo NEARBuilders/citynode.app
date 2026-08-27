@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Building2, CheckCircle2, Globe, Sparkles } from "lucide-react";
 import type { TransactionBuilder } from "near-kit";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import {
@@ -17,6 +17,11 @@ import {
   StepList,
   useStepper,
 } from "@/components";
+import {
+  type AuthRuntimeVariables,
+  type NearNetworkId,
+  resolveTenantIdentity,
+} from "./tenant-wizard";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -25,11 +30,16 @@ type NodeKind = "country" | "state" | "city";
 async function publishTenantConfig(
   apiClient: ReturnType<typeof useApiClient>,
   auth: ReturnType<typeof useAuthClient>,
-  input: { accountId: string; gatewayId: string; hostname: string; name: string },
+  input: {
+    accountId: string;
+    gatewayId: string;
+    hostname: string;
+    name: string;
+    parentAccount: string;
+  },
 ) {
-  const parentAccount = getAccount();
   const tenantConfig = {
-    extends: `bos://${parentAccount}/${input.gatewayId}`,
+    extends: `bos://${input.parentAccount}/${input.gatewayId}`,
     account: input.accountId,
     domain: input.hostname,
     title: input.name,
@@ -97,6 +107,8 @@ function NewTenantPage() {
   const auth = useAuthClient();
   const { auth: adminAuth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const activeNetwork = auth.near.useActiveNetwork() as NearNetworkId;
+  const authVariables = runtimeConfig?.auth?.variables as AuthRuntimeVariables | undefined;
 
   const hasOrg = !!adminAuth.activeOrganizationId;
 
@@ -113,6 +125,15 @@ function NewTenantPage() {
 
   const [tenantName, setTenantName] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [tenantNameTouched, setTenantNameTouched] = useState(false);
+  const [accountIdTouched, setAccountIdTouched] = useState(false);
+
+  const { parentAccount, accountId: suggestedAccountId } = resolveTenantIdentity({
+    slug,
+    network: activeNetwork,
+    authVariables,
+    mainnetAccount: getAccount(runtimeConfig),
+  });
 
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
 
@@ -123,6 +144,18 @@ function NewTenantPage() {
   ]);
 
   const hostname = useMemo(() => (slug ? `${slug}.${gatewayId}` : ""), [slug, gatewayId]);
+
+  useEffect(() => {
+    if (!accountIdTouched) {
+      setAccountId(suggestedAccountId);
+    }
+  }, [accountIdTouched, suggestedAccountId]);
+
+  useEffect(() => {
+    if (!tenantNameTouched) {
+      setTenantName(name);
+    }
+  }, [name, tenantNameTouched]);
 
   const { data: rootNodes = [] } = useQuery({
     queryKey: ["root-nodes"],
@@ -155,8 +188,6 @@ function NewTenantPage() {
     if (!slug || slug === generateSlug(name.slice(0, -1))) {
       const newSlug = generateSlug(value);
       setSlug(newSlug);
-      if (!tenantName) setTenantName(value);
-      if (!accountId) setAccountId(`${newSlug}.v1.citynode.near`);
     }
   };
 
@@ -234,13 +265,22 @@ function NewTenantPage() {
   const deploySubaccount = useMutation({
     mutationFn: async () => {
       const subAccountName = slug;
-      const { data: avail } = await auth.near.checkSubAccountAvailability({ subAccountName });
+      const { data: avail } = await auth.near.checkSubAccountAvailability({
+        subAccountName,
+        network: activeNetwork,
+      });
       if (!avail?.available) {
         throw new Error(avail?.reason ?? "Sub-account unavailable");
       }
       const connected = await auth.near.ensureConnected();
       if (!connected) throw new Error("Connect a NEAR wallet first");
-      return auth.near.createSubAccount({ subAccountName, publicKey: "ed25519:auto" });
+      const publicKey = auth.near.getState()?.publicKey;
+      if (!publicKey) throw new Error("Connected wallet did not provide a public key");
+      return auth.near.createSubAccount({
+        subAccountName,
+        publicKey,
+        network: activeNetwork,
+      });
     },
     onSuccess: () => {
       stepper.updateStep(1, "success");
@@ -259,6 +299,7 @@ function NewTenantPage() {
         gatewayId,
         hostname,
         name: tenantName || name,
+        parentAccount,
       });
     },
     onSuccess: () => {
@@ -568,8 +609,11 @@ function NewTenantPage() {
                 <Input
                   id="tenant-name"
                   value={tenantName}
-                  onChange={(e) => setTenantName(e.target.value)}
                   placeholder="Chicago City Node"
+                  onChange={(e) => {
+                    setTenantName(e.target.value);
+                    setTenantNameTouched(true);
+                  }}
                   required
                 />
               </Field>
@@ -579,8 +623,11 @@ function NewTenantPage() {
                 <Input
                   id="account-id"
                   value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  placeholder="chicago.v1.citynode.near"
+                  onChange={(e) => {
+                    setAccountId(e.target.value);
+                    setAccountIdTouched(true);
+                  }}
+                  placeholder={`${slug || "chicago"}.${parentAccount}`}
                   className="font-mono text-xs"
                   required
                 />
