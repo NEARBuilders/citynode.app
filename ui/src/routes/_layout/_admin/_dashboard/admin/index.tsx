@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, LayoutDashboard, Settings, Users } from "lucide-react";
+import { Building2, FileCheck2, LayoutDashboard, Network, Settings, Users } from "lucide-react";
 import { getAccount, useAuthClient } from "@/app";
 import { Button, Card, SectionHeader } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
@@ -30,6 +30,32 @@ function AdminDashboard() {
       <section className="space-y-3">
         <SectionHeader title="Manage" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Card className="p-6 space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+              <Network className="h-4 w-4" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">Nodes</h3>
+            <p className="text-sm text-muted-foreground">
+              Inspect the node tree, validator health, and staking resolution.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/nodes">open nodes</Link>
+            </Button>
+          </Card>
+
+          <Card className="p-6 space-y-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+              <FileCheck2 className="h-4 w-4" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">Proposals</h3>
+            <p className="text-sm text-muted-foreground">
+              Review pending proposals across every registered plugin.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/proposals">review proposals</Link>
+            </Button>
+          </Card>
+
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
               <LayoutDashboard className="h-4 w-4" />
