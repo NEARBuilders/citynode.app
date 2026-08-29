@@ -59,7 +59,7 @@ describe("buildCiInfraPlan", () => {
     }
   });
 
-  it("emits env vars and services for api+auth+plugin secrets", () => {
+  it("emits env vars and shared services for api, auth, and plugin secrets", () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-ci-infra-"));
     tempDirs.push(dir);
     writeGeneratedInfra(dir, buildRuntimeConfig());
@@ -78,16 +78,16 @@ describe("buildCiInfraPlan", () => {
       "postgres://everythingdev:everythingdev@localhost:5433/auth_db",
     );
     expect(plan.env.EXAMPLE_DATABASE_URL).toBe(
-      "postgres://everythingdev:everythingdev@localhost:5434/example_db",
+      "postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
     expect(plan.env.BETTER_AUTH_SECRET).toBe("");
     expect(plan.env.CORS_ORIGIN).toBe("http://127.0.0.1:4100");
 
-    expect(plan.services.length).toBeGreaterThanOrEqual(3);
+    expect(plan.services).toHaveLength(2);
     const serviceKeys = plan.services.map((s) => s.key);
     expect(serviceKeys).toContain("api");
     expect(serviceKeys).toContain("auth");
-    expect(serviceKeys).toContain("example");
+    expect(serviceKeys).not.toContain("example");
 
     const apiService = plan.services.find((s) => s.key === "api");
     expect(apiService?.image).toBe("postgres:17-alpine");

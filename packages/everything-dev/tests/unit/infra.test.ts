@@ -80,7 +80,7 @@ describe("generated infra", () => {
     expect(envExample).toContain("BETTER_AUTH_SECRET=");
     expect(envExample).toContain("# plugins.example");
     expect(envExample).toContain(
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
     expect(envExample).toContain("PAYMENT_API_URL=");
 
@@ -93,13 +93,13 @@ describe("generated infra", () => {
     expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-auth");
     expect(dockerCompose).toContain("POSTGRES_DB: auth_db");
     expect(dockerCompose).toContain('"5433:5432"');
-    expect(dockerCompose).toContain("postgres-example:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-example");
-    expect(dockerCompose).toContain("POSTGRES_DB: example_db");
-    expect(dockerCompose).toContain('"5434:5432"');
+    expect(dockerCompose).not.toContain("postgres-example:");
+    expect(dockerCompose).not.toContain("container_name: dev.everything.near-postgres-example");
+    expect(dockerCompose).not.toContain("POSTGRES_DB: example_db");
+    expect(dockerCompose).not.toContain('"5434:5432"');
     expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_data");
     expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_data");
-    expect(dockerCompose).toContain("name: dev_everything_near_postgres_example_data");
+    expect(dockerCompose).not.toContain("name: dev_everything_near_postgres_example_data");
     expect(dockerCompose).not.toContain("payment");
   });
 
@@ -166,7 +166,7 @@ describe("generated infra", () => {
     expect(dockerCompose).toContain("redis-cache:");
   });
 
-  it("persists ports in infra-state.json and keeps existing ports stable", () => {
+  it("persists shared database ports in infra-state.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-state-"));
     tempDirs.push(dir);
 
@@ -189,11 +189,11 @@ describe("generated infra", () => {
     expect(existsSync(statePath)).toBe(true);
 
     const firstState = JSON.parse(readFileSync(statePath, "utf-8"));
-    expect(firstState.postgresPorts.example).toBe(5434);
+    expect(firstState.postgresPorts.example).toBe(5432);
 
     const firstEnv = readFileSync(join(dir, ".env.example"), "utf-8");
     expect(firstEnv).toContain(
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
 
     syncGeneratedInfra(
@@ -219,23 +219,23 @@ describe("generated infra", () => {
     );
 
     const secondState = JSON.parse(readFileSync(statePath, "utf-8"));
-    expect(secondState.postgresPorts.example).toBe(5434);
-    expect(secondState.postgresPorts.registry).toBe(5435);
+    expect(secondState.postgresPorts.example).toBe(5432);
+    expect(secondState.postgresPorts.registry).toBe(5432);
 
     const secondEnv = readFileSync(join(dir, ".env.example"), "utf-8");
     expect(secondEnv).toContain(
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
     expect(secondEnv).toContain(
-      "REGISTRY_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5435/registry_db",
+      "REGISTRY_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
 
     const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
-    expect(dockerCompose).toContain('"5434:5432"');
-    expect(dockerCompose).toContain('"5435:5432"');
+    expect(dockerCompose).not.toContain('"5434:5432"');
+    expect(dockerCompose).not.toContain('"5435:5432"');
   });
 
-  it("assigns ports by alphabetical slug order for deterministic fallback", () => {
+  it("assigns all non-auth database secrets to the shared API port", () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-order-"));
     tempDirs.push(dir);
 
@@ -272,10 +272,9 @@ describe("generated infra", () => {
 
     const state = JSON.parse(readFileSync(join(dir, ".bos", "infra-state.json"), "utf-8"));
 
-    // Slugs sorted alphabetically: alpha, beta, zebra
-    expect(state.postgresPorts.alpha).toBe(5434);
-    expect(state.postgresPorts.beta).toBe(5435);
-    expect(state.postgresPorts.zebra).toBe(5436);
+    expect(state.postgresPorts.alpha).toBe(5432);
+    expect(state.postgresPorts.beta).toBe(5432);
+    expect(state.postgresPorts.zebra).toBe(5432);
   });
 
   it("detects stale .env values when ports change", () => {
@@ -320,7 +319,7 @@ describe("generated infra", () => {
     expect(result.staleEnvWarnings.length).toBe(1);
     expect(result.staleEnvWarnings[0]).toContain("EXAMPLE_DATABASE_URL");
     expect(result.staleEnvWarnings[0]).toContain("9999");
-    expect(result.staleEnvWarnings[0]).toContain("5434");
+    expect(result.staleEnvWarnings[0]).toContain("5432");
   });
 
   it("reports no stale warnings when .env matches or does not exist", () => {
@@ -355,7 +354,7 @@ describe("generated infra", () => {
       "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5433/auth_db",
     );
     expect(env).toContain(
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/example_db",
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
     expect(env).toContain("PAYMENT_API_URL=");
     expect(env).toContain("CORS_ORIGIN=http://localhost:3000");

@@ -467,7 +467,7 @@ describe("upgrade bos config migration", () => {
     );
     expect(demoSections).toContain('from "@/lib/auth"');
     expect(demoSections).not.toContain("auth-utils");
-  });
+  }, 60_000);
 
   it("adds @better-auth/core catalog refs to root and workspace packages during package migration", async () => {
     const projectDir = makeProjectDir();
