@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Network } from "lucide-react";
 import { useMemo } from "react";
-import { useApiClient } from "@/app";
+import { getActiveRuntime, useApiClient } from "@/app";
 import {
   Badge,
   Button,
@@ -15,6 +15,9 @@ import {
   Skeleton,
 } from "@/components";
 import { DataTable } from "@/components/ui/data-table";
+import { NodeBindings } from "./-node-bindings";
+import { NodeMetadataEditor } from "./-node-metadata-editor";
+import { NodeValidators } from "./-node-validators";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
@@ -29,6 +32,7 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/nodes/$no
 
 function AdminNodeDetail() {
   const { nodeId } = Route.useParams();
+  const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
   const nodeQuery = useQuery({
     queryKey: ["admin-node", nodeId],
@@ -38,7 +42,10 @@ function AdminNodeDetail() {
         summary.stakingValidators.sourceNodeId === nodeId
           ? summary.node
           : await apiClient.getNode({ nodeId: summary.stakingValidators.sourceNodeId });
-      return { summary, sourceNode };
+      const parent = summary.node.parentId
+        ? await apiClient.getNode({ nodeId: summary.node.parentId })
+        : null;
+      return { summary, sourceNode, parent };
     },
     staleTime: 30 * 1000,
   });
@@ -110,7 +117,7 @@ function AdminNodeDetail() {
     );
   }
 
-  const { summary, sourceNode } = nodeQuery.data;
+  const { summary, sourceNode, parent } = nodeQuery.data;
   const { node } = summary;
   const stakingIsResolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
 
@@ -127,6 +134,18 @@ function AdminNodeDetail() {
           <div className="space-y-1">
             <h2 className="text-2xl font-semibold text-foreground">{node.name}</h2>
             <p className="font-mono text-xs text-muted-foreground">{node.slug}</p>
+            {parent && (
+              <p className="text-sm text-muted-foreground">
+                Parent:{" "}
+                <Link
+                  to="/admin/nodes/$nodeId"
+                  params={{ nodeId: parent.id }}
+                  className="text-foreground hover:underline"
+                >
+                  {parent.name}
+                </Link>
+              </p>
+            )}
           </div>
           <Badge variant="outline">{node.kind}</Badge>
         </div>
@@ -140,7 +159,10 @@ function AdminNodeDetail() {
       </section>
 
       <section className="space-y-3">
-        <SectionHeader title="Node information" />
+        <SectionHeader
+          title="Node information"
+          action={<NodeMetadataEditor key={node.id} node={node} />}
+        />
         <Card className="space-y-3 p-6">
           <InfoRow label="id" value={node.id} mono />
           <InfoRow label="tenant" value={node.tenantId} mono />
@@ -158,18 +180,13 @@ function AdminNodeDetail() {
         </Card>
       </section>
 
-      <section className="space-y-3">
-        <SectionHeader title="Validators" />
-        <Card className="overflow-hidden">
-          {summary.validators.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              No validators are attached to this node.
-            </p>
-          ) : (
-            <NodeValidatorTable validators={summary.validators} />
-          )}
-        </Card>
-      </section>
+      <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
+
+      <NodeBindings
+        key={node.tenantId}
+        tenantId={node.tenantId}
+        gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
+      />
 
       <section className="space-y-3">
         <SectionHeader title="Direct children" />

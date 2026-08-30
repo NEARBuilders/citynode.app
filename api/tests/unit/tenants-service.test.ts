@@ -1,16 +1,20 @@
+import { resolveTxt } from "node:dns/promises";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PluginIdTag } from "every-plugin";
 import { Cause, Effect, Exit, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatabaseLive } from "@/db/layer";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
 
 let activeDir: string | null = null;
 
+vi.mock("node:dns/promises", () => ({ resolveTxt: vi.fn() }));
+
 afterEach(() => {
+  vi.resetAllMocks();
   if (activeDir) {
     rmSync(activeDir, { recursive: true, force: true });
     activeDir = null;
@@ -295,15 +299,13 @@ describe("TenantsService — domain bindings", () => {
       }),
     );
     await runService(layer, (svc) =>
-      svc.createBinding({ tenantId: tenant.id, hostname: "a.citynode.app", isPrimary: true }),
+      svc.createBinding({ tenantId: tenant.id, hostname: "a", isPrimary: true }),
     );
-    await runService(layer, (svc) =>
-      svc.createBinding({ tenantId: tenant.id, hostname: "b.citynode.app" }),
-    );
+    await runService(layer, (svc) => svc.createBinding({ tenantId: tenant.id, hostname: "b" }));
 
     const bindings = await runService(layer, (svc) => svc.listBindings());
     expect(bindings).toHaveLength(2);
-    expect(bindings.find((b) => b.hostname === "a.citynode.app")).toMatchObject({
+    expect(bindings.find((b) => b.hostname === "a")).toMatchObject({
       tenantId: tenant.id,
       accountId: tenant.accountId,
       allowUiOverrides: false,
@@ -333,16 +335,90 @@ describe("TenantsService — domain bindings", () => {
     expect(bindings.find((x) => x.id === b.id)?.isPrimary).toBe(true);
   });
 
-  it("verifyCustomDomain sets is_verified and verified_at", async () => {
+  it("activates a custom domain only after its exact TXT token is found", async () => {
     const layer = freshLayer();
     const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
     const binding = await runService(layer, (svc) =>
       svc.createBinding({ tenantId: tenant.id, hostname: "acme.com" }),
     );
 
-    const verified = await runService(layer, (svc) => svc.verifyCustomDomain(binding.id));
+    expect(await runService(layer, (svc) => svc.listBindings())).toEqual([]);
+    vi.mocked(resolveTxt).mockResolvedValue([
+      ["unrelated-record"],
+      ["everything-verify=", binding.verificationToken],
+    ]);
+    const verified = await runService(layer, (svc) =>
+      svc.verifyCustomDomain(tenant.id, binding.id),
+    );
     expect(verified.isVerified).toBe(true);
     expect(verified.verifiedAt).toEqual(expect.any(String));
+    expect(resolveTxt).toHaveBeenCalledWith("acme.com");
+    expect(await runService(layer, (svc) => svc.listBindings())).toMatchObject([
+      { hostname: "acme.com" },
+    ]);
+  });
+
+  it.each([
+    "missing",
+    "mismatch",
+    "dns-failure",
+  ])("leaves a custom domain unverified on %s", async (mode) => {
+    const layer = freshLayer();
+    const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
+    const binding = await runService(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "acme.com" }),
+    );
+    if (mode === "dns-failure")
+      vi.mocked(resolveTxt).mockRejectedValue(new Error("DNS unavailable"));
+    else
+      vi.mocked(resolveTxt).mockResolvedValue(
+        mode === "missing" ? [] : [["everything-verify=wrong"]],
+      );
+    const error = await squashServiceError(layer, (svc) =>
+      svc.verifyCustomDomain(tenant.id, binding.id),
+    );
+    expect(error).toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      await runService(layer, (svc) => svc.resolveBindingByHostname("acme.com")),
+    ).toMatchObject({ isVerified: false, verifiedAt: null });
+    expect(await runService(layer, (svc) => svc.listBindings())).toEqual([]);
+  });
+
+  it("activates a platform alias without querying DNS", async () => {
+    const layer = freshLayer();
+    const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
+    const binding = await runService(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "chicago" }),
+    );
+    expect(binding.isVerified).toBe(true);
+    await runService(layer, (svc) => svc.verifyCustomDomain(tenant.id, binding.id));
+    expect(resolveTxt).not.toHaveBeenCalled();
+    expect(await runService(layer, (svc) => svc.listBindings())).toMatchObject([
+      { hostname: "chicago" },
+    ]);
+  });
+
+  it("scopes removal and verification to the owning tenant", async () => {
+    const layer = freshLayer();
+    const tenant = await runService(layer, (svc) => svc.createTenant(tenantBase));
+    const binding = await runService(layer, (svc) =>
+      svc.createBinding({ tenantId: tenant.id, hostname: "chicago" }),
+    );
+    expect(
+      await squashServiceError(layer, (svc) => svc.deleteBinding(MISSING_ID, binding.id)),
+    ).toMatchObject({ code: "NOT_FOUND" });
+    expect(
+      await squashServiceError(layer, (svc) => svc.verifyCustomDomain(MISSING_ID, binding.id)),
+    ).toMatchObject({ code: "NOT_FOUND" });
+    expect(
+      await runService(layer, (svc) => svc.resolveBindingByHostname("chicago")),
+    ).not.toBeNull();
+    await runService(layer, (svc) => svc.deleteBinding(tenant.id, binding.id));
+    expect(await runService(layer, (svc) => svc.resolveBindingByHostname("chicago"))).toBeNull();
+    expect(await runService(layer, (svc) => svc.listBindings())).toEqual([]);
+    expect(
+      await squashServiceError(layer, (svc) => svc.deleteBinding(tenant.id, binding.id)),
+    ).toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("resolveBindingByHostname returns the binding for a hostname", async () => {

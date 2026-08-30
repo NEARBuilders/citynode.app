@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { and, eq, inArray, not } from "drizzle-orm";
+import { resolveTxt } from "node:dns/promises";
+import { and, eq, inArray, not, notLike, or } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { DatabaseTag } from "../db/layer";
@@ -65,11 +66,13 @@ export interface CreateBindingInput {
 }
 
 export interface TenantsService {
+  listAllTenants(): Promise<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): Promise<TenantRecord[]>;
   listBindings(): Promise<TenantBinding[]>;
   listBindingsForTenant(tenantId: string): Promise<TenantBindingRecord[]>;
   createBinding(input: CreateBindingInput): Promise<TenantBindingRecord>;
-  verifyCustomDomain(bindingId: string): Promise<TenantBindingRecord>;
+  verifyCustomDomain(tenantId: string, bindingId: string): Promise<TenantBindingRecord>;
+  deleteBinding(tenantId: string, bindingId: string): Promise<void>;
   setPrimaryBinding(tenantId: string, bindingId: string): Promise<TenantBindingRecord>;
   resolveBindingByHostname(hostname: string): Promise<TenantBindingRecord | null>;
   createTenant(input: TenantInput): Promise<TenantRecord>;
@@ -136,6 +139,14 @@ export const TenantsLive = Layer.effect(
     const db = yield* DatabaseTag;
 
     const service: TenantsService = {
+      listAllTenants: async () => {
+        try {
+          return (await db.select().from(tenantsTable)).map(toTenantRecord);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
       listTenantsByOrgIds: async (orgIds) => {
         if (orgIds.length === 0) return [];
         try {
@@ -162,7 +173,13 @@ export const TenantsLive = Layer.effect(
               status: tenantsTable.status,
             })
             .from(domainBindingsTable)
-            .innerJoin(tenantsTable, eq(domainBindingsTable.tenantId, tenantsTable.id));
+            .innerJoin(tenantsTable, eq(domainBindingsTable.tenantId, tenantsTable.id))
+            .where(
+              or(
+                eq(domainBindingsTable.isVerified, true),
+                notLike(domainBindingsTable.hostname, "%.%"),
+              ),
+            );
           return rows;
         } catch (error) {
           throw toOrpcError(error);
@@ -202,7 +219,8 @@ export const TenantsLive = Layer.effect(
                 tenantId: input.tenantId,
                 hostname: input.hostname,
                 isPrimary: input.isPrimary ?? false,
-                isVerified: false,
+                isVerified: !input.hostname.includes("."),
+                verifiedAt: input.hostname.includes(".") ? null : new Date(),
                 verificationToken: generateVerificationToken(),
               })
               .returning();
@@ -227,8 +245,34 @@ export const TenantsLive = Layer.effect(
         }
       },
 
-      verifyCustomDomain: async (bindingId) => {
+      verifyCustomDomain: async (tenantId, bindingId) => {
         try {
+          const [binding] = await db
+            .select()
+            .from(domainBindingsTable)
+            .where(
+              and(
+                eq(domainBindingsTable.id, bindingId),
+                eq(domainBindingsTable.tenantId, tenantId),
+              ),
+            )
+            .limit(1);
+          if (!binding) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Domain binding not found for tenant",
+              data: { resource: "domainBinding", resourceId: bindingId, tenantId },
+            });
+          }
+          if (binding.isVerified) return toBindingRecord(binding);
+          if (binding.hostname.includes(".")) {
+            const records = await resolveTxt(binding.hostname).catch(() => []);
+            const expected = `everything-verify=${binding.verificationToken}`;
+            if (!records.some((record) => record.join("") === expected)) {
+              throw new ORPCError("BAD_REQUEST", {
+                message: "Verification TXT record not found. Check your DNS records and try again.",
+              });
+            }
+          }
           const [row] = await db
             .update(domainBindingsTable)
             .set({
@@ -236,7 +280,12 @@ export const TenantsLive = Layer.effect(
               verifiedAt: new Date(),
               updatedAt: new Date(),
             })
-            .where(eq(domainBindingsTable.id, bindingId))
+            .where(
+              and(
+                eq(domainBindingsTable.id, bindingId),
+                eq(domainBindingsTable.tenantId, tenantId),
+              ),
+            )
             .returning();
 
           if (!row) {
@@ -247,6 +296,28 @@ export const TenantsLive = Layer.effect(
           }
 
           return toBindingRecord(row);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      deleteBinding: async (tenantId, bindingId) => {
+        try {
+          const rows = await db
+            .delete(domainBindingsTable)
+            .where(
+              and(
+                eq(domainBindingsTable.id, bindingId),
+                eq(domainBindingsTable.tenantId, tenantId),
+              ),
+            )
+            .returning({ id: domainBindingsTable.id });
+          if (rows.length === 0) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Domain binding not found for tenant",
+              data: { resource: "domainBinding", resourceId: bindingId, tenantId },
+            });
+          }
         } catch (error) {
           throw toOrpcError(error);
         }
