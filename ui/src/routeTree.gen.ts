@@ -49,8 +49,11 @@ import { Route as LayoutAdminDashboardAdminSystemRouteImport } from './routes/_l
 import { Route as LayoutAdminDashboardAdminRelayerRouteImport } from './routes/_layout/_admin/_dashboard/admin/relayer'
 import { Route as LayoutAuthenticatedDashboardDashboardNodeIndexRouteImport } from './routes/_layout/_authenticated/_dashboard/dashboard/node/index'
 import { Route as LayoutAdminDashboardAdminTenantsIndexRouteImport } from './routes/_layout/_admin/_dashboard/admin/tenants/index'
+import { Route as LayoutAdminDashboardAdminProposalsIndexRouteImport } from './routes/_layout/_admin/_dashboard/admin/proposals/index'
+import { Route as LayoutAdminDashboardAdminNodesIndexRouteImport } from './routes/_layout/_admin/_dashboard/admin/nodes/index'
 import { Route as LayoutAuthenticatedDashboardOrgsInvitesIdRouteImport } from './routes/_layout/_authenticated/_dashboard/orgs/invites.$id'
 import { Route as LayoutAdminDashboardAdminTenantsNewRouteImport } from './routes/_layout/_admin/_dashboard/admin/tenants/new'
+import { Route as LayoutAdminDashboardAdminNodesNodeIdRouteImport } from './routes/_layout/_admin/_dashboard/admin/nodes/$nodeId'
 import { Route as LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRouteImport } from './routes/_layout/_authenticated/_dashboard/dashboard/node/proposals/index'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -272,6 +275,18 @@ const LayoutAdminDashboardAdminTenantsIndexRoute =
     path: '/',
     getParentRoute: () => LayoutAdminDashboardAdminTenantsRoute,
   } as any)
+const LayoutAdminDashboardAdminProposalsIndexRoute =
+  LayoutAdminDashboardAdminProposalsIndexRouteImport.update({
+    id: '/proposals/',
+    path: '/proposals/',
+    getParentRoute: () => LayoutAdminDashboardAdminRoute,
+  } as any)
+const LayoutAdminDashboardAdminNodesIndexRoute =
+  LayoutAdminDashboardAdminNodesIndexRouteImport.update({
+    id: '/nodes/',
+    path: '/nodes/',
+    getParentRoute: () => LayoutAdminDashboardAdminRoute,
+  } as any)
 const LayoutAuthenticatedDashboardOrgsInvitesIdRoute =
   LayoutAuthenticatedDashboardOrgsInvitesIdRouteImport.update({
     id: '/orgs/invites/$id',
@@ -283,6 +298,12 @@ const LayoutAdminDashboardAdminTenantsNewRoute =
     id: '/new',
     path: '/new',
     getParentRoute: () => LayoutAdminDashboardAdminTenantsRoute,
+  } as any)
+const LayoutAdminDashboardAdminNodesNodeIdRoute =
+  LayoutAdminDashboardAdminNodesNodeIdRouteImport.update({
+    id: '/nodes/$nodeId',
+    path: '/nodes/$nodeId',
+    getParentRoute: () => LayoutAdminDashboardAdminRoute,
   } as any)
 const LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute =
   LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRouteImport.update({
@@ -323,8 +344,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof LayoutAuthenticatedDashboardDashboardIndexRoute
   '/orgs/': typeof LayoutAuthenticatedDashboardOrgsIndexRoute
   '/settings/': typeof LayoutAuthenticatedDashboardSettingsIndexRoute
+  '/admin/nodes/$nodeId': typeof LayoutAdminDashboardAdminNodesNodeIdRoute
   '/admin/tenants/new': typeof LayoutAdminDashboardAdminTenantsNewRoute
   '/orgs/invites/$id': typeof LayoutAuthenticatedDashboardOrgsInvitesIdRoute
+  '/admin/nodes/': typeof LayoutAdminDashboardAdminNodesIndexRoute
+  '/admin/proposals/': typeof LayoutAdminDashboardAdminProposalsIndexRoute
   '/admin/tenants/': typeof LayoutAdminDashboardAdminTenantsIndexRoute
   '/dashboard/node/': typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
   '/dashboard/node/proposals/': typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
@@ -355,8 +379,11 @@ export interface FileRoutesByTo {
   '/dashboard': typeof LayoutAuthenticatedDashboardDashboardIndexRoute
   '/orgs': typeof LayoutAuthenticatedDashboardOrgsIndexRoute
   '/settings': typeof LayoutAuthenticatedDashboardSettingsIndexRoute
+  '/admin/nodes/$nodeId': typeof LayoutAdminDashboardAdminNodesNodeIdRoute
   '/admin/tenants/new': typeof LayoutAdminDashboardAdminTenantsNewRoute
   '/orgs/invites/$id': typeof LayoutAuthenticatedDashboardOrgsInvitesIdRoute
+  '/admin/nodes': typeof LayoutAdminDashboardAdminNodesIndexRoute
+  '/admin/proposals': typeof LayoutAdminDashboardAdminProposalsIndexRoute
   '/admin/tenants': typeof LayoutAdminDashboardAdminTenantsIndexRoute
   '/dashboard/node': typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
   '/dashboard/node/proposals': typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
@@ -401,8 +428,11 @@ export interface FileRoutesById {
   '/_layout/_authenticated/_dashboard/dashboard/': typeof LayoutAuthenticatedDashboardDashboardIndexRoute
   '/_layout/_authenticated/_dashboard/orgs/': typeof LayoutAuthenticatedDashboardOrgsIndexRoute
   '/_layout/_authenticated/_dashboard/settings/': typeof LayoutAuthenticatedDashboardSettingsIndexRoute
+  '/_layout/_admin/_dashboard/admin/nodes/$nodeId': typeof LayoutAdminDashboardAdminNodesNodeIdRoute
   '/_layout/_admin/_dashboard/admin/tenants/new': typeof LayoutAdminDashboardAdminTenantsNewRoute
   '/_layout/_authenticated/_dashboard/orgs/invites/$id': typeof LayoutAuthenticatedDashboardOrgsInvitesIdRoute
+  '/_layout/_admin/_dashboard/admin/nodes/': typeof LayoutAdminDashboardAdminNodesIndexRoute
+  '/_layout/_admin/_dashboard/admin/proposals/': typeof LayoutAdminDashboardAdminProposalsIndexRoute
   '/_layout/_admin/_dashboard/admin/tenants/': typeof LayoutAdminDashboardAdminTenantsIndexRoute
   '/_layout/_authenticated/_dashboard/dashboard/node/': typeof LayoutAuthenticatedDashboardDashboardNodeIndexRoute
   '/_layout/_authenticated/_dashboard/dashboard/node/proposals/': typeof LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute
@@ -441,8 +471,11 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/orgs/'
     | '/settings/'
+    | '/admin/nodes/$nodeId'
     | '/admin/tenants/new'
     | '/orgs/invites/$id'
+    | '/admin/nodes/'
+    | '/admin/proposals/'
     | '/admin/tenants/'
     | '/dashboard/node/'
     | '/dashboard/node/proposals/'
@@ -473,8 +506,11 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/orgs'
     | '/settings'
+    | '/admin/nodes/$nodeId'
     | '/admin/tenants/new'
     | '/orgs/invites/$id'
+    | '/admin/nodes'
+    | '/admin/proposals'
     | '/admin/tenants'
     | '/dashboard/node'
     | '/dashboard/node/proposals'
@@ -518,8 +554,11 @@ export interface FileRouteTypes {
     | '/_layout/_authenticated/_dashboard/dashboard/'
     | '/_layout/_authenticated/_dashboard/orgs/'
     | '/_layout/_authenticated/_dashboard/settings/'
+    | '/_layout/_admin/_dashboard/admin/nodes/$nodeId'
     | '/_layout/_admin/_dashboard/admin/tenants/new'
     | '/_layout/_authenticated/_dashboard/orgs/invites/$id'
+    | '/_layout/_admin/_dashboard/admin/nodes/'
+    | '/_layout/_admin/_dashboard/admin/proposals/'
     | '/_layout/_admin/_dashboard/admin/tenants/'
     | '/_layout/_authenticated/_dashboard/dashboard/node/'
     | '/_layout/_authenticated/_dashboard/dashboard/node/proposals/'
@@ -811,6 +850,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminDashboardAdminTenantsIndexRouteImport
       parentRoute: typeof LayoutAdminDashboardAdminTenantsRoute
     }
+    '/_layout/_admin/_dashboard/admin/proposals/': {
+      id: '/_layout/_admin/_dashboard/admin/proposals/'
+      path: '/proposals'
+      fullPath: '/admin/proposals/'
+      preLoaderRoute: typeof LayoutAdminDashboardAdminProposalsIndexRouteImport
+      parentRoute: typeof LayoutAdminDashboardAdminRoute
+    }
+    '/_layout/_admin/_dashboard/admin/nodes/': {
+      id: '/_layout/_admin/_dashboard/admin/nodes/'
+      path: '/nodes'
+      fullPath: '/admin/nodes/'
+      preLoaderRoute: typeof LayoutAdminDashboardAdminNodesIndexRouteImport
+      parentRoute: typeof LayoutAdminDashboardAdminRoute
+    }
     '/_layout/_authenticated/_dashboard/orgs/invites/$id': {
       id: '/_layout/_authenticated/_dashboard/orgs/invites/$id'
       path: '/orgs/invites/$id'
@@ -824,6 +877,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/tenants/new'
       preLoaderRoute: typeof LayoutAdminDashboardAdminTenantsNewRouteImport
       parentRoute: typeof LayoutAdminDashboardAdminTenantsRoute
+    }
+    '/_layout/_admin/_dashboard/admin/nodes/$nodeId': {
+      id: '/_layout/_admin/_dashboard/admin/nodes/$nodeId'
+      path: '/nodes/$nodeId'
+      fullPath: '/admin/nodes/$nodeId'
+      preLoaderRoute: typeof LayoutAdminDashboardAdminNodesNodeIdRouteImport
+      parentRoute: typeof LayoutAdminDashboardAdminRoute
     }
     '/_layout/_authenticated/_dashboard/dashboard/node/proposals/': {
       id: '/_layout/_authenticated/_dashboard/dashboard/node/proposals/'
@@ -858,6 +918,9 @@ interface LayoutAdminDashboardAdminRouteChildren {
   LayoutAdminDashboardAdminSystemRoute: typeof LayoutAdminDashboardAdminSystemRoute
   LayoutAdminDashboardAdminTenantsRoute: typeof LayoutAdminDashboardAdminTenantsRouteWithChildren
   LayoutAdminDashboardAdminIndexRoute: typeof LayoutAdminDashboardAdminIndexRoute
+  LayoutAdminDashboardAdminNodesNodeIdRoute: typeof LayoutAdminDashboardAdminNodesNodeIdRoute
+  LayoutAdminDashboardAdminNodesIndexRoute: typeof LayoutAdminDashboardAdminNodesIndexRoute
+  LayoutAdminDashboardAdminProposalsIndexRoute: typeof LayoutAdminDashboardAdminProposalsIndexRoute
 }
 
 const LayoutAdminDashboardAdminRouteChildren: LayoutAdminDashboardAdminRouteChildren =
@@ -868,6 +931,12 @@ const LayoutAdminDashboardAdminRouteChildren: LayoutAdminDashboardAdminRouteChil
     LayoutAdminDashboardAdminTenantsRoute:
       LayoutAdminDashboardAdminTenantsRouteWithChildren,
     LayoutAdminDashboardAdminIndexRoute: LayoutAdminDashboardAdminIndexRoute,
+    LayoutAdminDashboardAdminNodesNodeIdRoute:
+      LayoutAdminDashboardAdminNodesNodeIdRoute,
+    LayoutAdminDashboardAdminNodesIndexRoute:
+      LayoutAdminDashboardAdminNodesIndexRoute,
+    LayoutAdminDashboardAdminProposalsIndexRoute:
+      LayoutAdminDashboardAdminProposalsIndexRoute,
   }
 
 const LayoutAdminDashboardAdminRouteWithChildren =

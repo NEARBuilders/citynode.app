@@ -107,7 +107,7 @@ function NewTenantPage() {
   const auth = useAuthClient();
   const { auth: adminAuth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
-  const activeNetwork = auth.near.useActiveNetwork() as NearNetworkId;
+  const activeNetwork = auth.useActiveNetwork() as NearNetworkId;
   const authVariables = runtimeConfig?.auth?.variables as AuthRuntimeVariables | undefined;
 
   const hasOrg = !!adminAuth.activeOrganizationId;

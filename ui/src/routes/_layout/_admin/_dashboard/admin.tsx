@@ -1,5 +1,13 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Building2, Fuel, LayoutDashboard, Settings, Shield } from "lucide-react";
+import {
+  Building2,
+  FileCheck2,
+  Fuel,
+  LayoutDashboard,
+  Network,
+  Settings,
+  Shield,
+} from "lucide-react";
 import { getAccount } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
@@ -129,6 +137,8 @@ function AdminPage() {
 
 const NAV_ITEMS = [
   { label: "dashboard", to: "/admin", icon: LayoutDashboard },
+  { label: "nodes", to: "/admin/nodes", icon: Network },
+  { label: "proposals", to: "/admin/proposals", icon: FileCheck2 },
   { label: "tenants", to: "/admin/tenants", icon: Building2 },
   { label: "relayer", to: "/admin/relayer", icon: Fuel },
   { label: "system", to: "/admin/system", icon: Settings },

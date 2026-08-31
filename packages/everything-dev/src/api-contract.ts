@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { buildAuthTypesGenContent } from "./auth-types-gen";
+import { buildAuthExportStub, buildAuthTypesGenContent } from "./auth-types-gen";
 import { fetchJsonOrNull, fetchResponse } from "./http-client";
 import type { JsonObject, RuntimeConfig, RuntimePluginConfig } from "./types";
 
@@ -453,11 +453,20 @@ export function writeGeneratedFiles(opts: {
       );
     }
   } else if (opts.authSource) {
+    const generatedAuthExportPath = join(
+      opts.configDir,
+      ".bos",
+      "generated",
+      "auth",
+      "auth-export.d.ts",
+    );
+    mkdirSync(dirname(generatedAuthExportPath), { recursive: true });
+    if (!existsSync(generatedAuthExportPath)) {
+      writeFileIfChanged(generatedAuthExportPath, buildAuthExportStub());
+    }
+
     for (const authTypesPath of authTypeTargets) {
-      const exportImportPath = toImportPath(
-        authTypesPath,
-        join(opts.configDir, ".bos", "generated", "auth", "auth-export.d.ts"),
-      );
+      const exportImportPath = toImportPath(authTypesPath, generatedAuthExportPath);
       const contractImportPath = toImportPath(
         authTypesPath,
         join(opts.configDir, ".bos", "generated", "auth", "contract.d.ts"),

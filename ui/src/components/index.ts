@@ -31,6 +31,7 @@ export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
 export { SidebarUserNav } from "./layout/sidebar-user-nav";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
+export { NodeValidatorTable } from "./node-validator-table";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
 export { Button } from "./ui/button";

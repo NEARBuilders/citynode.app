@@ -81,7 +81,7 @@ export type InferOutput<T extends string> = Record<string, unknown>;
     expect(uiAuthTypes).toContain("AuthPluginContext");
   });
 
-  it("uses `export type *` in the contract-based path when no authExportPath is provided", async () => {
+  it("creates an auth export fallback when no authExportPath is provided", async () => {
     const { writeGeneratedFiles } = await import("../../src/api-contract");
     testDir = mkdtempSync(join(tmpdir(), "api-contract-auth-test-"));
 
@@ -91,14 +91,6 @@ export type InferOutput<T extends string> = Record<string, unknown>;
 
     const contractPath = join(apiSrc, "contract.ts");
     writeFile(contractPath, "export type ContractType = { ping: string };");
-
-    writeFile(
-      join(authDir, "auth-export.d.ts"),
-      `import type { InferOutput } from "./contract";
-export type AuthTeam = InferOutput<"listTeams">[number];
-export type GetFullOrganizationInput = { organizationId: string };
-`,
-    );
 
     writeFile(
       join(authDir, "contract.d.ts"),
@@ -125,6 +117,9 @@ export type InferOutput<T extends string> = Record<string, unknown>;
 
     expect(uiAuthTypes).toContain("export type * from");
     expect(uiAuthTypes).not.toContain("GetOrganizationInput");
+    expect(readFileSync(join(authDir, "auth-export.d.ts"), "utf-8")).toContain(
+      "AuthOrganizationContext",
+    );
   });
 });
 
@@ -221,6 +216,10 @@ describe("writeGeneratedFiles — apiDependsOn filtering", () => {
       pluginDependsOn: {
         pluginA: ["auth"],
         pluginB: ["pluginA"],
+      },
+      pluginLocalPaths: {
+        pluginA: join(testDir, "plugins", "pluginA"),
+        pluginB: join(testDir, "plugins", "pluginB"),
       },
     });
 
