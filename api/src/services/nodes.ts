@@ -46,6 +46,7 @@ export interface NodeUpdateInput {
 export interface NodeListFilter {
   kind?: NodeKind;
   parentId?: string | null;
+  tenantId?: string;
 }
 
 export interface SubtreeValidator {
@@ -172,6 +173,9 @@ export const NodesLive = Layer.effect(
           const conditions = [];
           if (filter?.kind !== undefined) {
             conditions.push(eq(nodesTable.kind, filter.kind));
+          }
+          if (filter?.tenantId !== undefined) {
+            conditions.push(eq(nodesTable.tenantId, filter.tenantId));
           }
           if (filter?.parentId !== undefined) {
             if (filter.parentId === null) {
