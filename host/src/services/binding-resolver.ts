@@ -61,7 +61,8 @@ function mapBindingsByHostname(
   const gatewayId = resolveGatewayId(config);
   const entries = new Map<string, TenantBinding>();
   for (const binding of bindings) {
-    entries.set(`${binding.hostname.toLowerCase()}.${gatewayId}`, binding);
+    const hostname = binding.hostname.toLowerCase();
+    entries.set(hostname.includes(".") ? hostname : `${hostname}.${gatewayId}`, binding);
   }
   return entries;
 }

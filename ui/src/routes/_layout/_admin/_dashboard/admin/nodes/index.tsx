@@ -2,16 +2,35 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Network } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  SectionHeader,
+  Skeleton,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components";
 import { DataTable } from "@/components/ui/data-table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Node = Awaited<ReturnType<ApiClient["listRootNodes"]>>[number];
 
 interface RootNodeRow {
   node: Node;
+  parent: Node | undefined;
+  status: string;
   childrenCount: number;
   validatorCount: number;
 }
@@ -25,16 +44,26 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/nodes/")(
 
 function AdminNodes() {
   const apiClient = useApiClient();
+  const [scope, setScope] = useState("roots");
+  const [kind, setKind] = useState("all");
   const nodesQuery = useQuery({
-    queryKey: ["admin-nodes"],
+    queryKey: ["admin-nodes", scope],
     queryFn: async () => {
-      const nodes = await apiClient.listRootNodes();
+      const [allNodes, tenants] = await Promise.all([
+        apiClient.listNodes({}),
+        apiClient.listTenants(),
+      ]);
+      const nodes = scope === "roots" ? await apiClient.listRootNodes() : allNodes;
+      const parents = new Map(allNodes.map((node) => [node.id, node]));
+      const statuses = new Map(tenants.map((tenant) => [tenant.id, tenant.status]));
       return (
         await Promise.all(
           nodes.map(async (node): Promise<RootNodeRow> => {
             const summary = await apiClient.getNodeSummary({ nodeId: node.id });
             return {
               node,
+              parent: node.parentId ? parents.get(node.parentId) : undefined,
+              status: statuses.get(node.tenantId) ?? "unknown",
               childrenCount: summary.childrenCount,
               validatorCount: summary.validators.length,
             };
@@ -76,6 +105,32 @@ function AdminNodes() {
         ),
       },
       {
+        id: "parent",
+        accessorFn: (row) => row.parent?.name ?? "Root node",
+        header: "Parent",
+        cell: ({ row }) =>
+          row.original.parent ? (
+            <Link
+              to="/admin/nodes/$nodeId"
+              params={{ nodeId: row.original.parent.id }}
+              className="text-foreground hover:underline"
+            >
+              {row.original.parent.name}
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">Root node</span>
+          ),
+      },
+      {
+        accessorKey: "status",
+        header: "Tenant status",
+        cell: ({ row }) => (
+          <Badge variant={row.original.status === "active" ? "default" : "secondary"}>
+            {row.original.status.replaceAll("_", " ")}
+          </Badge>
+        ),
+      },
+      {
         accessorKey: "validatorCount",
         header: "Validators",
       },
@@ -98,9 +153,33 @@ function AdminNodes() {
     [],
   );
 
+  const visibleNodes = (nodesQuery.data ?? []).filter(
+    (row) => kind === "all" || row.node.kind === kind,
+  );
+
   return (
     <div className="space-y-6">
       <SectionHeader title="Node structure" />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tabs value={scope} onValueChange={setScope}>
+          <TabsList>
+            <TabsTrigger value="roots">Root nodes</TabsTrigger>
+            <TabsTrigger value="all">All nodes</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Select value={kind} onValueChange={setKind}>
+          <SelectTrigger aria-label="Filter nodes by kind">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All kinds</SelectItem>
+            <SelectItem value="country">Country</SelectItem>
+            <SelectItem value="state">State</SelectItem>
+            <SelectItem value="city">City</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {nodesQuery.isLoading ? (
         <Card className="space-y-3 p-6">
@@ -119,16 +198,14 @@ function AdminNodes() {
             </Button>
           }
         />
-      ) : !nodesQuery.data?.length ? (
+      ) : !visibleNodes.length ? (
         <EmptyState
           icon={Network}
-          title="No root nodes"
-          description="No top-level nodes have been registered yet."
+          title="No matching nodes"
+          description="No nodes match this view. Try all nodes or a different kind."
         />
       ) : (
-        <div className="overflow-x-auto">
-          <DataTable columns={columns} data={nodesQuery.data} />
-        </div>
+        <DataTable columns={columns} data={visibleNodes} />
       )}
     </div>
   );

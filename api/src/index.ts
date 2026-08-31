@@ -109,6 +109,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const authorizedTenant = async (
       input: { tenantId: string },
       context: {
+        user?: { role?: string | null };
         organization?: { activeOrganizationId: string | null };
         near?: { primaryAccountId: string | null };
       },
@@ -120,6 +121,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           data: { resource: "tenant", resourceId: input.tenantId },
         });
       }
+      if (context.user?.role === "admin") return tenant;
       if (tenant.orgId === null) {
         const isOwner =
           !!context.near?.primaryAccountId && context.near.primaryAccountId === tenant.accountId;
@@ -145,12 +147,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         timestamp: new Date().toISOString(),
       })),
 
-      listTenants: builder.listTenants
-        .use(requireAuth)
-        .use(requireOrganization)
-        .handler(async ({ context }) =>
-          services.tenants.listTenantsByOrgIds([context.organization.activeOrganizationId]),
-        ),
+      listTenants: builder.listTenants.use(requireAuth).handler(async ({ context }) => {
+        if (context.user.role === "admin") return services.tenants.listAllTenants();
+        const orgId = context.organization?.activeOrganizationId;
+        if (!orgId) {
+          throw new ORPCError("FORBIDDEN", { message: "Active organization required" });
+        }
+        return services.tenants.listTenantsByOrgIds([orgId]);
+      }),
 
       createTenant: builder.createTenant
         .use(requireAuth)
@@ -267,8 +271,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .handler(async ({ input, context }) => {
           await authorizedTenant(input, context);
-          return await services.tenants.verifyCustomDomain(input.bindingId);
+          return await services.tenants.verifyCustomDomain(input.tenantId, input.bindingId);
         }),
+
+      deleteBinding: builder.deleteBinding.use(requireAuth).handler(async ({ input, context }) => {
+        await authorizedTenant(input, context);
+        await services.tenants.deleteBinding(input.tenantId, input.bindingId);
+        return { success: true as const };
+      }),
 
       setPrimaryBinding: builder.setPrimaryBinding
         .use(requireAuth)
@@ -335,37 +345,38 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
-      updateNode: builder.updateNode
-        .use(requireAuth)
-        .use(requireOrganization)
-        .handler(async ({ input, context }) => {
-          const node = await services.nodes.getById(input.nodeId);
-          if (!node) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: input.nodeId },
-            });
-          }
-          const tenant = await services.tenants.resolveTenantById(node.tenantId);
-          if (!tenant) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: node.tenantId },
-            });
-          }
-          if (tenant.orgId !== context.organization.activeOrganizationId) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "This node does not belong to your organization",
-            });
-          }
-          return await services.nodes.update(input.nodeId, {
-            ...(input.kind !== undefined && { kind: input.kind }),
-            ...(input.slug !== undefined && { slug: input.slug }),
-            ...(input.name !== undefined && { name: input.name }),
-            ...(input.parentId !== undefined && { parentId: input.parentId }),
-            ...(input.metadata !== undefined && { metadata: input.metadata }),
+      updateNode: builder.updateNode.use(requireAuth).handler(async ({ input, context }) => {
+        const node = await services.nodes.getById(input.nodeId);
+        if (!node) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Node not found",
+            data: { resource: "node", resourceId: input.nodeId },
           });
-        }),
+        }
+        const tenant = await services.tenants.resolveTenantById(node.tenantId);
+        if (!tenant) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Tenant not found",
+            data: { resource: "tenant", resourceId: node.tenantId },
+          });
+        }
+        if (
+          context.user.role !== "admin" &&
+          (!context.organization?.activeOrganizationId ||
+            tenant.orgId !== context.organization.activeOrganizationId)
+        ) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "This node does not belong to your organization",
+          });
+        }
+        return await services.nodes.update(input.nodeId, {
+          ...(input.kind !== undefined && { kind: input.kind }),
+          ...(input.slug !== undefined && { slug: input.slug }),
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.parentId !== undefined && { parentId: input.parentId }),
+          ...(input.metadata !== undefined && { metadata: input.metadata }),
+        });
+      }),
 
       deleteNode: builder.deleteNode
         .use(requireAuth)

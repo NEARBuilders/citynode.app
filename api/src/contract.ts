@@ -277,6 +277,12 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/verify" })
     .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
     .output(TenantBindingRecordSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  deleteBinding: oc
+    .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/delete" })
+    .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
+    .output(z.object({ success: z.literal(true) }))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   setPrimaryBinding: oc

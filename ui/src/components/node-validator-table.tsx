@@ -1,10 +1,17 @@
 import type { InferClientOutputs } from "@orpc/client";
+import type { ReactNode } from "react";
 import type { ApiClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
 
 type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][number];
 
-export function NodeValidatorTable({ validators }: { validators: Validator[] }) {
+export function NodeValidatorTable({
+  validators,
+  renderActions,
+}: {
+  validators: Validator[];
+  renderActions?: (validator: Validator) => ReactNode;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] text-left text-sm">
@@ -15,6 +22,7 @@ export function NodeValidatorTable({ validators }: { validators: Validator[] }) 
             <th className="px-4 py-3 font-semibold">Protocol</th>
             <th className="px-4 py-3 font-semibold">Role</th>
             <th className="px-4 py-3 font-semibold">Default</th>
+            {renderActions && <th className="px-4 py-3 font-semibold">Actions</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -31,6 +39,7 @@ export function NodeValidatorTable({ validators }: { validators: Validator[] }) 
                   {validator.isDefault ? "default" : "no"}
                 </Badge>
               </td>
+              {renderActions && <td className="px-4 py-3">{renderActions(validator)}</td>}
             </tr>
           ))}
         </tbody>
