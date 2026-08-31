@@ -405,6 +405,54 @@ export default createPlugin.withPlugins<PluginsClient>()({
         services.nodes.listChildren(input.nodeId),
       ),
 
+      getSubtree: builder.getSubtree.handler(async ({ input }) => {
+        const subtree = await services.nodes.subtreeWithValidators(input.nodeId);
+        if (subtree.length === 0) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Node not found",
+            data: { resource: "node", resourceId: input.nodeId },
+          });
+        }
+        return subtree;
+      }),
+
+      getNodeSummary: builder.getNodeSummary.handler(async ({ input }) => {
+        const node = await services.nodes.getById(input.nodeId);
+        if (!node) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Node not found",
+            data: { resource: "node", resourceId: input.nodeId },
+          });
+        }
+
+        const [children, subtree, validators, stakingValidators] = await Promise.all([
+          services.nodes.listChildren(input.nodeId),
+          services.nodes.subtreeWithValidators(input.nodeId),
+          services.validators.listByNode(input.nodeId),
+          services.validators.resolveForStaking(input.nodeId),
+        ]);
+        const subtreeValidators = subtree.flatMap((entry) => entry.validators);
+        const subtreeValidatorCountsByRole = { official: 0, community: 0 };
+        for (const validator of subtreeValidators) {
+          if (validator.role === "official") {
+            subtreeValidatorCountsByRole.official += 1;
+          } else if (validator.role === "community") {
+            subtreeValidatorCountsByRole.community += 1;
+          }
+        }
+
+        return {
+          node,
+          childrenCount: children.length,
+          subtreeNodeCount: subtree.length,
+          validators,
+          subtreeValidatorCount: subtreeValidators.length,
+          subtreeValidatorCountsByRole,
+          stakingValidators,
+          children: children.map(({ id, kind, slug, name }) => ({ id, kind, slug, name })),
+        };
+      }),
+
       resolveNodeBySlug: builder.resolveNodeBySlug.handler(async ({ input }) => {
         const node = await services.nodes.resolveBySlug(
           input.slug,

@@ -113,6 +113,29 @@ export const SubtreeNodeSchema = z.object({
   validators: z.array(SubtreeValidatorSchema),
 });
 
+export const NodeSummarySchema = z.object({
+  node: NodeSchema,
+  childrenCount: z.number().int().nonnegative(),
+  subtreeNodeCount: z.number().int().nonnegative(),
+  validators: z.array(ValidatorSchema),
+  subtreeValidatorCount: z.number().int().nonnegative(),
+  subtreeValidatorCountsByRole: z.object({
+    official: z.number().int().nonnegative(),
+    community: z.number().int().nonnegative(),
+  }),
+  stakingValidators: StakingValidatorsSchema,
+  children: z.array(
+    z.object({
+      id: z.string(),
+      kind: NodeKindSchema,
+      slug: z.string(),
+      name: z.string(),
+    }),
+  ),
+});
+
+export type NodeSummary = z.infer<typeof NodeSummarySchema>;
+
 const ThingSchema = z.object({
   thingId: z.string().describe("Unique identifier for the thing"),
   type: z.string().describe("Plugin-derived thing type"),
@@ -354,6 +377,28 @@ export const contract = oc.router({
     .route({ method: "GET", path: "/nodes/{nodeId}/children" })
     .input(z.object({ nodeId: z.string() }))
     .output(z.array(NodeSchema)),
+
+  getSubtree: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/subtree",
+      summary: "Get a node subtree with validators",
+      description: "Public — returns the node and all descendants with validators per node.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(z.array(SubtreeNodeSchema))
+    .errors({ NOT_FOUND }),
+
+  getNodeSummary: oc
+    .route({
+      method: "GET",
+      path: "/nodes/{nodeId}/summary",
+      summary: "Get an aggregated node summary",
+      description: "Public — returns node structure, validator totals, and staking resolution.",
+    })
+    .input(z.object({ nodeId: z.string() }))
+    .output(NodeSummarySchema)
+    .errors({ NOT_FOUND }),
 
   resolveNodeBySlug: oc
     .route({ method: "GET", path: "/nodes/resolve" })
