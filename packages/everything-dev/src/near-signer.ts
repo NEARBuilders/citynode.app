@@ -74,7 +74,7 @@ export async function submitFunctionCallTransaction(
       gas: "300 Tgas",
       attachedDeposit: "0 yocto",
     })
-    .send();
+    .send({ waitUntil: "NONE" });
 
   const txHash = outcome?.transaction?.hash;
   return { success: true, txHash };

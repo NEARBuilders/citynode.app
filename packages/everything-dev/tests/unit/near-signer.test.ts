@@ -150,6 +150,7 @@ describe("submitFunctionCallTransaction", () => {
         attachedDeposit: expect.anything(),
       }),
     );
+    expect(builder.send).toHaveBeenCalledWith({ waitUntil: "NONE" });
     expect(builder.send).toHaveBeenCalledTimes(1);
   });
 
