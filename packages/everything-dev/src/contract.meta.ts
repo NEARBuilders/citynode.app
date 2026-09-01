@@ -50,6 +50,23 @@ export const cliCommandMeta = {
       full: { description: "Print the fully resolved configuration" },
     },
   },
+  registryUse: {
+    commandPath: ["registry", "use"],
+    summary:
+      "Compose app.ui/app.host/app.api/plugins.<key> sections from a published runtime into bos.config.json",
+    interactive: false,
+    fields: {
+      from: {
+        positional: true,
+        description:
+          "Published runtime (account/gateway or bos:// URL), e.g. v1.citynode.near/citynode.app",
+      },
+      sections: {
+        description: "Comma-separated sections to compose, e.g. app.ui,plugins.apps",
+      },
+      dryRun: { description: "Preview the merged config without writing" },
+    },
+  },
   pluginAdd: {
     commandPath: ["plugin", "add"],
     summary: "Add a plugin attachment",

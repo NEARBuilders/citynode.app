@@ -69,6 +69,23 @@ export const ConfigResultSchema = z.object({
   full: z.boolean().default(false),
 });
 
+export const RegistryUseOptionsSchema = z.object({
+  from: z.string().describe("Published runtime to compose from (account/gateway or bos:// URL)"),
+  sections: z
+    .array(z.string())
+    .min(1)
+    .describe("Sections to compose: app.ui, app.host, app.api, app.auth, plugins.<key>"),
+  dryRun: z.boolean().default(false),
+});
+
+export const RegistryUseResultSchema = z.object({
+  status: z.enum(["updated", "dry-run", "error"]),
+  from: z.string(),
+  applied: z.array(z.string()),
+  configPath: z.string().optional(),
+  error: z.string().optional(),
+});
+
 export const PluginAddOptionsSchema = z.object({
   source: z.string(),
   as: z.string().optional(),
@@ -492,6 +509,10 @@ export const bosContract = oc.router({
     .route({ method: "GET", path: "/config" })
     .input(ConfigOptionsSchema)
     .output(ConfigResultSchema),
+  registryUse: oc
+    .route({ method: "POST", path: "/registry/use" })
+    .input(RegistryUseOptionsSchema)
+    .output(RegistryUseResultSchema),
   pluginAdd: oc
     .route({ method: "POST", path: "/plugin/add" })
     .input(PluginAddOptionsSchema)

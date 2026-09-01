@@ -1011,6 +1011,30 @@ async function main() {
       return;
     }
 
+    if (descriptor.key === "registryUse") {
+      console.log();
+      if (result.status === "error") {
+        console.error(colors.error(`${icons.err} ${result.error || "Unknown error"}`));
+        process.exit(1);
+      }
+      console.log(
+        colors.green(
+          `${icons.ok} ${result.status === "dry-run" ? "Dry run" : "Composed"} from ${result.from}`,
+        ),
+      );
+      for (const section of result.applied) {
+        console.log(`  ${colors.green("+")} ${section}`);
+      }
+      if (result.configPath) {
+        console.log(`  ${colors.dim("Config:")} ${result.configPath}`);
+      }
+      if (result.status === "updated") {
+        console.log(colors.dim("  Run bos types gen to refresh generated types."));
+      }
+      console.log();
+      return;
+    }
+
     if (descriptor.key === "publish") {
       if (result.status === "dry-run") {
         console.log();

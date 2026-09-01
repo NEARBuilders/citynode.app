@@ -28,6 +28,8 @@ bos publish --network testnet
 bos publish --packages ui,api
 ```
 
+The registry transaction is signed in-process via near-kit — key resolution order: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json`. Publishes are skipped when FastKV already holds an identical config. Reads are indexed by tx signer, so the config resolves at `bos://<account>/<gateway>` only when signed by `<account>` itself — see the `registry` skill for the namespace=signer law and composing other runtimes (`bos registry use`).
+
 After `bos publish --deploy`:
 1. Each workspace builds and deploys to Zephyr CDN
 2. `bos.config.json` is auto-updated with production URLs + integrity hashes
@@ -62,7 +64,7 @@ You don't need to wait for CI/CD to see changes in production. Publish your own 
 
 **Step-by-step:**
 
-1. Install near-cli-rs (v0.23.5) — the `bos` CLI shells out to it for `bos publish` and `bos key generate`
+1. Install near-cli-rs (v0.23.5) — only needed for account creation and `bos key generate`; `bos publish` signs transactions in-process via near-kit
 2. Create a NEAR account via near-cli-rs (testnet or mainnet; named accounts can own subaccounts, implicit hex accounts cannot)
 3. `bos key generate` — generates a function-call key scoped to the FastKV registry contract; set the output as `NEAR_PRIVATE_KEY`
 4. Update `bos.config.json`: set `account` to your NEAR account, add `"extends": "bos://<parent-account>/<parent-gateway>"`, keep `domain` as the parent gateway

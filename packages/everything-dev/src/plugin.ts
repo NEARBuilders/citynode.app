@@ -75,6 +75,7 @@ import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
 import { computeSriHashForUrl, parseDeployLines } from "./integrity";
+import { applyRegistrySections } from "./registry-use";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import {
   addFunctionCallAccessKey,
@@ -341,6 +342,46 @@ export default createPlugin({
 
       const localConfig = await loadLocalConfig({ cwd: deps.configDir });
       return buildConfigResult(localConfig?.config ?? null, false);
+    }),
+
+    registryUse: builder.registryUse.handler(async ({ input }) => {
+      const configPath = join(deps.configDir, "bos.config.json");
+      const normalizedFrom = input.from.startsWith("bos://") ? input.from : `bos://${input.from}`;
+
+      try {
+        const remote = await fetchBosConfigFromFastKv<Record<string, unknown>>(normalizedFrom);
+        const local = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+        const { config: merged, applied } = applyRegistrySections(
+          local as never,
+          remote as never,
+          input.sections,
+        );
+
+        if (input.dryRun) {
+          return {
+            status: "dry-run" as const,
+            from: normalizedFrom,
+            applied,
+            configPath,
+          };
+        }
+
+        writeFileSync(configPath, `${JSON.stringify(merged, null, 2)}\n`);
+
+        return {
+          status: "updated" as const,
+          from: normalizedFrom,
+          applied,
+          configPath,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          from: normalizedFrom,
+          applied: [],
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
     }),
 
     pluginAdd: builder.pluginAdd.handler(async ({ input }) => {
