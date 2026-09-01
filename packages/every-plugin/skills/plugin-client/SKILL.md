@@ -392,7 +392,6 @@ export type ApiContract = BaseApiContract & {
 ### Regeneration Triggers
 
 Generated files are gitignored and auto-regenerated on:
-- `bun install` (via postinstall `bos types gen`)
 - `bun typecheck`
 - `bos dev` / `bos build`
 - `bos plugin add` / `bos plugin remove`
@@ -433,7 +432,7 @@ bos init myapp.everything.dev \
   --plugins apps,template
 ```
 
-This writes `bos.config.json` with `extends`, scaffolds the project, and generates types. The child's `postinstall` hook runs `bos types gen` automatically.
+This writes `bos.config.json` with `extends`, scaffolds the project, and generates types. Afterward, `bun typecheck`, `bos dev`, and `bos build` regenerate types on demand.
 
 ### What Can Be Overridden
 

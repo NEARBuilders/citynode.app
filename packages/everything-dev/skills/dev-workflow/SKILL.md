@@ -79,7 +79,6 @@ bos types gen   # Regenerate ui/src/lib/api-types.gen.ts and api/src/lib/plugins
 ```
 
 **When it auto-runs:**
-- `bun install` (postinstall hook)
 - `bun typecheck`
 - `bos dev` startup
 - `bos build`, `bos deploy`, `bos publish`

@@ -316,9 +316,9 @@ The auth plugin's subaccount creation flow (used by the tenant wizard) requires 
 | `near account add-key <id> grant-function-call-access ...` | Add a function-call access key (used by `bos key generate`) |
 | `near account delete-keys <id> public-keys <keys> ...` | Remove access keys |
 | `near account export-account <id> explicitly-provide-private-key ...` | Export a full access key |
-| `near contract call-function as-transaction <contract> <method> ...` | Submit a contract call (used internally by `bos publish`) |
+| `near contract call-function as-transaction <contract> <method> ...` | Submit a contract call (used internally by `bos key generate`; `bos publish` signs in-process via near-kit) |
 
-The `bos` CLI wraps near-cli-rs — you normally don't invoke `near` directly except for account creation and key export. `bos publish` and `bos key generate` handle the transaction signing automatically.
+The `bos` CLI wraps near-cli-rs for account and key management — you normally don't invoke `near` directly except for account creation and key export. `bos publish` signs its transaction in-process via near-kit; `bos key generate` handles publish-key minting.
 
 ## Code Changes
 
