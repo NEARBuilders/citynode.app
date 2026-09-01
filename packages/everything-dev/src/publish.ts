@@ -12,7 +12,12 @@ import {
   getRegistryNamespaceForNetwork,
   type NetworkId,
 } from "./fastkv";
-import { ensureNearCli, executeTransaction, resolveNearSigningMode } from "./near-cli";
+import {
+  NostrKeyMissing,
+  PayloadTooLarge,
+  publishViaNostr,
+  RelayRejected,
+} from "./nostr-transport";
 import { getNetworkIdForAccount } from "./network";
 import type { BosConfig, BosConfigInput, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
@@ -70,6 +75,23 @@ export async function waitForPublishedConfig(opts: {
   );
 }
 
+export async function isConfigAlreadyPublished(opts: {
+  account: string;
+  gateway: string;
+  publishConfig: BosConfigInput;
+  registry?: string;
+}): Promise<boolean> {
+  try {
+    const current = await fetchBosConfigFromFastKv<BosConfigInput>(
+      `bos://${opts.account}/${opts.gateway}`,
+      opts.registry,
+    );
+    return JSON.stringify(current) === JSON.stringify(opts.publishConfig);
+  } catch {
+    return false;
+  }
+}
+
 interface PublishToFastKvInput {
   bosConfig: BosConfig;
   runtimeConfig: RuntimeConfig | null;
@@ -123,24 +145,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return { status: "dry-run", registryUrl, built, skipped };
   }
 
-  const privateKey =
-    input.privateKey || process.env.NEAR_PRIVATE_KEY || process.env.BOS_NEAR_PRIVATE_KEY;
-  let signingMode: ReturnType<typeof resolveNearSigningMode>;
-  try {
-    signingMode = resolveNearSigningMode(privateKey);
-  } catch (error) {
-    return {
-      status: "error" as const,
-      registryUrl,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-
   if (input.build) {
-    console.log("  Ensuring NEAR CLI...");
-    await Effect.runPromise(ensureNearCli);
-    console.log("  NEAR CLI ready");
-
     await generateCodeArtifacts(configDir, bosConfig, {
       env: "production",
       runtimeConfig: runtimeConfig ?? undefined,
@@ -208,58 +213,65 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
   const publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
-  const registryEntries: Record<string, string> = {
-    [`apps/${account}/${gateway}/bos.config.json`]: JSON.stringify(publishPayload),
-  };
-
-  const payload = JSON.stringify(registryEntries);
-  const argsBase64 = Buffer.from(payload).toString("base64");
+  const registryKey = `apps/${account}/${gateway}/bos.config.json`;
+  const registryNamespace = getRegistryNamespaceForNetwork(network, input.registry);
+  const configValue = JSON.stringify(publishPayload);
 
   console.log();
   console.log("  Publishing to:");
   console.log(`    ${colors.cyan(registryUrl)}`);
 
   try {
-    let txHash: string | undefined;
+    const alreadyPublished = await isConfigAlreadyPublished({
+      account,
+      gateway,
+      publishConfig: publishPayload,
+      registry: input.registry,
+    });
+    if (alreadyPublished) {
+      console.log("  Already up to date — skipping transaction");
+      return {
+        status: "published",
+        registryUrl,
+        built,
+        skipped,
+        deployResults,
+        publishConfig: publishPayload,
+      };
+    }
 
-    console.log(`  Submitting transaction on ${network}...`);
+    let hostUrl: string;
+    if (isStaging && bosConfig.staging?.domain) {
+      hostUrl = `https://${bosConfig.staging.domain}`;
+    } else if (bosConfig.app.host.production) {
+      hostUrl = bosConfig.app.host.production;
+    } else {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          "bos.config.json must define app.host.production — the nostr transport publishes through the host's apps plugin route.",
+        built,
+        skipped,
+        deployResults,
+      };
+    }
 
-    try {
-      const tx = await Effect.runPromise(
-        executeTransaction(
-          {
-            account,
-            contract: getRegistryNamespaceForNetwork(network, input.registry),
-            method: "__fastdata_kv",
-            argsBase64,
-            network,
-            privateKey: signingMode._tag === "privateKey" ? signingMode.privateKey : undefined,
-            gas: "300Tgas",
-            deposit: "0NEAR",
-            verbose: input.verbose,
-          },
-          signingMode,
-        ),
-      );
-      txHash = tx.txHash;
-      if (txHash && !tx.output?.includes("CodeDoesNotExist")) {
-        console.log(`  Transaction submitted: ${colors.dim(txHash)}`);
-      }
-    } catch (error) {
-      console.log(colors.dim("  Transaction reported an error — verifying publish..."));
-      try {
-        await waitForPublishedConfig({
-          account,
-          gateway,
-          publishConfig: publishPayload,
-          registry: input.registry,
-          timeoutMs: 30_000,
-          intervalMs: 2_000,
-        });
-        txHash = extractTransactionHash(error);
-      } catch {
-        throw error;
-      }
+    console.log(`  Signing registry event and posting to ${colors.cyan(hostUrl)}...`);
+
+    const result = await Effect.runPromise(
+      publishViaNostr({
+        key: registryKey,
+        account,
+        gateway,
+        registry: registryNamespace,
+        value: configValue,
+        hostUrl,
+      }),
+    );
+
+    if (result.transactionHash) {
+      console.log(`  Transaction submitted: ${colors.dim(result.transactionHash)}`);
     }
 
     console.log("  Waiting for publish confirmation...");
@@ -273,7 +285,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return {
       status: "published",
       registryUrl,
-      txHash,
+      txHash: result.transactionHash,
       built,
       skipped,
       deployResults,
@@ -283,7 +295,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return {
       status: "error",
       registryUrl,
-      error: formatNearError(error),
+      error: formatPublishError(error),
       built,
       skipped,
       deployResults,
@@ -291,31 +303,29 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   }
 }
 
-function formatNearError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (message.includes("does not have enough allowance")) {
+function formatPublishError(error: unknown): string {
+  if (error instanceof RelayRejected) {
+    if (error.status === 403) {
+      return (
+        "The signing key is not authorized for this account.\n" +
+        "  Bind a deployment key at /settings/deployment-keys (challenge → verify → prepare),\n" +
+        "  then set NOSTR_PRIVATE_KEY in your environment or CI secrets.\n" +
+        `  Detail: ${error.detail}`
+      );
+    }
+    if (error.status === 429) {
+      return `Publish rate limited — retry shortly.\n  Detail: ${error.detail}`;
+    }
+    return `Publish rejected by the registry relay (status ${error.status}).\n  Detail: ${error.detail}`;
+  }
+  if (error instanceof PayloadTooLarge) {
     return (
-      "The publish access key has insufficient allowance to cover this transaction.\n" +
-      "  Regenerate your key with a higher allowance:\n" +
-      "    bos key generate\n" +
-      `  Original: ${message}`
+      `bos.config.json is too large to publish as a nostr event (${error.size} > ${error.limit} bytes).\n` +
+      "  Reduce the config size or publish via a smaller payload."
     );
   }
-
-  if (message.includes("exceeded gas") || message.includes("GasLimitExceeded")) {
-    return `Transaction exceeded gas limit.\n  Original: ${message}`;
+  if (error instanceof NostrKeyMissing) {
+    return error.message;
   }
-
-  if (message.includes("timeout") || message.includes("Timeout")) {
-    return `Transaction timed out. Check NEAR network status.\n  Original: ${message}`;
-  }
-
-  return message;
-}
-
-function extractTransactionHash(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  const match = message.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
-  return match?.[1];
+  return error instanceof Error ? error.message : String(error);
 }
