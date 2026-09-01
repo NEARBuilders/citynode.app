@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
+import { ArrowUp } from "lucide-react";
+import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
 import { DataTable } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Thing = Awaited<
-  ReturnType<ReturnType<typeof useApiClient>["template"]["listThings"]>
->["data"][number];
+type ApiClient = ReturnType<typeof useApiClient>;
+type Thing = Awaited<ReturnType<ApiClient["template"]["listThings"]>>["data"][number];
+type UpvoteCounts = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCounts"]>>;
 
 export const Route = createFileRoute("/_layout/_public/things/")({
   head: () => ({
@@ -23,53 +25,68 @@ export const Route = createFileRoute("/_layout/_public/things/")({
   component: ThingsIndex,
 });
 
-const columns: ColumnDef<Thing>[] = [
-  {
-    accessorKey: "thingId",
-    header: "ID",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs truncate max-w-[160px] block text-foreground">
-        {row.original.thingId}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "type",
-    header: "Type",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs text-muted-foreground">{row.original.type}</span>
-    ),
-  },
-  {
-    accessorKey: "createdAt",
-    header: "Created",
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground">
-        {new Date(row.original.createdAt).toLocaleDateString()}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "updatedAt",
-    header: "Updated",
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground">
-        {new Date(row.original.updatedAt).toLocaleDateString()}
-      </span>
-    ),
-  },
-  {
-    id: "actions",
-    header: "",
-    cell: ({ row }) => (
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/things/$thingId" params={{ thingId: row.original.thingId }}>
-          View
-        </Link>
-      </Button>
-    ),
-  },
-];
+function createColumns(
+  upvoteCounts: UpvoteCounts | undefined,
+  isLoadingUpvotes: boolean,
+): ColumnDef<Thing>[] {
+  return [
+    {
+      accessorKey: "thingId",
+      header: "ID",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs truncate max-w-[160px] block text-foreground">
+          {row.original.thingId}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">{row.original.type}</span>
+      ),
+    },
+    {
+      id: "upvotes",
+      header: "Upvotes",
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <ArrowUp className="h-3.5 w-3.5" />
+          {isLoadingUpvotes ? "—" : (upvoteCounts?.[row.original.thingId]?.totalCount ?? 0)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Created",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">
+          {new Date(row.original.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "updatedAt",
+      header: "Updated",
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">
+          {new Date(row.original.updatedAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/things/$thingId" params={{ thingId: row.original.thingId }}>
+            View
+          </Link>
+        </Button>
+      ),
+    },
+  ];
+}
 
 function ThingsIndex() {
   const apiClient = useApiClient();
@@ -81,6 +98,19 @@ function ThingsIndex() {
   });
 
   const things: Thing[] = data?.data ?? [];
+  const thingIds = useMemo(() => things.map((thing) => thing.thingId), [things]);
+
+  const upvoteCountsQuery = useQuery({
+    queryKey: ["thing-upvote-counts", thingIds],
+    queryFn: () => apiClient.votes.getUpvoteCounts({ entityIds: thingIds }),
+    enabled: thingIds.length > 0,
+    staleTime: 30 * 1000,
+  });
+
+  const columns = useMemo(
+    () => createColumns(upvoteCountsQuery.data, upvoteCountsQuery.isLoading),
+    [upvoteCountsQuery.data, upvoteCountsQuery.isLoading],
+  );
 
   return (
     <PageContainer variant="default">
