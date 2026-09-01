@@ -1,7 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { Effect } from "effect";
 import { execa } from "execa";
-import { colors } from "./utils/theme";
 
 export interface NearKeyPair {
   publicKey: string;
