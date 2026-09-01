@@ -3,7 +3,6 @@ import { FileKeyStore } from "near-kit/keys/file";
 
 import type { NetworkId } from "./fastkv";
 import { executeKeychainTransaction, isNearCliInstalled, NearTransactionError } from "./near-cli";
-import { colors } from "./utils/theme";
 
 export type SigningKeySource = "provided" | "credentials-file";
 
