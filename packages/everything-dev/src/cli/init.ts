@@ -539,7 +539,6 @@ export function buildChildRootScripts(sections: {
     changeset: "changeset",
     version: "changeset version",
     release: "echo 'Packages versioned - app release handled by workflow'",
-    postinstall: "node node_modules/.bin/bos types gen || true",
     "types:gen": "node node_modules/.bin/bos types gen",
     bos: "bos",
   };

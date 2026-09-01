@@ -65,6 +65,7 @@ jobs:
   lint-and-typecheck:
     name: Lint and Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (Node 24)
@@ -79,9 +80,6 @@ jobs:
 
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
-
-      - name: Run postinstall
-        run: bun run postinstall
 
       - name: Security audit
         id: audit
@@ -140,9 +138,6 @@ jobs:
 
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
-
-      - name: Run postinstall
-        run: bun run postinstall
 
       - name: Test everything-dev
         run: bun run --cwd packages/everything-dev test
@@ -229,9 +224,6 @@ jobs:
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
 
-      - name: Run postinstall
-        run: bun run postinstall
-
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
@@ -259,29 +251,3 @@ jobs:
             .bos/logs/**
             playwright-report/**
             test-results/**
-
-  notify:
-    name: Notify downstream workflows
-    needs: [lint-and-typecheck, framework-tests, plugin-tests, regression]
-    if: |
-      always() &&
-      !contains(needs.*.result, 'failure') &&
-      github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Send repository dispatch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for i in 1 2 3; do
-            if gh api repos/${{ github.repository }}/dispatches \
-              --method POST \
-              -f event_type=ci-main-success \
-              -f "client_payload[sha]=${{ github.sha }}"; then
-              exit 0
-            fi
-            sleep 5
-          done
-          exit 1

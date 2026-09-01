@@ -20,14 +20,13 @@ permissions:
   contents: write
   id-token: write
   pull-requests: write
-  packages: write
 
 jobs:
   release:
     name: Publish Packages
     runs-on: ubuntu-latest
     env:
-      TARGET_REF: ${{ inputs.ref != '' && inputs.ref || github.event.client_payload.sha || github.sha }}
+      TARGET_REF: ${{ inputs.ref != '' && inputs.ref || github.sha }}
     outputs:
       should_publish: ${{ steps.release_mode.outputs.should_publish }}
       target_ref: ${{ steps.target_ref.outputs.ref }}
@@ -53,9 +52,6 @@ jobs:
 
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
-
-      - name: Run postinstall
-        run: bun run postinstall
 
       - name: Create release PR when changesets are pending
         id: changesets

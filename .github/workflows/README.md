@@ -12,7 +12,7 @@ This repository uses the following workflows:
 - `Release` — changeset versioning and npm publish (manual only, for framework packages)
 - `Docker` — Docker build and push (manual or via Release only)
 
-The key design: `CI` is the validation workflow. On successful push to `main`, CI sends a `repository_dispatch(ci-main-success)` event that triggers `Deploy` directly. No Release or Docker in between — this is a downstream project that only deploys its own app workspaces.
+The key design: `CI` is the validation workflow. On a successful push to `main`, the `Deploy` workflow triggers automatically via `workflow_run` — no dispatch token, no notify job, and it checks out the exact SHA that CI validated (`workflow_run.head_sha`). No Release or Docker in between — this is a downstream project that only deploys its own app workspaces.
 
 `Staging` runs independently on push to the `staging` branch, deploying to testnet using `v1.citynode.testnet` as the signing account.
 
@@ -28,19 +28,18 @@ Host is never deployed from this repo — it's loaded from a remote URL at runti
 
 **Jobs:**
 1. `detect-changes` — diffs against base to determine if `packages/everything-dev/` or `packages/every-plugin/` changed
-2. `lint-and-typecheck` — install, build, postinstall, audit, lint, typecheck
+2. `lint-and-typecheck` — install, build, audit, lint, typecheck
 3. `framework-tests` — runs `everything-dev` tests (only if `everything-dev` or `every-plugin` changed)
 4. `plugin-tests` — runs `every-plugin` tests (only if `every-plugin` changed)
 5. `regression` — full stack regression with Playwright + Go HTTP tests (needs `lint-and-typecheck`)
-6. `notify` — sends `repository_dispatch(ci-main-success)` with SHA (only on push to main, all jobs must pass)
 
 **Key design decisions:**
-- `Build every-plugin` runs before `postinstall` because `postinstall` triggers `types:gen` which needs `every-plugin` to be built first.
+- Generated types (`types:gen`) are produced on demand: `bun typecheck` chains `types:gen` first, `bos dev`/`bos build`/`bos publish` regenerate via `generateCodeArtifacts` — no postinstall hook exists (it was dead code under `ignore-scripts = true`).
 - `detect-changes` uses native `git diff` (no third-party action). For `workflow_dispatch`, all tests run unconditionally.
-- `notify` requires `actions: write` permission to call the dispatch API. It has a 3-retry backoff.
 - Playwright browsers are cached by `bun.lock` hash — cache hit only installs system deps (~10s), miss does full install (~60-90s).
-- `cancel-in-progress: true` is safe for CI — cancelled runs never send `repository_dispatch` (the `notify` job is blocked).
-- Skipped jobs in `needs` are non-blocking: `notify` runs if `framework-tests`/`plugin-tests` are skipped (no relevant changes), but won't run if any needed job failed.
+- `cancel-in-progress: true` is safe for CI — cancelled runs never trigger Deploy (the `workflow_run` gate requires `conclusion == 'success'`).
+- Skipped jobs in `needs` are non-blocking for the workflow result: `framework-tests`/`plugin-tests` may be skipped (no relevant changes) without failing CI.
+- Deploy reads its config from FastKV at runtime (`BOS_ACCOUNT`/`BOS_GATEWAY` on Railway), so nothing needs to be committed back after a deploy.
 
 ### Docker (`docker.yml`)
 
@@ -64,7 +63,7 @@ Host is never deployed from this repo — it's loaded from a remote URL at runti
 ```
 1. Developer creates changeset          →  bun run changeset
 2. Developer merges feature branch      →  Changesets land on main
-3. CI succeeds on main                   →  repository_dispatch triggers Deploy directly
+3. CI succeeds on main                   →  workflow_run triggers Deploy directly
                                              (Release is NOT triggered automatically)
 4. Developer manually triggers Release  →  Creates/updates "chore: version packages" PR
 5. Team merges Version Packages PR      →  CI triggers Release again via workflow_dispatch
@@ -79,14 +78,15 @@ Host is never deployed from this repo — it's loaded from a remote URL at runti
 
 ### Deploy (`deploy.yml`)
 
-**Trigger:** `repository_dispatch(ci-main-success)` from CI, or `workflow_dispatch`.
+**Trigger:** `workflow_run` (CI completed successfully on `main`), or `workflow_dispatch`.
 
 **Purpose:** Build and deploy app workspaces (UI, API, plugins) to Zephyr CDN, publish `bos.config.json` to FastKV, and redeploy Railway.
 
 **Behavior:**
 - Runs `bos publish --deploy --packages ui,api,apps,proposals,votes` (excludes host — host is loaded from a remote URL)
+- Checks out the exact commit CI validated (`github.event.workflow_run.head_sha`)
 - Redeploys the Railway service
-- Commits and pushes updated `bos.config.json` deployment URLs back to `main`
+- Does **not** commit anything back — the Railway host fetches the published config from FastKV (`bos start` resolves `BOS_ACCOUNT`/`BOS_GATEWAY`), so the repo copy of `bos.config.json` is the publish *input*, not the deploy output
 
 **Secrets:** `NEAR_PRIVATE_KEY` and `ZEPHYR_CI_TOKEN` come from repository secrets. NEAR for FastKV publish, Zephyr CI token for CDN deploy. If `ZEPHYR_CI_TOKEN` is not set, falls back to `ZEPHYR_AUTH_TOKEN` + `ZEPHYR_USER_EMAIL` (legacy server-token auth).
 
@@ -98,7 +98,7 @@ This repo is a downstream child project. The flow is simplified — no Release o
 
 ```
 main branch push → CI (lint, typecheck, regression)
-                 → ci-main-success dispatch → Deploy (Zephyr CDN + FastKV, excludes host)
+                 → workflow_run (success) → Deploy (Zephyr CDN + FastKV, excludes host)
 
 staging branch push → Staging (Zephyr CDN + FastKV on testnet, excludes host)
 ```
@@ -124,7 +124,6 @@ Builder stage:
   RUN bun install --frozen-lockfile --ignore-scripts
   RUN bun run --cwd packages/every-plugin build
   RUN bun run --cwd packages/everything-dev build
-  RUN bun run postinstall                     # types:gen needs every-plugin built first
   RUN bun run scripts/resolve-workspace-refs.ts  # normalize workspace refs
   RUN rm -rf host api ui plugins              # App code loaded remotely at runtime
 
@@ -167,6 +166,6 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 | `ZEPHYR_CI_TOKEN` | Deploy, Staging (as `ZE_CI_TOKEN`) | Zephyr Cloud CI token for CDN deploy (preferred) |
 | `ZEPHYR_AUTH_TOKEN` | Deploy, Staging (as `ZE_SECRET_TOKEN`) | Zephyr auth used as direct bearer token; `ZE_CI_TOKEN` fallback |
 | `ZEPHYR_USER_EMAIL` | Deploy, Staging (as `ZE_USER_EMAIL`) | Fallback Zephyr user email when `ZEPHYR_CI_TOKEN` is absent |
-| `GITHUB_TOKEN` | Release, Deploy, CI notify | Changesets PR creation, GitHub releases, repository_dispatch |
+| `GITHUB_TOKEN` | Release, Check Skills | Changesets PR creation, GitHub releases, skills review PRs |
 
 NEAR CLI is installed in a dedicated workflow step before publishing so Actions can apply the PATH update before `bos publish --deploy` runs.
