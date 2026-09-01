@@ -1,5 +1,5 @@
-import { FileKeyStore } from "near-kit/keys/file";
 import { isPrivateKey, Near, type PrivateKey } from "near-kit";
+import { FileKeyStore } from "near-kit/keys/file";
 
 import type { NetworkId } from "./fastkv";
 import { executeKeychainTransaction, isNearCliInstalled, NearTransactionError } from "./near-cli";
@@ -94,7 +94,10 @@ export function describeSigningStrategy(strategy: SigningStrategy): string {
     : `~/.near-credentials`;
 }
 
-async function submitWithNearKit(tx: RegistryWriteRequest, privateKey: string): Promise<NearTransactionResult> {
+async function submitWithNearKit(
+  tx: RegistryWriteRequest,
+  privateKey: string,
+): Promise<NearTransactionResult> {
   const near = new Near({
     network: tx.network,
     defaultSignerId: tx.account,

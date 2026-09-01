@@ -90,9 +90,7 @@ describe("near-cli", () => {
       stderr: "Access key exhausted",
     });
 
-    await expect(executeKeychainTransaction(KEYCHAIN_ARGS)).rejects.toThrow(
-      /Access key exhausted/,
-    );
+    await expect(executeKeychainTransaction(KEYCHAIN_ARGS)).rejects.toThrow(/Access key exhausted/);
   });
 
   it("refuses to run without a TTY", async () => {

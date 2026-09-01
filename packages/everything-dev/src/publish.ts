@@ -11,7 +11,12 @@ import {
   getRegistryNamespaceForNetwork,
   type NetworkId,
 } from "./fastkv";
-import { describeSigningStrategy, resolveSigningStrategy, submitRegistryWrite, type SigningStrategy } from "./near-signer";
+import {
+  describeSigningStrategy,
+  resolveSigningStrategy,
+  type SigningStrategy,
+  submitRegistryWrite,
+} from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import type { BosConfig, BosConfigInput, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";

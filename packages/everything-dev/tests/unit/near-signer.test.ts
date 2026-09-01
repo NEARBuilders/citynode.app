@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,7 +37,12 @@ vi.mock("../../src/near-cli", async (importOriginal) => {
   };
 });
 
-import { describeSigningStrategy, resolveSigningKey, resolveSigningStrategy, submitRegistryWrite } from "../../src/near-signer";
+import {
+  describeSigningStrategy,
+  resolveSigningKey,
+  resolveSigningStrategy,
+  submitRegistryWrite,
+} from "../../src/near-signer";
 
 const VALID_KEY =
   "ed25519:5dGS92auiST5KtcLpBG3hQXnWUX2ny94BGYHbzup4jhzyYcpisz6TeoSGKhVQNTtcdANs9MJp5tqqPe21aCGjtBx";
@@ -242,8 +247,7 @@ describe("submitRegistryWrite", () => {
     contract: "dev.everything.near",
     method: "__fastdata_kv",
     args: {
-      "apps/v1.citynode.near/citynode.app/bos.config.json":
-        '{"account":"v1.citynode.near"}',
+      "apps/v1.citynode.near/citynode.app/bos.config.json": '{"account":"v1.citynode.near"}',
     },
     network: "mainnet" as const,
     privateKey: VALID_KEY,
