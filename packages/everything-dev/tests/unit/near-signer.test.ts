@@ -1,20 +1,20 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { NearMock, builder } = vi.hoisted(() => {
+const { NearMock, nearCalls, builder } = vi.hoisted(() => {
+  const nearCalls: Array<Record<string, unknown>> = [];
   const send = vi.fn();
-  const functionCall = vi.fn(function () {
-    return { send };
-  });
-  const transaction = vi.fn(function () {
-    return { functionCall };
-  });
-  const NearMock = vi.fn(function () {
-    return { transaction };
-  });
-  return { NearMock, builder: { send, functionCall, transaction } };
+  const functionCall = vi.fn(() => ({ send }));
+  const transaction = vi.fn(() => ({ functionCall }));
+  class NearMock {
+    transaction = transaction;
+    constructor(config: Record<string, unknown>) {
+      nearCalls.push(config);
+    }
+  }
+  return { NearMock, nearCalls, builder: { send, functionCall, transaction } };
 });
 
 vi.mock("near-kit", async (importOriginal) => {
@@ -112,7 +112,7 @@ describe("resolveSigningKey", () => {
 
 describe("submitFunctionCallTransaction", () => {
   beforeEach(() => {
-    NearMock.mockClear();
+    nearCalls.length = 0;
     builder.send.mockReset();
     builder.functionCall.mockClear();
     builder.transaction.mockClear();
@@ -123,8 +123,7 @@ describe("submitFunctionCallTransaction", () => {
     contract: "dev.everything.near",
     method: "__fastdata_kv",
     args: {
-      "apps/v1.citynode.near/citynode.app/bos.config.json":
-        '{"account":"v1.citynode.near"}',
+      "apps/v1.citynode.near/citynode.app/bos.config.json": '{"account":"v1.citynode.near"}',
     },
     network: "mainnet" as const,
     privateKey: VALID_KEY,
@@ -136,7 +135,7 @@ describe("submitFunctionCallTransaction", () => {
     const result = await submitFunctionCallTransaction(txArgs);
 
     expect(result).toEqual({ success: true, txHash: "ABCDEF123" });
-    expect(NearMock).toHaveBeenCalledWith({
+    expect(nearCalls[0]).toEqual({
       network: "mainnet",
       defaultSignerId: "v1.citynode.near",
       privateKey: VALID_KEY,

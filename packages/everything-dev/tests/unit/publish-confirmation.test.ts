@@ -12,7 +12,7 @@ vi.mock("../../src/fastkv", async (importOriginal) => {
   };
 });
 
-import { waitForPublishedConfig, isConfigAlreadyPublished } from "../../src/publish";
+import { isConfigAlreadyPublished, waitForPublishedConfig } from "../../src/publish";
 import type { BosConfig } from "../../src/types";
 
 const publishConfig: BosConfig = {
@@ -102,7 +102,10 @@ describe("isConfigAlreadyPublished", () => {
   });
 
   it("returns false when FastKV differs from the publish payload", async () => {
-    fetchBosConfigFromFastKvMock.mockResolvedValueOnce({ ...publishConfig, domain: "stale.example" });
+    fetchBosConfigFromFastKvMock.mockResolvedValueOnce({
+      ...publishConfig,
+      domain: "stale.example",
+    });
 
     const result = await isConfigAlreadyPublished({
       account: "dev.everything.near",

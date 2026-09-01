@@ -149,7 +149,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     console.log(
       `  Signing with key from ${
         signingKey.source === "provided"
-          ? "NEAR_PRIVATE_KEY"
+          ? "the environment or --private-key flag"
           : colors.dim("~/.near-credentials")
       }`,
     );

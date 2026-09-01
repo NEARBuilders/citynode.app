@@ -75,7 +75,6 @@ import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
 import { computeSriHashForUrl, parseDeployLines } from "./integrity";
-import { applyRegistrySections } from "./registry-use";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import {
   addFunctionCallAccessKey,
@@ -86,6 +85,7 @@ import {
 import { getNetworkIdForAccount } from "./network";
 import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { extractPublishedUrl, publishToFastKv } from "./publish";
+import { applyRegistrySections } from "./registry-use";
 import { createPlugin, z } from "./sdk";
 import {
   type AppOrchestrator,

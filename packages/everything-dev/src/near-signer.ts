@@ -1,5 +1,5 @@
-import { FileKeyStore } from "near-kit/keys/file";
 import { isPrivateKey, Near, type PrivateKey } from "near-kit";
+import { FileKeyStore } from "near-kit/keys/file";
 
 import type { NetworkId } from "./fastkv";
 import { NearTransactionError } from "./near-cli";
@@ -7,7 +7,7 @@ import { NearTransactionError } from "./near-cli";
 function assertPrivateKey(key: string): PrivateKey {
   if (!isPrivateKey(key)) {
     throw new NearTransactionError(
-      `Invalid private key format: must start with "ed25519:" or "secp256k1:". Got: ${key.slice(0, 10)}...`,
+      `Invalid private key format: must start with "ed25519:" or "secp256k1:" (got a ${key.length}-character value).`,
     );
   }
   return key as PrivateKey;
