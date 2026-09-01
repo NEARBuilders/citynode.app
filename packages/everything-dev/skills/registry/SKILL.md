@@ -38,7 +38,7 @@ Or in code: `fetchBosConfigFromFastKv("bos://<account>/<gateway>")` from `everyt
 
 `bos publish [--deploy]` signs the registry transaction **in-process** via near-kit — no near-cli-rs, no external binary:
 
-1. Key resolution: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json` (near-cli-rs compatible, via `FileKeyStore`).
+1. Key resolution: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json` (near-cli-rs compatible, via `FileKeyStore`) → near-cli-rs OS keychain (`sign-with-keychain`, interactive terminals only).
 2. The transaction is a function call on the namespace contract (`__fastdata_kv`) with `{ "apps/<account>/<gateway>/bos.config.json": "<config json>" }`, gas `300 Tgas`, deposit `0`.
 3. Publishes are **skipped** when FastKV already holds an identical config (`isConfigAlreadyPublished`) — free no-op detection before spending gas.
 4. `waitForPublishedConfig` re-reads the registry until the published value matches (confirmation, ~120s timeout).

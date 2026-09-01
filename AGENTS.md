@@ -217,7 +217,7 @@ bun run dev    # hot reload, all services local
 
 **Self-deployed production (step-by-step):**
 
-1. **Install near-cli-rs** (needed for account management and `bos key generate`; `bos publish` signs transactions in-process via near-kit):
+1. **Install near-cli-rs** (needed for account management and `bos key generate`; `bos publish` signs via near-kit, falling back to the near-cli-rs OS keychain for local interactive use):
    ```bash
    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh
    near --version    # verify

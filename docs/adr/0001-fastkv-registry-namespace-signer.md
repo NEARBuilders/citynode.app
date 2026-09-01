@@ -17,7 +17,7 @@ Addendum (same day, from a production publish failure): the registry write is **
 
 ## Decision
 
-- **Publishes sign with the publisher's own NEAR key.** `bos publish` builds and signs the registry transaction in-process via `near-kit` — no near-cli-rs shell-out, no key passed through argv. Key resolution: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json` (near-cli-rs compatible).
+- **Publishes sign with the publisher's own NEAR key.** `bos publish` builds and signs the registry transaction in-process via `near-kit` — no near-cli-rs shell-out, no key passed through argv. Key resolution: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json` (near-cli-rs compatible) → near-cli-rs OS keychain (`sign-with-keychain`), which keeps keys inside the keychain for local interactive publishers.
 - **Nostr is dropped from the publish path.** It duplicates nothing the chain doesn't already provide (see Consequences) and cannot grant write authority. The nostr plugin remains available for identity/social features (comments, builder profiles) as a separate concern.
 - **`bos key generate` stays** — minting a scoped FCAK (restricted to `__fastdata_kv`, allowance-capped) remains the publisher's onboarding step.
 - **No-op publishes are skipped**: `isConfigAlreadyPublished` compares the FastKV value with the payload before submitting, saving allowance and the confirmation wait.

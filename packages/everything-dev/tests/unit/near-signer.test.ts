@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { NearMock, nearCalls, builder } = vi.hoisted(() => {
+const { NearMock, nearCalls, builder, keychainSubmit, nearCliInstalled } = vi.hoisted(() => {
   const nearCalls: Array<Record<string, unknown>> = [];
   const send = vi.fn();
   const functionCall = vi.fn(() => ({ send }));
@@ -14,7 +14,13 @@ const { NearMock, nearCalls, builder } = vi.hoisted(() => {
       nearCalls.push(config);
     }
   }
-  return { NearMock, nearCalls, builder: { send, functionCall, transaction } };
+  return {
+    NearMock,
+    nearCalls,
+    builder: { send, functionCall, transaction },
+    keychainSubmit: vi.fn(),
+    nearCliInstalled: vi.fn(),
+  };
 });
 
 vi.mock("near-kit", async (importOriginal) => {
@@ -22,7 +28,16 @@ vi.mock("near-kit", async (importOriginal) => {
   return { ...actual, Near: NearMock };
 });
 
-import { resolveSigningKey, submitFunctionCallTransaction } from "../../src/near-signer";
+vi.mock("../../src/near-cli", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/near-cli")>();
+  return {
+    ...actual,
+    executeKeychainTransaction: keychainSubmit,
+    isNearCliInstalled: nearCliInstalled,
+  };
+});
+
+import { describeSigningStrategy, resolveSigningKey, resolveSigningStrategy, submitRegistryWrite } from "../../src/near-signer";
 
 const VALID_KEY =
   "ed25519:5dGS92auiST5KtcLpBG3hQXnWUX2ny94BGYHbzup4jhzyYcpisz6TeoSGKhVQNTtcdANs9MJp5tqqPe21aCGjtBx";
@@ -95,27 +110,131 @@ describe("resolveSigningKey", () => {
     expect(resolved).toEqual({ source: "provided", privateKey: VALID_KEY });
   });
 
-  it("throws actionable guidance when no key is available", async () => {
+  it("throws when no key or credentials file is available", async () => {
     const home = mkdtempSync(join(tmpdir(), "near-signer-"));
     tempHomes.push(home);
     process.env.HOME = home;
 
-    const promise = resolveSigningKey({
+    await expect(
+      resolveSigningKey({ account: "v1.citynode.near", network: "mainnet" }),
+    ).rejects.toThrow(/No signing key available/);
+  });
+});
+
+describe("resolveSigningStrategy", () => {
+  const originalHome = process.env.HOME;
+  const originalNearKey = process.env.NEAR_PRIVATE_KEY;
+  const originalBosKey = process.env.BOS_NEAR_PRIVATE_KEY;
+  const originalTty = process.stdin.isTTY;
+  const tempHomes: string[] = [];
+
+  function setTty(value: boolean) {
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value });
+  }
+
+  beforeEach(() => {
+    nearCliInstalled.mockReset();
+    keychainSubmit.mockReset();
+    setTty(true);
+    nearCliInstalled.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    if (originalNearKey === undefined) delete process.env.NEAR_PRIVATE_KEY;
+    else process.env.NEAR_PRIVATE_KEY = originalNearKey;
+    if (originalBosKey === undefined) delete process.env.BOS_NEAR_PRIVATE_KEY;
+    else process.env.BOS_NEAR_PRIVATE_KEY = originalBosKey;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: originalTty,
+    });
+    for (const home of tempHomes.splice(0)) {
+      rmSync(home, { recursive: true, force: true });
+    }
+    vi.restoreAllMocks();
+  });
+
+  it("resolves the near-kit strategy from an env key", async () => {
+    process.env.NEAR_PRIVATE_KEY = VALID_KEY;
+
+    const strategy = await resolveSigningStrategy({
+      account: "v1.citynode.near",
+      network: "mainnet",
+    });
+
+    expect(strategy).toEqual({ strategy: "near-kit", privateKey: VALID_KEY, source: "provided" });
+    expect(describeSigningStrategy(strategy)).toContain("--private-key");
+  });
+
+  it("resolves the near-cli keychain strategy when no key is available on a TTY", async () => {
+    const home = mkdtempSync(join(tmpdir(), "near-signer-"));
+    tempHomes.push(home);
+    process.env.HOME = home;
+
+    const strategy = await resolveSigningStrategy({
+      account: "v1.citynode.near",
+      network: "mainnet",
+    });
+
+    expect(strategy).toEqual({ strategy: "near-cli-keychain" });
+    expect(describeSigningStrategy(strategy)).toContain("keychain");
+  });
+
+  it("throws actionable guidance when there is no key, no TTY, and no near CLI", async () => {
+    const home = mkdtempSync(join(tmpdir(), "near-signer-"));
+    tempHomes.push(home);
+    process.env.HOME = home;
+    setTty(false);
+    nearCliInstalled.mockResolvedValue(false);
+
+    const promise = resolveSigningStrategy({
       account: "v1.citynode.near",
       network: "mainnet",
     });
 
     await expect(promise).rejects.toThrow(/NEAR_PRIVATE_KEY/);
-    await expect(promise).rejects.toThrow(/near-credentials/);
+    await expect(promise).rejects.toThrow(/near-cli-rs keychain/);
   });
 });
 
-describe("submitFunctionCallTransaction", () => {
+describe("submitRegistryWrite", () => {
+  const originalHome = process.env.HOME;
+  const originalNearKey = process.env.NEAR_PRIVATE_KEY;
+  const originalBosKey = process.env.BOS_NEAR_PRIVATE_KEY;
+  const originalTty = process.stdin.isTTY;
+  const tempHomes: string[] = [];
+
+  function setTty(value: boolean) {
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value });
+  }
+
   beforeEach(() => {
     nearCalls.length = 0;
     builder.send.mockReset();
     builder.functionCall.mockClear();
     builder.transaction.mockClear();
+    keychainSubmit.mockReset();
+    setTty(true);
+    nearCliInstalled.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    if (originalNearKey === undefined) delete process.env.NEAR_PRIVATE_KEY;
+    else process.env.NEAR_PRIVATE_KEY = originalNearKey;
+    if (originalBosKey === undefined) delete process.env.BOS_NEAR_PRIVATE_KEY;
+    else process.env.BOS_NEAR_PRIVATE_KEY = originalBosKey;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: originalTty,
+    });
+    for (const home of tempHomes.splice(0)) {
+      rmSync(home, { recursive: true, force: true });
+    }
+    vi.restoreAllMocks();
   });
 
   const txArgs = {
@@ -123,7 +242,8 @@ describe("submitFunctionCallTransaction", () => {
     contract: "dev.everything.near",
     method: "__fastdata_kv",
     args: {
-      "apps/v1.citynode.near/citynode.app/bos.config.json": '{"account":"v1.citynode.near"}',
+      "apps/v1.citynode.near/citynode.app/bos.config.json":
+        '{"account":"v1.citynode.near"}',
     },
     network: "mainnet" as const,
     privateKey: VALID_KEY,
@@ -132,9 +252,9 @@ describe("submitFunctionCallTransaction", () => {
   it("submits a function call via near-kit and returns the transaction hash", async () => {
     builder.send.mockResolvedValueOnce({ transaction: { hash: "ABCDEF123" } });
 
-    const result = await submitFunctionCallTransaction(txArgs);
+    const result = await submitRegistryWrite(txArgs);
 
-    expect(result).toEqual({ success: true, txHash: "ABCDEF123" });
+    expect(result).toEqual({ success: true, txHash: "ABCDEF123", signedWith: "env" });
     expect(nearCalls[0]).toEqual({
       network: "mainnet",
       defaultSignerId: "v1.citynode.near",
@@ -158,6 +278,29 @@ describe("submitFunctionCallTransaction", () => {
     const cause = new Error("does not have enough allowance on this key");
     builder.send.mockRejectedValueOnce(cause);
 
-    await expect(submitFunctionCallTransaction(txArgs)).rejects.toBe(cause);
+    await expect(submitRegistryWrite(txArgs)).rejects.toBe(cause);
+  });
+
+  it("delegates to the near-cli-rs keychain when no key resolves on a TTY", async () => {
+    const home = mkdtempSync(join(tmpdir(), "near-signer-"));
+    tempHomes.push(home);
+    process.env.HOME = home;
+    const { privateKey: _privateKey, ...withoutKey } = txArgs;
+
+    keychainSubmit.mockResolvedValueOnce({ success: true, txHash: "KC123" });
+
+    const result = await submitRegistryWrite(withoutKey);
+
+    expect(result).toEqual({ success: true, txHash: "KC123", signedWith: "near-cli-keychain" });
+    expect(keychainSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account: "v1.citynode.near",
+        contract: "dev.everything.near",
+        method: "__fastdata_kv",
+        args: withoutKey.args,
+        network: "mainnet",
+      }),
+    );
+    expect(nearCalls).toHaveLength(0);
   });
 });

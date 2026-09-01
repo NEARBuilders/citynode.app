@@ -7,6 +7,20 @@ export interface NearKeyPair {
   privateKey: string;
 }
 
+export interface KeychainTransactionConfig {
+  account: string;
+  contract: string;
+  method: string;
+  args: Record<string, string>;
+  network: "mainnet" | "testnet";
+  verbose?: boolean;
+}
+
+export interface KeychainTransactionResult {
+  success: true;
+  txHash?: string;
+}
+
 export interface FunctionCallAccessKeyConfig {
   account: string;
   contract: string;
@@ -97,6 +111,76 @@ const checkNearCliInstalled = Effect.tryPromise({
   },
   catch: () => new Error("Failed to check NEAR CLI"),
 });
+
+export async function isNearCliInstalled(): Promise<boolean> {
+  try {
+    await execa("near", ["--version"], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function combineNearOutput(stdout?: string, stderr?: string): string {
+  return [stdout, stderr].filter((value) => value && value.trim().length > 0).join("\n");
+}
+
+function extractTransactionHash(output: string): string | undefined {
+  const match = output.match(/Transaction ID:\s*([A-Za-z0-9]+)/i);
+  return match?.[1];
+}
+
+export async function executeKeychainTransaction(
+  config: KeychainTransactionConfig,
+): Promise<KeychainTransactionResult> {
+  if (!process.stdin.isTTY) {
+    throw new NearTransactionError(
+      "No TTY available for keychain signing. Set NEAR_PRIVATE_KEY environment variable to sign locally.",
+    );
+  }
+
+  const gas = "300Tgas";
+  const deposit = "0NEAR";
+  const argsBase64 = Buffer.from(JSON.stringify(config.args)).toString("base64");
+
+  const args = [
+    "contract",
+    "call-function",
+    "as-transaction",
+    config.contract,
+    config.method,
+    "base64-args",
+    argsBase64,
+    "prepaid-gas",
+    gas,
+    "attached-deposit",
+    deposit,
+    "sign-as",
+    config.account,
+    "network-config",
+    config.network,
+    "sign-with-keychain",
+    "send",
+  ];
+
+  const result = await execa("near", args, {
+    stdin: "inherit",
+    stdout: "pipe",
+    stderr: "pipe",
+    reject: false,
+    timeout: 5 * 60 * 1000,
+  });
+
+  const combined = combineNearOutput(result.stdout, result.stderr);
+  const txHash = extractTransactionHash(combined);
+  const hasCodeDoesNotExist = /CodeDoesNotExist/i.test(combined);
+
+  if (result.exitCode === 0 || hasCodeDoesNotExist) {
+    return { success: true, txHash };
+  }
+
+  throw new NearTransactionError(combined || `Transaction failed with code ${result.exitCode}`);
+}
 
 async function runNearCommand(args: string[]): Promise<void> {
   if (!process.stdin.isTTY) {

@@ -11,7 +11,7 @@ import {
   getRegistryNamespaceForNetwork,
   type NetworkId,
 } from "./fastkv";
-import { resolveSigningKey, submitFunctionCallTransaction } from "./near-signer";
+import { describeSigningStrategy, resolveSigningStrategy, submitRegistryWrite, type SigningStrategy } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import type { BosConfig, BosConfigInput, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
@@ -139,20 +139,10 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return { status: "dry-run", registryUrl, built, skipped };
   }
 
-  let signingKey: Awaited<ReturnType<typeof resolveSigningKey>>;
+  let strategy: SigningStrategy;
   try {
-    signingKey = await resolveSigningKey({
-      privateKey: input.privateKey,
-      account,
-      network,
-    });
-    console.log(
-      `  Signing with key from ${
-        signingKey.source === "provided"
-          ? "the environment or --private-key flag"
-          : colors.dim("~/.near-credentials")
-      }`,
-    );
+    strategy = await resolveSigningStrategy({ privateKey: input.privateKey, account, network });
+    console.log(`  Signing via ${colors.cyan(describeSigningStrategy(strategy))}`);
   } catch (error) {
     return {
       status: "error" as const,
@@ -260,14 +250,17 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
     console.log(`  Submitting transaction on ${network}...`);
 
-    const result = await submitFunctionCallTransaction({
-      account,
-      contract: registryNamespace,
-      method: "__fastdata_kv",
-      args: registryEntries,
-      network,
-      privateKey: signingKey.privateKey,
-    });
+    const result = await submitRegistryWrite(
+      {
+        account,
+        contract: registryNamespace,
+        method: "__fastdata_kv",
+        args: registryEntries,
+        network,
+        privateKey: input.privateKey,
+      },
+      strategy,
+    );
 
     if (result.txHash) {
       console.log(`  Transaction submitted: ${colors.dim(result.txHash)}`);

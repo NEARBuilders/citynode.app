@@ -1,17 +1,9 @@
-import { isPrivateKey, Near, type PrivateKey } from "near-kit";
 import { FileKeyStore } from "near-kit/keys/file";
+import { isPrivateKey, Near, type PrivateKey } from "near-kit";
 
 import type { NetworkId } from "./fastkv";
-import { NearTransactionError } from "./near-cli";
-
-function assertPrivateKey(key: string): PrivateKey {
-  if (!isPrivateKey(key)) {
-    throw new NearTransactionError(
-      `Invalid private key format: must start with "ed25519:" or "secp256k1:" (got a ${key.length}-character value).`,
-    );
-  }
-  return key as PrivateKey;
-}
+import { executeKeychainTransaction, isNearCliInstalled, NearTransactionError } from "./near-cli";
+import { colors } from "./utils/theme";
 
 export type SigningKeySource = "provided" | "credentials-file";
 
@@ -20,18 +12,32 @@ export interface ResolvedSigningKey {
   privateKey: string;
 }
 
-export interface FunctionCallTransaction {
+export interface RegistryWriteRequest {
   account: string;
   contract: string;
   method: string;
   args: Record<string, string>;
   network: NetworkId;
-  privateKey: string;
+  privateKey?: string;
 }
+
+export type SigningStrategy =
+  | { strategy: "near-kit"; privateKey: string; source: SigningKeySource }
+  | { strategy: "near-cli-keychain" };
 
 export interface NearTransactionResult {
   success: true;
   txHash?: string;
+  signedWith: "env" | "credentials-file" | "near-cli-keychain";
+}
+
+function assertPrivateKey(key: string): PrivateKey {
+  if (!isPrivateKey(key)) {
+    throw new NearTransactionError(
+      `Invalid private key format: must start with "ed25519:" or "secp256k1:" (got a ${key.length}-character value).`,
+    );
+  }
+  return key as PrivateKey;
 }
 
 export async function resolveSigningKey(opts: {
@@ -51,21 +57,48 @@ export async function resolveSigningKey(opts: {
     return { source: "credentials-file", privateKey: keyPair.secretKey };
   }
 
+  throw new NearTransactionError("No signing key available");
+}
+
+export async function resolveSigningStrategy(opts: {
+  privateKey?: string;
+  account: string;
+  network: NetworkId;
+}): Promise<SigningStrategy> {
+  try {
+    const resolved = await resolveSigningKey(opts);
+    return { strategy: "near-kit", privateKey: resolved.privateKey, source: resolved.source };
+  } catch {
+    // fall through to the near-cli-rs keychain
+  }
+
+  if (process.stdin.isTTY && (await isNearCliInstalled())) {
+    return { strategy: "near-cli-keychain" };
+  }
+
   throw new NearTransactionError(
     `No signing key available for ${opts.account} on ${opts.network}. ` +
-      `Set NEAR_PRIVATE_KEY (or BOS_NEAR_PRIVATE_KEY), or store credentials at ` +
-      `~/.near-credentials/${opts.network}/${opts.account}.json. ` +
+      `Set NEAR_PRIVATE_KEY (or BOS_NEAR_PRIVATE_KEY), store credentials at ` +
+      `~/.near-credentials/${opts.network}/${opts.account}.json, or sign with the ` +
+      `near-cli-rs keychain (install it, then retry from an interactive terminal). ` +
       `Generate a publish key with: bos key generate`,
   );
 }
 
-export async function submitFunctionCallTransaction(
-  tx: FunctionCallTransaction,
-): Promise<NearTransactionResult> {
+export function describeSigningStrategy(strategy: SigningStrategy): string {
+  if (strategy.strategy === "near-cli-keychain") {
+    return "near-cli-rs keychain";
+  }
+  return strategy.source === "provided"
+    ? "the environment or --private-key flag"
+    : `~/.near-credentials`;
+}
+
+async function submitWithNearKit(tx: RegistryWriteRequest, privateKey: string): Promise<NearTransactionResult> {
   const near = new Near({
     network: tx.network,
     defaultSignerId: tx.account,
-    privateKey: assertPrivateKey(tx.privateKey),
+    privateKey: assertPrivateKey(privateKey),
   });
 
   const outcome = await near
@@ -76,6 +109,25 @@ export async function submitFunctionCallTransaction(
     })
     .send({ waitUntil: "NONE" });
 
-  const txHash = outcome?.transaction?.hash;
-  return { success: true, txHash };
+  return { success: true, txHash: outcome?.transaction?.hash, signedWith: "env" };
+}
+
+export async function submitRegistryWrite(
+  tx: RegistryWriteRequest,
+  strategy?: SigningStrategy,
+): Promise<NearTransactionResult> {
+  const resolved = strategy ?? (await resolveSigningStrategy(tx));
+
+  if (resolved.strategy === "near-cli-keychain") {
+    const result = await executeKeychainTransaction({
+      account: tx.account,
+      contract: tx.contract,
+      method: tx.method,
+      args: tx.args,
+      network: tx.network,
+    });
+    return { ...result, signedWith: "near-cli-keychain" };
+  }
+
+  return submitWithNearKit(tx, resolved.privateKey);
 }
