@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { useNearAccount } from "@/lib/use-near-account";
 
 export function useIdentity() {
   const auth = useAuthClient();
@@ -12,7 +13,7 @@ export function useIdentity() {
   const router = useRouter();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const user = session?.user;
-  const nearAccountId = auth.near.getAccountId();
+  const nearAccountId = useNearAccount();
 
   const { data: organizations } = useQuery({
     queryKey: ["organizations"],

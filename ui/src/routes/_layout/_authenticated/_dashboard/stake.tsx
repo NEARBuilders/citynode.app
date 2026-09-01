@@ -19,6 +19,7 @@ import {
 } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNearAccount } from "@/lib/use-near-account";
 import { cn } from "@/lib/utils";
 
 const STAKE_GAS = "300000000000000";
@@ -56,7 +57,7 @@ function StakePage() {
 
   const slug = nodeSlug ?? getSlugFromHostname();
 
-  const [nearAccountId, setNearAccountId] = useState<string | null>(() => auth.near.getAccountId());
+  const nearAccountId = useNearAccount();
   const [connectingWallet, setConnectingWallet] = useState(false);
   const [amount, setAmount] = useState("1");
   const [selectedValidatorId, setSelectedValidatorId] = useState<string | null>(null);
@@ -65,9 +66,7 @@ function StakePage() {
     setConnectingWallet(true);
     try {
       const connected = await auth.near.ensureConnected();
-      if (connected) {
-        setNearAccountId(auth.near.getAccountId());
-      } else {
+      if (!connected) {
         toast.error("Failed to connect wallet");
       }
     } catch {
@@ -129,7 +128,6 @@ function StakePage() {
       if (!connected) throw new Error("Connect a NEAR wallet to stake.");
       const signer = auth.near.getAccountId();
       if (!signer) throw new Error("Connect a NEAR wallet to stake.");
-      setNearAccountId(signer);
       if (!selectedValidator) throw new Error("Select a validator to stake to.");
       if (!parsedYocto) throw new Error("Enter a valid amount to stake.");
       const near = auth.near.getNearClient();
@@ -407,7 +405,7 @@ function PingOnrampBanner({
         "border-[#AF9EF9] bg-white/80 text-[#3D315E] hover:bg-white",
         "dark:border-[#6D5BD0] dark:bg-[#2B2444] dark:text-[#F3EEFF] dark:hover:bg-[#332B54]",
         "shadow-sm hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AF9EF9]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        (disabled || pending) && "cursor-not-allowed opacity-50 hover:shadow-sm",
+        disabled || pending ? "cursor-not-allowed opacity-50 hover:shadow-sm" : "cursor-pointer",
       )}
     >
       {pending ? (
