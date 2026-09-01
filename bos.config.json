@@ -40,10 +40,6 @@
     },
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
-      "secrets": [
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
-      ],
       "variables": {
         "passkey": {
           "rpID": "citynode.app",
@@ -68,18 +64,6 @@
               ],
               "maxGasPerTransaction": "300000000000000",
               "maxDepositPerTransaction": "0"
-            }
-          },
-          "subAccount": {
-            "mainnet": {
-              "parentAccount": "v1.citynode.near",
-              "parentHasFullAccess": true,
-              "minDeposit": "0.1 NEAR"
-            },
-            "testnet": {
-              "parentAccount": "v1.citynode.testnet",
-              "parentHasFullAccess": true,
-              "minDeposit": "0.1 NEAR"
             }
           }
         }

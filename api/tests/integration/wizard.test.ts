@@ -1,10 +1,20 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getPluginClient, orgContext, teardown } from "../setup";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+
+vi.mock("@/services/dao", () => ({
+  verifyDaoMembership: vi.fn(async () => ({
+    isSputnikContract: true,
+    isMember: true,
+    policy: { roles: [] },
+  })),
+  parsePolicyGroupMembers: vi.fn(() => []),
+  isExplicitDaoMember: vi.fn(() => true),
+}));
 
 describe("Tenant + Node + Binding wizard flow", () => {
   beforeAll(async () => {
     await getPluginClient(orgContext());
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await teardown();
@@ -12,7 +22,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("full chain: createTenant → createNode → createBinding", () => {
     it("creates a tenant, root country node, and primary binding in sequence", async () => {
-      const ctx = orgContext("wizard-user-1", "org-wizard-1");
+      const ctx = daoContext("wizard-user-1", "org-wizard-1", "admin-wizard-1.near");
       const c = await getPluginClient(ctx);
 
       const tenant = await c.createTenant({
@@ -62,7 +72,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("rollback on duplicate hostname", () => {
     it("cleans up node and tenant when binding creation fails on a duplicate hostname", async () => {
-      const ctx = orgContext("wizard-user-2", "org-wizard-2");
+      const ctx = daoContext("wizard-user-2", "org-wizard-2", "admin-wizard-2.near");
       const c = await getPluginClient(ctx);
 
       const tenantA = await c.createTenant({
@@ -118,7 +128,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("nested hierarchy: country → state → city", () => {
     it("creates a three-level node tree, each with its own binding", async () => {
-      const ctx = orgContext("wizard-user-3", "org-wizard-3");
+      const ctx = daoContext("wizard-user-3", "org-wizard-3", "admin-wizard-3.near");
       const c = await getPluginClient(ctx);
 
       const tenant = await c.createTenant({
@@ -185,7 +195,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("bindingPreflight across the wizard", () => {
     it("reports available before creation and unavailable after", async () => {
-      const ctx = orgContext("wizard-user-4", "org-wizard-4");
+      const ctx = daoContext("wizard-user-4", "org-wizard-4", "admin-wizard-4.near");
       const c = await getPluginClient(ctx);
 
       const hostname = "preflight-city.citynode.app";

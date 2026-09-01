@@ -13,12 +13,15 @@ import { isUniqueViolation, toOrpcError } from "../lib/errors";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
+export type TenantOwnerKind = "platform" | "dao";
+
 export interface TenantRecord {
   id: string;
   accountId: string;
   orgId: string | null;
   name: string;
   status: TenantStatus;
+  ownerKind: TenantOwnerKind;
   allowUiOverrides: boolean;
   allowBackendOverrides: boolean;
   allowSsr: boolean;
@@ -54,6 +57,7 @@ export interface TenantInput {
   accountId: string;
   orgId: string | null;
   status?: TenantStatus;
+  ownerKind?: TenantOwnerKind;
   allowUiOverrides?: boolean;
   allowBackendOverrides?: boolean;
   allowSsr?: boolean;
@@ -106,6 +110,7 @@ function toTenantRecord(row: TenantRow): TenantRecord {
     orgId: row.orgId,
     name: row.name,
     status: row.status,
+    ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
     allowUiOverrides: row.allowUiOverrides,
     allowBackendOverrides: row.allowBackendOverrides,
     allowSsr: row.allowSsr,
@@ -395,6 +400,7 @@ export const TenantsLive = Layer.effect(
                 accountId: input.accountId,
                 orgId: input.orgId,
                 ...(input.status !== undefined && { status: input.status }),
+                ...(input.ownerKind !== undefined && { ownerKind: input.ownerKind }),
                 ...(input.allowUiOverrides !== undefined && {
                   allowUiOverrides: input.allowUiOverrides,
                 }),

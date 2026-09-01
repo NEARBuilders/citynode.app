@@ -1,14 +1,27 @@
-import { describe, expect, it } from "vitest";
-import { authedContext, getPluginClient, orgContext } from "../setup";
+import { describe, expect, it, vi } from "vitest";
+import { authedContext, daoContext, getPluginClient, orgContext } from "../setup";
+
+vi.mock("@/services/dao", () => ({
+  verifyDaoMembership: vi.fn(async () => ({
+    isSputnikContract: true,
+    isMember: true,
+    policy: { roles: [] },
+  })),
+  parsePolicyGroupMembers: vi.fn(() => []),
+  isExplicitDaoMember: vi.fn(() => true),
+}));
 
 const adminContext = {
   ...authedContext("platform-admin"),
   user: { id: "platform-admin", email: "admin@example.com", name: "Admin", role: "admin" },
+  near: { primaryAccountId: "platform-admin.near" },
 };
 
 describe("platform node management", () => {
   it("lets platform admins list and manage another organization's node without switching orgs", async () => {
-    const owner = await getPluginClient(orgContext("owner", "managed-org"));
+    const owner = await getPluginClient(
+      daoContext("owner", "managed-org", "admin-owner-managed.near"),
+    );
     const admin = await getPluginClient(adminContext);
     const outsider = await getPluginClient(orgContext("outsider", "other-org"));
     const tenant = await owner.createTenant({ name: "Chicago", accountId: "managed-chicago.near" });
@@ -74,7 +87,9 @@ describe("platform node management", () => {
   });
 
   it("rejects verification and removal when a binding belongs to a different tenant", async () => {
-    const owner = await getPluginClient(orgContext("binding-owner", "binding-org"));
+    const owner = await getPluginClient(
+      daoContext("binding-owner", "binding-org", "admin-binding-owner.near"),
+    );
     const admin = await getPluginClient(adminContext);
     const first = await owner.createTenant({ name: "First", accountId: "binding-first.near" });
     const second = await owner.createTenant({ name: "Second", accountId: "binding-second.near" });

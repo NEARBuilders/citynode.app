@@ -124,7 +124,7 @@ describe("schema isolation", () => {
       await db.execute(sql`DELETE FROM ${journalRef}`);
 
       await expect(Effect.runPromise(migrate(db, migrations, storage, "plugin_api"))).resolves.toBe(
-        1,
+        2,
       );
     });
   });

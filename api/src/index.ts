@@ -7,6 +7,7 @@ import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
+import { verifyDaoMembership } from "./services/dao";
 import { NodesLive, NodesTag } from "./services/nodes";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
@@ -104,7 +105,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   createRouter: (services, builder) => {
     const { templateClient } = services;
-    const { requireAuth, requireOrganization, requireOrgRole } = createAuthMiddleware(builder);
+    const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
+      createAuthMiddleware(builder);
 
     const authorizedTenant = async (
       input: { tenantId: string },
@@ -158,14 +160,29 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       createTenant: builder.createTenant
         .use(requireAuth)
+        .use(requireAdmin)
         .use(requireOrganization)
         .handler(async ({ input, context }) => {
           validateAccountId(input.accountId);
+          const result = await verifyDaoMembership({
+            daoAccountId: input.accountId,
+            memberAccountId: context.near?.primaryAccountId ?? null,
+          });
+          if (!result.isMember) {
+            throw new ORPCError("FORBIDDEN", {
+              message: "Your connected NEAR account is not a member of this DAO",
+              data: {
+                daoAccountId: input.accountId,
+                primaryAccountId: context.near?.primaryAccountId ?? null,
+              },
+            });
+          }
           return await services.tenants.createTenant({
             name: input.name,
             accountId: input.accountId,
             orgId: context.organization.activeOrganizationId,
             status: input.status,
+            ownerKind: "dao",
             allowUiOverrides: input.allowUiOverrides,
             allowBackendOverrides: input.allowBackendOverrides,
             allowSsr: input.allowSsr,

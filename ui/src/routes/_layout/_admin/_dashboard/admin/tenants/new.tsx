@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Building2, CheckCircle2, Globe, Sparkles } from "lucide-react";
-import type { TransactionBuilder } from "near-kit";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
@@ -17,74 +16,36 @@ import {
   StepList,
   useStepper,
 } from "@/components";
+import { ConnectDao } from "@/components/connect-dao";
 import {
-  type AuthRuntimeVariables,
-  type NearNetworkId,
-  resolveTenantIdentity,
-} from "./tenant-wizard";
-
-const CONFIG_GAS = "300000000000000";
+  buildTenantPublishConfig,
+  signAsDaoTransaction,
+  useDaoConnection,
+} from "@/lib/dao-connect";
+import type { NearNetworkId } from "./tenant-wizard";
 
 type NodeKind = "country" | "state" | "city";
 
-async function publishTenantConfig(
-  apiClient: ReturnType<typeof useApiClient>,
-  auth: ReturnType<typeof useAuthClient>,
-  input: {
-    accountId: string;
-    gatewayId: string;
-    hostname: string;
-    name: string;
-    parentAccount: string;
-  },
-) {
-  const tenantConfig = {
-    extends: `bos://${input.parentAccount}/${input.gatewayId}`,
-    account: input.accountId,
-    domain: input.hostname,
-    title: input.name,
-    description: input.name,
-  };
+interface FastKvEntry {
+  current_account_id?: string;
+  key?: string;
+  value?: unknown;
+}
 
-  const prepared = await apiClient.apps.prepareRegistryConfigWrite({
-    accountId: input.accountId,
-    gatewayId: input.gatewayId,
-    config: tenantConfig,
-  });
-
-  const relayerInfo = await auth.near.getRelayerInfo();
-  const hasRelayer = relayerInfo.data?.enabled === true;
-
-  if (hasRelayer) {
-    const signed = await auth.near.buildSignedDelegateAction(
-      prepared.data.contractId,
-      (builder: TransactionBuilder) =>
-        builder.functionCall(
-          prepared.data.contractId,
-          prepared.data.methodName,
-          prepared.data.args,
-          {
-            gas: CONFIG_GAS,
-            attachedDeposit: 0n,
-          },
-        ),
-    );
-    const relayed = await auth.near.relayTransaction({ payload: signed });
-    if (relayed.error) throw new Error(relayed.error.message);
-    return relayed;
-  }
-
-  const signerAccountId = auth.near.getAccountId();
-  if (!signerAccountId) throw new Error("Connect a NEAR wallet first");
-
-  return auth.near
-    .getNearClient()
-    .transaction(signerAccountId)
-    .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
-      gas: CONFIG_GAS,
-      attachedDeposit: 0n,
-    })
-    .send({ waitUntil: "EXECUTED" });
+async function fastKvAccountHasConfig(
+  daoAccountId: string,
+  gatewayId: string,
+  namespace: string,
+): Promise<boolean> {
+  const baseUrl = "https://kv.main.fastnear.com";
+  const key = encodeURIComponent(`apps/${daoAccountId}/${gatewayId}/bos.config.json`);
+  const res = await fetch(
+    `${baseUrl}/v0/latest/${encodeURIComponent(namespace)}/${encodeURIComponent(daoAccountId)}/${key}`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+  );
+  if (!res.ok) return false;
+  const payload = (await res.json()) as { entries?: Array<FastKvEntry | null> };
+  return Boolean(payload.entries?.find((e) => e && e.value != null));
 }
 
 function generateSlug(value: string) {
@@ -107,60 +68,44 @@ function NewTenantPage() {
   const auth = useAuthClient();
   const { auth: adminAuth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const baseAccount = getAccount(runtimeConfig);
   const activeNetwork = auth.useActiveNetwork() as NearNetworkId;
-  const authVariables = runtimeConfig?.auth?.variables as AuthRuntimeVariables | undefined;
 
   const hasOrg = !!adminAuth.activeOrganizationId;
+  const daoConnection = useDaoConnection();
 
   const [phase, setPhase] = useState<"form" | "deploy">("form");
-
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
-
   const [kind, setKind] = useState<NodeKind>("country");
   const [rootParentId, setRootParentId] = useState<string>("");
   const [stateParentId, setStateParentId] = useState<string>("");
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
-
   const [tenantName, setTenantName] = useState("");
-  const [accountId, setAccountId] = useState("");
-  const [tenantNameTouched, setTenantNameTouched] = useState(false);
-  const [accountIdTouched, setAccountIdTouched] = useState(false);
-
-  const { parentAccount, accountId: suggestedAccountId } = resolveTenantIdentity({
-    slug,
-    network: activeNetwork,
-    authVariables,
-    mainnetAccount: getAccount(runtimeConfig),
-  });
-
+  const [verifyState, setVerifyState] = useState<"idle" | "checking" | "verified" | "failed">(
+    "idle",
+  );
+  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
 
   const stepper = useStepper([
     { label: "Create tenant + node + binding", blocking: true },
-    { label: "Create NEAR subaccount", blocking: false },
-    { label: "Publish registry config", blocking: false },
+    { label: "Publish config as DAO", blocking: false },
   ]);
 
   const hostname = useMemo(() => (slug ? `${slug}.${gatewayId}` : ""), [slug, gatewayId]);
 
   useEffect(() => {
-    if (!accountIdTouched) {
-      setAccountId(suggestedAccountId);
-    }
-  }, [accountIdTouched, suggestedAccountId]);
-
-  useEffect(() => {
-    if (!tenantNameTouched) {
+    if (!tenantName) {
       setTenantName(name);
     }
-  }, [name, tenantNameTouched]);
+  }, [name, tenantName]);
 
   const { data: rootNodes = [] } = useQuery({
     queryKey: ["root-nodes"],
     queryFn: async () => apiClient.listRootNodes(),
-    enabled: phase === "form",
+    enabled: phase === "form" && hasOrg,
   });
 
   const { data: stateNodes = [] } = useQuery({
@@ -183,13 +128,12 @@ function NewTenantPage() {
     return null;
   }, [kind, rootParentId, stateParentId]);
 
-  const handleNameChange = (value: string) => {
+  function handleNameChange(value: string) {
     setName(value);
     if (!slug || slug === generateSlug(name.slice(0, -1))) {
-      const newSlug = generateSlug(value);
-      setSlug(newSlug);
+      setSlug(generateSlug(value));
     }
-  };
+  }
 
   const orgMutation = useMutation({
     mutationFn: async () => {
@@ -206,6 +150,9 @@ function NewTenantPage() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
+      const daoAccountId = daoConnection.daoAccountId;
+      if (!daoAccountId) throw new Error("Connect a DAO account first");
+
       stepper.updateStep(0, "running");
 
       let tenantId: string | null = null;
@@ -214,7 +161,7 @@ function NewTenantPage() {
       try {
         const tenant = await apiClient.createTenant({
           name: tenantName || name,
-          accountId,
+          accountId: daoAccountId,
           status: "active",
         });
         tenantId = tenant.id;
@@ -254,74 +201,97 @@ function NewTenantPage() {
         throw err;
       }
     },
-    onSuccess: () => {
-      setPhase("deploy");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to create tenant — rolled back");
-    },
+    onSuccess: () => setPhase("deploy"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to create tenant — rolled back"),
   });
 
-  const deploySubaccount = useMutation({
-    mutationFn: async () => {
-      const subAccountName = slug;
-      const { data: avail } = await auth.near.checkSubAccountAvailability({
-        subAccountName,
-        network: activeNetwork,
-      });
-      if (!avail?.available) {
-        throw new Error(avail?.reason ?? "Sub-account unavailable");
-      }
-      const connected = await auth.near.ensureConnected();
-      if (!connected) throw new Error("Connect a NEAR wallet first");
-      const publicKey = auth.near.getState()?.publicKey;
-      if (!publicKey) throw new Error("Connected wallet did not provide a public key");
-      return auth.near.createSubAccount({
-        subAccountName,
-        publicKey,
-        network: activeNetwork,
-      });
-    },
-    onSuccess: () => {
-      stepper.updateStep(1, "success");
-      toast.success("NEAR subaccount created");
-    },
-    onError: (error: Error) => {
-      stepper.updateStep(1, "failed", error.message);
-    },
-  });
+  async function publishConfig(preparedData: {
+    contractId: string;
+    methodName: string;
+    args: Record<string, string>;
+    gas: string;
+    attachedDeposit: string;
+  }) {
+    const daoAccountId = daoConnection.daoAccountId;
+    if (!daoAccountId) throw new Error("Connect a DAO account first");
+    return signAsDaoTransaction(daoAccountId, {
+      receiverId: preparedData.contractId,
+      methodName: preparedData.methodName,
+      args: preparedData.args as unknown as Record<string, unknown>,
+      gas: preparedData.gas,
+      attachedDeposit: preparedData.attachedDeposit,
+    });
+  }
 
   const deployPublish = useMutation({
     mutationFn: async () => {
       if (!createdTenantId) throw new Error("Tenant not created yet");
-      return publishTenantConfig(apiClient, auth, {
-        accountId,
+      const daoAccountId = daoConnection.daoAccountId;
+      if (!daoAccountId) throw new Error("Disconnect detected — reconnect and retry");
+
+      stepper.updateStep(1, "running");
+
+      const tenantConfig = buildTenantPublishConfig({
+        daoAccountId,
         gatewayId,
+        baseAccount,
         hostname,
-        name: tenantName || name,
-        parentAccount,
+        title: tenantName || name,
       });
+
+      const prepared = await apiClient.apps.prepareRegistryConfigWrite({
+        accountId: daoAccountId,
+        gatewayId,
+        config: tenantConfig as unknown as Record<string, unknown>,
+      });
+
+      try {
+        await publishConfig(prepared.data);
+        stepper.updateStep(1, "success");
+        return true;
+      } catch (err) {
+        stepper.updateStep(1, "failed", err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     },
-    onSuccess: () => {
-      stepper.updateStep(2, "success");
-      toast.success("Registry config published");
-    },
-    onError: (error: Error) => {
-      stepper.updateStep(2, "failed", error.message);
-    },
+    onSuccess: () => toast.success("Config submitted to DAO"),
+    onError: (error: Error) => toast.error(error.message || "Failed to submit config"),
   });
 
-  const canSubmit =
+  async function recheckPublish() {
+    if (!daoConnection.daoAccountId) return;
+    setVerifyState("checking");
+    setVerifyMessage(null);
+    try {
+      const ok = await fastKvAccountHasConfig(daoConnection.daoAccountId, gatewayId, baseAccount);
+      if (ok) {
+        setVerifyState("verified");
+        return;
+      }
+      setVerifyState("failed");
+      setVerifyMessage("config not yet published — approve in Trezu if pending");
+    } catch (err) {
+      setVerifyState("failed");
+      setVerifyMessage(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const canSubmitDuringForm =
+    hasOrg &&
     !!slug &&
     !!name &&
-    !!accountId &&
     !!tenantName &&
     (kind === "country" || !!parentId) &&
-    preflight?.hostname.available !== false;
+    preflight?.hostname.available !== false &&
+    daoConnection.status === "connected" &&
+    !!daoConnection.daoAccountId &&
+    activeNetwork === "mainnet";
 
   if (phase === "deploy") {
     const allDone = stepper.steps.every((s) => s.state === "success");
     const hasFailure = stepper.steps.some((s) => s.state === "failed");
+    const publishStep = stepper.steps[1];
 
     return (
       <div className="space-y-8">
@@ -331,74 +301,83 @@ function NewTenantPage() {
           title={allDone ? "Deployment complete" : "Deploying tenant…"}
         />
 
+        <ConnectDao />
+
         <Card>
           <CardContent className="p-6 space-y-6">
             <StepList steps={stepper.steps} />
 
-            {stepper.steps[0].state === "success" && stepper.steps[1].state === "pending" && (
+            {publishStep?.state === "success" && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  API records created. Now deploying on-chain — these steps are non-blocking and can
-                  be retried later from the tenant page.
+                  Transaction submitted as{" "}
+                  <code className="font-mono text-xs">{daoConnection.daoAccountId}</code>. Trezu
+                  multiplexes the call into your DAO's internal proposal — sign in to trezu.app to
+                  confirm or wait for council approval.
                 </p>
+                {verifyMessage && (
+                  <p
+                    className={
+                      verifyState === "verified"
+                        ? "text-sm text-foreground"
+                        : "text-sm text-muted-foreground"
+                    }
+                  >
+                    {verifyMessage}
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    onClick={() => deploySubaccount.mutate()}
-                    disabled={deploySubaccount.isPending}
+                    variant="outline"
+                    onClick={() => void recheckPublish()}
+                    disabled={verifyState === "checking"}
                   >
-                    create NEAR subaccount
+                    {verifyState === "checking" ? "rechecking…" : "recheck publish"}
                   </Button>
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={() => deployPublish.mutate()}
-                    disabled={deployPublish.isPending}
+                    variant="outline"
+                    onClick={() => {
+                      stepper.updateStep(1, "pending");
+                      deployPublish.reset();
+                    }}
                   >
-                    publish config
+                    re-submit
                   </Button>
                 </div>
               </div>
             )}
 
-            {(stepper.steps[1].state === "success" || stepper.steps[1].state === "failed") &&
-              stepper.steps[2].state === "pending" && (
+            {publishStep?.state === "failed" && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Publish failed — re-check the Trezu connection or re-submit.
+                </p>
                 <Button
+                  variant="outline"
                   size="sm"
-                  onClick={() => deployPublish.mutate()}
-                  disabled={deployPublish.isPending}
+                  onClick={() => {
+                    stepper.updateStep(1, "pending");
+                    deployPublish.reset();
+                  }}
                 >
-                  publish registry config
+                  retry publish
                 </Button>
-              )}
+              </div>
+            )}
 
-            {stepper.steps[1].state === "failed" && (
+            {publishStep?.state === "pending" && (
               <Button
-                variant="outline"
                 size="sm"
-                onClick={() => {
-                  stepper.updateStep(1, "pending");
-                  deploySubaccount.reset();
-                }}
+                onClick={() => deployPublish.mutate()}
+                disabled={deployPublish.isPending}
               >
-                retry subaccount
+                publish config via DAO
               </Button>
             )}
 
-            {stepper.steps[2].state === "failed" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  stepper.updateStep(2, "pending");
-                  deployPublish.reset();
-                }}
-              >
-                retry publish
-              </Button>
-            )}
-
-            {allDone && (
+            {verifyState === "verified" && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm text-foreground">
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -415,7 +394,7 @@ function NewTenantPage() {
               </div>
             )}
 
-            {hasFailure && (
+            {hasFailure && !verifyState && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
                   Some steps failed. API records were created — you can retry on-chain steps from
@@ -444,6 +423,19 @@ function NewTenantPage() {
         title="Tenant + node creation"
         description="Create a tenant, a geographic node, and a primary domain binding in one flow."
       />
+
+      {activeNetwork !== "mainnet" && (
+        <Card>
+          <CardContent className="p-6 space-y-3">
+            <p className="text-sm text-foreground font-semibold">
+              DAO tenant creation is mainnet-only
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Switch the network to mainnet to create tenants through your DAO account.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {!hasOrg && (
         <Card>
@@ -508,6 +500,8 @@ function NewTenantPage() {
           }}
           className="space-y-6"
         >
+          <ConnectDao />
+
           <Card>
             <CardContent className="p-6 space-y-4">
               <h2 className="text-sm font-semibold text-foreground">Node details</h2>
@@ -610,10 +604,7 @@ function NewTenantPage() {
                   id="tenant-name"
                   value={tenantName}
                   placeholder="Chicago City Node"
-                  onChange={(e) => {
-                    setTenantName(e.target.value);
-                    setTenantNameTouched(true);
-                  }}
+                  onChange={(e) => setTenantName(e.target.value)}
                   required
                 />
               </Field>
@@ -622,15 +613,16 @@ function NewTenantPage() {
                 <FieldLabel htmlFor="account-id">NEAR account id</FieldLabel>
                 <Input
                   id="account-id"
-                  value={accountId}
-                  onChange={(e) => {
-                    setAccountId(e.target.value);
-                    setAccountIdTouched(true);
-                  }}
-                  placeholder={`${slug || "chicago"}.${parentAccount}`}
+                  value={daoConnection.daoAccountId ?? ""}
+                  readOnly
+                  placeholder="connect a DAO account to set the tenant account id"
                   className="font-mono text-xs"
-                  required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Tenant account = the connected DAO. Config publishes under{" "}
+                  <code>bos://&lt;dao&gt;/citynode.app</code> with <code>extends</code> set to{" "}
+                  <code>b{`os://${baseAccount}/citynode.app`}</code>.
+                </p>
               </Field>
 
               <Field>
@@ -653,7 +645,7 @@ function NewTenantPage() {
             <Button asChild variant="outline">
               <Link to="/admin/tenants">cancel</Link>
             </Button>
-            <Button type="submit" disabled={submitMutation.isPending || !canSubmit}>
+            <Button type="submit" disabled={submitMutation.isPending || !canSubmitDuringForm}>
               {submitMutation.isPending ? "creating…" : "create tenant + node"}
             </Button>
           </div>

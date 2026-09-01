@@ -47,6 +47,7 @@ export const TenantSchema = z.object({
   orgId: z.string().nullable(),
   name: z.string(),
   status: TenantStatusSchema,
+  ownerKind: z.string(),
   allowUiOverrides: z.boolean(),
   allowBackendOverrides: z.boolean(),
   allowSsr: z.boolean(),

@@ -17,8 +17,17 @@ import {
   PageHeader,
   SectionHeader,
 } from "@/components";
+import { ConnectDao } from "@/components/connect-dao";
+import {
+  buildTenantPublishConfig,
+  signAsDaoTransaction,
+  useDaoConnection,
+} from "@/lib/dao-connect";
+import { useNearAccount } from "@/lib/use-near-account";
 
 const CONFIG_GAS = "300000000000000";
+
+type PublishMode = "platform" | "dao";
 
 async function publishTenantConfig(
   apiClient: ReturnType<typeof useApiClient>,
@@ -26,26 +35,37 @@ async function publishTenantConfig(
   input: {
     accountId: string;
     gatewayId: string;
+    parentAccount: string;
     subdomain: string;
     name: string;
     status?: "active" | "suspended" | "pending_deletion";
+    mode: PublishMode;
   },
 ) {
-  const parentAccount = getAccount();
-  const tenantConfig = {
-    extends: `bos://${parentAccount}/${input.gatewayId}`,
-    account: input.accountId,
-    domain: `${input.subdomain}.${input.gatewayId}`,
+  const tenantConfig = buildTenantPublishConfig({
+    daoAccountId: input.accountId,
+    gatewayId: input.gatewayId,
+    baseAccount: input.parentAccount,
+    hostname: `${input.subdomain}.${input.gatewayId}`,
     title: input.name,
-    description: input.name,
     ...(input.status ? { status: input.status } : {}),
-  };
+  });
 
   const prepared = await apiClient.apps.prepareRegistryConfigWrite({
     accountId: input.accountId,
     gatewayId: input.gatewayId,
-    config: tenantConfig,
+    config: tenantConfig as unknown as Record<string, unknown>,
   });
+
+  if (input.mode === "dao") {
+    return signAsDaoTransaction(input.accountId, {
+      receiverId: prepared.data.contractId,
+      methodName: prepared.data.methodName,
+      args: prepared.data.args as unknown as Record<string, unknown>,
+      gas: CONFIG_GAS,
+      attachedDeposit: prepared.data.attachedDeposit,
+    });
+  }
 
   const relayerInfo = await auth.near.getRelayerInfo();
   const hasRelayer = relayerInfo.data?.enabled === true;
@@ -102,6 +122,8 @@ function TenantDetail() {
   const [name, setName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const gatewayId = getActiveRuntime()?.gatewayId ?? "everything.dev";
+  const parentAccount = getAccount();
+  const daoConnection = useDaoConnection();
 
   const { data: tenant } = useQuery({
     queryKey: ["tenant", tenantId],
@@ -140,6 +162,14 @@ function TenantDetail() {
   const isAdmin = members.some(
     (m) => m.userId === session?.user?.id && (m.role === "admin" || m.role === "owner"),
   );
+  const isDaoOwned = tenant?.ownerKind === "dao";
+
+  const publishMode: PublishMode = isDaoOwned ? "dao" : "platform";
+  const nearAccountId = useNearAccount();
+  const hasSigningWallet =
+    publishMode === "dao"
+      ? daoConnection.status === "connected" && daoConnection.daoAccountId === tenant?.accountId
+      : !!nearAccountId;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
 
@@ -147,17 +177,17 @@ function TenantDetail() {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updated = await apiClient.updateTenant({
-        tenantId,
-        name,
-      });
+      if (!tenant) throw new Error("Tenant not loaded");
+      const updated = await apiClient.updateTenant({ tenantId, name });
       if (name !== updated.name) {
         await publishTenantConfig(apiClient, auth, {
           accountId: updated.accountId,
           gatewayId,
+          parentAccount,
           subdomain: tenantHostname,
           name: updated.name,
           status: updated.status === "active" ? "active" : undefined,
+          mode: publishMode,
         });
       }
       return updated;
@@ -176,9 +206,11 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
+        parentAccount,
         subdomain: tenantHostname,
         name: updated.name,
         status: "suspended",
+        mode: publishMode,
       });
       return updated;
     },
@@ -194,9 +226,11 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
+        parentAccount,
         subdomain: tenantHostname,
         name: updated.name,
         status: "active",
+        mode: publishMode,
       });
       return updated;
     },
@@ -211,12 +245,14 @@ function TenantDetail() {
       return publishTenantConfig(apiClient, auth, {
         accountId: tenant?.accountId ?? "",
         gatewayId,
+        parentAccount,
         subdomain: tenantHostname,
         name: tenant?.name ?? "",
         status:
           tenant?.status === "suspended" || tenant?.status === "pending_deletion"
             ? tenant?.status
             : undefined,
+        mode: publishMode,
       });
     },
     onSuccess: () => toast.success("Config republished"),
@@ -229,9 +265,11 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
+        parentAccount,
         subdomain: tenantHostname,
         name: updated.name,
         status: "pending_deletion",
+        mode: publishMode,
       });
       return updated;
     },
@@ -258,6 +296,12 @@ function TenantDetail() {
         ? "destructive"
         : "secondary";
 
+  const republishTooltip = !hasSigningWallet
+    ? isDaoOwned
+      ? "connect the DAO account via Trezu to republish"
+      : "connect your NEAR session wallet to republish"
+    : undefined;
+
   return (
     <PageContainer variant="wide">
       <div className="space-y-8">
@@ -268,6 +312,9 @@ function TenantDetail() {
           subtitle={`${tenantHostname}.${gatewayId} · ${tenant.accountId}`}
           actions={
             <div className="flex gap-2">
+              <Badge variant={isDaoOwned ? "default" : "secondary"}>
+                {isDaoOwned ? "DAO-owned" : (tenant.ownerKind ?? "platform")}
+              </Badge>
               <Badge variant={statusVariant as "default" | "destructive" | "secondary"}>
                 {tenant.status}
               </Badge>
@@ -305,6 +352,13 @@ function TenantDetail() {
             </div>
           }
         />
+
+        {isDaoOwned && (
+          <section className="space-y-3">
+            <SectionHeader title="DAO connection" />
+            <ConnectDao />
+          </section>
+        )}
 
         <section className="space-y-3">
           <SectionHeader
@@ -364,6 +418,7 @@ function TenantDetail() {
                   <InfoRow label="name" value={tenant.name} />
                   <InfoRow label="hostname" value={`${tenantHostname}.${gatewayId}`} mono />
                   <InfoRow label="account" value={tenant.accountId} mono />
+                  <InfoRow label="owner kind" value={isDaoOwned ? "dao" : "platform"} />
                   <InfoRow label="org id" value={tenant.orgId} mono />
                   <InfoRow label="status" value={tenant.status} />
                   <InfoRow
@@ -397,10 +452,14 @@ function TenantDetail() {
               variant="outline"
               size="sm"
               onClick={() => republishMutation.mutate()}
-              disabled={republishMutation.isPending}
+              disabled={republishMutation.isPending || !hasSigningWallet}
+              title={republishTooltip}
             >
               republish config
             </Button>
+            {!hasSigningWallet && (
+              <p className="text-xs text-muted-foreground">{republishTooltip}</p>
+            )}
           </Card>
         </section>
 

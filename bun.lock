@@ -48,6 +48,7 @@
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
         "every-plugin": "catalog:",
+        "near-kit": "catalog:",
         "pg": "catalog:",
         "zod": "catalog:",
       },
@@ -270,6 +271,7 @@
         "@better-auth/api-key": "catalog:",
         "@better-auth/core": "catalog:",
         "@better-auth/passkey": "catalog:",
+        "@hot-labs/near-connect": "catalog:",
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
         "@orpc/tanstack-query": "catalog:",
@@ -358,6 +360,7 @@
     "@better-auth/core": "1.6.25",
     "@better-auth/passkey": "1.6.25",
     "@electric-sql/pglite": "^0.4.5",
+    "@hot-labs/near-connect": "0.11.4",
     "@libsql/client": "0.17.0",
     "@modelcontextprotocol/server": "2.0.0-beta.5",
     "@module-federation/dts-plugin": "^2.4.0",
@@ -638,6 +641,8 @@
     "@hexagon/base64": ["@hexagon/base64@1.1.28", "", {}, "sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw=="],
 
     "@hono/node-server": ["@hono/node-server@2.1.1", "", { "peerDependencies": { "hono": "^4" } }, "sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg=="],
+
+    "@hot-labs/near-connect": ["@hot-labs/near-connect@0.11.4", "", {}, "sha512-exAL1gqysyCHewcMO334YJ3ddTPg3j9EyVM9novz5Jx4fLbG/YSYBlkYMjMNB8E9K/4I7BiemjOw9bQ+h80hEA=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
