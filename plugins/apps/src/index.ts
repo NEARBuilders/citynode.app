@@ -5,11 +5,10 @@ import { z } from "every-plugin/zod";
 import { contract } from "./contract";
 import type { AuthContext } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
-import type { PluginsClient } from "./lib/plugins-client.gen";
 import { RegistryConfigService } from "./services/fastkv";
 import { RegistryService } from "./services/registry";
 
-export default createPlugin.withPlugins<PluginsClient>()({
+export default createPlugin({
   variables: z.object({
     registryNamespace: z.string().optional(),
   }),
@@ -24,7 +23,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, plugins, tools) =>
+  initialize: (config, _plugins, tools) =>
     Effect.gen(function* () {
       const RegistryConfig = RegistryConfigService.Live({
         namespace: config.variables.registryNamespace,
@@ -38,7 +37,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       const registryService = yield* tools.buildService(RegistryService, RegistryServices);
 
       yield* Effect.logInfo("[Registry] Services Initialized");
-      return { registryService, nostr: plugins.nostr };
+      return { registryService };
     }),
 
   shutdown: () => Effect.logInfo("[Registry] Shutdown"),

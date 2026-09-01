@@ -57,8 +57,7 @@
           "relayer": {
             "mainnet": {
               "whitelistedContracts": [
-                "v1.citynode.near",
-                "contextual.near"
+                "v1.citynode.near"
               ],
               "maxGasPerTransaction": "300000000000000",
               "maxDepositPerTransaction": "0"
@@ -99,21 +98,11 @@
     },
     "apps": {
       "development": "local:plugins/apps",
-      "dependsOn": [
-        "nostr"
-      ],
       "production": "https://elliot-braem-7653-everything-dev-apps-plugin-city-662cd0b28-ze.zephyrcloud.app",
       "variables": {
         "registryNamespace": "v1.citynode.near"
       },
       "integrity": "sha384-/XPaFJEj8gHp3WaUXJrXL7yAztBmIYTykb47j5ZJYtljsIfG7ZAUDyAl0UPhAmjR"
-    },
-    "nostr": {
-      "dependsOn": [
-        "auth"
-      ],
-      "production": "https://elliot-braem-7739-every-plugin-nostr-nostr-nearbu-a240acca3-ze.zephyrcloud.app",
-      "integrity": "sha384-HrNENKE9M63lvwNYe0QfLjsLqS4lPKcu+UL8cITIo511lUEMOKyRWdxANl+URnP3"
     },
     "proposals": {
       "variables": {
