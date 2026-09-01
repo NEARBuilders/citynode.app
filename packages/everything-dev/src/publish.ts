@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
-import { Effect } from "effect";
 import { buildWorkspaceTargets, selectWorkspaceTargets } from "./build";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
@@ -12,12 +11,7 @@ import {
   getRegistryNamespaceForNetwork,
   type NetworkId,
 } from "./fastkv";
-import {
-  NostrKeyMissing,
-  PayloadTooLarge,
-  publishViaNostr,
-  RelayRejected,
-} from "./nostr-transport";
+import { resolveSigningKey, submitFunctionCallTransaction } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import type { BosConfig, BosConfigInput, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
@@ -145,6 +139,28 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return { status: "dry-run", registryUrl, built, skipped };
   }
 
+  let signingKey: Awaited<ReturnType<typeof resolveSigningKey>>;
+  try {
+    signingKey = await resolveSigningKey({
+      privateKey: input.privateKey,
+      account,
+      network,
+    });
+    console.log(
+      `  Signing with key from ${
+        signingKey.source === "provided"
+          ? "NEAR_PRIVATE_KEY"
+          : colors.dim("~/.near-credentials")
+      }`,
+    );
+  } catch (error) {
+    return {
+      status: "error" as const,
+      registryUrl,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+
   if (input.build) {
     await generateCodeArtifacts(configDir, bosConfig, {
       env: "production",
@@ -215,7 +231,9 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;
   const registryNamespace = getRegistryNamespaceForNetwork(network, input.registry);
-  const configValue = JSON.stringify(publishPayload);
+  const registryEntries: Record<string, string> = {
+    [registryKey]: JSON.stringify(publishPayload),
+  };
 
   console.log();
   console.log("  Publishing to:");
@@ -240,38 +258,19 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       };
     }
 
-    let hostUrl: string;
-    if (isStaging && bosConfig.staging?.domain) {
-      hostUrl = `https://${bosConfig.staging.domain}`;
-    } else if (bosConfig.app.host.production) {
-      hostUrl = bosConfig.app.host.production;
-    } else {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          "bos.config.json must define app.host.production — the nostr transport publishes through the host's apps plugin route.",
-        built,
-        skipped,
-        deployResults,
-      };
-    }
+    console.log(`  Submitting transaction on ${network}...`);
 
-    console.log(`  Signing registry event and posting to ${colors.cyan(hostUrl)}...`);
+    const result = await submitFunctionCallTransaction({
+      account,
+      contract: registryNamespace,
+      method: "__fastdata_kv",
+      args: registryEntries,
+      network,
+      privateKey: signingKey.privateKey,
+    });
 
-    const result = await Effect.runPromise(
-      publishViaNostr({
-        key: registryKey,
-        account,
-        gateway,
-        registry: registryNamespace,
-        value: configValue,
-        hostUrl,
-      }),
-    );
-
-    if (result.transactionHash) {
-      console.log(`  Transaction submitted: ${colors.dim(result.transactionHash)}`);
+    if (result.txHash) {
+      console.log(`  Transaction submitted: ${colors.dim(result.txHash)}`);
     }
 
     console.log("  Waiting for publish confirmation...");
@@ -285,7 +284,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return {
       status: "published",
       registryUrl,
-      txHash: result.transactionHash,
+      txHash: result.txHash,
       built,
       skipped,
       deployResults,
@@ -295,7 +294,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return {
       status: "error",
       registryUrl,
-      error: formatPublishError(error),
+      error: formatNearError(error),
       built,
       skipped,
       deployResults,
@@ -303,29 +302,25 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   }
 }
 
-function formatPublishError(error: unknown): string {
-  if (error instanceof RelayRejected) {
-    if (error.status === 403) {
-      return (
-        "The signing key is not authorized for this account.\n" +
-        "  Bind a deployment key at /settings/deployment-keys (challenge → verify → prepare),\n" +
-        "  then set NOSTR_PRIVATE_KEY in your environment or CI secrets.\n" +
-        `  Detail: ${error.detail}`
-      );
-    }
-    if (error.status === 429) {
-      return `Publish rate limited — retry shortly.\n  Detail: ${error.detail}`;
-    }
-    return `Publish rejected by the registry relay (status ${error.status}).\n  Detail: ${error.detail}`;
-  }
-  if (error instanceof PayloadTooLarge) {
+function formatNearError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("does not have enough allowance")) {
     return (
-      `bos.config.json is too large to publish as a nostr event (${error.size} > ${error.limit} bytes).\n` +
-      "  Reduce the config size or publish via a smaller payload."
+      "The publish access key has insufficient allowance to cover this transaction.\n" +
+      "  Regenerate your key with a higher allowance:\n" +
+      "    bos key generate\n" +
+      `  Original: ${message}`
     );
   }
-  if (error instanceof NostrKeyMissing) {
-    return error.message;
+
+  if (message.includes("exceeded gas") || message.includes("GasLimitExceeded")) {
+    return `Transaction exceeded gas limit.\n  Original: ${message}`;
   }
-  return error instanceof Error ? error.message : String(error);
+
+  if (message.includes("timeout") || message.includes("Timeout")) {
+    return `Transaction timed out. Check NEAR network status.\n  Original: ${message}`;
+  }
+
+  return message;
 }

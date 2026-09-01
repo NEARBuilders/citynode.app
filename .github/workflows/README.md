@@ -168,4 +168,4 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 | `ZEPHYR_USER_EMAIL` | Deploy, Staging (as `ZE_USER_EMAIL`) | Fallback Zephyr user email when `ZEPHYR_CI_TOKEN` is absent |
 | `GITHUB_TOKEN` | Release, Check Skills | Changesets PR creation, GitHub releases, skills review PRs |
 
-NEAR CLI is installed in a dedicated workflow step before publishing so Actions can apply the PATH update before `bos publish --deploy` runs.
+`bos publish` signs the FastKV registry transaction in-process via `near-kit` — no near-cli-rs install step is needed in CI. `NEAR_PRIVATE_KEY` (or `BOS_NEAR_PRIVATE_KEY`) is read directly from the environment; locally, `~/.near-credentials` also works.

@@ -23,7 +23,6 @@
       "@tanstack/react-table": "^8.21.3",
       "@tanstack/zod-form-adapter": "^0.42.1",
       "near-kit": "^0.14.0",
-      "nostr-tools": "^2.25.1",
       "@scure/base": "^2.2.0",
       "drizzle-orm": "^0.45.1",
       "drizzle-kit": "^0.31.8",

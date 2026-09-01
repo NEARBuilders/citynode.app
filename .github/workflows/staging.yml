@@ -49,12 +49,6 @@ jobs:
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
 
-      - name: Install NEAR CLI
-        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.23.5/near-cli-rs-installer.sh | sh
-
-      - name: Verify NEAR CLI
-        run: near --version
-
       - name: Configure Zephyr CI token fallback
         if: ${{ env.ZE_SECRET_TOKEN == '' }}
         env:
