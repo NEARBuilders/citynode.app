@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { authedContext, daoContext, getPluginClient } from "../setup";
+import { authedContext, daoContext, getPluginClient, orgContext } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(async () => ({
@@ -472,6 +472,46 @@ describe("API Plugin Integration Tests", () => {
 
       const fetched = await client.getValidator({ validatorId: validator.id });
       expect(fetched?.id).toBe(validator.id);
+    });
+
+    it("rejects validator mutations from outside the node's organization", async () => {
+      const owner = await getPluginClient(
+        daoContext("validator-scope-owner", "validator-scope-org", "admin-validator-scope.near"),
+      );
+      const outsider = await getPluginClient(
+        orgContext("validator-outsider", "validator-outsider-org"),
+      );
+
+      const tenant = await owner.createTenant({
+        name: "Validator Scope",
+        accountId: "validatorscope.example.near",
+        status: "active",
+      });
+      const node = await owner.createNode({
+        kind: "country",
+        slug: "validator-scope",
+        name: "Validator Scope",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      const validator = await owner.createValidator({
+        nodeId: node.id,
+        accountId: "scoped.near",
+        role: "official",
+      });
+
+      await expect(
+        outsider.createValidator({ nodeId: node.id, accountId: "intruder.near" }),
+      ).rejects.toThrow("This node's validators do not belong to your organization");
+      await expect(
+        outsider.updateValidator({ validatorId: validator.id, role: "community" }),
+      ).rejects.toThrow("This node's validators do not belong to your organization");
+      await expect(outsider.deleteValidator({ validatorId: validator.id })).rejects.toThrow(
+        "This node's validators do not belong to your organization",
+      );
+      await expect(outsider.setDefaultValidator({ validatorId: validator.id })).rejects.toThrow(
+        "This node's validators do not belong to your organization",
+      );
     });
   });
 

@@ -7,7 +7,7 @@ import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
-import { verifyDaoMembership } from "./services/dao";
+import { isExplicitDaoMember, verifyDaoMembership } from "./services/dao";
 import { NodesLive, NodesTag } from "./services/nodes";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
@@ -38,7 +38,9 @@ function validateHostname(hostname: string): void {
 }
 
 export default createPlugin.withPlugins<PluginsClient>()({
-  variables: z.object({}),
+  variables: z.object({
+    platformAccount: z.string().optional(),
+  }),
 
   secrets: z.object({
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
@@ -98,13 +100,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         nodes: nodesService,
         validators: validatorsService,
         templateClient,
+        platformAccount: config.variables.platformAccount,
       };
     }),
 
   shutdown: () => Effect.log("[API] Shutdown"),
 
   createRouter: (services, builder) => {
-    const { templateClient } = services;
+    const { templateClient, platformAccount } = services;
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware(builder);
 
@@ -143,6 +146,39 @@ export default createPlugin.withPlugins<PluginsClient>()({
       return tenant;
     };
 
+    const authorizedNodeForValidators = async (
+      nodeId: string,
+      context: {
+        user?: { role?: string | null };
+        organization?: { activeOrganizationId: string | null };
+      },
+    ) => {
+      const node = await services.nodes.getById(nodeId);
+      if (!node) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Node not found",
+          data: { resource: "node", resourceId: nodeId },
+        });
+      }
+      const tenant = await services.tenants.resolveTenantById(node.tenantId);
+      if (!tenant) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Tenant not found",
+          data: { resource: "tenant", resourceId: node.tenantId },
+        });
+      }
+      if (
+        context.user?.role !== "admin" &&
+        (!context.organization?.activeOrganizationId ||
+          tenant.orgId !== context.organization.activeOrganizationId)
+      ) {
+        throw new ORPCError("FORBIDDEN", {
+          message: "This node's validators do not belong to your organization",
+        });
+      }
+      return node;
+    };
+
     return {
       ping: builder.ping.handler(async () => ({
         status: "ok",
@@ -175,6 +211,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 daoAccountId: input.accountId,
                 primaryAccountId: context.near?.primaryAccountId ?? null,
               },
+            });
+          }
+          if (platformAccount && !isExplicitDaoMember(result.policy, platformAccount)) {
+            throw new ORPCError("FORBIDDEN", {
+              message: "Platform audit account is not a member of this DAO",
+              data: { daoAccountId: input.accountId, platformAccount },
             });
           }
           return await services.tenants.createTenant({
@@ -519,37 +561,60 @@ export default createPlugin.withPlugins<PluginsClient>()({
         services.validators.resolveForStaking(input.nodeId),
       ),
 
-      createValidator: builder.createValidator.use(requireAuth).handler(async ({ input }) =>
-        services.validators.create({
-          nodeId: input.nodeId,
-          accountId: input.accountId,
-          network: input.network,
-          protocol: input.protocol,
-          role: input.role,
-          isDefault: input.isDefault,
-          ...(input.metadata !== undefined && { metadata: input.metadata }),
+      createValidator: builder.createValidator
+        .use(requireAuth)
+        .handler(async ({ input, context }) => {
+          await authorizedNodeForValidators(input.nodeId, context);
+          return services.validators.create({
+            nodeId: input.nodeId,
+            accountId: input.accountId,
+            network: input.network,
+            protocol: input.protocol,
+            role: input.role,
+            isDefault: input.isDefault,
+            ...(input.metadata !== undefined && { metadata: input.metadata }),
+          });
         }),
-      ),
 
-      updateValidator: builder.updateValidator.use(requireAuth).handler(async ({ input }) =>
-        services.validators.update(input.validatorId, {
-          ...(input.accountId !== undefined && { accountId: input.accountId }),
-          ...(input.network !== undefined && { network: input.network }),
-          ...(input.protocol !== undefined && { protocol: input.protocol }),
-          ...(input.role !== undefined && { role: input.role }),
-          ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
-          ...(input.metadata !== undefined && { metadata: input.metadata }),
+      updateValidator: builder.updateValidator
+        .use(requireAuth)
+        .handler(async ({ input, context }) => {
+          const validator = await services.validators.getById(input.validatorId);
+          if (!validator) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Validator not found",
+              data: { resource: "validator", resourceId: input.validatorId },
+            });
+          }
+          await authorizedNodeForValidators(validator.nodeId, context);
+          return services.validators.update(input.validatorId, {
+            ...(input.accountId !== undefined && { accountId: input.accountId }),
+            ...(input.network !== undefined && { network: input.network }),
+            ...(input.protocol !== undefined && { protocol: input.protocol }),
+            ...(input.role !== undefined && { role: input.role }),
+            ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
+            ...(input.metadata !== undefined && { metadata: input.metadata }),
+          });
         }),
-      ),
 
-      deleteValidator: builder.deleteValidator.use(requireAuth).handler(async ({ input }) => {
-        const ok = await services.validators.delete(input.validatorId);
-        return { success: ok as true };
-      }),
+      deleteValidator: builder.deleteValidator
+        .use(requireAuth)
+        .handler(async ({ input, context }) => {
+          const validator = await services.validators.getById(input.validatorId);
+          if (!validator) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Validator not found",
+              data: { resource: "validator", resourceId: input.validatorId },
+            });
+          }
+          await authorizedNodeForValidators(validator.nodeId, context);
+          const ok = await services.validators.delete(input.validatorId);
+          return { success: ok as true };
+        }),
 
       setDefaultValidator: builder.setDefaultValidator
         .use(requireAuth)
-        .handler(async ({ input }) => {
+        .handler(async ({ input, context }) => {
           const target = await services.validators.getById(input.validatorId);
           if (!target) {
             throw new ORPCError("NOT_FOUND", {
@@ -557,6 +622,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               data: { resource: "validator", resourceId: input.validatorId },
             });
           }
+          await authorizedNodeForValidators(target.nodeId, context);
           return await services.validators.setDefault(target.nodeId, input.validatorId);
         }),
 

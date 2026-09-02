@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { isExplicitDaoMember } from "@/services/dao";
 import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
@@ -10,6 +11,10 @@ vi.mock("@/services/dao", () => ({
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));
+
+afterEach(() => {
+  vi.mocked(isExplicitDaoMember).mockReturnValue(true);
+});
 
 describe("Tenant + Node + Binding wizard flow", () => {
   beforeAll(async () => {
@@ -231,6 +236,23 @@ describe("Tenant + Node + Binding wizard flow", () => {
       const result = await c.bindingPreflight({ hostname: "NOT A VALID HOST" });
       expect(result.hostname.format).toBe("invalid");
       expect(result.hostname.available).toBe(false);
+    });
+  });
+
+  describe("audit seat enforcement", () => {
+    it("rejects tenant creation when the platform audit account is not in the DAO policy", async () => {
+      vi.mocked(isExplicitDaoMember).mockReturnValue(false);
+      const c = await getPluginClient(
+        daoContext("audit-seat-user", "org-audit-seat", "admin-audit-seat.near"),
+      );
+
+      await expect(
+        c.createTenant({
+          name: "No Audit Seat",
+          accountId: "audit-seat.example.near",
+          status: "active",
+        }),
+      ).rejects.toThrow("Platform audit account is not a member of this DAO");
     });
   });
 

@@ -378,7 +378,7 @@ function NewTenantPage() {
                 </div>
                 {createdTenantId && (
                   <Button asChild size="sm">
-                    <Link to="/tenant/$tenantId" params={{ tenantId: createdTenantId }}>
+                    <Link to="/tenant/$tenantId" params={{ tenantId: slug || createdTenantId }}>
                       open tenant
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
@@ -395,7 +395,7 @@ function NewTenantPage() {
                 </p>
                 {createdTenantId && (
                   <Button asChild variant="outline" size="sm">
-                    <Link to="/tenant/$tenantId" params={{ tenantId: createdTenantId }}>
+                    <Link to="/tenant/$tenantId" params={{ tenantId: slug || createdTenantId }}>
                       go to tenant
                     </Link>
                   </Button>

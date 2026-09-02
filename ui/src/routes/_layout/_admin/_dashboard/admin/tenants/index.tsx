@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Building2, Plus } from "lucide-react";
 import { useMemo } from "react";
-import { getActiveRuntime, useApiClient } from "@/app";
+import { useApiClient } from "@/app";
 import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
 import { DataTable } from "@/components/ui/data-table";
 
@@ -26,7 +26,6 @@ const STATUS_VARIANT: Record<Tenant["status"], "default" | "destructive" | "seco
 
 function AdminTenants() {
   const apiClient = useApiClient();
-  const gatewayId = getActiveRuntime()?.gatewayId ?? "everything.dev";
 
   const {
     data: tenants = [],
@@ -39,6 +38,22 @@ function AdminTenants() {
     staleTime: 30 * 1000,
   });
 
+  const { data: nodes = [] } = useQuery({
+    queryKey: ["all-nodes"],
+    queryFn: async () => apiClient.listNodes({}),
+    staleTime: 30 * 1000,
+  });
+
+  const slugByTenantId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const node of nodes) {
+      if (!map.has(node.tenantId)) map.set(node.tenantId, node.slug);
+    }
+    return map;
+  }, [nodes]);
+
+  const tenantKey = (tenantId: string) => slugByTenantId.get(tenantId) ?? tenantId;
+
   const columns = useMemo<ColumnDef<Tenant>[]>(
     () => [
       {
@@ -47,7 +62,7 @@ function AdminTenants() {
         cell: ({ row }) => (
           <Link
             to="/tenant/$tenantId"
-            params={{ tenantId: row.original.id }}
+            params={{ tenantId: tenantKey(row.original.id) }}
             className="font-medium text-foreground hover:underline"
           >
             {row.original.name}
@@ -62,11 +77,11 @@ function AdminTenants() {
         ),
       },
       {
-        accessorKey: "subdomain",
-        header: "ID",
+        accessorKey: "slug",
+        header: "Slug",
         cell: ({ row }) => (
           <span className="font-mono text-xs text-muted-foreground">
-            {row.original.id.slice(0, 8)}
+            {slugByTenantId.get(row.original.id) ?? row.original.id.slice(0, 8)}
           </span>
         ),
       },
@@ -88,14 +103,14 @@ function AdminTenants() {
         header: "",
         cell: ({ row }) => (
           <Button asChild variant="outline" size="sm">
-            <Link to="/tenant/$tenantId" params={{ tenantId: row.original.id }}>
+            <Link to="/tenant/$tenantId" params={{ tenantId: tenantKey(row.original.id) }}>
               open
             </Link>
           </Button>
         ),
       },
     ],
-    [gatewayId],
+    [slugByTenantId],
   );
 
   return (
