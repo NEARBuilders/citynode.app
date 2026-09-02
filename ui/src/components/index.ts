@@ -4,7 +4,6 @@ export {
   ApiKeyReveal,
   type ApiKeyRevealProps,
 } from "./api-key-manager";
-export { BrandElement } from "./brand-element";
 export { ConfirmDialog } from "./confirm-dialog";
 export { EmptyState } from "./empty-state";
 export { AppHeader } from "./layout/app-header";
@@ -31,6 +30,7 @@ export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
 export { SidebarUserNav } from "./layout/sidebar-user-nav";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
+export { Logo } from "./logo";
 export { NodeDirectory, type NodeDirectoryNode } from "./node-directory";
 export { NodeValidatorTable } from "./node-validator-table";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -68,6 +68,8 @@ export {
 } from "./ui/dialog";
 export {
   Field,
+  FieldDescription,
+  FieldError,
   FieldLabel,
 } from "./ui/field";
 export { InfoRow } from "./ui/info-row";

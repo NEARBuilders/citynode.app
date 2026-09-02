@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { ClientOnly, Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,17 @@ import { useIdentity } from "./use-identity";
 import { UserNavMenuContent } from "./user-nav-menu";
 
 export function UserNav({ showConnect = true }: { showConnect?: boolean }) {
+  return (
+    <ClientOnly>
+      <UserNavContent showConnect={showConnect} />
+    </ClientOnly>
+  );
+}
+
+function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
   const {
     user,
+    isSessionLoading,
     nearAccountId,
     organizations,
     activeOrgId,
@@ -23,6 +32,8 @@ export function UserNav({ showConnect = true }: { showConnect?: boolean }) {
     showHandle,
     initials,
   } = useIdentity();
+
+  if (isSessionLoading) return null;
 
   if (!user) {
     return (

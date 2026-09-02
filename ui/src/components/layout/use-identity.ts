@@ -11,7 +11,8 @@ export function useIdentity() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const router = useRouter();
-  const { data: session } = useQuery(sessionQueryOptions(auth));
+  const sessionQuery = useQuery(sessionQueryOptions(auth));
+  const session = sessionQuery.data;
   const user = session?.user;
   const nearAccountId = useNearAccount();
 
@@ -70,6 +71,7 @@ export function useIdentity() {
   return {
     user,
     session,
+    isSessionLoading: sessionQuery.isLoading,
     nearAccountId,
     organizations: organizations ?? [],
     activeOrgId,

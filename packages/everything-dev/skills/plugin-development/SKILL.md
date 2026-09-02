@@ -243,58 +243,13 @@ Good practice:
 **`tools`** — Framework-provided third argument in `initialize(config, plugins, tools)`. Use `tools.buildService(tag, layer)` to build scoped resources (DB pools, caches, repositories) that live for the plugin's lifetime.  
 **`createRouter`** — Maps contract procedures to handlers. Receives the value returned by `initialize` plus a pre-configured `builder`.
 
-## Request Context Reference
+## Request Context
 
-The host injects a per-request context object into every plugin. The plugin **must declare the fields it uses** in its context zod schema. Only declared fields are available to route handlers and middleware:
+The host injects a per-request context object into every plugin. The plugin **must declare the fields it uses** in its context zod schema — the schema is a filter; the host passes all fields, but your plugin only sees what you declare.
 
-```ts
-context: z.object({
-  userId: z.string().optional(),
-  user: z.object({
-    id: z.string(),
-    role: z.string().optional(),   // "admin", "member", or null for anon
-    email: z.string().optional(),
-    name: z.string().optional(),
-  }).optional(),
-  organizationId: z.string().optional(),   // Active organization UUID
-  organization: z.object({
-    activeOrganizationId: z.string().nullable().optional(),
-    organization: z.object({
-      id: z.string(),
-      name: z.string(),
-      slug: z.string(),
-      logo: z.string().nullable().optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),  // daoAccountId lives here
-    }).nullable().optional(),
-    member: z.object({
-      id: z.string(),
-      role: z.string(),   // User's role within this org ("admin", "member")
-    }).nullable().optional(),
-    isPersonal: z.boolean(),
-    hasOrganization: z.boolean(),
-  }).optional(),
-  near: z.object({
-    primaryAccountId: z.string().nullable(),
-    linkedAccounts: z.array(z.object({
-      accountId: z.string(),
-      network: z.string(),
-      publicKey: z.string(),
-      isPrimary: z.boolean(),
-    })),
-    hasNearAccount: z.boolean(),
-  }).optional(),
-  walletAddress: z.string().optional(),
-  apiKey: z.object({
-    id: z.string(),
-    name: z.string().nullable().optional(),
-    permissions: z.record(z.string(), z.array(z.string())).nullable().optional(),
-  }).optional(),
-  reqHeaders: z.custom<Headers>().optional(),
-  getRawBody: z.custom<() => Promise<string>>().optional(),
-}),
-```
+Available fields: `userId`, `user` (id, role, email, name), `organizationId` / `organization` (active org envelope, `member.role`, `metadata.daoAccountId`), `near` (primaryAccountId, linkedAccounts), `walletAddress`, `apiKey` (id, name, permissions), `reqHeaders`, `getRawBody`.
 
-The zod schema is a filter — the host passes all fields, but your plugin only sees what you declare. For pre-built auth/organization middleware, see the `api-and-auth` skill.
+See `references/request-context.md` for the full schema and field table. For pre-built auth/organization middleware, see the `api-and-auth` skill.
 
 ## Step 5: Register in `bos.config.json`
 
@@ -395,86 +350,15 @@ export async function createDatabaseDriver(url: string) {
 
 ### Layer Pattern
 
-`DatabaseLive` is a `Layer.scoped` that creates the driver, runs migrations, and returns the `db`. The `acquireRelease` ensures `driver.close()` runs when the scope is released. Migrations run **inside** the scoped layer so the pool stays open for the migration queries:
-
-```ts
-// src/db/layer.ts
-import { PluginIdTag } from "every-plugin";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
-import { createDatabaseDriver, type Database, DatabaseError } from "./index";
-import { detectDrift, loadMigrations, migrate } from "./migrate";
-
-export class DatabaseTag extends Context.Tag("Database")<Database, Database>() {}
-
-export const DatabaseLive = (url: string) =>
-  Layer.scoped(
-    DatabaseTag,
-    Effect.gen(function* () {
-      const pluginId = yield* PluginIdTag;
-      const slug = pluginMigrationSlug(pluginId);
-      const schemaName = `plugin_${slug}`;
-
-      const driver = yield* Effect.acquireRelease(
-        Effect.tryPromise({
-          try: () => createDatabaseDriver(url, schemaName),
-          catch: (cause) => new DatabaseError({ stage: "driver", cause }),
-        }),
-        (driver) =>
-          Effect.tryPromise({
-            try: () => driver.close(),
-            catch: (cause) => new DatabaseError({ stage: "close", cause }),
-          }).pipe(Effect.ignore),
-      );
-
-      const storage = getMigrationStorage(slug);
-      const { migrations, source } = yield* loadMigrations();
-
-      if (migrations.length > 0) {
-        const applied = yield* migrate(driver.db, migrations, storage, schemaName);
-        yield* Effect.logInfo(
-          `[Database] Applied ${applied}/${migrations.length} migration(s) (source: ${source})`,
-        );
-        const drift = yield* detectDrift(driver.db, migrations, storage, schemaName);
-        if (drift.status === "healthy" || drift.status === "untracked-existing-schema") {
-          yield* Effect.logInfo(`[Database] Ready`);
-        }
-      }
-
-      return driver.db;
-    }),
-  );
-```
+`DatabaseLive` is a `Layer.scoped` that creates the driver, runs migrations (inside the scoped layer, so the pool stays open for migration queries), and returns the `db`. `acquireRelease` closes the driver on scope release. See `references/database.md` for the full implementation.
 
 ### Migration Generation
 
 1. Create `drizzle.config.ts` in your plugin directory
 2. Run `drizzle-kit generate` to produce SQL migration files
-3. Store migrations in `src/db/migrations/`
-4. Pass an explicit `storage` resolved from the workspace so the journal slug is reliable
-   under rspack/Module Federation bundling (the no-arg fallback reads
-   `npm_package_name`, which is unreliable in bundled remotes).
+3. Store migrations in `src/db/migrations/` with an explicit `storage` resolved from the workspace (the no-arg fallback reads `npm_package_name`, unreliable under rspack/Module Federation bundling)
 
-Migrations run inside `DatabaseLive`'s scoped layer (see the Layer Pattern above). The critical rule is to **build the DB-backed service via `tools.buildService`** so the scope (and the pool) lives for the plugin's lifetime. Do NOT call `DatabaseLive` directly in `initialize` and extract the driver — that creates a transient scope that releases the pool immediately:
-
-```ts
-// CORRECT — tools.buildService binds the scope to the plugin lifecycle
-initialize: (config, _plugins, tools) =>
-  Effect.gen(function* () {
-    const database = DatabaseLive(config.secrets.DATABASE_URL);
-    const serviceLayer = MyServiceLive.pipe(Layer.provide(database));
-    const myService = yield* tools.buildService(MyServiceTag, serviceLayer);
-
-    return { myService };
-  }),
-
-// WRONG — transient scope: pool.end() fires immediately, migrations fail
-initialize: (config) =>
-  Effect.gen(function* () {
-    const driver = yield* DatabaseLive(config.secrets.DATABASE_URL);
-    return { db: driver.db };
-  }),
-```
+Migrations run inside `DatabaseLive`'s scoped layer. The critical rule is to **build the DB-backed service via `tools.buildService`** so the scope (and the pool) lives for the plugin's lifetime. Do NOT call `DatabaseLive` directly in `initialize` and extract the driver — that creates a transient scope that releases the pool immediately. See `references/database.md` for correct/wrong examples.
 
 ### Per-Plugin Isolation
 

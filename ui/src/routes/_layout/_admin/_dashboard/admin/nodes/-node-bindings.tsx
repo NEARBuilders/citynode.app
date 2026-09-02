@@ -18,6 +18,7 @@ import {
   Label,
   SectionHeader,
   Skeleton,
+  UnderConstruction,
 } from "@/components";
 import {
   Select,
@@ -150,6 +151,11 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                         {mutation.error.message}
                       </p>
                     )}
+                  <UnderConstruction
+                    label="domain routing"
+                    url="https://www.reddit.com/r/rust/comments/1qew4ra/near_dns_dns_records_stored_on_blockchain_and/"
+                    tooltip="learn about near-dns and contribute"
+                  />
                 </div>
               )}
             </Card>

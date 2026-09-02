@@ -210,7 +210,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
             <Input
               value={newAccountId}
               onChange={(e) => setNewAccountId(e.target.value)}
-              placeholder="city-node-1.pool.near"
+              placeholder="everything.pool.near"
               className="max-w-xs font-mono text-xs"
               required
             />

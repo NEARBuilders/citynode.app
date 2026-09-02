@@ -1,7 +1,7 @@
+import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Users } from "lucide-react";
-import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import {
@@ -9,6 +9,8 @@ import {
   Card,
   CardContent,
   Field,
+  FieldDescription,
+  FieldError,
   FieldLabel,
   Input,
   PageContainer,
@@ -23,18 +25,23 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/ne
   component: NewOrganization,
 });
 
+const generateSlug = (value: string) => {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
 function NewOrganization() {
   const router = useRouter();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: { name: string; slug: string }) => {
       const { data, error } = await auth.organization.create({
-        name,
-        slug,
+        name: values.name,
+        slug: values.slug,
       });
       if (error) throw new Error(error.message);
       return data;
@@ -55,19 +62,15 @@ function NewOrganization() {
     },
   });
 
-  const generateSlug = (value: string) => {
-    return value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  };
-
-  const handleNameChange = (value: string) => {
-    setName(value);
-    if (!slug || slug === generateSlug(name.slice(0, -1))) {
-      setSlug(generateSlug(value));
-    }
-  };
+  const form = useForm({
+    defaultValues: {
+      name: "",
+      slug: "",
+    },
+    onSubmit: async ({ value }) => {
+      await createMutation.mutateAsync(value);
+    },
+  });
 
   return (
     <PageContainer variant="wide">
@@ -86,41 +89,89 @@ function NewOrganization() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            createMutation.mutate();
+            form.handleSubmit();
           }}
           className="space-y-6"
         >
           <Card>
             <CardContent className="p-6 space-y-4">
-              <Field>
-                <FieldLabel htmlFor="organization-name">name</FieldLabel>
-                <Input
-                  id="organization-name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="My Team"
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="organization-slug">slug</FieldLabel>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">@</span>
-                  <Input
-                    id="organization-slug"
-                    type="text"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                    placeholder="my-team"
-                    pattern="[a-z0-9-]+"
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Only lowercase letters, numbers, and hyphens.
-                </p>
-              </Field>
+              <form.Field
+                name="name"
+                validators={{
+                  onChange: ({ value }) => (!value.trim() ? "name is required" : undefined),
+                }}
+              >
+                {(field) => {
+                  const errors = field.state.meta.errors;
+                  return (
+                    <Field data-invalid={errors.length > 0 || undefined}>
+                      <FieldLabel htmlFor={field.name}>name</FieldLabel>
+                      <Input
+                        id={field.name}
+                        name={field.name}
+                        type="text"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          field.handleChange(e.target.value);
+                          if (!form.getFieldMeta("slug")?.isTouched) {
+                            form.setFieldValue("slug", generateSlug(e.target.value));
+                          }
+                        }}
+                        placeholder="My Team"
+                        aria-invalid={errors.length > 0 || undefined}
+                      />
+                      {errors.length > 0 ? <FieldError>{errors.join(", ")}</FieldError> : null}
+                    </Field>
+                  );
+                }}
+              </form.Field>
+
+              <form.Field
+                name="slug"
+                validators={{
+                  onChange: ({ value }) => {
+                    if (!value) return "slug is required";
+                    if (!/^[a-z0-9-]+$/.test(value)) {
+                      return "only lowercase letters, numbers, and hyphens";
+                    }
+                    return undefined;
+                  },
+                }}
+              >
+                {(field) => {
+                  const errors = field.state.meta.errors;
+                  return (
+                    <Field data-invalid={errors.length > 0 || undefined}>
+                      <FieldLabel htmlFor={field.name}>slug</FieldLabel>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">@</span>
+                        <Input
+                          id={field.name}
+                          name={field.name}
+                          type="text"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) =>
+                            field.handleChange(
+                              e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                            )
+                          }
+                          placeholder="my-team"
+                          aria-invalid={errors.length > 0 || undefined}
+                        />
+                      </div>
+                      {errors.length > 0 ? (
+                        <FieldError>{errors.join(", ")}</FieldError>
+                      ) : (
+                        <FieldDescription>
+                          Only lowercase letters, numbers, and hyphens.
+                        </FieldDescription>
+                      )}
+                    </Field>
+                  );
+                }}
+              </form.Field>
             </CardContent>
           </Card>
 
@@ -128,13 +179,17 @@ function NewOrganization() {
             <Button asChild variant="outline">
               <Link to="/orgs">cancel</Link>
             </Button>
-            <Button
-              type="submit"
-              disabled={createMutation.isPending || !name || !slug}
-              variant="outline"
-            >
-              {createMutation.isPending ? "creating..." : "create"}
-            </Button>
+            <form.Subscribe selector={(state) => state.canSubmit}>
+              {(canSubmit) => (
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || !canSubmit}
+                  variant="outline"
+                >
+                  {createMutation.isPending ? "creating..." : "create"}
+                </Button>
+              )}
+            </form.Subscribe>
           </div>
         </form>
 
