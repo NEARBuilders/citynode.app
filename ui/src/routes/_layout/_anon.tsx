@@ -17,10 +17,8 @@ export const Route = createFileRoute("/_layout/_anon")({
 });
 
 function AnonLayout() {
-  const { runtimeConfig } = Route.useRouteContext();
-
   return (
-    <PublicShell runtimeConfig={runtimeConfig} footer={<PublicShellFooter />}>
+    <PublicShell footer={<PublicShellFooter />}>
       <Outlet />
     </PublicShell>
   );
