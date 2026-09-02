@@ -1,28 +1,19 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, FileCheck2, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
+import { FileCheck2 } from "lucide-react";
+import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import {
   Badge,
   Button,
   Card,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   EmptyState,
-  Label,
   SectionHeader,
   Skeleton,
   Tabs,
   TabsList,
   TabsTrigger,
-  Textarea,
 } from "@/components";
 import { DataTable } from "@/components/ui/data-table";
 import {
@@ -49,12 +40,9 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/proposals
 
 function AdminProposals() {
   const apiClient = useApiClient();
-  const queryClient = useQueryClient();
   const navigate = Route.useNavigate();
   const { status } = Route.useSearch();
   const activeFilter = status ?? "pending";
-  const [proposalToReject, setProposalToReject] = useState<Proposal | null>(null);
-  const [rejectionReason, setRejectionReason] = useState("");
   const queryKey = ["admin-proposals", activeFilter] as const;
 
   const proposalsQuery = useQuery({
@@ -66,41 +54,17 @@ function AdminProposals() {
     staleTime: 15 * 1000,
   });
 
-  const reviewMutation = useMutation({
-    mutationFn: async ({
-      proposal,
-      action,
-      reason,
-    }: {
-      proposal: Proposal;
-      action: "approve" | "reject";
-      reason?: string;
-    }) => {
-      if (action === "approve") {
-        return apiClient.proposals.approve({
-          pluginId: proposal.pluginId,
-          entityId: proposal.entityId,
-          expectedUpdatedAt: proposal.updatedAt,
-        });
-      }
-      return apiClient.proposals.reject({
-        pluginId: proposal.pluginId,
-        entityId: proposal.entityId,
-        expectedUpdatedAt: proposal.updatedAt,
-        reason: reason ?? "",
-      });
-    },
-    onSuccess: async (_, variables) => {
-      toast.success(variables.action === "approve" ? "Proposal approved" : "Proposal rejected");
-      setProposalToReject(null);
-      setRejectionReason("");
-      await queryClient.invalidateQueries({ queryKey: ["admin-proposals"] });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to review proposal"),
-  });
-
   const columns = useMemo<ColumnDef<Proposal>[]>(
     () => [
+      {
+        accessorKey: "id",
+        header: "ID",
+        cell: ({ row }) => (
+          <span className="block max-w-36 truncate font-mono text-xs text-muted-foreground">
+            {row.original.id}
+          </span>
+        ),
+      },
       {
         accessorKey: "pluginId",
         header: "Plugin",
@@ -125,6 +89,13 @@ function AdminProposals() {
         ),
       },
       {
+        accessorKey: "submissionCount",
+        header: "Submissions",
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">{row.original.submissionCount}</span>
+        ),
+      },
+      {
         accessorKey: "reviewStatus",
         header: "Status",
         cell: ({ row }) => (
@@ -140,34 +111,21 @@ function AdminProposals() {
       },
       {
         id: "actions",
-        header: "Actions",
-        cell: ({ row }) =>
-          row.original.reviewStatus === "pending" ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                onClick={() => reviewMutation.mutate({ proposal: row.original, action: "approve" })}
-                disabled={reviewMutation.isPending}
-              >
-                <Check />
-                approve
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setProposalToReject(row.original)}
-                disabled={reviewMutation.isPending}
-              >
-                <X />
-                reject
-              </Button>
-            </div>
-          ) : (
-            <span className="text-xs text-muted-foreground">reviewed</span>
-          ),
+        header: "",
+        cell: ({ row }) => (
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to="/admin/proposals/$proposalId"
+              params={{ proposalId: row.original.id }}
+              search={{ pluginId: row.original.pluginId, entityId: row.original.entityId }}
+            >
+              {row.original.reviewStatus === "pending" ? "review" : "view"}
+            </Link>
+          </Button>
+        ),
       },
     ],
-    [reviewMutation],
+    [],
   );
 
   const proposals = proposalsQuery.data?.data ?? [];
@@ -222,7 +180,7 @@ function AdminProposals() {
       ) : proposals.length === 0 ? (
         <EmptyState
           icon={FileCheck2}
-          title={activeFilter === "pending" ? "No pending proposals" : "No proposals found"}
+          title={activeFilter === "pending" ? "No pending proposals." : "No proposals found."}
           description={`There are no ${activeFilter === "all" ? "" : `${activeFilter} `}proposals to show.`}
           className="min-h-[40vh]"
         />
@@ -231,60 +189,6 @@ function AdminProposals() {
           <DataTable columns={columns} data={proposals} />
         </div>
       )}
-
-      <Dialog
-        open={!!proposalToReject}
-        onOpenChange={(open) => {
-          if (!open) {
-            setProposalToReject(null);
-            setRejectionReason("");
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject proposal</DialogTitle>
-            <DialogDescription>
-              Add a reason so the proposal author understands what needs to change.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="rejection-reason">Reason</Label>
-            <Textarea
-              id="rejection-reason"
-              value={rejectionReason}
-              onChange={(event) => setRejectionReason(event.target.value)}
-              placeholder="Explain why this proposal is being rejected"
-              rows={4}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setProposalToReject(null);
-                setRejectionReason("");
-              }}
-            >
-              cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!rejectionReason.trim() || reviewMutation.isPending || !proposalToReject}
-              onClick={() => {
-                if (!proposalToReject) return;
-                reviewMutation.mutate({
-                  proposal: proposalToReject,
-                  action: "reject",
-                  reason: rejectionReason.trim(),
-                });
-              }}
-            >
-              reject proposal
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

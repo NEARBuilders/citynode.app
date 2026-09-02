@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,8 +10,8 @@ import { PublicShell } from "@/components/layout/public-shell";
 export const Route = createFileRoute("/_layout/_authenticated/things/new")({
   head: () => ({
     meta: [
-      { title: "New Thing | everything.dev" },
-      { name: "description", content: "Create a new thing in the registry." },
+      { title: "New Thing | app" },
+      { name: "description", content: "Submit a new thing for community review." },
     ],
   }),
   component: NewThingPage,
@@ -24,7 +24,7 @@ function NewThingPage() {
   const [thingId, setThingId] = useState("");
   const [payloadRaw, setPayloadRaw] = useState('{\n  "kind": "demo",\n  "value": "hello"\n}');
 
-  const createMutation = useMutation({
+  const submitMutation = useMutation({
     mutationFn: async () => {
       if (!thingId.trim()) throw new Error("thingId is required");
       let payload: unknown;
@@ -33,11 +33,21 @@ function NewThingPage() {
       } catch {
         throw new Error("Invalid JSON payload");
       }
-      return apiClient.template.createThing({ thingId: thingId.trim(), payload });
+      return apiClient.proposals.propose({
+        pluginId: "template",
+        entityId: thingId.trim(),
+        payload,
+        source: "things/new",
+      });
     },
-    onSuccess: (thing) => {
-      toast.success("Thing created");
-      void navigate({ to: "/things/$thingId", params: { thingId: thing.thingId } });
+    onSuccess: ({ data: proposal }) => {
+      toast.success("Proposal submitted", {
+        description: "Your thing is pending admin review.",
+      });
+      void navigate({
+        to: "/things/$thingId",
+        params: { thingId: proposal.entityId },
+      });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -50,7 +60,7 @@ function NewThingPage() {
             icon={Sparkles}
             label="Create"
             title="New thing"
-            description="Create a new thing in the registry."
+            description="Submit a thing proposal for an admin to review before it goes live."
           />
 
           <div className="space-y-4">
@@ -89,11 +99,24 @@ function NewThingPage() {
             </div>
 
             <Button
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || !thingId.trim()}
+              onClick={() => submitMutation.mutate()}
+              disabled={submitMutation.isPending || !thingId.trim()}
             >
-              {createMutation.isPending ? "Creating..." : "Create thing"}
+              {submitMutation.isPending ? "Submitting..." : "Submit for review"}
             </Button>
+
+            {submitMutation.isError && (
+              <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-foreground">
+                <p>{submitMutation.error.message || "Unable to submit this proposal."}</p>
+                <Link
+                  to="/login"
+                  search={{ redirect: "/things/new" }}
+                  className="mt-2 inline-flex text-sm font-semibold text-link underline"
+                >
+                  Sign in and try again
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </PageContainer>

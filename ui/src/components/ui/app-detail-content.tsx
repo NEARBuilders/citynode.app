@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Field, FieldLabel, Input, Textarea } from "@/components";
 import { highlightJson } from "@/lib/json-highlight";
+import { useNearAccount } from "@/lib/use-near-account";
 
 type RegistryAppDetail = {
   accountId: string;
@@ -69,7 +70,7 @@ export function AppDetailContent({
   const auth = useAuthClient();
 
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
-  const nearAccountId = auth.near.getAccountId();
+  const nearAccountId = useNearAccount();
   const user = session?.user;
 
   const [title, setTitle] = useState(app?.metadata?.title ?? "");

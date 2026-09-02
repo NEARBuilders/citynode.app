@@ -265,47 +265,11 @@ bun run dev    # hot reload, all services local
 
 `BOS_GATEWAY` (`domain` in `bos.config.json`) is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping `BOS_GATEWAY=citynode.app` while using your own `BOS_ACCOUNT`, your config lives at a separate FastKV path (`bos://<your-account>/citynode.app`) that `extends` the base runtime (`bos://v1.citynode.near/citynode.app`). You inherit the full platform — host, API, auth, plugins — and override only what you change. Your Railway URL is the ingress; point your own domain's DNS at it if you want a custom domain.
 
-**Setting up subaccount creation with near-cli-rs:**
+**Setting up subaccount creation:**
 
-The auth plugin's subaccount creation flow (used by the tenant wizard) requires a named NEAR account with a full access key. Implicit hex accounts cannot own subaccounts.
-
-1. **Create a named NEAR account** via near-cli-rs (if you don't already have one):
-   ```bash
-   # testnet
-   near account create-account fund-my-account <parent>.testnet use-faucet network-config testnet
-   # mainnet — fund via wallet transfer first
-   near account create-account fund-my-account <parent>.near manually-sign network-config mainnet
-   ```
-
-2. **Export the full access key** for that account (needed as `NEAR_SUB_ACCOUNT_PARENT_KEY`):
-   ```bash
-   near account export-account <parent>.testnet explicitly-provide-private-key network-config testnet
-   ```
-
-3. **Set the parent key secrets** in `.env`:
-   ```
-   NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET=ed25519:...
-   NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET=ed25519:...
-   ```
-
-4. **Update `bos.config.json` auth variables** — point `siwn.subAccount.parentAccount`, `siwn.recipients`, and `siwn.relayer.*.whitelistedContracts` to your own account:
-   ```json
-   "variables": {
-     "siwn": {
-       "recipients": { "mainnet": "<your-account>.near", "testnet": "<your-account>.testnet" },
-       "relayer": {
-         "mainnet": { "whitelistedContracts": ["<your-account>.near"], "maxGasPerTransaction": "300000000000000", "maxDepositPerTransaction": "0" },
-         "testnet": { "whitelistedContracts": ["<your-account>.testnet"], "maxGasPerTransaction": "300000000000000", "maxDepositPerTransaction": "0" }
-       },
-       "subAccount": {
-         "mainnet": { "parentAccount": "<your-account>.near", "parentHasFullAccess": true, "minDeposit": "0.1 NEAR" },
-         "testnet": { "parentAccount": "<your-account>.testnet", "parentHasFullAccess": true, "minDeposit": "0.1 NEAR" }
-       }
-     }
-   }
-   ```
-
-5. After restarting, the auth plugin can create subaccounts (e.g. `chicago.<your-account>.near`) and the ephemeral relayer can relay transactions for your whitelisted contracts. Fund the relayer's implicit account with NEAR (see "SIWN Auth Relayer" below for the funding workflow).
+Tenants are no longer provisioned as platform-owned subaccounts. The admin
+wizard now connects to a sputnik-dao account via the Trezu wallet and publishes
+the tenant runtime config under `bos://<dao-account>/<gateway>`.
 
 **near-cli-rs quick reference:**
 
@@ -484,7 +448,7 @@ The auth plugin's `siwn({ relayer: ... })` block in `bos.config.json → app.aut
 - On first startup the server generates an ED25519 keypair per network, derives an implicit hex account from the public key, and encrypts the private key with `BETTER_AUTH_SECRET` (HKDF-SHA256 → AES-256-GCM) into the `relayerKey` table. Same keypair recovers on every restart.
 - After first startup the server logs the implicit account id. **Fund that account with NEAR** to enable relay — otherwise every relay attempt fails with insufficient balance from the RPC.
 - Funding workflow: admins hit `getRelayerInfo`; the `/admin/relayer` page surfaces a "needs funding" banner on `/admin` when `enabled === false` and `accountId` is set, then the admin's connected wallet transfers NEAR to the implicit account via `authClient.near.getNearClient().transfer()`.
-- The implicit relayer account is *not* a `.near` named account, so it cannot own sub-accounts. `siwn.subAccount.parentAccount` must be a named account (this project uses `v1.citynode.near` / `v1.citynode.testnet`), and the parent key is supplied via `NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET` / `NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET` secrets. Without the parent key the sub-account endpoint explains why in the error message and returns a `not-configured` reason.
+- The implicit relayer account is *not* a `.near` named account and is short-lived, so it cannot own sub-accounts. The platform's tenant wizard no longer relies on server-side subaccount creation — tenants are owned by the connected sputnik-dao account (see "DAO-owned tenants"). The legacy `siwn.subAccount.parentAccount` configuration block, `parentHasFullAccess`, `minDeposit`, and `NEAR_SUB_ACCOUNT_PARENT_KEY_*` secrets are unused even if still declared during a transition window.
 - `NEAR_RELAYER_PRIVATE_KEY` is vestigial in ephemeral mode and is omitted from `.env.example`. Only reintroduce (plus explicit `relayer: { accountId, privateKey }`) when moving to `RelayerExplicitConfig`.
 - The mode is observable at runtime: `getRelayerInfo()` returns `{ accountId, mode: "ephemeral", publicKey, balance, enabled }`.
 

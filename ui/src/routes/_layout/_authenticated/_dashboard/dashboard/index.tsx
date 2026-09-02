@@ -11,6 +11,7 @@ import {
 } from "@/app";
 import { Button, Card, Chip, PageHeader } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
+import { useNearAccount } from "@/lib/use-near-account";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/")({
   beforeLoad: async ({ context }) => {
@@ -43,7 +44,7 @@ function Home() {
     staleTime: 60 * 1000,
   });
   const user = session?.user;
-  const nearAccountId = auth.near.getAccountId();
+  const nearAccountId = useNearAccount();
 
   const profile = useMemo(() => {
     if (!user)

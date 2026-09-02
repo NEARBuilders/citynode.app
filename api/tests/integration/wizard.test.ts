@@ -1,10 +1,25 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getPluginClient, orgContext, teardown } from "../setup";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { isExplicitDaoMember } from "@/services/dao";
+import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+
+vi.mock("@/services/dao", () => ({
+  verifyDaoMembership: vi.fn(async () => ({
+    isSputnikContract: true,
+    isMember: true,
+    policy: { roles: [] },
+  })),
+  parsePolicyGroupMembers: vi.fn(() => []),
+  isExplicitDaoMember: vi.fn(() => true),
+}));
+
+afterEach(() => {
+  vi.mocked(isExplicitDaoMember).mockReturnValue(true);
+});
 
 describe("Tenant + Node + Binding wizard flow", () => {
   beforeAll(async () => {
     await getPluginClient(orgContext());
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await teardown();
@@ -12,7 +27,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("full chain: createTenant → createNode → createBinding", () => {
     it("creates a tenant, root country node, and primary binding in sequence", async () => {
-      const ctx = orgContext("wizard-user-1", "org-wizard-1");
+      const ctx = daoContext("wizard-user-1", "org-wizard-1", "admin-wizard-1.near");
       const c = await getPluginClient(ctx);
 
       const tenant = await c.createTenant({
@@ -62,7 +77,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("rollback on duplicate hostname", () => {
     it("cleans up node and tenant when binding creation fails on a duplicate hostname", async () => {
-      const ctx = orgContext("wizard-user-2", "org-wizard-2");
+      const ctx = daoContext("wizard-user-2", "org-wizard-2", "admin-wizard-2.near");
       const c = await getPluginClient(ctx);
 
       const tenantA = await c.createTenant({
@@ -118,7 +133,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("nested hierarchy: country → state → city", () => {
     it("creates a three-level node tree, each with its own binding", async () => {
-      const ctx = orgContext("wizard-user-3", "org-wizard-3");
+      const ctx = daoContext("wizard-user-3", "org-wizard-3", "admin-wizard-3.near");
       const c = await getPluginClient(ctx);
 
       const tenant = await c.createTenant({
@@ -185,7 +200,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
 
   describe("bindingPreflight across the wizard", () => {
     it("reports available before creation and unavailable after", async () => {
-      const ctx = orgContext("wizard-user-4", "org-wizard-4");
+      const ctx = daoContext("wizard-user-4", "org-wizard-4", "admin-wizard-4.near");
       const c = await getPluginClient(ctx);
 
       const hostname = "preflight-city.citynode.app";
@@ -221,6 +236,130 @@ describe("Tenant + Node + Binding wizard flow", () => {
       const result = await c.bindingPreflight({ hostname: "NOT A VALID HOST" });
       expect(result.hostname.format).toBe("invalid");
       expect(result.hostname.available).toBe(false);
+    });
+  });
+
+  describe("audit seat enforcement", () => {
+    it("rejects tenant creation when the platform audit account is not in the DAO policy", async () => {
+      vi.mocked(isExplicitDaoMember).mockReturnValue(false);
+      const c = await getPluginClient(
+        daoContext("audit-seat-user", "org-audit-seat", "admin-audit-seat.near"),
+      );
+
+      await expect(
+        c.createTenant({
+          name: "No Audit Seat",
+          accountId: "audit-seat.example.near",
+          status: "active",
+        }),
+      ).rejects.toThrow("Platform audit account is not a member of this DAO");
+    });
+  });
+
+  describe("listTenantApps discovery", () => {
+    it("lists active tenants with primary hostname and node, excluding non-active and binding-less rows", async () => {
+      const c = await getPluginClient(
+        daoContext("discovery-user-1", "org-discovery-1", "admin-discovery-1.near"),
+      );
+      const publicClient = await getPluginClient();
+
+      const active = await c.createTenant({
+        name: "Discovery Active",
+        accountId: "discovery-active.example.near",
+        status: "active",
+      });
+      const activeNode = await c.createNode({
+        kind: "city",
+        slug: "discovery-active",
+        name: "Discovery Active",
+        parentId: null,
+        tenantId: active.id,
+      });
+      await c.createBinding({
+        tenantId: active.id,
+        hostname: "discovery-active.citynode.app",
+        isPrimary: true,
+      });
+      expect(activeNode.slug).toBe("discovery-active");
+
+      const bindingless = await c.createTenant({
+        name: "Discovery Bindingless",
+        accountId: "discovery-bindingless.example.near",
+        status: "active",
+      });
+      await c.createNode({
+        kind: "country",
+        slug: "discovery-bindingless",
+        name: "Discovery Bindingless",
+        parentId: null,
+        tenantId: bindingless.id,
+      });
+
+      const pending = await c.createTenant({
+        name: "Discovery Pending",
+        accountId: "discovery-pending.example.near",
+        status: "pending",
+      });
+      await c.createNode({
+        kind: "country",
+        slug: "discovery-pending",
+        name: "Discovery Pending",
+        parentId: null,
+        tenantId: pending.id,
+      });
+
+      const apps = await publicClient.listTenantApps();
+      const byAccount = new Map(apps.map((app) => [app.accountId, app]));
+
+      const activeApp = byAccount.get("discovery-active.example.near");
+      expect(activeApp).toMatchObject({
+        name: "Discovery Active",
+        status: "active",
+        hostname: "discovery-active.citynode.app",
+        node: { slug: "discovery-active", kind: "city", name: "Discovery Active" },
+      });
+
+      const bindinglessApp = byAccount.get("discovery-bindingless.example.near");
+      expect(bindinglessApp).toMatchObject({
+        status: "active",
+        hostname: null,
+        node: { slug: "discovery-bindingless" },
+      });
+
+      expect(byAccount.has("discovery-pending.example.near")).toBe(false);
+
+      expect(activeApp?.ownerKind).toBe("dao");
+    });
+
+    it("returns one row per tenant even when multiple nodes reference it", async () => {
+      const c = await getPluginClient(
+        daoContext("discovery-user-2", "org-discovery-2", "admin-discovery-2.near"),
+      );
+      const publicClient = await getPluginClient();
+
+      const tenant = await c.createTenant({
+        name: "Discovery Multi Node",
+        accountId: "discovery-multi.example.near",
+        status: "active",
+      });
+      await c.createNode({
+        kind: "country",
+        slug: "discovery-multi",
+        name: "Discovery Multi",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      await c.createNode({
+        kind: "state",
+        slug: "discovery-multi-child",
+        name: "Discovery Multi Child",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+
+      const apps = await publicClient.listTenantApps();
+      const rows = apps.filter((app) => app.accountId === "discovery-multi.example.near");
+      expect(rows).toHaveLength(1);
     });
   });
 });

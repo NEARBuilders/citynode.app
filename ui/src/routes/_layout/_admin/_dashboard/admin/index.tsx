@@ -1,8 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, FileCheck2, LayoutDashboard, Network, Settings, Users } from "lucide-react";
-import { getAccount, useAuthClient } from "@/app";
-import { Button, Card, SectionHeader } from "@/components";
+import { Building2, Gavel, LayoutDashboard, Network, Settings, Users } from "lucide-react";
+import { getAccount, useApiClient } from "@/app";
+import { Badge, Button, Card, SectionHeader } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
+import { useNearAccount } from "@/lib/use-near-account";
+import { pendingProposalCountQueryOptions } from "./proposals/-proposal-review";
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/")({
   head: () => ({
@@ -13,10 +16,12 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/")({
 
 function AdminDashboard() {
   const { auth, tenant } = Route.useRouteContext();
-  const authClient = useAuthClient();
+  const apiClient = useApiClient();
   const platformAccount = getAccount();
   const user = auth?.user ?? null;
-  const walletAccount = authClient.near.getAccountId();
+  const walletAccount = useNearAccount();
+  const pendingProposalsQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
+  const pendingProposalCount = pendingProposalsQuery.data?.meta.total;
 
   return (
     <div className="space-y-8">
@@ -45,11 +50,16 @@ function AdminDashboard() {
 
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <FileCheck2 className="h-4 w-4" />
+              <Gavel className="h-4 w-4" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">Proposals</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-foreground">Proposals</h3>
+              {pendingProposalCount !== undefined && (
+                <Badge variant="secondary">{pendingProposalCount} pending</Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">
-              Review pending proposals across every registered plugin.
+              Review and approve thing submissions from the community.
             </p>
             <Button asChild variant="outline" size="sm">
               <Link to="/admin/proposals">review proposals</Link>

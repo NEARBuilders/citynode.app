@@ -29,6 +29,7 @@ export const tenants = pgTable("tenants", {
   orgId: text("org_id"),
   name: text("name").notNull(),
   status: tenantStatus("status").default("active").notNull(),
+  ownerKind: text("owner_kind").default("platform").notNull(),
   allowUiOverrides: boolean("allow_ui_overrides").default(true).notNull(),
   allowBackendOverrides: boolean("allow_backend_overrides").default(false).notNull(),
   allowSsr: boolean("allow_ssr").default(false).notNull(),

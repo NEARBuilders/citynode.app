@@ -83,24 +83,25 @@ export async function getPluginClient(
   return client;
 }
 
-export function authedContext(userId = "user-1"): Record<string, unknown> {
-  return {
-    userId,
-    user: {
-      id: userId,
-      email: `${userId}@example.com`,
-      name: "Test User",
-    },
+export function authedContext(userId = "user-1", userRole?: string): Record<string, unknown> {
+  const user: Record<string, unknown> = {
+    id: userId,
+    email: `${userId}@example.com`,
+    name: "Test User",
   };
+  if (userRole) user.role = userRole;
+  return { userId, user };
 }
 
 export function orgContext(
   userId = "user-1",
   activeOrganizationId = "org-1",
   role = "owner",
+  userRole?: string,
+  primaryAccountId?: string,
 ): Record<string, unknown> {
-  return {
-    ...authedContext(userId),
+  const context: Record<string, unknown> = {
+    ...authedContext(userId, userRole),
     organization: {
       activeOrganizationId,
       organization: {
@@ -114,6 +115,10 @@ export function orgContext(
       },
     },
   };
+  if (primaryAccountId) {
+    context.near = { primaryAccountId };
+  }
+  return context;
 }
 
 export async function teardown() {
@@ -124,4 +129,13 @@ export async function teardown() {
     server = null;
   }
   await runtime.shutdown();
+}
+
+export function daoContext(
+  userId: string,
+  activeOrganizationId: string,
+  primaryAccountId: string,
+  organizationRole: "owner" | "admin" | "member" = "owner",
+): Record<string, unknown> {
+  return orgContext(userId, activeOrganizationId, organizationRole, "admin", primaryAccountId);
 }

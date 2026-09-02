@@ -54,6 +54,12 @@ code {
   --status-danger-border: #FD9AAE;
   --status-danger-fg: #D21B14;
   --status-danger-surface: #FEF7F6;
+  --status-warning-bg: #FFFBEB;
+  --status-warning-border: #F59E0B;
+  --status-warning-foreground: #92400E;
+  --status-success-bg: #ECFDF5;
+  --status-success-border: #22C55E;
+  --status-success-foreground: #166534;
   --disabled: #C5CED6;
   --tooltip-classic: #FFFFC8;
   --near-green: #16a34a;
@@ -106,6 +112,12 @@ code {
   --status-danger-border: #dc2626;
   --status-danger-fg: #fca5a5;
   --status-danger-surface: #2d1515;
+  --status-warning-bg: #422006;
+  --status-warning-border: #F59E0B;
+  --status-warning-foreground: #FDE68A;
+  --status-success-bg: #052E16;
+  --status-success-border: #22C55E;
+  --status-success-foreground: #BBF7D0;
   --disabled: #3f3f46;
   --tooltip-classic: #4a4a00;
   --near-green: #22c55e;
@@ -158,6 +170,12 @@ code {
   --color-status-danger-border: var(--status-danger-border);
   --color-status-danger-fg: var(--status-danger-fg);
   --color-status-danger-surface: var(--status-danger-surface);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-warning-foreground: var(--status-warning-foreground);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-success-foreground: var(--status-success-foreground);
   --color-disabled: var(--disabled);
   --color-tooltip-classic: var(--tooltip-classic);
   --radius-sm: calc(var(--radius) - 0.0625rem);

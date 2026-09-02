@@ -1,17 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import {
-  Building2,
-  FileCheck2,
-  Fuel,
-  LayoutDashboard,
-  Network,
-  Settings,
-  Shield,
-} from "lucide-react";
-import { getAccount } from "@/app";
+import { Building2, Fuel, Gavel, LayoutDashboard, Network, Settings, Shield } from "lucide-react";
+import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { cn } from "@/lib/utils";
+import { pendingProposalCountQueryOptions } from "./admin/proposals/-proposal-review";
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin")({
   head: () => ({
@@ -33,6 +27,7 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin")({
 
 function AdminPage() {
   const { tenant, session } = Route.useRouteContext();
+  const apiClient = useApiClient();
 
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
   const isMember = !!tenant && !!activeOrgId && activeOrgId === tenant.orgId;
@@ -40,6 +35,7 @@ function AdminPage() {
   const authorized = isMember || isAdmin;
 
   const { data: relayerInfo } = useRelayerInfoQuery();
+  const pendingProposalsQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
 
   const relayerNeedsFunding =
     relayerInfo && relayerInfo.enabled === false && !!relayerInfo.accountId;
@@ -127,7 +123,7 @@ function AdminPage() {
           </Link>
         )}
 
-        <AdminNav />
+        <AdminNav pendingProposalCount={pendingProposalsQuery.data?.meta.total} />
 
         <Outlet />
       </div>
@@ -138,13 +134,13 @@ function AdminPage() {
 const NAV_ITEMS = [
   { label: "dashboard", to: "/admin", icon: LayoutDashboard },
   { label: "nodes", to: "/admin/nodes", icon: Network },
-  { label: "proposals", to: "/admin/proposals", icon: FileCheck2 },
+  { label: "proposals", to: "/admin/proposals", icon: Gavel },
   { label: "tenants", to: "/admin/tenants", icon: Building2 },
   { label: "relayer", to: "/admin/relayer", icon: Fuel },
   { label: "system", to: "/admin/system", icon: Settings },
 ] as const;
 
-function AdminNav() {
+function AdminNav({ pendingProposalCount }: { pendingProposalCount?: number }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) =>
     to === "/admin" ? pathname === "/admin" || pathname === "/admin/" : pathname.startsWith(to);
@@ -164,6 +160,14 @@ function AdminNav() {
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
+            {label === "proposals" && pendingProposalCount !== undefined && (
+              <Badge
+                variant={active ? "outline" : "secondary"}
+                className="ml-1 h-5 min-w-5 px-1.5 text-[10px]"
+              >
+                {pendingProposalCount}
+              </Badge>
+            )}
           </Link>
         );
       })}

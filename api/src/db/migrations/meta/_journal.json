@@ -8,6 +8,13 @@
       "when": 1787182103309,
       "tag": "0000_furry_eternity",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788302790970,
+      "tag": "0001_late_joystick",
+      "breakpoints": true
     }
   ]
 }

@@ -33,6 +33,9 @@
     "api": {
       "development": "local:api",
       "production": "https://elliot-braem-7765-api-citynode-app-nearbuilders-64c255fdd-ze.zephyrcloud.app",
+      "variables": {
+        "platformAccount": "v1.citynode.near"
+      },
       "secrets": [
         "API_DATABASE_URL"
       ],
@@ -40,10 +43,6 @@
     },
     "auth": {
       "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
-      "secrets": [
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
-      ],
       "variables": {
         "passkey": {
           "rpID": "citynode.app",
@@ -69,18 +68,6 @@
               "maxGasPerTransaction": "300000000000000",
               "maxDepositPerTransaction": "0"
             }
-          },
-          "subAccount": {
-            "mainnet": {
-              "parentAccount": "v1.citynode.near",
-              "parentHasFullAccess": true,
-              "minDeposit": "0.1 NEAR"
-            },
-            "testnet": {
-              "parentAccount": "v1.citynode.testnet",
-              "parentHasFullAccess": true,
-              "minDeposit": "0.1 NEAR"
-            }
           }
         }
       }
@@ -99,9 +86,6 @@
     "apps": {
       "development": "local:plugins/apps",
       "production": "https://elliot-braem-7764-everything-dev-apps-plugin-city-4fbc5a9be-ze.zephyrcloud.app",
-      "variables": {
-        "registryNamespace": "v1.citynode.near"
-      },
       "integrity": "sha384-T+vM3ZIikLQhQFzLeYE8AD5jysvTJKxL89FFmIAqg/uC/OWbJ/aQqwTWUYP52FI1"
     },
     "proposals": {

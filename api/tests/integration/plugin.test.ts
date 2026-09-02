@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { authedContext, getPluginClient, orgContext } from "../setup";
+import { describe, expect, it, vi } from "vitest";
+import { authedContext, daoContext, getPluginClient, orgContext } from "../setup";
+
+vi.mock("@/services/dao", () => ({
+  verifyDaoMembership: vi.fn(async () => ({
+    isSputnikContract: true,
+    isMember: true,
+    policy: { roles: [] },
+  })),
+  parsePolicyGroupMembers: vi.fn(() => []),
+  isExplicitDaoMember: vi.fn(() => true),
+}));
 
 describe("API Plugin Integration Tests", () => {
   describe("ping", () => {
@@ -22,7 +32,9 @@ describe("API Plugin Integration Tests", () => {
     });
 
     it("resolves a tenant created by its owning organization", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("plugin-resolve-user-1", "plugin-resolve-org-1", "admin-resolve-1.near"),
+      );
 
       const created = await client.createTenant({
         name: "Acme Corp",
@@ -32,7 +44,7 @@ describe("API Plugin Integration Tests", () => {
       expect(created).toMatchObject({
         name: "Acme Corp",
         accountId: "acme.example.near",
-        orgId: "org-1",
+        orgId: "plugin-resolve-org-1",
         status: "active",
       });
 
@@ -41,7 +53,13 @@ describe("API Plugin Integration Tests", () => {
     });
 
     it("rejects invalid accountId format on create", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext(
+          "plugin-resolve-user-invalid",
+          "plugin-resolve-org-invalid",
+          "admin-invalid.near",
+        ),
+      );
       await expect(
         client.createTenant({
           name: "Acme",
@@ -53,7 +71,9 @@ describe("API Plugin Integration Tests", () => {
 
   describe("nodes", () => {
     it("creates a root country node and lists root nodes", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("country-holder-1", "country-holder-org-1", "admin-country-1.near"),
+      );
 
       const tenant = await client.createTenant({
         name: "Country Holder",
@@ -90,10 +110,20 @@ describe("API Plugin Integration Tests", () => {
 
     it("filters nodes by tenant", async () => {
       const firstClient = await getPluginClient(
-        orgContext("tenant-filter-user-a", "tenant-filter-org-a", "owner"),
+        daoContext(
+          "tenant-filter-user-a",
+          "tenant-filter-org-a",
+          "admin-tenant-filter-a.near",
+          "owner",
+        ),
       );
       const secondClient = await getPluginClient(
-        orgContext("tenant-filter-user-b", "tenant-filter-org-b", "owner"),
+        daoContext(
+          "tenant-filter-user-b",
+          "tenant-filter-org-b",
+          "admin-tenant-filter-b.near",
+          "owner",
+        ),
       );
       const firstTenant = await firstClient.createTenant({
         name: "Tenant Filter A",
@@ -127,7 +157,9 @@ describe("API Plugin Integration Tests", () => {
     });
 
     it("creates a nested node tree (country → state → city)", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("tree-holder-1", "tree-holder-org-1", "admin-tree-1.near"),
+      );
 
       const tenant = await client.createTenant({
         name: "Tree Holder",
@@ -165,7 +197,9 @@ describe("API Plugin Integration Tests", () => {
     });
 
     it("returns a node subtree with validators through the public client", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("subtree-holder-1", "subtree-holder-org-1", "admin-subtree-1.near"),
+      );
 
       const tenant = await client.createTenant({
         name: "Subtree Holder",
@@ -233,7 +267,9 @@ describe("API Plugin Integration Tests", () => {
     });
 
     it("returns an aggregated summary for a node", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("summary-holder-1", "summary-holder-org-1", "admin-summary-1.near"),
+      );
 
       const tenant = await client.createTenant({
         name: "Summary Holder",
@@ -305,7 +341,9 @@ describe("API Plugin Integration Tests", () => {
     });
 
     it("summarizes a leaf and resolves staking from its nearest ancestor", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("leaf-summary-1", "leaf-summary-org-1", "admin-leaf-summary-1.near"),
+      );
 
       const tenant = await client.createTenant({
         name: "Leaf Summary Holder",
@@ -390,7 +428,9 @@ describe("API Plugin Integration Tests", () => {
 
   describe("validators", () => {
     it("creates a validator and resolves it for staking from descendants", async () => {
-      const client = await getPluginClient(orgContext());
+      const client = await getPluginClient(
+        daoContext("validator-holder-1", "validator-holder-org-1", "admin-validator-1.near"),
+      );
 
       const tenant = await client.createTenant({
         name: "Validator Holder",
@@ -432,6 +472,46 @@ describe("API Plugin Integration Tests", () => {
 
       const fetched = await client.getValidator({ validatorId: validator.id });
       expect(fetched?.id).toBe(validator.id);
+    });
+
+    it("rejects validator mutations from outside the node's organization", async () => {
+      const owner = await getPluginClient(
+        daoContext("validator-scope-owner", "validator-scope-org", "admin-validator-scope.near"),
+      );
+      const outsider = await getPluginClient(
+        orgContext("validator-outsider", "validator-outsider-org"),
+      );
+
+      const tenant = await owner.createTenant({
+        name: "Validator Scope",
+        accountId: "validatorscope.example.near",
+        status: "active",
+      });
+      const node = await owner.createNode({
+        kind: "country",
+        slug: "validator-scope",
+        name: "Validator Scope",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      const validator = await owner.createValidator({
+        nodeId: node.id,
+        accountId: "scoped.near",
+        role: "official",
+      });
+
+      await expect(
+        outsider.createValidator({ nodeId: node.id, accountId: "intruder.near" }),
+      ).rejects.toThrow("This node's validators do not belong to your organization");
+      await expect(
+        outsider.updateValidator({ validatorId: validator.id, role: "community" }),
+      ).rejects.toThrow("This node's validators do not belong to your organization");
+      await expect(outsider.deleteValidator({ validatorId: validator.id })).rejects.toThrow(
+        "This node's validators do not belong to your organization",
+      );
+      await expect(outsider.setDefaultValidator({ validatorId: validator.id })).rejects.toThrow(
+        "This node's validators do not belong to your organization",
+      );
     });
   });
 

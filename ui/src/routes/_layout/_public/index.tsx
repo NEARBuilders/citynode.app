@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Button } from "@/components";
+import { Button, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
-import { NodeDirectory } from "./n/-node-directory";
 
 export const Route = createFileRoute("/_layout/_public/")({
   loader: async ({ context }) => ({
@@ -27,11 +26,19 @@ function LandingPage() {
   const apiClient = useApiClient();
   const runtime = getActiveRuntime(runtimeConfig);
 
-  const { data: rootNodes = [], isLoading } = useQuery({
-    queryKey: ["root-nodes"],
-    queryFn: () => apiClient.listRootNodes(),
+  const { data: tenantApps = [], isLoading } = useQuery({
+    queryKey: ["tenant-apps"],
+    queryFn: () => apiClient.listTenantApps(),
     staleTime: 30 * 1000,
   });
+
+  const directoryNodes = tenantApps.map((app) => ({
+    id: app.accountId,
+    name: app.name,
+    slug: app.node?.slug ?? app.accountId,
+    kind: app.node?.kind ?? app.ownerKind,
+    hostname: app.hostname,
+  }));
 
   const gateway = runtime?.gatewayId ?? "citynode.app";
 
@@ -66,7 +73,7 @@ function LandingPage() {
               <Link to="/apply">Apply</Link>
             </Button>
           </div>
-          <NodeDirectory nodes={rootNodes} gateway={gateway} isLoading={isLoading} />
+          <NodeDirectory nodes={directoryNodes} gateway={gateway} isLoading={isLoading} />
         </section>
       </div>
     </PageContainer>

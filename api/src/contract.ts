@@ -47,6 +47,7 @@ export const TenantSchema = z.object({
   orgId: z.string().nullable(),
   name: z.string(),
   status: TenantStatusSchema,
+  ownerKind: z.string(),
   allowUiOverrides: z.boolean(),
   allowBackendOverrides: z.boolean(),
   allowSsr: z.boolean(),
@@ -67,6 +68,26 @@ export const TenantBindingSchema = z.object({
   allowBackendOverrides: z.boolean(),
   allowSsr: z.boolean(),
   status: TenantStatusSchema,
+});
+
+export const TenantAppSchema = z.object({
+  accountId: z.string().describe("NEAR account that owns the tenant runtime"),
+  name: z.string(),
+  status: TenantStatusSchema,
+  ownerKind: z.string().describe("'dao' for DAO-owned tenants, 'platform' otherwise"),
+  hostname: z
+    .string()
+    .nullable()
+    .describe("Primary domain binding hostname, or null when the tenant has none"),
+  node: z
+    .object({
+      slug: z.string(),
+      kind: NodeKindSchema,
+      name: z.string(),
+    })
+    .nullable()
+    .describe("Geographic node attached to this tenant, or null"),
+  createdAt: z.string(),
 });
 
 export const TenantBindingRecordSchema = z.object({
@@ -244,6 +265,16 @@ export const contract = oc.router({
         "Public — returns hostname-to-tenant mapping used by the host's BindingResolver.",
     })
     .output(z.array(TenantBindingSchema)),
+
+  listTenantApps: oc
+    .route({
+      method: "GET",
+      path: "/tenants/apps",
+      summary: "List active tenants for discovery",
+      description:
+        "Public — DB-backed discovery listing of active tenants with their primary hostname and attached node. Replaces FastKV registry scans for tenant discovery.",
+    })
+    .output(z.array(TenantAppSchema)),
 
   listTenantBindingsForTenant: oc
     .route({

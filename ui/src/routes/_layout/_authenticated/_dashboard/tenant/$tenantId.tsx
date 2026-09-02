@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { Building2, ExternalLink, Pencil, Trash2, Users } from "lucide-react";
 import type { TransactionBuilder } from "near-kit";
 import { useState } from "react";
@@ -7,6 +8,12 @@ import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import {
   Badge,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
   Button,
   Card,
   CardContent,
@@ -17,8 +24,23 @@ import {
   PageHeader,
   SectionHeader,
 } from "@/components";
+import { ConnectDao } from "@/components/connect-dao";
+import {
+  buildTenantPublishConfig,
+  signAsDaoTransaction,
+  useDaoConnection,
+} from "@/lib/dao-connect";
+import { useNearAccount } from "@/lib/use-near-account";
+import {
+  classifyTenantKey,
+  resolveOrgSlug,
+  resolvePrimaryHostname,
+} from "../../../_admin/_dashboard/admin/tenants/tenant-wizard";
+import { TenantNodeValidators } from "./-node-validators";
 
 const CONFIG_GAS = "300000000000000";
+
+type PublishMode = "platform" | "dao";
 
 async function publishTenantConfig(
   apiClient: ReturnType<typeof useApiClient>,
@@ -26,26 +48,41 @@ async function publishTenantConfig(
   input: {
     accountId: string;
     gatewayId: string;
-    subdomain: string;
+    parentAccount: string;
+    hostname: string | null;
     name: string;
     status?: "active" | "suspended" | "pending_deletion";
+    mode: PublishMode;
   },
 ) {
-  const parentAccount = getAccount();
-  const tenantConfig = {
-    extends: `bos://${parentAccount}/${input.gatewayId}`,
-    account: input.accountId,
-    domain: `${input.subdomain}.${input.gatewayId}`,
+  if (!input.hostname) {
+    throw new Error("No primary domain binding configured for this tenant");
+  }
+
+  const tenantConfig = buildTenantPublishConfig({
+    daoAccountId: input.accountId,
+    gatewayId: input.gatewayId,
+    baseAccount: input.parentAccount,
+    hostname: input.hostname,
     title: input.name,
-    description: input.name,
     ...(input.status ? { status: input.status } : {}),
-  };
+  });
 
   const prepared = await apiClient.apps.prepareRegistryConfigWrite({
     accountId: input.accountId,
     gatewayId: input.gatewayId,
-    config: tenantConfig,
+    config: tenantConfig as unknown as Record<string, unknown>,
   });
+
+  if (input.mode === "dao") {
+    return signAsDaoTransaction(input.accountId, {
+      receiverId: prepared.data.contractId,
+      methodName: prepared.data.methodName,
+      args: prepared.data.args as unknown as Record<string, unknown>,
+      gas: CONFIG_GAS,
+      attachedDeposit: prepared.data.attachedDeposit,
+    });
+  }
 
   const relayerInfo = await auth.near.getRelayerInfo();
   const hasRelayer = relayerInfo.data?.enabled === true;
@@ -102,16 +139,53 @@ function TenantDetail() {
   const [name, setName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const gatewayId = getActiveRuntime()?.gatewayId ?? "everything.dev";
+  const parentAccount = getAccount();
+  const daoConnection = useDaoConnection();
 
   const { data: tenant } = useQuery({
     queryKey: ["tenant", tenantId],
     queryFn: async () => {
       const tenants = await apiClient.listTenants();
-      const found = tenants.find((t) => t.id === tenantId);
-      if (!found) throw new Error("Tenant not found");
-      return found;
+      const findById = (id: string) => tenants.find((t) => t.id === id) ?? null;
+      const kind = classifyTenantKey(tenantId);
+      if (kind === "uuid") {
+        return findById(tenantId);
+      }
+      if (kind === "accountId") {
+        const resolved = await apiClient.resolveTenant({ accountId: tenantId });
+        return resolved ? findById(resolved.id) : null;
+      }
+      const binding = await apiClient
+        .resolveBindingByHostname({ hostname: `${tenantId}.${gatewayId}` })
+        .catch(() => null);
+      if (binding) return findById(binding.tenantId);
+      const node = await apiClient.resolveNodeBySlug({ slug: tenantId });
+      return node ? findById(node.tenantId) : null;
     },
     enabled: !!tenantId,
+  });
+
+  const { data: nodes = [] } = useQuery({
+    queryKey: ["tenant-nodes", tenantId],
+    queryFn: async () => apiClient.listNodes({ tenantId }),
+    enabled: !!tenantId,
+  });
+  const nodeSlug = nodes[0]?.slug;
+
+  const { data: bindings } = useQuery({
+    queryKey: ["tenant-bindings", tenantId],
+    queryFn: async () => apiClient.listTenantBindingsForTenant({ tenantId }),
+    enabled: !!tenantId,
+  });
+
+  const { data: organizations } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data, error } = await auth.organization.list();
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    staleTime: 60 * 1000,
   });
 
   const { data: members = [] } = useQuery({
@@ -140,24 +214,35 @@ function TenantDetail() {
   const isAdmin = members.some(
     (m) => m.userId === session?.user?.id && (m.role === "admin" || m.role === "owner"),
   );
+  const isDaoOwned = tenant?.ownerKind === "dao";
+
+  const publishMode: PublishMode = isDaoOwned ? "dao" : "platform";
+  const nearAccountId = useNearAccount();
+  const hasSigningWallet =
+    publishMode === "dao"
+      ? daoConnection.status === "connected" && daoConnection.daoAccountId === tenant?.accountId
+      : !!nearAccountId;
+
+  const hostname = resolvePrimaryHostname(bindings);
+  const orgSlug = resolveOrgSlug(organizations, tenant?.orgId);
+  const bosUrl = tenant ? `bos://${tenant.accountId}/${gatewayId}` : null;
+  const fastKvUrl = tenant ? buildRegistryConfigUrl(tenant.accountId, gatewayId) : null;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
 
-  const tenantHostname = tenant?.id ? tenant.id.slice(0, 8) : "";
-
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updated = await apiClient.updateTenant({
-        tenantId,
-        name,
-      });
+      if (!tenant) throw new Error("Tenant not loaded");
+      const updated = await apiClient.updateTenant({ tenantId, name });
       if (name !== updated.name) {
         await publishTenantConfig(apiClient, auth, {
           accountId: updated.accountId,
           gatewayId,
-          subdomain: tenantHostname,
+          parentAccount,
+          hostname,
           name: updated.name,
           status: updated.status === "active" ? "active" : undefined,
+          mode: publishMode,
         });
       }
       return updated;
@@ -176,9 +261,11 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
-        subdomain: tenantHostname,
+        parentAccount,
+        hostname,
         name: updated.name,
         status: "suspended",
+        mode: publishMode,
       });
       return updated;
     },
@@ -194,9 +281,11 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
-        subdomain: tenantHostname,
+        parentAccount,
+        hostname,
         name: updated.name,
         status: "active",
+        mode: publishMode,
       });
       return updated;
     },
@@ -211,12 +300,14 @@ function TenantDetail() {
       return publishTenantConfig(apiClient, auth, {
         accountId: tenant?.accountId ?? "",
         gatewayId,
-        subdomain: tenantHostname,
+        parentAccount,
+        hostname,
         name: tenant?.name ?? "",
         status:
           tenant?.status === "suspended" || tenant?.status === "pending_deletion"
             ? tenant?.status
             : undefined,
+        mode: publishMode,
       });
     },
     onSuccess: () => toast.success("Config republished"),
@@ -229,9 +320,11 @@ function TenantDetail() {
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId,
-        subdomain: tenantHostname,
+        parentAccount,
+        hostname,
         name: updated.name,
         status: "pending_deletion",
+        mode: publishMode,
       });
       return updated;
     },
@@ -246,7 +339,7 @@ function TenantDetail() {
   if (!tenant) {
     return (
       <PageContainer variant="wide">
-        <div className="text-muted-foreground text-sm py-12">Loading tenant…</div>
+        <div className="text-muted-foreground text-sm py-12">Tenant not found.</div>
       </PageContainer>
     );
   }
@@ -258,16 +351,43 @@ function TenantDetail() {
         ? "destructive"
         : "secondary";
 
+  const republishTooltip = !hostname
+    ? "create a domain binding before republishing"
+    : !hasSigningWallet
+      ? isDaoOwned
+        ? "connect the DAO account via Trezu to republish"
+        : "connect your NEAR session wallet to republish"
+      : undefined;
+
+  const canRepublish = !!hostname && hasSigningWallet;
+
   return (
     <PageContainer variant="wide">
       <div className="space-y-8">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/dashboard">dashboard</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{nodeSlug ?? tenant.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
         <PageHeader
           icon={Building2}
           label="Tenant"
           title={tenant.name}
-          subtitle={`${tenantHostname}.${gatewayId} · ${tenant.accountId}`}
+          subtitle={`${hostname ?? "no binding yet"} · ${tenant.accountId}`}
           actions={
             <div className="flex gap-2">
+              <Badge variant={isDaoOwned ? "default" : "secondary"}>
+                {isDaoOwned ? "DAO-owned" : (tenant.ownerKind ?? "platform")}
+              </Badge>
               <Badge variant={statusVariant as "default" | "destructive" | "secondary"}>
                 {tenant.status}
               </Badge>
@@ -305,6 +425,13 @@ function TenantDetail() {
             </div>
           }
         />
+
+        {isDaoOwned && (
+          <section className="space-y-3">
+            <SectionHeader title="DAO connection" />
+            <ConnectDao />
+          </section>
+        )}
 
         <section className="space-y-3">
           <SectionHeader
@@ -362,8 +489,29 @@ function TenantDetail() {
               ) : (
                 <>
                   <InfoRow label="name" value={tenant.name} />
-                  <InfoRow label="hostname" value={`${tenantHostname}.${gatewayId}`} mono />
+                  <InfoRow label="hostname" value={hostname ?? "—"} mono />
                   <InfoRow label="account" value={tenant.accountId} mono />
+                  <InfoRow label="owner kind" value={isDaoOwned ? "dao" : "platform"} />
+                  <InfoRow
+                    label="registry"
+                    value={
+                      bosUrl && fastKvUrl ? (
+                        <span className="flex flex-wrap items-center gap-2">
+                          <code className="font-mono text-xs">{bosUrl}</code>
+                          <a
+                            href={fastKvUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs underline text-muted-foreground hover:text-foreground"
+                          >
+                            view published config on FastKV
+                          </a>
+                        </span>
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
                   <InfoRow label="org id" value={tenant.orgId} mono />
                   <InfoRow label="status" value={tenant.status} />
                   <InfoRow
@@ -384,25 +532,31 @@ function TenantDetail() {
           <SectionHeader title="Live site" />
           <Card className="p-4 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Your tenant is served at the subdomain below. The site resolves through the parent
-              gateway's host.
+              Your tenant is served at the binding hostname below. The site resolves through the
+              parent gateway's host.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <a href={`https://${tenantHostname}.${gatewayId}`} target="_blank" rel="noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" />
-                open {tenantHostname}.{gatewayId}
-              </a>
-            </Button>
+            {hostname && (
+              <Button asChild variant="outline" size="sm">
+                <a href={`https://${hostname}`} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  open {hostname}
+                </a>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               onClick={() => republishMutation.mutate()}
-              disabled={republishMutation.isPending}
+              disabled={republishMutation.isPending || !canRepublish}
+              title={republishTooltip}
             >
               republish config
             </Button>
+            {!canRepublish && <p className="text-xs text-muted-foreground">{republishTooltip}</p>}
           </Card>
         </section>
+
+        <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
 
         <section className="space-y-3">
           <SectionHeader title="Members & permissions" />
@@ -411,12 +565,14 @@ function TenantDetail() {
               This tenant is backed by an organization. Manage members, roles, and invitations
               there.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/orgs/$slug" params={{ slug: tenantHostname }}>
-                <Users className="h-3.5 w-3.5" />
-                open organization
-              </Link>
-            </Button>
+            {orgSlug && (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/orgs/$slug" params={{ slug: orgSlug }}>
+                  <Users className="h-3.5 w-3.5" />
+                  open organization
+                </Link>
+              </Button>
+            )}
           </Card>
         </section>
 

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, Field, FieldLabel, Input } from "@/components";
 import { InfoRow } from "@/components/ui/info-row";
+import { useNearAccount } from "@/lib/use-near-account";
 import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/relayer")({
@@ -20,7 +21,7 @@ const FUND_PRESETS = ["1", "5", "10"] as const;
 function AdminRelayerPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const nearAccountId = auth.near.getAccountId();
+  const nearAccountId = useNearAccount();
 
   const relayerInfoQuery = useRelayerInfoQuery();
   const info = relayerInfoQuery.data;

@@ -21,10 +21,12 @@ function normalizeRows<T>(result: unknown): T[] {
 }
 
 function isDuplicateObjectError(error: unknown): boolean {
+  const DUPLICATE_SQLSTATES: ReadonlySet<string> = new Set(["42710", "42701", "42P07"]);
   let current: unknown = error;
   for (let i = 0; i < 5 && current; i++) {
     if (typeof current === "object" && current !== null && "code" in current) {
-      if ((current as { code: unknown }).code === "42710") return true;
+      const code = (current as { code: unknown }).code;
+      if (typeof code === "string" && DUPLICATE_SQLSTATES.has(code)) return true;
     }
     current = (current as { cause?: unknown })?.cause;
   }
@@ -260,11 +262,16 @@ export function migrate(
         try: () =>
           db.transaction(async (tx) => {
             for (const [i, statement] of migration.sql.entries()) {
+              const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
+              const sp = `stmt_${i}`;
+              await tx.execute(sql.raw(`SAVEPOINT ${sp}`));
               try {
-                const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
                 await tx.execute(sql.raw(stmt));
               } catch (cause) {
-                if (isDuplicateObjectError(cause)) continue;
+                if (isDuplicateObjectError(cause)) {
+                  await tx.execute(sql.raw(`ROLLBACK TO SAVEPOINT ${sp}`));
+                  continue;
+                }
                 throw new DatabaseError({
                   stage: "migration",
                   migrationTag: migration.tag,
@@ -272,6 +279,7 @@ export function migrate(
                   cause,
                 });
               }
+              await tx.execute(sql.raw(`RELEASE SAVEPOINT ${sp}`));
             }
             await tx.execute(
               sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,

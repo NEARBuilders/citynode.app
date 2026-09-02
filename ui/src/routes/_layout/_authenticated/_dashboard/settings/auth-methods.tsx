@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
 import { Button, Card, Chip, ConfirmDialog, Input } from "@/components";
+import { useNearAccount } from "@/lib/use-near-account";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/settings/auth-methods")({
   component: AuthMethodsSettings,
@@ -14,7 +15,7 @@ function AuthMethodsSettings() {
   const auth = useAuthClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const user = session?.user;
-  const nearAccountId = auth.near.getAccountId();
+  const nearAccountId = useNearAccount();
 
   if (!user) return null;
 
