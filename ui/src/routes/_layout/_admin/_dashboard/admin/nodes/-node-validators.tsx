@@ -168,7 +168,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
             id="validator-account"
             value={accountId}
             onChange={(event) => setAccountId(event.target.value)}
-            placeholder="chicago.poolv1.near"
+            placeholder="everything.pool.near"
             required
           />
         </div>

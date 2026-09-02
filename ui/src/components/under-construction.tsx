@@ -13,6 +13,8 @@ import {
 interface UnderConstructionProps {
   label?: string;
   sourceFile?: string;
+  url?: string;
+  tooltip?: string;
   className?: string;
   onClick?: () => void;
   skipNavigation?: boolean;
@@ -25,6 +27,8 @@ const DEFAULT_REPOSITORY = "https://github.com/nearbuilders/everything-dev";
 export function UnderConstruction({
   label,
   sourceFile,
+  url,
+  tooltip,
   className,
   onClick,
   skipNavigation,
@@ -32,7 +36,7 @@ export function UnderConstruction({
   runtimeConfig,
 }: UnderConstructionProps) {
   const repository = getRepository(runtimeConfig) ?? DEFAULT_REPOSITORY;
-  const githubUrl = sourceFile ? `${repository}/blob/main/${sourceFile}` : repository;
+  const githubUrl = url ?? (sourceFile ? `${repository}/blob/main/${sourceFile}` : repository);
 
   const handleClick = () => {
     onClick?.();
@@ -104,7 +108,7 @@ export function UnderConstruction({
         {!skipNavigation && (
           <ClassicTooltipContent side="top">
             <span className="flex items-center gap-1.5">
-              see code and contribute
+              {tooltip ?? "see code and contribute"}
               <ExternalLink className="w-3 h-3" />
             </span>
           </ClassicTooltipContent>

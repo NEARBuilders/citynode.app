@@ -62,7 +62,7 @@ describe("platform node management", () => {
 
     const validator = await admin.createValidator({
       nodeId: node.id,
-      accountId: "community.poolv1.near",
+      accountId: "everything.pool.near",
       network: "mainnet",
       protocol: "near",
       role: "community",
