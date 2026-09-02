@@ -5,6 +5,7 @@ export interface NodeDirectoryNode {
   name: string;
   slug: string;
   kind: string;
+  hostname?: string | null;
 }
 
 interface NodeDirectoryProps {
@@ -48,38 +49,38 @@ export function NodeDirectory({
   return (
     <table className="w-full text-sm">
       <tbody>
-        {nodes.map((node) => (
-          <tr
-            key={node.id}
-            className="group border-b border-border last:border-0 transition-colors hover:bg-muted/50"
-          >
-            <td className="p-0">
-              <a
-                href={`https://${node.slug}.${gateway}/`}
-                className="flex items-center gap-4 px-2 py-4"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-base font-semibold capitalize text-foreground group-hover:underline">
-                    {node.name}
+        {nodes.map((node) => {
+          const hostname = node.hostname ?? `${node.slug}.${gateway}`;
+          return (
+            <tr
+              key={node.id}
+              className="group border-b border-border last:border-0 transition-colors hover:bg-muted/50"
+            >
+              <td className="p-0">
+                <a href={`https://${hostname}/`} className="flex items-center gap-4 px-2 py-4">
+                  <div className="min-w-0">
+                    <div className="truncate text-base font-semibold capitalize text-foreground group-hover:underline">
+                      {node.name}
+                    </div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {hostname}
+                    </div>
                   </div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">
-                    {node.slug}.{gateway}
-                  </div>
-                </div>
-                <div className="ml-auto flex shrink-0 items-center gap-2">
-                  <Badge variant="secondary" className="capitalize">
-                    {node.kind}
-                  </Badge>
-                  {validatorNodeIds?.has(node.id) && (
-                    <Badge variant="outline" className="text-[10px]">
-                      validator
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <Badge variant="secondary" className="capitalize">
+                      {node.kind}
                     </Badge>
-                  )}
-                </div>
-              </a>
-            </td>
-          </tr>
-        ))}
+                    {validatorNodeIds?.has(node.id) && (
+                      <Badge variant="outline" className="text-[10px]">
+                        validator
+                      </Badge>
+                    )}
+                  </div>
+                </a>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

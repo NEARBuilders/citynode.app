@@ -233,4 +233,111 @@ describe("Tenant + Node + Binding wizard flow", () => {
       expect(result.hostname.available).toBe(false);
     });
   });
+
+  describe("listTenantApps discovery", () => {
+    it("lists active tenants with primary hostname and node, excluding non-active and binding-less rows", async () => {
+      const c = await getPluginClient(
+        daoContext("discovery-user-1", "org-discovery-1", "admin-discovery-1.near"),
+      );
+      const publicClient = await getPluginClient();
+
+      const active = await c.createTenant({
+        name: "Discovery Active",
+        accountId: "discovery-active.example.near",
+        status: "active",
+      });
+      const activeNode = await c.createNode({
+        kind: "city",
+        slug: "discovery-active",
+        name: "Discovery Active",
+        parentId: null,
+        tenantId: active.id,
+      });
+      await c.createBinding({
+        tenantId: active.id,
+        hostname: "discovery-active.citynode.app",
+        isPrimary: true,
+      });
+      expect(activeNode.slug).toBe("discovery-active");
+
+      const bindingless = await c.createTenant({
+        name: "Discovery Bindingless",
+        accountId: "discovery-bindingless.example.near",
+        status: "active",
+      });
+      await c.createNode({
+        kind: "country",
+        slug: "discovery-bindingless",
+        name: "Discovery Bindingless",
+        parentId: null,
+        tenantId: bindingless.id,
+      });
+
+      const pending = await c.createTenant({
+        name: "Discovery Pending",
+        accountId: "discovery-pending.example.near",
+        status: "pending",
+      });
+      await c.createNode({
+        kind: "country",
+        slug: "discovery-pending",
+        name: "Discovery Pending",
+        parentId: null,
+        tenantId: pending.id,
+      });
+
+      const apps = await publicClient.listTenantApps();
+      const byAccount = new Map(apps.map((app) => [app.accountId, app]));
+
+      const activeApp = byAccount.get("discovery-active.example.near");
+      expect(activeApp).toMatchObject({
+        name: "Discovery Active",
+        status: "active",
+        hostname: "discovery-active.citynode.app",
+        node: { slug: "discovery-active", kind: "city", name: "Discovery Active" },
+      });
+
+      const bindinglessApp = byAccount.get("discovery-bindingless.example.near");
+      expect(bindinglessApp).toMatchObject({
+        status: "active",
+        hostname: null,
+        node: { slug: "discovery-bindingless" },
+      });
+
+      expect(byAccount.has("discovery-pending.example.near")).toBe(false);
+
+      expect(activeApp?.ownerKind).toBe("dao");
+    });
+
+    it("returns one row per tenant even when multiple nodes reference it", async () => {
+      const c = await getPluginClient(
+        daoContext("discovery-user-2", "org-discovery-2", "admin-discovery-2.near"),
+      );
+      const publicClient = await getPluginClient();
+
+      const tenant = await c.createTenant({
+        name: "Discovery Multi Node",
+        accountId: "discovery-multi.example.near",
+        status: "active",
+      });
+      await c.createNode({
+        kind: "country",
+        slug: "discovery-multi",
+        name: "Discovery Multi",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+      await c.createNode({
+        kind: "state",
+        slug: "discovery-multi-child",
+        name: "Discovery Multi Child",
+        parentId: null,
+        tenantId: tenant.id,
+      });
+
+      const apps = await publicClient.listTenantApps();
+      const rows = apps.filter((app) => app.accountId === "discovery-multi.example.near");
+      expect(rows).toHaveLength(1);
+    });
+  });
 });

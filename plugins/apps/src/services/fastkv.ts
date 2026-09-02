@@ -24,6 +24,8 @@ const FASTKV_TIMEOUT_MS = 10_000;
 
 const DEFAULT_REGISTRY_NAMESPACE = "dev.everything.near";
 
+export { DEFAULT_REGISTRY_NAMESPACE };
+
 export interface RegistryConfig {
   namespace: string;
   relayAccountId?: string;

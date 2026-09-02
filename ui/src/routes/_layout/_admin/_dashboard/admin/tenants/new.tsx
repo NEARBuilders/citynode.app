@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { ArrowRight, Building2, CheckCircle2, Globe, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -32,17 +33,9 @@ interface FastKvEntry {
   value?: unknown;
 }
 
-async function fastKvAccountHasConfig(
-  daoAccountId: string,
-  gatewayId: string,
-  namespace: string,
-): Promise<boolean> {
-  const baseUrl = "https://kv.main.fastnear.com";
-  const key = encodeURIComponent(`apps/${daoAccountId}/${gatewayId}/bos.config.json`);
-  const res = await fetch(
-    `${baseUrl}/v0/latest/${encodeURIComponent(namespace)}/${encodeURIComponent(daoAccountId)}/${key}`,
-    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
-  );
+async function fastKvAccountHasConfig(daoAccountId: string, gatewayId: string): Promise<boolean> {
+  const url = buildRegistryConfigUrl(daoAccountId, gatewayId);
+  const res = await fetch(url, { headers: { accept: "application/json" } });
   if (!res.ok) return false;
   const payload = (await res.json()) as { entries?: Array<FastKvEntry | null> };
   return Boolean(payload.entries?.find((e) => e && e.value != null));
@@ -264,7 +257,7 @@ function NewTenantPage() {
     setVerifyState("checking");
     setVerifyMessage(null);
     try {
-      const ok = await fastKvAccountHasConfig(daoConnection.daoAccountId, gatewayId, baseAccount);
+      const ok = await fastKvAccountHasConfig(daoConnection.daoAccountId, gatewayId);
       if (ok) {
         setVerifyState("verified");
         return;

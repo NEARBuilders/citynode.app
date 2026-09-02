@@ -83,9 +83,6 @@
     "apps": {
       "development": "local:plugins/apps",
       "production": "https://elliot-braem-7764-everything-dev-apps-plugin-city-4fbc5a9be-ze.zephyrcloud.app",
-      "variables": {
-        "registryNamespace": "v1.citynode.near"
-      },
       "integrity": "sha384-T+vM3ZIikLQhQFzLeYE8AD5jysvTJKxL89FFmIAqg/uC/OWbJ/aQqwTWUYP52FI1"
     },
     "proposals": {

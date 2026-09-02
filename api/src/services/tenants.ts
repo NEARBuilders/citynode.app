@@ -6,6 +6,8 @@ import { ORPCError } from "every-plugin/orpc";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
+  type nodeKind,
+  nodes as nodesTable,
   type tenantStatus,
   tenants as tenantsTable,
 } from "../db/schema";
@@ -52,6 +54,16 @@ export interface TenantBindingRecord {
   updatedAt: string;
 }
 
+export interface TenantAppRecord {
+  accountId: string;
+  name: string;
+  status: TenantStatus;
+  ownerKind: TenantOwnerKind;
+  hostname: string | null;
+  node: { slug: string; kind: (typeof nodeKind)["enumValues"][number]; name: string } | null;
+  createdAt: string;
+}
+
 export interface TenantInput {
   name: string;
   accountId: string;
@@ -72,6 +84,7 @@ export interface CreateBindingInput {
 export interface TenantsService {
   listAllTenants(): Promise<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): Promise<TenantRecord[]>;
+  listTenantApps(): Promise<TenantAppRecord[]>;
   listBindings(): Promise<TenantBinding[]>;
   listBindingsForTenant(tenantId: string): Promise<TenantBindingRecord[]>;
   createBinding(input: CreateBindingInput): Promise<TenantBindingRecord>;
@@ -160,6 +173,56 @@ export const TenantsLive = Layer.effect(
             .from(tenantsTable)
             .where(inArray(tenantsTable.orgId, orgIds));
           return rows.map(toTenantRecord);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      listTenantApps: async () => {
+        try {
+          const rows = await db
+            .select({
+              accountId: tenantsTable.accountId,
+              name: tenantsTable.name,
+              status: tenantsTable.status,
+              ownerKind: tenantsTable.ownerKind,
+              createdAt: tenantsTable.createdAt,
+              hostname: domainBindingsTable.hostname,
+              nodeSlug: nodesTable.slug,
+              nodeKind: nodesTable.kind,
+              nodeName: nodesTable.name,
+            })
+            .from(tenantsTable)
+            .leftJoin(
+              domainBindingsTable,
+              and(
+                eq(domainBindingsTable.tenantId, tenantsTable.id),
+                eq(domainBindingsTable.isPrimary, true),
+              ),
+            )
+            .leftJoin(nodesTable, eq(nodesTable.tenantId, tenantsTable.id))
+            .where(eq(tenantsTable.status, "active"));
+
+          const seen = new Set<string>();
+          const apps: TenantAppRecord[] = [];
+          for (const row of rows) {
+            if (seen.has(row.accountId)) continue;
+            seen.add(row.accountId);
+            apps.push({
+              accountId: row.accountId,
+              name: row.name,
+              status: row.status,
+              ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
+              hostname: row.hostname ?? null,
+              node:
+                row.nodeSlug && row.nodeKind && row.nodeName
+                  ? { slug: row.nodeSlug, kind: row.nodeKind, name: row.nodeName }
+                  : null,
+              createdAt:
+                row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+            });
+          }
+          return apps;
         } catch (error) {
           throw toOrpcError(error);
         }

@@ -270,6 +270,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         services.tenants.listBindings(),
       ),
 
+      listTenantApps: builder.listTenantApps.handler(async () => services.tenants.listTenantApps()),
+
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
         .use(requireAuth)
         .handler(async ({ input }) => services.tenants.listBindingsForTenant(input.tenantId)),
