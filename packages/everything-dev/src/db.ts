@@ -89,6 +89,47 @@ export function getDatabaseUrlSecretName(slug: string): string {
   return `${slug.toUpperCase().replace(/-/g, "_")}_DATABASE_URL`;
 }
 
+const RETRYABLE_SQLSTATES: ReadonlySet<string> = new Set([
+  "42P06",
+  "42710",
+  "42701",
+  "42P07",
+  "23505",
+  "40001",
+  "40P01",
+]);
+
+const RETRYABLE_DRIVER_CODES: ReadonlySet<string> = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EPIPE",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+]);
+
+/**
+ * Decide whether a failed migration-init statement (schema/journal creation)
+ * is worth retrying. Covers the concurrent `CREATE SCHEMA IF NOT EXISTS`
+ * race (unique violation on `pg_namespace`, duplicate-object errors),
+ * serialization/deadlock errors, and transient connection failures.
+ */
+export function isRetryableMigrationError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let i = 0; i < 6 && current; i++) {
+    if (typeof current === "object" && current !== null) {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === "string") {
+        if (RETRYABLE_SQLSTATES.has(code)) return true;
+        if (code.startsWith("08")) return true;
+        if (RETRYABLE_DRIVER_CODES.has(code)) return true;
+      }
+    }
+    current = (current as { cause?: unknown })?.cause;
+  }
+  return false;
+}
+
 export function extractExpectedTables(migrations: { sql: string[] }[]): string[] {
   const tables = new Set<string>();
   const re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"([^"]+)"\.)?"([^"]+)"/gi;

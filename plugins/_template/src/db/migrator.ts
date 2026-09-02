@@ -1,6 +1,22 @@
 import type { Migration } from "virtual:drizzle-migrations.sql";
 import { sql } from "drizzle-orm";
+import { isRetryableMigrationError } from "everything-dev/db";
 import type { TemplateDatabase } from "./index";
+
+const RETRY_DELAYS_MS = [250, 750, 1500];
+
+async function withRetry<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= RETRY_DELAYS_MS.length || !isRetryableMigrationError(error)) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
 
 function normalizeRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
@@ -27,16 +43,20 @@ export async function migrate(
   schemaName?: string,
 ): Promise<void> {
   if (schemaName) {
-    await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${schemaName}"`)}`);
+    await withRetry(() =>
+      db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${schemaName}"`)}`),
+    );
   }
 
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "drizzle_migrations" (
-      id SERIAL PRIMARY KEY,
-      hash text NOT NULL,
-      created_at bigint
-    )
-  `);
+  await withRetry(() =>
+    db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "drizzle_migrations" (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint
+      )
+    `),
+  );
 
   interface MigrationRow {
     hash: string;

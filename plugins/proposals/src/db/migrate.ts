@@ -22,12 +22,10 @@ function normalizeRows<T>(result: unknown): T[] {
 }
 
 function isDuplicateObjectError(error: unknown): boolean {
-  const DUPLICATE_SQLSTATES: ReadonlySet<string> = new Set(["42710", "42701", "42P07"]);
   let current: unknown = error;
   for (let i = 0; i < 5 && current; i++) {
     if (typeof current === "object" && current !== null && "code" in current) {
-      const code = (current as { code: unknown }).code;
-      if (typeof code === "string" && DUPLICATE_SQLSTATES.has(code)) return true;
+      if ((current as { code: unknown }).code === "42710") return true;
     }
     current = (current as { cause?: unknown })?.cause;
   }
@@ -63,7 +61,7 @@ function getExistingTables(
     try: () =>
       db.execute(sql`
         SELECT table_name FROM information_schema.tables
-        WHERE table_schema = ${sql.raw(`'${schema}'`)}
+        WHERE table_schema = ${schema}
           AND table_name = ANY(${sql.raw(toSqlArray(tables))})
       `),
     catch: (cause) =>
@@ -77,6 +75,49 @@ function getExistingTables(
     }),
     Effect.catchAll(() => Effect.succeed(new Set<string>())),
   );
+}
+
+/**
+ * Adopt tables that already exist in the public schema into the plugin's
+ * dedicated schema. This handles the upgrade path from single-schema (public)
+ * to per-plugin schema isolation by relocating existing tables via
+ * ALTER TABLE ... SET SCHEMA, preserving all data, indexes, and constraints.
+ */
+function adoptPublicTables(
+  db: Database,
+  tables: string[],
+  schemaName: string,
+): Effect.Effect<void, DatabaseError> {
+  if (tables.length === 0) return Effect.succeed(undefined);
+  return Effect.gen(function* () {
+    yield* Effect.tryPromise({
+      try: () => db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${schemaName}"`)}`),
+      catch: (cause) =>
+        new DatabaseError({ stage: "migration", migrationTag: "adopt-schema", cause }),
+    });
+
+    const alreadyAdopted = yield* getExistingTables(db, tables, schemaName);
+    const toCheckInPublic = tables.filter((t) => !alreadyAdopted.has(t));
+    if (toCheckInPublic.length === 0) return;
+
+    const inPublic = yield* getExistingTables(db, toCheckInPublic, "public");
+    const toMove = toCheckInPublic.filter((t) => inPublic.has(t));
+    if (toMove.length === 0) return;
+
+    yield* Effect.logInfo(
+      `[Database] Adopting ${toMove.length} table(s) from public → "${schemaName}": ${toMove.join(", ")}`,
+    );
+    yield* Effect.tryPromise({
+      try: () =>
+        db.transaction(async (tx) => {
+          for (const table of toMove) {
+            await tx.execute(sql.raw(`ALTER TABLE "public"."${table}" SET SCHEMA "${schemaName}"`));
+          }
+        }),
+      catch: (cause) =>
+        new DatabaseError({ stage: "migration", migrationTag: "adopt-tables", cause }),
+    });
+  });
 }
 
 /** Read applied hashes from the migration journal, returning an empty set on failure. */
@@ -205,11 +246,7 @@ export function migrate(
     yield* ensureMigrationTable(db, journal);
 
     if (schemaName) {
-      yield* Effect.tryPromise({
-        try: () => db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(`"${schemaName}"`)}`),
-        catch: (cause) =>
-          new DatabaseError({ stage: "migration", migrationTag: "init-data-schema", cause }),
-      });
+      yield* adoptPublicTables(db, extractExpectedTables(sorted), schemaName);
     }
 
     const ref = journalRef(journal);
@@ -221,8 +258,6 @@ export function migrate(
         appliedHashes.has(migration.hash) || appliedHashes.has(migration.hash.slice(0, 12));
       if (isApplied) continue;
 
-      // Preflight: if this migration's expected tables already exist, record it
-      // as applied rather than crashing on a duplicate DDL error.
       const expectedTables = extractExpectedTables([migration]);
       if (expectedTables.length > 0) {
         const existing = yield* getExistingTables(db, expectedTables, schemaName);
@@ -263,16 +298,11 @@ export function migrate(
         try: () =>
           db.transaction(async (tx) => {
             for (const [i, statement] of migration.sql.entries()) {
-              const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
-              const sp = `stmt_${i}`;
-              await tx.execute(sql.raw(`SAVEPOINT ${sp}`));
               try {
+                const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
                 await tx.execute(sql.raw(stmt));
               } catch (cause) {
-                if (isDuplicateObjectError(cause)) {
-                  await tx.execute(sql.raw(`ROLLBACK TO SAVEPOINT ${sp}`));
-                  continue;
-                }
+                if (isDuplicateObjectError(cause)) continue;
                 throw new DatabaseError({
                   stage: "migration",
                   migrationTag: migration.tag,
@@ -280,7 +310,6 @@ export function migrate(
                   cause,
                 });
               }
-              await tx.execute(sql.raw(`RELEASE SAVEPOINT ${sp}`));
             }
             await tx.execute(
               sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
@@ -367,7 +396,6 @@ export function detectDrift(
     const missingTables = expectedTables.filter((t) => !existing.has(t));
 
     if (appliedCount === 0 && missingTables.length === 0) {
-      // Journal is empty but all expected public tables already exist.
       return {
         status: "untracked-existing-schema",
         expectedTables,

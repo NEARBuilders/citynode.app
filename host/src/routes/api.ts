@@ -157,7 +157,17 @@ export async function setupApiRoutes(
 
   if (!apiRouter) {
     const unavailable = (c: Context<HonoEnv>) =>
-      c.json({ error: "Service Unavailable", message: "The API is currently unavailable." }, 503);
+      c.json(
+        {
+          error: "Service Unavailable",
+          message: "The API is currently unavailable.",
+          ...(plugins.status.error ? { detail: plugins.status.error } : {}),
+          ...(plugins.status.loadedPlugins.length > 0
+            ? { loadedPlugins: plugins.status.loadedPlugins }
+            : {}),
+        },
+        503,
+      );
 
     app.all("/api/rpc", unavailable);
     app.all("/api/rpc/*", unavailable);

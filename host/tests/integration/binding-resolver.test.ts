@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearBindingResolverCache,
   createBindingResolver,
+  FAILURE_TTL_MS,
   type TenantBinding,
 } from "../../src/services/binding-resolver";
 import type { RuntimeConfig } from "../../src/services/config";
@@ -59,5 +60,61 @@ describe("tenant binding hostnames", () => {
     });
     expect(await resolver.resolve("nyc.gov.citynode.app")).toBeNull();
     expect(await resolver.resolve("citynode.app")).toBeNull();
+  });
+});
+
+describe("binding resolver failure handling", () => {
+  beforeEach(() => {
+    clearBindingResolverCache();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("reports API-unavailable responses clearly and caches the failure briefly", async () => {
+    const failingFetch = vi
+      .fn()
+      .mockResolvedValue(new Response("Service Unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", failingFetch);
+    const resolver = createBindingResolver(config);
+
+    await expect(resolver.resolve("chicago.citynode.app")).rejects.toThrow(
+      /API plugin is not available on this host/,
+    );
+    expect(failingFetch).toHaveBeenCalledTimes(1);
+
+    await expect(resolver.resolve("chicago.citynode.app")).rejects.toThrow(/cached failure/);
+    expect(failingFetch).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(Date.now() + FAILURE_TTL_MS + 1_000);
+    const recoveringFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify([binding("chicago")])));
+    vi.stubGlobal("fetch", recoveringFetch);
+
+    expect(await resolver.resolve("chicago.citynode.app")).toMatchObject({
+      hostname: "chicago",
+    });
+  });
+
+  it("serves stale bindings and keeps refetching when a previous snapshot exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([binding("chicago")])))
+      .mockResolvedValue(new Response("Service Unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const resolver = createBindingResolver(config);
+
+    expect(await resolver.resolve("chicago.citynode.app")).toMatchObject({
+      hostname: "chicago",
+    });
+
+    vi.setSystemTime(Date.now() + 31_000);
+    await expect(resolver.resolve("chicago.citynode.app")).resolves.toMatchObject({
+      hostname: "chicago",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -25,7 +25,25 @@ function unwrapErrorMessage(error: unknown): string {
   ) {
     current = (current as any).cause;
   }
-  return current instanceof Error ? current.message : String(current ?? "");
+  if (current instanceof Error) {
+    return current.message || current.name || "Error";
+  }
+  if (typeof current === "object" && current !== null) {
+    const tag = (current as { _tag?: unknown })._tag;
+    if (typeof tag === "string" && tag.length > 0) {
+      try {
+        return `[${tag}] ${JSON.stringify(current)}`;
+      } catch {
+        return tag;
+      }
+    }
+    try {
+      const json = JSON.stringify(current);
+      if (json && json !== "{}" && json !== "[]") return json;
+    } catch {}
+  }
+  const text = String(current ?? "");
+  return text.length > 0 ? text : "unknown error";
 }
 
 class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
@@ -292,7 +310,12 @@ function logBootstrapError(err: PluginBootstrapError): Effect.Effect<void> {
     if (err.dbSecret) {
       yield* Effect.logError(`[Plugins] Failed to load ${err.pluginKey} plugin: ${err.message}`);
       if (err.dbUrlMasked) {
-        const dbLabel = err.pluginKey === "auth" ? "Auth" : "API";
+        const dbLabel =
+          err.pluginKey === "auth"
+            ? "Auth"
+            : err.pluginKey === "api"
+              ? "API"
+              : `${err.pluginKey} (${err.dbSecret})`;
         yield* Effect.logError(
           `[Plugins] ${dbLabel} DB URL: ${err.dbUrlMasked} (${dbUrlSummary(err.dbUrlMasked)})`,
         );
@@ -323,11 +346,14 @@ function loadPluginEntryEffect(
     }
 
     const isAuthOrApi = entry.key === "auth" || entry.key === "api";
+    const pluginDbSecretKey = isAuthOrApi
+      ? null
+      : ((entry.config.secrets ?? []).find((k) => k.endsWith("_DATABASE_URL")) ?? null);
     const secretKey = isAuthOrApi
       ? entry.key === "auth"
         ? "AUTH_DATABASE_URL"
         : "API_DATABASE_URL"
-      : null;
+      : pluginDbSecretKey;
     const dbSecret = secretKey ? yield* readDbSecret(secretKey) : null;
     const rawDbUrl = dbSecret ? Secret.value(dbSecret) : null;
 
@@ -550,6 +576,18 @@ export const initializePlugins = Effect.gen(function* () {
 
   const totalPlugins = Object.values(loadedPlugins).filter(Boolean).length;
   yield* Effect.logInfo(`[Plugins] ${totalPlugins} plugin(s) loaded`);
+
+  if (errors.length > 0) {
+    const failedKeys = loadableEntries.filter((key) => !loadedPlugins[key]);
+    yield* Effect.logWarning(
+      `[Plugins] ⚠ ${errors.length} plugin(s) failed to load — available: ${loadedPluginKeys.join(", ") || "none"}; failed: ${failedKeys.join(", ") || "unknown"}`,
+    );
+    if (!baseApi) {
+      yield* Effect.logWarning(
+        "[Plugins] ⚠ Serving without the API: all /api/* routes return 503 and tenant bindings cannot be resolved (tenant-domain SSR and asset proxying fail). Inspect GET /api/_health and the per-plugin errors above.",
+      );
+    }
+  }
 
   return {
     runtime,

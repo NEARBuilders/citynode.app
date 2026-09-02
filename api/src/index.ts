@@ -91,7 +91,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
             deleteThing: (input: { thingId: string }) => Promise<{ success: true }>;
           })
         | undefined;
-      const templateClient = templateFactory?.();
+      let templateClient: ReturnType<NonNullable<typeof templateFactory>> | undefined;
+      if (templateFactory) {
+        try {
+          templateClient = templateFactory();
+        } catch (cause) {
+          yield* Effect.logWarning(
+            `[API] Template plugin client unavailable — template-backed routes will return clean errors: ${cause instanceof Error ? cause.message : String(cause)}`,
+          );
+        }
+      }
 
       console.log("[API] Services Initialized");
 

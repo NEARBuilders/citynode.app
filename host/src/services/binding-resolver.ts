@@ -15,12 +15,14 @@ export interface TenantBinding {
 }
 
 const BINDINGS_TTL_MS = 30_000;
+export const FAILURE_TTL_MS = 10_000;
 
 interface CachedBindings {
   apiUrl: string;
   expiresAt: number;
   entries: Map<string, TenantBinding>;
   refetching?: Promise<Map<string, TenantBinding>>;
+  failedUntil?: number;
 }
 
 let bindingsCache: CachedBindings | null = null;
@@ -44,7 +46,11 @@ async function fetchBindingsFromApi(apiUrl: string): Promise<TenantBinding[]> {
   }
 
   if (!response.ok) {
-    throw new Error(`GET ${endpoint} failed with HTTP ${response.status}`);
+    const hint =
+      response.status === 503
+        ? " — API plugin is not available on this host; tenant bindings cannot be resolved (see /api/_health)"
+        : "";
+    throw new Error(`GET ${endpoint} failed with HTTP ${response.status}${hint}`);
   }
 
   return (await response.json()) as TenantBinding[];
@@ -74,6 +80,18 @@ function ensureBindingsLoaded(config: RuntimeConfig): Promise<Map<string, Tenant
   }
 
   const now = Date.now();
+  if (
+    bindingsCache?.apiUrl === apiUrl &&
+    bindingsCache.failedUntil &&
+    bindingsCache.failedUntil > now
+  ) {
+    return Promise.reject(
+      new Error(
+        `Tenant bindings unavailable (cached failure, ${Math.ceil((bindingsCache.failedUntil - now) / 1000)}s remaining) — last fetch of ${apiUrl}/api/tenants/bindings failed`,
+      ),
+    );
+  }
+
   if (
     bindingsCache &&
     bindingsCache.apiUrl === apiUrl &&
@@ -107,7 +125,16 @@ function ensureBindingsLoaded(config: RuntimeConfig): Promise<Map<string, Tenant
         };
         return staleEntries;
       }
-      bindingsCache = null;
+      logger.error(`[BindingResolver] ${cause instanceof Error ? cause.message : String(cause)}`);
+      logger.error(
+        "[BindingResolver] Tenant resolution is unavailable: the API plugin failed to load on this host, so /api/tenants/bindings cannot be served. Tenant-domain SSR and asset proxying will fail until the API loads. Check GET /api/_health and the startup plugin-load errors.",
+      );
+      bindingsCache = {
+        apiUrl,
+        expiresAt: now,
+        entries: new Map(),
+        failedUntil: Date.now() + FAILURE_TTL_MS,
+      };
       throw cause;
     });
 

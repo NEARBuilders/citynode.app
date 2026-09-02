@@ -36,6 +36,7 @@ export const createStartServer = (onReady?: () => void) =>
     const uiConfig = config.ui!;
     const plugins = yield* PluginsService;
     const security = yield* SecurityMiddleware;
+    const apiProxyMode = Boolean(config.api?.proxy);
 
     const app = new Hono<HonoEnv>();
 
@@ -57,7 +58,15 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("/*", security.rateLimit);
     app.use("*", security.csp);
 
-    app.get("/health", (c: Context<HonoEnv>) => c.text("OK"));
+    app.get("/health", (c: Context<HonoEnv>) =>
+      c.json({
+        status:
+          apiProxyMode || (plugins.api?.router && plugins.status.available) ? "ready" : "degraded",
+        api: apiProxyMode || plugins.api ? "ready" : "unavailable",
+        auth: plugins.auth ? "ready" : "unavailable",
+        ...(plugins.status.error ? { error: plugins.status.error } : {}),
+      }),
+    );
 
     app.get("/.well-known/mcp.json", (c: Context<HonoEnv>) => {
       const url = new URL(c.req.url);

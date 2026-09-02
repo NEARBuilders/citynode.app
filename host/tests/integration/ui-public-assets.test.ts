@@ -173,9 +173,10 @@ describe("UI public assets proxied through host (Cloudflare Error 1000 regressio
 
     it("/health is handled by host directly", async () => {
       const response = await fetch(`${baseUrl}/health`);
+      const body = (await response.json()) as { status: string };
 
       expect(response.status).toBe(200);
-      expect(await response.text()).toBe("OK");
+      expect(body.status).toBe("ready");
     });
 
     it("/api/ping is routed to API proxy", async () => {
