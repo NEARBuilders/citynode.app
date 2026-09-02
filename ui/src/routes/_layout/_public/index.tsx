@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Button } from "@/components";
+import { Button, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
-import { NodeDirectory } from "./n/-node-directory";
 
 export const Route = createFileRoute("/_layout/_public/")({
   loader: async ({ context }) => ({

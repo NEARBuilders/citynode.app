@@ -1,4 +1,6 @@
-import { Badge, Skeleton } from "@/components";
+import { Link } from "@tanstack/react-router";
+import { Badge } from "./ui/badge";
+import { Skeleton } from "./ui/skeleton";
 
 export interface NodeDirectoryNode {
   id: string;
@@ -14,6 +16,8 @@ interface NodeDirectoryProps {
   validatorNodeIds?: ReadonlySet<string>;
   isLoading?: boolean;
   emptyMessage?: string;
+  linkTo?: "/stake";
+  linkSearch?: (node: NodeDirectoryNode) => { node?: string } | undefined;
 }
 
 export function NodeDirectory({
@@ -22,6 +26,8 @@ export function NodeDirectory({
   validatorNodeIds,
   isLoading = false,
   emptyMessage = "No nodes yet.",
+  linkTo,
+  linkSearch,
 }: NodeDirectoryProps) {
   if (isLoading) {
     return (
@@ -51,32 +57,42 @@ export function NodeDirectory({
       <tbody>
         {nodes.map((node) => {
           const hostname = node.hostname ?? `${node.slug}.${gateway}`;
+          const className = "flex items-center gap-4 px-2 py-4";
+          const content = (
+            <>
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold capitalize text-foreground group-hover:underline">
+                  {node.name}
+                </div>
+                <div className="truncate font-mono text-xs text-muted-foreground">{hostname}</div>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Badge variant="secondary" className="capitalize">
+                  {node.kind}
+                </Badge>
+                {validatorNodeIds?.has(node.id) && (
+                  <Badge variant="outline" className="text-[10px]">
+                    validator
+                  </Badge>
+                )}
+              </div>
+            </>
+          );
           return (
             <tr
               key={node.id}
               className="group border-b border-border last:border-0 transition-colors hover:bg-muted/50"
             >
               <td className="p-0">
-                <a href={`https://${hostname}/`} className="flex items-center gap-4 px-2 py-4">
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-semibold capitalize text-foreground group-hover:underline">
-                      {node.name}
-                    </div>
-                    <div className="truncate font-mono text-xs text-muted-foreground">
-                      {hostname}
-                    </div>
-                  </div>
-                  <div className="ml-auto flex shrink-0 items-center gap-2">
-                    <Badge variant="secondary" className="capitalize">
-                      {node.kind}
-                    </Badge>
-                    {validatorNodeIds?.has(node.id) && (
-                      <Badge variant="outline" className="text-[10px]">
-                        validator
-                      </Badge>
-                    )}
-                  </div>
-                </a>
+                {linkTo ? (
+                  <Link to={linkTo} search={linkSearch?.(node) ?? {}} className={className}>
+                    {content}
+                  </Link>
+                ) : (
+                  <a href={`https://${hostname}/`} className={className}>
+                    {content}
+                  </a>
+                )}
               </td>
             </tr>
           );

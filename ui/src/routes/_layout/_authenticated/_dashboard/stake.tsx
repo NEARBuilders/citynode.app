@@ -4,7 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Globe, Landmark, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useApiClient, useAuthClient } from "@/app";
+import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
 import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
 import {
@@ -14,6 +14,7 @@ import {
   Field,
   FieldLabel,
   Input,
+  NodeDirectory,
   PageContainer,
   PageHeader,
 } from "@/components";
@@ -56,6 +57,30 @@ function StakePage() {
   const { node: nodeSlug } = Route.useSearch();
 
   const slug = nodeSlug ?? getSlugFromHostname();
+
+  const { runtimeConfig } = Route.useRouteContext();
+  const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+
+  const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
+    queryKey: ["tenant-apps"],
+    queryFn: () => apiClient.listTenantApps(),
+    enabled: !slug,
+    staleTime: 30 * 1000,
+  });
+
+  const directoryNodes = tenantApps.flatMap((app) =>
+    app.node
+      ? [
+          {
+            id: app.accountId,
+            name: app.name,
+            slug: app.node.slug,
+            kind: app.node.kind,
+            hostname: app.hostname,
+          },
+        ]
+      : [],
+  );
 
   const nearAccountId = useNearAccount();
   const [connectingWallet, setConnectingWallet] = useState(false);
@@ -185,7 +210,15 @@ function StakePage() {
         <PageHeader
           icon={Landmark}
           label="Stake"
-          title={node ? `Stake NEAR to ${node.name}` : "Stake NEAR to a city"}
+          title={
+            node ? (
+              `Stake NEAR to ${node.name}`
+            ) : slug ? (
+              <span className="capitalize">Stake NEAR to {slug}</span>
+            ) : (
+              "Stake NEAR to a city"
+            )
+          }
           description={
             <>
               Deposits are staked directly to the validator pool via{" "}
@@ -195,14 +228,16 @@ function StakePage() {
         />
 
         {!slug ? (
-          <Card className="p-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              No node selected. Browse the{" "}
-              <Link to="/" className="underline">
-                directory
-              </Link>{" "}
-              and pick a city to stake to.
-            </p>
+          <Card className="p-6 space-y-4">
+            <p className="text-sm text-muted-foreground">Select a city to stake to.</p>
+            <NodeDirectory
+              nodes={directoryNodes}
+              gateway={gateway}
+              linkTo="/stake"
+              linkSearch={(n) => ({ node: n.slug })}
+              isLoading={directoryLoading}
+              emptyMessage="No city nodes available yet."
+            />
           </Card>
         ) : nodeLoading || stakingLoading ? (
           <StakeSkeleton />

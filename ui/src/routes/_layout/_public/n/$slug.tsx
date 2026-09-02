@@ -2,10 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Badge, Button } from "@/components";
+import { Badge, Button, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NodeDirectory } from "./-node-directory";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
   loader: async ({ params, context }) => {
