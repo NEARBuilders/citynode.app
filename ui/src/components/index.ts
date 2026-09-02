@@ -68,6 +68,8 @@ export {
 } from "./ui/dialog";
 export {
   Field,
+  FieldDescription,
+  FieldError,
   FieldLabel,
 } from "./ui/field";
 export { InfoRow } from "./ui/info-row";
