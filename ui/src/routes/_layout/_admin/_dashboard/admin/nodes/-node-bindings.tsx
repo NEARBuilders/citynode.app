@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { invalidateTenantQueries, tenantBindingsQueryOptions } from "@/lib/queries/tenants";
 
 type Binding = Awaited<ReturnType<ApiClient["listTenantBindingsForTenant"]>>[number];
 
@@ -35,18 +36,14 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Binding | null>(null);
-  const queryKey = ["tenant-bindings", tenantId];
-  const bindingsQuery = useQuery({
-    queryKey,
-    queryFn: () => apiClient.listTenantBindingsForTenant({ tenantId }),
-  });
+  const bindingsQuery = useQuery(tenantBindingsQueryOptions(apiClient, tenantId));
   const mutation = useMutation({
     mutationFn: async ({ binding, action }: { binding: Binding; action: "remove" | "verify" }) => {
       if (action === "remove") await apiClient.deleteBinding({ tenantId, bindingId: binding.id });
       else await apiClient.verifyCustomDomain({ tenantId, bindingId: binding.id });
     },
     onSuccess: async (_, { action }) => {
-      await queryClient.invalidateQueries({ queryKey });
+      await invalidateTenantQueries(queryClient);
       setRemoving(null);
       toast.success(action === "remove" ? "Domain binding removed" : "Domain ownership verified");
     },
@@ -210,7 +207,7 @@ function AddBindingForm({
       return apiClient.createBinding({ tenantId, hostname: normalized });
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tenant-bindings", tenantId] });
+      await invalidateTenantQueries(queryClient);
       toast.success(
         kind === "alias" ? "Platform alias added" : "Domain added — DNS verification required",
       );

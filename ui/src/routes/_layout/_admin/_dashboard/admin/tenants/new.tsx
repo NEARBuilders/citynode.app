@@ -33,6 +33,12 @@ import {
   useDaoConnection,
 } from "@/lib/dao-connect";
 import {
+  childNodesQueryOptions,
+  invalidateNodeQueries,
+  rootNodesQueryOptions,
+} from "@/lib/queries/nodes";
+import { bindingPreflightQueryOptions, invalidateTenantQueries } from "@/lib/queries/tenants";
+import {
   deriveTenantWizardNameFields,
   generateSlug,
   type NearNetworkId,
@@ -40,6 +46,7 @@ import {
   type TenantWizardValues,
   tenantWizardSchema,
 } from "./-tenant-wizard";
+import { loadTenantWizardParents } from "./-tenant-wizard-loader";
 
 const DIRECT_COUNTRY_PARENT = "__direct-country__";
 
@@ -66,6 +73,12 @@ async function fastKvAccountHasConfig(daoAccountId: string, gatewayId: string): 
 }
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/tenants/new")({
+  loader: ({ context }) =>
+    loadTenantWizardParents({
+      activeOrganizationId: context.auth.activeOrganizationId,
+      apiClient: context.apiClient,
+      queryClient: context.queryClient,
+    }),
   head: () => ({
     title: "New Tenant | app",
     meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],
@@ -78,6 +91,7 @@ function NewTenantPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const initialRootNodes = Route.useLoaderData();
   const { auth: adminAuth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const baseAccount = getAccount(runtimeConfig);
@@ -89,7 +103,7 @@ function NewTenantPage() {
   const [phase, setPhase] = useState<"form" | "deploy">("form");
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
-  const [rootParentId, setRootParentId] = useState<string>("");
+  const [rootParentId, setRootParentId] = useState<string>(initialRootNodes[0]?.id ?? "");
   const slugManuallyEdited = useRef(false);
   const tenantNameManuallyEdited = useRef(false);
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "verified" | "failed">(
@@ -118,23 +132,20 @@ function NewTenantPage() {
   const { kind, slug, name, tenantName } = formValues;
   const hostname = useMemo(() => (slug ? `${slug}.${gatewayId}` : ""), [slug, gatewayId]);
 
-  const { data: rootNodes = [] } = useQuery({
-    queryKey: ["root-nodes"],
-    queryFn: async () => apiClient.listRootNodes(),
+  const { data: queriedRootNodes } = useQuery({
+    ...rootNodesQueryOptions(apiClient),
     enabled: phase === "form" && hasOrg,
   });
+  const rootNodes = queriedRootNodes ?? initialRootNodes;
 
   const { data: stateNodes = [] } = useQuery({
-    queryKey: ["children", rootParentId],
-    queryFn: async () => apiClient.listChildren({ nodeId: rootParentId }),
+    ...childNodesQueryOptions(apiClient, rootParentId),
     enabled: phase === "form" && kind === "city" && !!rootParentId,
   });
 
   const { data: preflight } = useQuery({
-    queryKey: ["preflight", hostname],
-    queryFn: async () => apiClient.bindingPreflight({ hostname }),
+    ...bindingPreflightQueryOptions(apiClient, hostname),
     enabled: phase === "form" && !!slug,
-    staleTime: 5000,
   });
 
   const orgMutation = useMutation({
@@ -215,7 +226,11 @@ function NewTenantPage() {
         throw err;
       }
     },
-    onSuccess: () => setPhase("deploy"),
+    onSuccess: async () => {
+      await Promise.all([invalidateNodeQueries(queryClient), invalidateTenantQueries(queryClient)]);
+      await router.invalidate({ sync: true });
+      setPhase("deploy");
+    },
     onError: (error: Error) =>
       toast.error(error.message || "Failed to create tenant — rolled back"),
   });
@@ -531,8 +546,12 @@ function NewTenantPage() {
                           size="sm"
                           onClick={() => {
                             field.handleChange(nodeKind);
-                            setRootParentId("");
-                            form.setFieldValue("parentId", "", { dontUpdateMeta: true });
+                            const nextRootParentId =
+                              nodeKind === "country" ? "" : rootParentId || rootNodes[0]?.id || "";
+                            setRootParentId(nextRootParentId);
+                            form.setFieldValue("parentId", nextRootParentId, {
+                              dontUpdateMeta: true,
+                            });
                           }}
                         >
                           {nodeKind}
@@ -546,7 +565,7 @@ function NewTenantPage() {
               {kind !== "country" && (
                 <form.Field name="parentId">
                   {(field) => {
-                    const errors = field.state.meta.errors;
+                    const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
                     const countryValue = kind === "city" ? rootParentId : field.state.value;
                     return (
                       <>
@@ -617,7 +636,7 @@ function NewTenantPage() {
 
               <form.Field name="name">
                 {(field) => {
-                  const errors = field.state.meta.errors;
+                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
                   return (
                     <Field data-invalid={errors.length > 0 || undefined}>
                       <FieldLabel htmlFor="node-name">name</FieldLabel>
@@ -664,7 +683,7 @@ function NewTenantPage() {
 
               <form.Field name="slug">
                 {(field) => {
-                  const errors = field.state.meta.errors;
+                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
                   return (
                     <Field data-invalid={errors.length > 0 || undefined}>
                       <FieldLabel htmlFor="node-slug">slug</FieldLabel>
@@ -697,7 +716,7 @@ function NewTenantPage() {
 
               <form.Field name="tenantName">
                 {(field) => {
-                  const errors = field.state.meta.errors;
+                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
                   return (
                     <Field data-invalid={errors.length > 0 || undefined}>
                       <FieldLabel htmlFor="tenant-name">tenant name</FieldLabel>

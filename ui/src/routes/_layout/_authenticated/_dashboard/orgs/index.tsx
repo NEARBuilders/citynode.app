@@ -11,6 +11,7 @@ import {
 } from "@/app";
 import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 
 type AuthClientType = import("@/app").AuthClient;
 type UserInvitationsResponse = Awaited<
@@ -84,15 +85,11 @@ function OrganizationsList() {
   const orgs = organizations || [];
 
   const { data: tenantOrgIds = new Set<string>() } = useQuery({
-    queryKey: ["tenant-orgs", orgs.map((o) => o.id)],
-    queryFn: async () => {
-      const results = await Promise.allSettled(
-        orgs.map((o) => apiClient.resolveTenantByOrgId({ orgId: o.id })),
-      );
-      return new Set(orgs.filter((_, i) => results[i]?.status === "fulfilled").map((o) => o.id));
-    },
+    ...tenantOrganizationIdsQueryOptions(
+      apiClient,
+      orgs.map((organization) => organization.id),
+    ),
     enabled: orgs.length > 0,
-    staleTime: 60 * 1000,
   });
 
   const pendingInvitations = userInvitations.filter((i) => i.status === "pending");

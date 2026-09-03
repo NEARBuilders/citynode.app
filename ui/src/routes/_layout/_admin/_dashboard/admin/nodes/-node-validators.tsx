@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { refreshNodeQueries } from "./-node-management";
+import { invalidateNodeQueries } from "@/lib/queries/nodes";
 
 type Validator = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["validators"][number];
 
@@ -53,7 +53,7 @@ export function NodeValidators({
       else await apiClient.setDefaultValidator({ validatorId: validator.id });
     },
     onSuccess: async (_, { action }) => {
-      await refreshNodeQueries(queryClient);
+      await invalidateNodeQueries(queryClient);
       setRemoving(null);
       toast.success(action === "remove" ? "Validator removed" : "Default validator updated");
     },
@@ -143,7 +143,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
         isDefault,
       }),
     onSuccess: async () => {
-      await refreshNodeQueries(queryClient);
+      await invalidateNodeQueries(queryClient);
       toast.success("Validator added");
       onClose();
     },

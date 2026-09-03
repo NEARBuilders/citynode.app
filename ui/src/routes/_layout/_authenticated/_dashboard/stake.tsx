@@ -20,6 +20,13 @@ import {
 } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  childNodesQueryOptions,
+  nodeByIdQueryOptions,
+  nodeBySlugQueryOptions,
+  stakingValidatorsQueryOptions,
+} from "@/lib/queries/nodes";
+import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import { cn } from "@/lib/utils";
 
@@ -62,10 +69,8 @@ function StakePage() {
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
 
   const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
-    queryKey: ["tenant-apps"],
-    queryFn: () => apiClient.listTenantApps(),
+    ...tenantAppsQueryOptions(apiClient),
     enabled: !slug,
-    staleTime: 30 * 1000,
   });
 
   const directoryNodes = tenantApps.flatMap((app) =>
@@ -102,36 +107,28 @@ function StakePage() {
   };
 
   const { data: node, isLoading: nodeLoading } = useQuery({
-    queryKey: ["node", "slug", slug],
-    queryFn: () => apiClient.resolveNodeBySlug({ slug: slug as string }),
+    ...nodeBySlugQueryOptions(apiClient, slug ?? ""),
     enabled: !!slug,
-    staleTime: 30 * 1000,
   });
 
   const nodeId = node?.id;
 
   const { data: staking, isLoading: stakingLoading } = useQuery({
-    queryKey: ["staking-validators", nodeId],
-    queryFn: () => apiClient.resolveStakingValidators({ nodeId: nodeId as string }),
+    ...stakingValidatorsQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
-    staleTime: 30 * 1000,
   });
 
   const validators = staking?.validators ?? [];
   const isInherited = !!node && !!staking?.sourceNodeId && staking.sourceNodeId !== node.id;
 
   const { data: sourceNode } = useQuery({
-    queryKey: ["node", "id", staking?.sourceNodeId],
-    queryFn: () => apiClient.getNode({ nodeId: staking?.sourceNodeId as string }),
+    ...nodeByIdQueryOptions(apiClient, staking?.sourceNodeId ?? ""),
     enabled: isInherited,
-    staleTime: 30 * 1000,
   });
 
   const { data: children = [] } = useQuery({
-    queryKey: ["node", "children", nodeId],
-    queryFn: () => apiClient.listChildren({ nodeId: nodeId as string }),
+    ...childNodesQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId && validators.length === 0,
-    staleTime: 30 * 1000,
   });
 
   const defaultValidator = useMemo(
