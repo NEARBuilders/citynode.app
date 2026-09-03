@@ -15,12 +15,6 @@ const MOCK_GENERATED_PUBLIC_KEY = "ed25519:11111111111111111111111111111111";
 const MOCK_GENERATED_SECRET_KEY =
   "ed25519:1111111111111111111111111111111111111111111111111111111111111111";
 
-function makeNonceBytes(): Uint8Array {
-  const nonce = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) nonce[i] = i + 1;
-  return nonce;
-}
-
 const mockSignedMessage = {
   accountId: MOCK_ACCOUNT_ID,
   publicKey: MOCK_PUBLIC_KEY,
@@ -442,7 +436,7 @@ describe("siwn plugin", () => {
 
   describe("link account endpoint", () => {
     it("should link a NEAR account to an existing session", async () => {
-      const { client, signInWithTestUser, customFetchImpl } = await getTestInstance(
+      const { signInWithTestUser, customFetchImpl } = await getTestInstance(
         {
           plugins: [siwn({ recipient: MOCK_RECIPIENT, requireFullAccessKey: false })],
           emailAndPassword: { enabled: true },
@@ -450,7 +444,7 @@ describe("siwn plugin", () => {
         { clientOptions: { plugins: [] } },
       );
 
-      const { headers, setCookie } = await signInWithTestUser();
+      const { headers } = await signInWithTestUser();
 
       const nonceBytes = makeUniqueNonce();
       const nonceHex = hex.encode(nonceBytes);
@@ -721,9 +715,7 @@ describe("siwn plugin", () => {
       const { data, error } = await client.near.relayTransaction({
         payload: "mock-delegate-action-payload",
       });
-      if (error) {
-        expect(error).toBeDefined();
-      }
+      expect(error ?? data).toBeDefined();
     });
 
     it("should return relayer info for the runtime network", async () => {
@@ -1123,8 +1115,6 @@ describe("siwn plugin", () => {
 });
 
 describe("siwnClient getActions", () => {
-  type SessionAtom = ReturnType<typeof atom<unknown>>;
-
   function makeSessionStore(initial: unknown) {
     const sessionAtom = atom<unknown>(initial);
     const store = {

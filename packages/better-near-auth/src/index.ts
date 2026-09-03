@@ -203,7 +203,7 @@ async function initRelayer(
 
   const headers: Record<string, string> = {};
   if (apiKey) {
-    headers["Authorization"] = `Bearer ${apiKey}`;
+    headers.Authorization = `Bearer ${apiKey}`;
   }
 
   if (networkConfig.accountId && networkConfig.privateKey) {
@@ -546,7 +546,7 @@ export const siwn = (options: SIWNPluginOptions) => {
     const relayerCfg = getRelayerConfig(network);
     const subAccountCfg = getSubAccountConfig(network);
 
-    if (!relayerCfg || !relayerCfg.accountId || !relayerCfg.privateKey) return undefined;
+    if (!relayerCfg?.accountId || !relayerCfg.privateKey) return undefined;
 
     const parent = subAccountCfg?.parentAccount ?? relayerCfg.accountId;
     if (parent && parent === relayerCfg.accountId) {
@@ -561,7 +561,7 @@ export const siwn = (options: SIWNPluginOptions) => {
 
   const headers: Record<string, string> = {};
   if (apiKey) {
-    headers["Authorization"] = `Bearer ${apiKey}`;
+    headers.Authorization = `Bearer ${apiKey}`;
   }
 
   const ensureRelayer = async (
@@ -1477,6 +1477,9 @@ export const siwn = (options: SIWNPluginOptions) => {
 
             return ctx.json(RelayStatusResponse.parse({ status: "pending" }));
           } catch (error: unknown) {
+            console.warn(
+              `[siwn] relay status lookup failed, reporting pending: ${error instanceof Error ? error.message : error}`,
+            );
             return ctx.json(RelayStatusResponse.parse({ status: "pending" }));
           }
         },

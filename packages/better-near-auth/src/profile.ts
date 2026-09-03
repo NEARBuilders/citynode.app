@@ -40,7 +40,7 @@ async function defaultGetProfile(accountId: AccountId, apiKey?: string): Promise
     const effectiveApiKey = apiKey || process.env.FASTNEAR_API_KEY;
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (effectiveApiKey) {
-      headers["Authorization"] = `Bearer ${effectiveApiKey}`;
+      headers.Authorization = `Bearer ${effectiveApiKey}`;
     }
 
     const response = await fetch(`${kvUrl}/v0/latest/social.near/${accountId}/profile/**`, {
@@ -96,7 +96,7 @@ async function defaultGetProfile(accountId: AccountId, apiKey?: string): Promise
       };
     }
     return null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
