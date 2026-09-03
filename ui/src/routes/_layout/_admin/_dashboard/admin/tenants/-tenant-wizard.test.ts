@@ -111,7 +111,6 @@ describe("tenant wizard name derivation", () => {
 
     expect(bothEdited).toEqual({ slug: "chi-town", tenantName: "Windy City" });
   });
-
 });
 
 describe("classifyTenantKey", () => {
