@@ -174,12 +174,12 @@
     "./package.json": "./package.json",
     "./db": {
       "development": {
-        "types": "./src/db.ts",
-        "import": "./src/db.ts"
+        "types": "./src/db/index.ts",
+        "import": "./src/db/index.ts"
       },
-      "types": "./dist/db.d.mts",
-      "import": "./dist/db.mjs",
-      "require": "./dist/db.cjs"
+      "types": "./dist/db/index.d.mts",
+      "import": "./dist/db/index.mjs",
+      "require": "./dist/db/index.cjs"
     }
   },
   "files": [
