@@ -35,7 +35,7 @@ import {
   classifyTenantKey,
   resolveOrgSlug,
   resolvePrimaryHostname,
-} from "../../../_admin/_dashboard/admin/tenants/tenant-wizard";
+} from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 import { TenantNodeValidators } from "./-node-validators";
 
 const CONFIG_GAS = "300000000000000";

@@ -21,7 +21,6 @@
       "@tanstack/react-devtools": "^0.10.1",
       "@tanstack/react-form": "^1.29.1",
       "@tanstack/react-table": "^9.2.4",
-      "@tanstack/zod-form-adapter": "^0.42.1",
       "near-kit": "^0.14.0",
       "@hot-labs/near-connect": "0.11.4",
       "@scure/base": "^2.2.0",
