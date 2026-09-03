@@ -30,12 +30,17 @@ import {
   signAsDaoTransaction,
   useDaoConnection,
 } from "@/lib/dao-connect";
+import { invalidateNodeQueries, tenantNodesQueryOptions } from "@/lib/queries/nodes";
+import {
+  invalidateTenantQueries,
+  tenantBindingsQueryOptions,
+  tenantByKeyQueryOptions,
+} from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
-  classifyTenantKey,
   resolveOrgSlug,
   resolvePrimaryHostname,
-} from "../../../_admin/_dashboard/admin/tenants/tenant-wizard";
+} from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 import { TenantNodeValidators } from "./-node-validators";
 
 const CONFIG_GAS = "300000000000000";
@@ -143,38 +148,18 @@ function TenantDetail() {
   const daoConnection = useDaoConnection();
 
   const { data: tenant } = useQuery({
-    queryKey: ["tenant", tenantId],
-    queryFn: async () => {
-      const tenants = await apiClient.listTenants();
-      const findById = (id: string) => tenants.find((t) => t.id === id) ?? null;
-      const kind = classifyTenantKey(tenantId);
-      if (kind === "uuid") {
-        return findById(tenantId);
-      }
-      if (kind === "accountId") {
-        const resolved = await apiClient.resolveTenant({ accountId: tenantId });
-        return resolved ? findById(resolved.id) : null;
-      }
-      const binding = await apiClient
-        .resolveBindingByHostname({ hostname: `${tenantId}.${gatewayId}` })
-        .catch(() => null);
-      if (binding) return findById(binding.tenantId);
-      const node = await apiClient.resolveNodeBySlug({ slug: tenantId });
-      return node ? findById(node.tenantId) : null;
-    },
+    ...tenantByKeyQueryOptions(apiClient, tenantId, gatewayId),
     enabled: !!tenantId,
   });
 
   const { data: nodes = [] } = useQuery({
-    queryKey: ["tenant-nodes", tenantId],
-    queryFn: async () => apiClient.listNodes({ tenantId }),
+    ...tenantNodesQueryOptions(apiClient, tenantId),
     enabled: !!tenantId,
   });
   const nodeSlug = nodes[0]?.slug;
 
   const { data: bindings } = useQuery({
-    queryKey: ["tenant-bindings", tenantId],
-    queryFn: async () => apiClient.listTenantBindingsForTenant({ tenantId }),
+    ...tenantBindingsQueryOptions(apiClient, tenantId),
     enabled: !!tenantId,
   });
 
@@ -228,7 +213,8 @@ function TenantDetail() {
   const bosUrl = tenant ? `bos://${tenant.accountId}/${gatewayId}` : null;
   const fastKvUrl = tenant ? buildRegistryConfigUrl(tenant.accountId, gatewayId) : null;
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["tenant", tenantId] });
+  const invalidate = () =>
+    Promise.all([invalidateNodeQueries(queryClient), invalidateTenantQueries(queryClient)]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {

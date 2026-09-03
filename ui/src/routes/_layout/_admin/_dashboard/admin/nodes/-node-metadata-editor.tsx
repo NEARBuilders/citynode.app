@@ -15,7 +15,8 @@ import {
   Label,
   Textarea,
 } from "@/components";
-import { parseNodeMetadata, refreshNodeQueries } from "./-node-management";
+import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import { parseNodeMetadata } from "./-node-management";
 
 type Node = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["node"];
 
@@ -50,7 +51,7 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
         metadata: parseNodeMetadata(metadata, description),
       }),
     onSuccess: async () => {
-      await refreshNodeQueries(queryClient);
+      await invalidateNodeQueries(queryClient);
       toast.success("Node metadata updated");
       onClose();
     },

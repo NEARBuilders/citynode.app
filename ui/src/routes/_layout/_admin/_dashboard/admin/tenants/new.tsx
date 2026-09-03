@@ -1,16 +1,18 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useForm, useSelector } from "@tanstack/react-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { ArrowRight, Building2, CheckCircle2, Globe, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
+import { getAccount, getActiveRuntime, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
 import {
   Badge,
   Button,
   Card,
   CardContent,
   Field,
+  FieldError,
   FieldLabel,
   Input,
   PageHeader,
@@ -19,13 +21,42 @@ import {
 } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   buildTenantPublishConfig,
   signAsDaoTransaction,
   useDaoConnection,
 } from "@/lib/dao-connect";
-import type { NearNetworkId } from "./tenant-wizard";
+import {
+  childNodesQueryOptions,
+  invalidateNodeQueries,
+  rootNodesQueryOptions,
+} from "@/lib/queries/nodes";
+import { bindingPreflightQueryOptions, invalidateTenantQueries } from "@/lib/queries/tenants";
+import {
+  deriveTenantWizardNameFields,
+  generateSlug,
+  type NearNetworkId,
+  nodeKinds,
+  type TenantWizardValues,
+  tenantWizardSchema,
+} from "./-tenant-wizard";
+import { loadTenantWizardParents } from "./-tenant-wizard-loader";
 
-type NodeKind = "country" | "state" | "city";
+const DIRECT_COUNTRY_PARENT = "__direct-country__";
+
+const tenantWizardDefaultValues: TenantWizardValues = {
+  kind: "country",
+  parentId: "",
+  name: "",
+  slug: "",
+  tenantName: "",
+};
 
 interface FastKvEntry {
   current_account_id?: string;
@@ -41,14 +72,13 @@ async function fastKvAccountHasConfig(daoAccountId: string, gatewayId: string): 
   return Boolean(payload.entries?.find((e) => e && e.value != null));
 }
 
-function generateSlug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/tenants/new")({
+  loader: ({ context }) =>
+    loadTenantWizardParents({
+      activeOrganizationId: context.auth.activeOrganizationId,
+      apiClient: context.apiClient,
+      queryClient: context.queryClient,
+    }),
   head: () => ({
     title: "New Tenant | app",
     meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],
@@ -59,6 +89,9 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/tenants/n
 function NewTenantPage() {
   const apiClient = useApiClient();
   const auth = useAuthClient();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const initialRootNodes = Route.useLoaderData();
   const { auth: adminAuth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const baseAccount = getAccount(runtimeConfig);
@@ -70,12 +103,9 @@ function NewTenantPage() {
   const [phase, setPhase] = useState<"form" | "deploy">("form");
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
-  const [kind, setKind] = useState<NodeKind>("country");
-  const [rootParentId, setRootParentId] = useState<string>("");
-  const [stateParentId, setStateParentId] = useState<string>("");
-  const [slug, setSlug] = useState("");
-  const [name, setName] = useState("");
-  const [tenantName, setTenantName] = useState("");
+  const [rootParentId, setRootParentId] = useState<string>(initialRootNodes[0]?.id ?? "");
+  const slugManuallyEdited = useRef(false);
+  const tenantNameManuallyEdited = useRef(false);
   const [verifyState, setVerifyState] = useState<"idle" | "checking" | "verified" | "failed">(
     "idle",
   );
@@ -87,62 +117,64 @@ function NewTenantPage() {
     { label: "Publish config as DAO", blocking: false },
   ]);
 
-  const hostname = useMemo(() => (slug ? `${slug}.${gatewayId}` : ""), [slug, gatewayId]);
-
-  useEffect(() => {
-    if (!tenantName) {
-      setTenantName(name);
-    }
-  }, [name, tenantName]);
-
-  const { data: rootNodes = [] } = useQuery({
-    queryKey: ["root-nodes"],
-    queryFn: async () => apiClient.listRootNodes(),
-    enabled: phase === "form" && hasOrg,
+  const form = useForm({
+    defaultValues: tenantWizardDefaultValues,
+    validators: {
+      onChange: tenantWizardSchema,
+      onSubmit: tenantWizardSchema,
+    },
+    onSubmit: async ({ value }) => {
+      await submitMutation.mutateAsync(value);
+    },
   });
 
+  const formValues = useSelector(form.store, (state) => state.values);
+  const { kind, slug, name, tenantName } = formValues;
+  const hostname = useMemo(() => (slug ? `${slug}.${gatewayId}` : ""), [slug, gatewayId]);
+
+  const { data: queriedRootNodes } = useQuery({
+    ...rootNodesQueryOptions(apiClient),
+    enabled: phase === "form" && hasOrg,
+  });
+  const rootNodes = queriedRootNodes ?? initialRootNodes;
+
   const { data: stateNodes = [] } = useQuery({
-    queryKey: ["children", rootParentId],
-    queryFn: async () => apiClient.listChildren({ nodeId: rootParentId }),
+    ...childNodesQueryOptions(apiClient, rootParentId),
     enabled: phase === "form" && kind === "city" && !!rootParentId,
   });
 
   const { data: preflight } = useQuery({
-    queryKey: ["preflight", hostname],
-    queryFn: async () => apiClient.bindingPreflight({ hostname }),
+    ...bindingPreflightQueryOptions(apiClient, hostname),
     enabled: phase === "form" && !!slug,
-    staleTime: 5000,
   });
-
-  const parentId = useMemo(() => {
-    if (kind === "country") return null;
-    if (kind === "state") return rootParentId || null;
-    if (kind === "city") return stateParentId || rootParentId || null;
-    return null;
-  }, [kind, rootParentId, stateParentId]);
-
-  function handleNameChange(value: string) {
-    setName(value);
-    if (!slug || slug === generateSlug(name.slice(0, -1))) {
-      setSlug(generateSlug(value));
-    }
-  }
 
   const orgMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await auth.organization.create({ name: orgName, slug: orgSlug });
+      const { error } = await auth.organization.create({ name: orgName, slug: orgSlug });
       if (error) throw new Error(error.message);
-      return data;
+
+      const { data: session, error: sessionError } = await auth.getSession({
+        query: { disableCookieCache: true },
+      });
+      if (sessionError || !session) {
+        throw new Error(
+          `Organization created, but the session could not be refreshed: ${sessionError?.message ?? "no active session returned"}`,
+        );
+      }
+      return session;
     },
-    onSuccess: () => {
+    onSuccess: async (session) => {
+      await queryClient.invalidateQueries({ queryKey: sessionQueryKey, refetchType: "none" });
+      queryClient.setQueryData(sessionQueryKey, session);
+      await queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      await router.invalidate();
       toast.success("Organization created — continue with the wizard");
-      setTimeout(() => window.location.reload(), 500);
     },
     onError: (error: Error) => toast.error(error.message || "Failed to create organization"),
   });
 
   const submitMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: TenantWizardValues) => {
       const daoAccountId = daoConnection.daoAccountId;
       if (!daoAccountId) throw new Error("Connect a DAO account first");
 
@@ -153,24 +185,24 @@ function NewTenantPage() {
 
       try {
         const tenant = await apiClient.createTenant({
-          name: tenantName || name,
+          name: values.tenantName,
           accountId: daoAccountId,
           status: "active",
         });
         tenantId = tenant.id;
 
         const node = await apiClient.createNode({
-          kind,
-          slug,
-          name,
-          parentId,
+          kind: values.kind,
+          slug: values.slug,
+          name: values.name,
+          parentId: values.kind === "country" ? null : values.parentId,
           tenantId: tenant.id,
         });
         nodeId = node.id;
 
         const binding = await apiClient.createBinding({
           tenantId: tenant.id,
-          hostname,
+          hostname: `${values.slug}.${gatewayId}`,
           isPrimary: true,
         });
 
@@ -194,7 +226,11 @@ function NewTenantPage() {
         throw err;
       }
     },
-    onSuccess: () => setPhase("deploy"),
+    onSuccess: async () => {
+      await Promise.all([invalidateNodeQueries(queryClient), invalidateTenantQueries(queryClient)]);
+      await router.invalidate({ sync: true });
+      setPhase("deploy");
+    },
     onError: (error: Error) =>
       toast.error(error.message || "Failed to create tenant — rolled back"),
   });
@@ -270,12 +306,10 @@ function NewTenantPage() {
     }
   }
 
+  const formValuesValid = tenantWizardSchema.safeParse(formValues).success;
   const canSubmitDuringForm =
     hasOrg &&
-    !!slug &&
-    !!name &&
-    !!tenantName &&
-    (kind === "country" || !!parentId) &&
+    formValuesValid &&
     preflight?.hostname.available !== false &&
     daoConnection.status === "connected" &&
     !!daoConnection.daoAccountId &&
@@ -489,7 +523,7 @@ function NewTenantPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            submitMutation.mutate();
+            form.handleSubmit();
           }}
           className="space-y-6"
         >
@@ -499,91 +533,180 @@ function NewTenantPage() {
             <CardContent className="p-6 space-y-4">
               <h2 className="text-sm font-semibold text-foreground">Node details</h2>
 
-              <Field>
-                <FieldLabel>kind</FieldLabel>
-                <div className="flex gap-2">
-                  {(["country", "state", "city"] as const).map((k) => (
-                    <Button
-                      key={k}
-                      type="button"
-                      variant={kind === k ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setKind(k);
-                        setRootParentId("");
-                        setStateParentId("");
-                      }}
-                    >
-                      {k}
-                    </Button>
-                  ))}
-                </div>
-              </Field>
+              <form.Field name="kind">
+                {(field) => (
+                  <Field>
+                    <FieldLabel>kind</FieldLabel>
+                    <div className="flex gap-2">
+                      {nodeKinds.map((nodeKind) => (
+                        <Button
+                          key={nodeKind}
+                          type="button"
+                          variant={field.state.value === nodeKind ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            field.handleChange(nodeKind);
+                            const nextRootParentId =
+                              nodeKind === "country" ? "" : rootParentId || rootNodes[0]?.id || "";
+                            setRootParentId(nextRootParentId);
+                            form.setFieldValue("parentId", nextRootParentId, {
+                              dontUpdateMeta: true,
+                            });
+                          }}
+                        >
+                          {nodeKind}
+                        </Button>
+                      ))}
+                    </div>
+                  </Field>
+                )}
+              </form.Field>
 
               {kind !== "country" && (
-                <Field>
-                  <FieldLabel htmlFor="parent-root">parent country</FieldLabel>
-                  <select
-                    id="parent-root"
-                    value={rootParentId}
-                    onChange={(e) => {
-                      setRootParentId(e.target.value);
-                      setStateParentId("");
-                    }}
-                    className="w-full h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-3 text-sm text-foreground"
-                    required
-                  >
-                    <option value="">select a country…</option>
-                    {rootNodes.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.name} ({n.slug})
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <form.Field name="parentId">
+                  {(field) => {
+                    const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+                    const countryValue = kind === "city" ? rootParentId : field.state.value;
+                    return (
+                      <>
+                        <Field data-invalid={errors.length > 0 || undefined}>
+                          <FieldLabel htmlFor="parent-root">parent country</FieldLabel>
+                          <Select
+                            value={countryValue}
+                            onValueChange={(value) => {
+                              setRootParentId(value);
+                              field.handleChange(value);
+                            }}
+                            required
+                          >
+                            <SelectTrigger
+                              id="parent-root"
+                              className="w-full"
+                              aria-invalid={errors.length > 0 || undefined}
+                            >
+                              <SelectValue placeholder="select a country…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {rootNodes.map((node) => (
+                                <SelectItem key={node.id} value={node.id}>
+                                  {node.name} ({node.slug})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FieldError errors={errors} />
+                        </Field>
+
+                        {kind === "city" && rootParentId && stateNodes.length > 0 && (
+                          <Field>
+                            <FieldLabel htmlFor="parent-state">parent state (optional)</FieldLabel>
+                            <Select
+                              value={
+                                field.state.value === rootParentId
+                                  ? DIRECT_COUNTRY_PARENT
+                                  : field.state.value
+                              }
+                              onValueChange={(value) =>
+                                field.handleChange(
+                                  value === DIRECT_COUNTRY_PARENT ? rootParentId : value,
+                                )
+                              }
+                            >
+                              <SelectTrigger id="parent-state" className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={DIRECT_COUNTRY_PARENT}>
+                                  directly under country
+                                </SelectItem>
+                                {stateNodes.map((node) => (
+                                  <SelectItem key={node.id} value={node.id}>
+                                    {node.name} ({node.slug})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                        )}
+                      </>
+                    );
+                  }}
+                </form.Field>
               )}
 
-              {kind === "city" && rootParentId && stateNodes.length > 0 && (
-                <Field>
-                  <FieldLabel htmlFor="parent-state">parent state (optional)</FieldLabel>
-                  <select
-                    id="parent-state"
-                    value={stateParentId}
-                    onChange={(e) => setStateParentId(e.target.value)}
-                    className="w-full h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-3 text-sm text-foreground"
-                  >
-                    <option value="">directly under country</option>
-                    {stateNodes.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.name} ({n.slug})
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
+              <form.Field name="name">
+                {(field) => {
+                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+                  return (
+                    <Field data-invalid={errors.length > 0 || undefined}>
+                      <FieldLabel htmlFor="node-name">name</FieldLabel>
+                      <Input
+                        id="node-name"
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const derived = deriveTenantWizardNameFields(
+                            value,
+                            {
+                              slug: form.getFieldValue("slug"),
+                              tenantName: form.getFieldValue("tenantName"),
+                            },
+                            {
+                              slug: slugManuallyEdited.current,
+                              tenantName: tenantNameManuallyEdited.current,
+                            },
+                          );
 
-              <Field>
-                <FieldLabel htmlFor="node-name">name</FieldLabel>
-                <Input
-                  id="node-name"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="Chicago"
-                  required
-                />
-              </Field>
+                          field.handleChange(value);
+                          if (!slugManuallyEdited.current) {
+                            form.setFieldValue("slug", derived.slug, {
+                              dontUpdateMeta: true,
+                            });
+                          }
+                          if (!tenantNameManuallyEdited.current) {
+                            form.setFieldValue("tenantName", derived.tenantName, {
+                              dontUpdateMeta: true,
+                            });
+                          }
+                        }}
+                        placeholder="Chicago"
+                        aria-invalid={errors.length > 0 || undefined}
+                        required
+                      />
+                      <FieldError errors={errors} />
+                    </Field>
+                  );
+                }}
+              </form.Field>
 
-              <Field>
-                <FieldLabel htmlFor="node-slug">slug</FieldLabel>
-                <Input
-                  id="node-slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                  placeholder="chicago"
-                  pattern="[a-z0-9-]+"
-                  required
-                />
-              </Field>
+              <form.Field name="slug">
+                {(field) => {
+                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+                  return (
+                    <Field data-invalid={errors.length > 0 || undefined}>
+                      <FieldLabel htmlFor="node-slug">slug</FieldLabel>
+                      <Input
+                        id="node-slug"
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          slugManuallyEdited.current = true;
+                          field.setMeta((meta) => ({ ...meta, isTouched: true }));
+                          field.handleChange(e.target.value.replace(/[^a-z0-9-]/g, ""));
+                        }}
+                        placeholder="chicago"
+                        pattern="[a-z0-9-]+"
+                        aria-invalid={errors.length > 0 || undefined}
+                        required
+                      />
+                      <FieldError errors={errors} />
+                    </Field>
+                  );
+                }}
+              </form.Field>
             </CardContent>
           </Card>
 
@@ -591,16 +714,31 @@ function NewTenantPage() {
             <CardContent className="p-6 space-y-4">
               <h2 className="text-sm font-semibold text-foreground">Tenant + binding</h2>
 
-              <Field>
-                <FieldLabel htmlFor="tenant-name">tenant name</FieldLabel>
-                <Input
-                  id="tenant-name"
-                  value={tenantName}
-                  placeholder="Chicago City Node"
-                  onChange={(e) => setTenantName(e.target.value)}
-                  required
-                />
-              </Field>
+              <form.Field name="tenantName">
+                {(field) => {
+                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+                  return (
+                    <Field data-invalid={errors.length > 0 || undefined}>
+                      <FieldLabel htmlFor="tenant-name">tenant name</FieldLabel>
+                      <Input
+                        id="tenant-name"
+                        name={field.name}
+                        value={field.state.value}
+                        placeholder="Chicago City Node"
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          tenantNameManuallyEdited.current = true;
+                          field.setMeta((meta) => ({ ...meta, isTouched: true }));
+                          field.handleChange(e.target.value);
+                        }}
+                        aria-invalid={errors.length > 0 || undefined}
+                        required
+                      />
+                      <FieldError errors={errors} />
+                    </Field>
+                  );
+                }}
+              </form.Field>
 
               <Field>
                 <FieldLabel htmlFor="account-id">NEAR account id</FieldLabel>
@@ -638,9 +776,16 @@ function NewTenantPage() {
             <Button asChild variant="outline">
               <Link to="/admin/tenants">cancel</Link>
             </Button>
-            <Button type="submit" disabled={submitMutation.isPending || !canSubmitDuringForm}>
-              {submitMutation.isPending ? "creating…" : "create tenant + node"}
-            </Button>
+            <form.Subscribe selector={(state) => state.canSubmit}>
+              {(canSubmit) => (
+                <Button
+                  type="submit"
+                  disabled={submitMutation.isPending || !canSubmit || !canSubmitDuringForm}
+                >
+                  {submitMutation.isPending ? "creating…" : "create tenant + node"}
+                </Button>
+              )}
+            </form.Subscribe>
           </div>
         </form>
       )}

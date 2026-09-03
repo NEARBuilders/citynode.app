@@ -3,7 +3,7 @@ import { ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { cn } from "@/lib/utils";
-import { hasNodeProposalReviewPermission } from "./node/node-access";
+import { hasNodeProposalReviewPermission } from "./node/-node-access";
 
 type NodeDashboardSearch = { nodeId?: string };
 

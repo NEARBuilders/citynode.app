@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Button, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
+import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
 
 export const Route = createFileRoute("/_layout/_public/")({
   loader: async ({ context }) => ({
@@ -26,11 +27,7 @@ function LandingPage() {
   const apiClient = useApiClient();
   const runtime = getActiveRuntime(runtimeConfig);
 
-  const { data: tenantApps = [], isLoading } = useQuery({
-    queryKey: ["tenant-apps"],
-    queryFn: () => apiClient.listTenantApps(),
-    staleTime: 30 * 1000,
-  });
+  const { data: tenantApps = [], isLoading } = useQuery(tenantAppsQueryOptions(apiClient));
 
   const directoryNodes = tenantApps.map((app) => ({
     id: app.accountId,
