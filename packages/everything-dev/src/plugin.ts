@@ -7,6 +7,7 @@ import { createInterface } from "node:readline/promises";
 import { Effect } from "effect";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import {
+  buildBetterNearAuthQuietly,
   buildEveryPluginQuietly,
   buildEverythingDevQuietly,
   buildWorkspaceTargets,
@@ -665,7 +666,10 @@ export default createPlugin({
         (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
 
       await timePhase(devTimings, "build", async () => {
-        const buildTasks: Promise<void>[] = [buildEverythingDevQuietly(deps.configDir)];
+        const buildTasks: Promise<void>[] = [
+          buildEverythingDevQuietly(deps.configDir),
+          buildBetterNearAuthQuietly(deps.configDir),
+        ];
         if (shouldBuildPlugin) {
           buildTasks.push(buildEveryPluginQuietly(deps.configDir));
         }
