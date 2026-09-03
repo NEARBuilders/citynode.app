@@ -351,7 +351,10 @@ export async function buildWorkspaceTargets(opts: {
   const shouldBuildPlugin = existing.some((entry) => entry.key === "api");
 
   const forceRebuild = opts.deploy;
-  const buildTasks: Promise<void>[] = [buildEverythingDevQuietly(opts.configDir, forceRebuild)];
+  const buildTasks: Promise<void>[] = [
+    buildEverythingDevQuietly(opts.configDir, forceRebuild),
+    buildBetterNearAuthQuietly(opts.configDir, forceRebuild),
+  ];
   if (shouldBuildPlugin) {
     buildTasks.push(buildEveryPluginQuietly(opts.configDir, forceRebuild));
   }
@@ -498,6 +501,39 @@ export async function buildEveryPluginQuietly(cwd: string, force = false) {
 
   throw new Error(
     `bun run --cwd packages/every-plugin build failed with exit code ${result.exitCode}`,
+  );
+}
+
+export async function buildBetterNearAuthQuietly(cwd: string, force = false) {
+  const packageDir = `${cwd}/packages/better-near-auth`;
+  const packageExists = await fileExists(`${packageDir}/package.json`);
+  if (!packageExists) {
+    return;
+  }
+
+  if (!force && !(await isWorkspaceDistStale(packageDir, "dist/index.js"))) {
+    return;
+  }
+
+  const result = (await run("bun", ["run", "--cwd", "packages/better-near-auth", "build"], {
+    cwd,
+    capture: true,
+  })) as { stdout: string; stderr: string; exitCode: number };
+
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  if (result.stdout.trim()) {
+    process.stdout.write(result.stdout);
+  }
+
+  if (result.stderr.trim()) {
+    process.stderr.write(result.stderr);
+  }
+
+  throw new Error(
+    `bun run --cwd packages/better-near-auth build failed with exit code ${result.exitCode}`,
   );
 }
 
