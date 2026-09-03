@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasNodeProposalReviewPermission } from "./node-access";
+import { hasNodeProposalReviewPermission } from "./-node-access";
 
 describe("node proposal review permission", () => {
   it("allows platform administrators", () => {

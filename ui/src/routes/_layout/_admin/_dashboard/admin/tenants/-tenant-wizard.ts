@@ -1,6 +1,53 @@
+import { z } from "zod";
+
 export type NearNetworkId = "mainnet" | "testnet";
 
 export type TenantKeyKind = "uuid" | "accountId" | "slug";
+
+export const nodeKinds = ["country", "state", "city"] as const;
+
+export type NodeKind = (typeof nodeKinds)[number];
+
+export const tenantWizardSchema = z
+  .object({
+    kind: z.enum(nodeKinds),
+    parentId: z.string(),
+    name: z.string().trim().min(1, "name is required"),
+    slug: z
+      .string()
+      .min(1, "slug is required")
+      .regex(/^[a-z0-9-]+$/, "only lowercase letters, numbers, and hyphens"),
+    tenantName: z.string().trim().min(1, "tenant name is required"),
+  })
+  .superRefine((values, context) => {
+    if (values.kind !== "country" && !values.parentId) {
+      context.addIssue({
+        code: "custom",
+        path: ["parentId"],
+        message: "parent is required",
+      });
+    }
+  });
+
+export type TenantWizardValues = z.infer<typeof tenantWizardSchema>;
+
+export function generateSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function deriveTenantWizardNameFields(
+  name: string,
+  current: Pick<TenantWizardValues, "slug" | "tenantName">,
+  touched: { slug: boolean; tenantName: boolean },
+) {
+  return {
+    slug: touched.slug ? current.slug : generateSlug(name),
+    tenantName: touched.tenantName ? current.tenantName : name,
+  };
+}
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
