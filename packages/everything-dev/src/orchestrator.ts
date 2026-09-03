@@ -73,7 +73,7 @@ const REMOTE_PROBE_DEADLINE_MS = 60_000;
 const REMOTE_PROBE_BACKOFF_INITIAL_MS = 1000;
 const REMOTE_PROBE_BACKOFF_MAX_MS = 15_000;
 
-const detectStatus = (
+export const detectStatus = (
   line: string,
   descriptor: ServiceDescriptor,
 ): { status: ProcessStatus; isError: boolean } | null => {
@@ -372,13 +372,13 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         callbacks.onLog(name, line, looksLikeError);
 
         const currentStatus = yield* Ref.get(statusRef);
-        if (currentStatus === "ready" || currentStatus === "error") return;
+        if (currentStatus === "ready") return;
 
         const detected = detectStatus(line, descriptor);
         if (detected) {
           if (detected.status === "ready") {
             yield* markReady;
-          } else {
+          } else if (currentStatus !== "error") {
             yield* markError(`Process failed: ${name}`);
           }
         }

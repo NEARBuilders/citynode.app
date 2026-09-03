@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import { formatDuration } from "./cli/timing";
@@ -475,10 +475,7 @@ export async function buildEveryPluginQuietly(cwd: string, force = false) {
     return;
   }
 
-  const distPath = `${cwd}/packages/every-plugin/dist/build/rspack/plugin.mjs`;
-  const distExists = await fileExists(distPath);
-
-  if (distExists && !force) {
+  if (!force && !(await isWorkspaceDistStale(packageDir, "dist/build/rspack/plugin.mjs"))) {
     return;
   }
 
@@ -504,6 +501,43 @@ export async function buildEveryPluginQuietly(cwd: string, force = false) {
   );
 }
 
+async function newestSourceMtimeMs(dir: string): Promise<number> {
+  let newest = 0;
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name === "dist") continue;
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      newest = Math.max(newest, await newestSourceMtimeMs(fullPath));
+    } else {
+      newest = Math.max(newest, (await stat(fullPath)).mtimeMs);
+    }
+  }
+  return newest;
+}
+
+/**
+ * Decide whether a workspace's dist bundle predates its sources.
+ *
+ * rspack-built services resolve workspace packages (e.g. `everything-dev/db`)
+ * via their `dist` exports, so a stale dist silently ships old code to dev
+ * servers. Compares the dist entry's mtime against the newest source file
+ * and package.json mtime.
+ */
+export async function isWorkspaceDistStale(
+  packageDir: string,
+  distEntry: string,
+): Promise<boolean> {
+  const distPath = join(packageDir, distEntry);
+  if (!existsSync(distPath)) return true;
+  const [distMtime, srcMtime, pkgMtime] = await Promise.all([
+    stat(distPath).then((s) => s.mtimeMs),
+    newestSourceMtimeMs(join(packageDir, "src")),
+    stat(join(packageDir, "package.json")).then((s) => s.mtimeMs),
+  ]);
+  return Math.max(srcMtime, pkgMtime) > distMtime;
+}
+
 export async function buildEverythingDevQuietly(cwd: string, force = false) {
   const packageDir = `${cwd}/packages/everything-dev`;
   const packageExists = await fileExists(`${packageDir}/package.json`);
@@ -511,10 +545,7 @@ export async function buildEverythingDevQuietly(cwd: string, force = false) {
     return;
   }
 
-  const distPath = `${cwd}/packages/everything-dev/dist/index.mjs`;
-  const distExists = await fileExists(distPath);
-
-  if (distExists && !force) {
+  if (!force && !(await isWorkspaceDistStale(packageDir, "dist/index.mjs"))) {
     return;
   }
 

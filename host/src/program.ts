@@ -8,6 +8,7 @@ import {
   Layer,
   ManagedRuntime,
 } from "every-plugin/effect";
+import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { type Context, Hono } from "hono";
 import type { AuthVariables } from "./lib/auth";
 import { getCspStrict, SecurityMiddleware } from "./middleware/security";
@@ -25,6 +26,8 @@ import { extractErrorDetails } from "./utils/errors";
 import { logger } from "./utils/logger";
 
 type HonoEnv = { Variables: AuthVariables };
+
+suppressPgQueryQueueDeprecation();
 
 export const createStartServer = (onReady?: () => void) =>
   Effect.gen(function* () {

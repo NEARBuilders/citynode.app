@@ -130,6 +130,32 @@ export function isRetryableMigrationError(error: unknown): boolean {
   return false;
 }
 
+const PG_QUERY_QUEUE_DEPRECATION = "client.query() when the client is already executing a query";
+
+let pgWarningFilterInstalled = false;
+
+/**
+ * Silence pg's query-queue deprecation warning (fires once per process from
+ * pg-pool's internal dispatch under concurrent boot load — node-postgres#3612,
+ * #3617). Node's default warning handler prints even when user listeners are
+ * attached, so it is removed first; every other warning is re-printed here.
+ */
+export function suppressPgQueryQueueDeprecation(): void {
+  if (pgWarningFilterInstalled) return;
+  if (typeof process === "undefined" || typeof process.on !== "function") return;
+  pgWarningFilterInstalled = true;
+  process.removeAllListeners("warning");
+  process.on("warning", (warning) => {
+    if (
+      warning.name === "DeprecationWarning" &&
+      warning.message.includes(PG_QUERY_QUEUE_DEPRECATION)
+    ) {
+      return;
+    }
+    console.error(warning.stack || `${warning.name}: ${warning.message}`);
+  });
+}
+
 export function extractExpectedTables(migrations: { sql: string[] }[]): string[] {
   const tables = new Set<string>();
   const re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"([^"]+)"\.)?"([^"]+)"/gi;

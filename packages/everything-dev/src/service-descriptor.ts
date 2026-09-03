@@ -35,7 +35,12 @@ export class DevRuntimeConfig extends Context.Tag("DevRuntimeConfig")<
 
 const PLUGIN_READY_PATTERNS = [/ready in/i, /compiled.*successfully/i, /listening/i, /started/i];
 
-const PLUGIN_ERROR_PATTERNS = [/error/i, /failed/i];
+const PLUGIN_ERROR_PATTERNS = [
+  /\bERROR in\b/,
+  /failed to compile/i,
+  /Module not found/i,
+  /Cannot find module/i,
+];
 
 const SERVICE_CONFIGS: Record<
   string,
