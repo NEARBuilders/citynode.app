@@ -22,17 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type ApiClient = ReturnType<typeof useApiClient>;
-type Node = Awaited<ReturnType<ApiClient["listRootNodes"]>>[number];
-
-interface RootNodeRow {
-  node: Node;
-  parent: Node | undefined;
-  status: string;
-  childrenCount: number;
-  validatorCount: number;
-}
+import {
+  type AdminNodeListRow,
+  type AdminNodeListScope,
+  adminNodeListQueryOptions,
+} from "@/lib/queries/nodes";
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/nodes/")({
   head: () => ({
@@ -43,37 +37,11 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/nodes/")(
 
 function AdminNodes() {
   const apiClient = useApiClient();
-  const [scope, setScope] = useState("roots");
+  const [scope, setScope] = useState<AdminNodeListScope>("roots");
   const [kind, setKind] = useState("all");
-  const nodesQuery = useQuery({
-    queryKey: ["admin-nodes", scope],
-    queryFn: async () => {
-      const [allNodes, tenants] = await Promise.all([
-        apiClient.listNodes({}),
-        apiClient.listTenants(),
-      ]);
-      const nodes = scope === "roots" ? await apiClient.listRootNodes() : allNodes;
-      const parents = new Map(allNodes.map((node) => [node.id, node]));
-      const statuses = new Map(tenants.map((tenant) => [tenant.id, tenant.status]));
-      return (
-        await Promise.all(
-          nodes.map(async (node): Promise<RootNodeRow> => {
-            const summary = await apiClient.getNodeSummary({ nodeId: node.id });
-            return {
-              node,
-              parent: node.parentId ? parents.get(node.parentId) : undefined,
-              status: statuses.get(node.tenantId) ?? "unknown",
-              childrenCount: summary.childrenCount,
-              validatorCount: summary.validators.length,
-            };
-          }),
-        )
-      ).sort((a, b) => a.node.name.localeCompare(b.node.name));
-    },
-    staleTime: 30 * 1000,
-  });
+  const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, scope));
 
-  const columns = useMemo<DataTableColumnDef<RootNodeRow>[]>(
+  const columns = useMemo<DataTableColumnDef<AdminNodeListRow>[]>(
     () => [
       {
         id: "name",
@@ -161,7 +129,7 @@ function AdminNodes() {
       <SectionHeader title="Node structure" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={scope} onValueChange={setScope}>
+        <Tabs value={scope} onValueChange={(value) => setScope(value === "all" ? "all" : "roots")}>
           <TabsList>
             <TabsTrigger value="roots">Root nodes</TabsTrigger>
             <TabsTrigger value="all">All nodes</TabsTrigger>

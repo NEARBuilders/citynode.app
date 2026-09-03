@@ -5,6 +5,11 @@ import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { Badge, Button, Card, CardContent, Input, SectionHeader } from "@/components";
 import { fetchPoolOwner } from "@/lib/pool-owner";
+import {
+  invalidateNodeQueries,
+  nodeValidatorsQueryOptions,
+  tenantNodesQueryOptions,
+} from "@/lib/queries/nodes";
 
 interface TenantNodeValidatorsProps {
   tenantId: string;
@@ -65,14 +70,11 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
   const [newRole, setNewRole] = useState<"official" | "community">("community");
 
   const { data: validators = [] } = useQuery({
-    queryKey: ["validators", nodeId],
-    queryFn: async () => {
-      const rows = await apiClient.listValidatorsByNode({ nodeId });
-      return rows as ValidatorRow[];
-    },
+    ...nodeValidatorsQueryOptions(apiClient, nodeId),
+    select: (rows) => rows as ValidatorRow[],
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["validators", nodeId] });
+  const invalidate = () => invalidateNodeQueries(queryClient);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -245,8 +247,7 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
   const [nodeName, setNodeName] = useState("");
 
   const { data: nodes = [] } = useQuery({
-    queryKey: ["tenant-nodes", tenantId],
-    queryFn: async () => apiClient.listNodes({ tenantId }),
+    ...tenantNodesQueryOptions(apiClient, tenantId),
     enabled: !!tenantId,
   });
 
@@ -256,7 +257,7 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
     onSuccess: () => {
       toast.success("Node renamed");
       setRenamingNodeId(null);
-      queryClient.invalidateQueries({ queryKey: ["tenant-nodes", tenantId] });
+      invalidateNodeQueries(queryClient);
     },
     onError: (error: Error) => toast.error(error.message || "Failed to rename node"),
   });

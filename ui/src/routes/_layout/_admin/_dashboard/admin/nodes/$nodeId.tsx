@@ -14,6 +14,7 @@ import {
   Skeleton,
 } from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
+import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { NodeBindings } from "./-node-bindings";
 import { NodeMetadataEditor } from "./-node-metadata-editor";
 import { NodeValidators } from "./-node-validators";
@@ -33,21 +34,7 @@ function AdminNodeDetail() {
   const { nodeId } = Route.useParams();
   const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
-  const nodeQuery = useQuery({
-    queryKey: ["admin-node", nodeId],
-    queryFn: async () => {
-      const summary = await apiClient.getNodeSummary({ nodeId });
-      const sourceNode =
-        summary.stakingValidators.sourceNodeId === nodeId
-          ? summary.node
-          : await apiClient.getNode({ nodeId: summary.stakingValidators.sourceNodeId });
-      const parent = summary.node.parentId
-        ? await apiClient.getNode({ nodeId: summary.node.parentId })
-        : null;
-      return { summary, sourceNode, parent };
-    },
-    staleTime: 30 * 1000,
-  });
+  const nodeQuery = useQuery(adminNodeDetailQueryOptions(apiClient, nodeId));
 
   const childColumns = useMemo<DataTableColumnDef<ChildNode>[]>(
     () => [

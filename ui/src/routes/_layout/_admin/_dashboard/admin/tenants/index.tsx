@@ -5,6 +5,8 @@ import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
+import { allNodesQueryOptions } from "@/lib/queries/nodes";
+import { tenantsQueryOptions } from "@/lib/queries/tenants";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
@@ -31,17 +33,9 @@ function AdminTenants() {
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ["tenants"],
-    queryFn: async () => apiClient.listTenants(),
-    staleTime: 30 * 1000,
-  });
+  } = useQuery(tenantsQueryOptions(apiClient));
 
-  const { data: nodes = [] } = useQuery({
-    queryKey: ["all-nodes"],
-    queryFn: async () => apiClient.listNodes({}),
-    staleTime: 30 * 1000,
-  });
+  const { data: nodes = [] } = useQuery(allNodesQueryOptions(apiClient));
 
   const slugByTenantId = useMemo(() => {
     const map = new Map<string, string>();

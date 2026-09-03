@@ -5,30 +5,23 @@ import { getActiveRuntime, useApiClient } from "@/app";
 import { Badge, Button, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  childNodesQueryOptions,
+  nodeBySlugQueryOptions,
+  stakingValidatorsQueryOptions,
+} from "@/lib/queries/nodes";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
   loader: async ({ params, context }) => {
     const { queryClient, apiClient, runtimeConfig } = context;
     const slug = params.slug;
 
-    const node = await queryClient.fetchQuery({
-      queryKey: ["node", "slug", slug],
-      queryFn: () => apiClient.resolveNodeBySlug({ slug, parentId: null }),
-      staleTime: 30 * 1000,
-    });
+    const node = await queryClient.ensureQueryData(nodeBySlugQueryOptions(apiClient, slug, null));
 
     if (node) {
       await Promise.all([
-        queryClient.prefetchQuery({
-          queryKey: ["node", "children", node.id],
-          queryFn: () => apiClient.listChildren({ nodeId: node.id }),
-          staleTime: 30 * 1000,
-        }),
-        queryClient.prefetchQuery({
-          queryKey: ["staking-validators", node.id],
-          queryFn: () => apiClient.resolveStakingValidators({ nodeId: node.id }),
-          staleTime: 30 * 1000,
-        }),
+        queryClient.prefetchQuery(childNodesQueryOptions(apiClient, node.id)),
+        queryClient.prefetchQuery(stakingValidatorsQueryOptions(apiClient, node.id)),
       ]);
     }
 
@@ -53,26 +46,20 @@ function NodePage() {
   const apiClient = useApiClient();
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
 
-  const { data: node, isLoading: nodeLoading } = useQuery({
-    queryKey: ["node", "slug", slug],
-    queryFn: () => apiClient.resolveNodeBySlug({ slug, parentId: null }),
-    staleTime: 30 * 1000,
-  });
+  const { data: node, isLoading: nodeLoading } = useQuery(
+    nodeBySlugQueryOptions(apiClient, slug, null),
+  );
 
   const nodeId = node?.id;
 
   const { data: children = [], isLoading: childrenLoading } = useQuery({
-    queryKey: ["node", "children", nodeId],
-    queryFn: () => apiClient.listChildren({ nodeId: nodeId as string }),
+    ...childNodesQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
-    staleTime: 30 * 1000,
   });
 
   const { data: staking } = useQuery({
-    queryKey: ["staking-validators", nodeId],
-    queryFn: () => apiClient.resolveStakingValidators({ nodeId: nodeId as string }),
+    ...stakingValidatorsQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
-    staleTime: 30 * 1000,
   });
 
   if (nodeLoading) {
