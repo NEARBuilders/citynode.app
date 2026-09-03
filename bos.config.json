@@ -110,6 +110,7 @@
       "integrity": "sha384-T+vM3ZIikLQhQFzLeYE8AD5jysvTJKxL89FFmIAqg/uC/OWbJ/aQqwTWUYP52FI1"
     },
     "proposals": {
+      "development": "local:plugins/proposals",
       "variables": {
         "privatePluginIds": []
       },
@@ -120,6 +121,7 @@
       "integrity": "sha384-r1RSJO0Em6cgW0oxKLqZC9VjZ5s4bjcG3UtRo73NHPiYwN2y5eRR9o9Oh2moyKax"
     },
     "votes": {
+      "development": "local:plugins/votes",
       "variables": {},
       "secrets": [
         "VOTES_DATABASE_URL"

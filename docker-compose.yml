@@ -25,17 +25,17 @@ services:
 
   postgres-auth:
     <<: *pg-common
-    container_name: auth.everything.near-postgres-auth
+    container_name: v1.citynode.near-postgres-auth
     environment:
       <<: *pg-env
       POSTGRES_DB: auth_db
     ports:
       - "5433:5432"
     volumes:
-      - auth_everything_near_postgres_auth_data:/var/lib/postgresql/data
+      - v1_citynode_near_postgres_auth_data:/var/lib/postgresql/data
 
 volumes:
   v1_citynode_near_postgres_api_data:
     name: v1_citynode_near_postgres_api_data
-  auth_everything_near_postgres_auth_data:
-    name: auth_everything_near_postgres_auth_data
+  v1_citynode_near_postgres_auth_data:
+    name: v1_citynode_near_postgres_auth_data
