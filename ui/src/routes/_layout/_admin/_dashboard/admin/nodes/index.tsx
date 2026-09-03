@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ColumnDef } from "@tanstack/react-table";
 import { Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
@@ -15,7 +14,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import {
   Select,
   SelectContent,
@@ -74,7 +73,7 @@ function AdminNodes() {
     staleTime: 30 * 1000,
   });
 
-  const columns = useMemo<ColumnDef<RootNodeRow>[]>(
+  const columns = useMemo<DataTableColumnDef<RootNodeRow>[]>(
     () => [
       {
         id: "name",

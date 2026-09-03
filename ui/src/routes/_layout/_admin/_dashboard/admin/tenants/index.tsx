@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ColumnDef } from "@tanstack/react-table";
 import { Building2, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
@@ -54,7 +53,7 @@ function AdminTenants() {
 
   const tenantKey = (tenantId: string) => slugByTenantId.get(tenantId) ?? tenantId;
 
-  const columns = useMemo<ColumnDef<Tenant>[]>(
+  const columns = useMemo<DataTableColumnDef<Tenant>[]>(
     () => [
       {
         accessorKey: "name",

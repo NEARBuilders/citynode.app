@@ -1,13 +1,12 @@
-import type { ColumnDef } from "@tanstack/react-table";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DataTable } from "./data-table";
+import { DataTable, type DataTableColumnDef } from "./data-table";
 
 interface Row {
   name: string;
 }
 
-const columns: ColumnDef<Row>[] = [{ accessorKey: "name", header: "Name" }];
+const columns: DataTableColumnDef<Row>[] = [{ accessorKey: "name", header: "Name" }];
 
 describe("DataTable", () => {
   it("reports the number of visible rows on the current page", () => {

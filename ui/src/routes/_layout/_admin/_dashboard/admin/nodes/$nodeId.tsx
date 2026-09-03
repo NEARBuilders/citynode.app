@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Network } from "lucide-react";
 import { useMemo } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
@@ -14,7 +13,7 @@ import {
   SectionHeader,
   Skeleton,
 } from "@/components";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import { NodeBindings } from "./-node-bindings";
 import { NodeMetadataEditor } from "./-node-metadata-editor";
 import { NodeValidators } from "./-node-validators";
@@ -50,7 +49,7 @@ function AdminNodeDetail() {
     staleTime: 30 * 1000,
   });
 
-  const childColumns = useMemo<ColumnDef<ChildNode>[]>(
+  const childColumns = useMemo<DataTableColumnDef<ChildNode>[]>(
     () => [
       {
         accessorKey: "name",

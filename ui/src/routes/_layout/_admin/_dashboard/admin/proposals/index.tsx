@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ColumnDef } from "@tanstack/react-table";
 import { FileCheck2 } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
@@ -15,7 +14,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import {
   PROPOSAL_REVIEW_FILTERS,
   type ProposalReviewFilter,
@@ -54,7 +53,7 @@ function AdminProposals() {
     staleTime: 15 * 1000,
   });
 
-  const columns = useMemo<ColumnDef<Proposal>[]>(
+  const columns = useMemo<DataTableColumnDef<Proposal>[]>(
     () => [
       {
         accessorKey: "id",

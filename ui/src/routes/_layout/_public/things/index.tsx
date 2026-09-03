@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowUp } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -28,7 +27,7 @@ export const Route = createFileRoute("/_layout/_public/things/")({
 function createColumns(
   upvoteCounts: UpvoteCounts | undefined,
   isLoadingUpvotes: boolean,
-): ColumnDef<Thing>[] {
+): DataTableColumnDef<Thing>[] {
   return [
     {
       accessorKey: "thingId",
