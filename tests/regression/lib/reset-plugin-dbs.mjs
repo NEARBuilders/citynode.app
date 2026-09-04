@@ -57,7 +57,7 @@ export async function resetPluginDatabases({ repoRoot, env = process.env } = {})
 
   const dropped = [];
   const targetsByDb = new Map();
-  for (const { key, schema, target } of targets) {
+  for (const { schema, target } of targets) {
     const client = new pg.Client({
       host: target.host,
       port: Number(target.port),

@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { killStalePorts } from "../lib/kill-stale-ports.mjs";
 import { computeRegressionEnv } from "../lib/regression-env.mjs";
 
 const mode = process.env.REGRESSION_MODE ?? "dev";
@@ -10,6 +11,8 @@ const command =
       : "bun run regression:start:dev";
 
 const regressionEnv = computeRegressionEnv();
+
+killStalePorts(regressionEnv.stalePorts);
 
 const derivedEnv = {
   ...regressionEnv.dbUrls,
@@ -39,7 +42,7 @@ export default defineConfig({
   webServer: {
     command,
     url: `${regressionEnv.baseUrl}/health`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     stdout: "pipe",
     stderr: "pipe",

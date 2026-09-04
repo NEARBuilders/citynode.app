@@ -87,9 +87,7 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
 
   const baseUrl = env.REGRESSION_BASE_URL ?? fileEnv.REGRESSION_BASE_URL ?? DEFAULT_BASE_URL;
   const authSecret =
-    env.BETTER_AUTH_SECRET ??
-    fileEnv.BETTER_AUTH_SECRET ??
-    DEFAULT_BETTER_AUTH_SECRET;
+    env.BETTER_AUTH_SECRET ?? fileEnv.BETTER_AUTH_SECRET ?? DEFAULT_BETTER_AUTH_SECRET;
 
   const basePort = Number(new URL(baseUrl).port) || 80;
   const localPluginCount = Object.values(config.plugins ?? {}).filter(

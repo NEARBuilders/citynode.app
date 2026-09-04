@@ -18,9 +18,9 @@ test.describe("admin", () => {
     await waitForApp(page);
 
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
-    await expect(
-      page.getByRole("button", { name: new RegExp(adminName) }).first(),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("button", { name: new RegExp(adminName) }).first()).toBeVisible({
+      timeout: 10000,
+    });
     await expect(page.getByRole("heading", { name: "Manage" })).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);

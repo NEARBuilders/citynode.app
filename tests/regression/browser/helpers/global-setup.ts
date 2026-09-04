@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
+import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 
 const ADMIN_COOKIES_PATH = ".bos/regression/admin-cookies.json";
 const LOGOUT_COOKIES_PATH = ".bos/regression/logout-cookies.json";
@@ -29,8 +29,12 @@ export default async function globalSetup() {
 
   const orgAName = `regression-admin-org-a-${unique}`;
   const orgBName = `regression-admin-org-b-${unique}`;
-  const orgA = await test.saveOrganization(test.createOrganization({ name: orgAName, slug: orgAName }));
-  const orgB = await test.saveOrganization(test.createOrganization({ name: orgBName, slug: orgBName }));
+  const orgA = await test.saveOrganization(
+    test.createOrganization({ name: orgAName, slug: orgAName }),
+  );
+  const orgB = await test.saveOrganization(
+    test.createOrganization({ name: orgBName, slug: orgBName }),
+  );
   await test.addMember({ userId: admin.id, organizationId: orgA.id, role: "admin" });
   await test.addMember({ userId: admin.id, organizationId: orgB.id, role: "admin" });
 
@@ -57,11 +61,7 @@ export default async function globalSetup() {
   const seedResolved = path.resolve(process.cwd(), ADMIN_SEED_PATH);
   fs.writeFileSync(
     seedResolved,
-    JSON.stringify(
-      { adminName: ADMIN_NAME, logoutName: LOGOUT_NAME, orgAName, orgBName },
-      null,
-      2,
-    ),
+    JSON.stringify({ adminName: ADMIN_NAME, logoutName: LOGOUT_NAME, orgAName, orgBName }, null, 2),
   );
   console.log(`[global-setup] wrote ${seedResolved}`);
 }

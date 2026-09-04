@@ -2148,8 +2148,9 @@ export default createPlugin({
         const skipped: Array<{ pid: number; reason: string }> = [];
 
         for (const entry of targets) {
+          const signal = input.signal === "SIGKILL" ? "SIGKILL" : "SIGTERM";
           try {
-            process.kill(entry.pid, input.signal === "SIGKILL" ? "SIGKILL" : "SIGTERM");
+            process.kill(entry.pid, signal);
             killed.push({ pid: entry.pid, configDir: entry.configDir });
             unregisterPid(entry.pid);
           } catch (err) {
@@ -2162,6 +2163,17 @@ export default createPlugin({
                 pid: entry.pid,
                 reason: (err as Error).message ?? "kill failed",
               });
+            }
+          }
+          for (const childPid of entry.childPids ?? []) {
+            try {
+              process.kill(-childPid, signal);
+            } catch {
+              try {
+                process.kill(childPid, signal);
+              } catch {
+                // already gone
+              }
             }
           }
         }

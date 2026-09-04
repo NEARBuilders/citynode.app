@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -16,7 +15,9 @@ function parsePostgresUrl(url) {
 }
 
 function randomId() {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }
 
 export async function seedTenant(input) {
@@ -50,7 +51,8 @@ export async function seedTenant(input) {
       "SELECT table_schema FROM information_schema.tables WHERE table_name = 'tenants' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema LIMIT 1",
     );
     const schema = located.rows[0]?.table_schema;
-    if (!schema) throw new Error("tenants table not found in api database — did API migrations run?");
+    if (!schema)
+      throw new Error("tenants table not found in api database — did API migrations run?");
     await client.query(`SET search_path TO "${schema}", public`);
 
     const existing = await client.query(
@@ -65,7 +67,7 @@ export async function seedTenant(input) {
       );
       if (binding.rows.length === 0) {
         await client.query(
-          'INSERT INTO domain_bindings (id, tenant_id, hostname, is_primary, is_verified, verification_token) VALUES ($1, $2, $3, true, true, $4)',
+          "INSERT INTO domain_bindings (id, tenant_id, hostname, is_primary, is_verified, verification_token) VALUES ($1, $2, $3, true, true, $4)",
           [randomId(), id, subdomain, `regression-${randomId()}`],
         );
       }
@@ -74,7 +76,7 @@ export async function seedTenant(input) {
 
     const id = randomId();
     await client.query(
-      'INSERT INTO tenants (id, account_id, org_id, name, status, owner_kind, allow_ui_overrides, allow_backend_overrides, allow_ssr) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      "INSERT INTO tenants (id, account_id, org_id, name, status, owner_kind, allow_ui_overrides, allow_backend_overrides, allow_ssr) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
       [
         id,
         accountId,
@@ -88,7 +90,7 @@ export async function seedTenant(input) {
       ],
     );
     await client.query(
-      'INSERT INTO domain_bindings (id, tenant_id, hostname, is_primary, is_verified, verification_token) VALUES ($1, $2, $3, true, true, $4)',
+      "INSERT INTO domain_bindings (id, tenant_id, hostname, is_primary, is_verified, verification_token) VALUES ($1, $2, $3, true, true, $4)",
       [randomId(), id, subdomain, `regression-${randomId()}`],
     );
     return { id, subdomain, accountId, orgId, reused: false };

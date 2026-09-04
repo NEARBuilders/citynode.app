@@ -400,10 +400,13 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       name,
       pid,
       kill: Effect.gen(function* () {
-        const result = yield* proc.kill("SIGTERM").pipe(Effect.timeout("3 seconds"), Effect.option);
-        if (Option.isNone(result)) {
-          const pid = Number(proc.pid);
-          yield* Effect.try(() => process.kill(-pid, "SIGKILL")).pipe(Effect.ignore);
+        const groupPid = Number(proc.pid);
+        const groupSignal = (signal: NodeJS.Signals) =>
+          Effect.try(() => process.kill(-groupPid, signal)).pipe(Effect.ignore);
+        yield* groupSignal("SIGTERM");
+        const exited = yield* proc.exitCode.pipe(Effect.timeout("3 seconds"), Effect.option);
+        if (Option.isNone(exited)) {
+          yield* groupSignal("SIGKILL");
           yield* Effect.sleep("250 millis");
         }
       }).pipe(Effect.ignore),

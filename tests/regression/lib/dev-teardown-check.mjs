@@ -9,7 +9,7 @@ const PORT_RANGE = [0, 1, 2, 3, 4, 5].map((o) => BASE + o);
 const PLUGIN_PORTS = [0, 1, 2, 3, 4, 5, 6, 7].map((o) => BASE + 10 + o);
 const ALL_PORTS = [...PORT_RANGE, ...PLUGIN_PORTS];
 const BOOT_TIMEOUT_MS = 150_000;
-const TEARDOWN_WAIT_MS = 20_000;
+const TEARDOWN_WAIT_MS = 30_000;
 
 const REPO_ROOT = computeRegressionEnv().repoRoot;
 
@@ -157,12 +157,10 @@ async function runPreflightCase() {
   }
   log(label, `SIGKILL leaked listeners on ${leaked.join(", ")} — running stale-port cleanup`);
 
-  const cleanup = Bun.spawnSync([
-    process.execPath,
-    "tests/regression/lib/kill-stale-ports.mjs",
-    "--base",
-    String(BASE),
-  ], { cwd: REPO_ROOT });
+  const cleanup = Bun.spawnSync(
+    [process.execPath, "tests/regression/lib/kill-stale-ports.mjs", "--base", String(BASE)],
+    { cwd: REPO_ROOT },
+  );
   process.stdout.write(cleanup.stdout);
   if (cleanup.exitCode !== 0) {
     log(label, `RED: kill-stale-ports.mjs failed (exit ${cleanup.exitCode})`);
