@@ -15,6 +15,35 @@ export const TenantStatusSchema = z.enum(["active", "pending", "suspended", "pen
 
 export const NodeKindSchema = z.enum(["country", "state", "city"]);
 
+export const NodeProposalPayloadSchema = z
+  .object({
+    kind: NodeKindSchema,
+    name: z.string().trim().min(1),
+    slug: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9-]+$/),
+    parentId: z.string().nullable(),
+    orgId: z.string().min(1),
+    motivation: z.string().trim().min(1),
+    accountId: z.string().min(1),
+    submitterAccountId: z.string().min(1),
+  })
+  .superRefine((value, context) => {
+    if (value.kind === "country" && value.parentId !== null) {
+      context.addIssue({
+        code: "custom",
+        path: ["parentId"],
+        message: "Country cannot have a parent",
+      });
+    }
+    if (value.kind !== "country" && !value.parentId) {
+      context.addIssue({ code: "custom", path: ["parentId"], message: "Parent is required" });
+    }
+  });
+
+export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
+
 export const ValidatorRoleSchema = z.enum(["official", "community"]);
 
 export const ProtocolSchema = z.string().default("near");
@@ -349,6 +378,18 @@ export const contract = oc.router({
       }),
     )
     .errors({ UNAUTHORIZED, BAD_REQUEST }),
+
+  applyNodeProposal: oc
+    .route({ method: "POST", path: "/nodes/proposals/apply" })
+    .input(NodeProposalPayloadSchema.extend({ hostname: z.string().min(1) }))
+    .output(z.object({ nodeId: z.string() }))
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      NOT_FOUND,
+      CONFLICT: { status: 409, message: "Node proposal resources already exist" },
+    }),
 
   listNodes: oc
     .route({ method: "GET", path: "/nodes" })

@@ -379,6 +379,21 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
+      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).handler(async ({ input }) => {
+        validateAccountId(input.accountId);
+        validateAccountId(input.submitterAccountId);
+        validateHostname(input.hostname);
+        return services.tenants.applyNodeProposal({
+          kind: input.kind,
+          name: input.name,
+          slug: input.slug,
+          parentId: input.parentId,
+          orgId: input.orgId,
+          accountId: input.accountId,
+          hostname: input.hostname.toLowerCase(),
+        });
+      }),
+
       listNodes: builder.listNodes.handler(async ({ input }) =>
         services.nodes.list({
           ...(input.kind !== undefined && { kind: input.kind }),

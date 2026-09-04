@@ -81,6 +81,16 @@ export interface CreateBindingInput {
   isPrimary?: boolean;
 }
 
+export interface ApplyNodeProposalInput {
+  kind: (typeof nodeKind)["enumValues"][number];
+  name: string;
+  slug: string;
+  parentId: string | null;
+  orgId: string;
+  accountId: string;
+  hostname: string;
+}
+
 export interface TenantsService {
   listAllTenants(): Promise<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): Promise<TenantRecord[]>;
@@ -93,6 +103,7 @@ export interface TenantsService {
   setPrimaryBinding(tenantId: string, bindingId: string): Promise<TenantBindingRecord>;
   resolveBindingByHostname(hostname: string): Promise<TenantBindingRecord | null>;
   createTenant(input: TenantInput): Promise<TenantRecord>;
+  applyNodeProposal(input: ApplyNodeProposalInput): Promise<{ nodeId: string }>;
   updateTenant(
     id: string,
     input: Partial<
@@ -493,6 +504,125 @@ export const TenantsLive = Layer.effect(
             throw error;
           }
         } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      applyNodeProposal: async (input) => {
+        try {
+          return await db.transaction(async (tx) => {
+            const [existingTenant, existingNode, existingBinding] = await Promise.all([
+              tx
+                .select({ id: tenantsTable.id })
+                .from(tenantsTable)
+                .where(eq(tenantsTable.accountId, input.accountId))
+                .limit(1),
+              tx
+                .select({ id: nodesTable.id })
+                .from(nodesTable)
+                .where(eq(nodesTable.slug, input.slug))
+                .limit(1),
+              tx
+                .select({ id: domainBindingsTable.id })
+                .from(domainBindingsTable)
+                .where(eq(domainBindingsTable.hostname, input.hostname))
+                .limit(1),
+            ]);
+
+            if (existingTenant.length > 0) {
+              throw new ORPCError("CONFLICT", {
+                message: "Tenant with this accountId already exists",
+                data: { accountId: input.accountId },
+              });
+            }
+            if (existingNode.length > 0) {
+              throw new ORPCError("CONFLICT", {
+                message: "Node slug already exists",
+                data: { slug: input.slug },
+              });
+            }
+            if (existingBinding.length > 0) {
+              throw new ORPCError("CONFLICT", {
+                message: "Hostname already in use",
+                data: { hostname: input.hostname },
+              });
+            }
+
+            let parentKind: (typeof nodeKind)["enumValues"][number] | null = null;
+            if (input.parentId) {
+              const [parent] = await tx
+                .select({ kind: nodesTable.kind })
+                .from(nodesTable)
+                .where(eq(nodesTable.id, input.parentId))
+                .limit(1);
+              if (!parent) {
+                throw new ORPCError("NOT_FOUND", {
+                  message: "Parent node not found",
+                  data: { resource: "node", resourceId: input.parentId },
+                });
+              }
+              parentKind = parent.kind;
+            }
+
+            const parentIsValid =
+              (input.kind === "country" && input.parentId === null) ||
+              (input.kind === "state" && parentKind === "country") ||
+              (input.kind === "city" && (parentKind === "country" || parentKind === "state"));
+            if (!parentIsValid) {
+              throw new ORPCError("BAD_REQUEST", { message: "Invalid parent for node kind" });
+            }
+
+            const [tenant] = await tx
+              .insert(tenantsTable)
+              .values({
+                name: input.name,
+                accountId: input.accountId,
+                orgId: input.orgId,
+                status: "active",
+              })
+              .returning({ id: tenantsTable.id });
+            if (!tenant) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Tenant creation failed" });
+            }
+
+            const [node] = await tx
+              .insert(nodesTable)
+              .values({
+                kind: input.kind,
+                slug: input.slug,
+                name: input.name,
+                parentId: input.parentId,
+                tenantId: tenant.id,
+                metadata: {},
+              })
+              .returning({ id: nodesTable.id });
+            if (!node) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Node creation failed" });
+            }
+
+            const [binding] = await tx
+              .insert(domainBindingsTable)
+              .values({
+                tenantId: tenant.id,
+                hostname: input.hostname,
+                isPrimary: true,
+                isVerified: !input.hostname.includes("."),
+                verifiedAt: input.hostname.includes(".") ? null : new Date(),
+                verificationToken: generateVerificationToken(),
+              })
+              .returning({ id: domainBindingsTable.id });
+            if (!binding) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Domain binding creation failed",
+              });
+            }
+
+            return { nodeId: node.id };
+          });
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            throw new ORPCError("CONFLICT", { message: "Node proposal resources already exist" });
+          }
           throw toOrpcError(error);
         }
       },
