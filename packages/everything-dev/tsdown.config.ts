@@ -15,6 +15,7 @@ export default defineConfig({
     "src/db/index.ts",
     "src/mf.ts",
     "src/integrity.ts",
+    "src/cdn.ts",
     "src/plugin.ts",
     "src/sdk.ts",
     "src/cli.ts",

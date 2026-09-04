@@ -263,6 +263,20 @@ bos publish           # Publish config to the FastKV registry
 bos publish --deploy  # Build/deploy all workspaces, then publish
 ```
 
+**CDN deploy provider:** `bos publish --deploy` uploads MF remote bundles to
+Zephyr by default. Setting `"deploy": { "cdn": "cloudflare" }` in
+`bos.config.json` switches uploads to a Cloudflare R2 bucket (custom domain
+`cdn.<domain>`, managed by an Alchemy sandbox in `.bos/alchemy/` — see
+`plans/infra/cloudflare-cdn-alchemy.md`). One-time local setup:
+
+```bash
+bos cdn login   # installs the .bos/alchemy sandbox + runs the alchemy OAuth flow
+```
+
+Deploys fail fast with a reminder to run `bos cdn login` when no Alchemy
+credentials are found (`~/.alchemy` profile or `CLOUDFLARE_API_TOKEN`).
+Rollback to Zephyr: set `"cdn": "zephyr"` and re-run `bos publish --deploy`.
+
 **Check Status:**
 ```bash
 bos ps        # List tracked development processes (PID, role, ports, age)

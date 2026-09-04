@@ -65,12 +65,15 @@ bos.config.toml (local, self-documenting with comments)
 
 ---
 
-## Phase 1: TOML Format Support (DONE)
+## Phase 1: TOML Format Support (NOT IMPLEMENTED)
 
-**Status**: Implemented. All TOML/JSON format handling is centralized in
-`config-source.ts` using `smol-toml`. The repo itself still uses
-`bos.config.json` but `bos.config.toml` is fully supported — format detection,
-parsing, stringification, and sync merge all handle both formats.
+**Status correction (2026-09-03)**: not implemented. No `bos.config.toml`
+support exists in the repo — no `config-source.ts`, no `smol-toml`
+dependency, no format detection in `config.ts`/`publish.ts`/`sync.ts`.
+The "What was built" table below describes the intended design, not
+shipped code. TOML is not a prerequisite for
+[cloudflare-cdn-alchemy.md](./cloudflare-cdn-alchemy.md) — the `[deploy]`
+section works in `bos.config.json`.
 
 ### What was built
 
@@ -243,7 +246,15 @@ Legacy compat: public                      (search_path = plugin_api, public)
 
 ---
 
-## Phase 3: `[infra]` Section + Config Model
+## Phase 3: `[infra]` Section + Config Model (NOT IMPLEMENTED)
+
+**Status correction (2026-09-03)**: not implemented. No
+`InfraConfigSchema`/`DeployConfigSchema` in `types.ts`; `BOS_CONFIG_ORDER`
+(`merge.ts:4-16`) does not include `"infra"` or `"deploy"`. The schema
+work needed by [cloudflare-cdn-alchemy.md](./cloudflare-cdn-alchemy.md)
+(the `[deploy]` section only) is tracked as Phase 0 of that plan; the
+database-focused `[infra]` section below remains the design for when
+database provisioning is revisited.
 
 **Scope**: Explicit infrastructure declarations in `bos.config.toml`. Replaces
 convention-based `*_DATABASE_URL` scanning.
@@ -305,7 +316,18 @@ back to legacy. `ci.railway` maps to `[deploy]` during resolution.
 
 ---
 
-## Phase 4: Alchemy as Database Provisioning Backend
+## Phase 4: Alchemy as Database Provisioning Backend (DEFERRED — SUPERSEDED)
+
+**Status (2026-09-03)**: superseded as the active Phase 4 by
+[cloudflare-cdn-alchemy.md](./cloudflare-cdn-alchemy.md), which revisits
+the Alchemy integration around the deploy topology (Railway host +
+Cloudflare R2 CDN for MF remote bundles) instead of database
+provisioning. Nothing in this Phase 4 was implemented — no `alchemy.ts`,
+no alchemy dependency, no DriverLive/MigrationLive split, no Neon
+WebSocket pool path. The database stays on Railway Postgres. The design
+below is preserved as the reference for when Neon database provisioning
+is revisited; the provider-pluggable `[deploy]` config schema it shares
+with the CDN plan is built by Phase 0 of that plan.
 
 **Scope**: `bos deploy` generates `alchemy.run.ts` from `[infra]` section.
 Provisions Neon databases/branches via Alchemy. Drizzle.Schema manages migrations
@@ -505,19 +527,15 @@ Phase 4 (native Effect queries) without a big-bang rewrite.
 ## Implementation order
 
 ```
-Phase 1 (TOML format)          ->  DONE — config-source.ts, smol-toml
-  |
+Phase 1 (TOML format)          ->  NOT IMPLEMENTED — no bos.config.toml support
+  |                               (status corrected 2026-09-03; see Phase 1 note)
 Phase 2 (per-plugin schemas)   ->  DONE — search_path via on(connect), PGlite exec,
   |                               getExistingTables schema-aware, 6 PGlite tests
-  |
-Phase 3 ([infra] section)      ->  DONE — InfraConfigSchema + DeployConfigSchema in types.ts,
-  |                               infra/deploy in BOS_CONFIG_ORDER, ci.railway→deploy mapping,
-  |                               buildDatabaseConfigs checks infraConfig first, InfraInput.infraConfig
-  |
-Phase 4 (Alchemy backend)      ->  PARTIAL — DriverLive + MigrationLive split in layer.ts,
-                                  Neon WebSocket Pool in db/index.ts (@neondatabase/serverless),
-                                  alchemy.ts deploy script generator
-                                  Remaining: bos deploy integration, Drizzle.Postgres native queries
+Phase 3 ([infra] section)      ->  NOT IMPLEMENTED — no InfraConfigSchema/DeployConfigSchema,
+  |                               BOS_CONFIG_ORDER lacks infra/deploy
+  |                               ([deploy] schema now tracked in cloudflare-cdn-alchemy.md Phase 0)
+Phase 4 (Alchemy backend)      ->  SUPERSEDED by cloudflare-cdn-alchemy.md (Neon DB deferred);
+                                   nothing was implemented
 ```
 
 Each phase is independently shippable and backward-compatible.
@@ -525,10 +543,11 @@ Each phase is independently shippable and backward-compatible.
 ## Cost projection
 
 ```
-After Phase 4:
+After Phase 4 (deferred — Neon DB provisioning):
   Neon database (1 project, branch-per-stage)   $0/mo  (free tier)
   Docker host on Railway                         $5/mo  (API + plugin runtime)
-  Zephyr CDN (static assets)                     $0/mo  (free tier)
+  Zephyr CDN (static assets)                     $0/mo  (free tier; R2 swap tracked
+                                                  in cloudflare-cdn-alchemy.md)
   Total                                          ~$5/mo
 
 Current:

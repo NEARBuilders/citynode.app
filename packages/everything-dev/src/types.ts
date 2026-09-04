@@ -224,6 +224,7 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     app: z.record(z.string(), BosConfigInputAppEntrySchema).optional(),
     plugins: z.record(z.string(), z.union([z.string(), BosConfigInputSchema])).optional(),
     ci: CiConfigSchema.optional(),
+    deploy: DeployConfigSchema.optional(),
   }),
 );
 
@@ -253,6 +254,7 @@ export interface BosConfigInput {
   app?: Record<string, BosConfigInputAppEntry>;
   plugins?: Record<string, string | BosConfigInput>;
   ci?: CiConfig;
+  deploy?: DeployConfig;
 }
 
 export const RailwayCiSchema = z.object({
@@ -265,6 +267,20 @@ export const CiConfigSchema = z.object({
 });
 export type CiConfig = z.infer<typeof CiConfigSchema>;
 
+export const CloudflareCdnConfigSchema = z.object({
+  hostname: z.string().optional(),
+  bucket: z.string().optional(),
+  zone: z.string().optional(),
+});
+export type CloudflareCdnConfig = z.infer<typeof CloudflareCdnConfigSchema>;
+
+export const DeployConfigSchema = z.object({
+  provider: z.literal("railway").optional(),
+  cdn: z.enum(["zephyr", "cloudflare"]).optional(),
+  cloudflare: CloudflareCdnConfigSchema.optional(),
+});
+export type DeployConfig = z.infer<typeof DeployConfigSchema>;
+
 export const BosConfigSchema = z.object({
   account: z.string(),
   extends: ExtendsSchema.optional(),
@@ -275,6 +291,7 @@ export const BosConfigSchema = z.object({
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
   ci: CiConfigSchema.optional(),
+  deploy: DeployConfigSchema.optional(),
   plugins: z.record(z.string(), z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,

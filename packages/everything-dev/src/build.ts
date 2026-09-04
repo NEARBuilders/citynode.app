@@ -100,14 +100,6 @@ export function resolveCdnProvider(bosConfig: BosConfig | null): "zephyr" | "clo
   return bosConfig.deploy.cdn ?? "zephyr";
 }
 
-export function checkCdnProviderDeployable(
-  bosConfig: BosConfig | null,
-): string | null {
-  const provider = resolveCdnProvider(bosConfig);
-  if (provider === "zephyr") return null;
-  return "Cloudflare deploy support is not implemented yet — fall back to the zephyr CDN for this release.";
-}
-
 interface BuildAttemptResult {
   success: boolean;
   url?: string;

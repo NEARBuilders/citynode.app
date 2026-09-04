@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const shouldDeploy = process.env.DEPLOY === "true";
+const useZephyr = shouldDeploy && process.env.BOS_CDN_PROVIDER !== "cloudflare";
 const bosConfigPath = path.resolve(__dirname, "../../bos.config.json");
 
 const baseConfig = {
@@ -30,7 +31,7 @@ const baseConfig = {
   stats: "errors-warnings",
 };
 
-export default shouldDeploy
+export default useZephyr
   ? withZephyr({
       hooks: {
         onDeployComplete: async (info) => {

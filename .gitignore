@@ -304,6 +304,7 @@ fabric.properties
 .bos
 !.bos/sync-snapshot.json
 !.bos/infra-state.json
+.alchemy/
 
 # AI tool config (local only, not committed)
 .opencode/

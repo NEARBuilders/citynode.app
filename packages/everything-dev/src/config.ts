@@ -1280,6 +1280,59 @@ export function parsePort(url: string): number {
   }
 }
 
+export interface ResolvedCloudflareCdnConfig {
+  hostname: string;
+  bucket: string;
+  zone?: string;
+}
+
+export interface ResolvedDeployConfig {
+  provider: "railway";
+  cdn: "zephyr" | "cloudflare";
+  railwayService?: string;
+  cloudflare: ResolvedCloudflareCdnConfig | null;
+}
+
+function cdnBucketSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function resolveDeployConfig(
+  config: BosConfig,
+  opts?: { domain?: string },
+): ResolvedDeployConfig {
+  const domain = opts?.domain ?? config.domain;
+  const deploy = config.deploy;
+  const cdn = deploy?.cdn ?? "zephyr";
+  const railwayService = config.ci?.railway?.service;
+
+  if (cdn !== "cloudflare") {
+    return { provider: "railway", cdn, railwayService, cloudflare: null };
+  }
+
+  const cloudflare = deploy?.cloudflare;
+  const hostname = cloudflare?.hostname ?? (domain ? `cdn.${domain}` : null);
+  if (!hostname) {
+    throw new Error(
+      'deploy.cdn "cloudflare" requires deploy.cloudflare.hostname or a top-level domain in bos.config.json',
+    );
+  }
+  const bucket =
+    cloudflare?.bucket ??
+    `${cdnBucketSlug(config.account)}-${cdnBucketSlug(domain ?? hostname)}-cdn`;
+  const zone = cloudflare?.zone;
+
+  return {
+    provider: "railway",
+    cdn,
+    railwayService,
+    cloudflare: zone ? { hostname, bucket, zone } : { hostname, bucket },
+  };
+}
+
 export {
   BOS_CONFIG_ORDER,
   mergeBosConfigWithExtends,

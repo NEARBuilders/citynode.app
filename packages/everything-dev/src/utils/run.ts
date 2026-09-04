@@ -9,13 +9,24 @@ export async function run(
     cwd?: string;
     env?: Record<string, string>;
     capture?: boolean;
+    stdin?: "inherit";
     onChunk?: (stream: "stdout" | "stderr", chunk: Buffer) => void;
   } = {},
 ): Promise<RunResult | undefined> {
+  const stdio =
+    options.stdin === "inherit"
+      ? ([
+          "inherit",
+          options.capture ? "pipe" : "inherit",
+          options.capture ? "pipe" : "inherit",
+        ] as const)
+      : options.capture
+        ? "pipe"
+        : "inherit";
   const proc = execa(cmd, args, {
     cwd: options.cwd,
     env: options.env ? { ...(process.env as Record<string, string>), ...options.env } : process.env,
-    stdio: options.capture ? "pipe" : "inherit",
+    stdio,
     reject: false,
   });
 

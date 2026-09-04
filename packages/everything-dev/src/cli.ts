@@ -986,6 +986,15 @@ async function main() {
       return;
     }
 
+    if (descriptor.key === "cdnLogin") {
+      console.log();
+      console.log(
+        colors.green(`${icons.ok} Alchemy credentials stored — Cloudflare CDN deploys are ready`),
+      );
+      console.log();
+      return;
+    }
+
     if (descriptor.key === "registryUse") {
       console.log();
       if (result.status === "error") {
