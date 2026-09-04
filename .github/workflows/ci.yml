@@ -182,32 +182,32 @@ jobs:
     timeout-minutes: 30
     env:
       CI: true
-      API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5432/api_db
-      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5433/auth_db
+      API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
+      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5435/auth_test_db
       CORS_ORIGIN: http://localhost:4100
       BETTER_AUTH_SECRET: regression-test-secret-do-not-use-in-production
     services:
-      postgres-api:
+      postgres-api-test:
         image: postgres:17-alpine
         env:
           POSTGRES_USER: everythingdev
           POSTGRES_PASSWORD: everythingdev
-          POSTGRES_DB: api_db
+          POSTGRES_DB: api_test_db
         ports:
-          - 5432:5432
+          - 5434:5432
         options: >-
           --health-cmd "pg_isready -U everythingdev"
           --health-interval 3s
           --health-timeout 3s
           --health-retries 10
-      postgres-auth:
+      postgres-auth-test:
         image: postgres:17-alpine
         env:
           POSTGRES_USER: everythingdev
           POSTGRES_PASSWORD: everythingdev
-          POSTGRES_DB: auth_db
+          POSTGRES_DB: auth_test_db
         ports:
-          - 5433:5432
+          - 5435:5432
         options: >-
           --health-cmd "pg_isready -U everythingdev"
           --health-interval 3s

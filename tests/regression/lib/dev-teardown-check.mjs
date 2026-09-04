@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { spawn } from "node:child_process";
 import net from "node:net";
-import { computeRegressionEnv } from "./regression-env.mjs";
+import { computeRegressionEnv, readDotEnv } from "./regression-env.mjs";
 
 const BASE = Number(process.env.TEARDOWN_BASE_PORT ?? 4200);
 const HOST_PORT = BASE;
@@ -59,6 +59,13 @@ function listeningPids(ports) {
 }
 
 function startStack() {
+  const testEnv = readDotEnv(REPO_ROOT, ".env.test");
+  const stackEnv = { ...process.env, BOS_NO_PERSIST_PORTS: "1", FORCE_COLOR: "0" };
+  for (const [key, value] of Object.entries(testEnv)) {
+    if (key.endsWith("_DATABASE_URL") || key === "BETTER_AUTH_SECRET") {
+      stackEnv[key] = value;
+    }
+  }
   const child = spawn(
     process.execPath,
     [
@@ -79,7 +86,7 @@ function startStack() {
     ],
     {
       cwd: REPO_ROOT,
-      env: { ...process.env, BOS_NO_PERSIST_PORTS: "1", FORCE_COLOR: "0" },
+      env: stackEnv,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );

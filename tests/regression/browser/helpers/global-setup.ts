@@ -11,9 +11,8 @@ const LOGOUT_NAME = "logout.near";
 
 export default async function globalSetup() {
   const regressionEnv = computeRegressionEnv();
-  const authDatabaseUrl =
-    process.env.AUTH_DATABASE_URL ?? regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "";
-  const secret = process.env.BETTER_AUTH_SECRET ?? regressionEnv.authSecret;
+  const authDatabaseUrl = regressionEnv.dbUrls.AUTH_DATABASE_URL ?? "";
+  const secret = regressionEnv.authSecret;
 
   const { test } = await createAuthTestInstance({ authDatabaseUrl, secret });
 

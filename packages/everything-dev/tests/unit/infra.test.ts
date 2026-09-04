@@ -96,11 +96,45 @@ describe("generated infra", () => {
     expect(dockerCompose).not.toContain("postgres-example:");
     expect(dockerCompose).not.toContain("container_name: dev.everything.near-postgres-example");
     expect(dockerCompose).not.toContain("POSTGRES_DB: example_db");
-    expect(dockerCompose).not.toContain('"5434:5432"');
+    expect(dockerCompose).toContain("postgres-api-test:");
+    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-api-test");
+    expect(dockerCompose).toContain("POSTGRES_DB: api_test_db");
+    expect(dockerCompose).toContain('"5434:5432"');
+    expect(dockerCompose).toContain("postgres-auth-test:");
+    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-auth-test");
+    expect(dockerCompose).toContain("POSTGRES_DB: auth_test_db");
+    expect(dockerCompose).toContain('"5435:5432"');
+    expect(dockerCompose).not.toContain("postgres-example-test:");
     expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_data");
     expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_data");
+    expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_test_data");
+    expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_test_data");
     expect(dockerCompose).not.toContain("name: dev_everything_near_postgres_example_data");
     expect(dockerCompose).not.toContain("payment");
+  });
+
+  it("writes a committed .env.test with isolated test database URLs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bos-env-test-"));
+    tempDirs.push(dir);
+
+    writeGeneratedInfra(dir, buildRuntimeConfig());
+    const envTest = readFileSync(join(dir, ".env.test"), "utf-8");
+
+    expect(envTest).toContain("# app.api");
+    expect(envTest).toContain(
+      "API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/api_test_db",
+    );
+    expect(envTest).toContain("# app.auth");
+    expect(envTest).toContain(
+      "AUTH_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5435/auth_test_db",
+    );
+    expect(envTest).toContain("BETTER_AUTH_SECRET=regression-test-secret-do-not-use-in-production");
+    expect(envTest).toContain("# plugins.example");
+    expect(envTest).toContain(
+      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5434/api_test_db",
+    );
+    expect(envTest).not.toContain("CORS_ORIGIN=");
+    expect(envTest).not.toContain("PAYMENT_API_URL=");
   });
 
   it("generates Redis docker compose and env for _REDIS_URL secrets", () => {
@@ -231,8 +265,11 @@ describe("generated infra", () => {
     );
 
     const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
-    expect(dockerCompose).not.toContain('"5434:5432"');
-    expect(dockerCompose).not.toContain('"5435:5432"');
+    expect(dockerCompose).toContain('"5434:5432"');
+    expect(dockerCompose).toContain('"5435:5432"');
+    expect(dockerCompose).not.toContain('"5436:5432"');
+    expect(dockerCompose).not.toContain("postgres-example-test:");
+    expect(dockerCompose).not.toContain("postgres-registry-test:");
   });
 
   it("assigns all non-auth database secrets to the shared API port", () => {
@@ -369,8 +406,10 @@ describe("generated infra", () => {
     const second = syncGeneratedInfra(dir, buildRuntimeConfig());
 
     expect(first.envExampleChanged).toBe(true);
+    expect(first.envTestChanged).toBe(true);
     expect(first.dockerComposeChanged).toBe(true);
     expect(second.envExampleChanged).toBe(false);
+    expect(second.envTestChanged).toBe(false);
     expect(second.dockerComposeChanged).toBe(false);
   });
 

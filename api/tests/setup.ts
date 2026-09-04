@@ -1,3 +1,4 @@
+import "./test-env";
 import { createServer } from "node:http";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
@@ -35,11 +36,6 @@ export async function getPluginClient(
     const { router } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
     const rpcHandler = new RPCHandler(router);
 
-    // Find an available port
-    const testPort = 3000 + Math.floor(Math.random() * 1000);
-    port = testPort;
-    baseUrl = `http://localhost:${port}`;
-
     server = createServer(async (req, res) => {
       const url = new URL(req.url!, baseUrl);
 
@@ -63,10 +59,20 @@ export async function getPluginClient(
       res.end("Route not found");
     });
 
-    await new Promise<void>((resolve, reject) => {
-      server?.listen(port, "127.0.0.1", () => resolve());
+    const assignedPort = await new Promise<number>((resolve, reject) => {
+      server?.listen(0, "127.0.0.1", () => {
+        const address = server?.address();
+        if (address && typeof address !== "string") {
+          resolve(address.port);
+          return;
+        }
+        server?.close();
+        reject(new Error("Failed to allocate test port"));
+      });
       server?.on("error", reject);
     });
+    port = assignedPort;
+    baseUrl = `http://localhost:${port}`;
   }
 
   const link = new RPCLink({

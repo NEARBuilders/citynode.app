@@ -17,8 +17,8 @@ export function findRepoRoot(startDir = process.cwd()) {
   }
 }
 
-export function readDotEnv(repoRoot) {
-  const envPath = path.join(repoRoot, ".env");
+export function readDotEnv(repoRoot, fileName = ".env") {
+  const envPath = path.join(repoRoot, fileName);
   if (!fs.existsSync(envPath)) return {};
   const parsed = {};
   for (const rawLine of fs.readFileSync(envPath, "utf-8").split(/\r?\n/)) {
@@ -57,12 +57,20 @@ function databaseSecrets(config) {
   }
   return secrets;
 }
+function defaultDevDatabaseUrl(secret, pgUser, pgPassword, pgHost) {
+  const isAuth = secret === "AUTH_DATABASE_URL";
+  const port = isAuth ? 5433 : 5432;
+  const databaseName = isAuth ? "auth_db" : "api_db";
+  return `postgres://${pgUser}:${pgPassword}@${pgHost}:${port}/${databaseName}`;
+}
 
 export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
   const root = repoRoot ?? findRepoRoot();
   if (!root) throw new Error("bos.config.json not found in any parent directory");
   const config = JSON.parse(fs.readFileSync(path.join(root, "bos.config.json"), "utf-8"));
   const fileEnv = readDotEnv(root);
+  const testEnv = readDotEnv(root, ".env.test");
+  const allowDevDb = env.REGRESSION_ALLOW_DEV_DB === "1";
 
   const pgUser = env.REGRESSION_PG_USER ?? fileEnv.REGRESSION_PG_USER ?? DEFAULT_PG_USER;
   const pgPassword =
@@ -71,24 +79,34 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
 
   const dbUrls = {};
   for (const secret of databaseSecrets(config)) {
-    if (env[secret]) {
-      dbUrls[secret] = env[secret];
-      continue;
+    const devUrl = fileEnv[secret] ?? defaultDevDatabaseUrl(secret, pgUser, pgPassword, pgHost);
+    const resolved = testEnv[secret] ?? env[secret] ?? fileEnv[secret] ?? devUrl;
+    if (!allowDevDb && resolved === devUrl) {
+      throw new Error(
+        `refusing to run: ${secret} resolves to the dev database (${resolved}). ` +
+          "Regression tests must stay isolated from dev databases. " +
+          "Restore the generated .env.test (run `bun run bos dev` to regenerate), " +
+          "or start the test databases with `bun run test:db:up`, " +
+          "or set REGRESSION_ALLOW_DEV_DB=1 to override deliberately.",
+      );
     }
-    if (fileEnv[secret]) {
-      dbUrls[secret] = fileEnv[secret];
-      continue;
-    }
-    const isAuth = secret === "AUTH_DATABASE_URL";
-    const port = isAuth ? 5433 : 5432;
-    const databaseName = isAuth ? "auth_db" : "api_db";
-    dbUrls[secret] = `postgres://${pgUser}:${pgPassword}@${pgHost}:${port}/${databaseName}`;
+    dbUrls[secret] = resolved;
   }
 
   const baseUrl = env.REGRESSION_BASE_URL ?? fileEnv.REGRESSION_BASE_URL ?? DEFAULT_BASE_URL;
+  const devAuthSecret = fileEnv.BETTER_AUTH_SECRET || null;
   const authSecret =
-    env.BETTER_AUTH_SECRET ?? fileEnv.BETTER_AUTH_SECRET ?? DEFAULT_BETTER_AUTH_SECRET;
-
+    testEnv.BETTER_AUTH_SECRET ??
+    env.BETTER_AUTH_SECRET ??
+    fileEnv.BETTER_AUTH_SECRET ??
+    DEFAULT_BETTER_AUTH_SECRET;
+  if (!allowDevDb && devAuthSecret && authSecret === devAuthSecret) {
+    throw new Error(
+      "refusing to run: BETTER_AUTH_SECRET matches the dev .env secret. " +
+        "Restore the generated .env.test with the test secret, " +
+        "or set REGRESSION_ALLOW_DEV_DB=1 to override deliberately.",
+    );
+  }
   const basePort = Number(new URL(baseUrl).port) || 80;
   const localPluginCount = Object.values(config.plugins ?? {}).filter(
     (plugin) => typeof plugin?.development === "string" && plugin.development.startsWith("local:"),
