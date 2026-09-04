@@ -4,6 +4,7 @@ import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { cn } from "@/lib/utils";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
+import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
 type NodeDashboardSearch = { nodeId?: string };
 
@@ -88,25 +89,24 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboa
 function NodeDashboardLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const { runtimeConfig, nodes, selectedNode, summary, emptyReason } = Route.useRouteContext();
+  const context = Route.useRouteContext();
+  const { runtimeConfig, nodes, selectedNode, summary, emptyReason } = context;
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
 
   if (!selectedNode || !summary) {
-    const description =
-      emptyReason === "no-org"
-        ? "Join or create an organization to manage a City Node."
-        : emptyReason === "no-tenant"
-          ? "Your active organization does not have a tenant deployment yet."
-          : "Your active organization's tenant does not manage a City Node yet.";
+    const emptyState = getNodeEmptyStateContent(
+      emptyReason ?? "no-node",
+      context.auth.user?.role === "admin",
+    );
     return (
       <PageContainer variant="wide">
         <EmptyState
           icon={Network}
           title="No node available"
-          description={description}
+          description={emptyState.description}
           action={
             <Button asChild>
-              <Link to="/orgs">open organizations</Link>
+              <Link to={emptyState.actionTo}>{emptyState.actionLabel}</Link>
             </Button>
           }
         />
