@@ -38,9 +38,9 @@ test.describe("Settings → API Keys", () => {
     await page.goto("/settings/profile", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    const apiKeysTab = page.getByRole("tab", { name: "API Keys" });
-    await expect(apiKeysTab).toBeVisible({ timeout: 10000 });
-    await apiKeysTab.click();
+    const apiKeysLink = page.locator('a[href="/settings/api-keys"]');
+    await expect(apiKeysLink).toBeVisible({ timeout: 10000 });
+    await apiKeysLink.click();
 
     await page.waitForURL(/\/settings\/api-keys/, { timeout: 10000 });
     await expect(page.getByRole("heading", { name: "API Keys", exact: true })).toBeVisible({
