@@ -16,17 +16,17 @@ test.describe("logout", () => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle");
     await waitForApp(page);
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000, waitUntil: "commit" });
 
     const accountButton = page.getByRole("button", { name: new RegExp(logoutName) }).first();
     await expect(accountButton).toBeVisible({ timeout: 10000 });
     await accountButton.click();
 
-    const signOutItem = page.getByRole("menuitem", { name: "sign out" });
+    const signOutItem = page.getByTestId("account.signout-menuitem");
     await expect(signOutItem).toBeVisible({ timeout: 5000 });
     await signOutItem.click();
 
-    await page.waitForURL(/\/$/, { timeout: 15000 });
+    await page.waitForURL(/\/$/, { timeout: 15000, waitUntil: "commit" });
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForApp(page);
     await expect(page.getByRole("button", { name: new RegExp(logoutName) })).toHaveCount(0);

@@ -35,13 +35,18 @@ function AdminDashboard() {
       </section>
 
       <section className="space-y-3">
-        <SectionHeader title="Manage" />
+        <SectionHeader title="Manage" sectionTestId="admin.section.manage" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
               <Network className="h-4 w-4" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">Nodes</h3>
+            <h3
+              className="text-base font-semibold text-foreground"
+              data-testid="admin.heading.nodes"
+            >
+              Nodes
+            </h3>
             <p className="text-sm text-muted-foreground">
               Inspect the node tree, validator health, and staking resolution.
             </p>
@@ -55,7 +60,12 @@ function AdminDashboard() {
               <Gavel className="h-4 w-4" />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-foreground">Proposals</h3>
+              <h3
+                className="text-base font-semibold text-foreground"
+                data-testid="admin.heading.proposals"
+              >
+                Proposals
+              </h3>
               {pendingProposalCount !== undefined && (
                 <Badge variant="secondary">{pendingProposalCount} pending</Badge>
               )}
@@ -72,7 +82,12 @@ function AdminDashboard() {
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
               <LayoutDashboard className="h-4 w-4" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">Tenants</h3>
+            <h3
+              className="text-base font-semibold text-foreground"
+              data-testid="admin.heading.tenants"
+            >
+              Tenants
+            </h3>
             <p className="text-sm text-muted-foreground">
               Create and manage tenant deployments for your organization.
             </p>
@@ -88,7 +103,12 @@ function AdminDashboard() {
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
               <Building2 className="h-4 w-4" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">Organizations</h3>
+            <h3
+              className="text-base font-semibold text-foreground"
+              data-testid="admin.heading.organizations"
+            >
+              Organizations
+            </h3>
             <p className="text-sm text-muted-foreground">
               Manage organizations, members, roles, and invitations.
             </p>
@@ -104,7 +124,12 @@ function AdminDashboard() {
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
               <Settings className="h-4 w-4" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">Settings</h3>
+            <h3
+              className="text-base font-semibold text-foreground"
+              data-testid="admin.heading.settings"
+            >
+              Settings
+            </h3>
             <p className="text-sm text-muted-foreground">
               Update your profile, auth methods, and security preferences.
             </p>
@@ -173,13 +198,21 @@ function StatCard({
   value: React.ReactNode;
   mono?: boolean;
 }) {
+  const slug = label.toLowerCase().replace(/\s+/g, "-");
   return (
-    <div className="border-2 border-outset border-border-strong bg-card p-4 rounded-[12px] shadow-sm space-y-1">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+    <div
+      className="border-2 border-outset border-border-strong bg-card p-4 rounded-[12px] shadow-sm space-y-1"
+      data-testid={`admin.stat.${slug}`}
+    >
+      <div
+        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+        data-testid={`admin.stat.${slug}.label`}
+      >
         {label}
       </div>
       <div
-        className={`text-sm text-foreground break-all ${mono ? "font-mono text-xs" : "font-semibold"}`}
+        className={`text-base font-bold text-foreground leading-tight ${mono ? "font-mono" : ""}`}
+        data-testid={`admin.stat.${slug}.value`}
       >
         {value}
       </div>

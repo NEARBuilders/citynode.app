@@ -76,6 +76,6 @@ export async function verifyAuthenticated(page: Page) {
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
   await waitForApp(page);
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000, waitUntil: "commit" });
   expect(sessionResponses.length, "expected a resolved auth session").toBeGreaterThanOrEqual(1);
 }

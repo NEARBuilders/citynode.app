@@ -7,6 +7,7 @@ interface PageHeaderProps {
   subtitle?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  headerTestId?: string;
 }
 
 export function PageHeader({
@@ -16,9 +17,10 @@ export function PageHeader({
   subtitle,
   description,
   actions,
+  headerTestId,
 }: PageHeaderProps) {
   return (
-    <header className="space-y-2">
+    <header className="space-y-2" data-testid={headerTestId}>
       {label && (
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           {Icon && <Icon className="h-3 w-3" />}

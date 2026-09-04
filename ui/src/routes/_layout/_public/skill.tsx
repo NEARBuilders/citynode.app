@@ -90,7 +90,12 @@ function SkillPage() {
                 {copied ? "Copied" : "Copy prompt"}
               </Button>
               <Button variant="outline" asChild>
-                <a href="/skill.md" target="_blank" rel="noopener noreferrer">
+                <a
+                  href="/skill.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="skill.raw-link"
+                >
                   <ExternalLink size={14} />
                   raw skill.md
                 </a>

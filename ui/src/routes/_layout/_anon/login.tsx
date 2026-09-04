@@ -96,7 +96,9 @@ function LoginPage() {
       <div className="w-full max-w-sm flex flex-col items-center gap-5">
         <div className="w-full rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
           <div className="space-y-1 text-center">
-            <h1 className="text-xl font-semibold text-foreground">Sign in</h1>
+            <h1 className="text-xl font-semibold text-foreground" data-testid="login.heading">
+              Sign in
+            </h1>
             <p className="text-sm text-muted-foreground">Connect your NEAR wallet to continue.</p>
           </div>
 
@@ -108,6 +110,7 @@ function LoginPage() {
                 onClick={handleNear}
                 disabled={nearPending}
                 className="w-full"
+                data-testid="near.signin-button"
               >
                 {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
               </Button>
@@ -146,6 +149,7 @@ function LoginPage() {
               onClick={handleNear}
               disabled={nearPending}
               className="w-full"
+              data-testid="near.signin-button"
             >
               {nearPending ? "connecting..." : "connect with NEAR"}
             </Button>

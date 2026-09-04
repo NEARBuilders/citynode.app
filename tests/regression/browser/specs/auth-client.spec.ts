@@ -10,10 +10,11 @@ test.describe("authClient", () => {
 
   test("login page renders with auth options", async ({ page }) => {
     await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.waitForURL(/\/login/, { timeout: 10000, waitUntil: "commit" });
     await waitForApp(page);
 
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole("button", { name: "connect with NEAR" })).toBeVisible({
+    await expect(page.getByTestId("login.heading")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("near.signin-button").first()).toBeVisible({
       timeout: 10000,
     });
 

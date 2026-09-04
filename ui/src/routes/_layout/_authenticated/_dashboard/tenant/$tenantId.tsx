@@ -356,6 +356,7 @@ function TenantDetail() {
           label="Tenant"
           title={tenant.name}
           subtitle={`${hostname ?? "no binding yet"} · ${tenant.accountId}`}
+          headerTestId="tenant.heading"
           actions={
             <div className="flex gap-2">
               <Badge variant={isDaoOwned ? "default" : "secondary"}>

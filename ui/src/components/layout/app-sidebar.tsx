@@ -40,10 +40,11 @@ export function AppSidebar({ items, appName, isActive }: AppSidebarProps) {
             {items.map((item) => {
               const Icon = item.icon;
               const active = isActive(item);
+              const slug = item.label.toLowerCase().replace(/\s+/g, "-");
               return (
                 <SidebarMenuItem key={item.label}>
                   <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
-                    <Link to={item.to} preload="intent">
+                    <Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`}>
                       <Icon />
                       <span className="capitalize">{item.label}</span>
                     </Link>

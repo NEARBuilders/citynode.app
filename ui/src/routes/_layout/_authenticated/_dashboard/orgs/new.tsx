@@ -80,6 +80,7 @@ function NewOrganization() {
               <Link to="/orgs">back to organizations</Link>
             </Button>
           }
+          headerTestId="orgs.new.heading"
         />
 
         <form
@@ -186,6 +187,7 @@ function NewOrganization() {
                   type="submit"
                   disabled={createMutation.isPending || !canSubmit}
                   variant="outline"
+                  data-testid="orgs.new.submit"
                 >
                   {createMutation.isPending ? "creating..." : "create"}
                 </Button>

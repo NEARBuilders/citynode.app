@@ -122,7 +122,7 @@ function ApiKeysSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Key} label="Account" title="API Keys" />
+      <PageHeader icon={Key} label="Account" title="API Keys" headerTestId="api-keys.heading" />
 
       <Card className="p-6 space-y-3">
         <div className="text-sm text-muted-foreground leading-relaxed">

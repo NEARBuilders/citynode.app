@@ -129,6 +129,7 @@ export function UserNavMenuContent({
           signOutMutation.mutate();
         }}
         disabled={signOutMutation.isPending}
+        data-testid="account.signout-menuitem"
       >
         <LogOut />
         {signOutMutation.isPending ? "signing out..." : "sign out"}

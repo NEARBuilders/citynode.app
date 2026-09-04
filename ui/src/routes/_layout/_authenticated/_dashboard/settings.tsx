@@ -39,7 +39,13 @@ function SettingsLayout() {
         <Tabs value={activeTab} className="w-full min-w-0">
           <TabsList className="w-full justify-start overflow-x-auto">
             {tabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} asChild className="shrink-0">
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                asChild
+                data-testid={`settings-tab-${tab.value}`}
+                className="shrink-0"
+              >
                 <Link to={tab.to}>{tab.label}</Link>
               </TabsTrigger>
             ))}

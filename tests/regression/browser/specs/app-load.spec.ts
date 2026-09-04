@@ -55,12 +55,12 @@ test.describe("App load", () => {
     await waitForApp(page);
     await page.waitForLoadState("networkidle");
 
-    const skillLink = page.getByRole("link", { name: "Open skill" });
+    const skillLink = page.getByTestId("about.open-skill-link");
     await expect(skillLink).toBeVisible({ timeout: 10000 });
     await skillLink.click();
 
-    await expect(page).toHaveURL(/\/skill$/, { timeout: 10000 });
-    await expect(page.getByText("raw skill.md")).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/\/skill$/, { timeout: 10000, waitUntil: "commit" });
+    await expect(page.getByTestId("skill.raw-link")).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);
   });

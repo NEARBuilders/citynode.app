@@ -77,7 +77,7 @@ test.describe("Error boundary", () => {
       }),
     );
 
-    await page.getByRole("link", { name: "my node" }).click();
+    await page.getByTestId("sidebar-nav-my-node").click();
     await page.waitForTimeout(2500);
 
     await expect(page.locator("#root")).toBeAttached({ timeout: 15000 });

@@ -181,6 +181,7 @@ function About() {
                 to="/skill"
                 preload="intent"
                 className="h-9 rounded-[12px] px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
+                data-testid="about.open-skill-link"
               >
                 <Sparkles size={14} />
                 Open skill

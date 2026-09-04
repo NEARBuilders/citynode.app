@@ -32,7 +32,9 @@ function AdminSystem() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-foreground">Runtime</h2>
+          <h2 className="text-sm font-semibold text-foreground" data-testid="admin.heading.runtime">
+            Runtime
+          </h2>
           <InfoRow label="account" value={runtime?.accountId ?? account} mono />
           <InfoRow label="name" value={appName} />
           <InfoRow label="base path" value={runtimeBasePath ?? "/"} mono />
@@ -40,7 +42,12 @@ function AdminSystem() {
         </Card>
 
         <Card className="p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-foreground">Deployment</h2>
+          <h2
+            className="text-sm font-semibold text-foreground"
+            data-testid="admin.heading.deployment"
+          >
+            Deployment
+          </h2>
           <InfoRow label="env" value={env ?? "—"} mono />
           <InfoRow label="network" value={networkId ?? "—"} mono />
           <InfoRow label="host" value={hostUrl ?? "—"} mono />
@@ -48,7 +55,12 @@ function AdminSystem() {
         </Card>
 
         <Card className="p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-foreground">Endpoints</h2>
+          <h2
+            className="text-sm font-semibold text-foreground"
+            data-testid="admin.heading.endpoints"
+          >
+            Endpoints
+          </h2>
           <InfoRow label="api" value={apiBase} mono />
           <InfoRow label="rpc" value={rpcBase} mono />
           <InfoRow label="assets" value={assetsUrl} mono />

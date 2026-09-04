@@ -144,6 +144,7 @@ function OrganizationsList() {
           icon={Users}
           label="Teams"
           title="Organizations"
+          headerTestId="orgs.heading"
           actions={
             <Button asChild>
               <Link to="/orgs/new">

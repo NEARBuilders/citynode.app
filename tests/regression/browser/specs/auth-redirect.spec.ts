@@ -12,7 +12,7 @@ test.describe("Auth redirect", () => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await page.waitForURL(/\/login/, { timeout: 15000 });
+    await page.waitForURL(/\/login/, { timeout: 15000, waitUntil: "commit" });
 
     const url = new URL(page.url());
     expect(url.pathname).toBe("/login");
@@ -20,7 +20,7 @@ test.describe("Auth redirect", () => {
       "/settings",
     );
 
-    const signInHeading = page.getByRole("heading", { name: "Sign in" });
+    const signInHeading = page.getByTestId("login.heading");
     await expect(signInHeading).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);
@@ -30,9 +30,9 @@ test.describe("Auth redirect", () => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    await page.waitForURL(/\/login/, { timeout: 15000 });
+    await page.waitForURL(/\/login/, { timeout: 15000, waitUntil: "commit" });
 
-    const signInHeading = page.getByRole("heading", { name: "Sign in" });
+    const signInHeading = page.getByTestId("login.heading");
     await expect(signInHeading).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);

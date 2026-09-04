@@ -647,6 +647,16 @@ bun run dev     # Restart
 - Verify shared dependency versions match in package.json
 - Clear browser cache
 
+**Browser regression tests time out on `page.waitForURL` after clicking a `<Link>`:**
+TanStack Router uses client-side navigation (`history.pushState`). `page.waitForURL` defaults to `waitUntil: "load"`, which never fires for client-side nav and produces a 10 s `TimeoutError` even though the URL already matches. Always pass `{ waitUntil: "commit" }` (or `{ waitUntil: "domcontentloaded" }`) when waiting for a route change triggered by a TanStack `<Link>` click.
+
+**Browser regression tests break when UI chrome text changes:**
+Prefer `data-testid` over `getByRole("heading", { name: ... })` / `getByText("...")` selectors for UI chrome (page headings, buttons, links in nav/sidebar/forms). The convention:
+- `<PageHeader headerTestId="<page>.heading">` — page h1 region
+- `<SectionHeader sectionTestId="<section>">` — section h2 region
+- Interactives: `data-testid="<area>-<purpose>"` (e.g., `settings-tab-api-keys`, `near.signin-button`, `account.signout-menuitem`, `sidebar-nav-my-node`).
+See `tests/regression/browser/specs/admin.spec.ts` and `settings-api-keys.spec.ts` for examples.
+
 **Plugin fails to load with `ModuleFederationError` / `__webpack_modules__[e].call`:**
 - The plugin's deployed `mf-manifest.json` reports a `metaData.pluginVersion` older than the host's. Each plugin bundle is built against a specific `@module-federation/runtime`; the host and each plugin must agree on that version, and the plugin's bundle must provide every `shared[]` dependency the host requires (`requiredVersion: ^X.Y.Z`).
 - Run `bos mf check` to see which plugin is behind. Redeploy it via `cd plugins/<key> && bun run deploy` and `bos publish --deploy --packages local` from the repo root, then re-run `bos mf check`.
