@@ -27,6 +27,10 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
     new URL("../db/migrations/0000_concerned_blade.sql", import.meta.url),
     "utf8",
   );
+  const repairSource = await readFile(
+    new URL("../db/migrations/0001_legacy_lifecycle_repair.sql", import.meta.url),
+    "utf8",
+  );
   return {
     default: [
       {
@@ -35,6 +39,13 @@ vi.mock("virtual:drizzle-migrations.sql", async () => {
         hash: "proposals-private-test",
         tag: "proposals-private-test",
         sql: source.split("--> statement-breakpoint").map((statement) => statement.trim()),
+      },
+      {
+        idx: 1,
+        when: 1788541800000,
+        hash: "proposals-legacy-lifecycle-repair-test",
+        tag: "proposals-legacy-lifecycle-repair-test",
+        sql: repairSource.split("--> statement-breakpoint").map((statement) => statement.trim()),
       },
     ],
   };

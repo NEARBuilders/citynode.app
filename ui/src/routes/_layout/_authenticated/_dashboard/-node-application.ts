@@ -78,7 +78,11 @@ export function parseNodeProposalPayload(payload: unknown): NodeProposalPayload 
   return nodeProposalPayloadSchema.parse(payload);
 }
 
-export function readSessionNearAccountId(user: unknown): string | null {
+export function readSessionNearAccountId(
+  user: unknown,
+  connectedNearAccountId: string | null = null,
+): string | null {
+  if (connectedNearAccountId) return connectedNearAccountId;
   if (!user || typeof user !== "object" || !("accounts" in user) || !Array.isArray(user.accounts)) {
     return null;
   }
@@ -95,6 +99,25 @@ export function readSessionNearAccountId(user: unknown): string | null {
     }
   }
   return null;
+}
+
+export function resolveActiveOrganizationLabel(
+  activeOrgId: string | null,
+  organizations: Array<{ id: string; name: string }>,
+) {
+  if (!activeOrgId) return "";
+  return (
+    organizations.find((organization) => organization.id === activeOrgId)?.name ??
+    "Active organization"
+  );
+}
+
+export function getDefaultOrganizationId(
+  activeOrgId: string | null,
+  organizations: Array<{ id: string }>,
+) {
+  if (activeOrgId) return null;
+  return organizations[0]?.id ?? null;
 }
 
 export function canSubmitNodeApplication({

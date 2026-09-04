@@ -2,9 +2,9 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, Send } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getActiveRuntime, useApiClient } from "@/app";
+import { getActiveRuntime, type Organization, useApiClient, useAuthClient } from "@/app";
 import {
   Badge,
   Button,
@@ -19,6 +19,7 @@ import {
   PageHeader,
   Textarea,
 } from "@/components";
+import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import {
   Select,
   SelectContent,
@@ -28,15 +29,18 @@ import {
 } from "@/components/ui/select";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
+import { useNearAccount } from "@/lib/use-near-account";
 import { loadNodeApplicationParents } from "./-apply-loader";
 import {
   canSubmitNodeApplication,
   deriveNodeApplicationSlug,
+  getDefaultOrganizationId,
   type NodeApplicationValues,
   nodeApplicationKinds,
   nodeApplicationSchema,
   proposeNodeApplication,
   readSessionNearAccountId,
+  resolveActiveOrganizationLabel,
 } from "./-node-application";
 
 const DIRECT_COUNTRY_PARENT = "__direct-country__";
@@ -63,12 +67,15 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/apply")
 
 function ApplyPage() {
   const apiClient = useApiClient();
+  const authClient = useAuthClient();
   const initialRootNodes = Route.useLoaderData();
-  const { auth, runtimeConfig, session } = Route.useRouteContext();
+  const { auth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const activeOrgId = auth.activeOrganizationId;
-  const nearAccountId = readSessionNearAccountId(session?.user);
+  const connectedNearAccountId = useNearAccount();
+  const nearAccountId = readSessionNearAccountId(auth.user, connectedNearAccountId);
   const slugManuallyEdited = useRef(false);
+  const attemptedDefaultOrgId = useRef<string | null>(null);
   const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
 
@@ -82,6 +89,24 @@ function ApplyPage() {
 
   const { data: queriedRootNodes } = useQuery(rootNodesQueryOptions(apiClient));
   const rootNodes = queriedRootNodes ?? initialRootNodes;
+  const { data: organizations = [] } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await authClient.organization.list();
+      return (data ?? []) as Organization[];
+    },
+    staleTime: 30 * 1000,
+  });
+  const defaultOrgId = getDefaultOrganizationId(activeOrgId, organizations);
+  const switchOrganization = useSwitchOrganization();
+  const displayedOrgId = activeOrgId ?? (switchOrganization.isError ? null : defaultOrgId);
+  const activeOrganizationLabel = resolveActiveOrganizationLabel(displayedOrgId, organizations);
+
+  useEffect(() => {
+    if (!defaultOrgId || attemptedDefaultOrgId.current === defaultOrgId) return;
+    attemptedDefaultOrgId.current = defaultOrgId;
+    switchOrganization.mutate(defaultOrgId);
+  }, [defaultOrgId, switchOrganization.mutate]);
   const { data: stateNodes = [], isLoading: statesLoading } = useQuery({
     ...childNodesQueryOptions(apiClient, rootParentId),
     enabled: formValues.kind === "city" && !!rootParentId,
@@ -148,7 +173,7 @@ function ApplyPage() {
           description="Propose a country, state, or city node for platform administrator review."
         />
 
-        {!activeOrgId && (
+        {!displayedOrgId && (
           <Card>
             <CardContent className="space-y-3 p-6">
               <h2 className="font-semibold text-foreground">Select an organization</h2>
@@ -360,7 +385,10 @@ function ApplyPage() {
               <h2 className="font-semibold text-foreground">Applicant</h2>
               <Field>
                 <FieldLabel htmlFor="application-org">active organization</FieldLabel>
-                <Input id="application-org" value={activeOrgId ?? ""} readOnly />
+                <Input id="application-org" value={activeOrganizationLabel} readOnly />
+                {!activeOrgId && defaultOrgId && (
+                  <FieldDescription>Activating this organization…</FieldDescription>
+                )}
               </Field>
               <Field>
                 <FieldLabel htmlFor="application-account">NEAR account</FieldLabel>

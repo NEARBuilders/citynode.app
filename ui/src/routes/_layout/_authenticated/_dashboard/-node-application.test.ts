@@ -4,10 +4,12 @@ import {
   buildNodeProposalPayload,
   canSubmitNodeApplication,
   deriveNodeApplicationSlug,
+  getDefaultOrganizationId,
   nodeApplicationSchema,
   parseNodeProposalPayload,
   proposeNodeApplication,
   readSessionNearAccountId,
+  resolveActiveOrganizationLabel,
 } from "./-node-application";
 
 describe("node application", () => {
@@ -72,6 +74,31 @@ describe("node application", () => {
       }),
     ).toBe("applicant.near");
     expect(readSessionNearAccountId({ accounts: [] })).toBeNull();
+  });
+
+  it("uses the reactive wallet account when the session omits linked accounts", () => {
+    expect(readSessionNearAccountId({ id: "user-id" }, "itexpert120-contra.near")).toBe(
+      "itexpert120-contra.near",
+    );
+  });
+
+  it("shows the active organization name instead of its internal ID", () => {
+    const activeOrgId = "94aa90a1-40f7-479f-ad02-a4a8c031f2aa";
+    expect(
+      resolveActiveOrganizationLabel(activeOrgId, [{ id: activeOrgId, name: "Zeeshan" }]),
+    ).toBe("Zeeshan");
+    expect(resolveActiveOrganizationLabel(activeOrgId, [])).toBe("Active organization");
+  });
+
+  it("selects the first organization only when none is active", () => {
+    const organizations = [
+      { id: "org-1", name: "Default organization" },
+      { id: "org-2", name: "Another organization" },
+    ];
+
+    expect(getDefaultOrganizationId(null, organizations)).toBe("org-1");
+    expect(getDefaultOrganizationId("org-2", organizations)).toBeNull();
+    expect(getDefaultOrganizationId(null, [])).toBeNull();
   });
 
   it("submits the exact node proposal envelope", async () => {
