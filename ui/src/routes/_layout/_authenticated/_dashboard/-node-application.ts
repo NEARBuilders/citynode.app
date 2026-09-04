@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApiClient } from "@/app";
+import { generateSlug } from "@/lib/slug";
 
 export const nodeApplicationKinds = ["country", "state", "city"] as const;
 
@@ -48,29 +49,18 @@ export type NodeApplicationValues = z.infer<typeof nodeApplicationSchema>;
 export type NodeProposalPayload = z.infer<typeof nodeProposalPayloadSchema>;
 
 export function generateNodeApplicationSlug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export function deriveNodeApplicationSlug(
-  name: string,
-  currentSlug: string,
-  manuallyEdited: boolean,
-) {
-  return manuallyEdited ? currentSlug : generateNodeApplicationSlug(name);
+  return generateSlug(value);
 }
 
 export function buildNodeProposalPayload(
   values: NodeApplicationValues,
-  identity: { orgId: string; accountId: string },
+  identity: { orgId: string; daoAccountId: string; submitterAccountId: string },
 ): NodeProposalPayload {
   return nodeProposalPayloadSchema.parse({
     ...values,
     orgId: identity.orgId,
-    accountId: identity.accountId,
-    submitterAccountId: identity.accountId,
+    accountId: identity.daoAccountId,
+    submitterAccountId: identity.submitterAccountId,
   });
 }
 
@@ -123,21 +113,24 @@ export function getDefaultOrganizationId(
 export function canSubmitNodeApplication({
   values,
   orgId,
-  accountId,
+  daoAccountId,
+  submitterAccountId,
   hostnameAvailable,
   preflightLoading = false,
   submitting = false,
 }: {
   values: NodeApplicationValues;
   orgId: string | null;
-  accountId: string | null;
+  daoAccountId: string | null;
+  submitterAccountId: string | null;
   hostnameAvailable: boolean;
   preflightLoading?: boolean;
   submitting?: boolean;
 }) {
   return (
     !!orgId &&
-    !!accountId &&
+    !!daoAccountId &&
+    !!submitterAccountId &&
     nodeApplicationSchema.safeParse(values).success &&
     hostnameAvailable &&
     !preflightLoading &&
@@ -148,7 +141,7 @@ export function canSubmitNodeApplication({
 export function proposeNodeApplication(
   apiClient: ApiClient,
   values: NodeApplicationValues,
-  identity: { orgId: string; accountId: string },
+  identity: { orgId: string; daoAccountId: string; submitterAccountId: string },
 ) {
   const payload = buildNodeProposalPayload(values, identity);
   return apiClient.proposals.propose({

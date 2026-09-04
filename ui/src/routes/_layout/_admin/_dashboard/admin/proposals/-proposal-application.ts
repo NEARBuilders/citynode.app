@@ -1,4 +1,5 @@
 import type { ApiClient } from "@/app";
+import type { DaoTenantPublishInput } from "@/lib/tenant-deploy";
 import { parseNodeProposalPayload } from "@/routes/_layout/_authenticated/_dashboard/-node-application";
 
 type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
@@ -7,10 +8,13 @@ export type Proposal = ProposalResult["data"][number];
 type ProposalApplicationInput = Pick<Proposal, "pluginId" | "entityId" | "payload" | "updatedAt">;
 
 type AppliedResource = { id: string; label: string };
+export type TenantConfigPublisher = (input: DaoTenantPublishInput) => Promise<unknown>;
 type ProposalApplicationHandler = (input: {
   apiClient: ApiClient;
   proposal: Proposal;
   gatewayId: string;
+  baseAccount: string;
+  publishTenantConfig: TenantConfigPublisher;
 }) => Promise<AppliedResource>;
 
 const proposalApplicationHandlers = {
@@ -21,11 +25,19 @@ const proposalApplicationHandlers = {
     });
     return { id: thing.thingId, label: "Thing" };
   },
-  node: async ({ apiClient, proposal, gatewayId }) => {
+  node: async ({ apiClient, proposal, gatewayId, baseAccount, publishTenantConfig }) => {
     const payload = parseNodeProposalPayload(proposal.payload);
+    const hostname = `${payload.slug}.${gatewayId}`;
     const node = await apiClient.applyNodeProposal({
       ...payload,
-      hostname: `${payload.slug}.${gatewayId}`,
+      hostname,
+    });
+    await publishTenantConfig({
+      daoAccountId: payload.accountId,
+      gatewayId,
+      baseAccount,
+      hostname,
+      title: payload.name,
     });
     return { id: node.nodeId, label: "Node" };
   },
@@ -39,11 +51,15 @@ export async function approveAndApplyProposal({
   apiClient,
   proposal,
   gatewayId,
+  baseAccount,
+  publishTenantConfig,
   onProposalChange,
 }: {
   apiClient: ApiClient;
   proposal: ProposalApplicationInput;
   gatewayId: string;
+  baseAccount: string;
+  publishTenantConfig: TenantConfigPublisher;
   onProposalChange?: (proposal: Proposal) => void;
 }) {
   const approved = await apiClient.proposals.approve({
@@ -58,7 +74,13 @@ export async function approveAndApplyProposal({
   try {
     const handler = applicationHandler(reviewedProposal.pluginId);
     if (handler) {
-      resource = await handler({ apiClient, proposal: reviewedProposal, gatewayId });
+      resource = await handler({
+        apiClient,
+        proposal: reviewedProposal,
+        gatewayId,
+        baseAccount,
+        publishTenantConfig,
+      });
     }
   } catch (error) {
     const message = errorMessage(error);
@@ -72,7 +94,7 @@ export async function approveAndApplyProposal({
       reviewedProposal = failed.data;
       onProposalChange?.(reviewedProposal);
     } catch {}
-    throw new Error(`Proposal approved, but the resource could not be created: ${message}`);
+    throw new Error(`Proposal approved, but it could not be fully applied: ${message}`);
   }
 
   if (!resource) return reviewedProposal;

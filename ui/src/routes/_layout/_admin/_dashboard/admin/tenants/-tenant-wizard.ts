@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { deriveSlug } from "@/lib/slug";
+
+export { generateSlug } from "@/lib/slug";
 
 export type NearNetworkId = "mainnet" | "testnet";
 
@@ -31,20 +34,13 @@ export const tenantWizardSchema = z
 
 export type TenantWizardValues = z.infer<typeof tenantWizardSchema>;
 
-export function generateSlug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 export function deriveTenantWizardNameFields(
   name: string,
   current: Pick<TenantWizardValues, "slug" | "tenantName">,
   touched: { slug: boolean; tenantName: boolean },
 ) {
   return {
-    slug: touched.slug ? current.slug : generateSlug(name),
+    slug: deriveSlug(name, current.slug, touched.slug),
     tenantName: touched.tenantName ? current.tenantName : name,
   };
 }

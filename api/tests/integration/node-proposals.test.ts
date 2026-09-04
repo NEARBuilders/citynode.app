@@ -1,5 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { verifyDaoMembership } from "@/services/dao";
 import { authedContext, getPluginClient, teardown } from "../setup";
+
+vi.mock("@/services/dao", () => ({
+  verifyDaoMembership: vi.fn(async () => ({
+    isSputnikContract: true,
+    isMember: true,
+    policy: { roles: [] },
+  })),
+  parsePolicyGroupMembers: vi.fn(() => []),
+  isExplicitDaoMember: vi.fn(() => true),
+}));
 
 const adminContext = {
   ...authedContext("node-proposal-admin", "admin"),
@@ -25,7 +36,7 @@ describe("node proposal application", () => {
       parentId: null,
       orgId: "proposal-org",
       motivation: "I want to operate the country node for my community.",
-      accountId: "proposal-applicant.near",
+      accountId: "proposal-city.sputnik-dao.near",
       submitterAccountId: "proposal-applicant.near",
       hostname: "proposal-country.citynode.app",
     });
@@ -42,10 +53,14 @@ describe("node proposal application", () => {
     const tenant = tenants.find((candidate) => candidate.id === node?.tenantId);
     expect(tenant).toMatchObject({
       name: "Proposal Country",
-      accountId: "proposal-applicant.near",
+      accountId: "proposal-city.sputnik-dao.near",
       orgId: "proposal-org",
       status: "active",
-      ownerKind: "platform",
+      ownerKind: "dao",
+    });
+    expect(verifyDaoMembership).toHaveBeenCalledWith({
+      daoAccountId: "proposal-city.sputnik-dao.near",
+      memberAccountId: "proposal-applicant.near",
     });
 
     const bindings = await admin.listTenantBindingsForTenant({ tenantId: tenant?.id ?? "" });
@@ -73,6 +88,34 @@ describe("node proposal application", () => {
         hostname: "unauthorized-country.citynode.app",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects proposals whose applicant is not a member of the tenant DAO", async () => {
+    (verifyDaoMembership as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      isSputnikContract: true,
+      isMember: false,
+      policy: { roles: [] },
+    });
+    const admin = await getPluginClient(adminContext);
+
+    await expect(
+      admin.applyNodeProposal({
+        kind: "country",
+        name: "Unowned Proposal Country",
+        slug: "unowned-proposal-country",
+        parentId: null,
+        orgId: "unowned-proposal-org",
+        motivation: "This applicant does not belong to the proposed tenant DAO.",
+        accountId: "unowned-proposal.sputnik-dao.near",
+        submitterAccountId: "outsider.near",
+        hostname: "unowned-proposal-country.citynode.app",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const tenants = await admin.listTenants();
+    expect(tenants.some((tenant) => tenant.accountId === "unowned-proposal.sputnik-dao.near")).toBe(
+      false,
+    );
   });
 
   it("validates account IDs and parent hierarchy", async () => {

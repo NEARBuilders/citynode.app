@@ -2,7 +2,7 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, Send } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getActiveRuntime, type Organization, useApiClient, useAuthClient } from "@/app";
 import {
@@ -19,6 +19,7 @@ import {
   PageHeader,
   Textarea,
 } from "@/components";
+import { ConnectDao } from "@/components/connect-dao";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import {
   Select,
@@ -27,19 +28,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useDaoConnection } from "@/lib/dao-connect";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
+import { deriveSlug } from "@/lib/slug";
 import { useNearAccount } from "@/lib/use-near-account";
 import { loadNodeApplicationParents } from "./-apply-loader";
 import {
   canSubmitNodeApplication,
-  deriveNodeApplicationSlug,
   getDefaultOrganizationId,
   type NodeApplicationValues,
   nodeApplicationKinds,
   nodeApplicationSchema,
   proposeNodeApplication,
-  readSessionNearAccountId,
   resolveActiveOrganizationLabel,
 } from "./-node-application";
 
@@ -72,12 +73,17 @@ function ApplyPage() {
   const { auth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const activeOrgId = auth.activeOrganizationId;
-  const connectedNearAccountId = useNearAccount();
-  const nearAccountId = readSessionNearAccountId(auth.user, connectedNearAccountId);
-  const slugManuallyEdited = useRef(false);
+  const nearAccountId = useNearAccount();
+  const daoConnection = useDaoConnection();
   const attemptedDefaultOrgId = useRef<string | null>(null);
+  const slugManuallyEdited = useRef(false);
   const [rootParentId, setRootParentId] = useState(initialRootNodes[0]?.id ?? "");
   const [submittedProposalId, setSubmittedProposalId] = useState<string | null>(null);
+  const [verifiedDaoAccountId, setVerifiedDaoAccountId] = useState<string | null>(null);
+  const handleDaoVerified = useCallback(
+    ({ daoAccountId }: { daoAccountId: string }) => setVerifiedDaoAccountId(daoAccountId),
+    [],
+  );
 
   const form = useForm({
     defaultValues,
@@ -107,6 +113,11 @@ function ApplyPage() {
     attemptedDefaultOrgId.current = defaultOrgId;
     switchOrganization.mutate(defaultOrgId);
   }, [defaultOrgId, switchOrganization.mutate]);
+  useEffect(() => {
+    if (verifiedDaoAccountId && verifiedDaoAccountId !== daoConnection.daoAccountId) {
+      setVerifiedDaoAccountId(null);
+    }
+  }, [daoConnection.daoAccountId, verifiedDaoAccountId]);
   const { data: stateNodes = [], isLoading: statesLoading } = useQuery({
     ...childNodesQueryOptions(apiClient, rootParentId),
     enabled: formValues.kind === "city" && !!rootParentId,
@@ -120,9 +131,13 @@ function ApplyPage() {
     mutationFn: async (values: NodeApplicationValues) => {
       if (!activeOrgId) throw new Error("Select an active organization first");
       if (!nearAccountId) throw new Error("Connect a NEAR account first");
+      if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
+        throw new Error("Connect and verify the tenant DAO first");
+      }
       return proposeNodeApplication(apiClient, values, {
         orgId: activeOrgId,
-        accountId: nearAccountId,
+        daoAccountId: daoConnection.daoAccountId,
+        submitterAccountId: nearAccountId,
       });
     },
     onSuccess: ({ data: proposal }) => {
@@ -137,7 +152,9 @@ function ApplyPage() {
   const canSubmit = canSubmitNodeApplication({
     values: formValues,
     orgId: activeOrgId,
-    accountId: nearAccountId,
+    daoAccountId:
+      verifiedDaoAccountId === daoConnection.daoAccountId ? daoConnection.daoAccountId : null,
+    submitterAccountId: nearAccountId,
     hostnameAvailable: preflight?.hostname.available === true,
     preflightLoading,
     submitting: submitMutation.isPending,
@@ -192,7 +209,8 @@ function ApplyPage() {
             <CardContent className="space-y-3 p-6">
               <h2 className="font-semibold text-foreground">Connect a NEAR account</h2>
               <p className="text-sm text-muted-foreground">
-                The connected SIWN account becomes the applicant and future tenant owner.
+                The connected SIWN account identifies the applicant. The tenant itself is owned by
+                the DAO connected through Trezu.
               </p>
               <Button asChild size="sm" variant="outline">
                 <Link to="/settings/auth-methods">manage sign-in methods</Link>
@@ -200,6 +218,8 @@ function ApplyPage() {
             </CardContent>
           </Card>
         )}
+
+        <ConnectDao onVerified={handleDaoVerified} />
 
         <form
           className="space-y-6"
@@ -327,9 +347,9 @@ function ApplyPage() {
                           field.handleChange(nextName);
                           form.setFieldValue(
                             "slug",
-                            deriveNodeApplicationSlug(
+                            deriveSlug(
                               nextName,
-                              form.state.values.slug,
+                              form.getFieldValue("slug"),
                               slugManuallyEdited.current,
                             ),
                             { dontUpdateMeta: true },
@@ -352,11 +372,13 @@ function ApplyPage() {
                       <FieldLabel htmlFor="application-slug">slug</FieldLabel>
                       <Input
                         id="application-slug"
+                        name={field.name}
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(event) => {
                           slugManuallyEdited.current = true;
-                          field.handleChange(event.target.value.toLowerCase());
+                          field.setMeta((meta) => ({ ...meta, isTouched: true }));
+                          field.handleChange(event.target.value.replace(/[^a-z0-9-]/g, ""));
                         }}
                         placeholder="chicago"
                         pattern="[a-z0-9-]+"
@@ -393,6 +415,14 @@ function ApplyPage() {
               <Field>
                 <FieldLabel htmlFor="application-account">NEAR account</FieldLabel>
                 <Input id="application-account" value={nearAccountId ?? ""} readOnly />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="application-dao-account">tenant DAO account</FieldLabel>
+                <Input
+                  id="application-dao-account"
+                  value={daoConnection.daoAccountId ?? ""}
+                  readOnly
+                />
               </Field>
               <form.Field name="motivation">
                 {(field) => {

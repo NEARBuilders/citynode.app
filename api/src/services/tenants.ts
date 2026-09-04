@@ -579,6 +579,7 @@ export const TenantsLive = Layer.effect(
                 accountId: input.accountId,
                 orgId: input.orgId,
                 status: "active",
+                ownerKind: "dao",
               })
               .returning({ id: tenantsTable.id });
             if (!tenant) {

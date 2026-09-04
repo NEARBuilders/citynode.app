@@ -25,17 +25,14 @@ import {
   SectionHeader,
 } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
-import {
-  buildTenantPublishConfig,
-  signAsDaoTransaction,
-  useDaoConnection,
-} from "@/lib/dao-connect";
+import { useDaoConnection } from "@/lib/dao-connect";
 import { invalidateNodeQueries, tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import {
   invalidateTenantQueries,
   tenantBindingsQueryOptions,
   tenantByKeyQueryOptions,
 } from "@/lib/queries/tenants";
+import { prepareTenantConfigWrite, publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
@@ -64,30 +61,25 @@ async function publishTenantConfig(
     throw new Error("No primary domain binding configured for this tenant");
   }
 
-  const tenantConfig = buildTenantPublishConfig({
-    daoAccountId: input.accountId,
+  if (input.mode === "dao") {
+    return publishDaoTenantConfig(apiClient, {
+      daoAccountId: input.accountId,
+      gatewayId: input.gatewayId,
+      baseAccount: input.parentAccount,
+      hostname: input.hostname,
+      title: input.name,
+      ...(input.status ? { status: input.status } : {}),
+    });
+  }
+
+  const prepared = await prepareTenantConfigWrite(apiClient, {
+    accountId: input.accountId,
     gatewayId: input.gatewayId,
     baseAccount: input.parentAccount,
     hostname: input.hostname,
     title: input.name,
     ...(input.status ? { status: input.status } : {}),
   });
-
-  const prepared = await apiClient.apps.prepareRegistryConfigWrite({
-    accountId: input.accountId,
-    gatewayId: input.gatewayId,
-    config: tenantConfig as unknown as Record<string, unknown>,
-  });
-
-  if (input.mode === "dao") {
-    return signAsDaoTransaction(input.accountId, {
-      receiverId: prepared.data.contractId,
-      methodName: prepared.data.methodName,
-      args: prepared.data.args as unknown as Record<string, unknown>,
-      gas: CONFIG_GAS,
-      attachedDeposit: prepared.data.attachedDeposit,
-    });
-  }
 
   const relayerInfo = await auth.near.getRelayerInfo();
   const hasRelayer = relayerInfo.data?.enabled === true;
