@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
+import { injectCookies } from "../helpers/seeded";
 
 test.describe("apiClient", () => {
   let pageErrors: string[];
 
   test.beforeEach(async ({ page }) => {
     pageErrors = collectErrors(page);
+    await injectCookies(page);
   });
 
   test("things page renders plugin data from apiClient", async ({ page }) => {
