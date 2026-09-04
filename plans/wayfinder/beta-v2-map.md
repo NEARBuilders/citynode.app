@@ -516,7 +516,7 @@ deferred — the pipeline hardening is a separate concern from resolution.
 - Native plugin composition model (React Navigation equivalent of grafting) — depends on #1 route grafting research settling the web pattern first
 - Tenant sandboxing verification — depends on #4 SSR per-request composition and #5 tenant data isolation
 - Hot-swap mechanism (Phase 9) — depends on #3 app.ts evaluation model
-- Alchemy DB integration details — depends on Phase 4 execution, not a decision to pre-spec
+- Alchemy integration details — the active Alchemy work is now the CDN deploy provider ([../infra/cloudflare-cdn-alchemy.md](../infra/cloudflare-cdn-alchemy.md)); DB integration (Neon) is deferred and not a decision to pre-spec
 - `composeApp()` implementation details and caching strategy — depends on #4 SSR per-request model
 - **Offline shell + data sync** (Layer 1: SW asset caching, Layer 2: IndexedDB mutation queue + replay) — depends on the host's MF loading pattern and shell HTML rendering settling first (Phase 2). The SW is a standalone `host/src/sw.ts` compiled as a second rsbuild entry, served at `/sw.js`. Layer 1 caches `remoteEntry.js`, plugin UI entries, and static files via structural URL patterns — no knowledge of plugin internals. Layer 2 adds a generic request queue for offline mutations, consumed by UI hooks via `postMessage`. Both tracked in `../offline/shell-sw-caching.md` and `../offline/data-sync-queue.md`. Open questions: SSR-rendered pages offline (shell fallback vs full content); `BackgroundSync` API vs periodic poll for queue replay; SW cache size/budget.
 

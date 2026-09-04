@@ -43,7 +43,8 @@ is verifiable on-chain via FastKV.
 
 | Document | Covers | Status |
 |---|---|---|
-| [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning | Phases 1–3 DONE, Phase 4 PARTIAL |
+| [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning (Neon, deferred) | Phase 2 DONE; Phases 1 & 3 NOT implemented; Phase 4 superseded by [cloudflare-cdn-alchemy.md](./infra/cloudflare-cdn-alchemy.md) |
+| [cloudflare-cdn-alchemy.md](./infra/cloudflare-cdn-alchemy.md) | Pluggable CDN deploy provider — Cloudflare R2 + custom domain via Alchemy, Zephyr fallback, Railway host unchanged | Phases 0–2 DONE; supersedes Phase 4 of [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) |
 | [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | Referenced by [composable.md](./beta-v2/composable.md) Phase 3 |
 
 ## offline — offline support
