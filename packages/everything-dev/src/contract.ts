@@ -495,6 +495,11 @@ export const InfraExportResultSchema = z.object({
   gateway: z.string(),
 });
 
+export const CdnLoginResultSchema = z.object({
+  status: z.enum(["ok", "error"]),
+  error: z.string().optional(),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -580,6 +585,7 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/infra/export" })
     .input(InfraExportOptionsSchema)
     .output(InfraExportResultSchema),
+  cdnLogin: oc.route({ method: "POST", path: "/cdn/login" }).output(CdnLoginResultSchema),
 });
 
 export type DevOptions = z.infer<typeof DevOptionsSchema>;
@@ -631,3 +637,4 @@ export type TypecheckWorkspaceResult = z.infer<typeof TypecheckWorkspaceResultSc
 export type InfraExportOptions = z.infer<typeof InfraExportOptionsSchema>;
 export type InfraExportResult = z.infer<typeof InfraExportResultSchema>;
 export type InfraExportService = z.infer<typeof InfraExportServiceSchema>;
+export type CdnLoginResult = z.infer<typeof CdnLoginResultSchema>;

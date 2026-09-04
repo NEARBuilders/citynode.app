@@ -1,9 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
-import { buildWorkspaceTargets, selectWorkspaceTargets } from "./build";
+import { buildWorkspaceTargets, resolveCdnProvider, selectWorkspaceTargets } from "./build";
+import {
+  applyCloudflareDeployEntries,
+  computeCloudflareDeployEntries,
+  deployToCloudflareCdn,
+  ensureAlchemySandbox,
+  hasAlchemyCredentials,
+  logCloudflareCdnNotice,
+  resolveWorkspaceCdnTargets,
+} from "./cdn";
 import { generateCodeArtifacts } from "./code-artifacts";
-import { loadResolvedConfig } from "./config";
+import { loadResolvedConfig, type ResolvedDeployConfig, resolveDeployConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
 import {
   buildRegistryConfigUrlForNetwork,
@@ -144,6 +153,37 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return { status: "dry-run", registryUrl, built, skipped };
   }
 
+  let deployResolved: ResolvedDeployConfig | null = null;
+  if (input.build && resolveCdnProvider(bosConfig) === "cloudflare") {
+    try {
+      deployResolved = resolveDeployConfig(bosConfig, { domain: gateway });
+    } catch (error) {
+      return {
+        status: "error" as const,
+        registryUrl,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    try {
+      await ensureAlchemySandbox(configDir);
+    } catch (error) {
+      return {
+        status: "error" as const,
+        registryUrl,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    logCloudflareCdnNotice(deployResolved);
+    if (!hasAlchemyCredentials()) {
+      return {
+        status: "error" as const,
+        registryUrl,
+        error:
+          "No Alchemy credentials — run `bos cdn login` (or set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN for CI), then re-run the deploy",
+      };
+    }
+  }
+
   let strategy: SigningStrategy;
   try {
     strategy = await resolveSigningStrategy({ privateKey: input.privateKey, account, network });
@@ -169,6 +209,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       targets,
       deploy: true,
       verbose: input.verbose,
+      cdnUploadHandled: true,
     });
     built = result.built;
     skipped = result.skipped;
@@ -201,6 +242,47 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           skipped,
           deployResults,
           error: `${failures.length} of ${total} workspaces failed to deploy`,
+        };
+      }
+    }
+
+    if (deployResolved?.cdn === "cloudflare" && deployResolved.cloudflare) {
+      const cdnTargets = resolveWorkspaceCdnTargets(
+        bosConfig,
+        runtimeConfig,
+        built ?? [],
+        configDir,
+      );
+      const cdnError = await deployToCloudflareCdn({
+        configDir,
+        resolved: deployResolved,
+        targets: cdnTargets,
+        stage: env,
+      });
+      if (cdnError) {
+        return {
+          status: "error" as const,
+          registryUrl,
+          built,
+          skipped,
+          deployResults,
+          error: cdnError,
+        };
+      }
+      try {
+        const entries = computeCloudflareDeployEntries(
+          cdnTargets,
+          deployResolved.cloudflare.hostname,
+        );
+        applyCloudflareDeployEntries(join(configDir, "bos.config.json"), entries);
+      } catch (error) {
+        return {
+          status: "error" as const,
+          registryUrl,
+          built,
+          skipped,
+          deployResults,
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     }

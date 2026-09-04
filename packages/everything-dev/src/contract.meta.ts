@@ -129,6 +129,12 @@ export const cliCommandMeta = {
       },
     },
   },
+  cdnLogin: {
+    commandPath: ["cdn", "login"],
+    summary:
+      "Log in to Alchemy for Cloudflare CDN deploys (installs the .bos/alchemy sandbox, then runs the OAuth flow)",
+    interactive: true,
+  },
   keyPublish: {
     commandPath: ["key", "generate"],
     summary: "Generate a publish access key",

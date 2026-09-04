@@ -17,6 +17,7 @@ import {
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
+import { runAlchemyLogin } from "./cdn";
 import {
   buildCiInfraPlan,
   type CiInfraPlan,
@@ -2134,6 +2135,8 @@ export default createPlugin({
         };
       }
     }),
+
+    cdnLogin: builder.cdnLogin.handler(async () => runAlchemyLogin(deps.configDir)),
 
     ps: builder.ps.handler(async () => {
       try {

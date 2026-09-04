@@ -24,6 +24,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const normalizedName = pkg.name;
 const shouldDeploy = process.env.DEPLOY === "true";
+const useZephyr = shouldDeploy && process.env.BOS_CDN_PROVIDER !== "cloudflare";
 const buildTarget = process.env.BUILD_TARGET as "client" | "server" | undefined;
 const isServerBuild = buildTarget === "server";
 
@@ -113,7 +114,7 @@ function createClientConfig() {
     }),
   ];
 
-  if (shouldDeploy) {
+  if (useZephyr) {
     plugins.push(
       withZephyr({
         hooks: {
@@ -224,7 +225,7 @@ function createServerConfig() {
     },
   });
 
-  if (shouldDeploy) {
+  if (useZephyr) {
     plugins.push(
       withZephyr({
         snapshotType: "csr",

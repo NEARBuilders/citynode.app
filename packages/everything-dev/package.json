@@ -180,6 +180,15 @@
       "types": "./dist/db/index.d.mts",
       "import": "./dist/db/index.mjs",
       "require": "./dist/db/index.cjs"
+    },
+    "./cdn": {
+      "development": {
+        "types": "./src/cdn.ts",
+        "import": "./src/cdn.ts"
+      },
+      "types": "./dist/cdn.d.mts",
+      "import": "./dist/cdn.mjs",
+      "require": "./dist/cdn.cjs"
     }
   },
   "files": [

@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 
 const __dirname = import.meta.dirname;
 const shouldDeploy = process.env.DEPLOY === "true";
+const useZephyr = shouldDeploy && process.env.BOS_CDN_PROVIDER !== "cloudflare";
 
 const resolvedConfigPath = path.resolve(__dirname, "../.bos/bos.resolved-config.json");
 const rootBosConfigPath = path.resolve(__dirname, "../bos.config.json");
@@ -163,7 +164,7 @@ const shared = mergeSharedMaps(
 
 const plugins = [pluginReact()];
 
-if (shouldDeploy) {
+if (useZephyr) {
   plugins.push(
     withZephyr({
       snapshotType: "csr",
