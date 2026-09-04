@@ -95,9 +95,9 @@ async function publishTenantConfig(
   if (hasRelayer) {
     const signed = await auth.near.buildSignedDelegateAction(
       prepared.data.contractId,
-      (builder: TransactionBuilder) =>
+      (builder: TransactionBuilder, receiverId: string) =>
         builder.functionCall(
-          prepared.data.contractId,
+          receiverId,
           prepared.data.methodName,
           prepared.data.args,
           {
