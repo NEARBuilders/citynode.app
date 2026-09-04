@@ -496,7 +496,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
         : undefined,
     };
 
-    const serviceDescriptors = buildServiceDescriptors(input.bosConfig, resolvedPorts);
+    const serviceDescriptors = buildServiceDescriptors(assignedRuntimeConfig, resolvedPorts);
 
     const launch = buildLaunchSpec(input.bosConfig, resolvedPorts);
     const composeModel = buildComposeModel(dbs, redisPlans);

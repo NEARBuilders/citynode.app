@@ -8,6 +8,27 @@ import (
 	"everything.dev/regression/http/internal/regtest"
 )
 
+// mcpHeaders satisfies the Streamable HTTP transport's Accept requirements:
+// the server rejects requests that don't accept both JSON and SSE.
+func mcpHeaders() map[string]string {
+	return map[string]string{
+		"Accept": "application/json, text/event-stream",
+	}
+}
+
+// mcpPayload unwraps the SSE envelope when the server answers as a stream
+// ("event: message\ndata: {...}") and falls back to the raw body for
+// plain-JSON responses.
+func mcpPayload(t *testing.T, body string) string {
+	t.Helper()
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "data:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		}
+	}
+	return body
+}
+
 func TestMcpEndpoint(t *testing.T) {
 	client := regtest.NewCookieClient()
 
@@ -26,7 +47,7 @@ func TestMcpEndpoint(t *testing.T) {
 			},
 		}
 
-		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/mcp", initReq, nil)
+		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/mcp", initReq, mcpHeaders())
 		regtest.MustStatus(t, status, 200, body)
 
 		var result struct {
@@ -38,7 +59,7 @@ func TestMcpEndpoint(t *testing.T) {
 				Capabilities map[string]any `json:"capabilities"`
 			} `json:"result"`
 		}
-		if err := json.Unmarshal([]byte(body), &result); err != nil {
+		if err := json.Unmarshal([]byte(mcpPayload(t, body)), &result); err != nil {
 			t.Fatalf("decoding MCP initialize response: %v\nBody: %s", err, body)
 		}
 
@@ -64,7 +85,7 @@ func TestMcpEndpoint(t *testing.T) {
 				"clientInfo":      map[string]any{"name": "regression-test", "version": "1.0.0"},
 			},
 		}
-		regtest.PostJSON(t, client, baseURL+"/api/mcp", initReq, nil)
+		regtest.PostJSON(t, client, baseURL+"/api/mcp", initReq, mcpHeaders())
 
 		listReq := map[string]any{
 			"jsonrpc": "2.0",
@@ -73,7 +94,7 @@ func TestMcpEndpoint(t *testing.T) {
 			"params":  map[string]any{},
 		}
 
-		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/mcp", listReq, nil)
+		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/mcp", listReq, mcpHeaders())
 		regtest.MustStatus(t, status, 200, body)
 
 		var result struct {
@@ -84,7 +105,7 @@ func TestMcpEndpoint(t *testing.T) {
 				} `json:"tools"`
 			} `json:"result"`
 		}
-		if err := json.Unmarshal([]byte(body), &result); err != nil {
+		if err := json.Unmarshal([]byte(mcpPayload(t, body)), &result); err != nil {
 			t.Fatalf("decoding tools/list response: %v\nBody: %s", err, body)
 		}
 

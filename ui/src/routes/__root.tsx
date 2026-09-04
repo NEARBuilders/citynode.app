@@ -120,9 +120,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         ...(siteUrl ? [{ rel: "canonical", href: siteUrl }] : []),
       ],
       scripts: [
-        ...(typeof window === "undefined"
-          ? [{ children: "window.__EVERYTHING_DEV_SSR__=true" }]
-          : []),
         getThemeInitScript(),
         ...getRemoteScripts({
           runtimeConfig: runtimeConfig ?? undefined,
@@ -146,8 +143,14 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootComponent() {
   const { cspNonce } = Route.useRouteContext();
   const isDesktop = useMediaQuery("(min-width: 640px)");
+  const isSsr = typeof window === "undefined";
   return (
-    <html lang="en" className="scroll-smooth" suppressHydrationWarning>
+    <html
+      lang="en"
+      className="scroll-smooth"
+      suppressHydrationWarning
+      data-everything-ssr={isSsr ? "true" : undefined}
+    >
       <head>
         <HeadContent />
         <style nonce={cspNonce} dangerouslySetInnerHTML={{ __html: getBaseStyles() }} />

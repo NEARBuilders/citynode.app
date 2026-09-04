@@ -17,6 +17,9 @@ declare global {
 }
 
 function isServerRendered(): boolean {
+  if (document.documentElement.hasAttribute("data-everything-ssr")) {
+    return true;
+  }
   if (window.__EVERYTHING_DEV_SSR__ !== undefined) {
     return window.__EVERYTHING_DEV_SSR__;
   }
