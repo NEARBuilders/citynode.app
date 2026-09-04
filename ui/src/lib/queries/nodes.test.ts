@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/app";
 import {
+  adminNodeListQueryOptions,
   childNodesQueryOptions,
   invalidateNodeQueries,
   nodeQueryKeys,
@@ -32,6 +33,57 @@ describe("node query options", () => {
     expect(listRootNodes).toHaveBeenCalledOnce();
     expect(listChildren).toHaveBeenCalledWith({ nodeId: "country-1" });
     expect(listNodes).toHaveBeenCalledWith({ tenantId: "tenant-1" });
+  });
+
+  it("loads admin rows with one batched summary request keyed by scope and kind", async () => {
+    const root = {
+      id: "country-1",
+      kind: "country" as const,
+      slug: "pakistan",
+      name: "Pakistan",
+      parentId: null,
+      tenantId: "tenant-1",
+      metadata: {},
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const listNodeSummaries = vi
+      .fn()
+      .mockResolvedValue([{ node: root, childrenCount: 2, validatorCount: 1 }]);
+    const listNodes = vi.fn().mockResolvedValue([root]);
+    const listTenants = vi.fn().mockResolvedValue([{ id: "tenant-1", status: "active" }]);
+    const getNodeSummary = vi.fn();
+    const apiClient = {
+      listNodeSummaries,
+      listNodes,
+      listTenants,
+      getNodeSummary,
+    } as unknown as ApiClient;
+    const queryClient = new QueryClient();
+
+    const rows = await queryClient.fetchQuery(
+      adminNodeListQueryOptions(apiClient, "roots", "country"),
+    );
+
+    expect(nodeQueryKeys.adminList("roots", "country")).toEqual([
+      "nodes",
+      "list",
+      "admin",
+      "roots",
+      "country",
+    ]);
+    expect(listNodeSummaries).toHaveBeenCalledOnce();
+    expect(listNodeSummaries).toHaveBeenCalledWith({ scope: "roots", kind: "country" });
+    expect(getNodeSummary).not.toHaveBeenCalled();
+    expect(rows).toEqual([
+      {
+        node: root,
+        parent: undefined,
+        status: "active",
+        childrenCount: 2,
+        validatorCount: 1,
+      },
+    ]);
   });
 
   it("invalidates every node query through the shared prefix", async () => {

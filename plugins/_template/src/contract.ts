@@ -66,6 +66,13 @@ export const CreatedThingSchema = ThingSchema.extend({
   action: z.string().describe("Action emitted for the creation, e.g. template.note.created"),
 });
 
+export const ThingEventSchema = z.object({
+  thingId: z.string().describe("Unique identifier for the affected thing"),
+  type: z.string().describe("Plugin-derived thing type"),
+  action: z.string().describe("Action that occurred, such as template.note.created"),
+  timestamp: z.string().datetime().describe("ISO 8601 timestamp when the event occurred"),
+});
+
 export const ListThingsSchema = z.object({
   data: z.array(ThingSchema).describe("List of things matching the query"),
   meta: z.object({
@@ -244,6 +251,23 @@ export const contract = oc.router({
       }),
     )
     .output(ListThingsSchema),
+
+  subscribeThings: oc
+    .route({
+      method: "GET",
+      path: "/things/stream",
+      summary: "Subscribe to thing events",
+      description: "Streams thing creation and deletion events as they occur.",
+      tags: ["Things", "Streaming"],
+    })
+    .input(
+      z.object({
+        thingId: z.string().optional().describe("Only events for this thing"),
+        type: z.string().optional().describe("Only events for this thing type"),
+        action: z.string().optional().describe("Only events with this action"),
+      }),
+    )
+    .output(eventIterator(ThingEventSchema)),
 
   deleteThing: oc
     .route({

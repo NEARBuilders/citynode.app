@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { optimisticUpvoteCount } from "./-thing-votes";
 
-describe("optimistic upvote count", () => {
+describe("optimistic Thing upvote count", () => {
   it("increments immediately when adding an upvote", () => {
     expect(optimisticUpvoteCount(4, true)).toBe(5);
   });

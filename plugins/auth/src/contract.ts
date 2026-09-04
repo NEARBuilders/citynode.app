@@ -44,7 +44,7 @@ const organizationInfoSchema = z.object({
   name: z.string(),
   slug: z.string(),
   logo: z.string().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 const organizationContextSchema = z.object({
@@ -344,6 +344,12 @@ export const contract = oc.router({
         })
         .nullable(),
     )
+    .errors(Errors),
+
+  getOrganizationForAdmin: oc
+    .route({ method: "GET", path: "/v1/auth/admin/organizations/{organizationId}" })
+    .input(z.object({ organizationId: z.string() }))
+    .output(organizationInfoSchema.nullable())
     .errors(Errors),
 
   createOrganization: oc

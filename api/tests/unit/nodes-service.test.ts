@@ -243,6 +243,43 @@ describe("NodesService", () => {
     expect(roots.map((n) => n.slug)).toEqual(["usa"]);
   });
 
+  it("lists node summaries with batched direct-child counts", async () => {
+    const layer = freshLayer();
+    const tenantId = await runService(layer, async ({ tenants }) => {
+      return await seedTenant(tenants);
+    });
+    const usa = await runService(layer, ({ nodes }) =>
+      nodes.create({
+        kind: "country",
+        slug: "usa",
+        name: "USA",
+        parentId: null,
+        tenantId,
+      }),
+    );
+    await runService(layer, ({ nodes }) =>
+      nodes.create({
+        kind: "state",
+        slug: "illinois",
+        name: "Illinois",
+        parentId: usa.id,
+        tenantId,
+      }),
+    );
+
+    const summaries = await runService(layer, ({ nodes }) =>
+      nodes.listSummaries({ parentId: null }),
+    );
+
+    expect(summaries).toEqual([
+      {
+        node: usa,
+        childrenCount: 1,
+        validatorCount: 0,
+      },
+    ]);
+  });
+
   it("listChildren returns direct children only", async () => {
     const layer = freshLayer();
     const tenantId = await runService(layer, async ({ tenants }) => {

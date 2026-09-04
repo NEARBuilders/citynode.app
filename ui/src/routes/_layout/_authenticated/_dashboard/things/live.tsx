@@ -1,53 +1,49 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, PageContainer, PageHeader } from "@/components";
 
-export const Route = createFileRoute("/_layout/_public/things/live")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/things/live")({
   head: () => ({
     meta: [
-      { title: "Live Stream | Things | everything.dev" },
-      { name: "description", content: "Real-time event stream from the template plugin." },
+      { title: "Live Stream | Things | app" },
+      { name: "description", content: "Real-time Thing creation and deletion events." },
     ],
   }),
-  component: LiveStreamPage,
+  component: ThingsLiveStreamPage,
 });
 
-type ThingEvent = {
-  id: string;
-  index: number;
-  timestamp: number;
-};
+type ApiClient = ReturnType<typeof useApiClient>;
+type ThingEvent =
+  Awaited<ReturnType<ApiClient["template"]["subscribeThings"]>> extends AsyncIterable<infer Event>
+    ? Event
+    : never;
 
-function LiveStreamPage() {
+function ThingsLiveStreamPage() {
   const apiClient = useApiClient();
   const router = useRouter();
   const canGoBack = router.history.canGoBack?.() ?? false;
   const [events, setEvents] = useState<ThingEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    setConnected(true);
-
-    const templateClient = apiClient.template;
-
-    if (!templateClient) {
-      setConnected(false);
-      return;
-    }
-
     const abort = new AbortController();
+    setConnectionError(null);
 
     (async () => {
       try {
-        const stream = await templateClient.listenBackground({});
+        const stream = await apiClient.template.subscribeThings({}, { signal: abort.signal });
+        setConnected(true);
         for await (const event of stream) {
           if (abort.signal.aborted) break;
-          setEvents((prev) => [event as ThingEvent, ...prev].slice(0, 200));
+          setEvents((previous) => [event, ...previous].slice(0, 200));
         }
-      } catch {
-        // stream ended
+      } catch (error) {
+        if (!abort.signal.aborted) {
+          setConnectionError(error instanceof Error ? error.message : "The event stream ended.");
+        }
       } finally {
         if (!abort.signal.aborted) setConnected(false);
       }
@@ -76,14 +72,14 @@ function LiveStreamPage() {
                 </Button>
               ) : (
                 <Button asChild variant="outline" size="icon-sm">
-                  <a href="/things">
+                  <Link to="/things">
                     <ArrowLeft />
-                  </a>
+                  </Link>
                 </Button>
               )}
               <span
                 className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                  connected ? "bg-green-500" : "bg-destructive"
+                  connected ? "bg-status-success-border" : "bg-destructive"
                 }`}
                 title={connected ? "Connected" : "Disconnected"}
               />
@@ -101,25 +97,27 @@ function LiveStreamPage() {
         <div className="space-y-1.5">
           {events.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-12">
-              {connected ? "Waiting for events..." : "Disconnected"}
+              {connectionError ?? (connected ? "Waiting for Thing events..." : "Connecting...")}
             </p>
           )}
-          {events.map((event, i) => (
+          {events.map((event, index) => (
             <div
-              key={`${event.id}-${event.index}-${i}`}
+              key={`${event.thingId}-${event.timestamp}-${index}`}
               className="flex items-start gap-2 rounded-[6px] border border-border bg-card px-3 py-2"
             >
               <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <Badge variant="secondary" className="text-[10px] font-mono">
-                    #{event.index}
+                    {event.action}
                   </Badge>
                   <span className="text-[10px] font-mono text-foreground font-semibold">
-                    {event.id}
+                    {event.thingId}
                   </span>
                 </div>
-                <div className="text-[10px] text-muted-foreground">
-                  {new Date(event.timestamp).toLocaleTimeString()}
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span className="font-mono">{event.type}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
                 </div>
               </div>
             </div>

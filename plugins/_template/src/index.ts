@@ -10,11 +10,17 @@ import type { PluginsClient } from "./lib/plugins-client.gen";
 import { TemplateService } from "./service";
 import { ThingsService } from "./services/things";
 
-type BackgroundEvents = {
+type TemplateEvents = {
   "background-updates": {
     id: string;
     index: number;
     timestamp: number;
+  };
+  "thing-updates": {
+    thingId: string;
+    type: string;
+    action: string;
+    timestamp: string;
   };
 };
 
@@ -75,7 +81,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         ThingsService.Live.pipe(Layer.provide(DatabaseLive(config.secrets.TEMPLATE_DATABASE_URL))),
       );
 
-      const publisher = new MemoryPublisher<BackgroundEvents>({
+      const publisher = new MemoryPublisher<TemplateEvents>({
         resumeRetentionSeconds: 60 * 2,
       });
 
@@ -173,7 +179,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       }),
 
       createThing: builder.createThing.handler(async ({ input }) => {
-        return await runEffect(thingsService.createThing(input.thingId, input.payload));
+        const thing = await runEffect(thingsService.createThing(input.thingId, input.payload));
+        await publisher.publish("thing-updates", {
+          thingId: thing.thingId,
+          type: thing.type,
+          action: thing.action,
+          timestamp: new Date().toISOString(),
+        });
+        return thing;
       }),
 
       getThing: builder.getThing.handler(async ({ input }) => {
@@ -184,8 +197,31 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return await runEffect(thingsService.listThings(input));
       }),
 
+      subscribeThings: builder.subscribeThings.handler(async function* ({
+        input,
+        signal,
+        lastEventId,
+      }) {
+        const iterator = publisher.subscribe("thing-updates", { signal, lastEventId });
+
+        for await (const event of iterator) {
+          if (input.thingId && event.thingId !== input.thingId) continue;
+          if (input.type && event.type !== input.type) continue;
+          if (input.action && event.action !== input.action) continue;
+          yield event;
+        }
+      }),
+
       deleteThing: builder.deleteThing.handler(async ({ input }) => {
-        return await runEffect(thingsService.deleteThing(input.thingId));
+        const thing = await runEffect(thingsService.getThing(input.thingId));
+        const result = await runEffect(thingsService.deleteThing(input.thingId));
+        await publisher.publish("thing-updates", {
+          thingId: thing.thingId,
+          type: thing.type,
+          action: `${thing.type}.deleted`,
+          timestamp: new Date().toISOString(),
+        });
+        return result;
       }),
 
       testError: builder.testError.handler(async ({ input }) => {

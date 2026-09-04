@@ -186,6 +186,12 @@ export const NodeSummarySchema = z.object({
 
 export type NodeSummary = z.infer<typeof NodeSummarySchema>;
 
+export const NodeListSummarySchema = z.object({
+  node: NodeSchema,
+  childrenCount: z.number().int().nonnegative(),
+  validatorCount: z.number().int().nonnegative(),
+});
+
 const ThingSchema = z.object({
   thingId: z.string().describe("Unique identifier for the thing"),
   type: z.string().describe("Plugin-derived thing type"),
@@ -401,6 +407,20 @@ export const contract = oc.router({
       }),
     )
     .output(z.array(NodeSchema)),
+
+  listNodeSummaries: oc
+    .route({
+      method: "GET",
+      path: "/nodes/summaries",
+      summary: "List nodes with direct child and validator counts",
+    })
+    .input(
+      z.object({
+        scope: z.enum(["roots", "all"]),
+        kind: NodeKindSchema.optional(),
+      }),
+    )
+    .output(z.array(NodeListSummarySchema)),
 
   getNode: oc
     .route({ method: "GET", path: "/nodes/{nodeId}" })

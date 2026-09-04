@@ -11,17 +11,17 @@ type ApiClient = ReturnType<typeof useApiClient>;
 type Thing = Awaited<ReturnType<ApiClient["template"]["listThings"]>>["data"][number];
 type UpvoteCounts = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCounts"]>>;
 
-export const Route = createFileRoute("/_layout/_public/things/")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/things/")({
   head: () => ({
     meta: [
       { title: "Things | app" },
       {
         name: "description",
-        content: "Thing registry — a generic typed table demo of durable, plugin-owned records.",
+        content: "Browse approved Things.",
       },
     ],
   }),
-  component: ThingsIndex,
+  component: ThingsIndexPage,
 });
 
 function createColumns(
@@ -87,7 +87,7 @@ function createColumns(
   ];
 }
 
-function ThingsIndex() {
+function ThingsIndexPage() {
   const apiClient = useApiClient();
 
   const { data, isLoading, error } = useQuery({
@@ -133,12 +133,6 @@ function ThingsIndex() {
             </div>
           }
         />
-
-        <p className="text-sm text-muted-foreground">
-          The thing registry is a generic API-owned durable store. Each thing has a plugin-owned
-          type and payload, supports real-time SSE events, and is rendered here through the typed{" "}
-          <code className="font-mono text-xs">DataTable</code> component.
-        </p>
 
         {isLoading ? (
           <div className="rounded-md border border-border p-4 space-y-3">

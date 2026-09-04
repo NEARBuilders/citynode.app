@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Network } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import {
   Badge,
@@ -23,12 +23,54 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  type AdminNodeListKind,
   type AdminNodeListRow,
   type AdminNodeListScope,
   adminNodeListQueryOptions,
 } from "@/lib/queries/nodes";
 
+type AdminNodeSearch = {
+  scope?: AdminNodeListScope;
+  kind?: AdminNodeListKind;
+};
+
+const NODE_KIND_VALUES = [
+  "all",
+  "country",
+  "state",
+  "city",
+] as const satisfies readonly AdminNodeListKind[];
+
+const NODE_KIND_LABELS: Record<AdminNodeListKind, string> = {
+  all: "All kinds",
+  country: "Country",
+  state: "State",
+  city: "City",
+};
+
+function parseScope(value: unknown): AdminNodeListScope | undefined {
+  return value === "roots" || value === "all" ? value : undefined;
+}
+
+function parseKind(value: unknown): AdminNodeListKind | undefined {
+  return typeof value === "string" && NODE_KIND_VALUES.some((kind) => kind === value)
+    ? (value as AdminNodeListKind)
+    : undefined;
+}
+
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/nodes/")({
+  validateSearch: (search: Record<string, unknown>): AdminNodeSearch => ({
+    scope: parseScope(search.scope),
+    kind: parseKind(search.kind),
+  }),
+  loaderDeps: ({ search }) => ({
+    scope: search.scope ?? "roots",
+    kind: search.kind ?? "all",
+  }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData(
+      adminNodeListQueryOptions(context.apiClient, deps.scope, deps.kind),
+    ),
   head: () => ({
     meta: [{ title: "Nodes | app" }],
   }),
@@ -37,9 +79,11 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/nodes/")(
 
 function AdminNodes() {
   const apiClient = useApiClient();
-  const [scope, setScope] = useState<AdminNodeListScope>("roots");
-  const [kind, setKind] = useState("all");
-  const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, scope));
+  const navigate = Route.useNavigate();
+  const search = Route.useSearch();
+  const scope = search.scope ?? "roots";
+  const kind = search.kind ?? "all";
+  const nodesQuery = useQuery(adminNodeListQueryOptions(apiClient, scope, kind));
 
   const columns = useMemo<DataTableColumnDef<AdminNodeListRow>[]>(
     () => [
@@ -120,30 +164,51 @@ function AdminNodes() {
     [],
   );
 
-  const visibleNodes = (nodesQuery.data ?? []).filter(
-    (row) => kind === "all" || row.node.kind === kind,
-  );
+  const visibleNodes = nodesQuery.data ?? [];
 
   return (
     <div className="space-y-6">
       <SectionHeader title="Node structure" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={scope} onValueChange={(value) => setScope(value === "all" ? "all" : "roots")}>
+        <Tabs
+          value={scope}
+          onValueChange={(value) =>
+            navigate({
+              search: (previous) => ({
+                ...previous,
+                scope: value === "all" ? "all" : undefined,
+              }),
+            })
+          }
+        >
           <TabsList>
             <TabsTrigger value="roots">Root nodes</TabsTrigger>
             <TabsTrigger value="all">All nodes</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Select value={kind} onValueChange={setKind}>
+        <Select
+          value={kind}
+          onValueChange={(value) => {
+            const nextKind = parseKind(value);
+            if (!nextKind) return;
+            navigate({
+              search: (previous) => ({
+                ...previous,
+                kind: nextKind === "all" ? undefined : nextKind,
+              }),
+            });
+          }}
+        >
           <SelectTrigger aria-label="Filter nodes by kind">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All kinds</SelectItem>
-            <SelectItem value="country">Country</SelectItem>
-            <SelectItem value="state">State</SelectItem>
-            <SelectItem value="city">City</SelectItem>
+            {NODE_KIND_VALUES.map((value) => (
+              <SelectItem key={value} value={value}>
+                {NODE_KIND_LABELS[value]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

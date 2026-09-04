@@ -49,6 +49,12 @@ export interface NodeListFilter {
   tenantId?: string;
 }
 
+export interface NodeListSummaryRecord {
+  node: NodeRecord;
+  childrenCount: number;
+  validatorCount: number;
+}
+
 export interface SubtreeValidator {
   id: string;
   accountId: string;
@@ -70,6 +76,7 @@ export interface SubtreeNode {
 export interface NodesService {
   create(input: NodeInput): Promise<NodeRecord>;
   list(filter?: NodeListFilter): Promise<NodeRecord[]>;
+  listSummaries(filter?: NodeListFilter): Promise<NodeListSummaryRecord[]>;
   getById(id: string): Promise<NodeRecord | null>;
   update(id: string, input: NodeUpdateInput): Promise<NodeRecord>;
   delete(id: string): Promise<boolean>;
@@ -192,6 +199,47 @@ export const NodesLive = Layer.effect(
                   .from(nodesTable)
                   .where(and(...conditions));
           return rows.map(toNodeRecord);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      listSummaries: async (filter) => {
+        try {
+          const nodes = await service.list(filter);
+          if (nodes.length === 0) return [];
+
+          const nodeIds = nodes.map((node) => node.id);
+          const [childRows, validatorRows] = await Promise.all([
+            db
+              .select({
+                nodeId: nodesTable.parentId,
+                count: sql<number>`cast(count(*) as integer)`,
+              })
+              .from(nodesTable)
+              .where(inArray(nodesTable.parentId, nodeIds))
+              .groupBy(nodesTable.parentId),
+            db
+              .select({
+                nodeId: validatorsTable.nodeId,
+                count: sql<number>`cast(count(*) as integer)`,
+              })
+              .from(validatorsTable)
+              .where(inArray(validatorsTable.nodeId, nodeIds))
+              .groupBy(validatorsTable.nodeId),
+          ]);
+          const childrenByNode = new Map(
+            childRows.flatMap((row) => (row.nodeId ? [[row.nodeId, row.count] as const] : [])),
+          );
+          const validatorsByNode = new Map(
+            validatorRows.map((row) => [row.nodeId, row.count] as const),
+          );
+
+          return nodes.map((node) => ({
+            node,
+            childrenCount: childrenByNode.get(node.id) ?? 0,
+            validatorCount: validatorsByNode.get(node.id) ?? 0,
+          }));
         } catch (error) {
           throw toOrpcError(error);
         }
