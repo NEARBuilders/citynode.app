@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, FileCheck2, History, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/app";
+import { getActiveRuntime, useApiClient } from "@/app";
 import {
   Badge,
   Button,
@@ -14,6 +14,10 @@ import {
   Skeleton,
   Textarea,
 } from "@/components";
+import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import { invalidateTenantQueries } from "@/lib/queries/tenants";
+import { nodeProposalPayloadSchema } from "@/routes/_layout/_authenticated/_dashboard/-node-application";
+import { approveAndApplyProposal } from "./-proposal-application";
 import { proposalReviewStatusVariant } from "./-proposal-review";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -40,6 +44,8 @@ function ProposalDetailPage() {
   const navigate = Route.useNavigate();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
+  const { runtimeConfig } = Route.useRouteContext();
+  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const [rejectionReason, setRejectionReason] = useState("");
   const proposalQueryKey = ["admin-proposal", proposalId, pluginId, entityId] as const;
 
@@ -83,56 +89,13 @@ function ProposalDetailPage() {
         return { action, proposal: rejected.data };
       }
 
-      const approved = await apiClient.proposals.approve({
-        pluginId: proposal.pluginId,
-        entityId: proposal.entityId,
-        expectedUpdatedAt: proposal.updatedAt,
+      const reviewedProposal = await approveAndApplyProposal({
+        apiClient,
+        proposal,
+        gatewayId,
+        onProposalChange: (nextProposal) =>
+          queryClient.setQueryData(proposalQueryKey, nextProposal),
       });
-      let reviewedProposal = approved.data;
-      queryClient.setQueryData(proposalQueryKey, reviewedProposal);
-
-      if (reviewedProposal.pluginId !== "template") {
-        return { action, proposal: reviewedProposal };
-      }
-
-      let createdThing: Awaited<ReturnType<ApiClient["template"]["createThing"]>>;
-      try {
-        createdThing = await apiClient.template.createThing({
-          thingId: reviewedProposal.entityId,
-          payload: reviewedProposal.payload,
-        });
-      } catch (error) {
-        const message = errorMessage(error);
-        try {
-          const failed = await apiClient.proposals.markApplyFailed({
-            pluginId: reviewedProposal.pluginId,
-            entityId: reviewedProposal.entityId,
-            expectedUpdatedAt: reviewedProposal.updatedAt,
-            error: message,
-          });
-          reviewedProposal = failed.data;
-          queryClient.setQueryData(proposalQueryKey, reviewedProposal);
-        } catch {
-          await queryClient.invalidateQueries({ queryKey: proposalQueryKey });
-        }
-        throw new Error(`Proposal approved, but the thing could not be created: ${message}`);
-      }
-
-      try {
-        const applied = await apiClient.proposals.markApplied({
-          pluginId: reviewedProposal.pluginId,
-          entityId: reviewedProposal.entityId,
-          expectedUpdatedAt: reviewedProposal.updatedAt,
-          appliedResourceId: createdThing.thingId,
-        });
-        reviewedProposal = applied.data;
-        queryClient.setQueryData(proposalQueryKey, reviewedProposal);
-      } catch (error) {
-        throw new Error(
-          `Thing ${createdThing.thingId} was created, but the proposal status could not be finalized: ${errorMessage(error)}`,
-        );
-      }
-
       return { action, proposal: reviewedProposal };
     },
     onSuccess: async ({ action, proposal }) => {
@@ -140,7 +103,7 @@ function ProposalDetailPage() {
         action === "reject"
           ? "Proposal rejected"
           : proposal.applyStatus === "applied"
-            ? "Proposal approved and thing published"
+            ? "Proposal approved and resource created"
             : "Proposal approved",
       );
       await Promise.all([
@@ -149,6 +112,8 @@ function ProposalDetailPage() {
         queryClient.invalidateQueries({ queryKey: ["thing", proposal.entityId] }),
         queryClient.invalidateQueries({ queryKey: ["things-list"] }),
         queryClient.invalidateQueries({ queryKey: ["proposal-review-history"] }),
+        invalidateNodeQueries(queryClient),
+        invalidateTenantQueries(queryClient),
       ]);
       await navigate({ to: "/admin/proposals" });
     },
@@ -264,6 +229,8 @@ function ProposalDetailPage() {
             {JSON.stringify(proposal.payload, null, 2)}
           </pre>
         </div>
+
+        {proposal.pluginId === "node" && <NodeProposalDetails payload={proposal.payload} />}
       </Card>
 
       {isPending ? (
@@ -343,6 +310,40 @@ function ProposalDetailPage() {
   );
 }
 
+function NodeProposalDetails({ payload }: { payload: unknown }) {
+  const parsed = nodeProposalPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    return (
+      <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+        This node proposal has an invalid payload and cannot be applied safely.
+      </div>
+    );
+  }
+
+  const proposal = parsed.data;
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Node application
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <MetaRow label="Applicant account" value={proposal.accountId} mono />
+        <MetaRow label="Submitting account" value={proposal.submitterAccountId} mono />
+        <MetaRow label="Organization" value={proposal.orgId} mono />
+        <MetaRow label="Kind" value={proposal.kind} />
+        <MetaRow label="Parent" value={proposal.parentId ?? "root"} mono />
+        <MetaRow label="Name" value={proposal.name} />
+      </div>
+      <div className="rounded-[8px] border border-border bg-muted/20 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Motivation
+        </p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{proposal.motivation}</p>
+      </div>
+    </div>
+  );
+}
+
 function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
   return (
     <Card className="space-y-3 p-5">
@@ -380,8 +381,4 @@ function MetaRow({ label, value, mono }: { label: string; value: string; mono?: 
       </p>
     </div>
   );
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }
