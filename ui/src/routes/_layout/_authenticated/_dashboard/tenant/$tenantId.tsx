@@ -96,15 +96,10 @@ async function publishTenantConfig(
     const signed = await auth.near.buildSignedDelegateAction(
       prepared.data.contractId,
       (builder: TransactionBuilder, receiverId: string) =>
-        builder.functionCall(
-          receiverId,
-          prepared.data.methodName,
-          prepared.data.args,
-          {
-            gas: CONFIG_GAS,
-            attachedDeposit: 0n,
-          },
-        ),
+        builder.functionCall(receiverId, prepared.data.methodName, prepared.data.args, {
+          gas: CONFIG_GAS,
+          attachedDeposit: 0n,
+        }),
     );
 
     const relayed = await auth.near.relayTransaction({ payload: signed });
