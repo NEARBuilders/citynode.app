@@ -922,6 +922,36 @@ async function main() {
       return;
     }
 
+    if (descriptor.key === "mfCheck") {
+      console.log();
+      console.log(
+        `  ${colors.dim("Host")}   ${result.hostReachable ? colors.green("OK  ") : colors.error("FAIL")}  ${
+          result.hostVersion ?? "unreachable"
+        }${result.hostReason ? `  (${result.hostReason})` : ""}`,
+      );
+      for (const r of result.remotes) {
+        const tag = r.ok ? colors.green("OK  ") : colors.error("FAIL");
+        console.log(
+          `  ${colors.dim(r.role.padEnd(10))} ${tag} ${r.url}  pluginVersion=${r.pluginVersion ?? "?"}${
+            r.reason ? `  ↳ ${r.reason}` : ""
+          }`,
+        );
+      }
+      console.log();
+      if (result.status !== "ok") {
+        console.log(
+          colors.error(
+            "  mf-compat: ✗ federation manifests NOT compatible — redeploy affected plugin(s) so pluginVersion and shared versions match host",
+          ),
+        );
+        console.log();
+        process.exit(1);
+      }
+      console.log(colors.green("  mf-compat: ✓ all federation manifests compatible"));
+      console.log();
+      return;
+    }
+
     if (result?.status === "error" && descriptor.key !== "publish" && descriptor.key !== "deploy") {
       console.error(`[CLI] ${result.error || "Unknown error"}`);
       process.exit(1);

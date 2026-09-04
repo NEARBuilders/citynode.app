@@ -63,7 +63,7 @@ jobs:
 
       - name: Publish with deploy
         timeout-minutes: 20
-        run: bun run bos publish --deploy --packages ui,api,apps,proposals,votes${{ inputs.verbose == true && ' --verbose' || '' }}
+        run: bun run bos publish --deploy --packages local${{ inputs.verbose == true && ' --verbose' || '' }}
 
       - name: Install Railway CLI
         run: npm i -g @railway/cli@5.47.1

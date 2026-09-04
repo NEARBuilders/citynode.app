@@ -647,6 +647,11 @@ bun run dev     # Restart
 - Verify shared dependency versions match in package.json
 - Clear browser cache
 
+**Plugin fails to load with `ModuleFederationError` / `__webpack_modules__[e].call`:**
+- The plugin's deployed `mf-manifest.json` reports a `metaData.pluginVersion` older than the host's. Each plugin bundle is built against a specific `@module-federation/runtime`; the host and each plugin must agree on that version, and the plugin's bundle must provide every `shared[]` dependency the host requires (`requiredVersion: ^X.Y.Z`).
+- Run `bos mf check` to see which plugin is behind. Redeploy it via `cd plugins/<key> && bun run deploy` and `bos publish --deploy --packages local` from the repo root, then re-run `bos mf check`.
+- See `packages/everything-dev/skills/publish-sync` (Federation runtime compatibility section) for the full failure mode and recovery workflow.
+
 **Database issues:**
 ```bash
 bun run db:push   # Push schema changes

@@ -80,6 +80,7 @@ import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
 import { computeSriHashForUrl, parseDeployLines } from "./integrity";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
+import { checkFederationCompat } from "./mf";
 import {
   addFunctionCallAccessKey,
   deleteAccessKeys,
@@ -1991,6 +1992,41 @@ export default createPlugin({
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
+    }),
+
+    mfCheck: builder.mfCheck.handler(async ({ input }) => {
+      const configPath = findConfigPath();
+      if (!configPath) {
+        return {
+          status: "fail" as const,
+          hostVersion: null,
+          hostReachable: false,
+          hostReason: "No bos.config.json found",
+          remotes: [],
+        };
+      }
+
+      let bosConfig: BosConfig | null = null;
+      try {
+        bosConfig = JSON.parse(readFileSync(configPath, "utf-8")) as BosConfig;
+      } catch (e) {
+        return {
+          status: "fail" as const,
+          hostVersion: null,
+          hostReachable: false,
+          hostReason: e instanceof Error ? e.message : String(e),
+          remotes: [],
+        };
+      }
+
+      const report = await checkFederationCompat(bosConfig, { timeoutMs: input.timeoutMs });
+      return {
+        status: report.ok ? ("ok" as const) : ("fail" as const),
+        hostVersion: report.hostVersion,
+        hostReachable: report.hostReachable,
+        hostReason: report.hostReason,
+        remotes: report.remotes,
+      };
     }),
 
     dbStudio: builder.dbStudio.handler(async ({ input }) => {

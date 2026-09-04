@@ -21,12 +21,15 @@ rspack  Zephyr   FastKV   bos sync
 Publish `bos.config.json` to the configured FastKV registry path for the app account/domain:
 
 ```bash
-bos publish                  # Publish config only
-bos publish --deploy         # Build/deploy all workspaces first, then publish
-bos publish --dry-run        # Preview without sending
+bos publish                        # Publish config only
+bos publish --deploy               # Build/deploy all workspaces first, then publish
+bos publish --deploy --packages local   # Build/deploy only the workspaces owned locally (recommended for CI)
+bos publish --dry-run              # Preview without sending
 bos publish --network testnet
-bos publish --packages ui,api
+bos publish --packages ui,api      # Manual subset
 ```
+
+`--packages` accepts a comma-separated key list, `all` (default), or `local`. `local` selects only the entries whose `development` field starts with `local:`, so it auto-tracks whatever plugins or apps live in this repo without you editing workflow files when a plugin is added. CI deploy configuration should use `--packages local` exclusively; remote-only plugins can't be redeployed from this repo and will fail with a missing-local-path error.
 
 The registry transaction is signed in-process via near-kit — key resolution order: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json` → near-cli-rs OS keychain (`sign-with-keychain`, interactive only). Publishes are skipped when FastKV already holds an identical config. Reads are indexed by tx signer, so the config resolves at `bos://<account>/<gateway>` only when signed by `<account>` itself — see the `registry` skill for the namespace=signer law and composing other runtimes (`bos registry use`).
 
@@ -199,6 +202,38 @@ During `bos publish --deploy`, integrity SRI hashes are auto-generated for each 
 - Identifies SSR modules by both URL and `ssrIntegrity` hash in the cache
 
 If a remote entry fails integrity check, the host rejects it and falls back to client-rendered output without that remote.
+
+### Federation runtime compatibility (`bos mf check`)
+
+Each deployed bundle's `mf-manifest.json` reports `metaData.pluginVersion` — the version of `@module-federation/runtime` baked into the bundle at build time. The host is the federation **consumer**; each plugin is a **provider** loaded over `mf-manifest.json` and `remoteEntry.js`. When the host's runtime version drifts ahead of a plugin's runtime version, the plugin's `remoteEntry.js` throws:
+
+```
+undefined is not an object (evaluating '__webpack_modules__[e].call')
+```
+
+The host treats this as a soft failure and continues serving with the plugin missing (`⚠ N plugin(s) failed to load`). Production stays live but the plugin is dead.
+
+```bash
+bos mf check                          # exit 0 = all manifests compatible
+bos publish --deploy --packages local # ship a fresh bundle + republish to FastKV
+```
+
+The check fetches `<host>/mf-manifest.json` and every `<plugin>/mf-manifest.json`, asserting:
+
+- `metaData.pluginVersion` matches the host's
+- every `shared[]` dep the host requires (`requiredVersion: ^X.Y.Z`) is provided by the plugin at a compatible version
+
+If `bos mf check` fails for one plugin, redeploy only that plugin from this repo:
+
+```bash
+cd plugins/<key>
+bun run deploy                        # rebuild + Zephyr upload + reportDeployResult writes
+                                      # the new url + integrity to bos.config.json locally
+```
+
+Then from the repo root: `bos publish --deploy --packages local` and `bos mf check` to confirm.
+
+In CI, this runs as a `bos mf check` step on every push/PR (`packages/everything-dev/src/cli.ts:mfCheck`). Treat a failed run as "this bundle is stale; a plugin needs to be redeployed" — never disable.
 
 ### Process issues
 

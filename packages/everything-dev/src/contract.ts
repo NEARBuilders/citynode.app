@@ -46,7 +46,12 @@ export const StartResultSchema = z.object({
 });
 
 export const BuildOptionsSchema = z.object({
-  packages: z.string().default("all"),
+  packages: z
+    .string()
+    .default("all")
+    .describe(
+      "Comma-separated keys, 'all' (default), or 'local' (only this repo's local plugins hosted via 'local:…')",
+    ),
   force: z.boolean().default(false),
   deploy: z.boolean().default(false),
 });
@@ -159,7 +164,12 @@ export const PublishOptionsSchema = z.object({
   deploy: z.boolean().default(false),
   dryRun: z.boolean().default(false),
   verbose: z.boolean().default(false),
-  packages: z.string().default("all"),
+  packages: z
+    .string()
+    .default("all")
+    .describe(
+      "Comma-separated keys, 'all' (default), or 'local' (only this repo's local plugins hosted via 'local:…')",
+    ),
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
@@ -181,7 +191,12 @@ export const DeployOptionsSchema = z.object({
   build: z.boolean().default(true),
   dryRun: z.boolean().default(false),
   verbose: z.boolean().default(false),
-  packages: z.string().default("all"),
+  packages: z
+    .string()
+    .default("all")
+    .describe(
+      "Comma-separated keys, 'all' (default), or 'local' (only this repo's local plugins hosted via 'local:…')",
+    ),
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
   service: z.string().optional(),
@@ -495,6 +510,27 @@ export const InfraExportResultSchema = z.object({
   gateway: z.string(),
 });
 
+export const MfCheckOptionsSchema = z.object({
+  timeoutMs: z.number().default(15_000),
+});
+
+export const MfCheckRemoteResultSchema = z.object({
+  role: z.string(),
+  url: z.string(),
+  reachable: z.boolean(),
+  pluginVersion: z.string().nullable(),
+  ok: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const MfCheckResultSchema = z.object({
+  status: z.enum(["ok", "fail"]),
+  hostVersion: z.string().nullable(),
+  hostReachable: z.boolean(),
+  hostReason: z.string().optional(),
+  remotes: z.array(MfCheckRemoteResultSchema),
+});
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc
@@ -576,6 +612,10 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/typecheck" })
     .input(TypecheckOptionsSchema)
     .output(TypecheckResultSchema),
+  mfCheck: oc
+    .route({ method: "POST", path: "/mf/check" })
+    .input(MfCheckOptionsSchema)
+    .output(MfCheckResultSchema),
   infraExport: oc
     .route({ method: "POST", path: "/infra/export" })
     .input(InfraExportOptionsSchema)
@@ -629,5 +669,7 @@ export type TypecheckOptions = z.infer<typeof TypecheckOptionsSchema>;
 export type TypecheckResult = z.infer<typeof TypecheckResultSchema>;
 export type TypecheckWorkspaceResult = z.infer<typeof TypecheckWorkspaceResultSchema>;
 export type InfraExportOptions = z.infer<typeof InfraExportOptionsSchema>;
+export type MfCheckOptions = z.infer<typeof MfCheckOptionsSchema>;
+export type MfCheckResult = z.infer<typeof MfCheckResultSchema>;
 export type InfraExportResult = z.infer<typeof InfraExportResultSchema>;
 export type InfraExportService = z.infer<typeof InfraExportServiceSchema>;

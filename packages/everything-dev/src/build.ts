@@ -88,6 +88,9 @@ export function selectWorkspaceTargets(packages: string, bosConfig: BosConfig | 
   if (packages === "all") {
     return allPackages;
   }
+  if (packages === "local") {
+    return allPackages.filter((k) => isLocalTarget(k, bosConfig));
+  }
 
   return packages
     .split(",")
@@ -95,9 +98,16 @@ export function selectWorkspaceTargets(packages: string, bosConfig: BosConfig | 
     .filter((pkg) => allPackages.includes(pkg));
 }
 
-export function resolveCdnProvider(bosConfig: BosConfig | null): "zephyr" | "cloudflare" {
-  if (!bosConfig?.deploy) return "zephyr";
-  return bosConfig.deploy.cdn ?? "zephyr";
+function isLocalTarget(key: string, bosConfig: BosConfig | null): boolean {
+  const slot =
+    (bosConfig?.app as Record<string, { development?: string }> | undefined)?.[key] ??
+    bosConfig?.plugins?.[key];
+  const dev = (slot as { development?: unknown } | undefined)?.development;
+  return typeof dev === "string" && dev.startsWith("local:");
+}
+
+export function resolveCdnProvider(_bosConfig: BosConfig | null): "zephyr" | "cloudflare" {
+  return "zephyr";
 }
 
 export function checkCdnProviderDeployable(bosConfig: BosConfig | null): string | null {

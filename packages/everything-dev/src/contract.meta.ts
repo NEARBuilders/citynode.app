@@ -210,6 +210,12 @@ export const cliCommandMeta = {
       },
     },
   },
+  mfCheck: {
+    commandPath: ["mf", "check"],
+    summary:
+      "Verify Module Federation runtime compatibility across published host + plugin bundles",
+    interactive: false,
+  },
   dbStudio: {
     commandPath: ["db", "studio"],
     summary: "Open Drizzle Studio for a plugin's database",

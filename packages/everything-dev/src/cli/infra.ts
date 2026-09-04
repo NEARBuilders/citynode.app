@@ -117,8 +117,6 @@ export function savePortState(configDir: string, state: PortState): void {
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-export type { DevPortState };
-
 function resolvePort(slug: string, portMap: Record<string, number>, basePort: number): number {
   if (portMap[slug] !== undefined) return portMap[slug];
   const assigned = Object.values(portMap);
