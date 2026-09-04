@@ -128,12 +128,10 @@ export function AppDetailContent({
       const signed = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
         (builder: TransactionBuilder, receiverId: string) =>
-          builder.functionCall(
-            receiverId,
-            prepared.data.methodName,
-            prepared.data.args,
-            { gas: "10000000000000", attachedDeposit: 0n },
-          ),
+          builder.functionCall(receiverId, prepared.data.methodName, prepared.data.args, {
+            gas: "10000000000000",
+            attachedDeposit: 0n,
+          }),
       );
       const result = await auth.near.relayTransaction({ payload: signed });
       if (result.error) throw new Error(result.error.message || "Relay failed");
@@ -155,12 +153,10 @@ export function AppDetailContent({
       return auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
         (builder: TransactionBuilder, receiverId: string) =>
-          builder.functionCall(
-            receiverId,
-            prepared.data.methodName,
-            prepared.data.args,
-            { gas: "10000000000000", attachedDeposit: 0n },
-          ),
+          builder.functionCall(receiverId, prepared.data.methodName, prepared.data.args, {
+            gas: "10000000000000",
+            attachedDeposit: 0n,
+          }),
       );
     },
     onSuccess: (payload: string) => {
