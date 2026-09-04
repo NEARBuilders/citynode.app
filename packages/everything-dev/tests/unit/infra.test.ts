@@ -147,6 +147,28 @@ describe("generated infra", () => {
     expect(dockerCompose).not.toContain("payment");
   });
 
+  it("emits a per-service pg_isready -d <db> healthcheck on every postgres service", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bos-healthcheck-"));
+    tempDirs.push(dir);
+
+    await materialize(dir, buildRuntimeConfig());
+    const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
+
+    expect(dockerCompose).not.toContain('"pg_isready -U ${POSTGRES_USER}"');
+    expect(dockerCompose).not.toContain('"pg_isready -U everythingdev"]');
+
+    const expectedPairs: Array<[string, string]> = [
+      ["postgres-api", "api_db"],
+      ["postgres-auth", "auth_db"],
+      ["postgres-api-test", "api_test_db"],
+      ["postgres-auth-test", "auth_test_db"],
+    ];
+    for (const [service, db] of expectedPairs) {
+      expect(dockerCompose).toContain(`  ${service}:`);
+      expect(dockerCompose).toContain(`["CMD-SHELL", "pg_isready -U everythingdev -d ${db}"]`);
+    }
+  });
+
   it("writes a committed .env.test with isolated test database URLs", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-env-test-"));
     tempDirs.push(dir);

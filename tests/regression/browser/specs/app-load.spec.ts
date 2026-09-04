@@ -58,7 +58,7 @@ test.describe("App load", () => {
     await expect(skillLink).toBeVisible({ timeout: 10000 });
     await skillLink.click();
 
-    await page.waitForURL(/\/skill$/, { timeout: 10000 });
+    await expect(page).toHaveURL(/\/skill$/, { timeout: 10000 });
     await expect(page.getByText("raw skill.md")).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);

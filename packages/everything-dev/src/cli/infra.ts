@@ -512,11 +512,6 @@ function renderDockerCompose(
       "  environment: &pg-env",
       `    POSTGRES_USER: ${POSTGRES_USER}`,
       `    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`,
-      "  healthcheck:",
-      '    test: ["CMD-SHELL", "pg_isready -U everythingdev"]',
-      "    interval: 3s",
-      "    timeout: 3s",
-      "    retries: 5",
       "",
     );
   }
@@ -546,6 +541,13 @@ function renderDockerCompose(
     lines.push(`      POSTGRES_DB: ${database.databaseName}`);
     lines.push("    ports:");
     lines.push(`      - "${database.port}:5432"`);
+    lines.push("    healthcheck:");
+    lines.push(
+      `      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${database.databaseName}"]`,
+    );
+    lines.push("      interval: 3s");
+    lines.push("      timeout: 3s");
+    lines.push("      retries: 5");
     lines.push("    volumes:");
     lines.push(`      - ${database.volumeName}:/var/lib/postgresql/data`);
     lines.push("");
@@ -560,6 +562,13 @@ function renderDockerCompose(
     lines.push(`      POSTGRES_DB: ${database.databaseName}`);
     lines.push("    ports:");
     lines.push(`      - "${database.port}:5432"`);
+    lines.push("    healthcheck:");
+    lines.push(
+      `      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${database.databaseName}"]`,
+    );
+    lines.push("      interval: 3s");
+    lines.push("      timeout: 3s");
+    lines.push("      retries: 5");
     lines.push("    volumes:");
     lines.push(`      - ${database.volumeName}:/var/lib/postgresql/data`);
     lines.push("");
@@ -772,7 +781,7 @@ export function buildCiInfraPlan(
       },
       ports: [`${db.port}:5432`],
       healthcheck: {
-        test: ["CMD-SHELL", `pg_isready -U ${POSTGRES_USER}`],
+        test: ["CMD-SHELL", `pg_isready -U ${POSTGRES_USER} -d ${db.databaseName}`],
         interval: "3s",
         timeout: "3s",
         retries: 10,

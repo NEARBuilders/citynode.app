@@ -196,7 +196,7 @@ jobs:
         ports:
           - 5434:5432
         options: >-
-          --health-cmd "pg_isready -U everythingdev"
+          --health-cmd "pg_isready -U everythingdev -d api_test_db"
           --health-interval 3s
           --health-timeout 3s
           --health-retries 10
@@ -209,7 +209,7 @@ jobs:
         ports:
           - 5435:5432
         options: >-
-          --health-cmd "pg_isready -U everythingdev"
+          --health-cmd "pg_isready -U everythingdev -d auth_test_db"
           --health-interval 3s
           --health-timeout 3s
           --health-retries 10
