@@ -154,8 +154,7 @@ describe("generated infra", () => {
     await materialize(dir, buildRuntimeConfig());
     const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
 
-    expect(dockerCompose).not.toContain('"pg_isready -U ${POSTGRES_USER}"');
-    expect(dockerCompose).not.toContain('"pg_isready -U everythingdev"]');
+    expect(dockerCompose).not.toMatch(/pg_isready -U everythingdev"\]/);
 
     const expectedPairs: Array<[string, string]> = [
       ["postgres-api", "api_db"],

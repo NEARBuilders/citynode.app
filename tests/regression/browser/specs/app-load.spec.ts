@@ -53,8 +53,9 @@ test.describe("App load", () => {
   test("about page navigates to skill", async ({ page }) => {
     await page.goto("/about", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
+    await page.waitForLoadState("networkidle");
 
-    const skillLink = page.getByText("Open skill");
+    const skillLink = page.getByRole("link", { name: "Open skill" });
     await expect(skillLink).toBeVisible({ timeout: 10000 });
     await skillLink.click();
 
