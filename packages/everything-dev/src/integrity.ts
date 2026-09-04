@@ -304,19 +304,24 @@ export function applyDeployResults(
   return merged;
 }
 
-export function findPluginKey(bosConfigPath: string, pluginDir: string): string | null {
+export function findPluginKey(
+  bosConfigPath: string,
+  pluginDir: string,
+): { key: string; slot: "app" | "plugins" } | null {
   const config = JSON.parse(readFileSync(bosConfigPath, "utf8")) as Record<string, unknown>;
-  const plugins = config.plugins as Record<string, Record<string, unknown>> | undefined;
-  if (!plugins) return null;
   const configRoot = join(bosConfigPath, "..");
   const normalizedPluginDir = pluginDir.replace(/\\/g, "/").replace(/\/+$/, "");
-  for (const [key, plugin] of Object.entries(plugins)) {
-    const dev = plugin?.development;
-    if (typeof dev !== "string" || !dev.startsWith("local:")) continue;
-    const resolved = join(configRoot, dev.slice("local:".length))
-      .replace(/\\/g, "/")
-      .replace(/\/+$/, "");
-    if (resolved === normalizedPluginDir) return key;
+  for (const slot of ["plugins", "app"] as const) {
+    const container = config[slot] as Record<string, Record<string, unknown>> | undefined;
+    if (!container) continue;
+    for (const [key, entry] of Object.entries(container)) {
+      const dev = entry?.development;
+      if (typeof dev !== "string" || !dev.startsWith("local:")) continue;
+      const resolved = join(configRoot, dev.slice("local:".length))
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "");
+      if (resolved === normalizedPluginDir) return { key, slot };
+    }
   }
   return null;
 }

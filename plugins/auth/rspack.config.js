@@ -36,15 +36,14 @@ export default shouldDeploy
         onDeployComplete: async (info) => {
           console.log("🚀 Auth Deployed:", info.url);
           const integrity = await computeSriHashForUrl(info.url);
-          const key = findPluginKey(bosConfigPath, __dirname);
-          if (key) {
+          const found = findPluginKey(bosConfigPath, __dirname);
+          if (found) {
             reportDeployResult({
               url: info.url,
               integrity,
               bosConfigPath,
-              // Keep on app.auth
-              urlField: `app.${key}.production`,
-              integrityField: `app.${key}.integrity`,
+              urlField: `${found.slot}.${found.key}.production`,
+              integrityField: `${found.slot}.${found.key}.integrity`,
             });
           }
         },

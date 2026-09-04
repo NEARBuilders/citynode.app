@@ -42,8 +42,8 @@
     },
     "auth": {
       "development": "local:plugins/auth",
-      "production": "https://elliot-braem-7538-everything-dev-auth-plugin-bett-6a8b025fb-ze.zephyrcloud.app",
-      "integrity": "sha384-5PFfr4JQZMd0pU09YVbT40T6vnZe11uknYWkR6K22lRdykFvVang3XTHdreKdVsm",
+      "production": "https://elliot-braem-7877-everything-dev-auth-plugin-city-6cf42e155-ze.zephyrcloud.app",
+      "integrity": "sha384-aUjuPBUbUXcTiMpUOl5sqYT1deA2VAAff3RzwFLddV3GvBqExojjbNcl+6MTtZfZ",
       "secrets": [
         "AUTH_DATABASE_URL",
         "BETTER_AUTH_SECRET",

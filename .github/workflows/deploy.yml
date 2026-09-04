@@ -48,6 +48,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
+      - name: Build everything-dev
+        run: bun run --cwd packages/everything-dev build
+        # fast build path: ensure dist/ is current so workspace imports
+        # in plugins' rspack hooks resolve through the same code as src/.
+
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
 
