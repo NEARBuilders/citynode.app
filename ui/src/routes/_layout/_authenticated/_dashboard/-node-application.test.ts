@@ -3,7 +3,7 @@ import type { ApiClient } from "@/app";
 import {
   buildNodeProposalPayload,
   canSubmitNodeApplication,
-  deriveNodeApplicationSlug,
+  generateNodeApplicationSlug,
   getDefaultOrganizationId,
   nodeApplicationSchema,
   parseNodeProposalPayload,
@@ -31,9 +31,9 @@ describe("node application", () => {
     ).toBe(true);
   });
 
-  it("derives the complete slug until the applicant edits it", () => {
-    expect(deriveNodeApplicationSlug("Chicago", "", false)).toBe("chicago");
-    expect(deriveNodeApplicationSlug("Chicago Heights", "chi", true)).toBe("chi");
+  it("always derives the slug from the node name", () => {
+    expect(generateNodeApplicationSlug("Chicago")).toBe("chicago");
+    expect(generateNodeApplicationSlug("Chicago Heights")).toBe("chicago-heights");
   });
 
   it("builds the agreed node proposal payload", () => {
@@ -46,7 +46,11 @@ describe("node application", () => {
           slug: "chicago",
           motivation: "I want to operate a node for the local community.",
         },
-        { orgId: "org-1", accountId: "applicant.near" },
+        {
+          orgId: "org-1",
+          daoAccountId: "chicago.sputnik-dao.near",
+          submitterAccountId: "applicant.near",
+        },
       ),
     ).toEqual({
       kind: "city",
@@ -55,7 +59,7 @@ describe("node application", () => {
       slug: "chicago",
       orgId: "org-1",
       motivation: "I want to operate a node for the local community.",
-      accountId: "applicant.near",
+      accountId: "chicago.sputnik-dao.near",
       submitterAccountId: "applicant.near",
     });
   });
@@ -112,7 +116,11 @@ describe("node application", () => {
         slug: "chicago",
         motivation: "I want to operate a node for the local community.",
       },
-      { orgId: "org-1", accountId: "applicant.near" },
+      {
+        orgId: "org-1",
+        daoAccountId: "chicago.sputnik-dao.near",
+        submitterAccountId: "applicant.near",
+      },
     );
 
     expect(propose).toHaveBeenCalledWith({
@@ -126,7 +134,7 @@ describe("node application", () => {
         slug: "chicago",
         orgId: "org-1",
         motivation: "I want to operate a node for the local community.",
-        accountId: "applicant.near",
+        accountId: "chicago.sputnik-dao.near",
         submitterAccountId: "applicant.near",
       },
     });
@@ -144,7 +152,8 @@ describe("node application", () => {
       canSubmitNodeApplication({
         values,
         orgId: "org-1",
-        accountId: "applicant.near",
+        daoAccountId: "chicago.sputnik-dao.near",
+        submitterAccountId: "applicant.near",
         hostnameAvailable: true,
       }),
     ).toBe(true);
@@ -152,7 +161,8 @@ describe("node application", () => {
       canSubmitNodeApplication({
         values,
         orgId: null,
-        accountId: "applicant.near",
+        daoAccountId: "chicago.sputnik-dao.near",
+        submitterAccountId: "applicant.near",
         hostnameAvailable: true,
       }),
     ).toBe(false);
@@ -160,7 +170,8 @@ describe("node application", () => {
       canSubmitNodeApplication({
         values,
         orgId: "org-1",
-        accountId: null,
+        daoAccountId: null,
+        submitterAccountId: "applicant.near",
         hostnameAvailable: true,
       }),
     ).toBe(false);
@@ -168,7 +179,17 @@ describe("node application", () => {
       canSubmitNodeApplication({
         values,
         orgId: "org-1",
-        accountId: "applicant.near",
+        daoAccountId: "chicago.sputnik-dao.near",
+        submitterAccountId: null,
+        hostnameAvailable: true,
+      }),
+    ).toBe(false);
+    expect(
+      canSubmitNodeApplication({
+        values,
+        orgId: "org-1",
+        daoAccountId: "chicago.sputnik-dao.near",
+        submitterAccountId: "applicant.near",
         hostnameAvailable: false,
       }),
     ).toBe(false);

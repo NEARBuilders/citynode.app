@@ -27,20 +27,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  buildTenantPublishConfig,
-  signAsDaoTransaction,
-  useDaoConnection,
-} from "@/lib/dao-connect";
+import { useDaoConnection } from "@/lib/dao-connect";
 import {
   childNodesQueryOptions,
   invalidateNodeQueries,
   rootNodesQueryOptions,
 } from "@/lib/queries/nodes";
 import { bindingPreflightQueryOptions, invalidateTenantQueries } from "@/lib/queries/tenants";
+import { deriveSlug } from "@/lib/slug";
+import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import {
   deriveTenantWizardNameFields,
-  generateSlug,
   type NearNetworkId,
   nodeKinds,
   type TenantWizardValues,
@@ -103,6 +100,7 @@ function NewTenantPage() {
   const [phase, setPhase] = useState<"form" | "deploy">("form");
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
+  const orgSlugManuallyEdited = useRef(false);
   const [rootParentId, setRootParentId] = useState<string>(initialRootNodes[0]?.id ?? "");
   const slugManuallyEdited = useRef(false);
   const tenantNameManuallyEdited = useRef(false);
@@ -235,24 +233,6 @@ function NewTenantPage() {
       toast.error(error.message || "Failed to create tenant — rolled back"),
   });
 
-  async function publishConfig(preparedData: {
-    contractId: string;
-    methodName: string;
-    args: Record<string, string>;
-    gas: string;
-    attachedDeposit: string;
-  }) {
-    const daoAccountId = daoConnection.daoAccountId;
-    if (!daoAccountId) throw new Error("Connect a DAO account first");
-    return signAsDaoTransaction(daoAccountId, {
-      receiverId: preparedData.contractId,
-      methodName: preparedData.methodName,
-      args: preparedData.args as unknown as Record<string, unknown>,
-      gas: preparedData.gas,
-      attachedDeposit: preparedData.attachedDeposit,
-    });
-  }
-
   const deployPublish = useMutation({
     mutationFn: async () => {
       if (!createdTenantId) throw new Error("Tenant not created yet");
@@ -261,22 +241,14 @@ function NewTenantPage() {
 
       stepper.updateStep(1, "running");
 
-      const tenantConfig = buildTenantPublishConfig({
-        daoAccountId,
-        gatewayId,
-        baseAccount,
-        hostname,
-        title: tenantName || name,
-      });
-
-      const prepared = await apiClient.apps.prepareRegistryConfigWrite({
-        accountId: daoAccountId,
-        gatewayId,
-        config: tenantConfig as unknown as Record<string, unknown>,
-      });
-
       try {
-        await publishConfig(prepared.data);
+        await publishDaoTenantConfig(apiClient, {
+          daoAccountId,
+          gatewayId,
+          baseAccount,
+          hostname,
+          title: tenantName || name,
+        });
         stepper.updateStep(1, "success");
         return true;
       } catch (err) {
@@ -490,7 +462,7 @@ function NewTenantPage() {
                   value={orgName}
                   onChange={(e) => {
                     setOrgName(e.target.value);
-                    if (!orgSlug) setOrgSlug(generateSlug(e.target.value));
+                    setOrgSlug(deriveSlug(e.target.value, orgSlug, orgSlugManuallyEdited.current));
                   }}
                   placeholder="My Organization"
                   required
@@ -501,7 +473,10 @@ function NewTenantPage() {
                 <Input
                   id="org-slug"
                   value={orgSlug}
-                  onChange={(e) => setOrgSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
+                  onChange={(e) => {
+                    orgSlugManuallyEdited.current = true;
+                    setOrgSlug(e.target.value.replace(/[^a-z0-9-]/g, ""));
+                  }}
                   placeholder="my-organization"
                   pattern="[a-z0-9-]+"
                   required

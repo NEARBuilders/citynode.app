@@ -383,6 +383,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
         validateAccountId(input.accountId);
         validateAccountId(input.submitterAccountId);
         validateHostname(input.hostname);
+        const result = await verifyDaoMembership({
+          daoAccountId: input.accountId,
+          memberAccountId: input.submitterAccountId,
+        });
+        if (!result.isMember) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "The applicant's connected NEAR account is not a member of this DAO",
+            data: {
+              daoAccountId: input.accountId,
+              submitterAccountId: input.submitterAccountId,
+            },
+          });
+        }
+        if (platformAccount && !isExplicitDaoMember(result.policy, platformAccount)) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "Platform audit account is not a member of this DAO",
+            data: { daoAccountId: input.accountId, platformAccount },
+          });
+        }
         return services.tenants.applyNodeProposal({
           kind: input.kind,
           name: input.name,

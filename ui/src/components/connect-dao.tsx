@@ -1,7 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link2, ShieldCheck, ShieldOff, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
-import { sessionQueryOptions, useAuthClient } from "@/app";
 import { Button, Card, CardContent } from "@/components";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -12,6 +10,7 @@ import {
   useDaoAutoRestore,
   useDaoConnection,
 } from "@/lib/dao-connect";
+import { useNearAccount } from "@/lib/use-near-account";
 
 interface ConnectDaoProps {
   onVerified?: (info: { daoAccountId: string; membership: ParsedDaoMembership }) => void;
@@ -27,12 +26,9 @@ type MembershipState =
 
 export function ConnectDao({ onVerified }: ConnectDaoProps) {
   useDaoAutoRestore();
-  const auth = useAuthClient();
   const connection = useDaoConnection();
   const [membership, setMembership] = useState<MembershipState>({ kind: "idle" });
-
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
-  const primaryAccountId = extractPrimaryNearAccountId(session);
+  const primaryAccountId = useNearAccount();
 
   useEffect(() => {
     let cancelled = false;
@@ -189,15 +185,4 @@ function MembershipBadge({ state, primaryAccountId }: MembershipBadgeProps) {
   }
 
   return null;
-}
-
-function extractPrimaryNearAccountId(
-  session: { user?: unknown } | undefined | null,
-): string | null {
-  const user = session?.user as
-    | { accounts?: Array<{ providerId?: unknown; accountId?: unknown }> }
-    | undefined;
-  const accounts = Array.isArray(user?.accounts) ? user.accounts : [];
-  const siwn = accounts.find((a) => a.providerId === "siwn" && typeof a.accountId === "string");
-  return typeof siwn?.accountId === "string" ? siwn.accountId.split(":")[0] : null;
 }
