@@ -8,6 +8,8 @@ import { useNearAccount } from "@/lib/use-near-account";
 import { pendingProposalCountQueryOptions } from "./proposals/-proposal-review";
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/")({
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(pendingProposalCountQueryOptions(context.apiClient)),
   head: () => ({
     meta: [{ title: "Admin Dashboard | app" }],
   }),
@@ -15,7 +17,7 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/")({
 });
 
 function AdminDashboard() {
-  const { auth, tenant } = Route.useRouteContext();
+  const { auth, tenant, tenantOrganizationSlug } = Route.useRouteContext();
   const apiClient = useApiClient();
   const platformAccount = getAccount();
   const user = auth?.user ?? null;
@@ -143,10 +145,17 @@ function AdminDashboard() {
               there.
             </p>
             <Button asChild variant="outline" size="sm">
-              <Link to="/orgs/$slug" params={{ slug: tenant.id.slice(0, 8) }}>
-                <Users className="h-3.5 w-3.5" />
-                open organization
-              </Link>
+              {tenantOrganizationSlug ? (
+                <Link to="/orgs/$slug" params={{ slug: tenantOrganizationSlug }}>
+                  <Users className="h-3.5 w-3.5" />
+                  open organization
+                </Link>
+              ) : (
+                <Link to="/orgs">
+                  <Users className="h-3.5 w-3.5" />
+                  open organizations
+                </Link>
+              )}
             </Button>
           </Card>
         </section>

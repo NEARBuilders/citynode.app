@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { Building2, Fuel, Gavel, LayoutDashboard, Network, Settings, Shield } from "lucide-react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
+import { organizationByIdQueryOptions } from "@/lib/queries/organizations";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { cn } from "@/lib/utils";
 import { pendingProposalCountQueryOptions } from "./admin/proposals/-proposal-review";
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin")({
     meta: [{ title: "Admin | app" }],
   }),
   beforeLoad: async ({ context }) => {
-    const { apiClient, runtimeConfig } = context;
+    const { apiClient, queryClient, runtimeConfig } = context;
     const accountId = getAccount(runtimeConfig);
     let tenant: Awaited<ReturnType<typeof apiClient.resolveTenant>> | null = null;
     try {
@@ -20,13 +21,19 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin")({
     } catch {
       tenant = null;
     }
-    return { tenant };
+    const tenantOrganization = tenant?.orgId
+      ? await queryClient
+          .ensureQueryData(organizationByIdQueryOptions(apiClient, tenant.orgId))
+          .catch(() => null)
+      : null;
+    const tenantOrganizationSlug = tenantOrganization?.slug ?? null;
+    return { tenant, tenantOrganizationSlug };
   },
   component: AdminPage,
 });
 
 function AdminPage() {
-  const { tenant, session } = Route.useRouteContext();
+  const { tenant, tenantOrganizationSlug, session } = Route.useRouteContext();
   const apiClient = useApiClient();
 
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
@@ -84,13 +91,19 @@ function AdminPage() {
             <StatCard
               label="Organization"
               value={
-                <Link
-                  to="/orgs/$slug"
-                  params={{ slug: tenant.id.slice(0, 8) }}
-                  className="text-foreground hover:underline font-mono"
-                >
-                  {tenant.id.slice(0, 8)}
-                </Link>
+                tenantOrganizationSlug ? (
+                  <Link
+                    to="/orgs/$slug"
+                    params={{ slug: tenantOrganizationSlug }}
+                    className="font-mono text-foreground hover:underline"
+                  >
+                    {tenantOrganizationSlug}
+                  </Link>
+                ) : (
+                  <Link to="/orgs" className="text-foreground hover:underline">
+                    organizations
+                  </Link>
+                )
               }
             />
             <StatCard

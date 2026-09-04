@@ -11,4 +11,15 @@ describe("node dashboard navigation", () => {
     expect(memberPaths).toContain("/dashboard/node");
     expect(adminPaths).toContain("/dashboard/node");
   });
+
+  it("shows Things and New Thing to signed-in members and admins only", () => {
+    const anonymousPaths = filterSidebarByRole(NAV_ITEMS, "anon").map((item) => item.to);
+    const memberPaths = filterSidebarByRole(NAV_ITEMS, "member").map((item) => item.to);
+    const adminPaths = filterSidebarByRole(NAV_ITEMS, "admin").map((item) => item.to);
+
+    expect(anonymousPaths).not.toContain("/things");
+    expect(anonymousPaths).not.toContain("/things/new");
+    expect(memberPaths).toEqual(expect.arrayContaining(["/things", "/things/new"]));
+    expect(adminPaths).toEqual(expect.arrayContaining(["/things", "/things/new"]));
+  });
 });

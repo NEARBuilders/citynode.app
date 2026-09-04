@@ -32,6 +32,12 @@ export declare const CreatedThingSchema: z.ZodObject<{
     updatedAt: z.ZodString;
     action: z.ZodString;
 }, z.core.$strip>;
+export declare const ThingEventSchema: z.ZodObject<{
+    thingId: z.ZodString;
+    type: z.ZodString;
+    action: z.ZodString;
+    timestamp: z.ZodString;
+}, z.core.$strip>;
 export declare const ListThingsSchema: z.ZodObject<{
     data: z.ZodArray<z.ZodObject<{
         thingId: z.ZodString;
@@ -165,6 +171,21 @@ export declare const contract: {
             nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strip>;
     }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
+    subscribeThings: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+        thingId: z.ZodOptional<z.ZodString>;
+        type: z.ZodOptional<z.ZodString>;
+        action: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>, import("@orpc/contract").Schema<AsyncIteratorObject<{
+        thingId: string;
+        type: string;
+        action: string;
+        timestamp: string;
+    }, unknown, void>, import("@orpc/shared").AsyncIteratorClass<{
+        thingId: string;
+        type: string;
+        action: string;
+        timestamp: string;
+    }, unknown, void>>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
     deleteThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
         thingId: z.ZodString;
     }, z.core.$strip>, z.ZodObject<{

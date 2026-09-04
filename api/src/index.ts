@@ -402,6 +402,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }),
       ),
 
+      listNodeSummaries: builder.listNodeSummaries.handler(async ({ input }) =>
+        services.nodes.listSummaries({
+          ...(input.scope === "roots" && { parentId: null }),
+          ...(input.kind !== undefined && { kind: input.kind }),
+        }),
+      ),
+
       getNode: builder.getNode.handler(async ({ input }) => {
         const node = await services.nodes.getById(input.nodeId);
         return node ?? null;

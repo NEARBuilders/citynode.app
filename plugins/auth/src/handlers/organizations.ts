@@ -4,6 +4,25 @@ import * as schema from "../db/schema";
 import type { PluginServices } from "../service-types";
 import { createHeaders, safeAuthApi, tryJsonParse } from "../utils";
 
+function toOrganizationInfo(organization: {
+  id: string;
+  name: string;
+  slug: string;
+  logo?: string | null;
+  metadata?: unknown;
+}) {
+  return {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    logo: organization.logo ?? null,
+    metadata:
+      typeof organization.metadata === "string"
+        ? tryJsonParse<Record<string, unknown>>(organization.metadata)
+        : ((organization.metadata as Record<string, unknown> | null | undefined) ?? null),
+  };
+}
+
 export function createOrganizationHandlers(
   services: PluginServices,
   builder: any,
@@ -19,14 +38,7 @@ export function createOrganizationHandlers(
           }),
         );
         return result.map((org: any) => ({
-          id: org.id,
-          name: org.name,
-          slug: org.slug,
-          logo: org.logo ?? null,
-          metadata:
-            typeof org.metadata === "string"
-              ? tryJsonParse<Record<string, unknown>>(org.metadata)
-              : ((org.metadata as Record<string, unknown> | null | undefined) ?? null),
+          ...toOrganizationInfo(org),
           createdAt: org.createdAt instanceof Date ? org.createdAt : new Date(org.createdAt),
         }));
       }),
@@ -45,14 +57,7 @@ export function createOrganizationHandlers(
           });
           if (!result) return null;
           return {
-            id: result.id,
-            name: result.name,
-            slug: result.slug,
-            logo: result.logo ?? null,
-            metadata:
-              typeof result.metadata === "string"
-                ? tryJsonParse<Record<string, unknown>>(result.metadata)
-                : ((result.metadata as Record<string, unknown> | null | undefined) ?? null),
+            ...toOrganizationInfo(result),
             createdAt:
               result.createdAt instanceof Date ? result.createdAt : new Date(result.createdAt),
             members: (result.members ?? []).map((m: any) => ({
@@ -86,6 +91,19 @@ export function createOrganizationHandlers(
         }
       }),
 
+    getOrganizationForAdmin: builder.getOrganizationForAdmin
+      .use(requireAuth)
+      .handler(async ({ input, context }: { input: any; context: any }) => {
+        if (context.user.role !== "admin") {
+          throw new ORPCError("FORBIDDEN", { message: "Admin access required" });
+        }
+        const organization = await services.db.query.organization.findFirst({
+          where: eq(schema.organization.id, input.organizationId),
+        });
+        if (!organization) return null;
+        return toOrganizationInfo(organization);
+      }),
+
     createOrganization: builder.createOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
@@ -101,14 +119,7 @@ export function createOrganizationHandlers(
           }),
         );
         return {
-          id: result.id,
-          name: result.name,
-          slug: result.slug,
-          logo: result.logo ?? null,
-          metadata:
-            typeof result.metadata === "string"
-              ? tryJsonParse<Record<string, unknown>>(result.metadata)
-              : result.metadata,
+          ...toOrganizationInfo(result),
           createdAt:
             result.createdAt instanceof Date ? result.createdAt : new Date(result.createdAt),
         };
@@ -146,16 +157,7 @@ export function createOrganizationHandlers(
         if (!result) {
           throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
         }
-        return {
-          id: result.id,
-          name: result.name,
-          slug: result.slug,
-          logo: result.logo ?? null,
-          metadata:
-            typeof result.metadata === "string"
-              ? tryJsonParse<Record<string, unknown>>(result.metadata)
-              : result.metadata,
-        };
+        return toOrganizationInfo(result);
       }),
 
     leaveOrganization: builder.leaveOrganization

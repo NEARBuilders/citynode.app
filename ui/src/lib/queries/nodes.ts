@@ -6,6 +6,7 @@ const NODE_STALE_TIME = 30 * 1000;
 export type AdminNodeListScope = "roots" | "all";
 
 type NodeRecord = Awaited<ReturnType<ApiClient["listNodes"]>>[number];
+export type AdminNodeListKind = NodeRecord["kind"] | "all";
 
 export interface AdminNodeListRow {
   node: NodeRecord;
@@ -22,7 +23,8 @@ export const nodeQueryKeys = {
   roots: () => [...nodeQueryKeys.lists(), "roots"] as const,
   children: (parentId: string) => [...nodeQueryKeys.lists(), "children", parentId] as const,
   tenant: (tenantId: string) => [...nodeQueryKeys.lists(), "tenant", tenantId] as const,
-  adminList: (scope: AdminNodeListScope) => [...nodeQueryKeys.lists(), "admin", scope] as const,
+  adminList: (scope: AdminNodeListScope, kind: AdminNodeListKind) =>
+    [...nodeQueryKeys.lists(), "admin", scope, kind] as const,
   details: () => [...nodeQueryKeys.all, "detail"] as const,
   byId: (nodeId: string) => [...nodeQueryKeys.details(), "id", nodeId] as const,
   bySlug: (slug: string, parentId?: string | null) =>
@@ -107,31 +109,35 @@ export function stakingValidatorsQueryOptions(apiClient: ApiClient, nodeId: stri
   });
 }
 
-export function adminNodeListQueryOptions(apiClient: ApiClient, scope: AdminNodeListScope) {
+export function adminNodeListQueryOptions(
+  apiClient: ApiClient,
+  scope: AdminNodeListScope,
+  kind: AdminNodeListKind,
+) {
   return queryOptions({
-    queryKey: nodeQueryKeys.adminList(scope),
+    queryKey: nodeQueryKeys.adminList(scope, kind),
     queryFn: async () => {
-      const [allNodes, tenants] = await Promise.all([
+      const [allNodes, tenants, summaries] = await Promise.all([
         apiClient.listNodes({}),
         apiClient.listTenants(),
+        apiClient.listNodeSummaries({
+          scope,
+          ...(kind !== "all" && { kind }),
+        }),
       ]);
-      const nodes = scope === "roots" ? await apiClient.listRootNodes() : allNodes;
       const parents = new Map(allNodes.map((node) => [node.id, node]));
       const statuses = new Map(tenants.map((tenant) => [tenant.id, tenant.status]));
-      return (
-        await Promise.all(
-          nodes.map(async (node): Promise<AdminNodeListRow> => {
-            const summary = await apiClient.getNodeSummary({ nodeId: node.id });
-            return {
-              node,
-              parent: node.parentId ? parents.get(node.parentId) : undefined,
-              status: statuses.get(node.tenantId) ?? "unknown",
-              childrenCount: summary.childrenCount,
-              validatorCount: summary.validators.length,
-            };
+      return summaries
+        .map(
+          ({ node, childrenCount, validatorCount }): AdminNodeListRow => ({
+            node,
+            parent: node.parentId ? parents.get(node.parentId) : undefined,
+            status: statuses.get(node.tenantId) ?? "unknown",
+            childrenCount,
+            validatorCount,
           }),
         )
-      ).sort((a, b) => a.node.name.localeCompare(b.node.name));
+        .sort((a, b) => a.node.name.localeCompare(b.node.name));
     },
     staleTime: NODE_STALE_TIME,
   });

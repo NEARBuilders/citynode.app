@@ -12,6 +12,12 @@ type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/tenants/")({
+  loader: async ({ context }) => {
+    await Promise.all([
+      context.queryClient.ensureQueryData(tenantsQueryOptions(context.apiClient)),
+      context.queryClient.ensureQueryData(allNodesQueryOptions(context.apiClient)),
+    ]);
+  },
   head: () => ({
     meta: [{ title: "Tenants | app" }],
   }),
@@ -28,14 +34,12 @@ const STATUS_VARIANT: Record<Tenant["status"], "default" | "destructive" | "seco
 function AdminTenants() {
   const apiClient = useApiClient();
 
-  const {
-    data: tenants = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery(tenantsQueryOptions(apiClient));
-
-  const { data: nodes = [] } = useQuery(allNodesQueryOptions(apiClient));
+  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
+  const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
+  const tenants = tenantsQuery.data ?? [];
+  const nodes = nodesQuery.data ?? [];
+  const isLoading = tenantsQuery.isLoading || nodesQuery.isLoading;
+  const error = tenantsQuery.error ?? nodesQuery.error;
 
   const slugByTenantId = useMemo(() => {
     const map = new Map<string, string>();
@@ -132,7 +136,10 @@ function AdminTenants() {
           title="Failed to load tenants"
           description={error.message || "Something went wrong while loading tenants."}
           action={
-            <Button variant="outline" onClick={() => refetch()}>
+            <Button
+              variant="outline"
+              onClick={() => Promise.all([tenantsQuery.refetch(), nodesQuery.refetch()])}
+            >
               retry
             </Button>
           }

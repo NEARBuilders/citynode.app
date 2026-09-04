@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUp, Clock3, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
+import { useApiClient } from "@/app";
 import { Badge, Button, PageContainer, PageHeader } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -14,26 +14,23 @@ type Proposal = ProposalResult["data"][number];
 type UpvoteCount = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCount"]>>;
 type UserVote = Awaited<ReturnType<ApiClient["votes"]["getUserVote"]>>;
 
-export const Route = createFileRoute("/_layout/_public/things/$thingId")({
+export const Route = createFileRoute("/_layout/_authenticated/_dashboard/things/$thingId")({
   head: ({ params }) => ({
     meta: [
       { title: `${params.thingId} | Things | everything.dev` },
       { name: "description", content: `Detail view for thing ${params.thingId}.` },
     ],
   }),
-  component: ThingDetailPage,
+  component: ThingDetailsPage,
 });
 
-function ThingDetailPage() {
+function ThingDetailsPage() {
   const { thingId } = Route.useParams();
   const apiClient = useApiClient();
-  const auth = useAuthClient();
   const queryClient = useQueryClient();
   const router = useRouter();
   const canGoBack = router.history.canGoBack?.() ?? false;
-
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
-  const isAuthenticated = !!session?.user;
+  const { session } = Route.useRouteContext();
   const isAdmin = session?.user?.role === "admin";
 
   const proposalQuery = useQuery({
@@ -77,7 +74,7 @@ function ThingDetailPage() {
   const userVoteQuery = useQuery({
     queryKey: userVoteQueryKey,
     queryFn: () => apiClient.votes.getUserVote({ entityId: thingId }),
-    enabled: !!thingQuery.data && isAuthenticated,
+    enabled: !!thingQuery.data,
     staleTime: 15 * 1000,
   });
 
@@ -210,33 +207,21 @@ function ThingDetailPage() {
                 <Badge variant="outline" className="text-xs font-mono">
                   {thing.type}
                 </Badge>
-                {isAuthenticated ? (
-                  <Button
-                    type="button"
-                    variant={userVoteQuery.data?.hasUpvote ? "default" : "outline"}
-                    size="sm"
-                    className="gap-1.5"
-                    aria-pressed={userVoteQuery.data?.hasUpvote ?? false}
-                    onClick={() => voteMutation.mutate(!(userVoteQuery.data?.hasUpvote ?? false))}
-                    disabled={
-                      upvoteCountQuery.isLoading ||
-                      userVoteQuery.isLoading ||
-                      voteMutation.isPending
-                    }
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                    {upvoteCountQuery.data?.totalCount ?? 0}
-                    <span>{userVoteQuery.data?.hasUpvote ? "upvoted" : "upvote"}</span>
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline" size="sm" className="gap-1.5">
-                    <Link to="/login" search={{ redirect: `/things/${thingId}` }}>
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      {upvoteCountQuery.data?.totalCount ?? 0}
-                      <span>sign in to upvote</span>
-                    </Link>
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant={userVoteQuery.data?.hasUpvote ? "default" : "outline"}
+                  size="sm"
+                  className="gap-1.5"
+                  aria-pressed={userVoteQuery.data?.hasUpvote ?? false}
+                  onClick={() => voteMutation.mutate(!(userVoteQuery.data?.hasUpvote ?? false))}
+                  disabled={
+                    upvoteCountQuery.isLoading || userVoteQuery.isLoading || voteMutation.isPending
+                  }
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  {upvoteCountQuery.data?.totalCount ?? 0}
+                  <span>{userVoteQuery.data?.hasUpvote ? "upvoted" : "upvote"}</span>
+                </Button>
               </div>
 
               <div className="space-y-1.5 text-sm">

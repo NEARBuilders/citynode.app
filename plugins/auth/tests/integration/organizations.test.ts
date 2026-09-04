@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as schema from "../../src/db/schema";
 import {
   addTestMember,
   createTestHandlers,
@@ -61,6 +63,47 @@ describe("organization handlers", () => {
       });
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("getOrganizationForAdmin", () => {
+    it("returns an organization the platform admin does not belong to", async () => {
+      const owner = await createTestUser(services.services);
+      const admin = await createTestUser(services.services, {
+        email: `platform-admin-${crypto.randomUUID()}@example.com`,
+      });
+      const organization = await createTestOrg(services.services, owner.userId, {
+        slug: `tenant-org-${crypto.randomUUID().slice(0, 8)}`,
+      });
+      await services.services.db
+        .update(schema.user)
+        .set({ role: "admin" })
+        .where(eq(schema.user.id, admin.userId));
+      const handlers = createTestHandlers(services.services);
+
+      const result = await handlers.organizations.getOrganizationForAdmin({
+        input: { organizationId: organization.id },
+        context: { reqHeaders: admin.reqHeaders },
+      });
+
+      expect(result).toMatchObject({
+        id: organization.id,
+        slug: organization.slug,
+      });
+    });
+
+    it("rejects a non-admin lookup", async () => {
+      const owner = await createTestUser(services.services);
+      const otherUser = await createTestUser(services.services);
+      const organization = await createTestOrg(services.services, owner.userId);
+      const handlers = createTestHandlers(services.services);
+
+      await expect(
+        handlers.organizations.getOrganizationForAdmin({
+          input: { organizationId: organization.id },
+          context: { reqHeaders: otherUser.reqHeaders },
+        }),
+      ).rejects.toThrow("Admin access required");
     });
   });
 

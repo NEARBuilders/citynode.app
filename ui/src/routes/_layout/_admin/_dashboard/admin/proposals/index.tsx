@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FileCheck2 } from "lucide-react";
 import { useMemo } from "react";
@@ -16,6 +16,8 @@ import {
 } from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import {
+  adminProposalListQueryOptions,
+  DEFAULT_PROPOSAL_REVIEW_FILTER,
   PROPOSAL_REVIEW_FILTERS,
   type ProposalReviewFilter,
   parseProposalReviewFilter,
@@ -31,6 +33,13 @@ export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/proposals
   validateSearch: (search: Record<string, unknown>): AdminProposalSearch => ({
     status: parseProposalReviewFilter(search.status),
   }),
+  loaderDeps: ({ search }) => ({
+    status: search.status ?? DEFAULT_PROPOSAL_REVIEW_FILTER,
+  }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureInfiniteQueryData(
+      adminProposalListQueryOptions(context.apiClient, deps.status),
+    ),
   head: () => ({
     meta: [{ title: "Proposal review | app" }],
   }),
@@ -41,17 +50,8 @@ function AdminProposals() {
   const apiClient = useApiClient();
   const navigate = Route.useNavigate();
   const { status } = Route.useSearch();
-  const activeFilter = status ?? "pending";
-  const queryKey = ["admin-proposals", activeFilter] as const;
-
-  const proposalsQuery = useQuery({
-    queryKey,
-    queryFn: () =>
-      activeFilter === "all"
-        ? apiClient.proposals.getProposals({ limit: 100 })
-        : apiClient.proposals.getProposals({ reviewStatus: activeFilter, limit: 100 }),
-    staleTime: 15 * 1000,
-  });
+  const activeFilter = status ?? DEFAULT_PROPOSAL_REVIEW_FILTER;
+  const proposalsQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, activeFilter));
 
   const columns = useMemo<DataTableColumnDef<Proposal>[]>(
     () => [
@@ -127,7 +127,8 @@ function AdminProposals() {
     [],
   );
 
-  const proposals = proposalsQuery.data?.data ?? [];
+  const proposals = proposalsQuery.data?.pages.flatMap((page) => page.data) ?? [];
+  const total = proposalsQuery.data?.pages[0]?.meta.total ?? 0;
 
   return (
     <div className="space-y-6">
@@ -135,7 +136,7 @@ function AdminProposals() {
         title="Proposal review"
         action={
           <Badge variant="secondary">
-            {proposalsQuery.data?.meta.total ?? 0} {activeFilter === "all" ? "total" : activeFilter}
+            {total} {activeFilter === "all" ? "total" : activeFilter}
           </Badge>
         }
       />
@@ -144,7 +145,12 @@ function AdminProposals() {
         value={activeFilter}
         onValueChange={(value) =>
           navigate({
-            search: { status: value === "pending" ? undefined : (value as ProposalReviewFilter) },
+            search: {
+              status:
+                value === DEFAULT_PROPOSAL_REVIEW_FILTER
+                  ? undefined
+                  : (value as ProposalReviewFilter),
+            },
           })
         }
       >
@@ -184,8 +190,19 @@ function AdminProposals() {
           className="min-h-[40vh]"
         />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="space-y-4 overflow-x-auto">
           <DataTable columns={columns} data={proposals} />
+          {proposalsQuery.hasNextPage && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => proposalsQuery.fetchNextPage()}
+                disabled={proposalsQuery.isFetchingNextPage}
+              >
+                {proposalsQuery.isFetchingNextPage ? "loading..." : "load more"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

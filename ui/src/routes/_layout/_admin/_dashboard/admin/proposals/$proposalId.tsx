@@ -18,7 +18,12 @@ import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { nodeProposalPayloadSchema } from "@/routes/_layout/_authenticated/_dashboard/-node-application";
 import { approveAndApplyProposal } from "./-proposal-application";
-import { proposalReviewStatusVariant } from "./-proposal-review";
+import {
+  adminProposalDetailQueryOptions,
+  proposalReviewHistoryQueryOptions,
+  proposalReviewQueryKeys,
+  proposalReviewStatusVariant,
+} from "./-proposal-review";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
@@ -47,27 +52,11 @@ function ProposalDetailPage() {
   const { runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const [rejectionReason, setRejectionReason] = useState("");
-  const proposalQueryKey = ["admin-proposal", proposalId, pluginId, entityId] as const;
-
-  const proposalQuery = useQuery({
-    queryKey: proposalQueryKey,
-    queryFn: async () => {
-      if (!pluginId || !entityId) throw new Error("Proposal location is missing");
-      const result = await apiClient.proposals.getProposals({ pluginId, entityId, limit: 1 });
-      return result.data.find((proposal) => proposal.id === proposalId) ?? null;
-    },
-    enabled: !!pluginId && !!entityId,
-  });
-
-  const reviewHistoryQuery = useQuery({
-    queryKey: ["proposal-review-history", pluginId],
-    queryFn: () => {
-      if (!pluginId) throw new Error("Plugin ID is missing");
-      return apiClient.proposals.getReviewHistory({ pluginId, limit: 100 });
-    },
-    enabled: !!pluginId,
-    staleTime: 15 * 1000,
-  });
+  const proposalQueryKey = proposalReviewQueryKeys.detail(proposalId, pluginId, entityId);
+  const proposalQuery = useQuery(
+    adminProposalDetailQueryOptions(apiClient, proposalId, pluginId, entityId),
+  );
+  const reviewHistoryQuery = useQuery(proposalReviewHistoryQueryOptions(apiClient, pluginId));
 
   const reviewMutation = useMutation({
     mutationFn: async ({
@@ -107,11 +96,11 @@ function ProposalDetailPage() {
             : "Proposal approved",
       );
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["admin-proposals"] }),
+        queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: ["thing-proposal", proposal.entityId] }),
         queryClient.invalidateQueries({ queryKey: ["thing", proposal.entityId] }),
         queryClient.invalidateQueries({ queryKey: ["things-list"] }),
-        queryClient.invalidateQueries({ queryKey: ["proposal-review-history"] }),
+        queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.histories() }),
         invalidateNodeQueries(queryClient),
         invalidateTenantQueries(queryClient),
       ]);
@@ -121,7 +110,7 @@ function ProposalDetailPage() {
       toast.error(error.message || "Failed to review proposal");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: proposalQueryKey }),
-        queryClient.invalidateQueries({ queryKey: ["admin-proposals"] }),
+        queryClient.invalidateQueries({ queryKey: proposalReviewQueryKeys.all }),
       ]);
     },
   });
