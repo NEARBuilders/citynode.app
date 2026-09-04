@@ -1,9 +1,22 @@
+vi.mock("../../src/infra/materializer", async () => {
+  const actual = await vi.importActual<typeof import("../../src/infra/materializer")>(
+    "../../src/infra/materializer",
+  );
+  // Replace the orchestration helper with a no-op so the file-generation
+  // side-effects don't pollute the test's tempdir. The previous test mock
+  // targeted writeGeneratedInfra; this is the materializer-equivalent
+  // bypass at the orchestration entry point.
+  return {
+    ...actual,
+    materializeViaLayer: async () => {},
+  };
+});
+
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as infraModule from "../../src/cli/infra";
 import * as initModule from "../../src/cli/init";
 import {
   buildInitPatterns,
@@ -97,7 +110,6 @@ describe("syncTemplate", () => {
     });
     vi.spyOn(initModule, "runBunInstall").mockResolvedValue();
     vi.spyOn(initModule, "runTypesGen").mockResolvedValue();
-    vi.spyOn(infraModule, "writeGeneratedInfra").mockImplementation(() => {});
   });
 
   afterEach(() => {

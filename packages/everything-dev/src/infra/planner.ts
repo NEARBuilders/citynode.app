@@ -14,6 +14,7 @@ import {
 } from "../cli/infra";
 import { buildDescription } from "../service-descriptor";
 import type { RuntimeConfig } from "../types";
+import { shouldPersistPortState } from "./materializer";
 import type {
   ClaimRecord,
   CliPorts,
@@ -34,13 +35,6 @@ const DEFAULT_AUTH_PORT = 3002;
 const DEFAULT_UI_PORT = 3003;
 const DEFAULT_PLUGIN_PORT_START = 3010;
 
-function shouldPersistPortState(): boolean {
-  return (
-    process.env.BOS_NO_PERSIST_PORTS !== "1" &&
-    process.env.BOS_TEST !== "1" &&
-    process.env.NODE_ENV !== "test"
-  );
-}
 const POSTGRES_USER = "everythingdev";
 const POSTGRES_PASSWORD = "everythingdev";
 

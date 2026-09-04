@@ -17,14 +17,7 @@ import {
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
-import {
-  buildCiInfraPlan,
-  type CiInfraPlan,
-  ensureEnvFile,
-  loadProjectEnv,
-  syncGeneratedInfra,
-  writeGeneratedInfra,
-} from "./cli/infra";
+import { buildCiInfraPlan, type CiInfraPlan, ensureEnvFile, loadProjectEnv } from "./cli/infra";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
@@ -81,6 +74,7 @@ import {
   type PluginManifest,
   parseBosUrl,
 } from "./fastkv";
+import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
@@ -798,7 +792,7 @@ export default createPlugin({
       }
 
       const services = buildServiceDescriptorMapFromPlan(plan, { ssr, proxy });
-      writeGeneratedInfra(deps.configDir, plan.runtimeConfig);
+      await materializeViaLayer(deps.configDir, plan.runtimeConfig);
       ensureEnvFile(deps.configDir);
       loadProjectEnv(deps.configDir);
 
@@ -914,7 +908,7 @@ export default createPlugin({
         runtimeConfig.env = "staging";
       }
 
-      syncGeneratedInfra(deps.configDir, runtimeConfig);
+      await materializeViaLayer(deps.configDir, runtimeConfig);
       ensureEnvFile(deps.configDir);
       loadProjectEnv(deps.configDir);
 
@@ -1574,7 +1568,7 @@ export default createPlugin({
           );
           if (initConfig?.runtime) {
             await timePhase(timings, "generate env/docker", async () => {
-              writeGeneratedInfra(targetDir, initConfig.runtime);
+              await materializeViaLayer(targetDir, initConfig.runtime);
             });
           }
           await timePhase(timings, "create env file", async () => {

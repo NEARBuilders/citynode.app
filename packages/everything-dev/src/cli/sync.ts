@@ -4,13 +4,13 @@ import { dirname, join } from "node:path";
 import { glob } from "glob";
 import { loadResolvedConfig } from "../config";
 import type { SyncOptions, SyncResult } from "../contract";
+import { materializeViaLayer } from "../infra/materializer";
 import {
   isPlainObject as isPlainObjectFromMerge,
   mergeBosConfigWithTemplate,
   resolveExtendsRef,
 } from "../merge";
 import { syncResolvedSharedDeps } from "../shared-deps";
-import { writeGeneratedInfra } from "./infra";
 import {
   buildChildAgentsMd,
   buildChildRootScripts,
@@ -646,7 +646,7 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
 
     const syncedConfig = await loadResolvedConfig({ cwd: projectDir });
     if (syncedConfig?.runtime) {
-      writeGeneratedInfra(projectDir, syncedConfig.runtime);
+      await materializeViaLayer(projectDir, syncedConfig.runtime!);
     }
 
     const newSnapshotFiles: Record<string, string> = {};

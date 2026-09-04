@@ -1,16 +1,50 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
+import { ensureEnvFile, loadPortState, loadProjectEnv, savePortState } from "../../src/cli/infra";
 import {
-  ensureEnvFile,
-  loadPortState,
-  loadProjectEnv,
-  savePortState,
-  syncGeneratedInfra,
-  writeGeneratedInfra,
-} from "../../src/cli/infra";
+  buildGeneratedInfraSpec,
+  InfraMaterializer,
+  InfraMaterializerLive,
+} from "../../src/infra/materializer";
 import type { RuntimeConfig } from "../../src/types";
+
+async function materialize(configDir: string, runtimeConfig: RuntimeConfig): Promise<void> {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const m = yield* InfraMaterializer;
+      yield* m.materializeTemplate(configDir, runtimeConfig);
+      yield* m.materializeTestInfra(configDir, runtimeConfig);
+      yield* m.materializeCompose(configDir, runtimeConfig);
+    }).pipe(Effect.provide(InfraMaterializerLive)),
+  );
+}
+
+async function materializeWithPortState(
+  configDir: string,
+  runtimeConfig: RuntimeConfig,
+): Promise<void> {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const m = yield* InfraMaterializer;
+      yield* m.materializeTemplate(configDir, runtimeConfig);
+      yield* m.materializeTestInfra(configDir, runtimeConfig);
+      yield* m.materializeCompose(configDir, runtimeConfig);
+      const { portState } = buildGeneratedInfraSpec(runtimeConfig, configDir);
+      yield* m.persistPortState(configDir, portState);
+    }).pipe(Effect.provide(InfraMaterializerLive)),
+  );
+}
 
 function buildRuntimeConfig(overrides?: Partial<RuntimeConfig>): RuntimeConfig {
   return {
@@ -54,18 +88,18 @@ describe("generated infra", () => {
     }
   });
 
-  it("writes env example and docker compose from runtime secrets", () => {
+  it("writes env example and docker compose from runtime secrets", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-infra-"));
     tempDirs.push(dir);
 
-    const secrets = writeGeneratedInfra(dir, buildRuntimeConfig());
+    await materialize(dir, buildRuntimeConfig());
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
     const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
 
-    expect(secrets).toContain("API_DATABASE_URL");
-    expect(secrets).toContain("AUTH_DATABASE_URL");
-    expect(secrets).toContain("EXAMPLE_DATABASE_URL");
-    expect(secrets).toContain("PAYMENT_API_URL");
+    expect(envExample).toContain("API_DATABASE_URL");
+    expect(envExample).toContain("AUTH_DATABASE_URL");
+    expect(envExample).toContain("EXAMPLE_DATABASE_URL");
+    expect(envExample).toContain("PAYMENT_API_URL");
 
     expect(envExample).toContain("# app.host");
     expect(envExample).toContain("CORS_ORIGIN=http://localhost:3000");
@@ -113,11 +147,11 @@ describe("generated infra", () => {
     expect(dockerCompose).not.toContain("payment");
   });
 
-  it("writes a committed .env.test with isolated test database URLs", () => {
+  it("writes a committed .env.test with isolated test database URLs", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-env-test-"));
     tempDirs.push(dir);
 
-    writeGeneratedInfra(dir, buildRuntimeConfig());
+    await materialize(dir, buildRuntimeConfig());
     const envTest = readFileSync(join(dir, ".env.test"), "utf-8");
 
     expect(envTest).toContain("# app.api");
@@ -137,11 +171,11 @@ describe("generated infra", () => {
     expect(envTest).not.toContain("PAYMENT_API_URL=");
   });
 
-  it("generates Redis docker compose and env for _REDIS_URL secrets", () => {
+  it("generates Redis docker compose and env for _REDIS_URL secrets", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-redis-"));
     tempDirs.push(dir);
 
-    const secrets = writeGeneratedInfra(
+    await materialize(
       dir,
       buildRuntimeConfig({
         plugins: {
@@ -158,7 +192,7 @@ describe("generated infra", () => {
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
     const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
 
-    expect(secrets).toContain("CACHE_REDIS_URL");
+    expect(envExample).toContain("CACHE_REDIS_URL");
 
     expect(envExample).toContain("# plugins.cache");
     expect(envExample).toContain("CACHE_REDIS_URL=redis://localhost:6379");
@@ -174,11 +208,11 @@ describe("generated infra", () => {
     expect(dockerCompose).toContain("name: dev_everything_near_redis_cache_data");
   });
 
-  it("generates Redis alongside Postgres in the same compose", () => {
+  it("generates Redis alongside Postgres in the same compose", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-mixed-"));
     tempDirs.push(dir);
 
-    writeGeneratedInfra(
+    await materialize(
       dir,
       buildRuntimeConfig({
         plugins: {
@@ -200,11 +234,11 @@ describe("generated infra", () => {
     expect(dockerCompose).toContain("redis-cache:");
   });
 
-  it("persists shared database ports in infra-state.json", () => {
+  it("persists shared database ports in infra-state.json", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-state-"));
     tempDirs.push(dir);
 
-    syncGeneratedInfra(
+    await materializeWithPortState(
       dir,
       buildRuntimeConfig({
         plugins: {
@@ -230,7 +264,7 @@ describe("generated infra", () => {
       "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
     );
 
-    syncGeneratedInfra(
+    await materializeWithPortState(
       dir,
       buildRuntimeConfig({
         plugins: {
@@ -272,13 +306,13 @@ describe("generated infra", () => {
     expect(dockerCompose).not.toContain("postgres-registry-test:");
   });
 
-  it("assigns all non-auth database secrets to the shared API port", () => {
+  it("assigns all non-auth database secrets to the shared API port", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-order-"));
     tempDirs.push(dir);
 
     mkdirSync(join(dir, ".bos"), { recursive: true });
 
-    writeGeneratedInfra(
+    await materializeWithPortState(
       dir,
       buildRuntimeConfig({
         plugins: {
@@ -314,72 +348,11 @@ describe("generated infra", () => {
     expect(state.postgresPorts.zebra).toBe(5432);
   });
 
-  it("detects stale .env values when ports change", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-stale-"));
-    tempDirs.push(dir);
-
-    syncGeneratedInfra(
-      dir,
-      buildRuntimeConfig({
-        plugins: {
-          example: {
-            name: "example",
-            url: "http://localhost:3010",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["EXAMPLE_DATABASE_URL"],
-          },
-        },
-      }),
-    );
-
-    writeFileSync(
-      join(dir, ".env"),
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:9999/example_db\n",
-    );
-
-    const result = syncGeneratedInfra(
-      dir,
-      buildRuntimeConfig({
-        plugins: {
-          example: {
-            name: "example",
-            url: "http://localhost:3010",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["EXAMPLE_DATABASE_URL"],
-          },
-        },
-      }),
-    );
-
-    expect(result.staleEnvWarnings.length).toBe(1);
-    expect(result.staleEnvWarnings[0]).toContain("EXAMPLE_DATABASE_URL");
-    expect(result.staleEnvWarnings[0]).toContain("9999");
-    expect(result.staleEnvWarnings[0]).toContain("5432");
-  });
-
-  it("reports no stale warnings when .env matches or does not exist", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-fresh-"));
-    tempDirs.push(dir);
-
-    const result = syncGeneratedInfra(dir, buildRuntimeConfig());
-    expect(result.staleEnvWarnings.length).toBe(0);
-
-    writeFileSync(
-      join(dir, ".env"),
-      "API_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db\n",
-    );
-
-    const second = syncGeneratedInfra(dir, buildRuntimeConfig());
-    expect(second.staleEnvWarnings.length).toBe(0);
-  });
-
-  it("creates .env with generated auth secret and preserves other defaults", () => {
+  it("creates .env with generated auth secret and preserves other defaults", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-env-"));
     tempDirs.push(dir);
 
-    writeGeneratedInfra(dir, buildRuntimeConfig());
+    await materialize(dir, buildRuntimeConfig());
     ensureEnvFile(dir);
 
     const env = readFileSync(join(dir, ".env"), "utf-8");
@@ -398,19 +371,32 @@ describe("generated infra", () => {
     expect(env).toMatch(/BETTER_AUTH_SECRET=.+/);
   });
 
-  it("skips rewriting generated infra when nothing changed", () => {
+  it("skips rewriting generated infra when nothing changed", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-sync-env-"));
     tempDirs.push(dir);
 
-    const first = syncGeneratedInfra(dir, buildRuntimeConfig());
-    const second = syncGeneratedInfra(dir, buildRuntimeConfig());
+    await materialize(dir, buildRuntimeConfig());
 
-    expect(first.envExampleChanged).toBe(true);
-    expect(first.envTestChanged).toBe(true);
-    expect(first.dockerComposeChanged).toBe(true);
-    expect(second.envExampleChanged).toBe(false);
-    expect(second.envTestChanged).toBe(false);
-    expect(second.dockerComposeChanged).toBe(false);
+    const firstExample = readFileSync(join(dir, ".env.example"), "utf-8");
+    const firstTest = readFileSync(join(dir, ".env.test"), "utf-8");
+    const firstCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
+    const firstMtimes = [
+      statSync(join(dir, ".env.example")).mtimeMs,
+      statSync(join(dir, ".env.test")).mtimeMs,
+      statSync(join(dir, "docker-compose.yml")).mtimeMs,
+    ];
+
+    // sleep well above filesystem mtime resolution so a re-write is detectable
+    await new Promise((r) => setTimeout(r, 1100));
+
+    await materialize(dir, buildRuntimeConfig());
+
+    expect(readFileSync(join(dir, ".env.example"), "utf-8")).toBe(firstExample);
+    expect(readFileSync(join(dir, ".env.test"), "utf-8")).toBe(firstTest);
+    expect(readFileSync(join(dir, "docker-compose.yml"), "utf-8")).toBe(firstCompose);
+    expect(statSync(join(dir, ".env.example")).mtimeMs).toBe(firstMtimes[0]!);
+    expect(statSync(join(dir, ".env.test")).mtimeMs).toBe(firstMtimes[1]!);
+    expect(statSync(join(dir, "docker-compose.yml")).mtimeMs).toBe(firstMtimes[2]!);
   });
 
   it("loads .env into the bos process without overriding exported values", () => {
@@ -452,11 +438,11 @@ describe("generated infra", () => {
     }
   });
 
-  it("derives CORS_ORIGIN from runtimeConfig.host.port in development", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-cors-port-"));
+  it("keeps CORS_ORIGIN stable at :3000 in .env.example regardless of host.port", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bos-cors-stable-"));
     tempDirs.push(dir);
 
-    writeGeneratedInfra(
+    await materialize(
       dir,
       buildRuntimeConfig({
         host: {
@@ -468,28 +454,33 @@ describe("generated infra", () => {
       }),
     );
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
-    expect(envExample).toContain("CORS_ORIGIN=http://localhost:3210");
+    expect(envExample).toContain("CORS_ORIGIN=http://localhost:3000");
+    expect(envExample).not.toContain("CORS_ORIGIN=http://localhost:3210");
   });
 
-  it("leaves CORS_ORIGIN at the URL-derived port when host.port is unset", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-cors-url-"));
+  it("keeps CORS_ORIGIN stable when host.url resolves to a non-default port", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bos-cors-stable-url-"));
     tempDirs.push(dir);
 
-    writeGeneratedInfra(
+    await materialize(
       dir,
       buildRuntimeConfig({
         host: { name: "host", url: "http://localhost:3055", entry: "/mf-manifest.json" },
       }),
     );
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
-    expect(envExample).toContain("CORS_ORIGIN=http://localhost:3055");
+    expect(envExample).toContain("CORS_ORIGIN=http://localhost:3000");
+    expect(envExample).not.toContain("CORS_ORIGIN=http://localhost:3055");
   });
 
-  it("skips dev CORS_ORIGIN override in production env", () => {
+  // canary: production-env path is identical to the dev path now that
+  // CORS_ORIGIN is decoupled from the runtime host port. Kept as a guard
+  // in case an env-mode conditional is reintroduced.
+  it("skips dev CORS_ORIGIN override in production env", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-cors-prod-"));
     tempDirs.push(dir);
 
-    writeGeneratedInfra(
+    await materialize(
       dir,
       buildRuntimeConfig({
         env: "production",

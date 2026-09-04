@@ -67,6 +67,8 @@ interface DevPortState {
   pluginPortStart?: number;
 }
 
+export type { DevPortState };
+
 export interface PortState {
   postgresPorts: Record<string, number>;
   redisPorts: Record<string, number>;
@@ -78,14 +80,6 @@ export interface GeneratedInfraSpec {
   databases: DatabaseSecretConfig[];
   redis: RedisSecretConfig[];
   testDatabases: TestInfraConfig;
-}
-
-interface SyncGeneratedInfraResult {
-  secrets: string[];
-  envExampleChanged: boolean;
-  envTestChanged: boolean;
-  dockerComposeChanged: boolean;
-  staleEnvWarnings: string[];
 }
 
 function uniqueSecrets(values: Array<string | undefined>): string[] {
@@ -194,6 +188,8 @@ function buildGeneratedInfraSpec(
 
   return { spec: { groups, databases, redis, testDatabases }, portState };
 }
+
+export { buildGeneratedInfraSpec };
 
 export function normalizeDatabaseSlug(secret: string): string {
   return secret.replace(/_DATABASE_URL$/, "").toLowerCase();
@@ -402,6 +398,8 @@ function resolveDevHostPort(runtimeConfig: RuntimeConfig): number {
   return 3000;
 }
 
+export { resolveDevHostPort };
+
 function defaultSecretValue(
   secret: string,
   databases: Map<string, DatabaseSecretConfig>,
@@ -413,6 +411,9 @@ function defaultSecretValue(
   }
 
   if (secret === "CORS_ORIGIN") {
+    if (options.forExample) {
+      return "http://localhost:3000";
+    }
     if (typeof options.devHostPort === "number") {
       return `http://localhost:${options.devHostPort}`;
     }
@@ -447,6 +448,8 @@ function renderEnvFile(
   return `${lines.join("\n")}\n`;
 }
 
+export { renderEnvFile };
+
 function renderEnvTestFile(groups: SecretGroup[], testDatabases: TestInfraConfig): string {
   const lines: string[] = [
     "# Generated test environment — loaded by test suites instead of .env",
@@ -473,6 +476,8 @@ function renderEnvTestFile(groups: SecretGroup[], testDatabases: TestInfraConfig
   return `${lines.join("\n")}\n`;
 }
 
+export { renderEnvTestFile };
+
 function uniqueDatabaseServices<T extends { serviceName: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -482,7 +487,7 @@ function uniqueDatabaseServices<T extends { serviceName: string }>(items: T[]): 
   });
 }
 
-interface ComposeDatabaseService {
+export interface ComposeDatabaseService {
   serviceName: string;
   containerName: string;
   port: number;
@@ -588,6 +593,8 @@ function renderDockerCompose(
   return `${lines.join("\n")}\n`;
 }
 
+export { renderDockerCompose };
+
 export function renderEnvFileFromPlan(env: Record<string, string>, devHostPort?: number): string {
   const lines: string[] = [
     "# Generated from bos dev infra plan",
@@ -647,95 +654,6 @@ function syncTextFile(filePath: string, nextContent: string): boolean {
 
   writeFileSync(filePath, nextContent);
   return true;
-}
-
-export function writeGeneratedInfra(configDir: string, runtimeConfig: RuntimeConfig): string[] {
-  const result = syncGeneratedInfra(configDir, runtimeConfig);
-
-  if (result.staleEnvWarnings.length > 0) {
-    p.log.warn(
-      `.env has ${result.staleEnvWarnings.length} stale value(s) compared to .env.example:`,
-    );
-    for (const warning of result.staleEnvWarnings) {
-      p.log.message(`  ${warning}`);
-    }
-  }
-
-  return result.secrets;
-}
-
-export function syncGeneratedInfra(
-  configDir: string,
-  runtimeConfig: RuntimeConfig,
-): SyncGeneratedInfraResult {
-  const { spec, portState } = buildGeneratedInfraSpec(runtimeConfig, configDir);
-  const secrets = spec.groups.flatMap((group) => group.secrets);
-  const envOptions: { forExample: true; devHostPort?: number } = { forExample: true };
-  if (runtimeConfig.env === "development") {
-    envOptions.devHostPort = resolveDevHostPort(runtimeConfig);
-  }
-  const newEnvContent = renderEnvFile(spec.groups, spec.databases, spec.redis, envOptions);
-  const newEnvTestContent = renderEnvTestFile(spec.groups, spec.testDatabases);
-  const newDockerContent = renderDockerCompose(
-    spec.databases,
-    spec.redis,
-    runtimeConfig.account,
-    spec.testDatabases.services,
-  );
-
-  const envExamplePath = join(configDir, ".env.example");
-  const envTestPath = join(configDir, ".env.test");
-  const dockerComposePath = join(configDir, "docker-compose.yml");
-
-  const staleWarnings = checkEnvStaleness(configDir, spec.databases, spec.redis);
-
-  if (configDir) {
-    savePortState(configDir, portState);
-  }
-
-  return {
-    secrets,
-    envExampleChanged: syncTextFile(envExamplePath, newEnvContent),
-    envTestChanged: syncTextFile(envTestPath, newEnvTestContent),
-    dockerComposeChanged: syncTextFile(dockerComposePath, newDockerContent),
-    staleEnvWarnings: staleWarnings,
-  };
-}
-
-function checkEnvStaleness(
-  configDir: string,
-  databases: DatabaseSecretConfig[],
-  redisConfigs: RedisSecretConfig[],
-): string[] {
-  const envPath = join(configDir, ".env");
-  if (!existsSync(envPath)) return [];
-
-  const existingEnv = readFileSync(envPath, "utf-8");
-  const envMap = new Map<string, string>();
-  for (const line of existingEnv.split("\n")) {
-    const match = line.match(/^([A-Z_]+)=(.*)$/);
-    if (match) envMap.set(match[1], match[2]);
-  }
-
-  const stale: string[] = [];
-
-  for (const db of databases) {
-    const existing = envMap.get(db.secret);
-    if (existing && existing !== db.url) {
-      const oldPort = extractPortFromUrl(existing) ?? "?";
-      stale.push(`${db.secret}: port ${oldPort} → ${db.port}`);
-    }
-  }
-
-  for (const redis of redisConfigs) {
-    const existing = envMap.get(redis.secret);
-    if (existing && existing !== redis.url) {
-      const oldPort = extractPortFromUrl(existing) ?? "?";
-      stale.push(`${redis.secret}: port ${oldPort} → ${redis.port}`);
-    }
-  }
-
-  return stale;
 }
 
 export function ensureEnvFile(configDir: string): void {

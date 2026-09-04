@@ -1,15 +1,22 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  buildCiInfraPlan,
-  buildOriginMap,
-  ensureEnvFile,
-  syncGeneratedInfra,
-  writeGeneratedInfra,
-} from "../../src/cli/infra";
+import { buildCiInfraPlan, buildOriginMap, ensureEnvFile } from "../../src/cli/infra";
+import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
 import type { RuntimeConfig, RuntimePluginConfig } from "../../src/types";
+
+async function materialize(configDir: string, runtimeConfig: RuntimeConfig): Promise<void> {
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const m = yield* InfraMaterializer;
+      yield* m.materializeTemplate(configDir, runtimeConfig);
+      yield* m.materializeTestInfra(configDir, runtimeConfig);
+      yield* m.materializeCompose(configDir, runtimeConfig);
+    }).pipe(Effect.provide(InfraMaterializerLive)),
+  );
+}
 
 function buildRuntimeConfig(overrides?: Partial<RuntimeConfig>): RuntimeConfig {
   return {
@@ -59,10 +66,10 @@ describe("buildCiInfraPlan", () => {
     }
   });
 
-  it("emits env vars and shared services for api, auth, and plugin secrets", () => {
+  it("emits env vars and shared services for api, auth, and plugin secrets", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-ci-infra-"));
     tempDirs.push(dir);
-    writeGeneratedInfra(dir, buildRuntimeConfig());
+    await materialize(dir, buildRuntimeConfig());
     ensureEnvFile(dir);
 
     const runtime = {
@@ -114,11 +121,11 @@ describe("buildCiInfraPlan", () => {
     }
   });
 
-  it("tracks stable ports across calls (portMap persistence)", () => {
+  it("tracks stable ports across calls (portMap persistence)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-ci-infra-ports-"));
     tempDirs.push(dir);
     const cfg = buildRuntimeConfig();
-    syncGeneratedInfra(dir, cfg);
+    await materialize(dir, cfg);
     const first = buildCiInfraPlan(cfg, { configDir: dir });
     const second = buildCiInfraPlan(cfg, { configDir: dir });
 
