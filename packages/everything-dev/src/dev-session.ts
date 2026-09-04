@@ -15,7 +15,7 @@ import {
   type ProcessCallbacks,
   type ProcessHandle,
 } from "./orchestrator";
-import { registerStandalone, unregisterPid } from "./process-registry";
+import { registerStandalone, unregisterPid, updateChildPids } from "./process-registry";
 import {
   type AppOrchestrator,
   DevRuntimeConfig,
@@ -76,9 +76,14 @@ function formatLogLine(entry: LogEntry): string {
   return `[${ts}] [${entry.source}] [${prefix}] ${entry.line}`;
 }
 
+export interface DevSessionControls {
+  requestShutdown: () => void;
+  emergencyKill: () => void;
+}
+
 export const runDevSession = (
   orchestrator: AppOrchestrator,
-  onShutdownReady?: (requestShutdown: () => void) => void,
+  onShutdownReady?: (controls: DevSessionControls) => void,
 ) =>
   Effect.gen(function* () {
     const configDir = getProjectRoot();
@@ -107,9 +112,14 @@ export const runDevSession = (
 
     const shutdown = yield* Deferred.make<void>();
 
-    onShutdownReady?.(() => {
-      void Effect.runPromise(Deferred.succeed(shutdown, undefined));
-    });
+    const controls: DevSessionControls = {
+      requestShutdown: () => {
+        void Effect.runPromise(Deferred.succeed(shutdown, undefined));
+      },
+      emergencyKill: () => {},
+    };
+
+    onShutdownReady?.(controls);
 
     const isWorkspaceChild = process.env.BOS_WORKSPACE_CHILD === "1";
     if (!isWorkspaceChild) {
@@ -251,6 +261,32 @@ export const runDevSession = (
 
     const allHandles = [...nonHostHandles, ...hostHandles];
 
+    const childPids = allHandles
+      .map((handle) => Number(handle.pid))
+      .filter((pid) => Number.isFinite(pid) && pid > 1);
+
+    controls.emergencyKill = () => {
+      for (const pid of childPids) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // already gone
+          }
+        }
+      }
+    };
+
+    if (!isWorkspaceChild && childPids.length > 0) {
+      try {
+        updateChildPids(process.pid, childPids);
+      } catch {
+        // best-effort; registry hygiene is non-critical for the running session
+      }
+    }
+
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         yield* Effect.forEach(allHandles, (h) => h.kill.pipe(Effect.ignore), {
@@ -297,18 +333,19 @@ const runApp = (
   services: Map<string, ServiceDescriptor>,
   runtimeConfig: RuntimeConfig,
 ) => {
-  let requestShutdown: (() => void) | null = null;
+  let controls: DevSessionControls | null = null;
   let signalCount = 0;
   let forceExitTimer: ReturnType<typeof setTimeout> | null = null;
 
   const forceExit = () => {
     console.log("\n[Dev] Force exit");
+    controls?.emergencyKill();
     process.exit(0);
   };
 
   const program = Effect.scoped(
-    runDevSession(orchestrator, (shutdown) => {
-      requestShutdown = shutdown;
+    runDevSession(orchestrator, (sessionControls) => {
+      controls = sessionControls;
     }),
   ).pipe(
     Effect.provide(ServiceDescriptorMapLive(services)),
@@ -329,7 +366,7 @@ const runApp = (
     }
     console.log("\n[Dev] Shutting down...");
     forceExitTimer = setTimeout(forceExit, 5000);
-    requestShutdown?.();
+    controls?.requestShutdown();
   };
 
   process.on("SIGINT", handleSignal);

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
+import { waitForApp } from "./page-ready";
 
 interface CookieEntry {
   name: string;
@@ -23,7 +24,16 @@ interface SeedData {
 
 const COOKIES_PATH = ".bos/regression/cookies.json";
 const ADMIN_COOKIES_PATH = ".bos/regression/admin-cookies.json";
+const LOGOUT_COOKIES_PATH = ".bos/regression/logout-cookies.json";
 const SEED_PATH = ".bos/regression/seed.json";
+const ADMIN_SEED_PATH = ".bos/regression/admin-seed.json";
+
+interface AdminSeedData {
+  adminName: string;
+  logoutName: string;
+  orgAName: string;
+  orgBName: string;
+}
 
 function readJsonFile(filePath: string) {
   const resolved = path.resolve(process.cwd(), filePath);
@@ -43,13 +53,29 @@ export async function injectAdminCookies(page: Page) {
   await page.context().addCookies(cookies);
 }
 
+export async function injectLogoutCookies(page: Page) {
+  const cookies: CookieEntry[] = readJsonFile(LOGOUT_COOKIES_PATH);
+  await page.context().addCookies(cookies);
+}
+
 export function loadSeedData(): SeedData {
   return readJsonFile(SEED_PATH) as SeedData;
 }
 
+export function loadAdminSeedData(): AdminSeedData {
+  return readJsonFile(ADMIN_SEED_PATH) as AdminSeedData;
+}
+
 export async function verifyAuthenticated(page: Page) {
+  const sessionResponses: string[] = [];
+  page.on("response", (response) => {
+    if (response.url().includes("/api/auth/get-session") && response.status() === 200) {
+      sessionResponses.push(response.url());
+    }
+  });
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(500);
   await page.waitForLoadState("networkidle");
-  await expect(page.locator("button[title='account menu']")).toBeVisible({ timeout: 10000 });
+  await waitForApp(page);
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+  expect(sessionResponses.length, "expected a resolved auth session").toBeGreaterThanOrEqual(1);
 }

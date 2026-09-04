@@ -30,7 +30,7 @@ func findReposRoot() (string, error) {
 }
 
 func writeCookies(client *http.Client, repoRoot string) error {
-	u, _ := url.Parse("http://localhost:4100")
+	u, _ := url.Parse(baseURL)
 	cookies := client.Jar.Cookies(u)
 
 	type cookieEntry struct {
@@ -111,7 +111,7 @@ func TestSeedRegressionData(t *testing.T) {
 			"name": orgAName,
 			"slug": orgAName,
 		}, map[string]string{
-			"Origin": "http://localhost:4100",
+			"Origin": regtest.Origin(),
 		})
 		regtest.MustStatus(t, status, 200, body)
 		var result struct {
@@ -131,7 +131,7 @@ func TestSeedRegressionData(t *testing.T) {
 			"name": orgBName,
 			"slug": orgBName,
 		}, map[string]string{
-			"Origin": "http://localhost:4100",
+			"Origin": regtest.Origin(),
 		})
 		regtest.MustStatus(t, status, 200, body)
 		var result struct {
@@ -151,31 +151,24 @@ func TestSeedRegressionData(t *testing.T) {
 		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/auth/organization/set-active", map[string]string{
 			"organizationId": orgAID,
 		}, map[string]string{
-			"Origin": "http://localhost:4100",
+			"Origin": regtest.Origin(),
 		})
 		regtest.MustStatus(t, status, 200, body)
 	})
 
-	// Step 4: Create a tenant in org A
+	// Step 4: Seed a tenant for browser tests. Tenant creation via the API is
+	// admin-gated in some forks (platform-admin + DAO membership), so the
+	// harness seeds the row directly and works with whatever the config allows.
 	var tenantID string
 	tenantSubdomain := fmt.Sprintf("regression-tenant-%d", os.Getpid())
 
 	t.Run("create_tenant", func(t *testing.T) {
-		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/tenants", map[string]string{
+		tenantID = regtest.SeedTenant(t, map[string]any{
 			"subdomain": tenantSubdomain,
 			"name":      "Regression Tenant",
 			"accountId": fmt.Sprintf("%s.testnet", tenantSubdomain),
-		}, nil)
-		if status != 200 {
-			t.Fatalf("expected status 200, got %d. Body: %s", status, body)
-		}
-		var result struct {
-			ID string `json:"id"`
-		}
-		if err := json.Unmarshal([]byte(body), &result); err != nil {
-			t.Fatalf("decoding tenant response: %v\nBody: %s", err, body)
-		}
-		tenantID = result.ID
+			"orgId":     orgAID,
+		})
 		if tenantID == "" {
 			t.Fatal("expected non-empty tenant id")
 		}

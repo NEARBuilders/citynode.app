@@ -24,6 +24,7 @@ export function SidebarOrgSwitcher({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
+              data-testid="org-switcher"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg border-2 border-outset border-border-strong bg-card text-foreground shrink-0">

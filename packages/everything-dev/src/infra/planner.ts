@@ -33,6 +33,14 @@ const DEFAULT_API_PORT = 3001;
 const DEFAULT_AUTH_PORT = 3002;
 const DEFAULT_UI_PORT = 3003;
 const DEFAULT_PLUGIN_PORT_START = 3010;
+
+function shouldPersistPortState(): boolean {
+  return (
+    process.env.BOS_NO_PERSIST_PORTS !== "1" &&
+    process.env.BOS_TEST !== "1" &&
+    process.env.NODE_ENV !== "test"
+  );
+}
 const POSTGRES_USER = "everythingdev";
 const POSTGRES_PASSWORD = "everythingdev";
 
@@ -428,7 +436,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
 
     // Write merged state once after all allocations succeed
     // Skip persistence for regression tests / ephemeral runs
-    if (process.env.BOS_NO_PERSIST_PORTS !== "1") {
+    if (shouldPersistPortState()) {
       savePortState(input.configDir, {
         postgresPorts: pgPorts,
         redisPorts: rdPorts,
@@ -496,7 +504,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
         : undefined,
     };
 
-    const serviceDescriptors = buildServiceDescriptors(input.bosConfig, resolvedPorts);
+    const serviceDescriptors = buildServiceDescriptors(assignedRuntimeConfig, resolvedPorts);
 
     const launch = buildLaunchSpec(input.bosConfig, resolvedPorts);
     const composeModel = buildComposeModel(dbs, redisPlans);

@@ -4,9 +4,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
+import * as p from "@clack/prompts";
 import { Effect } from "effect";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import {
+  buildBetterNearAuthQuietly,
   buildEveryPluginQuietly,
   buildEverythingDevQuietly,
   buildWorkspaceTargets,
@@ -63,6 +65,14 @@ import {
   type PhaseTiming,
   type PluginListResult,
 } from "./contract";
+import {
+  DatabaseBindings,
+  type DatabaseBindingsService,
+  DrizzleKit,
+  type DrizzleKitService,
+  makeDatabaseBindings,
+  makeDrizzleKitLive,
+} from "./db";
 import {
   buildRegistryConfigUrl,
   fetchBosConfigFromFastKv,
@@ -169,6 +179,8 @@ type BosDeps = {
   bosConfig: BosConfig | null;
   runtimeConfig: RuntimeConfig | null;
   configDir: string;
+  databaseBindings: DatabaseBindingsService;
+  drizzleKit: DrizzleKitService;
 };
 
 type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
@@ -324,13 +336,38 @@ export default createPlugin({
   }),
   secrets: z.object({}),
   contract: bosContract,
-  initialize: (config) =>
-    Effect.promise(async () => {
-      const configResult = await loadResolvedConfig({ path: config.variables.configPath });
+  initialize: (config, _plugins, tools) =>
+    Effect.gen(function* () {
+      const base = yield* Effect.promise(async () => {
+        const configResult = await loadResolvedConfig({ path: config.variables.configPath });
+        return {
+          bosConfig: configResult?.config ?? null,
+          runtimeConfig: configResult?.runtime ?? null,
+          configDir: getProjectRoot(),
+        };
+      });
+
+      const databaseBindings = yield* tools.buildService(
+        DatabaseBindings,
+        makeDatabaseBindings({
+          projectDir: base.configDir,
+          loadRuntimeConfig: async () =>
+            (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
+          loadEnv: () => loadProjectEnv(base.configDir),
+        }),
+      );
+      const drizzleKit = yield* tools.buildService(
+        DrizzleKit,
+        makeDrizzleKitLive({
+          projectDir: base.configDir,
+          onLog: (message) => p.log.info(message),
+        }),
+      );
+
       return {
-        bosConfig: configResult?.config ?? null,
-        runtimeConfig: configResult?.runtime ?? null,
-        configDir: getProjectRoot(),
+        ...base,
+        databaseBindings,
+        drizzleKit,
       } satisfies BosDeps;
     }),
   shutdown: () => Effect.void,
@@ -665,7 +702,10 @@ export default createPlugin({
         (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
 
       await timePhase(devTimings, "build", async () => {
-        const buildTasks: Promise<void>[] = [buildEverythingDevQuietly(deps.configDir)];
+        const buildTasks: Promise<void>[] = [
+          buildEverythingDevQuietly(deps.configDir),
+          buildBetterNearAuthQuietly(deps.configDir),
+        ];
         if (shouldBuildPlugin) {
           buildTasks.push(buildEveryPluginQuietly(deps.configDir));
         }
@@ -1727,17 +1767,23 @@ export default createPlugin({
           if (existsSync(join(projectDir, "host", "src"))) {
             generated.push("host/src/lib/auth-types.gen.ts");
           }
-          for (const [key, _plugin] of pluginEntries) {
-            const pluginSrc = join(
-              projectDir,
-              "plugins",
-              key,
+          for (const [_key, plugin] of pluginEntries) {
+            const localPath = plugin.localPath;
+            if (!localPath) continue;
+            const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
+            if (existsSync(pluginSrc)) {
+              generated.push(relative(projectDir, pluginSrc));
+            }
+          }
+          if (refreshed.runtime.auth?.localPath) {
+            const authSrc = join(
+              refreshed.runtime.auth.localPath,
               "src",
               "lib",
               "plugins-client.gen.ts",
             );
-            if (existsSync(pluginSrc)) {
-              generated.push(`plugins/${key}/src/lib/plugins-client.gen.ts`);
+            if (existsSync(authSrc)) {
+              generated.push(relative(projectDir, authSrc));
             }
           }
 
@@ -1768,10 +1814,23 @@ export default createPlugin({
         if (existsSync(join(projectDir, "host", "src"))) {
           generated.push("host/src/lib/auth-types.gen.ts");
         }
-        for (const [key, _plugin] of Object.entries(refreshed.runtime.plugins ?? {})) {
-          const pluginSrc = join(projectDir, "plugins", key, "src", "lib", "plugins-client.gen.ts");
+        for (const [_key, plugin] of Object.entries(refreshed.runtime.plugins ?? {})) {
+          const localPath = plugin.localPath;
+          if (!localPath) continue;
+          const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
           if (existsSync(pluginSrc)) {
-            generated.push(`plugins/${key}/src/lib/plugins-client.gen.ts`);
+            generated.push(relative(projectDir, pluginSrc));
+          }
+        }
+        if (refreshed.runtime.auth?.localPath) {
+          const authSrc = join(
+            refreshed.runtime.auth.localPath,
+            "src",
+            "lib",
+            "plugins-client.gen.ts",
+          );
+          if (existsSync(authSrc)) {
+            generated.push(relative(projectDir, authSrc));
           }
         }
 
@@ -1941,42 +2000,29 @@ export default createPlugin({
     }),
 
     dbStudio: builder.dbStudio.handler(async ({ input }) => {
+      const configPath = findConfigPath();
+      if (!configPath) {
+        return {
+          status: "error" as const,
+          plugin: input.plugin,
+          source: "remote" as const,
+          section: "",
+          error: "No bos.config.json found in current directory",
+        };
+      }
+
       try {
-        const configPath = findConfigPath();
-        if (!configPath) {
-          return {
-            status: "error" as const,
-            plugin: input.plugin,
-            source: "remote" as const,
-            section: "",
-            error: "No bos.config.json found in current directory",
-          };
-        }
-
-        const projectDir = resolve(dirname(configPath));
-        loadProjectEnv(projectDir);
-        const refreshed = await loadResolvedConfig({ cwd: projectDir });
-        if (!refreshed) {
-          return {
-            status: "error" as const,
-            plugin: input.plugin,
-            source: "remote" as const,
-            section: "",
-            error: "Failed to load bos.config.json",
-          };
-        }
-
-        const { resolvePluginDbInfo } = await import("./cli/db-studio");
-        const info = resolvePluginDbInfo(input.plugin, refreshed.runtime, projectDir);
+        const binding = await Effect.runPromise(deps.databaseBindings.forPluginKey(input.plugin));
+        await Effect.runPromise(deps.drizzleKit.studio(binding));
 
         return {
           status: "success" as const,
-          plugin: info.key,
-          source: info.source,
-          section: info.section,
-          databaseSecret: info.databaseSecret,
-          databaseUrl: info.databaseUrl,
-          workspaceDir: info.workspaceDir,
+          plugin: binding.key,
+          source: binding.source,
+          section: binding.section,
+          databaseSecret: binding.identity.secretName,
+          databaseUrl: binding.url,
+          workspaceDir: binding.identity.workspaceDir,
         };
       } catch (error) {
         return {
@@ -2004,34 +2050,14 @@ export default createPlugin({
             appliedHashCount: 0,
             expectedTables: [],
             missingTables: [],
-            error: "No bos.config.json",
+            error: "No bos.config.json found in current directory",
           };
         }
 
-        const projectDir = resolve(dirname(configPath));
-        loadProjectEnv(projectDir);
-        const refreshed = await loadResolvedConfig({ cwd: projectDir });
-        if (!refreshed) {
-          return {
-            status: "error" as const,
-            plugin: input.plugin,
-            slug: "",
-            journalTable: "",
-            journalSchema: "",
-            diagnosis: "error",
-            localMigrationCount: 0,
-            appliedHashCount: 0,
-            expectedTables: [],
-            missingTables: [],
-            error: "Failed to load config",
-          };
-        }
-
-        const { resolvePluginDbInfo } = await import("./cli/db-studio");
-        const info = resolvePluginDbInfo(input.plugin, refreshed.runtime, projectDir);
+        const binding = await Effect.runPromise(deps.databaseBindings.forPluginKey(input.plugin));
 
         const { diagnosePlugin } = await import("./cli/db-doctor");
-        const report = await diagnosePlugin(info);
+        const report = await diagnosePlugin(binding);
 
         return {
           status: "success" as const,
@@ -2066,23 +2092,10 @@ export default createPlugin({
           };
         }
 
-        const projectDir = resolve(dirname(configPath));
-        loadProjectEnv(projectDir);
-        const refreshed = await loadResolvedConfig({ cwd: projectDir });
-        if (!refreshed) {
-          return {
-            status: "error" as const,
-            message: "Failed to load config",
-            diagnosis: null,
-            error: "Config load failed",
-          };
-        }
-
-        const { resolvePluginDbInfo } = await import("./cli/db-studio");
-        const info = resolvePluginDbInfo(input.plugin, refreshed.runtime, projectDir);
+        const binding = await Effect.runPromise(deps.databaseBindings.forPluginKey(input.plugin));
 
         const { repairPlugin } = await import("./cli/db-repair");
-        const result = await repairPlugin(info, input.mode ?? "history-reset");
+        const result = await repairPlugin(binding, input.mode ?? "history-reset", deps.drizzleKit);
 
         return {
           ...result,
@@ -2154,8 +2167,9 @@ export default createPlugin({
         const skipped: Array<{ pid: number; reason: string }> = [];
 
         for (const entry of targets) {
+          const signal = input.signal === "SIGKILL" ? "SIGKILL" : "SIGTERM";
           try {
-            process.kill(entry.pid, input.signal === "SIGKILL" ? "SIGKILL" : "SIGTERM");
+            process.kill(entry.pid, signal);
             killed.push({ pid: entry.pid, configDir: entry.configDir });
             unregisterPid(entry.pid);
           } catch (err) {
@@ -2168,6 +2182,17 @@ export default createPlugin({
                 pid: entry.pid,
                 reason: (err as Error).message ?? "kill failed",
               });
+            }
+          }
+          for (const childPid of entry.childPids ?? []) {
+            try {
+              process.kill(-childPid, signal);
+            } catch {
+              try {
+                process.kill(childPid, signal);
+              } catch {
+                // already gone
+              }
             }
           }
         }

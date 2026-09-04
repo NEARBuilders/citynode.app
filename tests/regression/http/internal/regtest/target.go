@@ -20,16 +20,24 @@ func Mode() TargetMode {
 	return ModeDev
 }
 
+// BaseURL comes from the repo-derived config (REGRESSION_BASE_URL or
+// bos.config state), not a hardcoded upstream port.
 func BaseURL() string {
-	return "http://localhost:4100"
+	return LoadConfig().BaseURL
 }
 
-func StartCommand() string {
+// Origin is the browser origin the target is configured with (CORS Origin).
+func Origin() string {
+	return BaseURL()
+}
+
+// ScriptName is the package.json script that boots the target for the mode.
+func ScriptName() string {
 	switch Mode() {
 	case ModeProd:
-		return "bun run regression:start:prod"
+		return "regression:start:prod"
 	case ModeBackcompat:
-		return "bun run regression:start:backcompat"
+		return "regression:start:backcompat"
 	}
-	return "bun run regression:start:dev"
+	return "regression:start:dev"
 }

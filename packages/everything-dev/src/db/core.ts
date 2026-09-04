@@ -14,7 +14,7 @@ const DEFAULT_MIGRATION_JOURNAL = {
 
 const PER_PLUGIN_ISOLATION = false;
 
-function normalizeSlug(name: string): string {
+export function normalizeSlug(name: string): string {
   const basename = name.split("/").pop() ?? name;
   return basename
     .replace(/^@/, "")

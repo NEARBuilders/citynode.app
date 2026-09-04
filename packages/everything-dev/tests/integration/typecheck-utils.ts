@@ -70,6 +70,27 @@ export type ApiContract = BaseApiContract;
   );
 }
 
+export function writePermissiveTypeStubs(projectDir: string) {
+  const apiLibDir = join(projectDir, "api", "src", "lib");
+  mkdirSync(apiLibDir, { recursive: true });
+  writeFileSync(
+    join(apiLibDir, "plugins-types.gen.ts"),
+    `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";
+type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;
+export type PluginsClient = Record<string, ClientFactory<AnyContractRouter>>;
+`,
+  );
+
+  const uiLibDir = join(projectDir, "ui", "src", "lib");
+  mkdirSync(uiLibDir, { recursive: true });
+  writeFileSync(
+    join(uiLibDir, "api-types.gen.ts"),
+    `import type { ContractType as BaseApiContract } from "../../../api/src/contract.ts";
+export type ApiContract = BaseApiContract & { [k: string]: (...args: any[]) => any };
+`,
+  );
+}
+
 const CORE_PATHS = [
   "ui/src/lib/",
   "ui/src/lib/api",

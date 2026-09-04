@@ -127,9 +127,9 @@ export function AppDetailContent({
       const prepared = await prepareMetadataMutation.mutateAsync();
       const signed = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
-        (builder: TransactionBuilder) =>
+        (builder: TransactionBuilder, receiverId: string) =>
           builder.functionCall(
-            prepared.data.contractId,
+            receiverId,
             prepared.data.methodName,
             prepared.data.args,
             { gas: "10000000000000", attachedDeposit: 0n },
@@ -154,9 +154,9 @@ export function AppDetailContent({
       const prepared = await prepareMetadataMutation.mutateAsync();
       return auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
-        (builder: TransactionBuilder) =>
+        (builder: TransactionBuilder, receiverId: string) =>
           builder.functionCall(
-            prepared.data.contractId,
+            receiverId,
             prepared.data.methodName,
             prepared.data.args,
             { gas: "10000000000000", attachedDeposit: 0n },

@@ -12,6 +12,7 @@ export interface PidEntry {
   parentPid?: number;
   role: ProcessRole;
   ports: Record<string, number>;
+  childPids?: number[];
   budget?: { min: number; max: number };
   startedAt: number;
   description: string;
@@ -105,6 +106,14 @@ export function registerEntry(entry: PidEntry): void {
   const withoutSelf = live.filter((existing) => existing.pid !== entry.pid);
   withoutSelf.push(entry);
   writeRegistry(withoutSelf);
+}
+
+export function updateChildPids(pid: number, childPids: number[]): void {
+  const live = pruneDead(readRegistry());
+  const entry = live.find((existing) => existing.pid === pid);
+  if (!entry) return;
+  entry.childPids = childPids;
+  writeRegistry(live);
 }
 
 export function unregisterPid(pid: number): void {

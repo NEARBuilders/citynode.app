@@ -241,13 +241,17 @@ bun run dev
 bos dev --port 3100 --api-port 3101 --ui-port 3103 --auth-port 3102 --plugin-port-start 3110
 ```
 
-`docker-compose.yml` is committed and provisions two Postgres 17 services:
+`docker-compose.yml` is committed and provisions four Postgres 17 services — two for dev, two for tests:
 - `postgres-api` (port 5432, db `api_db`) — shared by the API and all local plugins; each plugin isolates its tables in a `plugin_<pluginId>` schema (set via `search_path` on every connection, see `api/src/db/layer.ts`).
 - `postgres-auth` (port 5433, db `auth_db`) — auth database.
+- `postgres-api-test` (port 5434, db `api_test_db`) — test-only API/plugin database.
+- `postgres-auth-test` (port 5435, db `auth_test_db`) — test-only auth database.
+
+**Dev/test isolation:** a committed `.env.test` (generated alongside `.env.example` and `docker-compose.yml` by `bos dev`) maps every `*_DATABASE_URL` and `BETTER_AUTH_SECRET` to the test databases. Test suites load `.env.test` instead of `.env`: the regression stack (`tests/regression/lib/start-stack.mjs`) injects it into spawned stacks, `tests/regression/lib/regression-env.mjs` resolves it with fail-fast guards that refuse to run against dev URLs or the dev auth secret (override deliberately with `REGRESSION_ALLOW_DEV_DB=1`), and api unit/integration tests pin to in-memory pglite unless `TEST_DATABASE=postgres` opts into `.env.test`. Start the test databases with `bun run test:db:up` (or `bun run test:db:reset` for a clean slate).
 
 The API and plugins auto-apply migrations on boot, so `bun db:migrate` is optional (use it to migrate without starting the dev server). `bun run dev` runs `bos dev`'s preflight, which probes the localhost DB ports and exits with a clear `docker compose up -d --wait` hint if Postgres isn't up.
 
-Dev ports are persisted to `.bos/infra-state.json` under `devPorts` and reused across restarts.
+Dev ports are persisted to `.bos/infra-state.json` under `devPorts` and reused across restarts. Test-spawned stacks never persist ports (`BOS_NO_PERSIST_PORTS=1`, plus `NODE_ENV=test` / `BOS_TEST=1` are honored), so test runs can never repin your dev ports.
 `CORS_ORIGIN` in `.env.example` is derived from the actual resolved host port in development.
 A global PID registry at `~/.cache/everything-dev/pids.json` tracks running `bos dev` sessions.
 

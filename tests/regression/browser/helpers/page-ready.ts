@@ -7,6 +7,7 @@ const HYDRATION_PATTERNS = [
   "Cannot read properties of undefined (reading 'call')",
   "Text content did not match",
   "Hydration failed because the initial UI",
+  "Hydration failed because the server rendered HTML didn't match",
   "Expected server HTML to contain a matching",
   "did not match server-rendered HTML",
 ];

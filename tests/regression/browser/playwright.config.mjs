@@ -1,4 +1,6 @@
 import { defineConfig } from "@playwright/test";
+import { killStalePorts } from "../lib/kill-stale-ports.mjs";
+import { computeRegressionEnv } from "../lib/regression-env.mjs";
 
 const mode = process.env.REGRESSION_MODE ?? "dev";
 const command =
@@ -7,6 +9,24 @@ const command =
     : mode === "backcompat"
       ? "bun run regression:start:backcompat"
       : "bun run regression:start:dev";
+
+const regressionEnv = computeRegressionEnv();
+
+killStalePorts(regressionEnv.stalePorts);
+
+const derivedEnv = {
+  ...regressionEnv.dbUrls,
+  CORS_ORIGIN: regressionEnv.baseUrl,
+  BETTER_AUTH_SECRET: regressionEnv.authSecret,
+  RATE_LIMIT_WINDOW_MS: "1000",
+  RATE_LIMIT_MAX: "100",
+  BODY_LIMIT_MAX: "65536",
+  CI: "true",
+};
+
+const webServerEnv = Object.fromEntries(
+  Object.entries(derivedEnv).filter(([key]) => process.env[key] === undefined),
+);
 
 export default defineConfig({
   testDir: "./specs",
@@ -17,26 +37,16 @@ export default defineConfig({
   use: {
     browserName: "chromium",
     headless: true,
-    baseURL: "http://localhost:4100",
+    baseURL: regressionEnv.baseUrl,
   },
   webServer: {
     command,
-    url: "http://localhost:4100/health",
-    reuseExistingServer: !process.env.CI,
+    url: `${regressionEnv.baseUrl}/health`,
+    reuseExistingServer: false,
     timeout: 120_000,
     stdout: "pipe",
     stderr: "pipe",
-    env: {
-      API_DATABASE_URL: "postgres://everythingdev:everythingdev@127.0.0.1:5432/api_db",
-      AUTH_DATABASE_URL: "postgres://everythingdev:everythingdev@127.0.0.1:5433/auth_db",
-      TEMPLATE_DATABASE_URL: "postgres://everythingdev:everythingdev@127.0.0.1:5434/template_db",
-      CORS_ORIGIN: "http://localhost:4100",
-      BETTER_AUTH_SECRET: "regression-test-secret-do-not-use-in-production",
-      RATE_LIMIT_WINDOW_MS: "1000",
-      RATE_LIMIT_MAX: "100",
-      BODY_LIMIT_MAX: "65536",
-      CI: "true",
-    },
+    env: webServerEnv,
   },
   projects: [{ name: "dev" }, { name: "prod" }, { name: "backcompat" }],
 });

@@ -15,7 +15,9 @@ test.describe("Settings → API Keys", () => {
     await waitForApp(page);
 
     await expect(page).toHaveURL(/\/settings\/api-keys/, { timeout: 10000 });
-    await expect(page.locator("h1")).toContainText("API Keys", { timeout: 10000 });
+    await expect(page.getByRole("heading", { name: "API Keys", exact: true })).toBeVisible({
+      timeout: 10000,
+    });
 
     expectNoHydrationFailure(pageErrors);
   });
@@ -36,12 +38,14 @@ test.describe("Settings → API Keys", () => {
     await page.goto("/settings/profile", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    const apiKeysTab = page.getByText("API Keys", { exact: true });
+    const apiKeysTab = page.getByRole("tab", { name: "API Keys" });
     await expect(apiKeysTab).toBeVisible({ timeout: 10000 });
     await apiKeysTab.click();
 
     await page.waitForURL(/\/settings\/api-keys/, { timeout: 10000 });
-    await expect(page.locator("h1")).toContainText("API Keys", { timeout: 10000 });
+    await expect(page.getByRole("heading", { name: "API Keys", exact: true })).toBeVisible({
+      timeout: 10000,
+    });
 
     expectNoHydrationFailure(pageErrors);
   });

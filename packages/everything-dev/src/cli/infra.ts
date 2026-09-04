@@ -11,6 +11,8 @@ const API_DATABASE_SECRET = "API_DATABASE_URL";
 const AUTH_DATABASE_SECRET = "AUTH_DATABASE_URL";
 const HOST_SECRET = "CORS_ORIGIN";
 const BASE_REDIS_PORT = 6379;
+const TEST_AUTH_SECRET = "regression-test-secret-do-not-use-in-production";
+const TEST_DATABASE_PORT_BASE = 5434;
 const VESTIGIAL_SECRETS = new Set([
   "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
   "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
@@ -39,6 +41,19 @@ export interface RedisSecretConfig {
   url: string;
 }
 
+export interface TestDatabaseServiceConfig {
+  serviceName: string;
+  containerName: string;
+  port: number;
+  databaseName: string;
+  volumeName: string;
+}
+
+export interface TestInfraConfig {
+  services: TestDatabaseServiceConfig[];
+  urlBySecret: Map<string, string>;
+}
+
 export interface SecretGroup {
   section: string;
   secrets: string[];
@@ -62,11 +77,13 @@ export interface GeneratedInfraSpec {
   groups: SecretGroup[];
   databases: DatabaseSecretConfig[];
   redis: RedisSecretConfig[];
+  testDatabases: TestInfraConfig;
 }
 
 interface SyncGeneratedInfraResult {
   secrets: string[];
   envExampleChanged: boolean;
+  envTestChanged: boolean;
   dockerComposeChanged: boolean;
   staleEnvWarnings: string[];
 }
@@ -173,8 +190,9 @@ function buildGeneratedInfraSpec(
 
   const databases = buildDatabaseConfigs(allSecrets, originMap, portState.postgresPorts);
   const redis = buildRedisConfigs(allSecrets, originMap, portState.redisPorts);
+  const testDatabases = buildTestInfra(databases);
 
-  return { spec: { groups, databases, redis }, portState };
+  return { spec: { groups, databases, redis, testDatabases }, portState };
 }
 
 export function normalizeDatabaseSlug(secret: string): string {
@@ -284,6 +302,45 @@ export function buildDatabaseConfigs(
   });
 }
 
+export function buildTestInfra(databases: DatabaseSecretConfig[]): TestInfraConfig {
+  const services: TestDatabaseServiceConfig[] = [];
+  const urlBySecret = new Map<string, string>();
+  const serviceBySource = new Map<string, TestDatabaseServiceConfig>();
+
+  const uniqueDbs = uniqueDatabaseServices(databases);
+  if (uniqueDbs.length === 0) return { services, urlBySecret };
+
+  const maxDevPort = Math.max(...uniqueDbs.map((db) => db.port));
+  let nextPort = Math.max(maxDevPort + 1, TEST_DATABASE_PORT_BASE);
+
+  for (const db of uniqueDbs) {
+    const service: TestDatabaseServiceConfig = {
+      serviceName: `${db.serviceName}-test`,
+      containerName: `${db.containerName}-test`,
+      port: nextPort++,
+      databaseName: db.databaseName.endsWith("_db")
+        ? `${db.databaseName.slice(0, -"_db".length)}_test_db`
+        : `${db.databaseName}_test`,
+      volumeName: db.volumeName.endsWith("_data")
+        ? `${db.volumeName.slice(0, -"_data".length)}_test_data`
+        : `${db.volumeName}_test`,
+    };
+    services.push(service);
+    serviceBySource.set(db.serviceName, service);
+  }
+
+  for (const db of databases) {
+    const service = serviceBySource.get(db.serviceName);
+    if (!service) continue;
+    urlBySecret.set(
+      db.secret,
+      `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${service.port}/${service.databaseName}`,
+    );
+  }
+
+  return { services, urlBySecret };
+}
+
 export function buildRedisConfigs(
   secrets: string[],
   originMap: Map<string, string>,
@@ -390,6 +447,32 @@ function renderEnvFile(
   return `${lines.join("\n")}\n`;
 }
 
+function renderEnvTestFile(groups: SecretGroup[], testDatabases: TestInfraConfig): string {
+  const lines: string[] = [
+    "# Generated test environment — loaded by test suites instead of .env",
+    "# Test databases run on dedicated *-test docker-compose services",
+    "",
+  ];
+
+  for (const group of groups) {
+    const entries: string[] = [];
+    for (const secret of group.secrets) {
+      if (secret === "BETTER_AUTH_SECRET") {
+        entries.push(`${secret}=${TEST_AUTH_SECRET}`);
+      } else if (testDatabases.urlBySecret.has(secret)) {
+        entries.push(`${secret}=${testDatabases.urlBySecret.get(secret)}`);
+      }
+    }
+    if (entries.length > 0) {
+      lines.push(`# ${group.section}`);
+      lines.push(...entries);
+      lines.push("");
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function uniqueDatabaseServices<T extends { serviceName: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -399,15 +482,25 @@ function uniqueDatabaseServices<T extends { serviceName: string }>(items: T[]): 
   });
 }
 
+interface ComposeDatabaseService {
+  serviceName: string;
+  containerName: string;
+  port: number;
+  volumeName: string;
+  databaseName: string;
+}
+
 function renderDockerCompose(
-  databases: DatabaseSecretConfig[],
-  redisConfigs: RedisSecretConfig[],
+  databases: ComposeDatabaseService[],
+  redisConfigs: { serviceName: string; containerName: string; port: number; volumeName: string }[],
   projectName: string,
+  testDatabases: TestDatabaseServiceConfig[] = [],
 ): string {
   const lines = [`name: ${projectName}`, ""];
   const uniqueDbs = uniqueDatabaseServices(databases);
+  const hasPostgres = uniqueDbs.length > 0 || testDatabases.length > 0;
 
-  if (uniqueDbs.length > 0) {
+  if (hasPostgres) {
     lines.push(
       "x-pg-common: &pg-common",
       "  image: postgres:17-alpine",
@@ -453,6 +546,20 @@ function renderDockerCompose(
     lines.push("");
   }
 
+  for (const database of testDatabases) {
+    lines.push(`  ${database.serviceName}:`);
+    lines.push("    <<: *pg-common");
+    lines.push(`    container_name: ${database.containerName}`);
+    lines.push("    environment:");
+    lines.push("      <<: *pg-env");
+    lines.push(`      POSTGRES_DB: ${database.databaseName}`);
+    lines.push("    ports:");
+    lines.push(`      - "${database.port}:5432"`);
+    lines.push("    volumes:");
+    lines.push(`      - ${database.volumeName}:/var/lib/postgresql/data`);
+    lines.push("");
+  }
+
   for (const redis of redisConfigs) {
     lines.push(`  ${redis.serviceName}:`);
     lines.push("    <<: *redis-common");
@@ -466,6 +573,10 @@ function renderDockerCompose(
 
   lines.push("volumes:");
   for (const database of uniqueDbs) {
+    lines.push(`  ${database.volumeName}:`);
+    lines.push(`    name: ${database.volumeName}`);
+  }
+  for (const database of testDatabases) {
     lines.push(`  ${database.volumeName}:`);
     lines.push(`    name: ${database.volumeName}`);
   }
@@ -496,87 +607,11 @@ export function renderEnvFileFromPlan(env: Record<string, string>, devHostPort?:
 }
 
 export function renderDockerComposeFromPlan(
-  databases: {
-    serviceName: string;
-    containerName: string;
-    port: number;
-    volumeName: string;
-    databaseName: string;
-  }[],
+  databases: ComposeDatabaseService[],
   redis: { serviceName: string; containerName: string; port: number; volumeName: string }[],
   projectName: string,
 ): string {
-  const lines = [`name: ${projectName}`, ""];
-  const uniqueDbs = uniqueDatabaseServices(databases);
-
-  if (uniqueDbs.length > 0) {
-    lines.push(
-      "x-pg-common: &pg-common",
-      "  image: postgres:17-alpine",
-      "  environment: &pg-env",
-      `    POSTGRES_USER: ${POSTGRES_USER}`,
-      `    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`,
-      "  healthcheck:",
-      '    test: ["CMD-SHELL", "pg_isready -U everythingdev"]',
-      "    interval: 3s",
-      "    timeout: 3s",
-      "    retries: 5",
-      "",
-    );
-  }
-
-  if (redis.length > 0) {
-    lines.push(
-      "x-redis-common: &redis-common",
-      "  image: redis:7-alpine",
-      "  command: redis-server --appendonly yes",
-      "  healthcheck:",
-      '    test: ["CMD", "redis-cli", "ping"]',
-      "    interval: 3s",
-      "    timeout: 3s",
-      "    retries: 5",
-      "",
-    );
-  }
-
-  lines.push("services:");
-
-  for (const db of uniqueDbs) {
-    lines.push(`  ${db.serviceName}:`);
-    lines.push("    <<: *pg-common");
-    lines.push(`    container_name: ${db.containerName}`);
-    lines.push("    environment:");
-    lines.push("      <<: *pg-env");
-    lines.push(`      POSTGRES_DB: ${db.databaseName}`);
-    lines.push("    ports:");
-    lines.push(`      - "${db.port}:5432"`);
-    lines.push("    volumes:");
-    lines.push(`      - ${db.volumeName}:/var/lib/postgresql/data`);
-    lines.push("");
-  }
-
-  for (const r of redis) {
-    lines.push(`  ${r.serviceName}:`);
-    lines.push("    <<: *redis-common");
-    lines.push(`    container_name: ${r.containerName}`);
-    lines.push("    ports:");
-    lines.push(`      - "${r.port}:6379"`);
-    lines.push("    volumes:");
-    lines.push(`      - ${r.volumeName}:/data`);
-    lines.push("");
-  }
-
-  lines.push("volumes:");
-  for (const db of uniqueDbs) {
-    lines.push(`  ${db.volumeName}:`);
-    lines.push(`    name: ${db.volumeName}`);
-  }
-  for (const r of redis) {
-    lines.push(`  ${r.volumeName}:`);
-    lines.push(`    name: ${r.volumeName}`);
-  }
-
-  return `${lines.join("\n")}\n`;
+  return renderDockerCompose(databases, redis, projectName);
 }
 
 export function materializeInfraPlan(
@@ -640,9 +675,16 @@ export function syncGeneratedInfra(
     envOptions.devHostPort = resolveDevHostPort(runtimeConfig);
   }
   const newEnvContent = renderEnvFile(spec.groups, spec.databases, spec.redis, envOptions);
-  const newDockerContent = renderDockerCompose(spec.databases, spec.redis, runtimeConfig.account);
+  const newEnvTestContent = renderEnvTestFile(spec.groups, spec.testDatabases);
+  const newDockerContent = renderDockerCompose(
+    spec.databases,
+    spec.redis,
+    runtimeConfig.account,
+    spec.testDatabases.services,
+  );
 
   const envExamplePath = join(configDir, ".env.example");
+  const envTestPath = join(configDir, ".env.test");
   const dockerComposePath = join(configDir, "docker-compose.yml");
 
   const staleWarnings = checkEnvStaleness(configDir, spec.databases, spec.redis);
@@ -654,6 +696,7 @@ export function syncGeneratedInfra(
   return {
     secrets,
     envExampleChanged: syncTextFile(envExamplePath, newEnvContent),
+    envTestChanged: syncTextFile(envTestPath, newEnvTestContent),
     dockerComposeChanged: syncTextFile(dockerComposePath, newDockerContent),
     staleEnvWarnings: staleWarnings,
   };

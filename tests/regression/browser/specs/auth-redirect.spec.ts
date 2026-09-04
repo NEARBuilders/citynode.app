@@ -20,8 +20,8 @@ test.describe("Auth redirect", () => {
       "/settings",
     );
 
-    const anonymousBtn = page.getByText("continue anonymously");
-    await expect(anonymousBtn).toBeVisible({ timeout: 10000 });
+    const signInHeading = page.getByRole("heading", { name: "Sign in" });
+    await expect(signInHeading).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);
   });
@@ -32,8 +32,8 @@ test.describe("Auth redirect", () => {
 
     await page.waitForURL(/\/login/, { timeout: 15000 });
 
-    const anonymousBtn = page.getByText("continue anonymously");
-    await expect(anonymousBtn).toBeVisible({ timeout: 10000 });
+    const signInHeading = page.getByRole("heading", { name: "Sign in" });
+    await expect(signInHeading).toBeVisible({ timeout: 10000 });
 
     expectNoHydrationFailure(pageErrors);
   });

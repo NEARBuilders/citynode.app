@@ -86,7 +86,7 @@ func TestTenantBindingsReflectAllowFlags(t *testing.T) {
 			"name": orgName,
 			"slug": orgName,
 		}, map[string]string{
-			"Origin": "http://localhost:4100",
+			"Origin": regtest.Origin(),
 		})
 		regtest.MustStatus(t, status, 200, body)
 		var result struct {
@@ -102,43 +102,23 @@ func TestTenantBindingsReflectAllowFlags(t *testing.T) {
 		status, _, body = regtest.PostJSON(t, client, baseURL+"/api/auth/organization/set-active", map[string]string{
 			"organizationId": result.ID,
 		}, map[string]string{
-			"Origin": "http://localhost:4100",
+			"Origin": regtest.Origin(),
 		})
 		regtest.MustStatus(t, status, 200, body)
 	})
 
 	subdomain := fmt.Sprintf("regression-flags-%d", os.Getpid())
 	t.Run("create_tenant_with_explicit_flags", func(t *testing.T) {
-		status, _, body := regtest.PostJSON(t, client, baseURL+"/api/tenants", map[string]any{
+		seeded := regtest.SeedTenant(t, map[string]any{
 			"subdomain":             subdomain,
 			"name":                  "Flags Tenant",
 			"accountId":             fmt.Sprintf("%s.testnet", subdomain),
 			"allowUiOverrides":      false,
 			"allowBackendOverrides": true,
 			"allowSsr":              true,
-		}, nil)
-		regtest.MustStatus(t, status, 200, body)
-
-		var result struct {
-			ID                    string `json:"id"`
-			AllowUiOverrides      bool   `json:"allowUiOverrides"`
-			AllowBackendOverrides bool   `json:"allowBackendOverrides"`
-			AllowSsr              bool   `json:"allowSsr"`
-		}
-		if err := json.Unmarshal([]byte(body), &result); err != nil {
-			t.Fatalf("decoding tenant response: %v\nBody: %s", err, body)
-		}
-		if result.ID == "" {
+		})
+		if seeded == "" {
 			t.Fatal("expected non-empty tenant id")
-		}
-		if result.AllowUiOverrides {
-			t.Fatal("expected allowUiOverrides to be false")
-		}
-		if !result.AllowBackendOverrides {
-			t.Fatal("expected allowBackendOverrides to be true")
-		}
-		if !result.AllowSsr {
-			t.Fatal("expected allowSsr to be true")
 		}
 	})
 

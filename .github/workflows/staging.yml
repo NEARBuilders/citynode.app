@@ -49,6 +49,9 @@ jobs:
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
 
+      - name: Build better-near-auth
+        run: bun run --cwd packages/better-near-auth build
+
       - name: Configure Zephyr CI token fallback
         if: ${{ env.ZE_SECRET_TOKEN == '' }}
         env:

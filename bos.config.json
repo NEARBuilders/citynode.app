@@ -42,11 +42,32 @@
       "integrity": "sha384-csF8Cx2C7CIQLrpY5Pj8xS/TnxOfmp6Jk/GYcgPWF/W1eECv6v5lU3uK2LJdGo8W"
     },
     "auth": {
-      "extends": "bos://auth.everything.near/auth.everything.dev#app.auth",
+      "development": "local:plugins/auth",
+      "production": "https://elliot-braem-7538-everything-dev-auth-plugin-bett-6a8b025fb-ze.zephyrcloud.app",
+      "integrity": "sha384-5PFfr4JQZMd0pU09YVbT40T6vnZe11uknYWkR6K22lRdykFvVang3XTHdreKdVsm",
+      "secrets": [
+        "AUTH_DATABASE_URL",
+        "BETTER_AUTH_SECRET",
+        "GITHUB_CLIENT_SECRET",
+        "GOOGLE_CLIENT_SECRET",
+        "FASTNEAR_API_KEY",
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+        "TWILIO_PHONE_NUMBER",
+        "RESEND_API_KEY",
+        "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
+        "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
+        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
+        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
+      ],
       "variables": {
         "passkey": {
           "rpID": "citynode.app",
           "rpName": "City Nodes"
+        },
+         "socialProviders": {
+          "github": {},
+          "google": {}
         },
         "siwn": {
           "recipients": {
@@ -100,6 +121,7 @@
       "integrity": "sha384-r1RSJO0Em6cgW0oxKLqZC9VjZ5s4bjcG3UtRo73NHPiYwN2y5eRR9o9Oh2moyKax"
     },
     "votes": {
+      "development": "local:plugins/votes",
       "variables": {},
       "secrets": [
         "VOTES_DATABASE_URL"

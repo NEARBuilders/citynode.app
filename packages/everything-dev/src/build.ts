@@ -18,7 +18,7 @@ const buildCommands: Record<string, { cmd: string; args: string[] }> = {
   api: { cmd: "bun", args: ["run", "build"] },
 };
 
-type WorkspaceTarget = {
+export type WorkspaceTarget = {
   key: string;
   kind: "app" | "plugin";
   path: string;
@@ -42,7 +42,7 @@ export async function readJsonFile<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, "utf8")) as T;
 }
 
-function resolveWorkspaceTarget(
+export function resolveWorkspaceTarget(
   key: string,
   bosConfig: BosConfig | null,
   runtimeConfig: RuntimeConfig | null,
@@ -95,6 +95,19 @@ export function selectWorkspaceTargets(packages: string, bosConfig: BosConfig | 
     .filter((pkg) => allPackages.includes(pkg));
 }
 
+export function resolveCdnProvider(bosConfig: BosConfig | null): "zephyr" | "cloudflare" {
+  if (!bosConfig?.deploy) return "zephyr";
+  return bosConfig.deploy.cdn ?? "zephyr";
+}
+
+export function checkCdnProviderDeployable(
+  bosConfig: BosConfig | null,
+): string | null {
+  const provider = resolveCdnProvider(bosConfig);
+  if (provider === "zephyr") return null;
+  return "Cloudflare deploy support is not implemented yet — fall back to the zephyr CDN for this release.";
+}
+
 interface BuildAttemptResult {
   success: boolean;
   url?: string;
@@ -109,7 +122,7 @@ function classifyBuildResult(
   stdout: string,
   stderr: string,
   exitCode: number,
-  deploy: boolean,
+  expectDeployUrl: boolean,
   verbose: boolean,
 ): BuildAttemptResult {
   const output = `${stdout}\n${stderr}`;
@@ -173,7 +186,7 @@ function classifyBuildResult(
     return { success: true, url: deployMatch[1], exitCode: 0, output };
   }
 
-  if (deploy) {
+  if (expectDeployUrl) {
     return {
       success: false,
       error: "No deploy URL found (Zephyr may have failed)",
@@ -191,6 +204,7 @@ async function runBuildAttempt(
   env: Record<string, string>,
   verbose: boolean,
   deploy: boolean,
+  expectDeployUrl: boolean,
 ): Promise<BuildAttemptResult> {
   const proc = await run(cmd, args, {
     cwd,
@@ -208,7 +222,7 @@ async function runBuildAttempt(
     proc?.stdout ?? "",
     proc?.stderr ?? "",
     proc?.exitCode ?? 0,
-    deploy,
+    expectDeployUrl,
     verbose,
   );
 }
@@ -223,7 +237,7 @@ const ZEPHYR_BACKOFF_MS = [2000, 5000, 10000];
 async function buildOneWorkspace(
   ws: WorkspaceTarget,
   env: Record<string, string>,
-  opts: { deploy: boolean; verbose?: boolean },
+  opts: { deploy: boolean; verbose?: boolean; cdnProvider?: "zephyr" | "cloudflare" },
 ): Promise<InternalWorkspaceResult> {
   const pkgJson = await readJsonFile<{
     scripts?: Record<string, string>;
@@ -234,6 +248,7 @@ async function buildOneWorkspace(
     : (buildCommands[ws.key] ?? { cmd: "bun", args: ["run", "build"] });
 
   const verbose = opts.verbose ?? false;
+  const expectDeployUrl = opts.deploy && (opts.cdnProvider ?? "zephyr") !== "cloudflare";
   const startTime = Date.now();
   let attempt: BuildAttemptResult | undefined;
   let retried = false;
@@ -247,6 +262,7 @@ async function buildOneWorkspace(
       env,
       verbose,
       opts.deploy,
+      expectDeployUrl,
     );
 
     if (attempt.success || attempt.exitCode !== 0 || !opts.deploy) break;
@@ -309,6 +325,7 @@ export async function buildWorkspaceTargets(opts: {
   targets: string[];
   deploy: boolean;
   verbose?: boolean;
+  cdnUploadHandled?: boolean;
 }): Promise<{
   built: string[];
   skipped: string[];
@@ -338,6 +355,14 @@ export async function buildWorkspaceTargets(opts: {
     return { built: [], skipped };
   }
 
+  const cdnProvider = resolveCdnProvider(opts.bosConfig);
+
+  if (opts.deploy && cdnProvider === "cloudflare" && !opts.cdnUploadHandled) {
+    console.log(
+      `  ${colors.yellow("⚠")} Cloudflare CDN uploads are orchestrated by \`bos publish --deploy\` — this build produced dist bundles without uploading them.`,
+    );
+  }
+
   const sharedSync = await syncResolvedSharedDeps({
     configDir: opts.configDir,
     hostMode: "local",
@@ -351,7 +376,10 @@ export async function buildWorkspaceTargets(opts: {
   const shouldBuildPlugin = existing.some((entry) => entry.key === "api");
 
   const forceRebuild = opts.deploy;
-  const buildTasks: Promise<void>[] = [buildEverythingDevQuietly(opts.configDir, forceRebuild)];
+  const buildTasks: Promise<void>[] = [
+    buildEverythingDevQuietly(opts.configDir, forceRebuild),
+    buildBetterNearAuthQuietly(opts.configDir, forceRebuild),
+  ];
   if (shouldBuildPlugin) {
     buildTasks.push(buildEveryPluginQuietly(opts.configDir, forceRebuild));
   }
@@ -360,6 +388,7 @@ export async function buildWorkspaceTargets(opts: {
   const env: Record<string, string> = {
     ...process.env,
     NODE_ENV: opts.deploy ? "production" : "development",
+    BOS_CDN_PROVIDER: cdnProvider,
   };
   if (opts.deploy) {
     env.DEPLOY = "true";
@@ -397,7 +426,7 @@ export async function buildWorkspaceTargets(opts: {
     console.log();
 
     const results = await Promise.allSettled(
-      parallelGroup.map((ws) => buildOneWorkspace(ws, env, opts)),
+      parallelGroup.map((ws) => buildOneWorkspace(ws, env, { ...opts, cdnProvider })),
     );
 
     const allDeployEntries: DeployResultEntry[] = [];
@@ -430,7 +459,7 @@ export async function buildWorkspaceTargets(opts: {
     }
 
     for (const ws of sequentialGroup) {
-      const result = await buildOneWorkspace(ws, env, opts);
+      const result = await buildOneWorkspace(ws, env, { ...opts, cdnProvider });
       if (result.success) {
         built.push(ws.key);
       }
@@ -498,6 +527,39 @@ export async function buildEveryPluginQuietly(cwd: string, force = false) {
 
   throw new Error(
     `bun run --cwd packages/every-plugin build failed with exit code ${result.exitCode}`,
+  );
+}
+
+export async function buildBetterNearAuthQuietly(cwd: string, force = false) {
+  const packageDir = `${cwd}/packages/better-near-auth`;
+  const packageExists = await fileExists(`${packageDir}/package.json`);
+  if (!packageExists) {
+    return;
+  }
+
+  if (!force && !(await isWorkspaceDistStale(packageDir, "dist/index.js"))) {
+    return;
+  }
+
+  const result = (await run("bun", ["run", "--cwd", "packages/better-near-auth", "build"], {
+    cwd,
+    capture: true,
+  })) as { stdout: string; stderr: string; exitCode: number };
+
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  if (result.stdout.trim()) {
+    process.stdout.write(result.stdout);
+  }
+
+  if (result.stderr.trim()) {
+    process.stderr.write(result.stderr);
+  }
+
+  throw new Error(
+    `bun run --cwd packages/better-near-auth build failed with exit code ${result.exitCode}`,
   );
 }
 

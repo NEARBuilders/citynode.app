@@ -25,17 +25,43 @@ services:
 
   postgres-auth:
     <<: *pg-common
-    container_name: auth.everything.near-postgres-auth
+    container_name: v1.citynode.near-postgres-auth
     environment:
       <<: *pg-env
       POSTGRES_DB: auth_db
     ports:
       - "5433:5432"
     volumes:
-      - auth_everything_near_postgres_auth_data:/var/lib/postgresql/data
+      - v1_citynode_near_postgres_auth_data:/var/lib/postgresql/data
+
+  postgres-api-test:
+    <<: *pg-common
+    container_name: v1.citynode.near-postgres-api-test
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: api_test_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - v1_citynode_near_postgres_api_test_data:/var/lib/postgresql/data
+
+  postgres-auth-test:
+    <<: *pg-common
+    container_name: v1.citynode.near-postgres-auth-test
+    environment:
+      <<: *pg-env
+      POSTGRES_DB: auth_test_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - v1_citynode_near_postgres_auth_test_data:/var/lib/postgresql/data
 
 volumes:
   v1_citynode_near_postgres_api_data:
     name: v1_citynode_near_postgres_api_data
-  auth_everything_near_postgres_auth_data:
-    name: auth_everything_near_postgres_auth_data
+  v1_citynode_near_postgres_auth_data:
+    name: v1_citynode_near_postgres_auth_data
+  v1_citynode_near_postgres_api_test_data:
+    name: v1_citynode_near_postgres_api_test_data
+  v1_citynode_near_postgres_auth_test_data:
+    name: v1_citynode_near_postgres_auth_test_data

@@ -298,6 +298,8 @@ export function writeGeneratedFiles(opts: {
   apiDependsOn?: string[];
   pluginDependsOn?: Record<string, string[]>;
   pluginLocalPaths?: Record<string, string>;
+  authLocalPath?: string;
+  authDependsOn?: string[];
 }) {
   const hasLocalApiWorkspace = existsSync(join(opts.configDir, "api", "src"));
   const baseSource = opts.sources.find((source) => source.key === "api");
@@ -415,6 +417,20 @@ export function writeGeneratedFiles(opts: {
       pluginKey,
       depSources,
       localPath,
+    });
+  }
+
+  if (opts.authLocalPath) {
+    const deps = opts.authDependsOn ?? [];
+    const depSources = deps
+      .map((depKey) => allSourcesForLookup.find((s) => s.key === depKey))
+      .filter((s): s is ContractSource => Boolean(s));
+
+    writePluginClientGen({
+      configDir: opts.configDir,
+      pluginKey: "auth",
+      depSources,
+      localPath: opts.authLocalPath,
     });
   }
 
@@ -691,6 +707,9 @@ export async function syncApiContractBridge(opts: {
     apiDependsOn: opts.runtimeConfig.api.dependsOn,
     pluginDependsOn,
     pluginLocalPaths,
+    authLocalPath:
+      opts.runtimeConfig.auth?.source === "local" ? opts.runtimeConfig.auth.localPath : undefined,
+    authDependsOn: opts.runtimeConfig.auth?.dependsOn,
   });
 
   if (opts.runtimeConfig.api.source !== "local") {
