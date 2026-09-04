@@ -1767,17 +1767,23 @@ export default createPlugin({
           if (existsSync(join(projectDir, "host", "src"))) {
             generated.push("host/src/lib/auth-types.gen.ts");
           }
-          for (const [key, _plugin] of pluginEntries) {
-            const pluginSrc = join(
-              projectDir,
-              "plugins",
-              key,
+          for (const [_key, plugin] of pluginEntries) {
+            const localPath = plugin.localPath;
+            if (!localPath) continue;
+            const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
+            if (existsSync(pluginSrc)) {
+              generated.push(relative(projectDir, pluginSrc));
+            }
+          }
+          if (refreshed.runtime.auth?.localPath) {
+            const authSrc = join(
+              refreshed.runtime.auth.localPath,
               "src",
               "lib",
               "plugins-client.gen.ts",
             );
-            if (existsSync(pluginSrc)) {
-              generated.push(`plugins/${key}/src/lib/plugins-client.gen.ts`);
+            if (existsSync(authSrc)) {
+              generated.push(relative(projectDir, authSrc));
             }
           }
 
@@ -1808,10 +1814,23 @@ export default createPlugin({
         if (existsSync(join(projectDir, "host", "src"))) {
           generated.push("host/src/lib/auth-types.gen.ts");
         }
-        for (const [key, _plugin] of Object.entries(refreshed.runtime.plugins ?? {})) {
-          const pluginSrc = join(projectDir, "plugins", key, "src", "lib", "plugins-client.gen.ts");
+        for (const [_key, plugin] of Object.entries(refreshed.runtime.plugins ?? {})) {
+          const localPath = plugin.localPath;
+          if (!localPath) continue;
+          const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
           if (existsSync(pluginSrc)) {
-            generated.push(`plugins/${key}/src/lib/plugins-client.gen.ts`);
+            generated.push(relative(projectDir, pluginSrc));
+          }
+        }
+        if (refreshed.runtime.auth?.localPath) {
+          const authSrc = join(
+            refreshed.runtime.auth.localPath,
+            "src",
+            "lib",
+            "plugins-client.gen.ts",
+          );
+          if (existsSync(authSrc)) {
+            generated.push(relative(projectDir, authSrc));
           }
         }
 

@@ -16,7 +16,7 @@ import { createNearHandlers } from "./handlers/near";
 import { createOrganizationHandlers } from "./handlers/organizations";
 import { createSessionHandlers } from "./handlers/session";
 import { createTeamHandlers } from "./handlers/teams";
-import type { PluginsClient } from "./lib/plugins-types.gen";
+import type { PluginsClient } from "./lib/plugins-client.gen";
 import { createRequireAuth } from "./middleware";
 import { toError } from "./utils";
 
