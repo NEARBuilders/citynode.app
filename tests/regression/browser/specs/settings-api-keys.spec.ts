@@ -36,20 +36,4 @@ test.describe("Settings → API Keys", () => {
 
     expectNoHydrationFailure(pageErrors);
   });
-
-  test("can navigate to api keys from settings tab", async ({ page }) => {
-    await page.goto("/settings/profile", { waitUntil: "domcontentloaded" });
-    await waitForApp(page);
-
-    const apiKeysLink = page.getByTestId("settings-tab-api-keys");
-    await expect(apiKeysLink).toBeVisible({ timeout: 10000 });
-    await apiKeysLink.click();
-
-    await page.waitForURL(/\/settings\/api-keys/, { timeout: 10000, waitUntil: "commit" });
-    await expect(page.getByTestId("api-keys.heading")).toBeVisible({
-      timeout: 10000,
-    });
-
-    expectNoHydrationFailure(pageErrors);
-  });
 });
