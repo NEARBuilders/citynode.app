@@ -72,9 +72,11 @@ export {
   FieldError,
   FieldLabel,
 } from "./ui/field";
+export { InfoPopover, type InfoPopoverLink } from "./ui/info-popover";
 export { InfoRow } from "./ui/info-row";
 export { Input } from "./ui/input";
 export { Label } from "./ui/label";
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./ui/popover";
 export { ScrollArea, ScrollBar } from "./ui/scroll-area";
 export { Skeleton } from "./ui/skeleton";
 export {

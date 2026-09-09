@@ -36,6 +36,23 @@ function isBaseHost(hostname: string, gatewayId: string): boolean {
   return normalized === gatewayId || normalized === "localhost" || normalized === "127.0.0.1";
 }
 
+const LOCALHOST_SUFFIX = ".localhost";
+
+/**
+ * Development affordance: bindings are keyed `<label>.<gatewayId>` and the
+ * gateway id stays the production domain locally, so `<label>.localhost` would
+ * never match a tenant. In development we map it back to its label so a
+ * locally created tenant is reachable at `http://<label>.localhost:<port>`.
+ * Returns null in production, for bare `localhost`, and for nested labels.
+ */
+function devLocalhostLabel(hostname: string): string | null {
+  if (process.env.NODE_ENV === "production") return null;
+  if (!hostname.endsWith(LOCALHOST_SUFFIX)) return null;
+  const label = hostname.slice(0, -LOCALHOST_SUFFIX.length);
+  if (!label || label.includes(".")) return null;
+  return label;
+}
+
 async function fetchBindingsFromApi(apiUrl: string): Promise<TenantBinding[]> {
   const endpoint = `${apiUrl.replace(/\/$/, "")}/api/tenants/bindings`;
   let response: Response;
@@ -163,7 +180,11 @@ export function createBindingResolver(config: RuntimeConfig): BindingResolver {
       }
 
       const entries = await ensureBindingsLoaded(config);
-      return entries.get(normalized) ?? null;
+      const direct = entries.get(normalized);
+      if (direct) return direct;
+
+      const devLabel = devLocalhostLabel(normalized);
+      return devLabel ? (entries.get(`${devLabel}.${gatewayId}`) ?? null) : null;
     },
     clear: clearBindingResolverCache,
   };

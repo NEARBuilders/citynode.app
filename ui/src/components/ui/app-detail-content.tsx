@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Field, FieldLabel, Input, Textarea } from "@/components";
 import { highlightJson } from "@/lib/json-highlight";
+import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 
 type RegistryAppDetail = {
@@ -282,7 +283,7 @@ export function AppDetailContent({
                 Tenant runtime — the shared host serves a custom UI at{" "}
                 {app.domain ? (
                   <a
-                    href={`https://${app.domain}`}
+                    href={buildTenantUrl(app.domain, gatewayId) ?? `https://${app.domain}`}
                     target="_blank"
                     rel="noreferrer"
                     className="font-mono text-foreground hover:underline"

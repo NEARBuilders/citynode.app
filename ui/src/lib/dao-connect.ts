@@ -157,6 +157,43 @@ export async function disconnectDaoAccount(): Promise<void> {
   useDaoConnectionStore.getState().reset();
 }
 
+/**
+ * Re-syncs the store from the connector itself. The zustand store can go
+ * stale — Trezu sessions expire while the store still says "connected" — so
+ * anything about to sign should verify against the connector first.
+ */
+export async function verifyDaoAccount(want: string): Promise<boolean> {
+  try {
+    const connector = getConnector();
+    const result = await connector.getConnectedWallet();
+    const accounts = result?.accounts ?? [];
+    if (accounts.some((account) => account.accountId === want)) {
+      useDaoConnectionStore.getState().set({
+        status: "connected",
+        daoAccountId: want,
+        error: null,
+      });
+      return true;
+    }
+  } catch {}
+  if (useDaoConnectionStore.getState().daoAccountId) {
+    useDaoConnectionStore.getState().reset();
+  }
+  return false;
+}
+
+/** Maps raw connector errors to actionable messages. */
+export function describeDaoError(error: unknown, want: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("No accounts found") || message.includes("No wallet selected")) {
+    return `Trezu session expired — reconnect ${want} on trezu.app`;
+  }
+  if (message.includes("returned no accounts")) {
+    return `Trezu has no accounts for ${want} — deploy or import it on trezu.app`;
+  }
+  return message;
+}
+
 export function getDaoConnector(): NearConnector {
   return getConnector();
 }
@@ -179,7 +216,7 @@ export async function fetchDaoPolicy(daoAccountId: string): Promise<NearPolicy |
       request_type: "call_function",
       account_id: daoAccountId,
       method_name: "get_policy",
-      args_base64: Buffer.from("{}", "utf8").toString("base64"),
+      args_base64: btoa("{}"),
       finality: "final",
     },
   });

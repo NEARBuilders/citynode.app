@@ -33,6 +33,7 @@ import {
   tenantByKeyQueryOptions,
 } from "@/lib/queries/tenants";
 import { prepareTenantConfigWrite, publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
@@ -127,16 +128,26 @@ function TenantDetail() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { tenantId } = Route.useParams();
+  const { runtimeConfig } = Route.useRouteContext();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const gatewayId = getActiveRuntime()?.gatewayId ?? "everything.dev";
-  const parentAccount = getAccount();
+  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId;
+  const parentAccount = getAccount(runtimeConfig);
   const daoConnection = useDaoConnection();
 
+  const assertGateway = (): string => {
+    if (!gatewayId) {
+      throw new Error(
+        "Cannot publish the tenant config — no gateway id is resolved from the runtime. Set bos.config.json's `domain` for this build.",
+      );
+    }
+    return gatewayId;
+  };
+
   const { data: tenant } = useQuery({
-    ...tenantByKeyQueryOptions(apiClient, tenantId, gatewayId),
-    enabled: !!tenantId,
+    ...tenantByKeyQueryOptions(apiClient, tenantId, gatewayId ?? ""),
+    enabled: !!tenantId && !!gatewayId,
   });
 
   const { data: nodes = [] } = useQuery({
@@ -197,20 +208,19 @@ function TenantDetail() {
 
   const hostname = resolvePrimaryHostname(bindings);
   const orgSlug = resolveOrgSlug(organizations, tenant?.orgId);
-  const bosUrl = tenant ? `bos://${tenant.accountId}/${gatewayId}` : null;
-  const fastKvUrl = tenant ? buildRegistryConfigUrl(tenant.accountId, gatewayId) : null;
 
   const invalidate = () =>
     Promise.all([invalidateNodeQueries(queryClient), invalidateTenantQueries(queryClient)]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
+      const gid = assertGateway();
       if (!tenant) throw new Error("Tenant not loaded");
       const updated = await apiClient.updateTenant({ tenantId, name });
       if (name !== updated.name) {
         await publishTenantConfig(apiClient, auth, {
           accountId: updated.accountId,
-          gatewayId,
+          gatewayId: gid,
           parentAccount,
           hostname,
           name: updated.name,
@@ -230,10 +240,11 @@ function TenantDetail() {
 
   const suspendMutation = useMutation({
     mutationFn: async () => {
+      const gid = assertGateway();
       const updated = await apiClient.suspendTenant({ tenantId });
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
-        gatewayId,
+        gatewayId: gid,
         parentAccount,
         hostname,
         name: updated.name,
@@ -250,10 +261,11 @@ function TenantDetail() {
 
   const reactivateMutation = useMutation({
     mutationFn: async () => {
+      const gid = assertGateway();
       const updated = await apiClient.reactivateTenant({ tenantId });
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
-        gatewayId,
+        gatewayId: gid,
         parentAccount,
         hostname,
         name: updated.name,
@@ -270,9 +282,10 @@ function TenantDetail() {
 
   const republishMutation = useMutation({
     mutationFn: async () => {
+      const gid = assertGateway();
       return publishTenantConfig(apiClient, auth, {
         accountId: tenant?.accountId ?? "",
-        gatewayId,
+        gatewayId: gid,
         parentAccount,
         hostname,
         name: tenant?.name ?? "",
@@ -289,10 +302,11 @@ function TenantDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
+      const gid = assertGateway();
       const updated = await apiClient.deleteTenant({ tenantId });
       await publishTenantConfig(apiClient, auth, {
         accountId: updated.accountId,
-        gatewayId,
+        gatewayId: gid,
         parentAccount,
         hostname,
         name: updated.name,
@@ -309,13 +323,27 @@ function TenantDetail() {
     onError: (error: Error) => toast.error(error.message || "Failed to delete tenant"),
   });
 
-  if (!tenant) {
+  if (!tenant || !gatewayId) {
     return (
       <PageContainer variant="wide">
-        <div className="text-muted-foreground text-sm py-12">Tenant not found.</div>
+        {!gatewayId ? (
+          <Card className="p-6 space-y-2">
+            <h2 className="text-lg font-semibold text-foreground">Gateway not configured</h2>
+            <p className="text-sm text-muted-foreground">
+              The active runtime does not declare a domain, so this page cannot resolve a tenant
+              address. Set <code className="font-mono">domain</code> in <code>bos.config.json</code>{" "}
+              and rebuild the host. Until then, view and edit operations will not run.
+            </p>
+          </Card>
+        ) : (
+          <div className="text-muted-foreground text-sm py-12">Tenant not found.</div>
+        )}
       </PageContainer>
     );
   }
+
+  const bosUrl = `bos://${tenant.accountId}/${gatewayId}`;
+  const fastKvUrl = buildRegistryConfigUrl(tenant.accountId, gatewayId);
 
   const statusVariant =
     tenant.status === "active"
@@ -511,7 +539,11 @@ function TenantDetail() {
             </p>
             {hostname && (
               <Button asChild variant="outline" size="sm">
-                <a href={`https://${hostname}`} target="_blank" rel="noreferrer">
+                <a
+                  href={buildTenantUrl(hostname, gatewayId ?? "") ?? `https://${hostname}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <ExternalLink className="h-3.5 w-3.5" />
                   open {hostname}
                 </a>

@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { buildTenantUrl } from "@/lib/tenant-url";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 
@@ -57,6 +58,7 @@ export function NodeDirectory({
       <tbody>
         {nodes.map((node) => {
           const hostname = node.hostname ?? `${node.slug}.${gateway}`;
+          const href = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
           const className = "flex items-center gap-4 px-2 py-4";
           const content = (
             <>
@@ -89,7 +91,7 @@ export function NodeDirectory({
                     {content}
                   </Link>
                 ) : (
-                  <a href={`https://${hostname}/`} className={className}>
+                  <a href={href} className={className}>
                     {content}
                   </a>
                 )}

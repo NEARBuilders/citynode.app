@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { spawnSync } from "node:child_process";
 import { computeRegressionEnv } from "./regression-env.mjs";
 
 export function portsForBase(base) {
@@ -10,11 +11,7 @@ export function portsForBase(base) {
 
 function listeningPidsOnPort(port) {
   try {
-    const out = Bun.spawnSync([
-      "sh",
-      "-c",
-      `lsof -nP -ti:${port} -sTCP:LISTEN 2>/dev/null || true`,
-    ]);
+    const out = spawnSync("sh", ["-c", `lsof -nP -ti:${port} -sTCP:LISTEN 2>/dev/null || true`]);
     return String(out.stdout)
       .split("\n")
       .map((line) => Number(line.trim()))

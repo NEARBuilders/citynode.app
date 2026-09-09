@@ -63,6 +63,39 @@ describe("tenant binding hostnames", () => {
   });
 });
 
+describe("tenant resolution over localhost", () => {
+  beforeEach(() => clearBindingResolverCache());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    process.env.NODE_ENV = "production";
+  });
+
+  it("maps <label>.localhost onto the gateway alias in development", async () => {
+    process.env.NODE_ENV = "development";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify([binding("chicago")]))),
+    );
+    const resolver = createBindingResolver(config);
+
+    expect(await resolver.resolve("chicago.localhost")).toMatchObject({ hostname: "chicago" });
+    expect(await resolver.resolve("localhost")).toBeNull();
+    expect(await resolver.resolve("unknown.localhost")).toBeNull();
+    expect(await resolver.resolve("a.b.localhost")).toBeNull();
+  });
+
+  it("ignores the localhost alias in production", async () => {
+    process.env.NODE_ENV = "production";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify([binding("chicago")]))),
+    );
+    const resolver = createBindingResolver(config);
+
+    expect(await resolver.resolve("chicago.localhost")).toBeNull();
+  });
+});
+
 describe("binding resolver failure handling", () => {
   beforeEach(() => {
     clearBindingResolverCache();

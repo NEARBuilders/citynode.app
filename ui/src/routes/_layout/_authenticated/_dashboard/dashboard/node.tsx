@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tan
 import { ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
+import { buildTenantUrl } from "@/lib/tenant-url";
 import { cn } from "@/lib/utils";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
@@ -114,7 +115,7 @@ function NodeDashboardLayout() {
     );
   }
 
-  const gatewayUrl = gateway ? `https://${selectedNode.slug}.${gateway}` : null;
+  const gatewayUrl = gateway ? buildTenantUrl(selectedNode.slug, gateway) : null;
   const isSummary = pathname === "/dashboard/node" || pathname === "/dashboard/node/";
 
   return (

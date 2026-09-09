@@ -34,6 +34,7 @@ export async function createAuthTestInstance({ authDatabaseUrl, secret }) {
   return {
     auth,
     test: ctx.test,
+    db,
     close: async () => {
       await pool.end();
     },

@@ -10,6 +10,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
   loader: async ({ params, context }) => {
@@ -133,7 +134,12 @@ function NodePage() {
                 {node.name} runs its own validator pool.
               </p>
               <Button asChild>
-                <a href={`https://${node.slug}.${gateway}/stake`}>
+                <a
+                  href={
+                    buildTenantUrl(node.slug, gateway, { path: "/stake" }) ??
+                    `https://${node.slug}.${gateway}/stake`
+                  }
+                >
                   Stake to {node.name}
                   <ArrowRight />
                 </a>
@@ -148,7 +154,10 @@ function NodePage() {
                 {childrenWithValidators.map((child) => (
                   <a
                     key={child.id}
-                    href={`https://${child.slug}.${gateway}/stake`}
+                    href={
+                      buildTenantUrl(child.slug, gateway, { path: "/stake" }) ??
+                      `https://${child.slug}.${gateway}/stake`
+                    }
                     className="group flex items-center gap-4 border-b border-border px-2 py-4 last:border-0 transition-colors hover:bg-muted/50"
                   >
                     <span className="capitalize text-base font-semibold text-foreground group-hover:underline">
