@@ -828,11 +828,20 @@ export async function buildRuntimeConfig(
       shared: apiConfig.shared,
       dependsOn: apiConfig.dependsOn ? normalizeStringArray(apiConfig.dependsOn) : undefined,
     },
-    auth: (() => {
+    auth: await (async () => {
       if (!authConfig || !authRuntime) return undefined;
       if (!authRuntime.localPath && !authRuntime.url) return undefined;
+      let authName = resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth");
+      if (
+        authRuntime.source === "remote" &&
+        authRuntime.url &&
+        !authRuntime.localPath &&
+        typeof authConfig.name !== "string"
+      ) {
+        authName = await resolveRemotePluginRuntimeName(authRuntime.url, authName);
+      }
       return {
-        name: resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth"),
+        name: authName,
         extendsRef: authExtendsRef,
         url: authRuntime.url,
         entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",

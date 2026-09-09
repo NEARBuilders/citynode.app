@@ -41,8 +41,9 @@
       "integrity": "sha384-wfnNaT2NUgnrVOFjjhxZxL58aO9IbQJS9Lp+wVUcYtZC9k5nIAzolZAcbvUQKL83"
     },
     "auth": {
+      "name": "@everything-dev/auth-plugin",
       "development": "local:plugins/auth",
-      "production": "https://elliot-braem-7877-everything-dev-auth-plugin-city-6cf42e155-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-7935-everything-dev-auth-plugin-city-65ff7220e-ze.zephyrcloud.app",
       "integrity": "sha384-aUjuPBUbUXcTiMpUOl5sqYT1deA2VAAff3RzwFLddV3GvBqExojjbNcl+6MTtZfZ",
       "secrets": [
         "AUTH_DATABASE_URL",
