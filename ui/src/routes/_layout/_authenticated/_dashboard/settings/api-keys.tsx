@@ -44,6 +44,15 @@ type ApiKeyItem = {
 
 type CreatedApiKey = ApiKeyRevealProps["apiKey"];
 
+async function handleCopy(value: string, message = "API key copied") {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(message);
+  } catch {
+    toast.error("Failed to copy");
+  }
+}
+
 const userApiKeysQueryKey = ["user-api-keys"] as const;
 
 function ApiKeysSettings() {
@@ -108,15 +117,6 @@ function ApiKeysSettings() {
       toast.error(error.message || "Failed to delete API key");
     },
   });
-
-  const handleCopy = async (value: string, message = "API key copied") => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(message);
-    } catch {
-      toast.error("Failed to copy");
-    }
-  };
 
   if (!user) return null;
 

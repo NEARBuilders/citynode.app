@@ -58,6 +58,15 @@ type ApiKeyItem = {
 
 type CreatedApiKey = ApiKeyRevealProps["apiKey"];
 
+async function handleCopyApiKey(value: string, message = "API key copied") {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(message);
+  } catch {
+    toast.error("Failed to copy API key");
+  }
+}
+
 const orgMembersQueryKey = (orgId: string) => ["org-members", orgId] as const;
 const orgInvitationsQueryKey = (orgId: string) => ["org-invitations", orgId] as const;
 const orgApiKeysQueryKey = (orgId: string) => ["org-api-keys", orgId] as const;
@@ -153,15 +162,6 @@ function OrganizationDetail() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKey | null>(null);
-
-  const handleCopyApiKey = async (value: string, message = "API key copied") => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(message);
-    } catch {
-      toast.error("Failed to copy API key");
-    }
-  };
 
   const switchOrg = useSwitchOrganization();
 

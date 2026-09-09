@@ -24,7 +24,7 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
   const segments = pathname === "/" ? [] : pathname.slice(1).split("/").filter(Boolean);
 
   return (
-    <header className="shrink-0 bg-card/50 border-b border-border transition-all duration-200 overflow-hidden h-12">
+    <header className="shrink-0 bg-card/50 border-b border-border transition-colors duration-200 overflow-hidden h-12">
       <div className="flex items-center gap-2 px-4 sm:px-6 h-12 min-w-0">
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-4" />

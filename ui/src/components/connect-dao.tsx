@@ -24,6 +24,16 @@ type MembershipState =
   | { kind: "not-sputnik" }
   | { kind: "error"; message: string };
 
+async function handleConnect() {
+  try {
+    await connectDaoAccount();
+  } catch {}
+}
+
+async function handleDisconnect() {
+  await disconnectDaoAccount();
+}
+
 export function ConnectDao({ onVerified }: ConnectDaoProps) {
   useDaoAutoRestore();
   const connection = useDaoConnection();
@@ -64,16 +74,6 @@ export function ConnectDao({ onVerified }: ConnectDaoProps) {
       cancelled = true;
     };
   }, [connection.status, connection.daoAccountId, primaryAccountId, onVerified]);
-
-  async function handleConnect() {
-    try {
-      await connectDaoAccount();
-    } catch {}
-  }
-
-  async function handleDisconnect() {
-    await disconnectDaoAccount();
-  }
 
   if (connection.status === "connected" && connection.daoAccountId) {
     return (

@@ -18,6 +18,7 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { getRemoteScripts, getThemeInitScript } from "everything-dev/ui/head";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
+import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import type { RouterContext } from "@/app";
 import { getBaseStyles } from "@/app";
@@ -156,12 +157,14 @@ function RootComponent() {
         <style nonce={cspNonce} dangerouslySetInnerHTML={{ __html: getBaseStyles() }} />
       </head>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={cspNonce}>
-          <div id="root">
-            <Outlet />
-          </div>
-          <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
-        </ThemeProvider>
+        <MotionConfig reducedMotion="user">
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={cspNonce}>
+            <div id="root">
+              <Outlet />
+            </div>
+            <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
+          </ThemeProvider>
+        </MotionConfig>
         <Scripts />
         {process.env.NODE_ENV === "development" && (
           <ClientOnly>

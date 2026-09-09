@@ -34,6 +34,19 @@ export const Route = createFileRoute("/_layout/_anon/login")({
   component: LoginPage,
 });
 
+type AuthError = { code?: string; message?: string } | Error;
+
+function handleError(error: AuthError) {
+  const code = "code" in error ? error.code : undefined;
+  const message = "message" in error ? error.message : "Failed to sign in";
+  if (code === "UNAUTHORIZED_NONCE_REPLAY") toast.error("Sign-in already used");
+  else if (code === "UNAUTHORIZED_INVALID_SIGNATURE") toast.error("Invalid signature");
+  else if (code === "SIGNER_NOT_AVAILABLE") toast.error("NEAR wallet not available");
+  else if (code === "RECIPIENT_MISMATCH") toast.error("Sign-in configuration error");
+  else if (code === "UNAUTHORIZED_INVALID_NONCE") toast.error("Session expired, please try again");
+  else toast.error(message || "Failed to sign in");
+}
+
 function LoginPage() {
   const navigate = useNavigate();
   const auth = useAuthClient();
@@ -58,18 +71,6 @@ function LoginPage() {
     toast.success(message);
     queryClient.invalidateQueries({ queryKey: ["session"] });
     navigate({ to: redirectTo, replace: true, search: {} });
-  };
-
-  const handleError = (error: { code?: string; message?: string } | Error) => {
-    const code = "code" in error ? error.code : undefined;
-    const message = "message" in error ? error.message : "Failed to sign in";
-    if (code === "UNAUTHORIZED_NONCE_REPLAY") toast.error("Sign-in already used");
-    else if (code === "UNAUTHORIZED_INVALID_SIGNATURE") toast.error("Invalid signature");
-    else if (code === "SIGNER_NOT_AVAILABLE") toast.error("NEAR wallet not available");
-    else if (code === "RECIPIENT_MISMATCH") toast.error("Sign-in configuration error");
-    else if (code === "UNAUTHORIZED_INVALID_NONCE")
-      toast.error("Session expired, please try again");
-    else toast.error(message || "Failed to sign in");
   };
 
   const handleNear = async () => {
