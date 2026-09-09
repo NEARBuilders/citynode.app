@@ -4,6 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Globe, Landmark, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
 import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
@@ -32,12 +33,8 @@ import { cn } from "@/lib/utils";
 
 const STAKE_GAS = "300000000000000";
 
-type StakeSearch = { node?: string };
-
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/stake")({
-  validateSearch: (search: Record<string, unknown>): StakeSearch => ({
-    node: typeof search.node === "string" ? search.node : undefined,
-  }),
+  validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
   head: () => ({
     meta: [
       { title: "Stake | app" },
@@ -61,16 +58,17 @@ function getSlugFromHostname(): string | null {
 function StakePage() {
   const apiClient = useApiClient();
   const auth = useAuthClient();
-  const { node: nodeSlug } = Route.useSearch();
+  const { node: nodeSlug, nodeId: selectedNodeId } = Route.useSearch();
 
   const slug = nodeSlug ?? getSlugFromHostname();
+  const hasNodeSelection = !!selectedNodeId || !!slug;
 
   const { runtimeConfig } = Route.useRouteContext();
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
 
   const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
     ...tenantAppsQueryOptions(apiClient),
-    enabled: !slug,
+    enabled: !hasNodeSelection,
   });
 
   const directoryNodes = tenantApps.flatMap((app) =>
@@ -106,10 +104,15 @@ function StakePage() {
     }
   };
 
-  const { data: node, isLoading: nodeLoading } = useQuery({
-    ...nodeBySlugQueryOptions(apiClient, slug ?? ""),
-    enabled: !!slug,
+  const nodeById = useQuery({
+    ...nodeByIdQueryOptions(apiClient, selectedNodeId ?? ""),
+    enabled: !!selectedNodeId,
   });
+  const nodeBySlug = useQuery({
+    ...nodeBySlugQueryOptions(apiClient, slug ?? ""),
+    enabled: !selectedNodeId && !!slug,
+  });
+  const { data: node, isLoading: nodeLoading } = selectedNodeId ? nodeById : nodeBySlug;
 
   const nodeId = node?.id;
 
@@ -224,7 +227,7 @@ function StakePage() {
           }
         />
 
-        {!slug ? (
+        {!hasNodeSelection ? (
           <Card className="p-6 space-y-4">
             <p className="text-sm text-muted-foreground">Select a city to stake to.</p>
             <NodeDirectory
@@ -253,7 +256,7 @@ function StakePage() {
                   <Link
                     key={child.id}
                     to="/stake"
-                    search={{ node: child.slug }}
+                    search={{ node: child.slug, nodeId: child.id }}
                     className="inline-flex h-10 items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   >
                     <span className="capitalize">{child.name}</span>

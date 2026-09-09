@@ -95,6 +95,7 @@
     "@types/react-dom": "catalog:",
     "every-plugin": "catalog:",
     "everything-dev": "catalog:",
+    "jsdom": "^30.0.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.17",
     "typescript": "catalog:",

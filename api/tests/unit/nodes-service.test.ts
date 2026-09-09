@@ -381,6 +381,57 @@ describe("NodesService", () => {
     expect(await runService(layer, ({ nodes }) => nodes.getById(node.id))).toBeNull();
   });
 
+  it("resolves unique child slugs, requires a parent for duplicates, and preserves root URLs", async () => {
+    const layer = freshLayer();
+    await runService(layer, async ({ nodes, tenants }) => {
+      const tenantId = await seedTenant(tenants);
+      const firstParent = await nodes.create({
+        kind: "state",
+        slug: "illinois",
+        name: "Illinois",
+        parentId: null,
+        tenantId,
+      });
+      const secondParent = await nodes.create({
+        kind: "state",
+        slug: "missouri",
+        name: "Missouri",
+        parentId: null,
+        tenantId,
+      });
+      const firstChild = await nodes.create({
+        kind: "city",
+        slug: "springfield",
+        name: "Springfield",
+        parentId: firstParent.id,
+        tenantId,
+      });
+      expect((await nodes.resolveBySlug("springfield"))?.id).toBe(firstChild.id);
+
+      const secondChild = await nodes.create({
+        kind: "city",
+        slug: "springfield",
+        name: "Springfield",
+        parentId: secondParent.id,
+        tenantId,
+      });
+      expect(await nodes.resolveBySlug("springfield")).toBeNull();
+      expect((await nodes.resolveBySlug("springfield", firstParent.id))?.id).toBe(firstChild.id);
+      expect((await nodes.resolveBySlug("springfield", secondParent.id))?.id).toBe(secondChild.id);
+      expect(await nodes.resolveBySlug("springfield", null)).toBeNull();
+
+      const root = await nodes.create({
+        kind: "city",
+        slug: "springfield",
+        name: "Springfield",
+        parentId: null,
+        tenantId,
+      });
+      expect((await nodes.resolveBySlug("springfield"))?.id).toBe(root.id);
+      expect((await nodes.resolveBySlug("springfield", secondParent.id))?.id).toBe(secondChild.id);
+    });
+  });
+
   it("list filters by kind and parentId", async () => {
     const layer = freshLayer();
     const tenantId = await runService(layer, async ({ tenants }) => {
