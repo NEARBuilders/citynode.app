@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { z } from "zod";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Badge, Button, NodeDirectory } from "@/components";
+import { Badge, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
+import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   childNodesQueryOptions,
@@ -12,11 +14,15 @@ import {
 } from "@/lib/queries/nodes";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
-  loader: async ({ params, context }) => {
+  validateSearch: z.object({ parentId: z.uuid().optional() }),
+  loaderDeps: ({ search }) => ({ parentId: search.parentId }),
+  loader: async ({ params, context, deps: { parentId } }) => {
     const { queryClient, apiClient, runtimeConfig } = context;
     const slug = params.slug;
 
-    const node = await queryClient.ensureQueryData(nodeBySlugQueryOptions(apiClient, slug, null));
+    const node = await queryClient.ensureQueryData(
+      nodeBySlugQueryOptions(apiClient, slug, parentId),
+    );
 
     if (node) {
       await Promise.all([
@@ -25,7 +31,7 @@ export const Route = createFileRoute("/_layout/_public/n/$slug")({
       ]);
     }
 
-    return { slug, runtimeConfig, nodeName: node?.name ?? null };
+    return { slug, parentId, runtimeConfig, nodeName: node?.name ?? null };
   },
   head: ({ loaderData }) => ({
     meta: [
@@ -42,12 +48,12 @@ export const Route = createFileRoute("/_layout/_public/n/$slug")({
 });
 
 function NodePage() {
-  const { slug, runtimeConfig } = Route.useLoaderData();
+  const { slug, parentId, runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
 
   const { data: node, isLoading: nodeLoading } = useQuery(
-    nodeBySlugQueryOptions(apiClient, slug, null),
+    nodeBySlugQueryOptions(apiClient, slug, parentId),
   );
 
   const nodeId = node?.id;
@@ -79,9 +85,7 @@ function NodePage() {
   }
 
   const validators = staking?.validators ?? [];
-  const hasOwnValidator = staking?.sourceNodeId === node.id;
   const validatorNodeIds = new Set(validators.map((v) => v.nodeId));
-  const childrenWithValidators = children.filter((c) => validatorNodeIds.has(c.id));
 
   return (
     <PageContainer variant="default">
@@ -122,49 +126,18 @@ function NodePage() {
             validatorNodeIds={validatorNodeIds}
             isLoading={childrenLoading}
             emptyMessage="No child nodes yet."
+            linkTo="/n/$slug"
           />
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-foreground">Stake</h2>
-          {hasOwnValidator ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {node.name} runs its own validator pool.
-              </p>
-              <Button asChild>
-                <a href={`https://${node.slug}.${gateway}/stake`}>
-                  Stake to {node.name}
-                  <ArrowRight />
-                </a>
-              </Button>
-            </div>
-          ) : childrenWithValidators.length > 0 ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {node.name} doesn&apos;t run its own validator — stake to a city that does.
-              </p>
-              <div>
-                {childrenWithValidators.map((child) => (
-                  <a
-                    key={child.id}
-                    href={`https://${child.slug}.${gateway}/stake`}
-                    className="group flex items-center gap-4 border-b border-border px-2 py-4 last:border-0 transition-colors hover:bg-muted/50"
-                  >
-                    <span className="capitalize text-base font-semibold text-foreground group-hover:underline">
-                      {child.name}
-                    </span>
-                    <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              This node doesn&apos;t run a validator yet.
-            </p>
-          )}
-        </section>
+        <NodeStakeSection
+          node={node}
+          children={children}
+          gateway={gateway}
+          validators={validators}
+          sourceNodeId={staking?.sourceNodeId ?? node.id}
+          apiClient={apiClient}
+        />
       </div>
     </PageContainer>
   );
