@@ -26,11 +26,12 @@ import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
 import { useMediaQuery } from "@/hooks";
 import { sessionQueryKey } from "@/lib/auth";
+import { resolveSessionFromCache } from "@/lib/session-cache";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   beforeLoad: async ({ context }) => {
-    const session = context.session;
+    const session = resolveSessionFromCache(context.queryClient, context.session);
 
     return {
       runtimeConfig: context.runtimeConfig,
@@ -40,9 +41,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   },
   loader: async ({ context }) => {
     const { queryClient } = context;
-    const session = context.session;
+    const session = resolveSessionFromCache(queryClient, context.session);
 
-    if (session && queryClient) {
+    if (session !== undefined && queryClient) {
       queryClient.setQueryData(sessionQueryKey, session);
     }
 

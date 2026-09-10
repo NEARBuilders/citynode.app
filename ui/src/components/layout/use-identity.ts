@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { sessionQueryOptions, useAuthClient } from "@/app";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { clearAuthenticatedQueries } from "@/lib/session-cache";
 import { useNearAccount } from "@/lib/use-near-account";
 
 export function useIdentity() {
@@ -50,9 +51,7 @@ export function useIdentity() {
       await auth.near.disconnect().catch(() => {});
     },
     onSuccess: async () => {
-      queryClient.setQueryData(["session"], null);
-      queryClient.removeQueries({ queryKey: ["organizations"] });
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      await clearAuthenticatedQueries(queryClient);
       await router.invalidate();
       await navigate({ to: "/", replace: true });
     },

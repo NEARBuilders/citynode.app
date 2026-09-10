@@ -2,8 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { sessionQueryKey, useAuthClient } from "@/app";
+import { useAuthClient } from "@/app";
 import { Button, Card, Field, FieldLabel, Input } from "@/components";
+import { clearAuthenticatedQueries } from "@/lib/session-cache";
 import { ActionCard } from "./-action-card";
 
 export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean | null } }) {
@@ -48,9 +49,7 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
       await auth.near.disconnect().catch(() => {});
     },
     onSuccess: async () => {
-      queryClient.setQueryData(sessionQueryKey, null);
-      queryClient.removeQueries({ queryKey: ["passkeys"] });
-      queryClient.removeQueries({ queryKey: ["organizations"] });
+      await clearAuthenticatedQueries(queryClient);
       await navigate({ to: "/", replace: true });
     },
     onError: (err: Error) => toast.error(err.message),
