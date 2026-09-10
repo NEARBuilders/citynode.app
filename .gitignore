@@ -332,8 +332,10 @@ node_modules/.federation
 !.changeset/**/*.md
 !docs/agents/**/*.md
 !docs/adr/**/*.md
-# Plans are tracked design documents — see plans/README.md
-!plans/**/*.md
+# Internal planning documents and domain glossaries stay local.
+/CONTEXT.md
+/CONTEXT-MAP.md
+/plans/**/*.md
 # Prototype source files (plans/prototypes/ has its own .gitignore for dist/, node_modules/)
 !plans/prototypes/**/*.css
 !plans/prototypes/**/*.gen.ts

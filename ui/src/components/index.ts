@@ -33,6 +33,7 @@ export { UserNav } from "./layout/user-nav";
 export { Logo } from "./logo";
 export { NodeDirectory, type NodeDirectoryNode } from "./node-directory";
 export { NodeValidatorTable } from "./node-validator-table";
+export { StakePoolCard } from "./stake-pool-card";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
 export {

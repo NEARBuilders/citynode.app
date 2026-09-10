@@ -340,11 +340,16 @@ export const NodesLive = Layer.effect(
           } else if (parentId !== undefined) {
             conditions.push(eq(nodesTable.parentId, parentId));
           }
-          const [row] = await db
+          const matches = await db
             .select()
             .from(nodesTable)
             .where(and(...conditions))
-            .limit(1);
+            .orderBy(sql`${nodesTable.parentId} IS NOT NULL`)
+            .limit(parentId === undefined ? 2 : 1);
+          const row = matches[0];
+          if (parentId === undefined && matches.length > 1 && row?.parentId !== null) {
+            return null;
+          }
           return row ? toNodeRecord(row) : null;
         } catch (error) {
           throw toOrpcError(error);

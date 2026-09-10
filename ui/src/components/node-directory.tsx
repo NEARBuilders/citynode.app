@@ -8,6 +8,7 @@ export interface NodeDirectoryNode {
   name: string;
   slug: string;
   kind: string;
+  parentId?: string | null;
   hostname?: string | null;
 }
 
@@ -17,7 +18,7 @@ interface NodeDirectoryProps {
   validatorNodeIds?: ReadonlySet<string>;
   isLoading?: boolean;
   emptyMessage?: string;
-  linkTo?: "/stake";
+  linkTo?: "/stake" | "/n/$slug";
   linkSearch?: (node: NodeDirectoryNode) => { node?: string } | undefined;
 }
 
@@ -86,7 +87,16 @@ export function NodeDirectory({
               className="group border-b border-border last:border-0 transition-colors hover:bg-muted/50"
             >
               <td className="p-0">
-                {linkTo ? (
+                {linkTo === "/n/$slug" ? (
+                  <Link
+                    to="/n/$slug"
+                    params={{ slug: node.slug }}
+                    search={{ parentId: node.parentId ?? undefined }}
+                    className={className}
+                  >
+                    {content}
+                  </Link>
+                ) : linkTo ? (
                   <Link to={linkTo} search={linkSearch?.(node) ?? {}} className={className}>
                     {content}
                   </Link>
