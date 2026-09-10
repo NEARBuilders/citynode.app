@@ -7,6 +7,13 @@ import { invalidateStakePoolQueries } from "@/lib/queries/stake-pool";
 
 const STAKE_GAS = "300000000000000";
 
+export type StakeVariables = {
+  amount: bigint;
+  network: string;
+  poolAccountId: string;
+  protocol: string;
+};
+
 export function useStakeWalletConnection(auth: AuthClient) {
   const [isConnecting, setIsConnecting] = useState(false);
   const connect = async () => {
@@ -30,13 +37,19 @@ export function useStakeMutation(auth: AuthClient, queryClient: QueryClient) {
       amount: stakeAmount,
       network,
       poolAccountId,
-    }: {
-      amount: bigint;
-      network: string;
-      poolAccountId: string;
-    }) => {
+      protocol,
+    }: StakeVariables) => {
+      if (protocol !== "near") {
+        throw new Error("Only NEAR validators can receive NEAR stakes.");
+      }
+      if (stakeAmount <= 0n) {
+        throw new Error("Enter a positive stake amount.");
+      }
       const connected = await auth.near.ensureConnected();
       if (!connected) throw new Error("Connect a NEAR wallet to stake.");
+      if (auth.near.getNetwork() !== network) {
+        throw new Error(`Switch your wallet to ${network} before staking.`);
+      }
       const signer = auth.near.getAccountId();
       if (!signer) throw new Error("Connect a NEAR wallet to stake.");
       const near = auth.near.getNearClient();

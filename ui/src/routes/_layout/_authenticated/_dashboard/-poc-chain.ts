@@ -11,6 +11,7 @@ import { Amount, type FinalExecutionOutcome, fromNearConnect, Near } from "near-
 import { getDaoConnector } from "@/lib/dao-connect";
 import { type DaoPlan, getNear } from "@/lib/sputnik-proposals";
 
+export { parseNearAmount } from "@/lib/near-amount";
 export type {
   ApprovalThreshold,
   DaoPlan,
@@ -118,12 +119,6 @@ export function remainingToStake(
   if (!state) return want;
   const staked = balanceOf(state.knownDeposited);
   return want > staked ? want - staked : 0n;
-}
-
-export function parseNearAmount(value: string): bigint | null {
-  const parsed = Number(value);
-  if (!value || Number.isNaN(parsed) || parsed <= 0) return null;
-  return BigInt(Math.round(parsed * 1e24));
 }
 
 export function txHash(result: unknown): string | undefined {

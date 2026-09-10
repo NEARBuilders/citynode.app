@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Amount } from "near-kit";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import { Card } from "@/components";
+import { parseNearAmount } from "@/lib/near-amount";
 import { useNearAccount } from "@/lib/use-near-account";
 import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 import { RelayerHistory } from "./-relayer-history";
@@ -28,11 +30,7 @@ function AdminRelayerPage() {
   const [amount, setAmount] = useState("5");
   const [sending, setSending] = useState(false);
 
-  const parsedAmount = useMemo(() => {
-    const value = Number(amount);
-    if (!amount || Number.isNaN(value) || value <= 0) return null;
-    return value;
-  }, [amount]);
+  const parsedAmount = useMemo(() => parseNearAmount(amount), [amount]);
 
   const sendFund = useCallback(async () => {
     const target = info?.accountId;
@@ -59,12 +57,12 @@ function AdminRelayerPage() {
       const result = await auth.near
         .getNearClient()
         .transaction(signer)
-        .transfer(target, `${parsedAmount} NEAR`)
+        .transfer(target, Amount.yocto(parsedAmount))
         .send({ waitUntil: "FINAL" });
       toast.success("Relayer funded", {
         description: result.transaction?.hash
           ? `tx: ${result.transaction.hash}`
-          : `Sent ${parsedAmount} NEAR → ${target}`,
+          : `Sent ${amount} NEAR → ${target}`,
       });
       relayerInfoQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ["relay-history"] });

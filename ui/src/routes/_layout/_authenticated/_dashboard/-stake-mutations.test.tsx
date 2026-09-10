@@ -62,17 +62,22 @@ afterEach(() => {
   harness.warning.mockReset();
 });
 
-function authWithTransaction(send: ReturnType<typeof vi.fn>) {
+function authWithTransaction(
+  send: ReturnType<typeof vi.fn>,
+  network: "mainnet" | "testnet" = "testnet",
+) {
   const functionCall = vi.fn(() => ({ send }));
   const transaction = vi.fn(() => ({ functionCall }));
+  const getNearClient = vi.fn(() => ({ transaction }));
   const auth = {
     near: {
       ensureConnected: vi.fn(async () => true),
       getAccountId: vi.fn(() => "alice.near"),
-      getNearClient: vi.fn(() => ({ transaction })),
+      getNetwork: vi.fn(() => network),
+      getNearClient,
     },
   } as unknown as AuthClient;
-  return { auth, functionCall, transaction };
+  return { auth, functionCall, transaction, getNearClient };
 }
 
 function withQueryClient(queryClient: QueryClient) {
@@ -101,6 +106,7 @@ describe("stake transaction behavior", () => {
         amount: 2_000_000_000_000_000_000_000_000n,
         network: "testnet",
         poolAccountId: "pool.testnet",
+        protocol: "near",
       });
     });
 
@@ -132,12 +138,86 @@ describe("stake transaction behavior", () => {
     });
 
     await act(async () => {
-      result.current.mutate({ amount: 1n, network: "testnet", poolAccountId: "pool.testnet" });
+      result.current.mutate({
+        amount: 1n,
+        network: "testnet",
+        poolAccountId: "pool.testnet",
+        protocol: "near",
+      });
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(queryClient.getQueryState(poolStats)?.isInvalidated).toBe(false);
     expect(harness.error).toHaveBeenCalledWith("User rejected the transaction");
+  });
+
+  it("does not send a transaction when the wallet network differs from the selected pool", async () => {
+    const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
+    const { auth, getNearClient } = authWithTransaction(send, "mainnet");
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+      wrapper: withQueryClient(queryClient),
+    });
+
+    await act(async () => {
+      result.current.mutate({
+        amount: 1n,
+        network: "testnet",
+        poolAccountId: "pool.testnet",
+        protocol: "near",
+      });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(getNearClient).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(harness.error).toHaveBeenCalledWith("Switch your wallet to testnet before staking.");
+  });
+
+  it("rejects unsupported validators before connecting or sending", async () => {
+    const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
+    const { auth, getNearClient } = authWithTransaction(send);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+      wrapper: withQueryClient(queryClient),
+    });
+
+    await act(async () => {
+      result.current.mutate({
+        amount: 1n,
+        network: "testnet",
+        poolAccountId: "pool.testnet",
+        protocol: "ethereum",
+      });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(auth.near.ensureConnected).not.toHaveBeenCalled();
+    expect(getNearClient).not.toHaveBeenCalled();
+    expect(harness.error).toHaveBeenCalledWith("Only NEAR validators can receive NEAR stakes.");
+  });
+
+  it("rejects non-positive stake amounts before connecting", async () => {
+    const send = vi.fn(async () => ({ transaction: { hash: "stake-tx" } }));
+    const { auth, getNearClient } = authWithTransaction(send);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useStakeMutation(auth, queryClient), {
+      wrapper: withQueryClient(queryClient),
+    });
+
+    await act(async () => {
+      result.current.mutate({
+        amount: 0n,
+        network: "testnet",
+        poolAccountId: "pool.testnet",
+        protocol: "near",
+      });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(auth.near.ensureConnected).not.toHaveBeenCalled();
+    expect(getNearClient).not.toHaveBeenCalled();
+    expect(harness.error).toHaveBeenCalledWith("Enter a positive stake amount.");
   });
 });
 

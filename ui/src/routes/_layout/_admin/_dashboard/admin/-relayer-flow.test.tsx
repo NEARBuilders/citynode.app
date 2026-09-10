@@ -177,7 +177,10 @@ describe("relayer funding flow", () => {
     await waitFor(() =>
       expect(mocks.success).toHaveBeenCalledWith("Relayer funded", expect.anything()),
     );
-    expect(current.transfer).toHaveBeenCalledWith("relayer.near", "5 NEAR");
+    expect(current.transfer).toHaveBeenCalledWith(
+      "relayer.near",
+      "5000000000000000000000000 yocto",
+    );
     expect(current.send).toHaveBeenCalledWith({ waitUntil: "FINAL" });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["relay-history"] });
     expect(await screen.findByText("abcdef123456…")).toBeTruthy();

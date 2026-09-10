@@ -1,10 +1,10 @@
 import { Wallet } from "lucide-react";
 import type { useApiClient } from "@/app";
 import { Button, Card, Field, FieldLabel, Input } from "@/components";
+import type { StakeVariables } from "./-stake-mutations";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Validator = Awaited<ReturnType<ApiClient["resolveStakingValidators"]>>["validators"][number];
-export type StakeVariables = { amount: bigint; network: string; poolAccountId: string };
 
 export function StakeForm({
   amount,
@@ -67,9 +67,10 @@ export function StakeForm({
                 amount: parsedYocto,
                 network: validator.network || "mainnet",
                 poolAccountId: validator.accountId,
+                protocol: validator.protocol || "near",
               });
             }}
-            disabled={!parsedYocto || isPending}
+            disabled={validator.protocol !== "near" || !parsedYocto || isPending}
             className="w-full"
           >
             {isPending ? "Staking…" : `Stake ${amount || "0"} NEAR`}

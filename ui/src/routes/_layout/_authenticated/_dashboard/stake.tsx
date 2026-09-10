@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader } from "@/components";
+import { parseNearAmount } from "@/lib/near-amount";
 import {
   childNodesQueryOptions,
   nodeByIdQueryOptions,
@@ -54,12 +55,6 @@ function getStakeTitle(node: Node | undefined, slug: string | null): ReactNode {
   if (node) return `Stake NEAR to ${node.name}`;
   if (slug) return <span className="capitalize">Stake NEAR to {slug}</span>;
   return "Stake NEAR to a city";
-}
-
-function parseStakeAmount(amount: string): bigint | null {
-  const value = Number(amount);
-  if (!amount || Number.isNaN(value) || value <= 0) return null;
-  return BigInt(parseFloat(amount) * 1e24);
 }
 
 function hasInheritedValidator(node: Node | undefined, sourceNodeId: string | null | undefined) {
@@ -127,7 +122,7 @@ function StakePage() {
   );
   const selectedValidator =
     validators.find((validator) => validator.id === selectedValidatorId) ?? defaultValidator;
-  const parsedYocto = useMemo(() => parseStakeAmount(amount), [amount]);
+  const parsedYocto = useMemo(() => parseNearAmount(amount), [amount]);
 
   const stakeMutation = useStakeMutation(auth, queryClient);
 

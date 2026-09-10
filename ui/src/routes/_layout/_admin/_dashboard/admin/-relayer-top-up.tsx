@@ -14,7 +14,7 @@ export function RelayerTopUp({
   nearAccountId: string | null;
   amount: string;
   sending: boolean;
-  parsedAmount: number | null;
+  parsedAmount: bigint | null;
   onAmountChange: (value: string) => void;
   onPreset: (value: string) => void;
   onConnect: () => void;
