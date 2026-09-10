@@ -164,8 +164,10 @@ describe("publishTenantConfigForMode", () => {
     const transaction = vi.fn().mockReturnValue({ functionCall });
     const auth = {
       near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
         getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: false } }),
-        getAccountId: vi.fn().mockReturnValue("alice.near"),
+        getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
         getNearClient: vi.fn().mockReturnValue({ transaction }),
       },
     } as unknown as ReturnType<typeof useAuthClient>;
@@ -176,7 +178,7 @@ describe("publishTenantConfigForMode", () => {
     });
 
     expect(auth.near.getNearClient).toHaveBeenCalled();
-    expect(transaction).toHaveBeenCalledWith("alice.near");
+    expect(transaction).toHaveBeenCalledWith("chicago.sputnik-dao.near");
     expect(result).toEqual({ transaction: "signed" });
   });
 
@@ -192,8 +194,10 @@ describe("publishTenantConfigForMode", () => {
     });
     const auth = {
       near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
         getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: false } }),
         getAccountId: vi.fn().mockReturnValue(null),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
       },
     } as unknown as ReturnType<typeof useAuthClient>;
 
@@ -203,5 +207,43 @@ describe("publishTenantConfigForMode", () => {
         mode: "platform",
       }),
     ).rejects.toThrow("Connect a NEAR wallet first");
+  });
+
+  it("refuses to publish when the connected signer does not own the tenant namespace", async () => {
+    const prepareRegistryConfigWrite = vi.fn();
+    const auth = {
+      near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
+        getAccountId: vi.fn().mockReturnValue("alice.near"),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    await expect(
+      publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+        ...baseInput,
+        mode: "platform",
+      }),
+    ).rejects.toThrow("cannot publish chicago.sputnik-dao.near");
+    expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
+  });
+
+  it("requires the wallet network that owns the tenant namespace", async () => {
+    const prepareRegistryConfigWrite = vi.fn();
+    const auth = {
+      near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
+        getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
+        getNetwork: vi.fn().mockReturnValue("testnet"),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    await expect(
+      publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+        ...baseInput,
+        mode: "platform",
+      }),
+    ).rejects.toThrow("Switch your wallet to mainnet");
+    expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
   });
 });
