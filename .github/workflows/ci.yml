@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       everything-dev: ${{ steps.changes.outputs.everything-dev }}
-      every-plugin: ${{ steps.changes.outputs.everything-plugin }}
+      every-plugin: ${{ steps.changes.outputs.every-plugin }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
@@ -50,13 +50,17 @@ jobs:
             fi
           fi
 
-          DIFF=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "")
-          if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/'; then
+          if ! DIFF=$(git diff --name-only "$BASE" HEAD); then
+            echo "everything-dev=true" >> "$GITHUB_OUTPUT"
+            echo "every-plugin=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
           else
             echo "everything-dev=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^packages/every-plugin/'; then
+          if echo "$DIFF" | grep -qE '^packages/every-plugin/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
             echo "every-plugin=true" >> "$GITHUB_OUTPUT"
           else
             echo "every-plugin=false" >> "$GITHUB_OUTPUT"

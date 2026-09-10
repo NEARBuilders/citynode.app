@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "dotenv";
 
 const DEFAULT_BASE_URL = "http://localhost:4100";
 const DEFAULT_PG_USER = "everythingdev";
@@ -20,23 +21,7 @@ export function findRepoRoot(startDir = process.cwd()) {
 export function readDotEnv(repoRoot, fileName = ".env") {
   const envPath = path.join(repoRoot, fileName);
   if (!fs.existsSync(envPath)) return {};
-  const parsed = {};
-  for (const rawLine of fs.readFileSync(envPath, "utf-8").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq === -1) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!(key in parsed)) parsed[key] = value;
-  }
-  return parsed;
+  return parse(fs.readFileSync(envPath));
 }
 
 function databaseSecrets(config) {
@@ -83,7 +68,7 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
     const resolved = testEnv[secret] ?? env[secret] ?? fileEnv[secret] ?? devUrl;
     if (!allowDevDb && resolved === devUrl) {
       throw new Error(
-        `refusing to run: ${secret} resolves to the dev database (${resolved}). ` +
+        `refusing to run: ${secret} resolves to the dev database. ` +
           "Regression tests must stay isolated from dev databases. " +
           "Restore the generated .env.test (run `bun run bos dev` to regenerate), " +
           "or start the test databases with `bun run test:db:up`, " +
@@ -107,7 +92,8 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
         "or set REGRESSION_ALLOW_DEV_DB=1 to override deliberately.",
     );
   }
-  const basePort = Number(new URL(baseUrl).port) || 80;
+  const parsedBase = new URL(baseUrl);
+  const basePort = Number(parsedBase.port) || (parsedBase.protocol === "https:" ? 443 : 80);
   const localPluginCount = Object.values(config.plugins ?? {}).filter(
     (plugin) => typeof plugin?.development === "string" && plugin.development.startsWith("local:"),
   ).length;
@@ -116,13 +102,64 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
     stalePorts.push(basePort + 10 + i);
   }
 
-  return { repoRoot: root, baseUrl, dbUrls, authSecret, stalePorts };
+  return { repoRoot: root, baseUrl, basePort, dbUrls, authSecret, stalePorts };
+}
+
+export function regressionStackOptions(config, mode, env = process.env) {
+  if (!["dev", "prod", "backcompat"].includes(mode)) {
+    throw new Error(`unknown mode: ${mode} (expected dev | prod | backcompat)`);
+  }
+  const { basePort } = config;
+  const command =
+    mode === "prod"
+      ? ["./node_modules/everything-dev/dist/cli.mjs", "start", "--no-interactive"]
+      : [
+          "packages/everything-dev/src/cli.ts",
+          "dev",
+          "--no-interactive",
+          "--ssr",
+          ...(mode === "backcompat"
+            ? [
+                "--host",
+                "local",
+                "--ui",
+                "remote",
+                "--api",
+                "remote",
+                "--auth",
+                "local",
+                "--remote-plugins",
+                "apps,template",
+              ]
+            : []),
+          "--port",
+          String(basePort),
+          "--api-port",
+          String(basePort + 1),
+          "--auth-port",
+          String(basePort + 2),
+          "--ui-port",
+          String(basePort + 3),
+          "--plugin-port-start",
+          String(basePort + 10),
+        ];
+  return {
+    command,
+    env: {
+      ...env,
+      ...config.dbUrls,
+      BETTER_AUTH_SECRET: config.authSecret,
+      ...(mode === "prod" ? { PORT: String(basePort) } : {}),
+      BOS_NO_PERSIST_PORTS: "1",
+      CORS_ORIGIN: env.CORS_ORIGIN ?? config.baseUrl,
+    },
+  };
 }
 
 const thisFile = fileURLToPath(import.meta.url);
 const isDirectRun = Boolean(process.argv[1]) && path.resolve(process.argv[1]) === thisFile;
 
-if (isDirectRun || process.argv.includes("--json")) {
+if (isDirectRun) {
   try {
     const result = computeRegressionEnv();
     if (process.argv.includes("--json")) {
@@ -141,8 +178,8 @@ if (isDirectRun || process.argv.includes("--json")) {
     } else {
       console.log(`repoRoot: ${result.repoRoot}`);
       console.log(`baseUrl:  ${result.baseUrl}`);
-      for (const [key, value] of Object.entries(result.dbUrls)) {
-        console.log(`${key}=${value}`);
+      for (const key of Object.keys(result.dbUrls)) {
+        console.log(`${key}=[configured]`);
       }
     }
   } catch (error) {
