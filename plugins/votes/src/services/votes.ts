@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { MemoryPublisher } from "every-plugin/orpc";
 import type { z } from "every-plugin/zod";
@@ -134,12 +134,28 @@ function createVoteMethods(db: any, publisher: MemoryPublisher<VoteEvents>) {
       return map;
     },
 
-    async getUpvoteFeed(limit = 50, _cursor?: string) {
+    async getUpvoteFeed(limit = 50, cursor?: string) {
       const pageLimit = Math.min(limit, 100);
-      const records = await db
-        .select()
-        .from(upvotes)
-        .orderBy(desc(upvotes.createdAt))
+      let recordsQuery = db.select().from(upvotes);
+
+      if (cursor) {
+        const [cursorRow] = await db
+          .select({ id: upvotes.id, createdAt: upvotes.createdAt })
+          .from(upvotes)
+          .where(eq(upvotes.id, cursor))
+          .limit(1);
+
+        const cursorCondition = cursorRow
+          ? or(
+              lt(upvotes.createdAt, cursorRow.createdAt),
+              and(eq(upvotes.createdAt, cursorRow.createdAt), lt(upvotes.id, cursorRow.id)),
+            )
+          : eq(upvotes.id, cursor);
+        recordsQuery = recordsQuery.where(cursorCondition);
+      }
+
+      const records = await recordsQuery
+        .orderBy(desc(upvotes.createdAt), desc(upvotes.id))
         .limit(pageLimit + 1);
 
       const hasMore = records.length > pageLimit;
