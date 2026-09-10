@@ -24,10 +24,12 @@ import type { BindingResolver } from "../../src/services/binding-resolver";
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function createMockBindingResolver(
@@ -640,7 +642,10 @@ describe("resolveRequestRuntime", () => {
     );
   });
 
-  it("revalidates expired tenant UI integrity in the background for stale asset requests", async () => {
+  it.each([
+    "success",
+    "failure",
+  ])("revalidates expired integrity and handles refresh %s", async (outcome) => {
     vi.useFakeTimers();
 
     try {
@@ -714,8 +719,36 @@ describe("resolveRequestRuntime", () => {
       ).resolves.toMatchObject({ tenantAccountId: "alice.linktree.near" });
       expect(verifySriForUrlMock).toHaveBeenCalledTimes(2);
 
-      refresh.resolve();
-      await Promise.resolve();
+      if (outcome === "success") {
+        refresh.resolve();
+        await Promise.resolve();
+      } else {
+        refresh.reject(new Error("integrity mismatch"));
+        await vi.advanceTimersByTimeAsync(0);
+        verifySriForUrlMock.mockRejectedValueOnce(new Error("integrity mismatch"));
+        await expect(
+          resolveRequestRuntime(baseConfig, new Request("https://alice.linktree.com/asset-3.js"), {
+            verification: "stale-while-revalidate",
+            bindingResolver: createMockBindingResolver({
+              hostname: "alice.linktree.com",
+              allowUiOverrides: true,
+              allowSsr: true,
+            }),
+          }),
+        ).rejects.toThrow("Integrity check failed");
+        expect(verifySriForUrlMock).toHaveBeenCalledTimes(3);
+        await expect(
+          resolveRequestRuntime(baseConfig, new Request("https://alice.linktree.com/asset-4.js"), {
+            verification: "stale-while-revalidate",
+            bindingResolver: createMockBindingResolver({
+              hostname: "alice.linktree.com",
+              allowUiOverrides: true,
+              allowSsr: true,
+            }),
+          }),
+        ).resolves.toMatchObject({ tenantAccountId: "alice.linktree.near" });
+        expect(verifySriForUrlMock).toHaveBeenCalledTimes(4);
+      }
     } finally {
       vi.useRealTimers();
     }

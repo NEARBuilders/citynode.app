@@ -149,7 +149,10 @@ function scheduleVerificationRefresh(
     return cached.refreshing;
   }
 
-  const refresh = createVerificationPromise(cacheKey, url, integrity, label)
+  const refresh = createVerificationPromise(cacheKey, url, integrity, label);
+
+  cached.refreshing = refresh;
+  void refresh
     .then(() => {
       const entry = verifiedUiCache.get(cacheKey);
       if (!entry || entry.refreshing !== refresh) {
@@ -164,10 +167,7 @@ function scheduleVerificationRefresh(
       logger.error(
         `[Tenant Runtime] Integrity refresh failed for ${label}: ${error instanceof Error ? error.message : String(error)}`,
       );
-      throw error;
     });
-
-  cached.refreshing = refresh;
   return refresh;
 }
 
