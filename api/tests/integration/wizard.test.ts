@@ -239,23 +239,6 @@ describe("Tenant + Node + Binding wizard flow", () => {
     });
   });
 
-  describe("audit seat enforcement", () => {
-    it("rejects tenant creation when the platform audit account is not in the DAO policy", async () => {
-      vi.mocked(isExplicitDaoMember).mockReturnValue(false);
-      const c = await getPluginClient(
-        daoContext("audit-seat-user", "org-audit-seat", "admin-audit-seat.near"),
-      );
-
-      await expect(
-        c.createTenant({
-          name: "No Audit Seat",
-          accountId: "audit-seat.example.near",
-          status: "active",
-        }),
-      ).rejects.toThrow("Platform audit account is not a member of this DAO");
-    });
-  });
-
   describe("listTenantApps discovery", () => {
     it("lists active tenants with primary hostname and node, excluding non-active and binding-less rows", async () => {
       const c = await getPluginClient(

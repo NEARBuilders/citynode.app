@@ -513,9 +513,16 @@ export const ProposalServiceLive = Layer.effect(
             return yield* Effect.fail(staleProposal());
           }
 
-          if (existing.reviewStatus !== "pending" || existing.applyStatus === "applying") {
+          const canReject =
+            existing.reviewStatus === "pending" ||
+            (existing.reviewStatus === "approved" &&
+              (existing.applyStatus === "not_started" || existing.applyStatus === "failed"));
+          if (!canReject || existing.applyStatus === "applying") {
             return yield* Effect.fail(
-              new ORPCError("BAD_REQUEST", { message: "Only pending proposals can be rejected" }),
+              new ORPCError("BAD_REQUEST", {
+                message:
+                  "Only pending proposals — or approved proposals that were never applied — can be rejected",
+              }),
             );
           }
 

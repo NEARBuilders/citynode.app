@@ -23,7 +23,7 @@ import {
 } from "./-poc-chain";
 
 export type SignerKind = "session" | "endowment" | "team";
-export type PhaseId = "stand-up" | "fund" | "vote";
+export type PhaseId = "stand-up" | "fund" | "vote" | "refresh";
 export type StationId =
   | "apply"
   | "approve"
@@ -32,7 +32,9 @@ export type StationId =
   | "stake"
   | "register-team"
   | "delegate"
-  | "vote";
+  | "vote"
+  | "unstake"
+  | "undelegate";
 
 export type StepStatus = "pending" | "staged" | "done" | "skipped";
 
@@ -54,8 +56,9 @@ export interface PhaseDef {
 export const PHASES: readonly PhaseDef[] = [
   {
     id: "stand-up",
-    title: "Stand it up",
-    blurb: "your wallet applies; approval creates the tenant and publishes its UI bundle",
+    title: "Initialize Node",
+    blurb:
+      "anyone can apply, approval creates the tenant owned by a multi-sig and publishes its UI bundle",
   },
   {
     id: "fund",
@@ -64,8 +67,14 @@ export const PHASES: readonly PhaseDef[] = [
   },
   {
     id: "vote",
-    title: "Make it vote",
+    title: "Participate in Governance",
     blurb: "the team registers in veNEAR, receives the sponsor's voting power, votes",
+  },
+  {
+    id: "refresh",
+    title: "Refresh",
+    blurb:
+      "the endowment unstakes the pool and takes its voting power back, so the cycle can run again",
   },
 ];
 
@@ -165,7 +174,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "endow",
-      index: 3,
+      index: 4,
       phase: "fund",
       title: "Lock the sponsor's NEAR",
       signer: "endowment",
@@ -221,7 +230,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "stake",
-      index: 4,
+      index: 5,
       phase: "fund",
       title: "Stake the node's pool",
       signer: "endowment",
@@ -256,7 +265,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "register-team",
-      index: 5,
+      index: 6,
       phase: "vote",
       title: "Register the team in veNEAR",
       signer: "team",
@@ -279,7 +288,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "delegate",
-      index: 6,
+      index: 7,
       phase: "vote",
       title: "Hand voting power to the team",
       signer: "endowment",
@@ -305,7 +314,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "vote",
-      index: 7,
+      index: 8,
       phase: "vote",
       title: "Vote in House of Stake",
       signer: "team",
@@ -315,6 +324,76 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         {
           id: "vote",
           label: govProposalId == null ? "vote on a proposal" : `vote on proposal ${govProposalId}`,
+        },
+      ],
+    },
+    {
+      id: "unstake",
+      index: 9,
+      phase: "refresh",
+      title: "Unstake the pool",
+      signer: "endowment",
+      purpose:
+        "Unstakes everything from the pool, withdraws it back to the lockup once the epoch window passes, and releases the pool so a new one can be selected.",
+      steps: [
+        {
+          id: "unstake-all",
+          label: "unstake everything",
+          plan: {
+            kind: "call",
+            receiverId: endowmentLockup,
+            methodName: "unstake_all",
+            args: {},
+            gas: "125 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+        {
+          id: "withdraw-all",
+          label: "withdraw to the lockup",
+          plan: {
+            kind: "call",
+            receiverId: endowmentLockup,
+            methodName: "withdraw_all_from_staking_pool",
+            args: {},
+            gas: "175 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+        {
+          id: "unselect-pool",
+          label: "release the pool",
+          plan: {
+            kind: "call",
+            receiverId: endowmentLockup,
+            methodName: "unselect_staking_pool",
+            args: {},
+            gas: "25 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+      ],
+    },
+    {
+      id: "undelegate",
+      index: 10,
+      phase: "refresh",
+      title: "Take the vote back",
+      signer: "endowment",
+      purpose:
+        "Clears the endowment's veNEAR delegations, returning all of its voting power to itself.",
+      steps: [
+        {
+          id: "clear-delegations",
+          label: "remove all delegations",
+          plan: {
+            kind: "call",
+            receiverId: VENEAR_ACCOUNT,
+            methodName: "set_delegations",
+            args: { entries: [] },
+            gas: "100 Tgas",
+            attachedDeposit: DELEGATE_DEPOSIT,
+          },
         },
       ],
     },
@@ -346,8 +425,6 @@ export function signerAccount(
 export interface ChainFacts {
   tenantDeployed: boolean;
   applicationProposed: boolean;
-  /** Review approved (approve step), distinct from the apply lifecycle. */
-  applicationApproved: boolean;
   /** The tenant's config is live in the FastKV registry (publish step). */
   configPublished: boolean;
   applicationApplied: boolean;
@@ -360,13 +437,17 @@ export interface ChainFacts {
   teamRegistered: boolean;
   delegated: boolean;
   voteCast: boolean;
+  unstaked: boolean;
+  withdrawn: boolean;
+  poolReleased: boolean;
+  delegationsCleared: boolean;
   /** Endowment and team wallet are the same account. */
   treasuriesShared: boolean;
 }
 
 const STEP_FACT: Record<string, keyof ChainFacts> = {
   propose: "applicationProposed",
-  approve: "applicationApproved",
+  approve: "tenantDeployed",
   publish: "configPublished",
   "mark-applied": "applicationApplied",
   register: "endowmentRegistered",
@@ -378,6 +459,10 @@ const STEP_FACT: Record<string, keyof ChainFacts> = {
   "register-team": "teamRegistered",
   "set-delegations": "delegated",
   vote: "voteCast",
+  "unstake-all": "unstaked",
+  "withdraw-all": "withdrawn",
+  "unselect-pool": "poolReleased",
+  "clear-delegations": "delegationsCleared",
 };
 
 export interface StepState extends StepDef {

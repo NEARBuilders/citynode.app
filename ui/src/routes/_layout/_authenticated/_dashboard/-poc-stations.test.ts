@@ -29,7 +29,6 @@ const inputs: StationInputs = {
 const noFacts: ChainFacts = {
   tenantDeployed: false,
   applicationProposed: false,
-  applicationApproved: false,
   configPublished: false,
   applicationApplied: false,
   endowmentRegistered: false,
@@ -41,6 +40,10 @@ const noFacts: ChainFacts = {
   teamRegistered: false,
   delegated: false,
   voteCast: false,
+  unstaked: false,
+  withdrawn: false,
+  poolReleased: false,
+  delegationsCleared: false,
   treasuriesShared: false,
 };
 
@@ -81,9 +84,9 @@ function proposal(
 }
 
 describe("buildStations", () => {
-  it("orders eight stations across three phases", () => {
+  it("orders ten stations across four phases", () => {
     const stations = buildStations(inputs);
-    expect(stations.map((s) => s.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(stations.map((s) => s.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(stations.map((s) => s.phase)).toEqual([
       "stand-up",
       "stand-up",
@@ -93,6 +96,8 @@ describe("buildStations", () => {
       "vote",
       "vote",
       "vote",
+      "refresh",
+      "refresh",
     ]);
   });
 
@@ -107,6 +112,24 @@ describe("buildStations", () => {
       "register-team": "team",
       delegate: "endowment",
       vote: "team",
+      unstake: "endowment",
+      undelegate: "endowment",
+    });
+  });
+
+  it("unwinds the stake and delegation so the cycle can refresh", () => {
+    const byId = Object.fromEntries(buildStations(inputs).map((s) => [s.id, s]));
+    const unstake = byId.unstake;
+    expect(unstake?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null))).toEqual(
+      ["unstake_all", "withdraw_all_from_staking_pool", "unselect_staking_pool"],
+    );
+    expect(unstake?.steps.every((s) => s.plan?.receiverId === LOCKUP)).toBe(true);
+    const undelegate = byId.undelegate;
+    expect(undelegate?.steps[0]?.plan).toMatchObject({
+      kind: "call",
+      receiverId: "venear.dao",
+      methodName: "set_delegations",
+      args: { entries: [] },
     });
   });
 
@@ -155,32 +178,32 @@ describe("deriveStations", () => {
 
   it("reports a station as staged when a pending DAO proposal matches its plan", () => {
     const states = derive({
-      facts: { ...noFacts, applicationProposed: true, applicationApproved: true },
+      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
       proposalsBySigner: { team: [proposal(7, "registry.near", "__fastdata_kv")] },
       connectedDao: TEAM,
     });
-    const deploy = states[1];
-    expect(deploy.status).toBe("staged");
-    expect(deploy.steps.find((s) => s.id === "publish")?.pendingProposal?.id).toBe(7);
+    const publish = states[2];
+    expect(publish.status).toBe("staged");
+    expect(publish.steps.find((s) => s.id === "publish")?.pendingProposal?.id).toBe(7);
     expect(pendingProposalCount(states)).toBe(1);
   });
 
   it("ignores proposals that are no longer in progress", () => {
     const states = derive({
-      facts: { ...noFacts, applicationProposed: true, applicationApproved: true },
+      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
       proposalsBySigner: { team: [proposal(7, "registry.near", "__fastdata_kv", "Approved")] },
       connectedDao: TEAM,
     });
-    expect(states[1].status).toBe("ready");
+    expect(states[2].status).toBe("ready");
   });
 
   it("does not attribute one treasury's proposals to another", () => {
     const states = derive({
-      facts: { ...noFacts, applicationProposed: true, applicationApproved: true },
+      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
       proposalsBySigner: { endowment: [proposal(7, "registry.near", "__fastdata_kv")] },
       connectedDao: TEAM,
     });
-    expect(states[1].status).toBe("ready");
+    expect(states[2].status).toBe("ready");
   });
 
   it("skips the delegate stations when both treasuries are one account", () => {
@@ -197,7 +220,6 @@ describe("deriveStations", () => {
         ...noFacts,
         treasuriesShared: true,
         applicationProposed: true,
-        applicationApproved: true,
         configPublished: true,
         applicationApplied: true,
         tenantDeployed: true,
@@ -221,12 +243,12 @@ describe("deriveStations", () => {
   it("marks a station failed and stops the run there", () => {
     const states = derive({
       facts: { ...noFacts, applicationProposed: true },
-      failedStations: { deploy: "insufficient balance" },
+      failedStations: { publish: "insufficient balance" },
       connectedDao: TEAM,
     });
-    expect(states[1].status).toBe("failed");
-    expect(states[1].blockedReason).toBe("insufficient balance");
-    expect(runnableRun(states)).toEqual([]);
+    expect(states[2].status).toBe("failed");
+    expect(states[2].blockedReason).toBe("insufficient balance");
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["approve"]);
   });
 
   it("tracks whether the required signer is the connected treasury", () => {
@@ -234,7 +256,7 @@ describe("deriveStations", () => {
       facts: { ...noFacts, applicationProposed: true },
       connectedDao: ENDOWMENT,
     });
-    expect(states.find((s) => s.def.id === "deploy")?.signerConnected).toBe(false);
+    expect(states.find((s) => s.def.id === "publish")?.signerConnected).toBe(false);
     expect(states.find((s) => s.def.id === "endow")?.signerConnected).toBe(true);
     expect(states.find((s) => s.def.id === "apply")?.signerConnected).toBe(true);
   });
@@ -242,7 +264,6 @@ describe("deriveStations", () => {
 
 const deployDone = {
   applicationProposed: true,
-  applicationApproved: true,
   configPublished: true,
   applicationApplied: true,
   tenantDeployed: true,
@@ -251,7 +272,7 @@ const deployDone = {
 describe("runnableRun", () => {
   it("stops at the first station the connected wallet cannot sign", () => {
     const states = derive({ facts: { ...noFacts } });
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["apply"]);
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["apply", "approve"]);
   });
 
   it("never crosses a signer boundary", () => {
@@ -262,12 +283,12 @@ describe("runnableRun", () => {
     expect(runnableRun(states).map((s) => s.def.id)).toEqual(["endow", "stake"]);
   });
 
-  it("is empty when the next station needs a treasury that is not connected", () => {
+  it("runs the session stations before stopping at an unconnected treasury", () => {
     const states = derive({
       facts: { ...noFacts, applicationProposed: true },
       connectedDao: ENDOWMENT,
     });
-    expect(runnableRun(states)).toEqual([]);
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["approve"]);
   });
 
   it("walks through stations blocked only by upstream ordering", () => {
@@ -356,13 +377,13 @@ describe("run gating", () => {
 
   it("disables input-blocked stations with the blocker as the reason", () => {
     const states = derive({
-      facts: { ...noFacts, ...deployDone },
-      blockers: { stake: "enter a stake amount" },
-      connectedDao: ENDOWMENT,
+      facts: { ...noFacts, applicationProposed: true },
+      blockers: { approve: "admin access required — sign in as an admin" },
+      connectedDao: TEAM,
     });
-    const stake = states.find((s) => s.def.id === "stake");
-    expect(stake?.canRun).toBe(false);
-    expect(stake?.runBlockReason).toBe("enter a stake amount");
+    const approve = states.find((s) => s.def.id === "approve");
+    expect(approve?.canRun).toBe(false);
+    expect(approve?.runBlockReason).toBe("admin access required — sign in as an admin");
   });
 
   it("reports awaiting votes when only staged steps remain", () => {

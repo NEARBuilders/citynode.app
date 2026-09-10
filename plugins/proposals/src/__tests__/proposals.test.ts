@@ -466,6 +466,73 @@ describe.sequential("Proposals plugin", () => {
     ).rejects.toThrow("This proposal changed");
   });
 
+  it("lets admins clean up approved proposals that were never applied", async () => {
+    const input = {
+      pluginId: "nearcatalog",
+      entityId: "claim:alice.near:cleanup-project",
+      payload: { roles: ["Developer"] },
+      idempotencyKey: "cleanup-project",
+    };
+
+    const proposed = await aliceClient().propose(input);
+    const approved = await adminClient().approve({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: proposed.data.updatedAt,
+    });
+
+    await expect(
+      adminClient().reject({
+        pluginId: input.pluginId,
+        entityId: input.entityId,
+        expectedUpdatedAt: approved.data.updatedAt,
+      }),
+    ).rejects.toThrow("never applied");
+
+    const failed = await adminClient().markApplyFailed({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: approved.data.updatedAt,
+      error: "Tenant with this accountId already exists",
+    });
+
+    const rejected = await adminClient().reject({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: failed.data.updatedAt,
+      reason: "cleanup — superseded application",
+    });
+    expect(rejected.data.reviewStatus).toBe("rejected");
+    expect(rejected.data.rejectionReason).toBe("cleanup — superseded application");
+
+    const reopened = await adminClient().reopen({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: rejected.data.updatedAt,
+    });
+    expect(reopened.data.reviewStatus).toBe("pending");
+
+    const reapproved = await adminClient().approve({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: reopened.data.updatedAt,
+    });
+    const applied = await adminClient().markApplied({
+      pluginId: input.pluginId,
+      entityId: input.entityId,
+      expectedUpdatedAt: reapproved.data.updatedAt,
+      appliedResourceId: input.entityId,
+    });
+
+    await expect(
+      adminClient().reject({
+        pluginId: input.pluginId,
+        entityId: input.entityId,
+        expectedUpdatedAt: applied.data.updatedAt,
+      }),
+    ).rejects.toThrow("never applied");
+  });
+
   it("includes pending and failed lifecycle records in the actionable queue", async () => {
     const applyInput = {
       pluginId: "builders",

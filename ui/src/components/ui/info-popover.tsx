@@ -16,9 +16,19 @@ interface InfoPopoverProps {
   className?: string;
   testId?: string;
   label?: string;
+  /** Replaces the default Info icon in the trigger. */
+  icon?: ReactNode;
 }
 
-export function InfoPopover({ title, body, links, className, testId, label }: InfoPopoverProps) {
+export function InfoPopover({
+  title,
+  body,
+  links,
+  className,
+  testId,
+  label,
+  icon,
+}: InfoPopoverProps) {
   return (
     <Popover>
       <PopoverTrigger
@@ -29,7 +39,7 @@ export function InfoPopover({ title, body, links, className, testId, label }: In
         aria-label={label ?? `about ${title}`}
         data-testid={testId}
       >
-        <Info className="h-3.5 w-3.5" />
+        {icon ?? <Info className="h-3.5 w-3.5" />}
         {label ? <span className="text-xs">{label}</span> : null}
       </PopoverTrigger>
       <PopoverContent className="space-y-2">
