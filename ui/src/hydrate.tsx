@@ -37,9 +37,15 @@ export async function hydrate() {
     const runtimeConfig = getRuntimeConfig();
     const cspNonce = getCspNonce();
 
-    const { QueryClientProvider } = await import("@tanstack/react-query");
-    const { createRouter } = await import("./router");
-    const client = new (await import("@tanstack/react-query")).QueryClient({
+    if (!runtimeConfig.hostUrl || !runtimeConfig.rpcBase) {
+      throw new Error("Missing hostUrl or rpcBase in runtime config");
+    }
+
+    const [{ QueryClient, QueryClientProvider }, { createRouter }] = await Promise.all([
+      import("@tanstack/react-query"),
+      import("./router"),
+    ]);
+    const client = new QueryClient({
       defaultOptions: {
         queries: {
           staleTime: 5 * 60 * 1000,
@@ -49,10 +55,6 @@ export async function hydrate() {
         },
       },
     });
-
-    if (!runtimeConfig.hostUrl || !runtimeConfig.rpcBase) {
-      throw new Error("Missing hostUrl or rpcBase in runtime config");
-    }
 
     const { router } = createRouter({
       context: {

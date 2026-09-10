@@ -1,5 +1,5 @@
 import type { ClientRuntimeConfig } from "everything-dev/types";
-import { motion } from "framer-motion";
+import { domAnimation, LazyMotion, m } from "framer-motion";
 import { ExternalLink } from "lucide-react";
 import { getRepository } from "@/app";
 import underConstructionImage from "@/assets/under-construction.gif";
@@ -70,41 +70,43 @@ export function UnderConstruction({
                     : "under construction - view source"
               }
             >
-              <motion.div
-                animate={
-                  pressed
-                    ? { scale: 0.95, rotateY: 0, z: -15 }
-                    : {
-                        rotateY: [0, 12, 0, -12, 0],
-                        y: [0, -4, 0],
-                      }
-                }
-                transition={
-                  pressed
-                    ? { duration: 0.15 }
-                    : {
-                        rotateY: {
-                          duration: 4,
-                          ease: "easeInOut",
-                          repeat: Infinity,
-                        },
-                        y: {
-                          duration: 3,
-                          ease: "easeInOut",
-                          repeat: Infinity,
-                        },
-                      }
-                }
-                whileTap={{ scale: 0.95, rotateY: 0, z: -15 }}
-                className="relative"
-                style={{ transformStyle: "preserve-3d" }}
-              >
-                <img
-                  src={underConstructionImage}
-                  alt={label ? `${label} under construction` : "under construction"}
-                  className="w-full h-auto rounded-xl border border-border object-cover shadow-lg"
-                />
-              </motion.div>
+              <LazyMotion features={domAnimation}>
+                <m.div
+                  animate={
+                    pressed
+                      ? { scale: 0.95, rotateY: 0, z: -15 }
+                      : {
+                          rotateY: [0, 12, 0, -12, 0],
+                          y: [0, -4, 0],
+                        }
+                  }
+                  transition={
+                    pressed
+                      ? { duration: 0.15 }
+                      : {
+                          rotateY: {
+                            duration: 4,
+                            ease: "easeInOut",
+                            repeat: Infinity,
+                          },
+                          y: {
+                            duration: 3,
+                            ease: "easeInOut",
+                            repeat: Infinity,
+                          },
+                        }
+                  }
+                  whileTap={{ scale: 0.95, rotateY: 0, z: -15 }}
+                  className="relative"
+                  style={{ transformStyle: "preserve-3d" }}
+                >
+                  <img
+                    src={underConstructionImage}
+                    alt={label ? `${label} under construction` : "under construction"}
+                    className="w-full h-auto rounded-xl border border-border object-cover shadow-lg"
+                  />
+                </m.div>
+              </LazyMotion>
             </button>
           </div>
         </TooltipTrigger>

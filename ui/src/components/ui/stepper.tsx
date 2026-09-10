@@ -5,6 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 export type StepState = "pending" | "running" | "success" | "failed";
 
 export interface Step {
+  id?: string;
   label: string;
   state: StepState;
   error?: string;
@@ -28,7 +29,7 @@ export function StepList({ steps }: { steps: Step[] }) {
   return (
     <>
       {steps.map((step, i) => (
-        <div key={i} className="flex items-start gap-3">
+        <div key={step.id ?? i} className="flex items-start gap-3">
           <StepIcon state={step.state} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -53,9 +54,11 @@ export function StepList({ steps }: { steps: Step[] }) {
   );
 }
 
-export function useStepper(stepLabels: readonly { label: string; blocking?: boolean }[]) {
-  const [steps, setSteps] = useState<Step[]>(
-    stepLabels.map((s) => ({ ...s, state: "pending" as StepState })),
+export function useStepper(
+  stepLabels: readonly { id?: string; label: string; blocking?: boolean }[],
+) {
+  const [steps, setSteps] = useState<Step[]>(() =>
+    stepLabels.map((s) => ({ ...s, state: "pending" })),
   );
 
   const updateStep = useCallback((index: number, state: StepState, error?: string) => {

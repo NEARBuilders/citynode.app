@@ -11,7 +11,6 @@ import {
   ClientOnly,
   createRootRouteWithContext,
   HeadContent,
-  Link,
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
@@ -22,6 +21,8 @@ import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import type { RouterContext } from "@/app";
 import { getBaseStyles } from "@/app";
+import { RootError } from "@/components/root-error";
+import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
 import { useMediaQuery } from "@/hooks";
 import { sessionQueryKey } from "@/lib/auth";
@@ -182,39 +183,5 @@ function RootComponent() {
         )}
       </body>
     </html>
-  );
-}
-
-function RootNotFound() {
-  return (
-    <DocumentFallback title="Page not found" body="The page you requested doesn't exist here." />
-  );
-}
-
-function RootError() {
-  return (
-    <DocumentFallback
-      title="Application error"
-      body="Something went wrong before the app layout could render."
-    />
-  );
-}
-
-function DocumentFallback({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="min-h-dvh bg-background text-foreground flex items-center justify-center px-6">
-      <div className="max-w-md text-center space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{body}</p>
-        <div>
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center h-10 px-4 border border-border bg-card hover:bg-accent transition-colors"
-          >
-            Back home
-          </Link>
-        </div>
-      </div>
-    </div>
   );
 }

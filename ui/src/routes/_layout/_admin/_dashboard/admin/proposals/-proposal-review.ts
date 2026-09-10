@@ -1,23 +1,14 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "@/app";
+import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
+
+export { proposalReviewQueryKeys } from "@/lib/queries/proposals";
 
 export const PROPOSAL_REVIEW_FILTERS = ["pending", "approved", "rejected", "all"] as const;
 
 export type ProposalReviewFilter = (typeof PROPOSAL_REVIEW_FILTERS)[number];
 
 export const DEFAULT_PROPOSAL_REVIEW_FILTER: ProposalReviewFilter = "all";
-
-export const proposalReviewQueryKeys = {
-  all: ["admin-proposals"] as const,
-  lists: () => [...proposalReviewQueryKeys.all, "list"] as const,
-  list: (filter: ProposalReviewFilter) => [...proposalReviewQueryKeys.lists(), filter] as const,
-  pendingCount: () => [...proposalReviewQueryKeys.all, "pending-count"] as const,
-  details: () => [...proposalReviewQueryKeys.all, "detail"] as const,
-  detail: (proposalId: string, pluginId?: string, entityId?: string) =>
-    [...proposalReviewQueryKeys.details(), proposalId, pluginId, entityId] as const,
-  histories: () => [...proposalReviewQueryKeys.all, "review-history"] as const,
-  history: (pluginId?: string) => [...proposalReviewQueryKeys.histories(), pluginId] as const,
-};
 
 export function parseProposalReviewFilter(value: unknown): ProposalReviewFilter | undefined {
   return typeof value === "string" &&

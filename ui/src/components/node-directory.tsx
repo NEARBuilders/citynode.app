@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { buildTenantUrl } from "@/lib/tenant-url";
+import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
-import { Skeleton } from "./ui/skeleton";
 
 export interface NodeDirectoryNode {
   id: string;
@@ -32,22 +32,7 @@ export function NodeDirectory({
   linkSearch,
 }: NodeDirectoryProps) {
   if (isLoading) {
-    return (
-      <div>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-4 border-b border-border py-4 last:border-0"
-          >
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-44" />
-            </div>
-            <Skeleton className="ml-auto h-5 w-16" />
-          </div>
-        ))}
-      </div>
-    );
+    return <NodeDirectorySkeleton />;
   }
 
   if (nodes.length === 0) {

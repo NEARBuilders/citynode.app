@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Badge, NodeDirectory } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
+import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
 import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -12,7 +13,6 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
-import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
   validateSearch: z.object({ parentId: z.uuid().optional() }),
@@ -157,20 +157,7 @@ function NodeSkeleton() {
       </header>
       <section className="space-y-6">
         <Skeleton className="h-5 w-32" />
-        <div>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 border-b border-border py-4 last:border-0"
-            >
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-44" />
-              </div>
-              <Skeleton className="ml-auto h-5 w-16" />
-            </div>
-          ))}
-        </div>
+        <NodeDirectorySkeleton />
       </section>
     </div>
   );
