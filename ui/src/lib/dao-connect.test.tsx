@@ -1,0 +1,141 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  connectDaoAccount,
+  disconnectDaoAccount,
+  useDaoAutoRestore,
+  useDaoConnectionStore,
+} from "./dao-connect";
+
+const harness = vi.hoisted(() => ({
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  getConnectedWallet: vi.fn(),
+}));
+
+vi.mock("@hot-labs/near-connect", async () => {
+  const actual =
+    await vi.importActual<typeof import("@hot-labs/near-connect")>("@hot-labs/near-connect");
+  return {
+    ...actual,
+    NearConnector: class {
+      async connect(input: { walletId?: string }) {
+        return harness.connect(input);
+      }
+      async disconnect() {
+        return harness.disconnect();
+      }
+      async getConnectedWallet() {
+        return harness.getConnectedWallet();
+      }
+    },
+  };
+});
+
+function Probe({ authAccountId }: { authAccountId: string | null }) {
+  useDaoAutoRestore(authAccountId);
+  return null;
+}
+
+const AUTH_ACCOUNT_KEY = "dao-connect:auth-account";
+
+describe("trezu session binding to the SIWN account", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    useDaoConnectionStore.getState().reset();
+  });
+
+  afterEach(cleanup);
+
+  it("restores the session when the binding matches the auth account", async () => {
+    localStorage.setItem(AUTH_ACCOUNT_KEY, "efiz.near");
+    harness.getConnectedWallet.mockResolvedValue({
+      accounts: [{ accountId: "dao.sputnik.near" }],
+    });
+
+    render(<Probe authAccountId="efiz.near" />);
+
+    await waitFor(() => {
+      expect(useDaoConnectionStore.getState()).toMatchObject({
+        status: "connected",
+        daoAccountId: "dao.sputnik.near",
+      });
+    });
+    expect(harness.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("disconnects when the binding belongs to a different auth account", async () => {
+    localStorage.setItem(AUTH_ACCOUNT_KEY, "work.efiz.near");
+    harness.getConnectedWallet.mockResolvedValue({
+      accounts: [{ accountId: "dao.sputnik.near" }],
+    });
+
+    render(<Probe authAccountId="efiz.near" />);
+
+    await waitFor(() => expect(harness.disconnect).toHaveBeenCalledOnce());
+    expect(useDaoConnectionStore.getState().status).toBe("idle");
+    expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBeNull();
+  });
+
+  it("disconnects when signed out", async () => {
+    localStorage.setItem(AUTH_ACCOUNT_KEY, "efiz.near");
+    harness.getConnectedWallet.mockResolvedValue({
+      accounts: [{ accountId: "dao.sputnik.near" }],
+    });
+
+    render(<Probe authAccountId={null} />);
+
+    await waitFor(() => expect(harness.disconnect).toHaveBeenCalledOnce());
+    expect(useDaoConnectionStore.getState().status).toBe("idle");
+  });
+
+  it("disconnects legacy sessions without a binding", async () => {
+    harness.getConnectedWallet.mockResolvedValue({
+      accounts: [{ accountId: "dao.sputnik.near" }],
+    });
+
+    render(<Probe authAccountId="efiz.near" />);
+
+    await waitFor(() => expect(harness.disconnect).toHaveBeenCalledOnce());
+    expect(useDaoConnectionStore.getState().status).toBe("idle");
+  });
+
+  it("leaves the store idle when no trezu session exists", async () => {
+    harness.getConnectedWallet.mockRejectedValue(new Error("No wallet selected"));
+
+    render(<Probe authAccountId="efiz.near" />);
+
+    await waitFor(() => expect(harness.getConnectedWallet).toHaveBeenCalled());
+    expect(harness.disconnect).not.toHaveBeenCalled();
+    expect(useDaoConnectionStore.getState().status).toBe("idle");
+  });
+
+  it("binds the auth account on connect and always targets the trezu wallet", async () => {
+    harness.connect.mockResolvedValue({
+      getAccounts: async () => [{ accountId: "dao.sputnik.near" }],
+    });
+
+    const accountId = await connectDaoAccount({ authAccountId: "efiz.near" });
+
+    expect(accountId).toBe("dao.sputnik.near");
+    expect(harness.connect).toHaveBeenCalledWith({ walletId: "trezu-wallet" });
+    expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBe("efiz.near");
+    expect(useDaoConnectionStore.getState()).toMatchObject({
+      status: "connected",
+      daoAccountId: "dao.sputnik.near",
+    });
+  });
+
+  it("clears the binding on disconnect", async () => {
+    localStorage.setItem(AUTH_ACCOUNT_KEY, "efiz.near");
+
+    await disconnectDaoAccount();
+
+    expect(harness.disconnect).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBeNull();
+    expect(useDaoConnectionStore.getState().status).toBe("idle");
+  });
+});

@@ -24,9 +24,9 @@ type MembershipState =
   | { kind: "not-sputnik" }
   | { kind: "error"; message: string };
 
-async function handleConnect() {
+async function handleConnect(authAccountId: string | null) {
   try {
-    await connectDaoAccount();
+    await connectDaoAccount({ authAccountId: authAccountId ?? undefined });
   } catch {}
 }
 
@@ -35,10 +35,10 @@ async function handleDisconnect() {
 }
 
 export function ConnectDao({ onVerified }: ConnectDaoProps) {
-  useDaoAutoRestore();
+  const primaryAccountId = useNearAccount();
+  useDaoAutoRestore(primaryAccountId);
   const connection = useDaoConnection();
   const [membership, setMembership] = useState<MembershipState>({ kind: "idle" });
-  const primaryAccountId = useNearAccount();
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +115,7 @@ export function ConnectDao({ onVerified }: ConnectDaoProps) {
           <Button
             type="button"
             size="sm"
-            onClick={() => void handleConnect()}
+            onClick={() => void handleConnect(primaryAccountId)}
             disabled={connection.status === "connecting"}
           >
             {connection.status === "connecting" ? (

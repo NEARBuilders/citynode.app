@@ -157,12 +157,12 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/prototy
 });
 
 function NodeLifecyclePocPage() {
-  useDaoAutoRestore();
+  const sessionAccount = useNearAccount();
+  useDaoAutoRestore(sessionAccount);
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const connection = useDaoConnection();
   const queryClient = useQueryClient();
-  const sessionAccount = useNearAccount();
   const { auth: routeAuth, runtimeConfig } = Route.useRouteContext();
 
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";

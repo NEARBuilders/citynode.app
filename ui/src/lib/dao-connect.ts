@@ -1,6 +1,10 @@
 /**
- * DAO wallet connection — a second NEAR Connect instance scoped to the
- * Trezu wallet only, fully separated from the SIWN session wallet.
+ * DAO wallet connection — a second NEAR Connect instance locked to the Trezu
+ * wallet via an explicit wallet id on every connect, fully separated from the
+ * SIWN session wallet. Wallet metadata (executor URL, icon, features) comes
+ * from the official near-connect registry manifest, fetched at runtime.
+ * Trezu sessions are bound to the SIWN identity that opened them and are torn
+ * down when that identity changes or signs out.
  * Exposes a singleton connector + a `useDaoConnection` hook + a `signAsDao`
  * helper that wraps a near-kit transaction builder as the connected DAO account.
  *
@@ -37,35 +41,20 @@ export type {
 };
 export { buildTenantPublishConfig, isExplicitDaoMember, parsePolicyGroupMembers };
 
-const TREZU_WALLET_MANIFEST = {
-  id: "trezu-wallet",
-  name: "Trezu Wallet",
-  icon: "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20500%20500%22%3E%3Cdefs%3D%3ClinearGradient%20id%3D%22a%22%20x1%3D%2244.13%22%20y1%3D%220%22%20x2%3D%2244.13%22%20y2%3D%2297.718%22%20gradientUnits%3D%22userSpaceOnUse%22%20gradientTransform%3D%22translate(144.076%20132.727)scale(2.40025)%22%3E%3Cstop%20stop-color%3D%22%23fff%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c0d5ff%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20style%3D%22fill%3A%231b66ff%22%20d%3D%22M-1.669-1.48h503.337v502.959H-1.669z%22%2F%3E%3Cpath%20d%3D%22M250.001%20367.274V253.783h105.923zm0-113.491H144.076l105.925-121.057h105.923z%22%20fill%3D%22url(%23a)%22%2F%3E%3C%2Fsvg%3E",
-  description: "Trezu multichain multisig",
-  website: "https://trezu.org",
-  version: "1.0.0",
-  executor: "https://trezu.app/_next/static/near-connect/trezu-wallet.js",
-  type: "sandbox" as const,
-  platform: ["https://trezu.app"],
-  features: {
-    signMessage: false,
-    signTransaction: false,
-    signAndSendTransaction: true,
-    signAndSendTransactions: true,
-    signInWithoutAddKey: true,
-    signInAndSignMessage: false,
-    signInWithFunctionCallKey: false,
-    signDelegateActions: false,
-    mainnet: true,
-    testnet: false,
-  },
-  permissions: {
-    storage: true,
-    allowsOpen: ["https://trezu.app"],
-  },
-};
+const TREZU_WALLET_ID = "trezu-wallet";
 
 const DAO_STORAGE_PREFIX = "dao-connect:";
+const DAO_AUTH_ACCOUNT_KEY = "dao-connect:auth-account";
+
+async function readSessionAuthAccount(): Promise<string | null> {
+  return new LocalStorage().get(DAO_AUTH_ACCOUNT_KEY);
+}
+
+async function writeSessionAuthAccount(accountId: string | null): Promise<void> {
+  const storage = new LocalStorage();
+  if (accountId) await storage.set(DAO_AUTH_ACCOUNT_KEY, accountId);
+  else await storage.remove(DAO_AUTH_ACCOUNT_KEY);
+}
 
 function prefixedStorage(): LocalStorage {
   const inner = new LocalStorage();
@@ -88,7 +77,6 @@ function getConnector(): NearConnector {
   if (_connector) return _connector;
   _connector = new NearConnector({
     network: "mainnet",
-    manifest: { version: "1.0.0", wallets: [TREZU_WALLET_MANIFEST] },
     storage: prefixedStorage(),
     autoConnect: false,
   });
@@ -127,6 +115,7 @@ export const useDaoConnectionStore = create<DaoConnectionState>((set) => ({
 
 export interface ConnectDaoOptions {
   walletId?: string;
+  authAccountId?: string;
 }
 
 export async function connectDaoAccount(options: ConnectDaoOptions = {}): Promise<string> {
@@ -135,13 +124,14 @@ export async function connectDaoAccount(options: ConnectDaoOptions = {}): Promis
   try {
     const connector = getConnector();
     const wallet = await connector.connect({
-      ...(options.walletId ? { walletId: options.walletId } : {}),
+      walletId: options.walletId ?? TREZU_WALLET_ID,
     });
     const accounts = await wallet.getAccounts();
     const first = accounts[0]?.accountId;
     if (!first) {
       throw new Error("Trezu wallet returned no accounts");
     }
+    await writeSessionAuthAccount(options.authAccountId ?? null);
     store.set({ status: "connected", daoAccountId: first, error: null });
     return first;
   } catch (err) {
@@ -156,6 +146,7 @@ export async function disconnectDaoAccount(): Promise<void> {
   try {
     await connector.disconnect();
   } catch {}
+  await writeSessionAuthAccount(null);
   useDaoConnectionStore.getState().reset();
 }
 
@@ -192,6 +183,9 @@ export function describeDaoError(error: unknown, want: string): string {
   }
   if (message.includes("returned no accounts")) {
     return `Trezu has no accounts for ${want} — deploy or import it on trezu.app`;
+  }
+  if (message.includes("Wallet not found") || message.includes("Failed to load manifest")) {
+    return "Trezu wallet is unavailable — the wallet registry could not be reached. Check your connection and retry.";
   }
   return message;
 }
@@ -256,7 +250,15 @@ export async function fetchDaoMembership(
   };
 }
 
-export function useDaoAutoRestore(): void {
+/**
+ * Restores a Trezu session on mount, but only while it belongs to the current
+ * SIWN identity. The session is bound to the auth account it was opened under
+ * (stored at `dao-connect:auth-account`); a mismatch, a signed-out state, or a
+ * legacy session with no binding tears the Trezu session down instead of
+ * restoring it. DAO membership is verified separately — binding only scopes
+ * the session to the signed-in identity.
+ */
+export function useDaoAutoRestore(authAccountId: string | null): void {
   const set = useDaoConnectionStore((s) => s.set);
   useEffect(() => {
     let cancelled = false;
@@ -265,16 +267,19 @@ export function useDaoAutoRestore(): void {
         const connector = getConnector();
         const result = await connector.getConnectedWallet();
         const accountId = result?.accounts?.[0]?.accountId;
-        if (cancelled) return;
-        if (accountId) {
-          set({ status: "connected", daoAccountId: accountId, error: null });
+        if (cancelled || !accountId) return;
+        const boundAccount = await readSessionAuthAccount();
+        if (authAccountId === null || boundAccount === null || boundAccount !== authAccountId) {
+          await disconnectDaoAccount();
+          return;
         }
+        set({ status: "connected", daoAccountId: accountId, error: null });
       } catch {}
     })();
     return () => {
       cancelled = true;
     };
-  }, [set]);
+  }, [authAccountId, set]);
 }
 
 export interface SignAsDaoSpec {
