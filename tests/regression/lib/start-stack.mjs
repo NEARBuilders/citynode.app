@@ -3,6 +3,7 @@
 // from .env.test so regression runs never touch dev databases or dev ports.
 import { spawn } from "node:child_process";
 import net from "node:net";
+import { killStalePorts } from "./kill-stale-ports.mjs";
 import { computeRegressionEnv, findRepoRoot, regressionStackOptions } from "./regression-env.mjs";
 
 const PROBE_RETRIES = 6;
@@ -69,6 +70,7 @@ if (!root) {
 const regressionEnv = computeRegressionEnv({ repoRoot: root });
 const spec = regressionStackOptions(regressionEnv, mode);
 await waitForDatabases(regressionEnv.dbUrls);
+killStalePorts(regressionEnv.stalePorts);
 
 log(`starting ${mode} stack on port ${regressionEnv.basePort} with test databases`);
 const child = spawn(process.execPath, spec.command, {

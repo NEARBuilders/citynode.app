@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -86,4 +88,42 @@ test("dev database rejection does not reveal credentials", () => {
 
 test("invalid modes fail before starting a stack", () => {
   assert.throws(() => regressionStackOptions({}, "invalid", {}), /unknown mode/);
+});
+
+test("loading browser configuration in a worker leaves the running stack alive", async () => {
+  const repoRoot = fixture();
+  writeFileSync(join(repoRoot, "bos.config.json"), "{}");
+  writeFileSync(join(repoRoot, ".env.test"), "BETTER_AUTH_SECRET=test-secret\n");
+  const server = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    'import { createServer } from "node:http"; const server = createServer((_req, res) => res.end("alive")); server.listen(0, "127.0.0.1", () => console.log(server.address().port));',
+  ]);
+  const [output] = await once(server.stdout, "data");
+  const baseUrl = `http://127.0.0.1:${Number(String(output).trim())}`;
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        "await import(process.argv[1]);",
+        new URL("../browser/playwright.config.mjs", import.meta.url).href,
+      ],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, REGRESSION_BASE_URL: baseUrl },
+        encoding: "utf8",
+        timeout: 10000,
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(await (await fetch(baseUrl)).text(), "alive");
+  } finally {
+    if (server.exitCode === null && server.signalCode === null) {
+      const stopped = once(server, "exit");
+      server.kill();
+      await stopped;
+    }
+  }
 });
