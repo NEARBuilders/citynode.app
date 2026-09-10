@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import { callViewFunction } from "@/lib/near-rpc";
 
@@ -17,6 +17,18 @@ interface PoolOptions {
   protocol?: string;
 }
 
+export const stakePoolQueryKeys = {
+  all: ["stake-pool"] as const,
+  pool: (accountId: string, network: string) =>
+    [...stakePoolQueryKeys.all, accountId, network] as const,
+  stats: (accountId: string, network: string) =>
+    [...stakePoolQueryKeys.pool(accountId, network), "stats"] as const,
+  topHolders: (accountId: string, network: string, limit?: number) => {
+    const key = [...stakePoolQueryKeys.pool(accountId, network), "top-holders"] as const;
+    return limit === undefined || limit === 50 ? key : ([...key, limit] as const);
+  },
+};
+
 function canReadPool({ accountId, network = "mainnet", protocol = "near" }: PoolOptions) {
   return !!accountId && protocol === "near" && (network === "mainnet" || network === "testnet");
 }
@@ -24,7 +36,7 @@ function canReadPool({ accountId, network = "mainnet", protocol = "near" }: Pool
 export function stakePoolStatsQueryOptions(options: PoolOptions) {
   const { accountId, network = "mainnet" } = options;
   return queryOptions({
-    queryKey: ["stake-pool", accountId, network, "stats"],
+    queryKey: stakePoolQueryKeys.stats(accountId, network),
     enabled: canReadPool(options),
     staleTime: 5 * 60_000,
     retry: false,
@@ -51,9 +63,8 @@ export function stakePoolTopHoldersQueryOptions(options: PoolOptions & { limit?:
   const limit = Number.isFinite(requestedLimit)
     ? Math.max(1, Math.min(50, Math.trunc(requestedLimit)))
     : 50;
-  const queryKey = ["stake-pool", accountId, network, "top-holders"];
   return queryOptions({
-    queryKey: limit === 50 ? queryKey : [...queryKey, limit],
+    queryKey: stakePoolQueryKeys.topHolders(accountId, network, limit),
     enabled: canReadPool(options),
     staleTime: 5 * 60_000,
     retry: false,
@@ -87,6 +98,14 @@ export function stakePoolTopHoldersQueryOptions(options: PoolOptions & { limit?:
         );
     },
   });
+}
+
+export function invalidateStakePoolQueries(
+  queryClient: QueryClient,
+  accountId: string,
+  network: string,
+) {
+  return queryClient.invalidateQueries({ queryKey: stakePoolQueryKeys.pool(accountId, network) });
 }
 
 export function formatNearBalance(balance: bigint) {

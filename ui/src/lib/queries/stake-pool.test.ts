@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   formatNearBalance,
   formatPoolFee,
+  invalidateStakePoolQueries,
   stakePoolStatsQueryOptions,
   stakePoolTopHoldersQueryOptions,
 } from "./stake-pool";
@@ -63,6 +64,26 @@ describe("stake pool queries", () => {
       expect(makeOptions({ ...options, accountId: "" }).enabled).toBe(false);
       expect(makeOptions({ ...options, network: "localnet" }).enabled).toBe(false);
     }
+  });
+
+  it("invalidates every page variant for the executed pool and network only", async () => {
+    const client = new QueryClient();
+    const affected = [
+      ["stake-pool", "pool.near", "mainnet", "stats"],
+      ["stake-pool", "pool.near", "mainnet", "top-holders"],
+      ["stake-pool", "pool.near", "mainnet", "top-holders", 5],
+    ];
+    const untouched = [
+      ["stake-pool", "pool.near", "testnet", "stats"],
+      ["stake-pool", "other.near", "mainnet", "stats"],
+    ];
+    for (const key of [...affected, ...untouched]) client.setQueryData(key, []);
+
+    await invalidateStakePoolQueries(client, "pool.near", "mainnet");
+
+    for (const key of affected) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    for (const key of untouched) expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    client.clear();
   });
 
   it("keeps unavailable stats distinct from a valid empty account list", async () => {
