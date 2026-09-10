@@ -97,6 +97,28 @@ describe("ValidatorsService", () => {
     return node.id;
   }
 
+  it("retains the default validator when a replacement cannot be persisted", async () => {
+    await runService(freshLayer(), async (svc) => {
+      const nodeId = await setupTenantAndNode(svc);
+      const original = await svc.validators.create({
+        nodeId,
+        accountId: "original.pool",
+        isDefault: true,
+      });
+      const replacement = await svc.validators.create({ nodeId, accountId: "replacement.pool" });
+      const metadata = { cannotSerialize: 1n };
+      await expect(
+        svc.validators.create({ nodeId, accountId: "failed.pool", isDefault: true, metadata }),
+      ).rejects.toThrow();
+      expect((await svc.validators.getById(original.id))?.isDefault).toBe(true);
+      await expect(
+        svc.validators.update(replacement.id, { isDefault: true, metadata }),
+      ).rejects.toThrow();
+      expect((await svc.validators.getById(original.id))?.isDefault).toBe(true);
+      expect((await svc.validators.getById(replacement.id))?.isDefault).toBe(false);
+    });
+  });
+
   it("creates a validator with defaults", async () => {
     const layer = freshLayer();
     const nodeId = await runService(layer, setupTenantAndNode);

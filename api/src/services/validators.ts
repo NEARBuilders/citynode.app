@@ -87,10 +87,14 @@ function toRecord(row: ValidatorRow): ValidatorRecord {
 function descendantIdsQuery(nodeId: string) {
   return sql`
     WITH RECURSIVE subtree AS (
-      SELECT id FROM nodes WHERE id = ${nodeId}
+      SELECT id, ARRAY[id] AS path
+      FROM nodes
+      WHERE id = ${nodeId}
       UNION ALL
-      SELECT n.id FROM nodes n
+      SELECT n.id, subtree.path || n.id
+      FROM nodes n
       INNER JOIN subtree ON n.parent_id = subtree.id
+      WHERE NOT (n.id = ANY(subtree.path))
     )
     SELECT id FROM subtree
   `;
@@ -99,15 +103,16 @@ function descendantIdsQuery(nodeId: string) {
 function ancestorIdsQuery(nodeId: string) {
   return sql`
     WITH RECURSIVE ancestors AS (
-      SELECT id, parent_id, 0 AS depth
+      SELECT id, parent_id, 0 AS depth, ARRAY[id] AS path
       FROM nodes
       WHERE id = ${nodeId}
       UNION ALL
-      SELECT n.id, n.parent_id, ancestors.depth + 1
+      SELECT n.id, n.parent_id, ancestors.depth + 1, ancestors.path || n.id
       FROM nodes n
       INNER JOIN ancestors ON n.id = ancestors.parent_id
+      WHERE NOT (n.id = ANY(ancestors.path))
     )
-    SELECT id FROM ancestors
+    SELECT id FROM ancestors ORDER BY depth
   `;
 }
 
@@ -128,44 +133,46 @@ export const ValidatorsLive = Layer.effect(
     const service: ValidatorsService = {
       create: async (input) => {
         try {
-          const node = await db
-            .select({ id: nodesTable.id })
-            .from(nodesTable)
-            .where(eq(nodesTable.id, input.nodeId))
-            .limit(1);
-          if (node.length === 0) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: input.nodeId },
-            });
-          }
+          return await db.transaction(async (tx) => {
+            const node = await tx
+              .select({ id: nodesTable.id })
+              .from(nodesTable)
+              .where(eq(nodesTable.id, input.nodeId))
+              .limit(1);
+            if (node.length === 0) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Node not found",
+                data: { resource: "node", resourceId: input.nodeId },
+              });
+            }
 
-          if (input.isDefault === true) {
-            await db
-              .update(validatorsTable)
-              .set({ isDefault: false, updatedAt: new Date() })
-              .where(eq(validatorsTable.nodeId, input.nodeId));
-          }
+            if (input.isDefault === true) {
+              await tx
+                .update(validatorsTable)
+                .set({ isDefault: false, updatedAt: new Date() })
+                .where(eq(validatorsTable.nodeId, input.nodeId));
+            }
 
-          const [row] = await db
-            .insert(validatorsTable)
-            .values({
-              nodeId: input.nodeId,
-              accountId: input.accountId,
-              network: input.network ?? "mainnet",
-              protocol: input.protocol ?? "near",
-              role: input.role ?? "official",
-              isDefault: input.isDefault ?? false,
-              metadata: input.metadata ?? {},
-            })
-            .returning();
+            const [row] = await tx
+              .insert(validatorsTable)
+              .values({
+                nodeId: input.nodeId,
+                accountId: input.accountId,
+                network: input.network ?? "mainnet",
+                protocol: input.protocol ?? "near",
+                role: input.role ?? "official",
+                isDefault: input.isDefault ?? false,
+                metadata: input.metadata ?? {},
+              })
+              .returning();
 
-          if (!row) {
-            throw new ORPCError("INTERNAL_SERVER_ERROR", {
-              message: "Validator creation failed",
-            });
-          }
-          return toRecord(row);
+            if (!row) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Validator creation failed",
+              });
+            }
+            return toRecord(row);
+          });
         } catch (error) {
           throw toOrpcError(error);
         }
@@ -220,48 +227,50 @@ export const ValidatorsLive = Layer.effect(
 
       update: async (id, input) => {
         try {
-          const [existing] = await db
-            .select({ nodeId: validatorsTable.nodeId })
-            .from(validatorsTable)
-            .where(eq(validatorsTable.id, id))
-            .limit(1);
-          if (!existing) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Validator not found",
-              data: { resource: "validator", resourceId: id },
-            });
-          }
+          return await db.transaction(async (tx) => {
+            const [existing] = await tx
+              .select({ nodeId: validatorsTable.nodeId })
+              .from(validatorsTable)
+              .where(eq(validatorsTable.id, id))
+              .limit(1);
+            if (!existing) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Validator not found",
+                data: { resource: "validator", resourceId: id },
+              });
+            }
 
-          if (input.isDefault === true) {
-            await db
+            if (input.isDefault === true) {
+              await tx
+                .update(validatorsTable)
+                .set({ isDefault: false, updatedAt: new Date() })
+                .where(
+                  and(eq(validatorsTable.nodeId, existing.nodeId), not(eq(validatorsTable.id, id))),
+                );
+            }
+
+            const patch: Record<string, unknown> = { updatedAt: new Date() };
+            if (input.accountId !== undefined) patch.accountId = input.accountId;
+            if (input.network !== undefined) patch.network = input.network;
+            if (input.protocol !== undefined) patch.protocol = input.protocol;
+            if (input.role !== undefined) patch.role = input.role;
+            if (input.isDefault !== undefined) patch.isDefault = input.isDefault;
+            if (input.metadata !== undefined) patch.metadata = input.metadata;
+
+            const [row] = await tx
               .update(validatorsTable)
-              .set({ isDefault: false, updatedAt: new Date() })
-              .where(
-                and(eq(validatorsTable.nodeId, existing.nodeId), not(eq(validatorsTable.id, id))),
-              );
-          }
+              .set(patch)
+              .where(eq(validatorsTable.id, id))
+              .returning();
 
-          const patch: Record<string, unknown> = { updatedAt: new Date() };
-          if (input.accountId !== undefined) patch.accountId = input.accountId;
-          if (input.network !== undefined) patch.network = input.network;
-          if (input.protocol !== undefined) patch.protocol = input.protocol;
-          if (input.role !== undefined) patch.role = input.role;
-          if (input.isDefault !== undefined) patch.isDefault = input.isDefault;
-          if (input.metadata !== undefined) patch.metadata = input.metadata;
-
-          const [row] = await db
-            .update(validatorsTable)
-            .set(patch)
-            .where(eq(validatorsTable.id, id))
-            .returning();
-
-          if (!row) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Validator not found",
-              data: { resource: "validator", resourceId: id },
-            });
-          }
-          return toRecord(row);
+            if (!row) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Validator not found",
+                data: { resource: "validator", resourceId: id },
+              });
+            }
+            return toRecord(row);
+          });
         } catch (error) {
           throw toOrpcError(error);
         }
