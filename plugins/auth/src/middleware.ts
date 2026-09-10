@@ -4,10 +4,14 @@ import { createHeaders } from "./utils";
 
 export function createRequireAuth(builder: any, services: PluginServices) {
   return builder.middleware(async ({ context, next }: { context: any; next: any }) => {
-    const headers = createHeaders(context.reqHeaders);
-    const session = await services.auth.api.getSession({ headers });
+    let user = context.user?.id ? context.user : null;
+    if (!user) {
+      const headers = createHeaders(context.reqHeaders);
+      const session = await services.auth.api.getSession({ headers });
+      user = session?.user ?? null;
+    }
 
-    if (!session?.user) {
+    if (!user?.id) {
       throw new ORPCError("UNAUTHORIZED", {
         message: "Authentication required",
       });
@@ -15,8 +19,8 @@ export function createRequireAuth(builder: any, services: PluginServices) {
 
     return next({
       context: {
-        userId: session.user.id,
-        user: session.user,
+        userId: user.id,
+        user,
         reqHeaders: context.reqHeaders,
       },
     });

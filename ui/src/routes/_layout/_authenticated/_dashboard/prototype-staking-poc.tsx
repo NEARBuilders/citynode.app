@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import {
   AlertTriangle,
   ArrowDown,
@@ -60,7 +61,7 @@ import { generateSlug } from "@/lib/slug";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
-import { proposeNodeApplication } from "./-node-application";
+import { parseNodeProposalPayload, proposeNodeApplication } from "./-node-application";
 import {
   accountExplorerUrl,
   approvalThreshold,
@@ -150,6 +151,10 @@ function proposalCleanupMode(proposal: { reviewStatus: string; applyStatus: stri
   return null;
 }
 
+/** "near builders" → "Near Builders" — the default node name from the org name. */
+const titleCase = (value: string) =>
+  value.replace(/(^|[\s-])[a-z]/g, (match) => match.toUpperCase());
+
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/prototype-staking-poc")({
   head: () => ({
     meta: [
@@ -182,6 +187,7 @@ function NodeLifecyclePocPage() {
   const [lens, setLens] = useState<LensId>("you");
 
   const [endowmentInput, setEndowmentInput] = useState("");
+  const [connectedTeamDao, setConnectedTeamDao] = useState<string | null>(null);
   const [poolInput, setPoolInput] = useState(DEFAULT_POOL);
   const [nameInput, setNameInput] = useState("");
   const [linkedAmounts, setLinkedAmounts] = useState(true);
@@ -233,32 +239,57 @@ function NodeLifecyclePocPage() {
     setSelectedGovProposal("");
     setLinkTreasuries(true);
     setEndowmentInput("");
+    setConnectedTeamDao(null);
     if (activeOrgName) {
-      lastAutoName.current = activeOrgName;
-      setNameInput(activeOrgName);
+      const defaultName = titleCase(activeOrgName);
+      lastAutoName.current = defaultName;
+      setNameInput(defaultName);
     }
   }, [activeOrgId, activeOrgName]);
 
   const poc = <T,>(key: readonly unknown[], queryFn: () => Promise<T>, enabled = true) =>
     ({ queryKey: ["poc", ...key], queryFn, enabled, refetchInterval: REFETCH_MS }) as const;
 
-  /** The team wallet is the DAO linked to the active organization — not a free input. */
+  /** Org-linked DAO wins; the application payload keeps it stable once proposed. */
   const { data: orgDao } = useQuery(
     poc(
       ["org-dao", activeOrgId],
-      () => apiClient.auth.getDao({ organizationId: activeOrgId ?? "" }),
+      () => apiClient.auth.getDao({ organizationId: activeOrgId ?? "" }).catch(() => null),
       !!activeOrgId,
     ),
   );
   const orgDaoAccountId = orgDao?.daoAccountId ?? null;
 
-  const team = orgDaoAccountId ?? "";
+  /** The node slug is pinned to the organization; the node name is the custom part. */
+  const slug = generateSlug(activeOrg?.slug ?? "");
+
+  const { data: application } = useQuery(
+    poc(
+      ["application", slug],
+      async () => {
+        const result = await apiClient.proposals.getProposals({
+          pluginId: "node",
+          entityId: slug,
+          limit: 1,
+        });
+        return result.data[0] ?? null;
+      },
+      !!slug,
+    ),
+  );
+  const proposedDaoAccountId = useMemo(() => {
+    if (!application) return null;
+    try {
+      return parseNodeProposalPayload(application.payload).accountId;
+    } catch {
+      return null;
+    }
+  }, [application]);
+
+  const team = orgDaoAccountId ?? proposedDaoAccountId ?? connectedTeamDao ?? "";
   const endowment = (linkTreasuries ? team : endowmentInput).trim();
   const pool = poolInput.trim();
   const treasuriesShared = !!team && team === endowment;
-
-  /** The node slug is pinned to the organization; the node name is the custom part. */
-  const slug = generateSlug(activeOrg?.slug ?? "");
 
   const lockYocto = useMemo(() => parseNearAmount(lockAmount), [lockAmount]);
   const stakeYocto = useMemo(() => parseNearAmount(stakeAmount), [stakeAmount]);
@@ -337,20 +368,6 @@ function NodeLifecyclePocPage() {
       !!slug,
     ),
   );
-  const { data: application } = useQuery(
-    poc(
-      ["application", slug],
-      async () => {
-        const result = await apiClient.proposals.getProposals({
-          pluginId: "node",
-          entityId: slug,
-          limit: 1,
-        });
-        return result.data[0] ?? null;
-      },
-      !!slug,
-    ),
-  );
   const { data: registryApp } = useQuery(
     poc(
       ["registry-app", team, gatewayId],
@@ -423,13 +440,13 @@ function NodeLifecyclePocPage() {
 
   const blockers: Partial<Record<StationId, string>> = {};
   if (!activeOrgId) blockers.apply = "select an organization";
-  else if (!orgDaoAccountId) blockers.apply = "link a DAO to your organization";
+  else if (!team) blockers.apply = "connect your team DAO with Trezu";
   else if (daoBlocked) blockers.apply = daoBlocked;
   else if (!sessionAccount) blockers.apply = "sign in with your NEAR wallet";
   else if (!nameInput.trim()) blockers.apply = "enter a node name";
   if (!sessionAccount) blockers.approve = "sign in to approve";
   else if (!isAdmin) blockers.approve = "admin access required — sign in as an admin";
-  else if (!orgDaoAccountId) blockers.approve = "link a DAO to your organization";
+  else if (!team) blockers.approve = "connect your team DAO with Trezu";
   else if (daoBlocked) blockers.approve = daoBlocked;
   else if (daoPolicyForAudit && !isExplicitDaoMember(daoPolicyForAudit, sessionAccount)) {
     blockers.approve = `${sessionAccount} is not a member of ${team}`;
@@ -439,16 +456,19 @@ function NodeLifecyclePocPage() {
       ? `the platform audit account ${baseAccount} is not a member of ${team}`
       : null;
   const trezuMembersUrl = team ? `https://trezu.app/${team}/members` : null;
-  if (!team) blockers.publish = "link a DAO to your organization";
-  if (!team) blockers["register-team"] = "link a DAO to your organization";
-  if (!team) blockers.vote = "link a DAO to your organization";
+  if (!team) blockers.publish = "connect your team DAO with Trezu";
+  else if (application && facts.configPublished && !isAdmin) {
+    blockers.publish = "config is live — an admin must mark the application applied";
+  }
+  if (!team) blockers["register-team"] = "connect your team DAO with Trezu";
+  if (!team) blockers.vote = "connect your team DAO with Trezu";
   if (!lockYocto || !stakeYocto) blockers.endow = "enter lock and stake amounts";
   if (!pool) blockers.stake = "enter a staking pool";
   if (lockYocto && stakeYocto && !endowmentLockup) {
     blockers.stake = "resolving the endowment lockup…";
   }
   if (!delegateBpsValue) blockers.delegate = "delegate between 1 and 100 percent";
-  if (!team) blockers.delegate = "link a DAO to your organization";
+  if (!team) blockers.delegate = "connect your team DAO with Trezu";
   else if (!govProposal) blockers.vote = "no active House of Stake proposal";
   if (!endowment) blockers.unstake = "set an endowment treasury";
   else if (!endowmentLockup) blockers.unstake = "resolving the endowment lockup…";
@@ -501,6 +521,12 @@ function NodeLifecyclePocPage() {
   const tenantHostname = tenantBinding?.hostname ?? (slug ? `${slug}.${gatewayId}` : "");
   const tenantUrl = tenantHostname ? buildTenantUrl(tenantHostname, gatewayId) : null;
   const tenantDisplayHost = tenantUrl ? new URL(tenantUrl).host : tenantHostname || "—";
+  const tenantRecord = orgTenant ?? tenantByDao ?? null;
+  const publishPendingProposal =
+    stations
+      .find((station) => station.def.id === "publish")
+      ?.steps.find((step) => step.id === "publish")?.pendingProposal ?? null;
+  const fastKvUrl = team ? buildRegistryConfigUrl(team, gatewayId) : null;
 
   /* ------------------------------------------------------------------ actions */
 
@@ -804,8 +830,14 @@ function NodeLifecyclePocPage() {
       const immediate = await waitFor(async () => !!(await fetchPublishedNow()), 30_000, 3_000);
       if (immediate) {
         log(`published the tenant config as ${team}`, txHash(result));
+        toast.success(`tenant config is live — ${tenantUrl ?? `${slug}.${gatewayId}`}`);
       } else {
-        log(`publish proposal signed as ${team} — config goes live when it passes`, txHash(result));
+        const latest = await fetchDaoProposals(team).catch(() => []);
+        const detail =
+          [txHash(result), latest[0] ? `latest proposal #${latest[0].id}` : null]
+            .filter(Boolean)
+            .join(" · ") || undefined;
+        log(`publish proposal signed as ${team} — config goes live when it passes`, detail);
         toast.info("publish proposal awaiting votes — the config goes live once it passes");
       }
       return;
@@ -900,22 +932,44 @@ function NodeLifecyclePocPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const linkOrgDaoMutation = useMutation({
+  const connectTeamDaoMutation = useMutation({
     mutationFn: async () => {
-      if (!activeOrgId) throw new Error("Select an organization first");
       let dao = connection.daoAccountId;
       if (dao && !(await verifyDaoAccount(dao).catch(() => false))) {
         await connection.disconnect();
         dao = null;
       }
       if (!dao) dao = await connection.connect();
-      await apiClient.auth.linkDao({ organizationId: activeOrgId, daoAccountId: dao });
+      setConnectedTeamDao(dao);
+      if (activeOrgId && dao !== orgDaoAccountId) {
+        await apiClient.auth
+          .linkDao({ organizationId: activeOrgId, daoAccountId: dao })
+          .catch(() => {});
+      }
       return dao;
     },
     onSuccess: (dao) => {
-      toast.success(`linked ${dao} to ${activeOrgName ?? "the organization"}`);
-      log(`linked ${dao} to the organization`);
+      log(`team wallet set to ${dao} — linked to the organization`);
       refresh();
+    },
+    onError: (error: Error) =>
+      toast.error(describeDaoError(error, connection.daoAccountId ?? "the treasury")),
+  });
+
+  const connectEndowmentMutation = useMutation({
+    mutationFn: async () => {
+      let dao = connection.daoAccountId;
+      if (dao && !(await verifyDaoAccount(dao).catch(() => false))) {
+        await connection.disconnect();
+        dao = null;
+      }
+      if (!dao) dao = await connection.connect();
+      setLinkTreasuries(false);
+      setEndowmentInput(dao);
+      return dao;
+    },
+    onSuccess: (dao) => {
+      log(`endowment treasury set to ${dao}`);
     },
     onError: (error: Error) =>
       toast.error(describeDaoError(error, connection.daoAccountId ?? "the treasury")),
@@ -932,6 +986,46 @@ function NodeLifecyclePocPage() {
     onSuccess: (result) => {
       toast.success(`deleted application ${result.data.entityId}`);
       log(`deleted application ${result.data.entityId}`);
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const markAppliedMutation = useMutation({
+    mutationFn: async ({
+      entityId,
+      updatedAt,
+      payload,
+    }: {
+      entityId: string;
+      updatedAt: string;
+      payload: unknown;
+    }) => {
+      if (!isAdmin) throw new Error("admin access required — sign in as an admin");
+      const accountId = (() => {
+        try {
+          return parseNodeProposalPayload(payload).accountId;
+        } catch {
+          return null;
+        }
+      })();
+      if (accountId) {
+        const published = await apiClient.apps
+          .getRegistryApp({ accountId, gatewayId })
+          .then((result) => result.data ?? null)
+          .catch(() => null);
+        if (!published) throw new Error(`config not published for ${accountId} — publish it first`);
+      }
+      return apiClient.proposals.markApplied({
+        pluginId: "node",
+        entityId,
+        expectedUpdatedAt: updatedAt,
+        appliedResourceId: entityId,
+      });
+    },
+    onSuccess: (result) => {
+      toast.success(`marked application ${result.data.entityId} applied`);
+      log(`marked application ${result.data.entityId} applied`);
       refresh();
     },
     onError: (error: Error) => toast.error(error.message),
@@ -1139,45 +1233,55 @@ function NodeLifecyclePocPage() {
                   />
                   <PocField
                     id="poc-slug"
-                    label="Node slug (pinned to organization)"
+                    label="Node slug"
                     value={slug}
                     onChange={() => {}}
                     placeholder="select an organization"
                     disabled
                   />
-                  <div className="space-y-1">
+                  {team ? (
                     <PocField
                       id="poc-team"
-                      label="Team wallet (organization DAO)"
+                      label="Team wallet"
                       value={team}
                       onChange={() => {}}
-                      placeholder="link a DAO below"
                       disabled
                     />
-                    {!team && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => linkOrgDaoMutation.mutate()}
-                        disabled={
-                          linkOrgDaoMutation.isPending || connection.status === "connecting"
-                        }
-                        data-testid="poc-link-dao"
-                      >
-                        {linkOrgDaoMutation.isPending || connection.status === "connecting"
-                          ? "connecting…"
-                          : "connect & link your DAO"}
-                      </Button>
-                    )}
-                  </div>
+                  ) : (
+                    <PocConnectField
+                      id="poc-team"
+                      label="Team wallet"
+                      connecting={
+                        connectTeamDaoMutation.isPending || connection.status === "connecting"
+                      }
+                      onClick={() => connectTeamDaoMutation.mutate()}
+                      testId="poc-connect-team"
+                    >
+                      connect team DAO
+                    </PocConnectField>
+                  )}
                   <div className="space-y-1">
-                    <PocField
-                      id="poc-endowment"
-                      label="Endowment treasury"
-                      value={linkTreasuries ? team : endowmentInput}
-                      onChange={setEndowmentInput}
-                      disabled={linkTreasuries}
-                    />
+                    {!linkTreasuries && !endowmentInput ? (
+                      <PocConnectField
+                        id="poc-endowment"
+                        label="Endowment treasury"
+                        connecting={
+                          connectEndowmentMutation.isPending || connection.status === "connecting"
+                        }
+                        onClick={() => connectEndowmentMutation.mutate()}
+                        testId="poc-connect-endowment"
+                      >
+                        connect endowment
+                      </PocConnectField>
+                    ) : (
+                      <PocField
+                        id="poc-endowment"
+                        label="Endowment treasury"
+                        value={linkTreasuries ? team : endowmentInput}
+                        onChange={setEndowmentInput}
+                        disabled={linkTreasuries}
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => setLinkTreasuries((prev) => !prev)}
@@ -1375,19 +1479,49 @@ function NodeLifecyclePocPage() {
                                 })
                               }
                               extra={
-                                station.def.id === "publish" &&
-                                facts.tenantDeployed &&
-                                tenantUrl ? (
-                                  <a
-                                    href={tenantUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground"
-                                    data-testid="poc-open-tenant"
+                                station.def.id === "publish" && facts.tenantDeployed ? (
+                                  <div
+                                    className="flex flex-wrap items-center gap-2"
+                                    data-testid="poc-publish-state"
                                   >
-                                    open {tenantUrl.replace(/^https?:\/\//, "")}
-                                    <ExternalLink className="h-3 w-3 shrink-0" />
-                                  </a>
+                                    {facts.configPublished ? (
+                                      <>
+                                        <Badge variant="success" className="text-[10px]">
+                                          config live
+                                        </Badge>
+                                        {tenantUrl && (
+                                          <a
+                                            href={tenantUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground"
+                                            data-testid="poc-open-tenant"
+                                          >
+                                            open {tenantUrl.replace(/^https?:\/\//, "")}
+                                            <ExternalLink className="h-3 w-3 shrink-0" />
+                                          </a>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        config not published yet — the open link appears once the DAO
+                                        proposal passes
+                                        {team ? (
+                                          <>
+                                            {" · "}
+                                            <a
+                                              href={`https://trezu.app/${team}`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="underline hover:text-foreground"
+                                            >
+                                              view proposals on trezu
+                                            </a>
+                                          </>
+                                        ) : null}
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : station.def.id === "vote" && govProposals.length > 0 ? (
                                   <div className="flex flex-wrap gap-2">
                                     <Select
@@ -1445,6 +1579,8 @@ function NodeLifecyclePocPage() {
                     <p className="text-xs font-semibold text-foreground">node applications</p>
                     {cleanupProposals.map((proposal) => {
                       const mode = proposalCleanupMode(proposal);
+                      const applying =
+                        proposal.reviewStatus === "approved" && proposal.applyStatus === "applying";
                       return (
                         <div
                           key={proposal.id}
@@ -1454,7 +1590,24 @@ function NodeLifecyclePocPage() {
                           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
                             {proposal.entityId} · {proposal.reviewStatus}/{proposal.applyStatus}
                           </span>
-                          {mode ? (
+                          {applying ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                markAppliedMutation.mutate({
+                                  entityId: proposal.entityId,
+                                  updatedAt: proposal.updatedAt,
+                                  payload: proposal.payload,
+                                })
+                              }
+                              disabled={busy || markAppliedMutation.isPending}
+                              title="checks the published config, then marks the application applied"
+                              data-testid={`poc-mark-applied-${proposal.entityId}`}
+                            >
+                              mark applied
+                            </Button>
+                          ) : mode ? (
                             <Button
                               variant="outline"
                               size="sm"
@@ -1800,6 +1953,40 @@ function PocField({
         className="font-mono text-xs"
         data-testid={id}
       />
+    </Field>
+  );
+}
+
+/** Takes the place of a PocField when the wallet it holds is not set yet. */
+function PocConnectField({
+  id,
+  label,
+  connecting,
+  onClick,
+  testId,
+  children,
+}: {
+  id: string;
+  label: string;
+  connecting: boolean;
+  onClick: () => void;
+  testId: string;
+  children: string;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Button
+        id={id}
+        variant="outline"
+        size="sm"
+        className="w-full justify-start font-mono text-xs"
+        onClick={onClick}
+        disabled={connecting}
+        data-testid={testId}
+      >
+        {connecting ? "connecting…" : children}
+      </Button>
     </Field>
   );
 }
