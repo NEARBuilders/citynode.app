@@ -28,10 +28,10 @@ it("walks tied timestamps without duplicates and stops on unknown cursors", asyn
       ),
     );
     const first = await votes.getUpvoteFeed(2);
-    expect(first.data.map((vote) => vote.id)).toEqual(["c", "b"]);
+    expect(first.data).toMatchObject([{ id: "c" }, { id: "b" }]);
     expect(first.meta).toMatchObject({ hasMore: true, nextCursor: "b" });
     const second = await votes.getUpvoteFeed(2, first.meta.nextCursor!);
-    expect(second.data.map((vote) => vote.id)).toEqual(["a", "z"]);
+    expect(second.data).toMatchObject([{ id: "a" }, { id: "z" }]);
     expect(second.meta).toMatchObject({ hasMore: false, nextCursor: null });
     expect((await votes.getUpvoteFeed(2, "missing")).data).toEqual([]);
     await votes.downvote("b", "user");
