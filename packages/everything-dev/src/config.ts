@@ -50,6 +50,7 @@ export function clearConfigCache(): void {
   cachedConfig = null;
   projectRoot = null;
   configWarnings = [];
+  configPathCache.clear();
 }
 
 export function suppressWarnings(): void {
@@ -77,18 +78,20 @@ function emitConfigWarning(message: string): void {
 const configPathCache = new Map<string, string | null>();
 
 export function findConfigPath(cwd?: string): string | null {
-  const cacheKey = cwd ?? process.cwd();
+  const cacheKey = resolve(cwd ?? process.cwd());
   const cached = configPathCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   let dir = cacheKey;
-  while (dir !== "/") {
+  while (true) {
     const configPath = join(dir, "bos.config.json");
     if (existsSync(configPath)) {
       configPathCache.set(cacheKey, configPath);
       return configPath;
     }
-    dir = dirname(dir);
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
   }
   configPathCache.set(cacheKey, null);
   return null;

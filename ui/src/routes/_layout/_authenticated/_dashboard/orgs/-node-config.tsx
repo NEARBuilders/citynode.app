@@ -72,6 +72,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
   const queryClient = useQueryClient();
   const connection = useDaoConnection();
   const nearAccountId = useNearAccount();
+  const activeNetwork = auth.useActiveNetwork();
 
   const { data: tenant } = useQuery(tenantByOrgQueryOptions(apiClient, orgId));
 
@@ -139,7 +140,8 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
   const editable = canManage && tenant?.status === "active";
   const hasSigningWallet = daoOwned
     ? connection.status === "connected" && connection.daoAccountId === tenantAccount
-    : !!nearAccountId;
+    : nearAccountId === tenantAccount &&
+      activeNetwork === (tenantAccount.endsWith(".testnet") ? "testnet" : "mainnet");
 
   const [verifying, setVerifying] = useState(false);
   const [computing, setComputing] = useState(false);

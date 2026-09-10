@@ -1,15 +1,15 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { sessionQueryOptions, useAuthClient } from "@/app";
+import { sessionQueryKey, sessionQueryOptions, useAuthClient } from "@/app";
 import { Button, Card, InfoRow, Input } from "@/components";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/settings/profile")({
   component: ProfileSettings,
 });
 
-function ProfileSettings() {
+export function ProfileSettings() {
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const user = session?.user;
@@ -35,6 +35,7 @@ function IdentityCard({
   user: { id: string; email?: string; name?: string; isAnonymous?: boolean | null };
 }) {
   const auth = useAuthClient();
+  const queryClient = useQueryClient();
   const [name, setName] = useState(user.name || "");
 
   const updateMutation = useMutation({
@@ -42,7 +43,10 @@ function IdentityCard({
       const { error } = await auth.updateUser({ name });
       if (error) throw new Error(error.message);
     },
-    onSuccess: () => toast.success("Profile updated"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+      toast.success("Profile updated");
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 

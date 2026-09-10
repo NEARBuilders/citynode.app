@@ -60,6 +60,10 @@ export interface TenantConfigPublishInput {
 
 type AuthClientShape = Pick<ReturnType<typeof useAuthClient>, "near">;
 
+function networkForAccount(accountId: string): "mainnet" | "testnet" {
+  return accountId.endsWith(".testnet") ? "testnet" : "mainnet";
+}
+
 /**
  * Publishes a tenant config through the signer its ownership requires: DAO
  * owners propose the write as a sputnik proposal via Trezu, platform owners
@@ -97,6 +101,28 @@ export async function publishTenantConfigForMode(
     );
   }
 
+  const connected = await auth.near.ensureConnected();
+  if (!connected) {
+    throw new Error("Connect a NEAR wallet first");
+  }
+
+  const signerAccountId = auth.near.getAccountId();
+  if (!signerAccountId) {
+    throw new Error("Connect a NEAR wallet first");
+  }
+  if (signerAccountId !== input.accountId) {
+    throw new Error(
+      `Connected NEAR account ${signerAccountId} cannot publish ${input.accountId}. Connect ${input.accountId}.`,
+    );
+  }
+
+  const expectedNetwork = networkForAccount(input.accountId);
+  if (auth.near.getNetwork() !== expectedNetwork) {
+    throw new Error(
+      `Switch your wallet to ${expectedNetwork} before publishing ${input.accountId}.`,
+    );
+  }
+
   const prepared = await prepareTenantConfigWrite(apiClient, {
     daoAccountId: input.accountId,
     ...passthrough,
@@ -118,11 +144,6 @@ export async function publishTenantConfigForMode(
     const relayed = await auth.near.relayTransaction({ payload: signed });
     if (relayed.error) throw new Error(relayed.error.message);
     return relayed;
-  }
-
-  const signerAccountId = auth.near.getAccountId();
-  if (!signerAccountId) {
-    throw new Error("Connect a NEAR wallet first");
   }
 
   return auth.near

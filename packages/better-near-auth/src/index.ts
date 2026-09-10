@@ -689,6 +689,14 @@ export const siwn = (options: SIWNPluginOptions) => {
             });
           }
 
+          const expectedRecipient = getRecipient(network);
+          if (recipient !== expectedRecipient) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Unauthorized: Invalid recipient",
+              status: 401,
+            });
+          }
+
           try {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
@@ -725,7 +733,7 @@ export const siwn = (options: SIWNPluginOptions) => {
               const isValidKey = await options.validateLimitedAccessKey({
                 accountId: accountId,
                 publicKey: publicKey,
-                recipient: options.recipient,
+                recipient: expectedRecipient,
               });
 
               if (!isValidKey) {
@@ -1061,6 +1069,14 @@ export const siwn = (options: SIWNPluginOptions) => {
         async (ctx) => {
           const { signedMessage, message, recipient, nonce, accountId, callbackUrl } = ctx.body;
           const network = getNetworkFromAccountId(accountId);
+          const expectedRecipient = getRecipient(network);
+
+          if (recipient !== expectedRecipient) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Unauthorized: Invalid recipient",
+              status: 401,
+            });
+          }
 
           try {
             const near = getNear(network);
@@ -1121,14 +1137,14 @@ export const siwn = (options: SIWNPluginOptions) => {
                   defaultValidateLimitedAccessKey(
                     args.accountId,
                     args.publicKey,
-                    args.recipient || getRecipient(network),
+                    args.recipient || expectedRecipient,
                     near,
                   ));
 
               const isValidKey = await validateKey({
                 accountId: accountId,
                 publicKey: publicKey,
-                recipient: options.recipient,
+                recipient: expectedRecipient,
               });
 
               if (!isValidKey) {

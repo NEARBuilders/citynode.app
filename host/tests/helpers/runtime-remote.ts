@@ -171,6 +171,8 @@ function buildRuntimeConfig(
           ),
           source: "remote" as const,
           variables: rawAuth.variables as Record<string, unknown>,
+          secrets: rawAuth.secrets as string[] | undefined,
+          shared: rawAuth.shared as NonNullable<RuntimeConfig["auth"]>["shared"] | undefined,
         }
       : undefined,
   } as RuntimeConfig;

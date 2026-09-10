@@ -83,6 +83,69 @@ async function seedTenant(tenants: TenantsService): Promise<string> {
 }
 
 describe("NodesService", () => {
+  it("rejects moving a City Node below its descendant without changing its subtree", async () => {
+    await runService(freshLayer(), async ({ nodes, tenants }) => {
+      const tenantId = await seedTenant(tenants);
+      const root = await nodes.create({
+        kind: "country",
+        slug: "root",
+        name: "Root",
+        parentId: null,
+        tenantId,
+      });
+      const child = await nodes.create({
+        kind: "state",
+        slug: "child",
+        name: "Child",
+        parentId: root.id,
+        tenantId,
+      });
+      const leaf = await nodes.create({
+        kind: "city",
+        slug: "leaf",
+        name: "Leaf",
+        parentId: child.id,
+        tenantId,
+      });
+      await expect(nodes.update(root.id, { parentId: leaf.id })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      expect((await nodes.getById(root.id))?.parentId).toBeNull();
+      expect((await nodes.getById(child.id))?.parentId).toBe(root.id);
+      await expect(nodes.update(leaf.id, { parentId: root.id })).resolves.toMatchObject({
+        parentId: root.id,
+      });
+    });
+  });
+
+  it("does not allow opposite reparenting requests to create a cycle", async () => {
+    await runService(freshLayer(), async ({ nodes, tenants }) => {
+      const tenantId = await seedTenant(tenants);
+      const a = await nodes.create({
+        kind: "country",
+        slug: "a",
+        name: "A",
+        parentId: null,
+        tenantId,
+      });
+      const b = await nodes.create({
+        kind: "country",
+        slug: "b",
+        name: "B",
+        parentId: null,
+        tenantId,
+      });
+      const results = await Promise.allSettled([
+        nodes.update(a.id, { parentId: b.id }),
+        nodes.update(b.id, { parentId: a.id }),
+      ]);
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const updatedA = await nodes.getById(a.id);
+      const updatedB = await nodes.getById(b.id);
+      expect(updatedA?.parentId === b.id && updatedB?.parentId === a.id).toBe(false);
+    });
+  });
+
   it("creates and resolves a node by id", async () => {
     const layer = freshLayer();
     const tenantId = await runService(layer, async ({ tenants }) => {

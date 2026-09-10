@@ -5,6 +5,7 @@ export {
   type ApiKeyRevealProps,
 } from "./api-key-manager";
 export { ConfirmDialog } from "./confirm-dialog";
+export { DocumentFallback } from "./document-fallback";
 export { EmptyState } from "./empty-state";
 export { AppHeader } from "./layout/app-header";
 export { AppShell } from "./layout/app-shell";
@@ -32,7 +33,11 @@ export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
 export { Logo } from "./logo";
 export { NodeDirectory, type NodeDirectoryNode } from "./node-directory";
+export { NodeDirectorySkeleton } from "./node-directory-skeleton";
 export { NodeValidatorTable } from "./node-validator-table";
+export { RootError } from "./root-error";
+export { RootNotFound } from "./root-not-found";
+export { RouterError } from "./router-error";
 export { StakePoolCard } from "./stake-pool-card";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";

@@ -57,7 +57,7 @@ function LandingPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Learn More
+                Learn about NEAR Legion City Nodes
               </a>
             </Button>
           </p>

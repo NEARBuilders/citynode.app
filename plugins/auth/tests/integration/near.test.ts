@@ -14,7 +14,7 @@ describe("NEAR SIWN Sandbox Integration", () => {
   }, 30000);
 
   afterAll(async () => {
-    await sandbox.stop();
+    await sandbox?.stop();
   });
 
   it("sandbox responds to RPC", async () => {

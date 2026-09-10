@@ -11,6 +11,8 @@ type ApiClient = ReturnType<typeof useApiClient>;
 type Thing = Awaited<ReturnType<ApiClient["template"]["listThings"]>>["data"][number];
 type UpvoteCounts = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCounts"]>>;
 
+const EMPTY_THINGS: Thing[] = [];
+
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/things/")({
   head: () => ({
     meta: [
@@ -96,7 +98,7 @@ function ThingsIndexPage() {
     staleTime: 30 * 1000,
   });
 
-  const things: Thing[] = data?.data ?? [];
+  const things = data?.data ?? EMPTY_THINGS;
   const thingIds = useMemo(() => things.map((thing) => thing.thingId), [things]);
 
   const upvoteCountsQuery = useQuery({

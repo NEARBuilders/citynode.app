@@ -1,38 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Check, FileCheck2, History, X } from "lucide-react";
+import { ArrowLeft, FileCheck2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient } from "@/app";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  SectionHeader,
-  Skeleton,
-  Textarea,
-} from "@/components";
-import { ConnectDao } from "@/components/connect-dao";
+import { Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
 import { nodeProposalPayloadSchema } from "@/routes/_layout/_authenticated/_dashboard/-node-application";
 import { approveAndApplyProposal } from "./-proposal-application";
+import type { Proposal } from "./-proposal-columns";
 import {
   adminProposalDetailQueryOptions,
   proposalReviewHistoryQueryOptions,
   proposalReviewQueryKeys,
-  proposalReviewStatusVariant,
 } from "./-proposal-review";
+import { ProposalReviewActions } from "./-proposal-review-actions";
+import { ProposalReviewHistory } from "./-proposal-review-history";
+import { ProposalSummary } from "./-proposal-summary";
 
-type ApiClient = ReturnType<typeof useApiClient>;
-type ProposalResult = Awaited<ReturnType<ApiClient["proposals"]["getProposals"]>>;
-type Proposal = ProposalResult["data"][number];
-type ReviewHistoryResult = Awaited<ReturnType<ApiClient["proposals"]["getReviewHistory"]>>;
-type ReviewHistoryEntry = ReviewHistoryResult["data"][number];
 type ProposalDetailSearch = { pluginId?: string; entityId?: string };
 
 export const Route = createFileRoute("/_layout/_admin/_dashboard/admin/proposals/$proposalId")({
@@ -185,7 +173,6 @@ function ProposalDetailPage() {
   }
 
   const proposal = proposalQuery.data;
-  const reviewHistory = reviewHistoryQuery.data?.data ?? [];
   const isPending = proposal.reviewStatus === "pending";
   const parsedNodePayload =
     proposal.pluginId === "node" ? nodeProposalPayloadSchema.safeParse(proposal.payload) : null;
@@ -210,214 +197,28 @@ function ProposalDetailPage() {
         }
       />
 
-      <Card className="space-y-5 p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="font-mono text-xs text-muted-foreground">{proposal.id}</p>
-            <h2 className="font-mono text-lg font-semibold text-foreground">{proposal.entityId}</h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={proposalReviewStatusVariant(proposal.reviewStatus)}>
-              {proposal.reviewStatus}
-            </Badge>
-            <Badge variant="outline">apply: {proposal.applyStatus.replace("_", " ")}</Badge>
-          </div>
-        </div>
+      <ProposalSummary proposal={proposal} />
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <MetaRow label="Plugin" value={proposal.pluginId} mono />
-          <MetaRow label="Entity" value={proposal.entityId} mono />
-          <MetaRow label="Created by" value={proposal.createdBy} mono />
-          <MetaRow label="Submissions" value={String(proposal.submissionCount)} />
-          <MetaRow label="Created" value={new Date(proposal.createdAt).toLocaleString()} />
-          <MetaRow label="Updated" value={new Date(proposal.updatedAt).toLocaleString()} />
-        </div>
+      <ProposalReviewActions
+        isPending={isPending}
+        isNodeProposal={proposal.pluginId === "node"}
+        proposalDaoAccountId={proposalDaoAccountId}
+        daoIsVerified={daoIsVerified}
+        rejectionReason={rejectionReason}
+        isReviewing={reviewMutation.isPending}
+        onDaoVerified={handleDaoVerified}
+        onRejectionReasonChange={(event) => setRejectionReason(event.target.value)}
+        onApprove={() => reviewMutation.mutate({ proposal, action: "approve" })}
+        onReject={() =>
+          reviewMutation.mutate({
+            proposal,
+            action: "reject",
+            reason: rejectionReason.trim(),
+          })
+        }
+      />
 
-        {proposal.rejectionReason && (
-          <div className="rounded-[8px] border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
-            <p className="font-semibold">Rejection reason</p>
-            <p className="mt-1">{proposal.rejectionReason}</p>
-          </div>
-        )}
-
-        {proposal.applyError && (
-          <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-foreground">
-            <p className="font-semibold text-destructive">Apply error</p>
-            <p className="mt-1">{proposal.applyError}</p>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Payload
-          </p>
-          <pre className="max-h-96 overflow-auto rounded-[8px] border border-border bg-muted/40 p-4 font-mono text-xs text-foreground">
-            {JSON.stringify(proposal.payload, null, 2)}
-          </pre>
-        </div>
-
-        {proposal.pluginId === "node" && <NodeProposalDetails payload={proposal.payload} />}
-      </Card>
-
-      {isPending && proposal.pluginId === "node" && (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-foreground">Tenant DAO</h2>
-            <p className="text-sm text-muted-foreground">
-              Connect {proposalDaoAccountId ?? "the proposed DAO"} through Trezu. Approval creates
-              the tenant records and submits its bos.config.json publish proposal to Sputnik DAO.
-            </p>
-          </div>
-          <ConnectDao onVerified={handleDaoVerified} />
-        </div>
-      )}
-
-      {isPending ? (
-        <Card className="space-y-4 p-6">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-foreground">Review action</h2>
-            <p className="text-sm text-muted-foreground">
-              Approve to publish this thing, or add required notes before rejecting it.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rejection-reason">Review notes</Label>
-            <Textarea
-              id="rejection-reason"
-              value={rejectionReason}
-              onChange={(event) => setRejectionReason(event.target.value)}
-              placeholder="Required when rejecting"
-              rows={4}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => reviewMutation.mutate({ proposal, action: "approve" })}
-              disabled={reviewMutation.isPending || !daoIsVerified}
-            >
-              <Check />
-              {reviewMutation.isPending ? "reviewing..." : "approve"}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() =>
-                reviewMutation.mutate({
-                  proposal,
-                  action: "reject",
-                  reason: rejectionReason.trim(),
-                })
-              }
-              disabled={!rejectionReason.trim() || reviewMutation.isPending}
-            >
-              <X />
-              reject
-            </Button>
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-6 text-sm text-muted-foreground">
-          This proposal has already been reviewed.
-        </Card>
-      )}
-
-      <section className="space-y-3">
-        <SectionHeader title="Review history" />
-        {reviewHistoryQuery.isLoading ? (
-          <Card className="space-y-3 p-6">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </Card>
-        ) : reviewHistoryQuery.isError ? (
-          <Card className="p-6 text-sm text-destructive">
-            Review history could not be loaded: {reviewHistoryQuery.error.message}
-          </Card>
-        ) : reviewHistory.length === 0 ? (
-          <EmptyState
-            icon={History}
-            title="No review history"
-            description={`No ${pluginId} proposals have been approved or rejected yet.`}
-          />
-        ) : (
-          <div className="space-y-3">
-            {reviewHistory.map((entry) => (
-              <ReviewHistoryCard key={entry.id} entry={entry} />
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function NodeProposalDetails({ payload }: { payload: unknown }) {
-  const parsed = nodeProposalPayloadSchema.safeParse(payload);
-  if (!parsed.success) {
-    return (
-      <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-        This node proposal has an invalid payload and cannot be applied safely.
-      </div>
-    );
-  }
-
-  const proposal = parsed.data;
-  return (
-    <div className="space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Node application
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <MetaRow label="Applicant account" value={proposal.accountId} mono />
-        <MetaRow label="Submitting account" value={proposal.submitterAccountId} mono />
-        <MetaRow label="Organization" value={proposal.orgId} mono />
-        <MetaRow label="Kind" value={proposal.kind} />
-        <MetaRow label="Parent" value={proposal.parentId ?? "root"} mono />
-        <MetaRow label="Name" value={proposal.name} />
-      </div>
-      <div className="rounded-[8px] border border-border bg-muted/20 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Motivation
-        </p>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{proposal.motivation}</p>
-      </div>
-    </div>
-  );
-}
-
-function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
-  return (
-    <Card className="space-y-3 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-foreground">{entry.actorLabel || entry.actor}</p>
-          <p className="font-mono text-xs text-muted-foreground">{entry.entityId}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={entry.action === "rejected" ? "destructive" : "default"}>
-            {entry.action}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {new Date(entry.createdAt).toLocaleString()}
-          </span>
-        </div>
-      </div>
-      {entry.details !== null && (
-        <pre className="overflow-auto rounded-[8px] border border-border bg-muted/40 p-3 font-mono text-xs text-foreground">
-          {JSON.stringify(entry.details, null, 2)}
-        </pre>
-      )}
-    </Card>
-  );
-}
-
-function MetaRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-[8px] border border-border bg-muted/20 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-1 break-all text-sm text-foreground ${mono ? "font-mono text-xs" : ""}`}>
-        {value}
-      </p>
+      <ProposalReviewHistory pluginId={pluginId} query={reviewHistoryQuery} />
     </div>
   );
 }

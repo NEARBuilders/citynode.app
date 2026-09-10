@@ -189,6 +189,68 @@ describe("Scope lifecycle", () => {
     expect(shutdownLog.indexOf("shutdown")).toBeLessThanOrEqual(shutdownLog.indexOf("released"));
   });
 
+  it("closes an evicted plugin scope when its shutdown hook dies", async () => {
+    let released = false;
+
+    const failPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: testContract,
+      initialize: () =>
+        Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+          Effect.sync(() => {
+            released = true;
+          }),
+        ),
+      shutdown: () => Effect.die(new Error("intentional shutdown defect")),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true as const })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "evict-shutdown-defect": { module: failPlugin } },
+      secrets: {},
+    });
+
+    await runtime.usePlugin("evict-shutdown-defect", { variables: {}, secrets: {} });
+    await runtime.evictPlugin("evict-shutdown-defect", { variables: {}, secrets: {} });
+
+    expect(released).toBe(true);
+
+    await runtime.shutdown();
+  });
+
+  it("closes registered plugin scopes when runtime cleanup shutdown dies", async () => {
+    let released = false;
+
+    const failPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: testContract,
+      initialize: () =>
+        Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+          Effect.sync(() => {
+            released = true;
+          }),
+        ),
+      shutdown: () => Effect.die(new Error("intentional cleanup defect")),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true as const })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "cleanup-shutdown-defect": { module: failPlugin } },
+      secrets: {},
+    });
+
+    await runtime.usePlugin("cleanup-shutdown-defect", { variables: {}, secrets: {} });
+    await runtime.shutdown();
+
+    expect(released).toBe(true);
+  });
+
   it("initialization failure closes the plugin scope immediately", async () => {
     let released = false;
 
@@ -221,6 +283,72 @@ describe("Scope lifecycle", () => {
       .usePlugin("fail-scope", { variables: {}, secrets: {} })
       .catch((e) => e);
     expect(err._tag).toBe("PluginRuntimeError");
+
+    expect(released).toBe(true);
+
+    await runtime.shutdown();
+  });
+
+  it("closes the plugin scope when initialization dies", async () => {
+    let released = false;
+
+    const failPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: testContract,
+      initialize: () =>
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+            Effect.sync(() => {
+              released = true;
+            }),
+          );
+          return yield* Effect.die(new Error("intentional defect"));
+        }),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true as const })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "defect-scope": { module: failPlugin } },
+      secrets: {},
+    });
+
+    await runtime.usePlugin("defect-scope", { variables: {}, secrets: {} }).catch(() => {});
+
+    expect(released).toBe(true);
+
+    await runtime.shutdown();
+  });
+
+  it("closes the plugin scope when initialization is interrupted", async () => {
+    let released = false;
+
+    const failPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: testContract,
+      initialize: () =>
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+            Effect.sync(() => {
+              released = true;
+            }),
+          );
+          return yield* Effect.interrupt;
+        }),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true as const })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "interrupt-scope": { module: failPlugin } },
+      secrets: {},
+    });
+
+    await runtime.usePlugin("interrupt-scope", { variables: {}, secrets: {} }).catch(() => {});
 
     expect(released).toBe(true);
 
@@ -277,6 +405,52 @@ describe("Scope lifecycle", () => {
     await runtime.shutdown();
   });
 
+  it("evicts a failed in-flight initialization without rethrowing", async () => {
+    let startedResolve!: () => void;
+    let rejectInitialization!: (error: Error) => void;
+    const started = new Promise<void>((resolve) => {
+      startedResolve = resolve;
+    });
+    const initialization = new Promise<never>((_resolve, reject) => {
+      rejectInitialization = reject;
+    });
+
+    const failPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: testContract,
+      initialize: () =>
+        Effect.tryPromise({
+          try: async () => {
+            startedResolve();
+            return await initialization;
+          },
+          catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+        }),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true as const })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "evict-failure": { module: failPlugin } },
+      secrets: {},
+    });
+
+    const result = runtime
+      .usePlugin("evict-failure", { variables: {}, secrets: {} })
+      .catch((error) => error);
+    await started;
+
+    const eviction = runtime.evictPlugin("evict-failure", { variables: {}, secrets: {} });
+    rejectInitialization(new Error("intentional in-flight failure"));
+
+    await expect(eviction).resolves.toBeUndefined();
+    expect((await result)._tag).toBe("PluginRuntimeError");
+
+    await runtime.shutdown();
+  });
+
   it("constructs the router once per plugin instance", async () => {
     let routerCallCount = 0;
 
@@ -303,8 +477,14 @@ describe("Scope lifecycle", () => {
       secrets: {},
     });
 
+    const secondResult = await runtime.usePlugin("router-count", {
+      variables: {},
+      secrets: {},
+    });
+
     // router should be constructed exactly once
     expect(routerCallCount).toBe(1);
+    expect(secondResult.router).toBe(result.router);
 
     // createClient should not call createRouter again
     const client = result.createClient();
@@ -315,6 +495,86 @@ describe("Scope lifecycle", () => {
     const client2 = result.createClient();
     expect(client2).toBeDefined();
     expect(routerCallCount).toBe(1);
+
+    await runtime.shutdown();
+  });
+
+  it("initializes once for structurally-equal configs and shares the instance", async () => {
+    let initCount = 0;
+
+    const countingPlugin = createPlugin({
+      variables: z.object({ url: z.string() }),
+      secrets: z.object({ token: z.string() }),
+      contract: testContract,
+      initialize: () =>
+        Effect.sync(() => {
+          initCount++;
+          return { ready: true };
+        }),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "init-count": { module: countingPlugin } },
+      secrets: {},
+    });
+
+    const first = await runtime.usePlugin("init-count", {
+      variables: { url: "https://example.test" },
+      secrets: { token: "secret" },
+    });
+
+    const second = await runtime.usePlugin("init-count", {
+      variables: { url: "https://example.test" },
+      secrets: { token: "secret" },
+    });
+
+    expect(initCount).toBe(1);
+    expect(second.initialized).toBe(first.initialized);
+    expect(second.router).toBe(first.router);
+
+    const third = await runtime.usePlugin("init-count", {
+      variables: { url: "https://other.test" },
+      secrets: { token: "secret" },
+    });
+
+    expect(initCount).toBe(2);
+    expect(third.initialized).not.toBe(first.initialized);
+
+    await runtime.shutdown();
+  });
+
+  it("closes an initialized scope when router construction fails", async () => {
+    let released = false;
+
+    const failPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: testContract,
+      initialize: () =>
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+            Effect.sync(() => {
+              released = true;
+            }),
+          );
+          return { ready: true };
+        }),
+      createRouter: () => {
+        throw new Error("intentional router failure");
+      },
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "router-failure": { module: failPlugin } },
+      secrets: {},
+    });
+
+    await runtime.usePlugin("router-failure", { variables: {}, secrets: {} }).catch(() => {});
+
+    expect(released).toBe(true);
 
     await runtime.shutdown();
   });

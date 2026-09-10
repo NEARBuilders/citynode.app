@@ -1,26 +1,12 @@
-import { PingpayOnramp, PingpayOnrampError } from "@pingpay/onramp-sdk";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Globe, Landmark, Wallet } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { Landmark } from "lucide-react";
+import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
-import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
-import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  FieldLabel,
-  Input,
-  NodeDirectory,
-  PageContainer,
-  PageHeader,
-} from "@/components";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageContainer, PageHeader } from "@/components";
+import { parseNearAmount } from "@/lib/near-amount";
 import {
   childNodesQueryOptions,
   nodeByIdQueryOptions,
@@ -29,9 +15,10 @@ import {
 } from "@/lib/queries/nodes";
 import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
-import { cn } from "@/lib/utils";
-
-const STAKE_GAS = "300000000000000";
+import { StakeForm } from "./-stake-form";
+import { useStakeMutation, useStakeWalletConnection } from "./-stake-mutations";
+import { StakeNodeContent } from "./-stake-node-content";
+import { StakeOnramp } from "./-stake-onramp";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/stake")({
   validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
@@ -43,6 +30,36 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/stake")
   }),
   component: StakePage,
 });
+
+type ApiClient = ReturnType<typeof useApiClient>;
+type TenantApp = Awaited<ReturnType<ApiClient["listTenantApps"]>>[number];
+type Node = Awaited<ReturnType<ApiClient["getNode"]>>;
+
+function getDirectoryNodes(tenantApps: TenantApp[]) {
+  return tenantApps.flatMap((app) =>
+    app.node
+      ? [
+          {
+            id: app.accountId,
+            name: app.name,
+            slug: app.node.slug,
+            kind: app.node.kind,
+            hostname: app.hostname,
+          },
+        ]
+      : [],
+  );
+}
+
+function getStakeTitle(node: Node | undefined, slug: string | null): ReactNode {
+  if (node) return `Stake NEAR to ${node.name}`;
+  if (slug) return <span className="capitalize">Stake NEAR to {slug}</span>;
+  return "Stake NEAR to a city";
+}
+
+function hasInheritedValidator(node: Node | undefined, sourceNodeId: string | null | undefined) {
+  return !!node && !!sourceNodeId && sourceNodeId !== node.id;
+}
 
 function getSlugFromHostname(): string | null {
   if (typeof window === "undefined") return null;
@@ -58,51 +75,22 @@ function getSlugFromHostname(): string | null {
 function StakePage() {
   const apiClient = useApiClient();
   const auth = useAuthClient();
+  const queryClient = useQueryClient();
   const { node: nodeSlug, nodeId: selectedNodeId } = Route.useSearch();
-
   const slug = nodeSlug ?? getSlugFromHostname();
   const hasNodeSelection = !!selectedNodeId || !!slug;
-
   const { runtimeConfig } = Route.useRouteContext();
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
-
   const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
     ...tenantAppsQueryOptions(apiClient),
     enabled: !hasNodeSelection,
   });
-
-  const directoryNodes = tenantApps.flatMap((app) =>
-    app.node
-      ? [
-          {
-            id: app.accountId,
-            name: app.name,
-            slug: app.node.slug,
-            kind: app.node.kind,
-            hostname: app.hostname,
-          },
-        ]
-      : [],
-  );
-
+  const directoryNodes = useMemo(() => getDirectoryNodes(tenantApps), [tenantApps]);
   const nearAccountId = useNearAccount();
-  const [connectingWallet, setConnectingWallet] = useState(false);
   const [amount, setAmount] = useState("1");
   const [selectedValidatorId, setSelectedValidatorId] = useState<string | null>(null);
-
-  const handleConnectWallet = async () => {
-    setConnectingWallet(true);
-    try {
-      const connected = await auth.near.ensureConnected();
-      if (!connected) {
-        toast.error("Failed to connect wallet");
-      }
-    } catch {
-      toast.error("Failed to connect wallet");
-    } finally {
-      setConnectingWallet(false);
-    }
-  };
+  const { connect: handleConnectWallet, isConnecting: connectingWallet } =
+    useStakeWalletConnection(auth);
 
   const nodeById = useQuery({
     ...nodeByIdQueryOptions(apiClient, selectedNodeId ?? ""),
@@ -113,96 +101,30 @@ function StakePage() {
     enabled: !selectedNodeId && !!slug,
   });
   const { data: node, isLoading: nodeLoading } = selectedNodeId ? nodeById : nodeBySlug;
-
   const nodeId = node?.id;
-
   const { data: staking, isLoading: stakingLoading } = useQuery({
     ...stakingValidatorsQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId,
   });
-
-  const validators = staking?.validators ?? [];
-  const isInherited = !!node && !!staking?.sourceNodeId && staking.sourceNodeId !== node.id;
-
+  const validators = useMemo(() => staking?.validators ?? [], [staking?.validators]);
+  const isInherited = hasInheritedValidator(node, staking?.sourceNodeId);
   const { data: sourceNode } = useQuery({
     ...nodeByIdQueryOptions(apiClient, staking?.sourceNodeId ?? ""),
     enabled: isInherited,
   });
-
   const { data: children = [] } = useQuery({
     ...childNodesQueryOptions(apiClient, nodeId ?? ""),
     enabled: !!nodeId && validators.length === 0,
   });
-
   const defaultValidator = useMemo(
-    () => validators.find((v) => v.isDefault) ?? validators[0] ?? null,
+    () => validators.find((validator) => validator.isDefault) ?? validators[0] ?? null,
     [validators],
   );
   const selectedValidator =
-    validators.find((v) => v.id === selectedValidatorId) ?? defaultValidator;
+    validators.find((validator) => validator.id === selectedValidatorId) ?? defaultValidator;
+  const parsedYocto = useMemo(() => parseNearAmount(amount), [amount]);
 
-  const parsedYocto = useMemo(() => {
-    const value = Number(amount);
-    if (!amount || Number.isNaN(value) || value <= 0) return null;
-    return BigInt(parseFloat(amount) * 1e24);
-  }, [amount]);
-
-  const stakeMutation = useMutation({
-    mutationFn: async () => {
-      const connected = await auth.near.ensureConnected();
-      if (!connected) throw new Error("Connect a NEAR wallet to stake.");
-      const signer = auth.near.getAccountId();
-      if (!signer) throw new Error("Connect a NEAR wallet to stake.");
-      if (!selectedValidator) throw new Error("Select a validator to stake to.");
-      if (!parsedYocto) throw new Error("Enter a valid amount to stake.");
-      const near = auth.near.getNearClient();
-      const result = await near
-        .transaction(signer)
-        .functionCall(
-          selectedValidator.accountId,
-          "deposit_and_stake",
-          {},
-          { gas: STAKE_GAS, attachedDeposit: parsedYocto },
-        )
-        .send({ waitUntil: "FINAL" });
-      return result;
-    },
-    onSuccess: (result) => {
-      toast.success("Staked", {
-        description: result.transaction?.hash ? `tx: ${result.transaction.hash}` : undefined,
-      });
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to stake"),
-  });
-
-  const onrampRef = useRef<PingpayOnramp | null>(null);
-
-  const onrampMutation = useMutation({
-    mutationFn: async () => {
-      const onramp = new PingpayOnramp({
-        destinationAddress: nearAccountId ?? undefined,
-        onPopupClose: () => onrampMutation.reset(),
-      });
-      onrampRef.current = onramp;
-      return onramp.initiateOnramp({ chain: "NEAR", asset: "NEAR" });
-    },
-    onSuccess: (result) => {
-      toast.success("Purchase complete", {
-        description: `Deposited to ${result.depositAddress}`,
-      });
-    },
-    onError: (err: Error) => {
-      if (err instanceof PingpayOnrampError) {
-        toast.error(err.message || "Onramp failed");
-      } else {
-        toast.error("Unexpected error during purchase");
-      }
-    },
-  });
-
-  useEffect(() => {
-    return () => onrampRef.current?.close();
-  }, []);
+  const stakeMutation = useStakeMutation(auth, queryClient);
 
   return (
     <PageContainer variant="wide">
@@ -210,15 +132,7 @@ function StakePage() {
         <PageHeader
           icon={Landmark}
           label="Stake"
-          title={
-            node ? (
-              `Stake NEAR to ${node.name}`
-            ) : slug ? (
-              <span className="capitalize">Stake NEAR to {slug}</span>
-            ) : (
-              "Stake NEAR to a city"
-            )
-          }
+          title={getStakeTitle(node, slug)}
           description={
             <>
               Deposits are staked directly to the validator pool via{" "}
@@ -227,274 +141,36 @@ function StakePage() {
           }
         />
 
-        {!hasNodeSelection ? (
-          <Card className="p-6 space-y-4">
-            <p className="text-sm text-muted-foreground">Select a city to stake to.</p>
-            <NodeDirectory
-              nodes={directoryNodes}
-              gateway={gateway}
-              linkTo="/stake"
-              linkSearch={(n) => ({ node: n.slug })}
-              isLoading={directoryLoading}
-              emptyMessage="No city nodes available yet."
-            />
-          </Card>
-        ) : nodeLoading || stakingLoading ? (
-          <StakeSkeleton />
-        ) : !node ? (
-          <Card className="p-10 text-center">
-            <p className="text-sm text-muted-foreground">Node not found.</p>
-          </Card>
-        ) : validators.length === 0 ? (
-          <Card className="p-6 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              This node doesn&apos;t run a validator — browse child nodes that might.
-            </p>
-            {children.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {children.map((child) => (
-                  <Link
-                    key={child.id}
-                    to="/stake"
-                    search={{ node: child.slug, nodeId: child.id }}
-                    className="inline-flex h-10 items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                  >
-                    <span className="capitalize">{child.name}</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">No child nodes either.</p>
-            )}
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {isInherited && sourceNode && (
-              <Card className="p-4">
-                <p className="text-sm text-muted-foreground">
-                  {node.name} doesn&apos;t run its own validator — staking to{" "}
-                  <span className="font-semibold text-foreground">{sourceNode.name}</span>
-                  &apos;s inherited validator.
-                </p>
-              </Card>
-            )}
-
-            <div className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Validators
-              </p>
-              {validators.map((validator) => {
-                const isSelected = selectedValidator?.id === validator.id;
-                const isCommunity = validator.role === "community";
-                return (
-                  <button
-                    key={validator.id}
-                    type="button"
-                    onClick={() => setSelectedValidatorId(validator.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-[10px] border-2 p-4 text-left transition-colors",
-                      isSelected
-                        ? "border-foreground bg-card"
-                        : "border-border bg-card hover:bg-muted",
-                      isCommunity && !isSelected && "opacity-80",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]",
-                        isCommunity
-                          ? "bg-muted text-muted-foreground"
-                          : "bg-foreground text-background",
-                      )}
-                    >
-                      <Globe className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-foreground truncate">
-                          {validator.accountId}
-                        </span>
-                        {validator.isDefault && (
-                          <Badge variant="default" className="text-[10px]">
-                            default
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Badge
-                          variant={isCommunity ? "outline" : "secondary"}
-                          className="capitalize text-[10px]"
-                        >
-                          {validator.role}
-                        </Badge>
-                        {validator.protocol && validator.protocol !== "near" && (
-                          <Badge variant="outline" className="text-[10px] font-mono">
-                            {validator.protocol}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div
-                      className={cn(
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
-                        isSelected
-                          ? "border-foreground bg-foreground"
-                          : "border-border bg-transparent",
-                      )}
-                    >
-                      {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-background" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {selectedValidator && (
-          <Card className="p-6 space-y-4">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Stake
-            </div>
-            {!nearAccountId ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  No NEAR wallet linked. Connect one to stake.
-                </p>
-                <Button variant="outline" onClick={handleConnectWallet} disabled={connectingWallet}>
-                  {connectingWallet ? "connecting…" : "connect wallet"}
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Wallet className="h-4 w-4" />
-                  <span className="font-mono text-xs">{nearAccountId}</span>
-                </div>
-                <Field>
-                  <FieldLabel htmlFor="amount-input">Amount (NEAR)</FieldLabel>
-                  <Input
-                    id="amount-input"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="h-9 text-sm"
-                  />
-                </Field>
-                <Button
-                  onClick={() => stakeMutation.mutate()}
-                  disabled={!selectedValidator || !parsedYocto || stakeMutation.isPending}
-                  className="w-full"
-                >
-                  {stakeMutation.isPending ? "Staking…" : `Stake ${amount || "0"} NEAR`}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  Staking sends NEAR to the pool contract — your stake stays under your account.
-                </p>
-              </>
-            )}
-          </Card>
-        )}
-
-        <PingOnrampBanner
-          disabled={!nearAccountId}
-          pending={onrampMutation.isPending}
-          onBuy={() => onrampMutation.mutate()}
+        <StakeNodeContent
+          childNodes={children}
+          directoryLoading={directoryLoading}
+          directoryNodes={directoryNodes}
+          gateway={gateway}
+          hasNodeSelection={hasNodeSelection}
+          isInherited={isInherited}
+          node={node}
+          nodeLoading={nodeLoading}
+          onSelectValidator={setSelectedValidatorId}
+          selectedValidatorId={selectedValidator?.id ?? null}
+          sourceNode={sourceNode}
+          stakingLoading={stakingLoading}
+          validators={validators}
         />
+
+        <StakeForm
+          amount={amount}
+          connectingWallet={connectingWallet}
+          isPending={stakeMutation.isPending}
+          nearAccountId={nearAccountId}
+          onAmountChange={setAmount}
+          onConnect={() => void handleConnectWallet()}
+          onStake={(variables) => stakeMutation.mutate(variables)}
+          parsedYocto={parsedYocto}
+          validator={selectedValidator}
+        />
+
+        <StakeOnramp />
       </div>
     </PageContainer>
-  );
-}
-
-function StakeSkeleton() {
-  return (
-    <div className="space-y-4">
-      <Skeleton className="h-3 w-20" />
-      <Skeleton className="h-16 w-full rounded-[10px]" />
-      <Skeleton className="h-16 w-full rounded-[10px]" />
-      <Skeleton className="h-40 w-full rounded-[10px]" />
-    </div>
-  );
-}
-
-function PingOnrampBanner({
-  disabled,
-  pending,
-  onBuy,
-}: {
-  disabled: boolean;
-  pending: boolean;
-  onBuy: () => void;
-}) {
-  const button = (
-    <button
-      type="button"
-      onClick={onBuy}
-      disabled={disabled || pending}
-      aria-label={pending ? "Opening PingPay" : "Buy NEAR with PingPay"}
-      className={cn(
-        "group inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border-2 px-5 text-sm font-semibold transition-colors",
-        "border-[#AF9EF9] bg-white/80 text-[#3D315E] hover:bg-white",
-        "dark:border-[#6D5BD0] dark:bg-[#2B2444] dark:text-[#F3EEFF] dark:hover:bg-[#332B54]",
-        "shadow-sm hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AF9EF9]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        disabled || pending ? "cursor-not-allowed opacity-50 hover:shadow-sm" : "cursor-pointer",
-      )}
-    >
-      {pending ? (
-        <>
-          <span className="size-4 animate-spin rounded-full border-2 border-[#AF9EF9] border-t-[#3D315E] dark:border-t-[#F3EEFF]" />
-          Opening…
-        </>
-      ) : (
-        <>
-          <span>Buy with</span>
-          <span className="relative inline-block h-4 w-[52px]">
-            <img
-              src={pingpayLogoDark}
-              alt="PingPay"
-              className="absolute inset-0 h-full w-full object-contain dark:hidden"
-            />
-            <img
-              src={pingpayLogoLight}
-              alt="PingPay"
-              className="absolute inset-0 hidden h-full w-full object-contain dark:block"
-            />
-          </span>
-        </>
-      )}
-    </button>
-  );
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl border-2 border-[#AF9EF9]/50 bg-gradient-to-br from-[#F9F7FF] to-[#EFE9FF] p-5 dark:border-[#6D5BD0]/40 dark:from-[#211C33] dark:to-[#2B2444]">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-white/5">
-            <Wallet className="h-4 w-4 text-[#6D5BD0] dark:text-[#C9BBFF]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[#3D315E] dark:text-[#EDE8FF]">
-              Need NEAR to stake?
-            </p>
-            <p className="text-xs text-[#6B5F94] dark:text-[#B9AEDE]">
-              Buy instantly with card, Apple Pay, or bank transfer.
-            </p>
-          </div>
-        </div>
-        {disabled ? (
-          <Tooltip>
-            <TooltipTrigger asChild>{button}</TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs">
-              Connect a NEAR wallet to buy NEAR
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          button
-        )}
-      </div>
-    </div>
   );
 }

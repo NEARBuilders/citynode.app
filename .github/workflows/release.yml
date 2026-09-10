@@ -32,15 +32,15 @@ jobs:
       target_ref: ${{ steps.target_ref.outputs.ref }}
       actually_published: ${{ steps.npm_publish.outputs.actually_published }}
     steps:
-      - name: Capture target ref
-        id: target_ref
-        run: echo "ref=${TARGET_REF}" >> "$GITHUB_OUTPUT"
-
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (Node 24)
         with:
           fetch-depth: 0
           ref: ${{ env.TARGET_REF }}
+
+      - name: Capture checked-out commit
+        id: target_ref
+        run: echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -135,6 +135,7 @@ jobs:
         if: steps.release_mode.outputs.should_publish == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ steps.target_ref.outputs.ref }}
         run: |
           for release_dir in .release/*; do
             PKG_JSON="$release_dir/package.json"
@@ -163,5 +164,5 @@ jobs:
             gh release create "$TAG" \
               --title "$TAG" \
               --notes "$NOTES" \
-              --target main
+              --target "$RELEASE_COMMIT"
           done

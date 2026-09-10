@@ -257,25 +257,6 @@ export const NodesLive = Layer.effect(
       update: async (id, input) => {
         try {
           if (input.slug !== undefined) validateSlug(input.slug);
-          if (input.parentId !== undefined && input.parentId !== null) {
-            if (input.parentId === id) {
-              throw new ORPCError("BAD_REQUEST", {
-                message: "Node cannot be its own parent",
-              });
-            }
-            const parent = await db
-              .select({ id: nodesTable.id })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, input.parentId))
-              .limit(1);
-            if (parent.length === 0) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Parent node not found",
-                data: { resource: "node", resourceId: input.parentId },
-              });
-            }
-          }
-
           const patch: Record<string, unknown> = { updatedAt: new Date() };
           if (input.kind !== undefined) patch.kind = input.kind;
           if (input.slug !== undefined) patch.slug = input.slug;
@@ -283,20 +264,68 @@ export const NodesLive = Layer.effect(
           if (input.parentId !== undefined) patch.parentId = input.parentId;
           if (input.metadata !== undefined) patch.metadata = input.metadata;
 
-          const [row] = await db
-            .update(nodesTable)
-            .set(patch)
-            .where(eq(nodesTable.id, id))
-            .returning();
+          return await db.transaction(async (tx) => {
+            if (input.parentId !== undefined && input.parentId !== null) {
+              await tx.execute(sql`LOCK TABLE nodes IN SHARE ROW EXCLUSIVE MODE`);
 
-          if (!row) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: id },
-            });
-          }
+              if (input.parentId === id) {
+                throw new ORPCError("BAD_REQUEST", {
+                  message: "Node cannot be its own parent",
+                });
+              }
 
-          return toNodeRecord(row);
+              const parent = await tx
+                .select({ id: nodesTable.id })
+                .from(nodesTable)
+                .where(eq(nodesTable.id, input.parentId))
+                .limit(1);
+              if (parent.length === 0) {
+                throw new ORPCError("NOT_FOUND", {
+                  message: "Parent node not found",
+                  data: { resource: "node", resourceId: input.parentId },
+                });
+              }
+
+              const descendantsResult = await tx.execute(sql`
+                WITH RECURSIVE descendants AS (
+                  SELECT id, ARRAY[id] AS path
+                  FROM nodes
+                  WHERE id = ${id}
+                  UNION ALL
+                  SELECT n.id, descendants.path || n.id
+                  FROM nodes n
+                  INNER JOIN descendants ON n.parent_id = descendants.id
+                  WHERE NOT (n.id = ANY(descendants.path))
+                )
+                SELECT id
+                FROM descendants
+                WHERE id = ${input.parentId}
+                LIMIT 1
+              `);
+              const descendants =
+                (descendantsResult as { rows?: unknown }).rows ?? descendantsResult;
+              if (Array.isArray(descendants) && descendants.length > 0) {
+                throw new ORPCError("BAD_REQUEST", {
+                  message: "Node cannot be moved below one of its descendants",
+                });
+              }
+            }
+
+            const [row] = await tx
+              .update(nodesTable)
+              .set(patch)
+              .where(eq(nodesTable.id, id))
+              .returning();
+
+            if (!row) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Node not found",
+                data: { resource: "node", resourceId: id },
+              });
+            }
+
+            return toNodeRecord(row);
+          });
         } catch (error) {
           throw toOrpcError(error);
         }
@@ -360,15 +389,18 @@ export const NodesLive = Layer.effect(
         try {
           const subtreeResult = await db.execute(sql`
             WITH RECURSIVE subtree AS (
-              SELECT id, kind, slug, name, parent_id, 0 AS depth
+              SELECT id, kind, slug, name, parent_id, 0 AS depth, ARRAY[id] AS path
               FROM nodes
               WHERE id = ${nodeId}
               UNION ALL
-              SELECT n.id, n.kind, n.slug, n.name, n.parent_id, subtree.depth + 1
+              SELECT n.id, n.kind, n.slug, n.name, n.parent_id, subtree.depth + 1,
+                subtree.path || n.id
               FROM nodes n
               INNER JOIN subtree ON n.parent_id = subtree.id
+              WHERE NOT (n.id = ANY(subtree.path))
             )
             SELECT id, kind, slug, name, parent_id FROM subtree
+            ORDER BY depth
           `);
 
           const rows = (subtreeResult as { rows?: unknown }).rows ?? subtreeResult;

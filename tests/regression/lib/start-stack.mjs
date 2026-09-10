@@ -3,64 +3,11 @@
 // from .env.test so regression runs never touch dev databases or dev ports.
 import { spawn } from "node:child_process";
 import net from "node:net";
-import { computeRegressionEnv, findRepoRoot, readDotEnv } from "./regression-env.mjs";
+import { killStalePorts } from "./kill-stale-ports.mjs";
+import { computeRegressionEnv, findRepoRoot, regressionStackOptions } from "./regression-env.mjs";
 
-const BASE_PORT = 4100;
 const PROBE_RETRIES = 6;
 const PROBE_DELAY_MS = 500;
-
-const MODES = {
-  dev: {
-    command: [
-      "packages/everything-dev/src/cli.ts",
-      "dev",
-      "--no-interactive",
-      "--ssr",
-      "--port",
-      String(BASE_PORT),
-      "--api-port",
-      String(BASE_PORT + 1),
-      "--auth-port",
-      String(BASE_PORT + 2),
-      "--ui-port",
-      String(BASE_PORT + 3),
-      "--plugin-port-start",
-      String(BASE_PORT + 10),
-    ],
-  },
-  prod: {
-    command: ["./node_modules/everything-dev/dist/cli.mjs", "start", "--no-interactive"],
-    env: { PORT: String(BASE_PORT) },
-  },
-  backcompat: {
-    command: [
-      "packages/everything-dev/src/cli.ts",
-      "dev",
-      "--no-interactive",
-      "--ssr",
-      "--host",
-      "local",
-      "--ui",
-      "remote",
-      "--api",
-      "remote",
-      "--auth",
-      "local",
-      "--remote-plugins",
-      "apps,template",
-      "--port",
-      String(BASE_PORT),
-      "--api-port",
-      String(BASE_PORT + 1),
-      "--auth-port",
-      String(BASE_PORT + 2),
-      "--ui-port",
-      String(BASE_PORT + 3),
-      "--plugin-port-start",
-      String(BASE_PORT + 10),
-    ],
-  },
-};
 
 function log(msg) {
   console.log(`[start-stack] ${msg}`);
@@ -114,12 +61,6 @@ async function waitForDatabases(dbUrls) {
 }
 
 const mode = process.argv[2] ?? "dev";
-const spec = MODES[mode];
-if (!spec) {
-  console.error(`[start-stack] unknown mode: ${mode} (expected dev | prod | backcompat)`);
-  process.exit(1);
-}
-
 const root = findRepoRoot();
 if (!root) {
   console.error("[start-stack] bos.config.json not found in any parent directory");
@@ -127,25 +68,14 @@ if (!root) {
 }
 
 const regressionEnv = computeRegressionEnv({ repoRoot: root });
+const spec = regressionStackOptions(regressionEnv, mode);
 await waitForDatabases(regressionEnv.dbUrls);
+killStalePorts(regressionEnv.stalePorts);
 
-const testEnv = readDotEnv(root, ".env.test");
-const stackEnv = {
-  ...process.env,
-  ...spec.env,
-  BOS_NO_PERSIST_PORTS: "1",
-  CORS_ORIGIN: process.env.CORS_ORIGIN ?? `http://localhost:${BASE_PORT}`,
-};
-for (const [key, value] of Object.entries(testEnv)) {
-  if (key.endsWith("_DATABASE_URL") || key === "BETTER_AUTH_SECRET") {
-    stackEnv[key] = value;
-  }
-}
-
-log(`starting ${mode} stack on port ${BASE_PORT} with test databases`);
+log(`starting ${mode} stack on port ${regressionEnv.basePort} with test databases`);
 const child = spawn(process.execPath, spec.command, {
   cwd: root,
-  env: stackEnv,
+  env: spec.env,
   stdio: "inherit",
 });
 
@@ -156,6 +86,10 @@ process.on("SIGTERM", () => forward("SIGTERM"));
 process.on("SIGINT", () => forward("SIGINT"));
 
 const exitCode = await new Promise((resolve) => {
-  child.once("exit", (code) => resolve(code ?? 0));
+  child.once("error", (error) => {
+    console.error(`[start-stack] ${error.message}`);
+    resolve(1);
+  });
+  child.once("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
 });
 process.exit(exitCode);
