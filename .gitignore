@@ -340,3 +340,4 @@ node_modules/.federation
 !plans/prototypes/**/*.css
 !plans/prototypes/**/*.gen.ts
 .bos/sync-backup/
+.scratch/
