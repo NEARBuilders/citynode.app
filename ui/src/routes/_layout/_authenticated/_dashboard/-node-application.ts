@@ -68,29 +68,6 @@ export function parseNodeProposalPayload(payload: unknown): NodeProposalPayload 
   return nodeProposalPayloadSchema.parse(payload);
 }
 
-export function readSessionNearAccountId(
-  user: unknown,
-  connectedNearAccountId: string | null = null,
-): string | null {
-  if (connectedNearAccountId) return connectedNearAccountId;
-  if (!user || typeof user !== "object" || !("accounts" in user) || !Array.isArray(user.accounts)) {
-    return null;
-  }
-  for (const account of user.accounts) {
-    if (
-      account &&
-      typeof account === "object" &&
-      "providerId" in account &&
-      account.providerId === "siwn" &&
-      "accountId" in account &&
-      typeof account.accountId === "string"
-    ) {
-      return account.accountId.split(":")[0] || null;
-    }
-  }
-  return null;
-}
-
 export function resolveActiveOrganizationLabel(
   activeOrgId: string | null,
   organizations: Array<{ id: string; name: string }>,

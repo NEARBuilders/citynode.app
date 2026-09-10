@@ -71,58 +71,6 @@ function getAuthVariables(config?: Partial<ClientRuntimeConfig>): RuntimeAuthVar
   return runtimeConfig.auth.variables;
 }
 
-function getProviderId(account: {
-  providerId?: unknown;
-  accountId?: unknown;
-  network?: unknown;
-}): string {
-  if (typeof account.providerId === "string" && account.providerId.length > 0) {
-    return account.providerId;
-  }
-
-  if (
-    typeof account.accountId === "string" &&
-    (account.network === "mainnet" || account.network === "testnet")
-  ) {
-    return "siwn";
-  }
-
-  return "unknown";
-}
-
-export function getAccountProviderId(account: {
-  providerId?: unknown;
-  accountId?: unknown;
-  network?: unknown;
-}): string {
-  return getProviderId(account);
-}
-
-export function getNearAccountId(
-  linkedAccounts: Array<{ providerId?: unknown; accountId?: unknown; network?: unknown }>,
-): string | null {
-  if (!Array.isArray(linkedAccounts)) {
-    return null;
-  }
-
-  const nearAccount = linkedAccounts.find((account) => getProviderId(account) === "siwn");
-  if (typeof nearAccount?.accountId !== "string") {
-    return null;
-  }
-
-  return nearAccount.accountId.split(":")[0] || null;
-}
-
-export function getLinkedProviders(
-  linkedAccounts: Array<{ providerId?: unknown; accountId?: unknown; network?: unknown }>,
-): string[] {
-  if (!Array.isArray(linkedAccounts)) {
-    return [];
-  }
-
-  return [...new Set(linkedAccounts.map((account) => getProviderId(account)))];
-}
-
 function getSiwnClientConfig(options: CreateAuthClientOptions): SiwnClientConfig {
   const runtimeConfig = readRuntimeConfig(options.runtimeConfig);
   const variables = getAuthVariables(options.runtimeConfig);

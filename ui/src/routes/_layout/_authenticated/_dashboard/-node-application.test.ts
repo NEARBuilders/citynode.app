@@ -8,7 +8,6 @@ import {
   nodeApplicationSchema,
   parseNodeProposalPayload,
   proposeNodeApplication,
-  readSessionNearAccountId,
   resolveActiveOrganizationLabel,
 } from "./-node-application";
 
@@ -66,24 +65,6 @@ describe("node application", () => {
 
   it("rejects malformed stored proposal payloads", () => {
     expect(() => parseNodeProposalPayload({ kind: "city", slug: "Chicago" })).toThrow();
-  });
-
-  it("reads the primary SIWN account from the session extension", () => {
-    expect(
-      readSessionNearAccountId({
-        accounts: [
-          { providerId: "email", accountId: "person@example.com" },
-          { providerId: "siwn", accountId: "applicant.near:mainnet" },
-        ],
-      }),
-    ).toBe("applicant.near");
-    expect(readSessionNearAccountId({ accounts: [] })).toBeNull();
-  });
-
-  it("uses the reactive wallet account when the session omits linked accounts", () => {
-    expect(readSessionNearAccountId({ id: "user-id" }, "itexpert120-contra.near")).toBe(
-      "itexpert120-contra.near",
-    );
   });
 
   it("shows the active organization name instead of its internal ID", () => {
