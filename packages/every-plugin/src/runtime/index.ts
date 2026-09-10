@@ -19,27 +19,35 @@ import type {
 import { PluginRuntimeError } from "./errors";
 import { PluginService } from "./services/plugin.service";
 
+const MAX_CACHE_KEY_DEPTH = 32;
+
 export class PluginRuntime<R = RegisteredPlugins> {
   readonly __registryType?: R;
 
   private pluginCache = new Map<string, Promise<InitializedPlugin<AnyPlugin>>>();
   private routerCache = new Map<string, PluginRouterType<any>>();
-  private cacheObjectIds = new WeakMap<object, number>();
-  private cacheSymbolIds = new Map<symbol, number>();
-  private nextCacheObjectId = 0;
+  private cacheLeafIds = new WeakMap<object, number>();
+  private nextCacheLeafId = 0;
 
   constructor(
     private runtime: ManagedRuntime.ManagedRuntime<PluginService, never>,
     private registry: PluginRegistry,
   ) {}
 
+  /**
+   * Cache key for plugin instances: JSON-equal configs share one plugin
+   * instance (variables and secrets originate from bos.config.json, so they
+   * are JSON values). Values outside the JSON domain follow Effect's Hash
+   * semantics — symbols key by description, functions and class instances by
+   * reference identity — and the host creates its pluginsClient map once per
+   * boot, making identity the correct equivalence for function-bearing
+   * configs.
+   */
   private generateCacheKey(pluginId: string, config: unknown): string {
-    return `${pluginId}:${this.serializeCacheValue(config)}`;
+    return `${pluginId}:${this.canonicalizeConfig(config, 0, new Set())}`;
   }
 
-  private serializeCacheValue(value: unknown, ancestors = new Set<object>()): string {
-    if (value === null) return "null";
-
+  private canonicalizeConfig(value: unknown, depth: number, ancestors: Set<object>): string {
     switch (typeof value) {
       case "undefined":
         return "undefined";
@@ -52,51 +60,49 @@ export class PluginRuntime<R = RegisteredPlugins> {
       case "boolean":
         return `boolean:${value}`;
       case "symbol":
-        return `symbol:${this.getCacheSymbolId(value)}`;
+        return `symbol:${String(value)}`;
       case "function":
-        return `function:${this.getCacheObjectId(value)}`;
+        return `ref:${this.getCacheLeafId(value)}`;
+      case "object": {
+        if (value === null) return "null";
+        if (ancestors.has(value) || depth >= MAX_CACHE_KEY_DEPTH) {
+          return `ref:${this.getCacheLeafId(value)}`;
+        }
+
+        if (Array.isArray(value)) {
+          ancestors.add(value);
+          const serialized = `[${value
+            .map((item) => this.canonicalizeConfig(item, depth + 1, ancestors))
+            .join(",")}]`;
+          ancestors.delete(value);
+          return serialized;
+        }
+
+        const prototype = Object.getPrototypeOf(value);
+        if (prototype !== Object.prototype && prototype !== null) {
+          return `ref:${this.getCacheLeafId(value)}`;
+        }
+
+        const record = value as Record<string, unknown>;
+        ancestors.add(value);
+        const serialized = `{${Object.keys(record)
+          .sort()
+          .map(
+            (key) =>
+              `${JSON.stringify(key)}:${this.canonicalizeConfig(record[key], depth + 1, ancestors)}`,
+          )
+          .join(",")}}`;
+        ancestors.delete(value);
+        return serialized;
+      }
     }
-
-    if (value instanceof Date) return `date:${value.toISOString()}`;
-    if (value instanceof RegExp) return `regexp:${value.toString()}`;
-
-    if (ancestors.has(value)) return `cycle:${this.getCacheObjectId(value)}`;
-    ancestors.add(value);
-
-    if (Array.isArray(value)) {
-      const serialized = `[${value.map((item) => this.serializeCacheValue(item, ancestors)).join(",")}]`;
-      ancestors.delete(value);
-      return serialized;
-    }
-
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
-      ancestors.delete(value);
-      return `object:${this.getCacheObjectId(value)}`;
-    }
-
-    const record = value as Record<string, unknown>;
-    const serialized = `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${this.serializeCacheValue(record[key], ancestors)}`)
-      .join(",")}}`;
-    ancestors.delete(value);
-    return serialized;
   }
 
-  private getCacheObjectId(value: object): number {
-    const existing = this.cacheObjectIds.get(value);
+  private getCacheLeafId(value: object): number {
+    const existing = this.cacheLeafIds.get(value);
     if (existing !== undefined) return existing;
-    const id = this.nextCacheObjectId++;
-    this.cacheObjectIds.set(value, id);
-    return id;
-  }
-
-  private getCacheSymbolId(value: symbol): number {
-    const existing = this.cacheSymbolIds.get(value);
-    if (existing !== undefined) return existing;
-    const id = this.nextCacheObjectId++;
-    this.cacheSymbolIds.set(value, id);
+    const id = this.nextCacheLeafId++;
+    this.cacheLeafIds.set(value, id);
     return id;
   }
 

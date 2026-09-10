@@ -499,6 +499,53 @@ describe("Scope lifecycle", () => {
     await runtime.shutdown();
   });
 
+  it("initializes once for structurally-equal configs and shares the instance", async () => {
+    let initCount = 0;
+
+    const countingPlugin = createPlugin({
+      variables: z.object({ url: z.string() }),
+      secrets: z.object({ token: z.string() }),
+      contract: testContract,
+      initialize: () =>
+        Effect.sync(() => {
+          initCount++;
+          return { ready: true };
+        }),
+      createRouter: (_deps, builder) => ({
+        ping: builder.ping.handler(async () => ({ ok: true })),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "init-count": { module: countingPlugin } },
+      secrets: {},
+    });
+
+    const first = await runtime.usePlugin("init-count", {
+      variables: { url: "https://example.test" },
+      secrets: { token: "secret" },
+    });
+
+    const second = await runtime.usePlugin("init-count", {
+      variables: { url: "https://example.test" },
+      secrets: { token: "secret" },
+    });
+
+    expect(initCount).toBe(1);
+    expect(second.initialized).toBe(first.initialized);
+    expect(second.router).toBe(first.router);
+
+    const third = await runtime.usePlugin("init-count", {
+      variables: { url: "https://other.test" },
+      secrets: { token: "secret" },
+    });
+
+    expect(initCount).toBe(2);
+    expect(third.initialized).not.toBe(first.initialized);
+
+    await runtime.shutdown();
+  });
+
   it("closes an initialized scope when router construction fails", async () => {
     let released = false;
 
