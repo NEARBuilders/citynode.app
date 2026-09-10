@@ -6,8 +6,10 @@ export const Route = createFileRoute("/_layout/_public")({
 });
 
 function PublicLayout() {
+  const { runtimeConfig } = Route.useRouteContext();
+
   return (
-    <PublicShell footer={<PublicShellFooter />}>
+    <PublicShell footer={<PublicShellFooter />} runtimeConfig={runtimeConfig}>
       <Outlet />
     </PublicShell>
   );

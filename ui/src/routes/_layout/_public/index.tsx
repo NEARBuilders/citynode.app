@@ -9,9 +9,11 @@ export const Route = createFileRoute("/_layout/_public/")({
   loader: async ({ context }) => ({
     runtimeConfig: context.runtimeConfig,
   }),
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "City Nodes | app" },
+      {
+        title: getActiveRuntime(loaderData?.runtimeConfig)?.title ?? "City Nodes | app",
+      },
       {
         name: "description",
         content:

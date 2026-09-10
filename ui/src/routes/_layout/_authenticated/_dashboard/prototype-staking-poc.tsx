@@ -1504,8 +1504,8 @@ function NodeLifecyclePocPage() {
                                       </>
                                     ) : (
                                       <span className="text-xs text-muted-foreground">
-                                        config not published yet — the open link appears once the DAO
-                                        proposal passes
+                                        config not published yet — the open link appears once the
+                                        DAO proposal passes
                                         {team ? (
                                           <>
                                             {" · "}
@@ -1846,7 +1846,7 @@ function NodeLifecyclePocPage() {
               </CardContent>
             </Card>
 
-            {tenantBinding && (
+            {application && (
               <Card>
                 <CardContent className="space-y-3 p-4">
                   <SectionHeader
@@ -1854,16 +1854,101 @@ function NodeLifecyclePocPage() {
                     sectionTestId="poc-tenant"
                     action={
                       <InfoPopover
-                        title="Tenant resolution"
-                        body="The host resolves a tenant from the request hostname. Locally the gateway id is still the production domain, so the link points at <slug>.localhost, which the host maps back to the gateway alias in development."
-                        links={tenantUrl ? [{ label: "open the tenant", href: tenantUrl }] : []}
+                        title="Tenant state"
+                        body="The DB record and binding are created by the approve station; the config goes live in FastKV when the DAO's publish proposal passes. A tenant page that renders means its config is live — a 404 means it is not. Locally the link points at <slug>.localhost, which the host maps back to the gateway alias in development."
+                        links={
+                          tenantUrl && facts.configPublished
+                            ? [{ label: "open the tenant", href: tenantUrl }]
+                            : []
+                        }
                       />
+                    }
+                  />
+                  <InfoRow
+                    label="record"
+                    value={
+                      tenantRecord ? (
+                        <span
+                          className="inline-flex flex-wrap items-center gap-2"
+                          data-testid="poc-tenant-record"
+                        >
+                          <Badge variant="success" className="text-[10px]">
+                            {tenantRecord.status}
+                          </Badge>
+                          <span className="truncate">{tenantRecord.name}</span>
+                        </span>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">
+                          not created
+                        </Badge>
+                      )
+                    }
+                  />
+                  <InfoRow
+                    label="binding"
+                    value={
+                      tenantBinding ? (
+                        <span
+                          className="inline-flex flex-wrap items-center gap-2"
+                          data-testid="poc-tenant-binding"
+                        >
+                          <span className="truncate">{tenantBinding.hostname}</span>
+                          {tenantBinding.isPrimary && (
+                            <Badge variant="outline" className="text-[10px]">
+                              primary
+                            </Badge>
+                          )}
+                          {tenantBinding.isVerified && (
+                            <Badge variant="outline" className="text-[10px]">
+                              verified
+                            </Badge>
+                          )}
+                        </span>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">
+                          not created
+                        </Badge>
+                      )
+                    }
+                    mono
+                  />
+                  <InfoRow
+                    label="config"
+                    value={
+                      <span
+                        className="inline-flex flex-wrap items-center gap-2"
+                        data-testid="poc-tenant-config"
+                      >
+                        {facts.configPublished ? (
+                          <Badge variant="success" className="text-[10px]">
+                            live
+                          </Badge>
+                        ) : publishPendingProposal ? (
+                          <Badge variant="warning" className="text-[10px]">
+                            awaiting votes #{publishPendingProposal.id}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">
+                            not published
+                          </Badge>
+                        )}
+                        {fastKvUrl && (
+                          <a
+                            href={fastKvUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground"
+                          >
+                            view on FastKV
+                          </a>
+                        )}
+                      </span>
                     }
                   />
                   <InfoRow
                     label="hostname"
                     value={
-                      tenantUrl ? (
+                      tenantUrl && facts.configPublished ? (
                         <a
                           href={tenantUrl}
                           target="_blank"
@@ -1885,7 +1970,7 @@ function NodeLifecyclePocPage() {
                     }
                     mono
                   />
-                  {tenantUrl && (
+                  {tenantUrl && facts.configPublished && (
                     <Button variant="outline" size="sm" asChild className="w-full">
                       <a href={tenantUrl} target="_blank" rel="noreferrer">
                         <ExternalLink className="h-3.5 w-3.5" />
