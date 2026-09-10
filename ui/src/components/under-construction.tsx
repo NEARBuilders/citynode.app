@@ -22,8 +22,6 @@ interface UnderConstructionProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
 }
 
-const DEFAULT_REPOSITORY = "https://github.com/nearbuilders/everything-dev";
-
 export function UnderConstruction({
   label,
   sourceFile,
@@ -35,16 +33,21 @@ export function UnderConstruction({
   pressed,
   runtimeConfig,
 }: UnderConstructionProps) {
-  const repository = getRepository(runtimeConfig) ?? DEFAULT_REPOSITORY;
-  const githubUrl = url ?? (sourceFile ? `${repository}/blob/main/${sourceFile}` : repository);
+  const resolveOutlink = () => {
+    if (url) return url;
+    const repository = getRepository(runtimeConfig);
+    if (!repository) return undefined;
+    return sourceFile ? `${repository}/blob/main/${sourceFile}` : repository;
+  };
+  const hasOutlink = Boolean(resolveOutlink());
 
   const handleClick = () => {
     onClick?.();
-    if (!skipNavigation) {
-      setTimeout(() => {
-        window.open(githubUrl, "_blank", "noopener,noreferrer");
-      }, 150);
-    }
+    const outlink = resolveOutlink();
+    if (skipNavigation || !outlink) return;
+    setTimeout(() => {
+      window.open(outlink, "_blank", "noopener,noreferrer");
+    }, 150);
   };
 
   return (
@@ -58,7 +61,7 @@ export function UnderConstruction({
               style={{ cursor: "pointer" }}
               onClick={handleClick}
               aria-label={
-                skipNavigation
+                skipNavigation || !hasOutlink
                   ? label
                     ? `${label} under construction`
                     : "under construction"
@@ -105,7 +108,7 @@ export function UnderConstruction({
             </button>
           </div>
         </TooltipTrigger>
-        {!skipNavigation && (
+        {!skipNavigation && hasOutlink && (
           <ClassicTooltipContent side="top">
             <span className="flex items-center gap-1.5">
               {tooltip ?? "see code and contribute"}

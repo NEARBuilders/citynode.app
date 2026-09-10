@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { getActiveRuntime } from "@/app";
 import { Badge, Card, NodeValidatorTable, SectionHeader } from "@/components";
+import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,
@@ -43,7 +44,7 @@ function NodeOverview() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {summary.children.map((child) => {
-              const childUrl = gateway ? `https://${child.slug}.${gateway}` : null;
+              const childUrl = gateway ? buildTenantUrl(child.slug, gateway) : null;
               return (
                 <Card key={child.id} className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-3">

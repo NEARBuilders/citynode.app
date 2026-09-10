@@ -37,7 +37,7 @@ function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
 
   if (!user) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
         <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
         <NetworkToggle />
         {showConnect && (
@@ -50,7 +50,7 @@ function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
       <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
       {organizations.length > 0 && (
         <OrgSwitcher organizations={organizations} activeOrgId={activeOrgId} />

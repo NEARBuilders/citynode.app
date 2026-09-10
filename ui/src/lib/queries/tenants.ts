@@ -11,6 +11,7 @@ export const tenantQueryKeys = {
   details: () => [...tenantQueryKeys.all, "detail"] as const,
   byKey: (tenantKey: string, gatewayId: string) =>
     [...tenantQueryKeys.details(), "key", tenantKey, gatewayId] as const,
+  byOrg: (orgId: string) => [...tenantQueryKeys.details(), "org", orgId] as const,
   bindings: (tenantId: string) =>
     [...tenantQueryKeys.details(), "id", tenantId, "bindings"] as const,
   preflight: (hostname: string) => [...tenantQueryKeys.all, "binding-preflight", hostname] as const,
@@ -72,6 +73,20 @@ export function tenantOrganizationIdsQueryOptions(
       return new Set(organizationIds.filter((_, index) => results[index]?.status === "fulfilled"));
     },
     staleTime: 60 * 1000,
+  });
+}
+
+export function tenantByOrgQueryOptions(apiClient: ApiClient, orgId: string) {
+  return queryOptions({
+    queryKey: tenantQueryKeys.byOrg(orgId),
+    queryFn: async () => {
+      try {
+        return await apiClient.resolveTenantByOrgId({ orgId });
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!orgId,
   });
 }
 

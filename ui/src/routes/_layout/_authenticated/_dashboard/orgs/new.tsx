@@ -1,10 +1,10 @@
-import { useForm } from "@tanstack/react-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm, useSelector } from "@tanstack/react-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Users } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useAuthClient } from "@/app";
+import { useApiClient, useAuthClient } from "@/app";
 import {
   Button,
   Card,
@@ -17,7 +17,7 @@ import {
   PageContainer,
   PageHeader,
 } from "@/components";
-import { deriveSlug } from "@/lib/slug";
+import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/new")({
   head: () => ({
@@ -30,6 +30,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/ne
 function NewOrganization() {
   const router = useRouter();
   const auth = useAuthClient();
+  const apiClient = useApiClient();
   const queryClient = useQueryClient();
   const slugManuallyEdited = useRef(false);
 
@@ -67,6 +68,34 @@ function NewOrganization() {
       await createMutation.mutateAsync(value);
     },
   });
+  const formValues = useSelector(form.store, (state) => state.values);
+  const slugValue = formValues.slug;
+
+  const { data: slugCheck, isFetching: slugChecking } = useQuery({
+    queryKey: ["org-slug-check", slugValue],
+    queryFn: () => apiClient.auth.checkSlug({ slug: slugValue }),
+    enabled: /^[a-z0-9-]+$/.test(slugValue),
+    staleTime: 5_000,
+  });
+  const slugTaken = slugValue && slugCheck ? !slugCheck.status : false;
+
+  useEffect(() => {
+    if (!slugTaken || slugManuallyEdited.current) return;
+    const base = generateSlug(formValues.name);
+    if (!base || base === slugValue) return;
+    let cancelled = false;
+    void suggestAvailableSlug(base, async (candidate) => {
+      const result = await apiClient.auth.checkSlug({ slug: candidate });
+      return !result.status;
+    }).then((suggestion) => {
+      if (!cancelled && suggestion && suggestion !== slugValue) {
+        form.setFieldValue("slug", suggestion, { dontUpdateMeta: true });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slugTaken, formValues.name, slugValue, form, apiClient]);
 
   return (
     <PageContainer variant="wide">
@@ -163,7 +192,13 @@ function NewOrganization() {
                         aria-invalid={errors.length > 0 || undefined}
                       />
                       <FieldDescription>
-                        Only lowercase letters, numbers, and hyphens.
+                        {slugChecking
+                          ? "checking availability…"
+                          : slugTaken
+                            ? "taken — pick another or let us suggest one"
+                            : slugValue
+                              ? "available"
+                              : "Only lowercase letters, numbers, and hyphens."}
                       </FieldDescription>
                       {errors.length > 0 ? <FieldError>{errors.join(", ")}</FieldError> : null}
                     </Field>

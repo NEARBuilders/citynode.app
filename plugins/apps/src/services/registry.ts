@@ -837,7 +837,11 @@ function readString(value: unknown) {
 }
 
 function buildOpenUrl(domain: string | null) {
-  return domain ? `https://${domain}` : null;
+  if (!domain) return null;
+  if (domain.endsWith(".localhost") || domain === "localhost" || domain === "127.0.0.1") {
+    return null;
+  }
+  return `https://${domain}`;
 }
 
 function sanitizeNullable(value: string | undefined) {

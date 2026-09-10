@@ -8,7 +8,7 @@ import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
-import { isExplicitDaoMember, verifyDaoMembership } from "./services/dao";
+import { verifyDaoMembership } from "./services/dao";
 import { NodesLive, NodesTag } from "./services/nodes";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
@@ -119,7 +119,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
   shutdown: () => Effect.log("[API] Shutdown"),
 
   createRouter: (services, builder) => {
-    const { templateClient, platformAccount } = services;
+    const { templateClient } = services;
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware(builder);
 
@@ -223,12 +223,6 @@ export default createPlugin.withPlugins<PluginsClient>()({
                 daoAccountId: input.accountId,
                 primaryAccountId: context.near?.primaryAccountId ?? null,
               },
-            });
-          }
-          if (platformAccount && !isExplicitDaoMember(result.policy, platformAccount)) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "Platform audit account is not a member of this DAO",
-              data: { daoAccountId: input.accountId, platformAccount },
             });
           }
           return await services.tenants.createTenant({
@@ -389,17 +383,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
         });
         if (!result.isMember) {
           throw new ORPCError("FORBIDDEN", {
-            message: "The applicant's connected NEAR account is not a member of this DAO",
+            message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
             data: {
               daoAccountId: input.accountId,
               submitterAccountId: input.submitterAccountId,
             },
-          });
-        }
-        if (platformAccount && !isExplicitDaoMember(result.policy, platformAccount)) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Platform audit account is not a member of this DAO",
-            data: { daoAccountId: input.accountId, platformAccount },
           });
         }
         return services.tenants.applyNodeProposal({

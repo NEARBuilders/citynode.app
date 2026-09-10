@@ -73,4 +73,52 @@ describe("buildTenantPublishConfig", () => {
       }).status,
     ).toBe("suspended");
   });
+
+  it("keeps optional keys absent until they are provided", () => {
+    const config = buildTenantPublishConfig({
+      daoAccountId: "x.near",
+      gatewayId: "citynode.app",
+      baseAccount: "v1.citynode.near",
+      hostname: "x.citynode.app",
+      title: "X",
+    });
+    expect("repository" in config).toBe(false);
+    expect("app" in config).toBe(false);
+  });
+
+  it("threads description, repository and the UI override through when present", () => {
+    const config = buildTenantPublishConfig({
+      daoAccountId: "x.near",
+      gatewayId: "citynode.app",
+      baseAccount: "v1.citynode.near",
+      hostname: "x.citynode.app",
+      title: "X",
+      description: "The X node",
+      repository: "https://github.com/x/x",
+      app: {
+        ui: {
+          production: "https://cdn.example.com/ui.js",
+          integrity: "sha384-abc",
+          ssr: "https://cdn.example.com/ssr.js",
+          ssrIntegrity: "sha384-def",
+        },
+      },
+    });
+    expect(config).toEqual({
+      extends: "bos://v1.citynode.near/citynode.app",
+      account: "x.near",
+      domain: "x.citynode.app",
+      title: "X",
+      description: "The X node",
+      repository: "https://github.com/x/x",
+      app: {
+        ui: {
+          production: "https://cdn.example.com/ui.js",
+          integrity: "sha384-abc",
+          ssr: "https://cdn.example.com/ssr.js",
+          ssrIntegrity: "sha384-def",
+        },
+      },
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
+import { seedMemberFixtures } from "../../lib/member-seed.ts";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 
 const ADMIN_COOKIES_PATH = ".bos/regression/admin-cookies.json";
@@ -63,4 +64,7 @@ export default async function globalSetup() {
     JSON.stringify({ adminName: ADMIN_NAME, logoutName: LOGOUT_NAME, orgAName, orgBName }, null, 2),
   );
   console.log(`[global-setup] wrote ${seedResolved}`);
+
+  await seedMemberFixtures({ authDatabaseUrl, secret });
+  console.log(`[global-setup] refreshed member fixtures`);
 }

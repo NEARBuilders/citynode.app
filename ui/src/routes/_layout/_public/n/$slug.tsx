@@ -12,6 +12,7 @@ import {
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
+import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_layout/_public/n/$slug")({
   validateSearch: z.object({ parentId: z.uuid().optional() }),
