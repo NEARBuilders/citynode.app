@@ -1,10 +1,11 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
+import { invalidateThingAfterProposal } from "./-thing-cache";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/things/new")({
   head: () => ({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/things/
 
 function CreateThingPage() {
   const apiClient = useApiClient();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [thingId, setThingId] = useState("");
   const [payloadRaw, setPayloadRaw] = useState('{\n  "kind": "demo",\n  "value": "hello"\n}');
@@ -38,10 +40,15 @@ function CreateThingPage() {
         source: "things/new",
       });
     },
-    onSuccess: ({ data: proposal }) => {
+    onSuccess: async ({ data: proposal }) => {
       toast.success("Proposal submitted", {
         description: "Your thing is pending admin review.",
       });
+      try {
+        await invalidateThingAfterProposal(queryClient, proposal.entityId);
+      } catch {
+        toast.warning("Proposal submitted, but its review status could not refresh.");
+      }
       void navigate({
         to: "/things/$thingId",
         params: { thingId: proposal.entityId },
