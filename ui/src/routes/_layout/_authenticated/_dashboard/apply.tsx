@@ -1,58 +1,30 @@
-import { useForm, useSelector } from "@tanstack/react-form";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Send } from "lucide-react";
+import { useSelector } from "@tanstack/react-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getActiveRuntime, type Organization, useApiClient, useAuthClient } from "@/app";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  Input,
-  PageContainer,
-  PageHeader,
-  Textarea,
-} from "@/components";
-import { ConnectDao } from "@/components/connect-dao";
+import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
+import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
-import { deriveSlug } from "@/lib/slug";
 import { useNearAccount } from "@/lib/use-near-account";
+import { ApplyApplicantFields } from "./-apply-applicant-fields";
+import { useApplicationForm } from "./-apply-form";
 import { loadNodeApplicationParents } from "./-apply-loader";
+import { ApplyNodeFields } from "./-apply-node-fields";
+import { ApplyPrerequisites } from "./-apply-prerequisites";
+import { ApplySubmit } from "./-apply-submit";
+import { ApplySubmitted } from "./-apply-submitted";
 import {
   canSubmitNodeApplication,
   getDefaultOrganizationId,
   type NodeApplicationValues,
-  nodeApplicationKinds,
-  nodeApplicationSchema,
   proposeNodeApplication,
   resolveActiveOrganizationLabel,
 } from "./-node-application";
-
-const DIRECT_COUNTRY_PARENT = "__direct-country__";
-
-const defaultValues: NodeApplicationValues = {
-  kind: "country",
-  parentId: null,
-  name: "",
-  slug: "",
-  motivation: "",
-};
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/apply")({
   loader: ({ context }) =>
@@ -69,6 +41,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/apply")
 function ApplyPage() {
   const apiClient = useApiClient();
   const authClient = useAuthClient();
+  const queryClient = useQueryClient();
   const initialRootNodes = Route.useLoaderData();
   const { auth, runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
@@ -85,11 +58,33 @@ function ApplyPage() {
     [],
   );
 
-  const form = useForm({
-    defaultValues,
-    validators: { onChange: nodeApplicationSchema, onSubmit: nodeApplicationSchema },
-    onSubmit: async ({ value }) => submitMutation.mutateAsync(value),
+  const submitMutation = useMutation({
+    mutationFn: async (values: NodeApplicationValues) => {
+      if (!activeOrgId) throw new Error("Select an active organization first");
+      if (!nearAccountId) throw new Error("Connect a NEAR account first");
+      if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
+        throw new Error("Connect and verify the tenant DAO first");
+      }
+      return proposeNodeApplication(apiClient, values, {
+        orgId: activeOrgId,
+        daoAccountId: daoConnection.daoAccountId,
+        submitterAccountId: nearAccountId,
+      });
+    },
+    onSuccess: async ({ data: proposal }) => {
+      setSubmittedProposalId(proposal.id);
+      toast.success("Node application submitted", {
+        description: "A platform administrator can now review it.",
+      });
+      try {
+        await invalidateProposalQueries(queryClient);
+      } catch {
+        toast.warning("Application submitted, but the review list could not refresh.");
+      }
+    },
+    onError: (error: Error) => toast.error(error.message || "Failed to submit application"),
   });
+  const form = useApplicationForm((values) => submitMutation.mutateAsync(values));
   const formValues = useSelector(form.store, (state) => state.values);
   const hostname = formValues.slug ? `${formValues.slug}.${gatewayId}` : "";
 
@@ -105,7 +100,8 @@ function ApplyPage() {
   });
   const defaultOrgId = getDefaultOrganizationId(activeOrgId, organizations);
   const switchOrganization = useSwitchOrganization();
-  const displayedOrgId = activeOrgId ?? (switchOrganization.isError ? null : defaultOrgId);
+  const displayedOrgId =
+    activeOrgId ?? (switchOrganization.isError ? null : (defaultOrgId ?? null));
   const activeOrganizationLabel = resolveActiveOrganizationLabel(displayedOrgId, organizations);
 
   useEffect(() => {
@@ -118,6 +114,7 @@ function ApplyPage() {
       setVerifiedDaoAccountId(null);
     }
   }, [daoConnection.daoAccountId, verifiedDaoAccountId]);
+
   const { data: stateNodes = [], isLoading: statesLoading } = useQuery({
     ...childNodesQueryOptions(apiClient, rootParentId),
     enabled: formValues.kind === "city" && !!rootParentId,
@@ -125,28 +122,6 @@ function ApplyPage() {
   const { data: preflight, isFetching: preflightLoading } = useQuery({
     ...bindingPreflightQueryOptions(apiClient, hostname),
     enabled: !!hostname,
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: async (values: NodeApplicationValues) => {
-      if (!activeOrgId) throw new Error("Select an active organization first");
-      if (!nearAccountId) throw new Error("Connect a NEAR account first");
-      if (!daoConnection.daoAccountId || verifiedDaoAccountId !== daoConnection.daoAccountId) {
-        throw new Error("Connect and verify the tenant DAO first");
-      }
-      return proposeNodeApplication(apiClient, values, {
-        orgId: activeOrgId,
-        daoAccountId: daoConnection.daoAccountId,
-        submitterAccountId: nearAccountId,
-      });
-    },
-    onSuccess: ({ data: proposal }) => {
-      setSubmittedProposalId(proposal.id);
-      toast.success("Node application submitted", {
-        description: "A platform administrator can now review it.",
-      });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to submit application"),
   });
 
   const canSubmit = canSubmitNodeApplication({
@@ -160,27 +135,7 @@ function ApplyPage() {
     submitting: submitMutation.isPending,
   });
 
-  if (submittedProposalId) {
-    return (
-      <PageContainer variant="wide">
-        <Card>
-          <CardContent className="space-y-4 p-8 text-center">
-            <CheckCircle2 className="mx-auto size-10 text-primary" />
-            <div className="space-y-1">
-              <h1 className="text-xl font-semibold text-foreground">Application submitted</h1>
-              <p className="text-sm text-muted-foreground">
-                Your proposal is awaiting platform administrator review.
-              </p>
-            </div>
-            <p className="font-mono text-xs text-muted-foreground">{submittedProposalId}</p>
-            <Button asChild variant="outline">
-              <Link to="/dashboard">back to dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </PageContainer>
-    );
-  }
+  if (submittedProposalId) return <ApplySubmitted proposalId={submittedProposalId} />;
 
   return (
     <PageContainer variant="wide">
@@ -189,38 +144,11 @@ function ApplyPage() {
           title="Apply to run a City Node"
           description="Propose a country, state, or city node for platform administrator review."
         />
-
-        {!displayedOrgId && (
-          <Card>
-            <CardContent className="space-y-3 p-6">
-              <h2 className="font-semibold text-foreground">Select an organization</h2>
-              <p className="text-sm text-muted-foreground">
-                Node applications must be associated with an active organization.
-              </p>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/orgs">manage organizations</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {!nearAccountId && (
-          <Card>
-            <CardContent className="space-y-3 p-6">
-              <h2 className="font-semibold text-foreground">Connect a NEAR account</h2>
-              <p className="text-sm text-muted-foreground">
-                The connected SIWN account identifies the applicant. The tenant itself is owned by
-                the DAO connected through Trezu.
-              </p>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/settings/auth-methods">manage sign-in methods</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        <ConnectDao onVerified={handleDaoVerified} />
-
+        <ApplyPrerequisites
+          displayedOrgId={displayedOrgId}
+          nearAccountId={nearAccountId}
+          onDaoVerified={handleDaoVerified}
+        />
         <form
           className="space-y-6"
           onSubmit={(event) => {
@@ -228,236 +156,33 @@ function ApplyPage() {
             void form.handleSubmit();
           }}
         >
-          <Card>
-            <CardContent className="space-y-5 p-6">
-              <div className="space-y-1">
-                <h2 className="font-semibold text-foreground">Node details</h2>
-                <p className="text-sm text-muted-foreground">
-                  Choose where this node belongs and describe the location it represents.
-                </p>
-              </div>
-
-              <form.Field name="kind">
-                {(field) => (
-                  <Field>
-                    <FieldLabel>kind</FieldLabel>
-                    <div className="flex flex-wrap gap-2">
-                      {nodeApplicationKinds.map((kind) => (
-                        <Button
-                          key={kind}
-                          type="button"
-                          size="sm"
-                          variant={field.state.value === kind ? "default" : "outline"}
-                          onClick={() => {
-                            field.handleChange(kind);
-                            const parentId = kind === "country" ? null : rootParentId || null;
-                            form.setFieldValue("parentId", parentId, { dontUpdateMeta: true });
-                          }}
-                        >
-                          {kind}
-                        </Button>
-                      ))}
-                    </div>
-                  </Field>
-                )}
-              </form.Field>
-
-              {formValues.kind !== "country" && (
-                <form.Field name="parentId">
-                  {(field) => {
-                    const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-                    return (
-                      <div className="space-y-4">
-                        <Field data-invalid={errors.length > 0 || undefined}>
-                          <FieldLabel htmlFor="application-country">parent country</FieldLabel>
-                          <Select
-                            value={rootParentId}
-                            onValueChange={(countryId) => {
-                              setRootParentId(countryId);
-                              field.handleChange(countryId);
-                            }}
-                          >
-                            <SelectTrigger id="application-country" className="w-full">
-                              <SelectValue placeholder="Select a country" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {rootNodes.map((node) => (
-                                <SelectItem key={node.id} value={node.id}>
-                                  {node.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FieldError errors={errors} />
-                        </Field>
-
-                        {formValues.kind === "city" && rootParentId && (
-                          <Field>
-                            <FieldLabel htmlFor="application-state">parent state</FieldLabel>
-                            <Select
-                              value={
-                                field.state.value === rootParentId
-                                  ? DIRECT_COUNTRY_PARENT
-                                  : (field.state.value ?? DIRECT_COUNTRY_PARENT)
-                              }
-                              onValueChange={(value) =>
-                                field.handleChange(
-                                  value === DIRECT_COUNTRY_PARENT ? rootParentId : value,
-                                )
-                              }
-                            >
-                              <SelectTrigger id="application-state" className="w-full">
-                                <SelectValue
-                                  placeholder={statesLoading ? "Loading states…" : "Select a state"}
-                                />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={DIRECT_COUNTRY_PARENT}>
-                                  Directly under country
-                                </SelectItem>
-                                {stateNodes
-                                  .filter((node) => node.kind === "state")
-                                  .map((node) => (
-                                    <SelectItem key={node.id} value={node.id}>
-                                      {node.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                        )}
-                      </div>
-                    );
-                  }}
-                </form.Field>
-              )}
-
-              <form.Field name="name">
-                {(field) => {
-                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-                  return (
-                    <Field data-invalid={errors.length > 0 || undefined}>
-                      <FieldLabel htmlFor="application-name">name</FieldLabel>
-                      <Input
-                        id="application-name"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => {
-                          const nextName = event.target.value;
-                          field.handleChange(nextName);
-                          form.setFieldValue(
-                            "slug",
-                            deriveSlug(
-                              nextName,
-                              form.getFieldValue("slug"),
-                              slugManuallyEdited.current,
-                            ),
-                            { dontUpdateMeta: true },
-                          );
-                        }}
-                        placeholder="Chicago"
-                        aria-invalid={errors.length > 0 || undefined}
-                      />
-                      <FieldError errors={errors} />
-                    </Field>
-                  );
-                }}
-              </form.Field>
-
-              <form.Field name="slug">
-                {(field) => {
-                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-                  return (
-                    <Field data-invalid={errors.length > 0 || undefined}>
-                      <FieldLabel htmlFor="application-slug">slug</FieldLabel>
-                      <Input
-                        id="application-slug"
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => {
-                          slugManuallyEdited.current = true;
-                          field.setMeta((meta) => ({ ...meta, isTouched: true }));
-                          field.handleChange(event.target.value.replace(/[^a-z0-9-]/g, ""));
-                        }}
-                        placeholder="chicago"
-                        pattern="[a-z0-9-]+"
-                        aria-invalid={errors.length > 0 || undefined}
-                      />
-                      <FieldDescription>
-                        {hostname || `your-node.${gatewayId}`}
-                        {preflightLoading
-                          ? " — checking availability…"
-                          : preflight
-                            ? preflight.hostname.available
-                              ? " — available"
-                              : " — unavailable"
-                            : ""}
-                      </FieldDescription>
-                      <FieldError errors={errors} />
-                    </Field>
-                  );
-                }}
-              </form.Field>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="space-y-5 p-6">
-              <h2 className="font-semibold text-foreground">Applicant</h2>
-              <Field>
-                <FieldLabel htmlFor="application-org">active organization</FieldLabel>
-                <Input id="application-org" value={activeOrganizationLabel} readOnly />
-                {!activeOrgId && defaultOrgId && (
-                  <FieldDescription>Activating this organization…</FieldDescription>
-                )}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="application-account">NEAR account</FieldLabel>
-                <Input id="application-account" value={nearAccountId ?? ""} readOnly />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="application-dao-account">tenant DAO account</FieldLabel>
-                <Input
-                  id="application-dao-account"
-                  value={daoConnection.daoAccountId ?? ""}
-                  readOnly
-                />
-              </Field>
-              <form.Field name="motivation">
-                {(field) => {
-                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-                  return (
-                    <Field data-invalid={errors.length > 0 || undefined}>
-                      <FieldLabel htmlFor="application-motivation">motivation</FieldLabel>
-                      <Textarea
-                        id="application-motivation"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
-                        rows={6}
-                        placeholder="Why do you want to operate this node, and how will it serve the local community?"
-                        aria-invalid={errors.length > 0 || undefined}
-                      />
-                      <FieldError errors={errors} />
-                    </Field>
-                  );
-                }}
-              </form.Field>
-            </CardContent>
-          </Card>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={!canSubmit}>
-              <Send />
-              {submitMutation.isPending ? "submitting…" : "submit for review"}
-            </Button>
-            {hostname && preflight && (
-              <Badge variant={preflight.hostname.available ? "secondary" : "destructive"}>
-                {preflight.hostname.available ? "hostname available" : "hostname unavailable"}
-              </Badge>
-            )}
-          </div>
+          <ApplyNodeFields
+            form={form}
+            formValues={formValues}
+            gatewayId={gatewayId}
+            hostname={hostname}
+            preflight={preflight}
+            preflightLoading={preflightLoading}
+            rootNodes={rootNodes}
+            rootParentId={rootParentId}
+            setRootParentId={setRootParentId}
+            slugManuallyEdited={slugManuallyEdited}
+            stateNodes={stateNodes}
+            statesLoading={statesLoading}
+          />
+          <ApplyApplicantFields
+            activeOrganizationLabel={activeOrganizationLabel}
+            activatingOrganization={!activeOrgId && !!defaultOrgId}
+            daoAccountId={daoConnection.daoAccountId}
+            form={form}
+            nearAccountId={nearAccountId}
+          />
+          <ApplySubmit
+            canSubmit={canSubmit}
+            hostname={hostname}
+            hostnameAvailable={preflight?.hostname.available}
+            isSubmitting={submitMutation.isPending}
+          />
         </form>
       </div>
     </PageContainer>
