@@ -146,7 +146,7 @@ export function topologicalSort(nodes: Map<string, RuntimeDependencyNode>): stri
   }
 
   for (const [key, node] of nodes) {
-    for (const dep of node.dependsOn ?? []) {
+    for (const dep of new Set(node.dependsOn ?? [])) {
       if (nodes.has(dep)) {
         adjacency.get(dep)!.add(key);
         inDegree.set(key, (inDegree.get(key) ?? 0) + 1);
@@ -224,7 +224,7 @@ export function getDependenciesForNode(
       .filter(Boolean) as RuntimeDependencyNode[];
   }
 
-  const explicitDeps = (node.dependsOn ?? [])
+  const explicitDeps = [...new Set(node.dependsOn ?? [])]
     .map((k) => allNodes.get(k))
     .filter(Boolean) as RuntimeDependencyNode[];
 

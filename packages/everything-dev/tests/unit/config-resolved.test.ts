@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  clearConfigCache,
+  findConfigPath,
   getResolvedConfigPath,
   loadGeneratedResolvedConfig,
   loadLocalConfig,
@@ -11,6 +13,32 @@ import {
   resolveBosConfigPath,
   writeResolvedConfig,
 } from "../../src/config";
+
+describe("findConfigPath cache", () => {
+  afterEach(() => {
+    clearConfigCache();
+  });
+
+  it("normalizes a relative working directory before walking parents", () => {
+    expect(findConfigPath(".")).toBe(findConfigPath(process.cwd()));
+  });
+
+  it("clears cached misses when the config file is created", () => {
+    const testDir = mkdtempSync(join(tmpdir(), "bos-config-path-cache-"));
+
+    try {
+      expect(findConfigPath(testDir)).toBeNull();
+      writeFileSync(join(testDir, "bos.config.json"), "{}");
+      expect(findConfigPath(testDir)).toBeNull();
+
+      clearConfigCache();
+
+      expect(findConfigPath(testDir)).toBe(join(testDir, "bos.config.json"));
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("writeResolvedConfig / loadResolvedConfig", () => {
   let testDir: string;
