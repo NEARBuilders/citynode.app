@@ -1,23 +1,17 @@
-import type { ApiClient } from "@/app";
-import { buildTenantPublishConfig, type SignAsDaoSpec, signAsDaoTransaction } from "./dao-connect";
+import type { TransactionBuilder } from "near-kit";
+import type { ApiClient, useAuthClient } from "@/app";
+import {
+  buildTenantPublishConfig,
+  type SignAsDaoSpec,
+  signAsDaoTransaction,
+  type TenantPublishConfigInput,
+  type TenantUiOverride,
+} from "./dao-connect";
 
-export interface DaoTenantPublishInput {
-  daoAccountId: string;
-  gatewayId: string;
-  baseAccount: string;
-  hostname: string;
-  title: string;
-  status?: "active" | "suspended" | "pending_deletion";
-}
+const CONFIG_GAS = "300000000000000";
 
-export interface TenantConfigWriteInput {
-  accountId: string;
-  gatewayId: string;
-  baseAccount: string;
-  hostname: string;
-  title: string;
-  status?: "active" | "suspended" | "pending_deletion";
-}
+export type DaoTenantPublishInput = TenantPublishConfigInput;
+export type TenantConfigWriteInput = TenantPublishConfigInput;
 
 export type DaoTransactionSigner = (daoAccountId: string, spec: SignAsDaoSpec) => Promise<unknown>;
 
@@ -25,16 +19,9 @@ export async function prepareTenantConfigWrite(
   apiClient: ApiClient,
   input: TenantConfigWriteInput,
 ) {
-  const config = buildTenantPublishConfig({
-    daoAccountId: input.accountId,
-    gatewayId: input.gatewayId,
-    baseAccount: input.baseAccount,
-    hostname: input.hostname,
-    title: input.title,
-    ...(input.status ? { status: input.status } : {}),
-  });
+  const config = buildTenantPublishConfig(input);
   return apiClient.apps.prepareRegistryConfigWrite({
-    accountId: input.accountId,
+    accountId: input.daoAccountId,
     gatewayId: input.gatewayId,
     config: config as unknown as Record<string, unknown>,
   });
@@ -45,14 +32,7 @@ export async function publishDaoTenantConfig(
   input: DaoTenantPublishInput,
   signTransaction: DaoTransactionSigner = signAsDaoTransaction,
 ) {
-  const prepared = await prepareTenantConfigWrite(apiClient, {
-    accountId: input.daoAccountId,
-    gatewayId: input.gatewayId,
-    baseAccount: input.baseAccount,
-    hostname: input.hostname,
-    title: input.title,
-    ...(input.status ? { status: input.status } : {}),
-  });
+  const prepared = await prepareTenantConfigWrite(apiClient, input);
 
   return signTransaction(input.daoAccountId, {
     receiverId: prepared.data.contractId,
@@ -61,4 +41,96 @@ export async function publishDaoTenantConfig(
     gas: prepared.data.gas,
     attachedDeposit: prepared.data.attachedDeposit,
   });
+}
+
+export type TenantConfigPublishMode = "platform" | "dao";
+
+export interface TenantConfigPublishInput {
+  accountId: string;
+  gatewayId: string;
+  baseAccount: string;
+  hostname: string | null;
+  title: string;
+  description?: string;
+  repository?: string;
+  app?: { ui: TenantUiOverride };
+  status?: "active" | "suspended" | "pending_deletion";
+  mode: TenantConfigPublishMode;
+}
+
+type AuthClientShape = Pick<ReturnType<typeof useAuthClient>, "near">;
+
+/**
+ * Publishes a tenant config through the signer its ownership requires: DAO
+ * owners propose the write as a sputnik proposal via Trezu, platform owners
+ * sign it through the relayer (or the session wallet as a fallback).
+ */
+export async function publishTenantConfigForMode(
+  apiClient: ApiClient,
+  auth: AuthClientShape,
+  input: TenantConfigPublishInput,
+  signTransaction: DaoTransactionSigner = signAsDaoTransaction,
+) {
+  if (!input.hostname) {
+    throw new Error("No primary domain binding configured for this tenant");
+  }
+
+  const passthrough = {
+    gatewayId: input.gatewayId,
+    baseAccount: input.baseAccount,
+    hostname: input.hostname,
+    title: input.title,
+    ...(input.description ? { description: input.description } : {}),
+    ...(input.repository ? { repository: input.repository } : {}),
+    ...(input.app ? { app: input.app } : {}),
+    ...(input.status ? { status: input.status } : {}),
+  };
+
+  if (input.mode === "dao") {
+    return publishDaoTenantConfig(
+      apiClient,
+      {
+        daoAccountId: input.accountId,
+        ...passthrough,
+      },
+      signTransaction,
+    );
+  }
+
+  const prepared = await prepareTenantConfigWrite(apiClient, {
+    daoAccountId: input.accountId,
+    ...passthrough,
+  });
+
+  const relayerInfo = await auth.near.getRelayerInfo();
+  const hasRelayer = relayerInfo.data?.enabled === true;
+
+  if (hasRelayer) {
+    const signed = await auth.near.buildSignedDelegateAction(
+      prepared.data.contractId,
+      (builder: TransactionBuilder, receiverId: string) =>
+        builder.functionCall(receiverId, prepared.data.methodName, prepared.data.args, {
+          gas: CONFIG_GAS,
+          attachedDeposit: 0n,
+        }),
+    );
+
+    const relayed = await auth.near.relayTransaction({ payload: signed });
+    if (relayed.error) throw new Error(relayed.error.message);
+    return relayed;
+  }
+
+  const signerAccountId = auth.near.getAccountId();
+  if (!signerAccountId) {
+    throw new Error("Connect a NEAR wallet first");
+  }
+
+  return auth.near
+    .getNearClient()
+    .transaction(signerAccountId)
+    .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
+      gas: CONFIG_GAS,
+      attachedDeposit: 0n,
+    })
+    .send({ waitUntil: "EXECUTED" });
 }

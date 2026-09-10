@@ -30,11 +30,13 @@ export type StationId =
   | "publish"
   | "endow"
   | "stake"
+  | "stake-team"
   | "register-team"
   | "delegate"
   | "vote"
   | "unstake"
-  | "undelegate";
+  | "undelegate"
+  | "unstake-team";
 
 export type StepStatus = "pending" | "staged" | "done" | "skipped";
 
@@ -63,7 +65,7 @@ export const PHASES: readonly PhaseDef[] = [
   {
     id: "fund",
     title: "Fund it",
-    blurb: "the sponsor endowment locks NEAR and stakes the node's pool",
+    blurb: "the endowment locks NEAR and stakes the pool, the team stakes its own NEAR",
   },
   {
     id: "vote",
@@ -74,7 +76,7 @@ export const PHASES: readonly PhaseDef[] = [
     id: "refresh",
     title: "Refresh",
     blurb:
-      "the endowment unstakes the pool and takes its voting power back, so the cycle can run again",
+      "the endowment unstakes the pool and takes its voting power back, the team unstakes its own stake, so the cycle can run again",
   },
 ];
 
@@ -264,8 +266,31 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       ],
     },
     {
-      id: "register-team",
+      id: "stake-team",
       index: 6,
+      phase: "fund",
+      title: "Stake the team's NEAR",
+      signer: "team",
+      purpose:
+        "The team stakes its own NEAR directly into the node's pool — its own skin in the game, earning rewards and backing the node's validator.",
+      steps: [
+        {
+          id: "stake-team",
+          label: "stake from the team treasury",
+          plan: {
+            kind: "call",
+            receiverId: pool,
+            methodName: "deposit_and_stake",
+            args: {},
+            gas: "200 Tgas",
+            attachedDeposit: stakeYocto ? stakeYocto.toString() : "0",
+          },
+        },
+      ],
+    },
+    {
+      id: "register-team",
+      index: 7,
       phase: "vote",
       title: "Register the team in veNEAR",
       signer: "team",
@@ -288,9 +313,9 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "delegate",
-      index: 7,
+      index: 8,
       phase: "vote",
-      title: "Hand voting power to the team",
+      title: "Assign delegation",
       signer: "endowment",
       purpose:
         "The endowment delegates its veNEAR voting power to the team wallet, replacing its whole delegation set. Skipped when both are one account.",
@@ -314,7 +339,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "vote",
-      index: 8,
+      index: 9,
       phase: "vote",
       title: "Vote in House of Stake",
       signer: "team",
@@ -329,7 +354,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "unstake",
-      index: 9,
+      index: 10,
       phase: "refresh",
       title: "Unstake the pool",
       signer: "endowment",
@@ -376,7 +401,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "undelegate",
-      index: 10,
+      index: 11,
       phase: "refresh",
       title: "Take the vote back",
       signer: "endowment",
@@ -393,6 +418,41 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             args: { entries: [] },
             gas: "100 Tgas",
             attachedDeposit: DELEGATE_DEPOSIT,
+          },
+        },
+      ],
+    },
+    {
+      id: "unstake-team",
+      index: 12,
+      phase: "refresh",
+      title: "Unstake the team's stake",
+      signer: "team",
+      purpose:
+        "Unstakes the team's direct stake from the pool and withdraws it back to the team treasury once the epoch window passes.",
+      steps: [
+        {
+          id: "unstake-team-all",
+          label: "unstake everything",
+          plan: {
+            kind: "call",
+            receiverId: pool,
+            methodName: "unstake_all",
+            args: {},
+            gas: "125 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+        {
+          id: "withdraw-team",
+          label: "withdraw to the team",
+          plan: {
+            kind: "call",
+            receiverId: pool,
+            methodName: "withdraw",
+            args: {},
+            gas: "125 Tgas",
+            attachedDeposit: ONE_YOCTO,
           },
         },
       ],
@@ -434,6 +494,8 @@ export interface ChainFacts {
   nearLocked: boolean;
   poolSelected: boolean;
   stakedFromLockup: boolean;
+  /** The team's direct stake in the pool is live. */
+  teamStaked: boolean;
   teamRegistered: boolean;
   delegated: boolean;
   voteCast: boolean;
@@ -441,6 +503,10 @@ export interface ChainFacts {
   withdrawn: boolean;
   poolReleased: boolean;
   delegationsCleared: boolean;
+  /** The team's direct stake is out of the pool. */
+  teamUnstaked: boolean;
+  /** The team's unstaked balance is back in its treasury. */
+  teamWithdrawn: boolean;
   /** Endowment and team wallet are the same account. */
   treasuriesShared: boolean;
 }
@@ -456,6 +522,7 @@ const STEP_FACT: Record<string, keyof ChainFacts> = {
   lock: "nearLocked",
   "select-pool": "poolSelected",
   stake: "stakedFromLockup",
+  "stake-team": "teamStaked",
   "register-team": "teamRegistered",
   "set-delegations": "delegated",
   vote: "voteCast",
@@ -463,6 +530,8 @@ const STEP_FACT: Record<string, keyof ChainFacts> = {
   "withdraw-all": "withdrawn",
   "unselect-pool": "poolReleased",
   "clear-delegations": "delegationsCleared",
+  "unstake-team-all": "teamUnstaked",
+  "withdraw-team": "teamWithdrawn",
 };
 
 export interface StepState extends StepDef {
@@ -476,6 +545,8 @@ export interface StationState {
   steps: StepState[];
   /** Populated when the station is blocked on something the user must fix. */
   blockedReason: string | null;
+  /** Populated when the station is skipped, explaining the no-op. */
+  skipReason: string | null;
   /**
    * Why the station is blocked. `upstream` clears itself as earlier stations
    * land, so a chained run may walk through it; `input` needs the user to fix
@@ -511,6 +582,15 @@ export function isSharedTreasurySkip(stationId: StationId, facts: ChainFacts): b
   return stationId === "register-team" || stationId === "delegate";
 }
 
+/** Why a shared-treasury skip is a no-op rather than missing work. */
+export function sharedTreasurySkipReason(stationId: StationId, facts: ChainFacts): string | null {
+  if (!isSharedTreasurySkip(stationId, facts)) return null;
+  if (stationId === "register-team") {
+    return "team and endowment are one account — the shared wallet registers in Lock the sponsor's NEAR";
+  }
+  return "the endowment cannot delegate to itself";
+}
+
 export function deriveStations(options: DeriveOptions): StationState[] {
   const { stations, facts, proposalsBySigner, accounts, connectedDao } = options;
   const blockers = options.blockers ?? {};
@@ -528,7 +608,7 @@ export function deriveStations(options: DeriveOptions): StationState[] {
       const fact = STEP_FACT[step.id];
       const satisfied = fact ? facts[fact] === true : false;
       const pendingProposal = step.plan ? findPendingProposalForPlan(pending, step.plan) : null;
-      const status: StepStatus = satisfied ? "done" : pendingProposal ? "staged" : "pending";
+      const status: StepStatus = pendingProposal ? "staged" : satisfied ? "done" : "pending";
       return { ...step, status, pendingProposal };
     });
 
@@ -568,6 +648,7 @@ export function deriveStations(options: DeriveOptions): StationState[] {
       status,
       steps,
       blockedReason,
+      skipReason: sharedTreasurySkipReason(def.id, facts),
       blockedBy,
       signerAccountId,
       signerConnected,

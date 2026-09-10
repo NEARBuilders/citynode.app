@@ -1,8 +1,6 @@
 /**
  * Pure helpers for parsing sputnik-dao v2 policy responses and producing
- * the registry config payload the tenant wizard publishes. Shared between
- * the UI and the API, so changes here must stay mirrored in
- * api/src/services/dao.ts.
+ * the registry config payload the tenant wizard publishes.
  */
 
 export interface NearPolicyRoleGroup {
@@ -45,12 +43,22 @@ export function isExplicitDaoMember(policy: unknown, accountId: string): boolean
   return parsePolicyGroupMembers(policy).includes(accountId);
 }
 
+export interface TenantUiOverride {
+  production: string;
+  integrity: string;
+  ssr?: string;
+  ssrIntegrity?: string;
+}
+
 export interface TenantPublishConfigInput {
   daoAccountId: string;
   gatewayId: string;
   baseAccount: string;
   hostname: string;
   title: string;
+  description?: string;
+  repository?: string;
+  app?: { ui: TenantUiOverride };
   status?: "active" | "suspended" | "pending_deletion";
 }
 
@@ -60,6 +68,8 @@ export interface TenantPublishConfig {
   domain: string;
   title: string;
   description: string;
+  repository?: string;
+  app?: { ui: TenantUiOverride };
   status?: "active" | "suspended" | "pending_deletion";
 }
 
@@ -69,7 +79,9 @@ export function buildTenantPublishConfig(input: TenantPublishConfigInput): Tenan
     account: input.daoAccountId,
     domain: input.hostname,
     title: input.title,
-    description: input.title,
+    description: input.description ?? input.title,
+    ...(input.repository ? { repository: input.repository } : {}),
+    ...(input.app ? { app: input.app } : {}),
   };
   if (input.status) config.status = input.status;
   return config;

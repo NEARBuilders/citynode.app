@@ -37,6 +37,7 @@ const noFacts: ChainFacts = {
   nearLocked: false,
   poolSelected: false,
   stakedFromLockup: false,
+  teamStaked: false,
   teamRegistered: false,
   delegated: false,
   voteCast: false,
@@ -44,6 +45,8 @@ const noFacts: ChainFacts = {
   withdrawn: false,
   poolReleased: false,
   delegationsCleared: false,
+  teamUnstaked: false,
+  teamWithdrawn: false,
   treasuriesShared: false,
 };
 
@@ -84,18 +87,20 @@ function proposal(
 }
 
 describe("buildStations", () => {
-  it("orders ten stations across four phases", () => {
+  it("orders twelve stations across four phases", () => {
     const stations = buildStations(inputs);
-    expect(stations.map((s) => s.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(stations.map((s) => s.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(stations.map((s) => s.phase)).toEqual([
       "stand-up",
       "stand-up",
       "stand-up",
       "fund",
       "fund",
+      "fund",
       "vote",
       "vote",
       "vote",
+      "refresh",
       "refresh",
       "refresh",
     ]);
@@ -109,12 +114,34 @@ describe("buildStations", () => {
       publish: "team",
       endow: "endowment",
       stake: "endowment",
+      "stake-team": "team",
       "register-team": "team",
       delegate: "endowment",
       vote: "team",
       unstake: "endowment",
       undelegate: "endowment",
+      "unstake-team": "team",
     });
+  });
+
+  it("stakes the team's own NEAR directly into the pool", () => {
+    const stakeTeam = buildStations(inputs).find((s) => s.id === "stake-team");
+    expect(stakeTeam?.steps[0]?.plan).toEqual({
+      kind: "call",
+      receiverId: "thing.pool.near",
+      methodName: "deposit_and_stake",
+      args: {},
+      gas: "200 Tgas",
+      attachedDeposit: (10n ** 24n).toString(),
+    });
+  });
+
+  it("unwinds the team's direct stake back to its treasury", () => {
+    const unstakeTeam = buildStations(inputs).find((s) => s.id === "unstake-team");
+    expect(
+      unstakeTeam?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null)),
+    ).toEqual(["unstake_all", "withdraw"]);
+    expect(unstakeTeam?.steps.every((s) => s.plan?.receiverId === "thing.pool.near")).toBe(true);
   });
 
   it("unwinds the stake and delegation so the cycle can refresh", () => {
@@ -209,8 +236,15 @@ describe("deriveStations", () => {
   it("skips the delegate stations when both treasuries are one account", () => {
     const facts = { ...noFacts, treasuriesShared: true, applicationProposed: true };
     const states = derive({ facts });
-    expect(states.find((s) => s.def.id === "register-team")?.status).toBe("skipped");
-    expect(states.find((s) => s.def.id === "delegate")?.status).toBe("skipped");
+    const registerTeam = states.find((s) => s.def.id === "register-team");
+    const delegate = states.find((s) => s.def.id === "delegate");
+    expect(registerTeam?.status).toBe("skipped");
+    expect(delegate?.status).toBe("skipped");
+    expect(registerTeam?.skipReason).toBe(
+      "team and endowment are one account — the shared wallet registers in Lock the sponsor's NEAR",
+    );
+    expect(delegate?.skipReason).toBe("the endowment cannot delegate to itself");
+    expect(states.find((s) => s.def.id === "stake-team")?.skipReason).toBeNull();
     expect(isSharedTreasurySkip("vote", facts)).toBe(false);
   });
 
@@ -229,9 +263,38 @@ describe("deriveStations", () => {
         nearLocked: true,
         poolSelected: true,
         stakedFromLockup: true,
+        teamStaked: true,
       },
     });
     expect(states.find((s) => s.def.id === "vote")?.status).toBe("ready");
+  });
+
+  it("keeps a station awaiting votes while its proposal is open, even if the fact is satisfied", () => {
+    const states = derive({
+      facts: {
+        ...noFacts,
+        ...deployDone,
+        endowmentRegistered: true,
+        lockupDeployed: true,
+        lockupFunded: true,
+        nearLocked: true,
+        poolSelected: true,
+        stakedFromLockup: true,
+      },
+      proposalsBySigner: {
+        endowment: [
+          proposal(5, LOCKUP, "select_staking_pool"),
+          proposal(6, LOCKUP, "deposit_and_stake"),
+        ],
+      },
+      connectedDao: ENDOWMENT,
+    });
+    const stake = states.find((s) => s.def.id === "stake");
+    expect(stake?.steps.find((s) => s.id === "select-pool")?.status).toBe("staged");
+    expect(stake?.steps.find((s) => s.id === "stake")?.status).toBe("staged");
+    expect(stake?.status).toBe("staged");
+    expect(stake?.canRun).toBe(false);
+    expect(stake?.runBlockReason).toBe("awaiting votes");
   });
 
   it("surfaces input blockers ahead of ordering blockers", () => {

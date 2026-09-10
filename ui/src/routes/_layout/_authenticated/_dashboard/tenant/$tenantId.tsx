@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { Building2, ExternalLink, Pencil, Trash2, Users } from "lucide-react";
-import type { TransactionBuilder } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
@@ -32,7 +31,7 @@ import {
   tenantBindingsQueryOptions,
   tenantByKeyQueryOptions,
 } from "@/lib/queries/tenants";
-import { prepareTenantConfigWrite, publishDaoTenantConfig } from "@/lib/tenant-deploy";
+import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
 import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import {
@@ -40,80 +39,6 @@ import {
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 import { TenantNodeValidators } from "./-node-validators";
-
-const CONFIG_GAS = "300000000000000";
-
-type PublishMode = "platform" | "dao";
-
-async function publishTenantConfig(
-  apiClient: ReturnType<typeof useApiClient>,
-  auth: ReturnType<typeof useAuthClient>,
-  input: {
-    accountId: string;
-    gatewayId: string;
-    parentAccount: string;
-    hostname: string | null;
-    name: string;
-    status?: "active" | "suspended" | "pending_deletion";
-    mode: PublishMode;
-  },
-) {
-  if (!input.hostname) {
-    throw new Error("No primary domain binding configured for this tenant");
-  }
-
-  if (input.mode === "dao") {
-    return publishDaoTenantConfig(apiClient, {
-      daoAccountId: input.accountId,
-      gatewayId: input.gatewayId,
-      baseAccount: input.parentAccount,
-      hostname: input.hostname,
-      title: input.name,
-      ...(input.status ? { status: input.status } : {}),
-    });
-  }
-
-  const prepared = await prepareTenantConfigWrite(apiClient, {
-    accountId: input.accountId,
-    gatewayId: input.gatewayId,
-    baseAccount: input.parentAccount,
-    hostname: input.hostname,
-    title: input.name,
-    ...(input.status ? { status: input.status } : {}),
-  });
-
-  const relayerInfo = await auth.near.getRelayerInfo();
-  const hasRelayer = relayerInfo.data?.enabled === true;
-
-  if (hasRelayer) {
-    const signed = await auth.near.buildSignedDelegateAction(
-      prepared.data.contractId,
-      (builder: TransactionBuilder, receiverId: string) =>
-        builder.functionCall(receiverId, prepared.data.methodName, prepared.data.args, {
-          gas: CONFIG_GAS,
-          attachedDeposit: 0n,
-        }),
-    );
-
-    const relayed = await auth.near.relayTransaction({ payload: signed });
-    if (relayed.error) throw new Error(relayed.error.message);
-    return relayed;
-  }
-
-  const signerAccountId = auth.near.getAccountId();
-  if (!signerAccountId) {
-    throw new Error("Connect a NEAR wallet first");
-  }
-
-  return auth.near
-    .getNearClient()
-    .transaction(signerAccountId)
-    .functionCall(prepared.data.contractId, prepared.data.methodName, prepared.data.args, {
-      gas: CONFIG_GAS,
-      attachedDeposit: 0n,
-    })
-    .send({ waitUntil: "EXECUTED" });
-}
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/tenant/$tenantId")({
   head: () => ({
@@ -199,7 +124,7 @@ function TenantDetail() {
   );
   const isDaoOwned = tenant?.ownerKind === "dao";
 
-  const publishMode: PublishMode = isDaoOwned ? "dao" : "platform";
+  const publishMode: TenantConfigPublishMode = isDaoOwned ? "dao" : "platform";
   const nearAccountId = useNearAccount();
   const hasSigningWallet =
     publishMode === "dao"
@@ -218,12 +143,12 @@ function TenantDetail() {
       if (!tenant) throw new Error("Tenant not loaded");
       const updated = await apiClient.updateTenant({ tenantId, name });
       if (name !== updated.name) {
-        await publishTenantConfig(apiClient, auth, {
+        await publishTenantConfigForMode(apiClient, auth, {
           accountId: updated.accountId,
           gatewayId: gid,
-          parentAccount,
+          baseAccount: parentAccount,
           hostname,
-          name: updated.name,
+          title: updated.name,
           status: updated.status === "active" ? "active" : undefined,
           mode: publishMode,
         });
@@ -242,12 +167,12 @@ function TenantDetail() {
     mutationFn: async () => {
       const gid = assertGateway();
       const updated = await apiClient.suspendTenant({ tenantId });
-      await publishTenantConfig(apiClient, auth, {
+      await publishTenantConfigForMode(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId: gid,
-        parentAccount,
+        baseAccount: parentAccount,
         hostname,
-        name: updated.name,
+        title: updated.name,
         status: "suspended",
         mode: publishMode,
       });
@@ -263,12 +188,12 @@ function TenantDetail() {
     mutationFn: async () => {
       const gid = assertGateway();
       const updated = await apiClient.reactivateTenant({ tenantId });
-      await publishTenantConfig(apiClient, auth, {
+      await publishTenantConfigForMode(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId: gid,
-        parentAccount,
+        baseAccount: parentAccount,
         hostname,
-        name: updated.name,
+        title: updated.name,
         status: "active",
         mode: publishMode,
       });
@@ -283,12 +208,12 @@ function TenantDetail() {
   const republishMutation = useMutation({
     mutationFn: async () => {
       const gid = assertGateway();
-      return publishTenantConfig(apiClient, auth, {
+      return publishTenantConfigForMode(apiClient, auth, {
         accountId: tenant?.accountId ?? "",
         gatewayId: gid,
-        parentAccount,
+        baseAccount: parentAccount,
         hostname,
-        name: tenant?.name ?? "",
+        title: tenant?.name ?? "",
         status:
           tenant?.status === "suspended" || tenant?.status === "pending_deletion"
             ? tenant?.status
@@ -304,12 +229,12 @@ function TenantDetail() {
     mutationFn: async () => {
       const gid = assertGateway();
       const updated = await apiClient.deleteTenant({ tenantId });
-      await publishTenantConfig(apiClient, auth, {
+      await publishTenantConfigForMode(apiClient, auth, {
         accountId: updated.accountId,
         gatewayId: gid,
-        parentAccount,
+        baseAccount: parentAccount,
         hostname,
-        name: updated.name,
+        title: updated.name,
         status: "pending_deletion",
         mode: publishMode,
       });

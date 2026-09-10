@@ -66,7 +66,6 @@ import {
   accountExplorerUrl,
   approvalThreshold,
   approveProposalPlan,
-  canAccountApprove,
   type DaoPlan,
   describePlan,
   fetchActiveGovProposals,
@@ -137,18 +136,6 @@ interface LogEntry {
   time: string;
   label: string;
   detail?: string;
-}
-
-/** Proposals the cleanup panel can delete via `reject` (admin, nothing applied). */
-function proposalCleanupMode(proposal: { reviewStatus: string; applyStatus: string }) {
-  if (proposal.reviewStatus === "pending" && proposal.applyStatus !== "applying") return "reject";
-  if (
-    proposal.reviewStatus === "approved" &&
-    (proposal.applyStatus === "not_started" || proposal.applyStatus === "failed")
-  ) {
-    return "reject";
-  }
-  return null;
 }
 
 /** "near builders" → "Near Builders" — the default node name from the org name. */
@@ -324,6 +311,13 @@ function NodeLifecyclePocPage() {
       !!pool && !!endowmentLockup,
     ),
   );
+  const { data: teamPoolAccount } = useQuery(
+    poc(
+      ["pool-account", pool, team],
+      () => getNear().view<PoolAccountView>(pool, "get_account", { account_id: team }),
+      !!pool && !!team,
+    ),
+  );
   const { data: whitelisted } = useQuery(
     poc(
       ["whitelist", pool],
@@ -397,17 +391,6 @@ function NodeLifecyclePocPage() {
       !!activeOrgId,
     ),
   );
-  /** Recent node applications — the cleanup panel's delete candidates. */
-  const { data: cleanupProposals = [] } = useQuery(
-    poc(
-      ["node-proposals"],
-      async () => {
-        const result = await apiClient.proposals.getProposals({ pluginId: "node", limit: 8 });
-        return result.data;
-      },
-      isAdmin,
-    ),
-  );
 
   /* -------------------------------------------------------------------- model */
 
@@ -422,6 +405,7 @@ function NodeLifecyclePocPage() {
     nearLocked: isPositive(lockupState?.locked),
     poolSelected: !!lockupState?.stakingPool && lockupState.stakingPool === pool,
     stakedFromLockup: isPositive(lockupState?.knownDeposited),
+    teamStaked: isPositive(teamPoolAccount?.staked_balance),
     teamRegistered: teamVe != null,
     delegated: !!endowmentVe?.account.delegations.some((entry) => entry.account_id === team),
     voteCast: voteRecord != null,
@@ -429,6 +413,8 @@ function NodeLifecyclePocPage() {
     withdrawn: poolAccount ? !isPositive(poolAccount.unstaked_balance) : true,
     poolReleased: !lockupState?.stakingPool,
     delegationsCleared: endowmentVe ? endowmentVe.account.delegations.length === 0 : true,
+    teamUnstaked: teamPoolAccount ? !isPositive(teamPoolAccount.staked_balance) : true,
+    teamWithdrawn: teamPoolAccount ? !isPositive(teamPoolAccount.unstaked_balance) : true,
     treasuriesShared,
   };
 
@@ -467,12 +453,17 @@ function NodeLifecyclePocPage() {
   if (lockYocto && stakeYocto && !endowmentLockup) {
     blockers.stake = "resolving the endowment lockup…";
   }
+  if (!team) blockers["stake-team"] = "connect your team DAO with Trezu";
+  else if (!pool) blockers["stake-team"] = "enter a staking pool";
+  else if (!stakeYocto) blockers["stake-team"] = "enter a stake amount";
   if (!delegateBpsValue) blockers.delegate = "delegate between 1 and 100 percent";
   if (!team) blockers.delegate = "connect your team DAO with Trezu";
   else if (!govProposal) blockers.vote = "no active House of Stake proposal";
   if (!endowment) blockers.unstake = "set an endowment treasury";
   else if (!endowmentLockup) blockers.unstake = "resolving the endowment lockup…";
   if (!endowment) blockers.undelegate = "set an endowment treasury";
+  if (!team) blockers["unstake-team"] = "connect your team DAO with Trezu";
+  else if (!pool) blockers["unstake-team"] = "enter a staking pool";
 
   const stationDefs = useMemo(
     () =>
@@ -555,6 +546,14 @@ function NodeLifecyclePocPage() {
       .getRegistryApp({ accountId: team, gatewayId })
       .then((result) => result.data ?? null)
       .catch(() => null);
+
+  /** Fresh read of the team's account in the pool — the truth for the team stake stations. */
+  const fetchTeamPoolAccount = () =>
+    pool && team
+      ? getNear()
+          .view<PoolAccountView>(pool, "get_account", { account_id: team })
+          .catch(() => null)
+      : Promise.resolve(null);
 
   /** Executes one station's remaining steps in order, as its declared signer. */
   const runStation = async (station: StationState) => {
@@ -663,6 +662,19 @@ function NodeLifecyclePocPage() {
         }
         return { ...plan, args: { ...plan.args, amount: remaining.toString() } };
       }
+      case "stake-team": {
+        const want = yoctoArg(plan.attachedDeposit);
+        if (want <= 0n) return plan;
+        const current = await fetchTeamPoolAccount();
+        if (!current) return plan;
+        const staked = yoctoArg(current.staked_balance);
+        const remaining = want > staked ? want - staked : 0n;
+        if (remaining <= 0n) {
+          log("team already staked — skipping");
+          return null;
+        }
+        return { ...plan, attachedDeposit: remaining.toString() };
+      }
       case "set-delegations": {
         const entries = plan.args.entries as { account_id: string; bps: number }[] | undefined;
         if (!entries) return plan;
@@ -735,6 +747,27 @@ function NodeLifecyclePocPage() {
         if (ve && ve.account.delegations.length === 0) {
           log("no delegations — skipping");
           return null;
+        }
+        return plan;
+      }
+      case "unstake-team-all": {
+        const current = await fetchTeamPoolAccount();
+        if (!current || !isPositive(current.staked_balance)) {
+          log("nothing staked by the team — skipping");
+          return null;
+        }
+        return plan;
+      }
+      case "withdraw-team": {
+        const current = await fetchTeamPoolAccount();
+        if (!current || !isPositive(current.unstaked_balance)) {
+          log("nothing for the team to withdraw — skipping");
+          return null;
+        }
+        if (!current.can_withdraw) {
+          throw new Error(
+            "unstaked balance is still locked in the epoch window — run again in a couple of days",
+          );
         }
         return plan;
       }
@@ -911,25 +944,31 @@ function NodeLifecyclePocPage() {
     onError: () => {},
   });
 
+  /**
+   * Approves a staged proposal with the connected Trezu wallet — never the
+   * session wallet. A mismatched treasury is disconnected and reconnected as
+   * the proposal's DAO before the vote is signed.
+   */
   const approveMutation = useMutation({
-    mutationFn: async ({ dao, proposalId }: { dao: string; proposalId: number }) => {
-      if (!sessionAccount) throw new Error("Sign in with your NEAR wallet first");
-      const plan = approveProposalPlan(dao, proposalId);
-      return auth.near
-        .getNearClient()
-        .transaction(sessionAccount)
-        .functionCall(plan.receiverId, plan.methodName, plan.args, {
-          gas: "200 Tgas",
-          attachedDeposit: 0n,
-        })
-        .send({ waitUntil: "EXECUTED" });
+    mutationFn: async ({
+      signer,
+      dao,
+      proposalId,
+    }: {
+      signer: SignerKind;
+      dao: string;
+      proposalId: number;
+    }) => {
+      if (!dao) throw new Error("Set the treasury account first");
+      await requireConnected(signer);
+      return signPlanAsDao(dao, approveProposalPlan(dao, proposalId));
     },
     onSuccess: (result, variables) => {
       toast.success(`approved proposal ${variables.proposalId}`);
       log(`voted Approve on ${variables.dao} proposal ${variables.proposalId}`, txHash(result));
       refresh();
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error, variables) => toast.error(describeDaoError(error, variables.dao)),
   });
 
   const connectTeamDaoMutation = useMutation({
@@ -973,62 +1012,6 @@ function NodeLifecyclePocPage() {
     },
     onError: (error: Error) =>
       toast.error(describeDaoError(error, connection.daoAccountId ?? "the treasury")),
-  });
-
-  const cleanupMutation = useMutation({
-    mutationFn: async ({ entityId, updatedAt }: { entityId: string; updatedAt: string }) =>
-      apiClient.proposals.reject({
-        pluginId: "node",
-        entityId,
-        expectedUpdatedAt: updatedAt,
-        reason: "cleanup — superseded application",
-      }),
-    onSuccess: (result) => {
-      toast.success(`deleted application ${result.data.entityId}`);
-      log(`deleted application ${result.data.entityId}`);
-      refresh();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const markAppliedMutation = useMutation({
-    mutationFn: async ({
-      entityId,
-      updatedAt,
-      payload,
-    }: {
-      entityId: string;
-      updatedAt: string;
-      payload: unknown;
-    }) => {
-      if (!isAdmin) throw new Error("admin access required — sign in as an admin");
-      const accountId = (() => {
-        try {
-          return parseNodeProposalPayload(payload).accountId;
-        } catch {
-          return null;
-        }
-      })();
-      if (accountId) {
-        const published = await apiClient.apps
-          .getRegistryApp({ accountId, gatewayId })
-          .then((result) => result.data ?? null)
-          .catch(() => null);
-        if (!published) throw new Error(`config not published for ${accountId} — publish it first`);
-      }
-      return apiClient.proposals.markApplied({
-        pluginId: "node",
-        entityId,
-        expectedUpdatedAt: updatedAt,
-        appliedResourceId: entityId,
-      });
-    },
-    onSuccess: (result) => {
-      toast.success(`marked application ${result.data.entityId} applied`);
-      log(`marked application ${result.data.entityId} applied`);
-      refresh();
-    },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   /* --------------------------------------------------------------------- view */
@@ -1461,7 +1444,6 @@ function NodeLifecyclePocPage() {
                               dimmed={signerLens(station.def.signer) !== lens}
                               busy={busy}
                               policy={policyFor(station.def.signer)}
-                              sessionAccount={sessionAccount}
                               warning={station.def.id === "approve" ? platformAuditWarning : null}
                               membersHref={station.def.id === "approve" ? trezuMembersUrl : null}
                               onRun={() => void runStation(station).catch(() => {})}
@@ -1474,6 +1456,7 @@ function NodeLifecyclePocPage() {
                               }
                               onApprove={(proposalId) =>
                                 approveMutation.mutate({
+                                  signer: station.def.signer,
                                   dao: station.signerAccountId ?? "",
                                   proposalId,
                                 })
@@ -1570,68 +1553,6 @@ function NodeLifecyclePocPage() {
                     );
                   })}
                 </div>
-
-                {isAdmin && cleanupProposals.length > 0 && (
-                  <div
-                    className="space-y-1.5 border-t border-border pt-3"
-                    data-testid="poc-cleanup"
-                  >
-                    <p className="text-xs font-semibold text-foreground">node applications</p>
-                    {cleanupProposals.map((proposal) => {
-                      const mode = proposalCleanupMode(proposal);
-                      const applying =
-                        proposal.reviewStatus === "approved" && proposal.applyStatus === "applying";
-                      return (
-                        <div
-                          key={proposal.id}
-                          className="flex items-center justify-between gap-2"
-                          data-testid={`poc-cleanup-row-${proposal.entityId}`}
-                        >
-                          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                            {proposal.entityId} · {proposal.reviewStatus}/{proposal.applyStatus}
-                          </span>
-                          {applying ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                markAppliedMutation.mutate({
-                                  entityId: proposal.entityId,
-                                  updatedAt: proposal.updatedAt,
-                                  payload: proposal.payload,
-                                })
-                              }
-                              disabled={busy || markAppliedMutation.isPending}
-                              title="checks the published config, then marks the application applied"
-                              data-testid={`poc-mark-applied-${proposal.entityId}`}
-                            >
-                              mark applied
-                            </Button>
-                          ) : mode ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                cleanupMutation.mutate({
-                                  entityId: proposal.entityId,
-                                  updatedAt: proposal.updatedAt,
-                                })
-                              }
-                              disabled={busy || cleanupMutation.isPending}
-                              data-testid={`poc-cleanup-delete-${proposal.entityId}`}
-                            >
-                              delete
-                            </Button>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px]">
-                              keep
-                            </Badge>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
 
                 <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
                   <ArrowDown className="h-3.5 w-3.5 shrink-0" />
@@ -1833,8 +1754,13 @@ function NodeLifecyclePocPage() {
                     />
                     <InfoRow label="total staked" value={formatNear(poolMeta.totalStaked)} mono />
                     <InfoRow
-                      label="our stake"
+                      label="endowment stake"
                       value={formatNear(poolAccount?.staked_balance)}
+                      mono
+                    />
+                    <InfoRow
+                      label="team stake"
+                      value={formatNear(teamPoolAccount?.staked_balance)}
                       mono
                     />
                   </>
@@ -2187,7 +2113,6 @@ function StationRow({
   dimmed,
   busy,
   policy,
-  sessionAccount,
   warning,
   membersHref,
   onRun,
@@ -2199,7 +2124,6 @@ function StationRow({
   dimmed: boolean;
   busy: boolean;
   policy: Parameters<typeof approvalThreshold>[0];
-  sessionAccount: string | null;
   warning?: string | null;
   membersHref?: string | null;
   onRun: () => void;
@@ -2209,7 +2133,6 @@ function StationRow({
 }) {
   const { def, status } = station;
   const settled = status === "done" || status === "skipped";
-  const canApprove = canAccountApprove(policy, sessionAccount);
   const stagedSteps = station.steps.filter((step) => step.pendingProposal);
 
   return (
@@ -2282,6 +2205,9 @@ function StationRow({
               )}
             </p>
           )}
+          {status === "skipped" && station.skipReason && (
+            <p className="text-xs text-muted-foreground">skipped: {station.skipReason}</p>
+          )}
           {extra}
         </div>
         {!settled && !dimmed && (
@@ -2310,7 +2236,9 @@ function StationRow({
           {stagedSteps.map((step) => {
             const proposal = step.pendingProposal as SputnikProposal;
             const threshold = approvalThreshold(policy, proposal);
-            const alreadyVoted = sessionAccount ? !!proposal.votes[sessionAccount] : false;
+            const alreadyVoted = station.signerAccountId
+              ? !!proposal.votes[station.signerAccountId]
+              : false;
             return (
               <div
                 key={step.id}
@@ -2326,10 +2254,14 @@ function StationRow({
                     variant="outline"
                     size="sm"
                     onClick={() => onApprove(proposal.id)}
-                    disabled={busy || !canApprove || alreadyVoted}
+                    disabled={busy || !station.signerConnected || alreadyVoted}
                     data-testid={`poc-approve-${proposal.id}`}
                   >
-                    {alreadyVoted ? "voted" : canApprove ? "approve" : "not an approver"}
+                    {alreadyVoted
+                      ? "voted"
+                      : station.signerConnected
+                        ? "approve"
+                        : "connect to approve"}
                   </Button>
                 )}
               </div>

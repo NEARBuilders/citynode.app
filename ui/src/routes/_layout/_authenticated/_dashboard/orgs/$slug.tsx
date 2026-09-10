@@ -4,6 +4,7 @@ import {
   Building2,
   Edit2,
   Key,
+  Layers,
   LogOut,
   Mail,
   RefreshCw,
@@ -15,7 +16,14 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { type Organization, type SessionData, sessionQueryOptions, useAuthClient } from "@/app";
+import {
+  getAccount,
+  getActiveRuntime,
+  type Organization,
+  type SessionData,
+  sessionQueryOptions,
+  useAuthClient,
+} from "@/app";
 import {
   ApiKeyForm,
   type ApiKeyFormValues,
@@ -37,6 +45,7 @@ import {
   TabsTrigger,
 } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import { NodeConfigTab } from "./-node-config";
 
 type AuthClientType = import("@/app").AuthClient;
 
@@ -97,6 +106,9 @@ function OrganizationDetail() {
   const router = useRouter();
   const { slug: orgSlug } = Route.useParams();
   const auth = useAuthClient();
+  const { runtimeConfig } = Route.useRouteContext();
+  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "";
+  const baseAccount = getAccount(runtimeConfig);
 
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
 
@@ -495,6 +507,14 @@ function OrganizationDetail() {
               <Key className="h-4 w-4 mr-1.5" />
               API Keys ({apiKeys.length})
             </TabsTrigger>
+            <TabsTrigger
+              value="node-config"
+              className="shrink-0"
+              data-testid="orgs-tab-node-config"
+            >
+              <Layers className="h-4 w-4 mr-1.5" />
+              Node config
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="members" className="space-y-6 pt-4">
@@ -632,6 +652,14 @@ function OrganizationDetail() {
             ) : (
               <EmptyState label="No API keys" />
             )}
+          </TabsContent>
+          <TabsContent value="node-config" className="space-y-6 pt-4">
+            <NodeConfigTab
+              orgId={orgId}
+              gatewayId={gatewayId}
+              baseAccount={baseAccount}
+              canManage={canManageMembers}
+            />
           </TabsContent>
         </Tabs>
       </div>

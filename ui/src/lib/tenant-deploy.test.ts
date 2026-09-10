@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ApiClient } from "@/app";
-import { publishDaoTenantConfig } from "./tenant-deploy";
+import type { ApiClient, useAuthClient } from "@/app";
+import {
+  publishDaoTenantConfig,
+  publishTenantConfigForMode,
+  type TenantConfigPublishInput,
+} from "./tenant-deploy";
+
+const makeClient = (prepareRegistryConfigWrite: ReturnType<typeof vi.fn>) =>
+  ({ apps: { prepareRegistryConfigWrite } }) as unknown as ApiClient;
 
 describe("publishDaoTenantConfig", () => {
   it("prepares the DAO-owned config and submits it through the Trezu signer", async () => {
@@ -16,7 +23,7 @@ describe("publishDaoTenantConfig", () => {
     const signTransaction = vi.fn().mockResolvedValue({ transaction: "submitted" });
 
     await publishDaoTenantConfig(
-      { apps: { prepareRegistryConfigWrite } } as unknown as ApiClient,
+      makeClient(prepareRegistryConfigWrite),
       {
         daoAccountId: "chicago.sputnik-dao.near",
         gatewayId: "citynode.app",
@@ -45,5 +52,156 @@ describe("publishDaoTenantConfig", () => {
       gas: "300 Tgas",
       attachedDeposit: "0 yocto",
     });
+  });
+
+  it("threads the custom fields into the prepared config", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const signTransaction = vi.fn().mockResolvedValue({ transaction: "submitted" });
+
+    await publishDaoTenantConfig(
+      makeClient(prepareRegistryConfigWrite),
+      {
+        daoAccountId: "chicago.sputnik-dao.near",
+        gatewayId: "citynode.app",
+        baseAccount: "everything.near",
+        hostname: "chicago.citynode.app",
+        title: "Chicago",
+        description: "The Chicago node",
+        repository: "https://github.com/example/chicago",
+        app: {
+          ui: { production: "https://cdn.example.com/ui.js", integrity: "sha384-abc" },
+        },
+      },
+      signTransaction,
+    );
+
+    expect(prepareRegistryConfigWrite).toHaveBeenCalledWith({
+      accountId: "chicago.sputnik-dao.near",
+      gatewayId: "citynode.app",
+      config: expect.objectContaining({
+        description: "The Chicago node",
+        repository: "https://github.com/example/chicago",
+        app: {
+          ui: { production: "https://cdn.example.com/ui.js", integrity: "sha384-abc" },
+        },
+      }),
+    });
+  });
+});
+
+describe("publishTenantConfigForMode", () => {
+  const baseInput = {
+    accountId: "chicago.sputnik-dao.near",
+    gatewayId: "citynode.app",
+    baseAccount: "everything.near",
+    hostname: "chicago.citynode.app",
+    title: "Chicago",
+  } satisfies Omit<TenantConfigPublishInput, "mode">;
+
+  it("refuses to publish without a hostname binding", async () => {
+    const apiClient = makeClient(vi.fn());
+    const auth = {} as ReturnType<typeof useAuthClient>;
+    await expect(
+      publishTenantConfigForMode(apiClient, auth, { ...baseInput, hostname: null, mode: "dao" }),
+    ).rejects.toThrow("No primary domain binding configured for this tenant");
+  });
+
+  it("routes dao mode through the Trezu signer", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const signTransaction = vi.fn().mockResolvedValue({ transaction: "submitted" });
+    const auth = {} as ReturnType<typeof useAuthClient>;
+
+    const result = await publishTenantConfigForMode(
+      makeClient(prepareRegistryConfigWrite),
+      auth,
+      {
+        ...baseInput,
+        description: "The Chicago node",
+        mode: "dao",
+      },
+      signTransaction,
+    );
+    expect(prepareRegistryConfigWrite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ description: "The Chicago node" }),
+      }),
+    );
+    expect(signTransaction).toHaveBeenCalledWith(
+      "chicago.sputnik-dao.near",
+      expect.objectContaining({ receiverId: "dev.everything.near" }),
+    );
+    expect(result).toEqual({ transaction: "submitted" });
+  });
+
+  it("falls back to the session wallet when no relayer is enabled", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const send = vi.fn().mockResolvedValue({ transaction: "signed" });
+    const functionCall = vi.fn().mockReturnValue({ send });
+    const transaction = vi.fn().mockReturnValue({ functionCall });
+    const auth = {
+      near: {
+        getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: false } }),
+        getAccountId: vi.fn().mockReturnValue("alice.near"),
+        getNearClient: vi.fn().mockReturnValue({ transaction }),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    const result = await publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+      ...baseInput,
+      mode: "platform",
+    });
+
+    expect(auth.near.getNearClient).toHaveBeenCalled();
+    expect(transaction).toHaveBeenCalledWith("alice.near");
+    expect(result).toEqual({ transaction: "signed" });
+  });
+
+  it("requires a wallet for platform mode without a relayer", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const auth = {
+      near: {
+        getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: false } }),
+        getAccountId: vi.fn().mockReturnValue(null),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    await expect(
+      publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+        ...baseInput,
+        mode: "platform",
+      }),
+    ).rejects.toThrow("Connect a NEAR wallet first");
   });
 });
