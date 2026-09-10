@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Home as HomeIcon, Settings } from "lucide-react";
-import { useMemo } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   getAccount,
   type Passkey,
@@ -9,9 +7,9 @@ import {
   sessionQueryOptions,
   useAuthClient,
 } from "@/app";
-import { Button, Card, Chip, PageHeader } from "@/components";
-import { InfoRow } from "@/components/ui/info-row";
 import { useNearAccount } from "@/lib/use-near-account";
+import { TenantSummary } from "./-tenant-summary";
+import { WorkspaceIdentity } from "./-workspace-identity";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/")({
   beforeLoad: async ({ context }) => {
@@ -46,118 +44,26 @@ function Home() {
   const user = session?.user;
   const nearAccountId = useNearAccount();
 
-  const profile = useMemo(() => {
-    if (!user)
-      return {
-        isAnonymous: false,
-        hasEmail: false,
-        hasNear: false,
-        hasPasskeys: false,
-        isAdmin: false,
-      };
-    return {
-      isAnonymous: user.isAnonymous || false,
-      hasEmail: Boolean(user.email),
-      hasNear: Boolean(nearAccountId),
-      hasPasskeys: passkeys.length > 0,
-      isAdmin: user.role === "admin",
-    };
-  }, [user, nearAccountId, passkeys.length]);
-
+  const profile = {
+    isAnonymous: user?.isAnonymous || false,
+    hasEmail: Boolean(user?.email),
+    hasNear: Boolean(nearAccountId),
+    hasPasskeys: passkeys.length > 0,
+    isAdmin: user?.role === "admin",
+  };
   const activeOrgId = session?.session?.activeOrganizationId ?? null;
   const isTenantMember = !!tenant && !!activeOrgId && activeOrgId === tenant.orgId;
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        icon={HomeIcon}
-        label="Workspace"
-        title={user?.name || user?.email || "You"}
-        actions={
-          <Button asChild variant="outline">
-            <Link to="/settings" preload="intent">
-              <Settings />
-              settings
-            </Link>
-          </Button>
-        }
+      <WorkspaceIdentity
+        nearAccountId={nearAccountId}
+        passkeys={passkeys}
+        profile={profile}
+        tenantMember={isTenantMember}
+        user={user}
       />
-
-      {!user ? (
-        <div className="text-muted-foreground text-center py-12 text-sm">Loading…</div>
-      ) : (
-        <>
-          <Card className="p-6 space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Chip>workspace</Chip>
-              {profile.isAnonymous && <Chip>anonymous</Chip>}
-              {profile.isAdmin && <Chip accent>admin</Chip>}
-              {isTenantMember && <Chip accent>tenant member</Chip>}
-            </div>
-            <h2 className="text-foreground text-xl font-semibold">
-              {user.name || user.email || user.id.slice(0, 8)}
-            </h2>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              Manage your identity and connected accounts.
-            </p>
-          </Card>
-
-          <Card className="p-6 space-y-4">
-            <div className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-              Identity Status
-            </div>
-            <div className="flex flex-col gap-2">
-              <InfoRow
-                label="email"
-                value={profile.hasEmail ? (user.email ?? "linked") : "not linked"}
-              />
-              <InfoRow
-                label="near"
-                value={profile.hasNear ? (nearAccountId ?? "linked") : "not linked"}
-                mono
-              />
-              <InfoRow
-                label="passkeys"
-                value={profile.hasPasskeys ? `${passkeys.length} registered` : "not linked"}
-              />
-              <InfoRow
-                label="profile"
-                value={profile.isAnonymous ? "anonymous session" : "persistent account"}
-              />
-            </div>
-
-            {profile.isAnonymous && (
-              <div className="mt-2 rounded-[10px] bg-brand-accent-light border border-brand-accent-border text-foreground text-[13px] leading-relaxed px-4 py-3">
-                Link an email or NEAR wallet before signing out to keep your data.
-              </div>
-            )}
-          </Card>
-        </>
-      )}
-
-      {tenant && (
-        <Card className="p-6 space-y-4">
-          <div className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-            Tenant
-          </div>
-          <div className="flex flex-col gap-2">
-            <InfoRow label="name" value={tenant.name} />
-            <InfoRow label="id" value={tenant.id} mono />
-            <InfoRow label="account" value={tenant.accountId} mono />
-            <InfoRow
-              label="created"
-              value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-            />
-          </div>
-          <div className="flex gap-2 pt-1">
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin" preload="intent">
-                manage tenant
-              </Link>
-            </Button>
-          </div>
-        </Card>
-      )}
+      {tenant && <TenantSummary tenant={tenant} />}
     </div>
   );
 }
