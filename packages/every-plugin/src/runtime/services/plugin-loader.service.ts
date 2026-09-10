@@ -261,15 +261,17 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
               .pipe(
                 Effect.provideService(PluginIdTag, plugin.id),
                 Effect.provideService(Scope.Scope, scope),
-                Effect.tapError(() =>
-                  Scope.close(scope, Exit.succeed(undefined)).pipe(
-                    Effect.catchAll((closeError) =>
-                      Effect.logWarning(
-                        `Failed to close scope for plugin ${plugin.id} after initialize error`,
-                        closeError,
+                Effect.onExit((exit) =>
+                  Exit.isSuccess(exit)
+                    ? Effect.void
+                    : Scope.close(scope, exit).pipe(
+                        Effect.catchAllCause((closeCause) =>
+                          Effect.logWarning(
+                            `Failed to close scope for plugin ${plugin.id} after initialize error`,
+                            closeCause,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
                 ),
                 Effect.tapError((error) =>
                   Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin: ${error}`),

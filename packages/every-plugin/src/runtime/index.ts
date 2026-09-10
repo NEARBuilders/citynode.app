@@ -1,5 +1,5 @@
 import { createRouterClient } from "@orpc/server";
-import { Cause, Effect, Exit, Hash, ManagedRuntime, Option } from "effect";
+import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
 import type {
   AnyPlugin,
   AnyPluginConstructor,
@@ -22,10 +22,11 @@ import { PluginService } from "./services/plugin.service";
 export class PluginRuntime<R = RegisteredPlugins> {
   readonly __registryType?: R;
 
-  private pluginCache = new Map<
-    string,
-    Effect.Effect<InitializedPlugin<AnyPlugin>, PluginRuntimeError>
-  >();
+  private pluginCache = new Map<string, Promise<InitializedPlugin<AnyPlugin>>>();
+  private routerCache = new Map<string, PluginRouterType<any>>();
+  private cacheObjectIds = new WeakMap<object, number>();
+  private cacheSymbolIds = new Map<symbol, number>();
+  private nextCacheObjectId = 0;
 
   constructor(
     private runtime: ManagedRuntime.ManagedRuntime<PluginService, never>,
@@ -33,8 +34,70 @@ export class PluginRuntime<R = RegisteredPlugins> {
   ) {}
 
   private generateCacheKey(pluginId: string, config: unknown): string {
-    const configHash = Hash.structure(config as object).toString();
-    return `${pluginId}:${configHash}`;
+    return `${pluginId}:${this.serializeCacheValue(config)}`;
+  }
+
+  private serializeCacheValue(value: unknown, ancestors = new Set<object>()): string {
+    if (value === null) return "null";
+
+    switch (typeof value) {
+      case "undefined":
+        return "undefined";
+      case "string":
+        return `string:${JSON.stringify(value)}`;
+      case "number":
+        return `number:${Object.is(value, -0) ? "-0" : String(value)}`;
+      case "bigint":
+        return `bigint:${value.toString()}`;
+      case "boolean":
+        return `boolean:${value}`;
+      case "symbol":
+        return `symbol:${this.getCacheSymbolId(value)}`;
+      case "function":
+        return `function:${this.getCacheObjectId(value)}`;
+    }
+
+    if (value instanceof Date) return `date:${value.toISOString()}`;
+    if (value instanceof RegExp) return `regexp:${value.toString()}`;
+
+    if (ancestors.has(value)) return `cycle:${this.getCacheObjectId(value)}`;
+    ancestors.add(value);
+
+    if (Array.isArray(value)) {
+      const serialized = `[${value.map((item) => this.serializeCacheValue(item, ancestors)).join(",")}]`;
+      ancestors.delete(value);
+      return serialized;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      ancestors.delete(value);
+      return `object:${this.getCacheObjectId(value)}`;
+    }
+
+    const record = value as Record<string, unknown>;
+    const serialized = `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${this.serializeCacheValue(record[key], ancestors)}`)
+      .join(",")}}`;
+    ancestors.delete(value);
+    return serialized;
+  }
+
+  private getCacheObjectId(value: object): number {
+    const existing = this.cacheObjectIds.get(value);
+    if (existing !== undefined) return existing;
+    const id = this.nextCacheObjectId++;
+    this.cacheObjectIds.set(value, id);
+    return id;
+  }
+
+  private getCacheSymbolId(value: symbol): number {
+    const existing = this.cacheSymbolIds.get(value);
+    if (existing !== undefined) return existing;
+    const id = this.nextCacheObjectId++;
+    this.cacheSymbolIds.set(value, id);
+    return id;
   }
 
   private validatePluginId(pluginId: string): Effect.Effect<string, PluginRuntimeError> {
@@ -87,22 +150,32 @@ export class PluginRuntime<R = RegisteredPlugins> {
         return initialized;
       }).pipe(Effect.annotateLogs({ plugin: pluginId }), Effect.provide(this.runtime));
 
-      cachedPlugin = Effect.cached(operation).pipe(Effect.flatten);
+      cachedPlugin = this.runPromise(operation);
       this.pluginCache.set(cacheKey, cachedPlugin);
     }
 
     let initialized: InitializedPlugin<AnyPlugin>;
     try {
-      initialized = await this.runPromise(cachedPlugin);
+      initialized = await cachedPlugin;
     } catch (error) {
-      // Evict failed initializations so the next call retries instead
-      // of returning the permanently-cached failure from Effect.cached.
-      this.pluginCache.delete(cacheKey);
+      if (this.pluginCache.get(cacheKey) === cachedPlugin) {
+        this.pluginCache.delete(cacheKey);
+        this.routerCache.delete(cacheKey);
+      }
       throw error;
     }
 
     // Construct the router once per plugin instance, not per client/request.
-    const router = initialized.plugin.createRouter(initialized.context) as PluginRouterType<R[K]>;
+    let router = this.routerCache.get(cacheKey);
+    if (!router) {
+      try {
+        router = initialized.plugin.createRouter(initialized.context) as PluginRouterType<R[K]>;
+        this.routerCache.set(cacheKey, router);
+      } catch (error) {
+        await this.evictPlugin(pluginId, config, plugins);
+        throw error;
+      }
+    }
 
     // Create client factory that accepts request context
     const createClient = (context?: any) => createRouterClient(router, { context: context ?? {} });
@@ -155,8 +228,13 @@ export class PluginRuntime<R = RegisteredPlugins> {
       const pluginService = yield* PluginService;
       yield* pluginService.cleanup();
     });
-    await this.runPromise(effect);
-    await this.runtime.dispose();
+    try {
+      await this.runPromise(effect);
+    } finally {
+      this.pluginCache.clear();
+      this.routerCache.clear();
+      await this.runtime.dispose();
+    }
   }
 
   async evictPlugin<K extends keyof R & string>(
@@ -172,8 +250,12 @@ export class PluginRuntime<R = RegisteredPlugins> {
 
       if (cachedPlugin) {
         this.pluginCache.delete(cacheKey);
+        this.routerCache.delete(cacheKey);
 
-        const pluginResult = yield* cachedPlugin.pipe(Effect.catchAll(() => Effect.succeed(null)));
+        const pluginResult = yield* Effect.tryPromise({
+          try: () => cachedPlugin,
+          catch: (error) => error,
+        }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
         if (pluginResult) {
           yield* pluginService

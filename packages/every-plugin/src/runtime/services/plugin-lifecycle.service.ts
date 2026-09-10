@@ -58,28 +58,28 @@ export class PluginLifecycleService extends Effect.Service<PluginLifecycleServic
             yield* Effect.forEach(
               plugins,
               (plugin) =>
-                Effect.gen(function* () {
-                  yield* plugin.plugin
-                    .shutdown()
-                    .pipe(
-                      Effect.catchAll((error) =>
-                        Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, error),
-                      ),
-                    );
-                  yield* Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
-                    Effect.catchAll((error) =>
-                      Effect.logWarning(
-                        `Failed to close scope for plugin ${plugin.plugin.id}`,
-                        error,
+                plugin.plugin.shutdown().pipe(
+                  Effect.catchAllCause((cause) =>
+                    Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
+                  ),
+                  Effect.ensuring(
+                    Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
+                      Effect.catchAllCause((cause) =>
+                        Effect.logWarning(
+                          `Failed to close scope for plugin ${plugin.plugin.id}`,
+                          cause,
+                        ),
                       ),
                     ),
-                  );
-                }),
+                  ),
+                ),
               { concurrency: "unbounded" },
             );
 
             yield* Ref.set(activePlugins, new Set());
-          }).pipe(Effect.catchAll((error) => Effect.logWarning("Plugin cleanup failed", error))),
+          }).pipe(
+            Effect.catchAllCause((cause) => Effect.logWarning("Plugin cleanup failed", cause)),
+          ),
       };
     }),
   },
