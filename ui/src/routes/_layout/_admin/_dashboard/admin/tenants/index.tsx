@@ -37,19 +37,16 @@ function AdminTenants() {
   const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
   const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
   const tenants = tenantsQuery.data ?? [];
-  const nodes = nodesQuery.data ?? [];
   const isLoading = tenantsQuery.isLoading || nodesQuery.isLoading;
   const error = tenantsQuery.error ?? nodesQuery.error;
 
   const slugByTenantId = useMemo(() => {
     const map = new Map<string, string>();
-    for (const node of nodes) {
+    for (const node of nodesQuery.data ?? []) {
       if (!map.has(node.tenantId)) map.set(node.tenantId, node.slug);
     }
     return map;
-  }, [nodes]);
-
-  const tenantKey = (tenantId: string) => slugByTenantId.get(tenantId) ?? tenantId;
+  }, [nodesQuery.data]);
 
   const columns = useMemo<DataTableColumnDef<Tenant>[]>(
     () => [
@@ -59,7 +56,7 @@ function AdminTenants() {
         cell: ({ row }) => (
           <Link
             to="/tenant/$tenantId"
-            params={{ tenantId: tenantKey(row.original.id) }}
+            params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
             className="font-medium text-foreground hover:underline"
           >
             {row.original.name}
@@ -100,7 +97,10 @@ function AdminTenants() {
         header: "",
         cell: ({ row }) => (
           <Button asChild variant="outline" size="sm">
-            <Link to="/tenant/$tenantId" params={{ tenantId: tenantKey(row.original.id) }}>
+            <Link
+              to="/tenant/$tenantId"
+              params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
+            >
               open
             </Link>
           </Button>
