@@ -65,7 +65,8 @@ export class SecurityMiddleware extends Context.Tag("host/SecurityMiddleware")<
         }
 
         const host = c.req.header("host");
-        if (host && host.split(":")[0] === new URL(origin).hostname) {
+        const originUrl = URL.canParse(origin) ? new URL(origin) : null;
+        if (host && originUrl && host.split(":")[0] === originUrl.hostname) {
           return next();
         }
 
