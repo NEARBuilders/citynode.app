@@ -158,7 +158,9 @@ export const siwnClient = (config: SIWNClientConfig) => {
     network?: "mainnet" | "testnet",
   ) => {
     if (!accountId) return;
+    if (network && network !== activeNetwork.get()) return;
     const net = network || activeNetwork.get();
+    if (net !== activeNetwork.get()) return;
     nearState.set({
       accountId,
       publicKey: publicKey || null,
@@ -195,9 +197,10 @@ export const siwnClient = (config: SIWNClientConfig) => {
       });
 
       connector.on("wallet:signOut", () => {
+        if (activeNetwork.get() !== network) return;
         walletConnected.set(false);
         const state = nearState.get();
-        if (state) {
+        if (state?.networkId === network) {
           nearState.set({
             accountId: state.accountId,
             publicKey: null,
@@ -209,13 +212,14 @@ export const siwnClient = (config: SIWNClientConfig) => {
       void connector
         .getConnectedWallet()
         .then(({ accounts }) => {
+          if (activeNetwork.get() !== network) return;
           const account = accounts?.[0];
-          const net = activeNetwork.get();
-          if (account?.accountId && !nearState.get()) {
+          const state = nearState.get();
+          if (account?.accountId && !state) {
             nearState.set({
               accountId: account.accountId,
               publicKey: account.publicKey ?? null,
-              networkId: net,
+              networkId: network,
             });
           }
           if (account?.accountId) {
@@ -251,6 +255,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
 
   const restoreFromSession = async ($fetch: BetterFetch) => {
     if (sessionRestored) return;
+    const restoringNetwork = activeNetwork.get();
     const state = nearState.get();
     if (state?.accountId) {
       sessionRestored = true;
@@ -259,6 +264,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
 
     try {
       const res = await $fetch<ListAccountsResponseT>("/near/list-accounts", { method: "GET" });
+      if (activeNetwork.get() !== restoringNetwork) return;
       const accounts = res.data?.accounts;
       if (accounts?.length) {
         const primary =
@@ -311,9 +317,12 @@ export const siwnClient = (config: SIWNClientConfig) => {
       const signInHandler = (data: EventMap["wallet:signIn"]) => {
         const accountId = data.accounts?.[0]?.accountId;
         const publicKey = data.accounts?.[0]?.publicKey;
-        if (accountId) {
-          handleAccountConnection(accountId, publicKey, net);
-          resolve(true);
+        if (accountId && activeNetwork.get() === net) {
+          void handleAccountConnection(accountId, publicKey, net).then(() =>
+            resolve(activeNetwork.get() === net),
+          );
+        } else if (activeNetwork.get() !== net) {
+          resolve(false);
         }
       };
 
@@ -345,6 +354,10 @@ export const siwnClient = (config: SIWNClientConfig) => {
     try {
       connectedWallet = await conn.getConnectedWallet();
     } catch {}
+
+    if (activeNetwork.get() !== net) {
+      throw new Error("NEAR network changed while connecting wallet");
+    }
 
     if (connectedWallet?.accounts?.length) {
       const accountId: string = connectedWallet.accounts[0]!.accountId;
@@ -378,6 +391,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
       value: { signedMessage: SignedMessage; accountId: string; publicKey: string } | null;
     } = { value: null };
     const handler = (data: EventMap["wallet:signInAndSignMessage"]) => {
+      if (activeNetwork.get() !== net) return;
       const account = data.accounts?.[0];
       if (account?.signedMessage) {
         result.value = {
@@ -404,6 +418,10 @@ export const siwnClient = (config: SIWNClientConfig) => {
 
     if (!result.value) {
       throw new Error("Wallet sign-in was cancelled or failed");
+    }
+
+    if (activeNetwork.get() !== net) {
+      throw new Error("NEAR network changed while signing in");
     }
 
     return {

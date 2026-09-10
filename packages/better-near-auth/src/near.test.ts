@@ -149,20 +149,30 @@ vi.mock("near-kit", () => {
 });
 
 vi.mock("@hot-labs/near-connect", () => ({
-  NearConnector: vi.fn().mockImplementation(() => ({
-    connect: vi.fn(() => Promise.resolve({})),
-    disconnect: vi.fn(() => Promise.resolve()),
-    getConnectedWallet: vi.fn(() =>
-      Promise.resolve({
-        accounts: [{ accountId: MOCK_ACCOUNT_ID, publicKey: MOCK_PUBLIC_KEY }],
-      }),
-    ),
-    on: vi.fn(),
-    once: vi.fn(),
-    off: vi.fn(),
-    wallet: vi.fn(() => Promise.resolve({})),
-    switchNetwork: vi.fn(),
-  })),
+  NearConnector: vi.fn().mockImplementation(function (
+    this: unknown,
+    { network }: { network: "mainnet" | "testnet" },
+  ) {
+    return {
+      connect: vi.fn(() => Promise.resolve({})),
+      disconnect: vi.fn(() => Promise.resolve()),
+      getConnectedWallet: vi.fn(() =>
+        Promise.resolve({
+          accounts: [
+            {
+              accountId: network === "testnet" ? MOCK_TESTNET_ACCOUNT_ID : MOCK_ACCOUNT_ID,
+              publicKey: MOCK_PUBLIC_KEY,
+            },
+          ],
+        }),
+      ),
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+      wallet: vi.fn(() => Promise.resolve({})),
+      switchNetwork: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("./profile.js", () => ({
@@ -191,6 +201,7 @@ function makeVerifyBody(accountId: string = MOCK_ACCOUNT_ID) {
 
 async function setup(overrides?: {
   recipient?: string;
+  recipients?: { mainnet: string; testnet: string };
   requireFullAccessKey?: boolean;
   relayer?: any;
   getProfile?: any;
@@ -202,7 +213,9 @@ async function setup(overrides?: {
     {
       plugins: [
         siwn({
-          recipient: overrides?.recipient ?? MOCK_RECIPIENT,
+          ...(overrides?.recipients
+            ? { recipients: overrides.recipients }
+            : { recipient: overrides?.recipient ?? MOCK_RECIPIENT }),
           requireFullAccessKey: overrides?.requireFullAccessKey ?? false,
           relayer: overrides?.relayer,
           getProfile: overrides?.getProfile,
@@ -296,6 +309,38 @@ describe("siwn plugin", () => {
       expect(data?.token).toBeDefined();
       expect(data?.user.accountId).toBe(MOCK_ACCOUNT_ID);
       expect(data?.user.network).toBe("mainnet");
+    });
+
+    it("should reject a recipient that does not match the configured recipient", async () => {
+      const { client } = await setup();
+      const body = makeVerifyBody();
+      const { error } = await client.near.verify({
+        ...body,
+        message: "Sign in to attacker.near",
+        recipient: "attacker.near",
+      });
+
+      expect(error).toBeDefined();
+    });
+
+    it("passes the configured recipient for the account network to the key validator", async () => {
+      const validateLimitedAccessKey = vi.fn().mockResolvedValue(true);
+      const { client } = await setup({
+        recipients: { mainnet: "example.near", testnet: "example.testnet" },
+        validateLimitedAccessKey,
+      });
+      const body = makeVerifyBody(MOCK_TESTNET_ACCOUNT_ID);
+      const { data, error } = await client.near.verify({
+        ...body,
+        message: "Sign in to example.testnet",
+        recipient: "example.testnet",
+      });
+
+      expect(error).toBeNull();
+      expect(data?.success).toBe(true);
+      expect(validateLimitedAccessKey).toHaveBeenCalledWith(
+        expect.objectContaining({ recipient: "example.testnet" }),
+      );
     });
 
     it("should reject an signed message with mismatched accountId", async () => {
@@ -471,6 +516,43 @@ describe("siwn plugin", () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.accountId).toBe(MOCK_ACCOUNT_ID);
+    });
+
+    it("passes the configured recipient for the account network to the link validator", async () => {
+      const validateLimitedAccessKey = vi.fn().mockResolvedValue(true);
+      const { signInWithTestUser, customFetchImpl } = await getTestInstance(
+        {
+          plugins: [
+            siwn({
+              recipients: { mainnet: "example.near", testnet: "example.testnet" },
+              requireFullAccessKey: false,
+              validateLimitedAccessKey,
+            }),
+          ],
+          emailAndPassword: { enabled: true },
+        },
+        { clientOptions: { plugins: [] } },
+      );
+
+      const { headers } = await signInWithTestUser();
+      const body = makeVerifyBody(MOCK_TESTNET_ACCOUNT_ID);
+      const res = await customFetchImpl("http://localhost/api/auth/near/link-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: headers.get("cookie") || "",
+        },
+        body: JSON.stringify({
+          ...body,
+          message: "Sign in to example.testnet",
+          recipient: "example.testnet",
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(validateLimitedAccessKey).toHaveBeenCalledWith(
+        expect.objectContaining({ recipient: "example.testnet" }),
+      );
     });
 
     it("should reject linking without a session", async () => {
@@ -1142,6 +1224,56 @@ describe("siwnClient getActions", () => {
     );
     return { actions, sessionAtom, plugin, store, $fetch };
   }
+
+  it("ignores wallet events from a network that is no longer active", async () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
+
+    try {
+      const { NearConnector } = await import("@hot-labs/near-connect");
+      const connectorMock = NearConnector as any;
+      const callStart = connectorMock.mock.calls.length;
+      const { actions, plugin } = setupClient(null);
+
+      await vi.waitFor(() => {
+        expect(connectorMock).toHaveBeenCalledTimes(callStart + 1);
+      });
+
+      const mainnetConnector = connectorMock.mock.results[callStart]?.value;
+      actions.near.setNetwork("testnet");
+
+      await vi.waitFor(() => {
+        expect(connectorMock).toHaveBeenCalledTimes(callStart + 2);
+      });
+
+      const atoms = plugin.getAtoms(undefined as unknown as Parameters<typeof plugin.getAtoms>[0]);
+      await vi.waitFor(() => {
+        expect(atoms.nearState.get()?.networkId).toBe("testnet");
+      });
+
+      const stateBeforeStaleEvent = atoms.nearState.get();
+      const staleSignInHandler = mainnetConnector.on.mock.calls.find(
+        ([event]: [string]) => event === "wallet:signIn",
+      )?.[1];
+      const staleSignOutHandler = mainnetConnector.on.mock.calls.find(
+        ([event]: [string]) => event === "wallet:signOut",
+      )?.[1];
+
+      await staleSignInHandler({
+        accounts: [{ accountId: "stale.near", publicKey: "ed25519:stale" }],
+      });
+      staleSignOutHandler();
+
+      expect(atoms.nearState.get()).toEqual(stateBeforeStaleEvent);
+      expect(atoms.walletConnected.get()).toBe(true);
+    } finally {
+      if (previousWindow) {
+        Object.defineProperty(globalThis, "window", previousWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, "window");
+      }
+    }
+  });
 
   describe("getAccountId session fallback", () => {
     it("returns null when there is no session and no NearConnect state", () => {
