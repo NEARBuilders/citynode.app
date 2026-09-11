@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
@@ -19,7 +18,6 @@ import {
 } from "@/components/ui/sidebar";
 import type { SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
-import { SidebarUserNav } from "./sidebar-user-nav";
 import { useIdentity } from "./use-identity";
 
 interface AppSidebarProps {
@@ -50,10 +48,6 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-
-      <SidebarFooter>
-        <SidebarUserNav />
-      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
