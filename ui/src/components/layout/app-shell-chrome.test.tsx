@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppHeader } from "./app-header";
@@ -54,13 +54,24 @@ vi.mock("@/app", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   ClientOnly: ({ children }: { children: ReactNode }) => children,
-  Link: ({ to, children, ...props }: { to: string; children: ReactNode; [key: string]: unknown }) => (
+  Link: ({
+    to,
+    children,
+    ...props
+  }: {
+    to: string;
+    children: ReactNode;
+    [key: string]: unknown;
+  }) => (
     <a href={to} {...props}>
       {children}
     </a>
   ),
-  useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => unknown }) =>
-    select({ location: { pathname: "/dashboard" } }),
+  useRouterState: ({
+    select,
+  }: {
+    select: (state: { location: { pathname: string } }) => unknown;
+  }) => select({ location: { pathname: "/dashboard" } }),
 }));
 
 beforeEach(() => {
