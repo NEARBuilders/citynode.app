@@ -17,6 +17,8 @@ import { Amount, type FinalExecutionOutcome, fromNearConnect, Gas, Near } from "
 import { useEffect } from "react";
 import { create } from "zustand";
 
+import { getCspNonce } from "@/app";
+
 import {
   buildTenantPublishConfig,
   isExplicitDaoMember,
@@ -79,6 +81,7 @@ function getConnector(): NearConnector {
     network: "mainnet",
     storage: prefixedStorage(),
     autoConnect: false,
+    cspNonce: getCspNonce(),
   });
   return _connector;
 }

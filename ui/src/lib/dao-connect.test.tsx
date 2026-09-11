@@ -13,6 +13,7 @@ const harness = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   getConnectedWallet: vi.fn(),
+  constructorOptions: {} as Record<string, unknown>,
 }));
 
 vi.mock("@hot-labs/near-connect", async () => {
@@ -21,6 +22,9 @@ vi.mock("@hot-labs/near-connect", async () => {
   return {
     ...actual,
     NearConnector: class {
+      constructor(options: Record<string, unknown> = {}) {
+        harness.constructorOptions = options;
+      }
       async connect(input: { walletId?: string }) {
         return harness.connect(input);
       }
@@ -137,5 +141,49 @@ describe("trezu session binding to the SIWN account", () => {
     expect(harness.disconnect).toHaveBeenCalledOnce();
     expect(localStorage.getItem(AUTH_ACCOUNT_KEY)).toBeNull();
     expect(useDaoConnectionStore.getState().status).toBe("idle");
+  });
+});
+
+describe("csp nonce propagation to the trezu wallet iframe", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    harness.constructorOptions = {};
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+    delete window.__CSP_NONCE__;
+    vi.resetModules();
+  });
+
+  async function importFreshModule() {
+    vi.resetModules();
+    return import("./dao-connect");
+  }
+
+  it("forwards the page nonce to NearConnector under strict CSP", async () => {
+    window.__CSP_NONCE__ = "ULNjaTTRHz1rPLxPkj5+8w==";
+    harness.connect.mockResolvedValue({
+      getAccounts: async () => [{ accountId: "dao.sputnik.near" }],
+    });
+
+    const { connectDaoAccount: connectDaoAccountFresh } = await importFreshModule();
+    await connectDaoAccountFresh({ authAccountId: "efiz.near" });
+
+    expect(harness.constructorOptions).toMatchObject({
+      cspNonce: "ULNjaTTRHz1rPLxPkj5+8w==",
+    });
+  });
+
+  it("leaves cspNonce undefined when the page has no nonce (relaxed CSP)", async () => {
+    harness.connect.mockResolvedValue({
+      getAccounts: async () => [{ accountId: "dao.sputnik.near" }],
+    });
+
+    const { connectDaoAccount: connectDaoAccountFresh } = await importFreshModule();
+    await connectDaoAccountFresh({ authAccountId: "efiz.near" });
+
+    expect(harness.constructorOptions.cspNonce).toBeUndefined();
   });
 });
