@@ -24,7 +24,8 @@ jobs:
     outputs:
       everything-dev: ${{ steps.changes.outputs.everything-dev }}
       every-plugin: ${{ steps.changes.outputs.every-plugin }}
-      regression: ${{ steps.changes.outputs.regression }}
+      regression-http: ${{ steps.changes.outputs.regression-http }}
+      regression-browser: ${{ steps.changes.outputs.regression-browser }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
@@ -40,7 +41,8 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
             echo "every-plugin=true" >> "$GITHUB_OUTPUT"
-            echo "regression=true" >> "$GITHUB_OUTPUT"
+            echo "regression-http=true" >> "$GITHUB_OUTPUT"
+            echo "regression-browser=true" >> "$GITHUB_OUTPUT"
             exit 0
           else
             BEFORE="${{ github.event.before }}"
@@ -55,7 +57,8 @@ jobs:
           if ! DIFF=$(git diff --name-only "$BASE" HEAD); then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
             echo "every-plugin=true" >> "$GITHUB_OUTPUT"
-            echo "regression=true" >> "$GITHUB_OUTPUT"
+            echo "regression-http=true" >> "$GITHUB_OUTPUT"
+            echo "regression-browser=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
@@ -68,10 +71,15 @@ jobs:
           else
             echo "every-plugin=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^tests/regression/|^host/|^ui/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
-            echo "regression=true" >> "$GITHUB_OUTPUT"
+          if echo "$DIFF" | grep -qE '^tests/regression/(http|lib)/|^host/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+            echo "regression-http=true" >> "$GITHUB_OUTPUT"
           else
-            echo "regression=false" >> "$GITHUB_OUTPUT"
+            echo "regression-http=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$DIFF" | grep -qE '^tests/regression/(browser|lib)/|^host/|^ui/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+            echo "regression-browser=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "regression-browser=false" >> "$GITHUB_OUTPUT"
           fi
 
   lint-and-typecheck:
@@ -211,12 +219,12 @@ jobs:
       - name: Test every-plugin
         run: bun run --cwd packages/every-plugin test:all
 
-  regression:
-    name: Regression
+  regression-http:
+    name: Regression HTTP
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
-    if: needs.detect-changes.outputs.regression == 'true'
-    timeout-minutes: 30
+    if: needs.detect-changes.outputs.regression-http == 'true'
+    timeout-minutes: 15
     env:
       CI: true
       API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
@@ -270,6 +278,70 @@ jobs:
       - name: Build every-plugin
         run: bun run --cwd packages/every-plugin build
 
+      - name: Run regression unit and HTTP suite
+        run: bun run test:regression:unit && bun run test:regression:http:dev
+
+      - name: Upload regression artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
+        with:
+          name: regression-http-artifacts
+          path: .bos/logs/**
+
+  regression-browser:
+    name: Regression Browser
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-and-typecheck]
+    if: needs.detect-changes.outputs.regression-browser == 'true'
+    timeout-minutes: 20
+    env:
+      CI: true
+      API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
+      AUTH_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5435/auth_test_db
+      CORS_ORIGIN: http://localhost:4100
+      BETTER_AUTH_SECRET: regression-test-secret-do-not-use-in-production
+    services:
+      postgres-api-test:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: everythingdev
+          POSTGRES_PASSWORD: everythingdev
+          POSTGRES_DB: api_test_db
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U everythingdev -d api_test_db"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+      postgres-auth-test:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: everythingdev
+          POSTGRES_PASSWORD: everythingdev
+          POSTGRES_DB: auth_test_db
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U everythingdev -d auth_test_db"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build every-plugin
+        run: bun run --cwd packages/every-plugin build
+
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5 (Node 24)
@@ -285,14 +357,14 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Run regression suite
-        run: bun run test:regression
+      - name: Run browser regression suite
+        run: bun run test:regression:browser:dev
 
       - name: Upload regression artifacts on failure
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
         with:
-          name: regression-artifacts
+          name: regression-browser-artifacts
           path: |
             .bos/logs/**
             playwright-report/**
