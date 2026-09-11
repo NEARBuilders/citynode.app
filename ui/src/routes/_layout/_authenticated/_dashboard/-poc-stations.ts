@@ -96,6 +96,8 @@ export interface StationDef {
   signer: SignerKind;
   purpose: string;
   steps: StepDef[];
+  /** Chain facts that must hold before the station can run, with the reason shown while missing. */
+  requires?: Partial<Record<keyof ChainFacts, string>>;
 }
 
 export interface StationInputs {
@@ -131,8 +133,6 @@ export function buildStations(inputs: StationInputs): StationDef[] {
   } = inputs;
 
   const fundingYocto = (lockYocto ?? 0n) + (stakeYocto ?? 0n);
-  const teamStakeYocto =
-    stakeYocto && stakeYocto > MIN_TEAM_STAKE_YOCTO ? stakeYocto : MIN_TEAM_STAKE_YOCTO;
 
   const defs: StationDef[] = [
     {
@@ -275,18 +275,18 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Stake the team's NEAR",
       signer: "team",
       purpose:
-        "The team stakes its own NEAR directly into the node's pool — its own skin in the game, earning rewards and backing the node's validator. Only passes once at least 1 NEAR is staked.",
+        "The team stakes exactly 1 NEAR of its own into the node's pool — its own skin in the game, earning rewards and backing the node's validator. The endowment stakes whatever it wants separately.",
       steps: [
         {
           id: "stake-team",
-          label: "stake from the team treasury",
+          label: "stake 1 NEAR from the team treasury",
           plan: {
             kind: "call",
             receiverId: pool,
             methodName: "deposit_and_stake",
             args: {},
             gas: "200 Tgas",
-            attachedDeposit: teamStakeYocto.toString(),
+            attachedDeposit: MIN_TEAM_STAKE_YOCTO.toString(),
           },
         },
       ],
@@ -322,6 +322,9 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       signer: "endowment",
       purpose:
         "The endowment delegates its veNEAR voting power to the team wallet, replacing its whole delegation set. Skipped when both are one account.",
+      requires: {
+        teamRegistered: "the team must register in veNEAR before it can receive the delegation",
+      },
       steps: [
         {
           id: "set-delegations",
@@ -485,6 +488,22 @@ export function signerAccount(
 
 /* ------------------------------------------------------------ status derivation */
 
+/**
+ * Stations whose completion is not a prerequisite for what follows. Publish
+ * goes live through a DAO vote and an admin mark-applied — neither gates
+ * funding or governance. The team's own stake and veNEAR registration are
+ * signed by the team treasury alone and need nothing from the endowment
+ * track, so they never hold up the stations after them.
+ */
+const NON_GATING_STATIONS: ReadonlySet<StationId> = new Set([
+  "publish",
+  "stake-team",
+  "register-team",
+]);
+
+/** Stations that ignore upstream ordering entirely. */
+const UPSTREAM_EXEMPT_STATIONS: ReadonlySet<StationId> = new Set(["stake-team", "register-team"]);
+
 export interface ChainFacts {
   tenantDeployed: boolean;
   applicationProposed: boolean;
@@ -553,7 +572,8 @@ export interface StationState {
   /**
    * Why the station is blocked. `upstream` clears itself as earlier stations
    * land, so a chained run may walk through it; `input` needs the user to fix
-   * something first, so a run must stop there.
+   * something first, so a run must stop there. Upstream-exempt stations (the
+   * team's stake, the team's veNEAR registration) never report `upstream`.
    */
   blockedBy: "upstream" | "input" | null;
   /** Account that must sign, resolved from the current inputs. */
@@ -615,8 +635,22 @@ export function deriveStations(options: DeriveOptions): StationState[] {
       return { ...step, status, pendingProposal };
     });
 
-    const blockedByInput = blockers[def.id] ? "input" : null;
-    const blockedByUpstream = upstreamIncomplete ? "upstream" : null;
+    /**
+     * An unmet requirement blocks as `input`, not `upstream`: the fix is
+     * running another station, often as another signer, so a chained run must
+     * stop here rather than walk through and fail on-chain.
+     */
+    const unmetRequirement = (() => {
+      if (!def.requires) return null;
+      for (const [fact, reason] of Object.entries(def.requires)) {
+        if (facts[fact as keyof ChainFacts] !== true) return reason;
+      }
+      return null;
+    })();
+
+    const blockedByInput = blockers[def.id] || unmetRequirement ? "input" : null;
+    const blockedByUpstream =
+      upstreamIncomplete && !UPSTREAM_EXEMPT_STATIONS.has(def.id) ? "upstream" : null;
 
     const status = ((): StationStatus => {
       if (isSharedTreasurySkip(def.id, facts)) return "skipped";
@@ -628,7 +662,7 @@ export function deriveStations(options: DeriveOptions): StationState[] {
       return "ready";
     })();
 
-    if (status !== "done" && status !== "skipped") {
+    if (!NON_GATING_STATIONS.has(def.id) && status !== "done" && status !== "skipped") {
       upstreamIncomplete = true;
     }
 
@@ -636,12 +670,13 @@ export function deriveStations(options: DeriveOptions): StationState[] {
     const blockedReason =
       failures[def.id] ??
       blockers[def.id] ??
+      unmetRequirement ??
       (blockedBy === "upstream" ? "waiting on an earlier station" : null);
 
     const { canRun, runBlockReason } = deriveRunGate({
       status,
       blockedBy,
-      blockerReason: blockers[def.id] ?? null,
+      blockerReason: blockers[def.id] ?? unmetRequirement,
       signerConnected,
       hasPendingSteps: steps.some((step) => step.status === "pending"),
     });

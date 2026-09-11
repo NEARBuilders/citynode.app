@@ -1,9 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
-import { injectCookies } from "../helpers/seeded";
+import { injectCookies, seedRegressionThing } from "../helpers/seeded";
 
 test.describe("apiClient", () => {
   let pageErrors: string[];
+
+  test.beforeAll(async () => {
+    await seedRegressionThing();
+  });
 
   test.beforeEach(async ({ page }) => {
     pageErrors = collectErrors(page);
