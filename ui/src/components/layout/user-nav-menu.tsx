@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
@@ -25,9 +24,6 @@ interface UserNavMenuContentProps {
   signOutMutation: SignOutMutationLike;
   className?: string;
   align?: "start" | "end" | "center";
-  side?: "top" | "right" | "bottom" | "left";
-  sideOffset?: number;
-  header?: "inline" | "label";
 }
 
 export function UserNavMenuContent({
@@ -41,9 +37,6 @@ export function UserNavMenuContent({
   signOutMutation,
   className = "w-64",
   align = "end",
-  side,
-  sideOffset,
-  header = "inline",
 }: UserNavMenuContentProps) {
   const identityContent = (
     <>
@@ -61,46 +54,17 @@ export function UserNavMenuContent({
   );
 
   return (
-    <DropdownMenuContent className={className} align={align} side={side} sideOffset={sideOffset}>
-      {header === "label" ? (
-        <>
-          <DropdownMenuLabel className="p-0 font-normal">
-            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-              {identityContent}
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-        </>
-      ) : (
-        <>
-          <DropdownMenuItem asChild>
-            {nearAccountId ? (
-              <Link to="/$accountId" params={{ accountId: nearAccountId }}>
-                {identityContent}
-              </Link>
-            ) : (
-              <Link to="/settings/profile">{identityContent}</Link>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-        </>
-      )}
-
-      {header === "label" && (
-        <DropdownMenuItem asChild>
-          {nearAccountId ? (
-            <Link to="/$accountId" params={{ accountId: nearAccountId }}>
-              <User />
-              profile
-            </Link>
-          ) : (
-            <Link to="/settings/profile">
-              <User />
-              profile
-            </Link>
-          )}
-        </DropdownMenuItem>
-      )}
+    <DropdownMenuContent className={className} align={align}>
+      <DropdownMenuItem asChild>
+        {nearAccountId ? (
+          <Link to="/$accountId" params={{ accountId: nearAccountId }}>
+            {identityContent}
+          </Link>
+        ) : (
+          <Link to="/settings/profile">{identityContent}</Link>
+        )}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
         <Link to="/dashboard">
           <Home />

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
@@ -29,7 +30,7 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
         <SidebarTrigger />
         <Separator orientation="vertical" className="h-4" />
 
-        <Breadcrumb className="hidden sm:block min-w-0">
+        <Breadcrumb className="hidden sm:block min-w-0 flex-1">
           <BreadcrumbList className="flex-nowrap">
             <BreadcrumbItem>
               <span>{runtime?.accountId ?? account}</span>
@@ -61,6 +62,9 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
             )}
           </BreadcrumbList>
         </Breadcrumb>
+        <div className="ml-auto shrink-0">
+          <UserNav showOrgSwitcher={false} />
+        </div>
       </div>
     </header>
   );

@@ -341,3 +341,4 @@ node_modules/.federation
 !plans/prototypes/**/*.gen.ts
 .bos/sync-backup/
 .scratch/
+docs/adr/**

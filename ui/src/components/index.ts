@@ -28,7 +28,6 @@ export { PublicHeader } from "./layout/public-header";
 export { PublicShell, PublicShellFooter } from "./layout/public-shell";
 export { SectionHeader } from "./layout/section-header";
 export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
-export { SidebarUserNav } from "./layout/sidebar-user-nav";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
 export { Logo } from "./logo";

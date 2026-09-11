@@ -9,15 +9,20 @@ import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
 import { UserNavMenuContent } from "./user-nav-menu";
 
-export function UserNav({ showConnect = true }: { showConnect?: boolean }) {
+interface UserNavProps {
+  showConnect?: boolean;
+  showOrgSwitcher?: boolean;
+}
+
+export function UserNav({ showConnect = true, showOrgSwitcher = true }: UserNavProps) {
   return (
     <ClientOnly>
-      <UserNavContent showConnect={showConnect} />
+      <UserNavContent showConnect={showConnect} showOrgSwitcher={showOrgSwitcher} />
     </ClientOnly>
   );
 }
 
-function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
+function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavProps) {
   const {
     user,
     isSessionLoading,
@@ -52,7 +57,7 @@ function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
   return (
     <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
       <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
-      {organizations.length > 0 && (
+      {showOrgSwitcher && organizations.length > 0 && (
         <OrgSwitcher organizations={organizations} activeOrgId={activeOrgId} />
       )}
 
@@ -61,6 +66,7 @@ function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
           <button
             type="button"
             aria-label={displayName}
+            data-testid="account-menu"
             className="rounded-full! ring-1 ring-border transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:scale-105"
             title="account menu"
           >
@@ -82,7 +88,6 @@ function UserNavContent({ showConnect = true }: { showConnect?: boolean }) {
           initials={initials}
           signOutMutation={signOutMutation}
           align="end"
-          header="inline"
         />
       </DropdownMenu>
     </div>
