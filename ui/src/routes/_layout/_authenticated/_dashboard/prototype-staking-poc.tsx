@@ -80,6 +80,7 @@ import {
   formatNear,
   getNear,
   isPositive,
+  meetsTeamStakeMinimum,
   nearblocksAccount,
   type PoolAccountView,
   parseNearAmount,
@@ -405,7 +406,7 @@ function NodeLifecyclePocPage() {
     nearLocked: isPositive(lockupState?.locked),
     poolSelected: !!lockupState?.stakingPool && lockupState.stakingPool === pool,
     stakedFromLockup: isPositive(lockupState?.knownDeposited),
-    teamStaked: isPositive(teamPoolAccount?.staked_balance),
+    teamStaked: meetsTeamStakeMinimum(teamPoolAccount?.staked_balance),
     teamRegistered: teamVe != null,
     delegated: !!endowmentVe?.account.delegations.some((entry) => entry.account_id === team),
     voteCast: voteRecord != null,
@@ -455,7 +456,6 @@ function NodeLifecyclePocPage() {
   }
   if (!team) blockers["stake-team"] = "connect your team DAO with Trezu";
   else if (!pool) blockers["stake-team"] = "enter a staking pool";
-  else if (!stakeYocto) blockers["stake-team"] = "enter a stake amount";
   if (!delegateBpsValue) blockers.delegate = "delegate between 1 and 100 percent";
   if (!team) blockers.delegate = "connect your team DAO with Trezu";
   else if (!govProposal) blockers.vote = "no active House of Stake proposal";
@@ -670,7 +670,7 @@ function NodeLifecyclePocPage() {
         const staked = yoctoArg(current.staked_balance);
         const remaining = want > staked ? want - staked : 0n;
         if (remaining <= 0n) {
-          log("team already staked — skipping");
+          log("team already staked at least 1 NEAR — skipping");
           return null;
         }
         return { ...plan, attachedDeposit: remaining.toString() };

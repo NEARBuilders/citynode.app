@@ -44,6 +44,8 @@ export const LOCKUP_DEPLOY_DEPOSIT = "2000000000000000000000000";
 export const DELEGATE_DEPOSIT = "100000000000000000000000";
 export const VOTE_DEPOSIT = "5000000000000000000000000";
 export const ONE_YOCTO = "1";
+/** The team's direct stake only counts as skin in the game from 1 NEAR up. */
+export const MIN_TEAM_STAKE_YOCTO = 10n ** 24n;
 
 export const ACTIVE_VOTE_STATUSES = ["Voting", "Sandbox"];
 export const VOTE_OPTIONS = ["For", "Against", "Abstain"] as const;
@@ -72,6 +74,11 @@ export function isPositive(yocto: string | undefined | null): boolean {
   } catch {
     return false;
   }
+}
+
+/** True when the team's staked balance reaches the 1 NEAR minimum. */
+export function meetsTeamStakeMinimum(yocto: string | undefined | null): boolean {
+  return yoctoArg(yocto) >= MIN_TEAM_STAKE_YOCTO;
 }
 
 function balanceOf(value: string | undefined | null): bigint {

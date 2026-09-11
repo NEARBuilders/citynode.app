@@ -16,6 +16,7 @@ import {
   DELEGATE_DEPOSIT,
   findPendingProposalForPlan,
   LOCKUP_DEPLOY_DEPOSIT,
+  MIN_TEAM_STAKE_YOCTO,
   ONE_YOCTO,
   REGISTER_DEPOSIT,
   type SputnikProposal,
@@ -130,6 +131,8 @@ export function buildStations(inputs: StationInputs): StationDef[] {
   } = inputs;
 
   const fundingYocto = (lockYocto ?? 0n) + (stakeYocto ?? 0n);
+  const teamStakeYocto =
+    stakeYocto && stakeYocto > MIN_TEAM_STAKE_YOCTO ? stakeYocto : MIN_TEAM_STAKE_YOCTO;
 
   const defs: StationDef[] = [
     {
@@ -272,7 +275,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Stake the team's NEAR",
       signer: "team",
       purpose:
-        "The team stakes its own NEAR directly into the node's pool — its own skin in the game, earning rewards and backing the node's validator.",
+        "The team stakes its own NEAR directly into the node's pool — its own skin in the game, earning rewards and backing the node's validator. Only passes once at least 1 NEAR is staked.",
       steps: [
         {
           id: "stake-team",
@@ -283,7 +286,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             methodName: "deposit_and_stake",
             args: {},
             gas: "200 Tgas",
-            attachedDeposit: stakeYocto ? stakeYocto.toString() : "0",
+            attachedDeposit: teamStakeYocto.toString(),
           },
         },
       ],

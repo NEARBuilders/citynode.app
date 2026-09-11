@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SputnikProposal } from "./-poc-chain";
+import { MIN_TEAM_STAKE_YOCTO, meetsTeamStakeMinimum, type SputnikProposal } from "./-poc-chain";
 import {
   buildStations,
   type ChainFacts,
@@ -136,6 +136,24 @@ describe("buildStations", () => {
     });
   });
 
+  it("floors the team's stake proposal at 1 NEAR", () => {
+    const low = buildStations({ ...inputs, stakeYocto: 10n ** 23n });
+    expect(low.find((s) => s.id === "stake-team")?.steps[0]?.plan).toMatchObject({
+      attachedDeposit: (10n ** 24n).toString(),
+    });
+    const unset = buildStations({ ...inputs, stakeYocto: null });
+    expect(unset.find((s) => s.id === "stake-team")?.steps[0]?.plan).toMatchObject({
+      attachedDeposit: (10n ** 24n).toString(),
+    });
+  });
+
+  it("keeps the team's configured stake when it exceeds the floor", () => {
+    const stations = buildStations({ ...inputs, stakeYocto: 3n * 10n ** 24n });
+    expect(stations.find((s) => s.id === "stake-team")?.steps[0]?.plan).toMatchObject({
+      attachedDeposit: (3n * 10n ** 24n).toString(),
+    });
+  });
+
   it("unwinds the team's direct stake back to its treasury", () => {
     const unstakeTeam = buildStations(inputs).find((s) => s.id === "unstake-team");
     expect(
@@ -183,6 +201,17 @@ describe("buildStations", () => {
   it("falls back to the team wallet when no endowment account is set", () => {
     const stations = buildStations({ ...inputs, endowmentAccount: "" });
     expect(stations.find((s) => s.id === "endow")?.signer).toBe("team");
+  });
+});
+
+describe("meetsTeamStakeMinimum", () => {
+  it("passes the team's stake only from 1 NEAR up", () => {
+    expect(meetsTeamStakeMinimum(undefined)).toBe(false);
+    expect(meetsTeamStakeMinimum("0")).toBe(false);
+    expect(meetsTeamStakeMinimum((10n ** 23n).toString())).toBe(false);
+    expect(meetsTeamStakeMinimum((MIN_TEAM_STAKE_YOCTO - 1n).toString())).toBe(false);
+    expect(meetsTeamStakeMinimum(MIN_TEAM_STAKE_YOCTO.toString())).toBe(true);
+    expect(meetsTeamStakeMinimum((5n * 10n ** 24n).toString())).toBe(true);
   });
 });
 
