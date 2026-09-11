@@ -24,6 +24,7 @@ jobs:
     outputs:
       everything-dev: ${{ steps.changes.outputs.everything-dev }}
       every-plugin: ${{ steps.changes.outputs.every-plugin }}
+      regression: ${{ steps.changes.outputs.regression }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
@@ -39,6 +40,7 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
             echo "every-plugin=true" >> "$GITHUB_OUTPUT"
+            echo "regression=true" >> "$GITHUB_OUTPUT"
             exit 0
           else
             BEFORE="${{ github.event.before }}"
@@ -53,6 +55,7 @@ jobs:
           if ! DIFF=$(git diff --name-only "$BASE" HEAD); then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
             echo "every-plugin=true" >> "$GITHUB_OUTPUT"
+            echo "regression=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
@@ -64,6 +67,11 @@ jobs:
             echo "every-plugin=true" >> "$GITHUB_OUTPUT"
           else
             echo "every-plugin=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$DIFF" | grep -qE '^tests/regression/|^host/|^ui/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+            echo "regression=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "regression=false" >> "$GITHUB_OUTPUT"
           fi
 
   lint-and-typecheck:
@@ -206,7 +214,8 @@ jobs:
   regression:
     name: Regression
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck]
+    needs: [detect-changes, lint-and-typecheck]
+    if: needs.detect-changes.outputs.regression == 'true'
     timeout-minutes: 30
     env:
       CI: true
