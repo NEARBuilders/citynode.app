@@ -27,7 +27,37 @@ export const stakePoolQueryKeys = {
     const key = [...stakePoolQueryKeys.pool(accountId, network), "top-holders"] as const;
     return limit === undefined || limit === 50 ? key : ([...key, limit] as const);
   },
+  account: (accountId: string, network: string, stakerAccountId: string) =>
+    [...stakePoolQueryKeys.pool(accountId, network), "account", stakerAccountId] as const,
 };
+
+export interface StakePoolValidator {
+  accountId: string;
+  network?: string | null;
+  protocol?: string | null;
+  isDefault: boolean;
+}
+
+export function resolveTeamStakeTarget(input: {
+  daoAccountId?: string | null;
+  tenantAccountId?: string | null;
+  tenantOwnerKind?: string | null;
+  validators: readonly StakePoolValidator[];
+}) {
+  const teamAccountId =
+    input.daoAccountId?.trim() ||
+    (input.tenantOwnerKind === "dao" ? input.tenantAccountId?.trim() : "") ||
+    "";
+  if (!teamAccountId) return null;
+  const pool = input.validators.find((validator) => validator.isDefault) ?? input.validators[0];
+  if (!pool?.accountId) return null;
+  return {
+    teamAccountId,
+    poolAccountId: pool.accountId,
+    network: pool.network || "mainnet",
+    protocol: pool.protocol || "near",
+  };
+}
 
 function canReadPool({ accountId, network = "mainnet", protocol = "near" }: PoolOptions) {
   return !!accountId && protocol === "near" && (network === "mainnet" || network === "testnet");
@@ -52,6 +82,45 @@ export function stakePoolStatsQueryOptions(options: PoolOptions) {
         feeNumerator: numerator,
         feeDenominator: denominator,
         stakerCount: accountCountSchema.parse(count),
+      };
+    },
+  });
+}
+
+export type TeamStakeTarget = NonNullable<ReturnType<typeof resolveTeamStakeTarget>>;
+
+export function stakePoolAccountQueryOptions(options: {
+  poolAccountId: string;
+  stakerAccountId: string;
+  network?: string;
+  protocol?: string;
+}) {
+  const { poolAccountId, stakerAccountId, network = "mainnet" } = options;
+  return queryOptions({
+    queryKey: stakePoolQueryKeys.account(poolAccountId, network, stakerAccountId),
+    enabled: canReadPool({ ...options, accountId: poolAccountId }) && !!stakerAccountId,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: async () => {
+      const raw = await callViewFunction(
+        poolAccountId,
+        "get_account",
+        { account_id: stakerAccountId },
+        network,
+      );
+      const account = z
+        .object({
+          account_id: z.string().min(1),
+          staked_balance: balanceSchema,
+          unstaked_balance: balanceSchema,
+          can_withdraw: z.boolean(),
+        })
+        .parse(raw);
+      return {
+        accountId: account.account_id,
+        stakedBalance: account.staked_balance,
+        unstakedBalance: account.unstaked_balance,
+        canWithdraw: account.can_withdraw,
       };
     },
   });
