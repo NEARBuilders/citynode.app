@@ -4,6 +4,8 @@ import {
   formatNearBalance,
   formatPoolFee,
   invalidateStakePoolQueries,
+  resolveTeamStakeTarget,
+  stakePoolAccountQueryOptions,
   stakePoolStatsQueryOptions,
   stakePoolTopHoldersQueryOptions,
 } from "./stake-pool";
@@ -72,6 +74,7 @@ describe("stake pool queries", () => {
       ["stake-pool", "pool.near", "mainnet", "stats"],
       ["stake-pool", "pool.near", "mainnet", "top-holders"],
       ["stake-pool", "pool.near", "mainnet", "top-holders", 5],
+      ["stake-pool", "pool.near", "mainnet", "account", "india.sputnik-dao.near"],
     ];
     const untouched = [
       ["stake-pool", "pool.near", "testnet", "stats"],
@@ -135,5 +138,136 @@ describe("stake pool queries", () => {
     expect(formatPoolFee(stats.feeNumerator, stats.feeDenominator)).toBe("5%");
     expect(fetch).toHaveBeenCalledTimes(3);
     client.clear();
+  });
+});
+
+const pools = [
+  {
+    accountId: "other.poolv1.near",
+    network: "testnet",
+    protocol: "near",
+    isDefault: false,
+  },
+  {
+    accountId: "india.poolv1.near",
+    network: "mainnet",
+    protocol: "near",
+    isDefault: true,
+  },
+];
+
+describe("team stake target", () => {
+  it("prefers the org DAO and the default staking pool", () => {
+    expect(
+      resolveTeamStakeTarget({
+        daoAccountId: "india.sputnik-dao.near",
+        tenantAccountId: "tenant.near",
+        tenantOwnerKind: "dao",
+        validators: pools,
+      }),
+    ).toEqual({
+      teamAccountId: "india.sputnik-dao.near",
+      poolAccountId: "india.poolv1.near",
+      network: "mainnet",
+      protocol: "near",
+    });
+  });
+
+  it("falls back to a DAO-owned tenant account and the first pool when none is default", () => {
+    expect(
+      resolveTeamStakeTarget({
+        daoAccountId: "  ",
+        tenantAccountId: "india.sputnik-dao.near",
+        tenantOwnerKind: "dao",
+        validators: pools.filter((pool) => !pool.isDefault),
+      }),
+    ).toEqual({
+      teamAccountId: "india.sputnik-dao.near",
+      poolAccountId: "other.poolv1.near",
+      network: "testnet",
+      protocol: "near",
+    });
+  });
+
+  it("does not treat a platform tenant account as the team and needs both a team and a pool", () => {
+    expect(
+      resolveTeamStakeTarget({
+        tenantAccountId: "platform.near",
+        tenantOwnerKind: "platform",
+        validators: pools,
+      }),
+    ).toBeNull();
+    expect(
+      resolveTeamStakeTarget({
+        daoAccountId: "india.sputnik-dao.near",
+        validators: [],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("team stake pool account query", () => {
+  it("reads the team account's stake from get_account, not the pool total", async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      expect(body.params.method_name).toBe("get_account");
+      expect(JSON.parse(atob(body.params.args_base64))).toEqual({
+        account_id: "india.sputnik-dao.near",
+      });
+      return Response.json({
+        result: {
+          result: [
+            ...new TextEncoder().encode(
+              JSON.stringify({
+                account_id: "india.sputnik-dao.near",
+                staked_balance: "2500000000000000000000000",
+                unstaked_balance: "1000000000000000000000000",
+                can_withdraw: false,
+              }),
+            ),
+          ],
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const client = new QueryClient();
+    const account = await client.fetchQuery(
+      stakePoolAccountQueryOptions({
+        poolAccountId: "india.poolv1.near",
+        stakerAccountId: "india.sputnik-dao.near",
+        network: "mainnet",
+      }),
+    );
+    expect(account).toEqual({
+      accountId: "india.sputnik-dao.near",
+      stakedBalance: 2500000000000000000000000n,
+      unstakedBalance: 1000000000000000000000000n,
+      canWithdraw: false,
+    });
+    expect(formatNearBalance(account.stakedBalance)).toBe("2.5 NEAR");
+    client.clear();
+  });
+
+  it("isolates staker caches and stays disabled without a pool or team account", () => {
+    const options = {
+      poolAccountId: "india.poolv1.near",
+      stakerAccountId: "india.sputnik-dao.near",
+      network: "mainnet",
+    };
+    expect(stakePoolAccountQueryOptions(options).queryKey).toEqual([
+      "stake-pool",
+      "india.poolv1.near",
+      "mainnet",
+      "account",
+      "india.sputnik-dao.near",
+    ]);
+    expect(
+      stakePoolAccountQueryOptions({ ...options, stakerAccountId: "other.near" }).queryKey,
+    ).not.toEqual(stakePoolAccountQueryOptions(options).queryKey);
+    expect(stakePoolAccountQueryOptions(options).staleTime).toBe(300_000);
+    expect(stakePoolAccountQueryOptions({ ...options, protocol: "ethereum" }).enabled).toBe(false);
+    expect(stakePoolAccountQueryOptions({ ...options, poolAccountId: "" }).enabled).toBe(false);
+    expect(stakePoolAccountQueryOptions({ ...options, stakerAccountId: "" }).enabled).toBe(false);
+    expect(stakePoolAccountQueryOptions({ ...options, network: "localnet" }).enabled).toBe(false);
   });
 });

@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
-import { getActiveRuntime } from "@/app";
-import { Badge, Card, NodeValidatorTable, SectionHeader } from "@/components";
+import { getActiveRuntime, useApiClient } from "@/app";
+import { Badge, Card, NodeValidatorTable, SectionHeader, TeamStakeCard } from "@/components";
+import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/node/")({
@@ -9,14 +11,35 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboa
 });
 
 function NodeOverview() {
-  const { runtimeConfig, selectedNode, summary, stakingSourceNode } = Route.useRouteContext();
+  const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth } =
+    Route.useRouteContext();
+  const apiClient = useApiClient();
+  const orgId = tenant?.orgId ?? auth.activeOrganizationId;
+  const daoQuery = useQuery({
+    queryKey: ["org-dao", orgId],
+    enabled: !!orgId && !!selectedNode && !!summary,
+    staleTime: 60_000,
+    queryFn: () =>
+      apiClient.auth.getDao({ organizationId: orgId ?? "" }).catch(() => ({
+        daoAccountId: null,
+        daoNetwork: null,
+      })),
+  });
   if (!selectedNode || !summary) return null;
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
+  const teamStake = resolveTeamStakeTarget({
+    daoAccountId: daoQuery.data?.daoAccountId,
+    tenantAccountId: tenant?.accountId,
+    tenantOwnerKind: tenant?.ownerKind,
+    validators: summary.stakingValidators.validators,
+  });
 
   return (
     <div className="space-y-8">
+      <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Direct children" value={summary.childrenCount} />
         <StatCard label="Subtree nodes" value={summary.subtreeNodeCount} />

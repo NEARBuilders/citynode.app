@@ -38,6 +38,7 @@ export { RootError } from "./root-error";
 export { RootNotFound } from "./root-not-found";
 export { RouterError } from "./router-error";
 export { StakePoolCard } from "./stake-pool-card";
+export { TeamStakeCard } from "./team-stake-card";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
 export {
