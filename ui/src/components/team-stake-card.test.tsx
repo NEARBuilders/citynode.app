@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamStakeCard } from "./team-stake-card";
 
@@ -11,9 +11,37 @@ const target = {
   protocol: "near",
 };
 const clients: QueryClient[] = [];
+const unstakeMocks = vi.hoisted(() => ({
+  proposeTeamUnstake: vi.fn(),
+}));
+
+vi.mock("@/lib/use-near-account", () => ({
+  useNearAccount: () => "itexpert120-contra.near",
+}));
+
+vi.mock("@/lib/dao-connect", () => ({
+  useDaoConnection: () => ({
+    status: "idle",
+    daoAccountId: null,
+    error: null,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  }),
+  useDaoAutoRestore: () => undefined,
+  describeDaoError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+}));
+
+vi.mock("@/lib/team-unstake", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/team-unstake")>("@/lib/team-unstake");
+  return {
+    ...actual,
+    proposeTeamUnstake: unstakeMocks.proposeTeamUnstake,
+  };
+});
 
 afterEach(() => {
   cleanup();
+  unstakeMocks.proposeTeamUnstake.mockReset();
   for (const client of clients.splice(0)) client.clear();
   vi.unstubAllGlobals();
 });
@@ -66,6 +94,7 @@ describe("TeamStakeCard", () => {
       screen.getByText("Team stake appears once a team DAO and staking pool are linked."),
     ).toBeTruthy();
     expect(screen.queryByTestId("dashboard-node.team-stake-amount")).toBeNull();
+    expect(screen.queryByTestId("dashboard-node.team-stake-unstake")).toBeNull();
   });
 
   it("keeps the amount unavailable when the pool account view fails", async () => {
@@ -76,6 +105,32 @@ describe("TeamStakeCard", () => {
     renderCard();
     await waitFor(() =>
       expect(screen.getByTestId("dashboard-node.team-stake-amount").textContent).toBe("—"),
+    );
+  });
+
+  it("proposes an unstake of some team stake to the confidential treasury", async () => {
+    stubPool({
+      account_id: "india.sputnik-dao.near",
+      staked_balance: "2500000000000000000000000",
+      unstaked_balance: "0",
+      can_withdraw: true,
+    });
+    unstakeMocks.proposeTeamUnstake.mockResolvedValue(undefined);
+    renderCard();
+    const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(unstake);
+    const amount = await screen.findByTestId("dashboard-node.team-stake-unstake-amount");
+    fireEvent.change(amount, { target: { value: "1" } });
+    fireEvent.click(screen.getByTestId("dashboard-node.team-stake-unstake-confirm"));
+    await waitFor(() =>
+      expect(unstakeMocks.proposeTeamUnstake).toHaveBeenCalledWith(
+        expect.objectContaining({
+          teamAccountId: "india.sputnik-dao.near",
+          poolAccountId: "india.poolv1.near",
+          amountYocto: 1_000_000_000_000_000_000_000_000n,
+        }),
+      ),
     );
   });
 });
