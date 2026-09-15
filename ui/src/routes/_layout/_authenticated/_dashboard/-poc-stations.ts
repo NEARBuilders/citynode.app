@@ -1,13 +1,17 @@
 /**
- * The node lifecycle as an ordered cycle of stations, grouped into three phases.
+ * The node lifecycle as an ordered cycle of stations, grouped into phases.
  *
  * Each station declares the one wallet that must sign it. That matters because
  * the Trezu DAO connection is a singleton (`ui/src/lib/dao-connect.ts`): only
  * one treasury is connected at a time, so a station whose signer is not
  * currently connected offers to switch rather than pretending to be runnable.
  *
- * Stations own one or more steps. Every on-chain step maps to exactly one
- * sputnik-dao proposal; while a proposal awaits votes the step shows as staged.
+ * Ordering is declarative: a station lists the chain facts it requires, and
+ * nothing else. There is no implicit upstream walk — the bootstrap stations
+ * run in any order, and the endowment phase is optional and never gates the
+ * team's vote. Stations own one or more steps; every on-chain step maps to
+ * exactly one sputnik-dao proposal, and carries the deposit it consumes from
+ * its signer's treasury so the funding requirement can be derived.
  */
 
 import {
@@ -21,23 +25,25 @@ import {
   REGISTER_DEPOSIT,
   type SputnikProposal,
   VENEAR_ACCOUNT,
+  VOTE_STORAGE_FEE_FALLBACK,
 } from "./-poc-chain";
 
-export type SignerKind = "session" | "endowment" | "team";
-export type PhaseId = "stand-up" | "fund" | "vote" | "refresh";
+export type SignerKind = "session" | "team" | "endowment";
+export type LensId = "you" | "team" | "endowment";
+export type PhaseId = "stand-up" | "bootstrap" | "sponsor" | "vote" | "refresh";
 export type StationId =
   | "apply"
   | "approve"
+  | "fund"
   | "publish"
-  | "endow"
   | "stake"
-  | "stake-team"
-  | "register-team"
-  | "delegate"
+  | "setup-hos"
+  | "sponsor-lock"
+  | "sponsor-stake"
+  | "sponsor-delegate"
   | "vote"
   | "unstake"
-  | "undelegate"
-  | "unstake-team";
+  | "sponsor-unwind";
 
 export type StepStatus = "pending" | "staged" | "done" | "skipped";
 
@@ -61,23 +67,29 @@ export const PHASES: readonly PhaseDef[] = [
     id: "stand-up",
     title: "Initialize Node",
     blurb:
-      "anyone can apply, approval creates the tenant owned by a multi-sig and publishes its UI bundle",
+      "anyone can apply, the admin approves and assigns the pool, then funds the team treasury",
   },
   {
-    id: "fund",
-    title: "Fund it",
-    blurb: "the endowment locks NEAR and stakes the pool, the team stakes its own NEAR",
+    id: "bootstrap",
+    title: "Bootstrap the Node",
+    blurb:
+      "the team publishes the tenant, stakes its pool, and locks NEAR for House of Stake — in any order",
+  },
+  {
+    id: "sponsor",
+    title: "Sponsor Endowment",
+    blurb:
+      "the endowment locks its NEAR, stakes the node's pool from its lockup, and hands its voting power to the team — optional, never blocks anything",
   },
   {
     id: "vote",
     title: "Participate in Governance",
-    blurb: "the team registers in veNEAR, receives the sponsor's voting power, votes",
+    blurb: "the team votes in House of Stake with its veNEAR",
   },
   {
     id: "refresh",
     title: "Refresh",
-    blurb:
-      "the endowment unstakes the pool and takes its voting power back, the team unstakes its own stake, so the cycle can run again",
+    blurb: "unstake and withdraw so the cycle can run again for the next node",
   },
 ];
 
@@ -86,6 +98,8 @@ export interface StepDef {
   label: string;
   /** Absent for off-chain API steps, which never become DAO proposals. */
   plan?: DaoPlan;
+  /** Attached deposit the step consumes from its signer's treasury. */
+  costYocto?: string;
 }
 
 export interface StationDef {
@@ -103,12 +117,15 @@ export interface StationDef {
 export interface StationInputs {
   slug: string;
   pool: string;
-  endowmentAccount: string;
   teamAccount: string;
+  endowmentAccount: string;
   /** Deterministic even before deployment, via `venear.dao.get_lockup_account_id`. */
+  teamLockup: string;
   endowmentLockup: string;
-  lockYocto: bigint | null;
-  stakeYocto: bigint | null;
+  /** The sponsor's transfer into its lockup — uncapped, set by the endowment. */
+  sponsorYocto: bigint | null;
+  /** How much of the sponsor's NEAR goes into the pool from the lockup. */
+  sponsorStakeYocto: bigint | null;
   delegateBps: number | null;
   govProposalId: number | null;
 }
@@ -123,18 +140,16 @@ const OFFCHAIN = (id: string, label: string): StepDef => ({ id, label });
 export function buildStations(inputs: StationInputs): StationDef[] {
   const {
     pool,
-    endowmentAccount,
     teamAccount,
+    teamLockup,
     endowmentLockup,
-    lockYocto,
-    stakeYocto,
+    sponsorYocto,
+    sponsorStakeYocto,
     delegateBps,
     govProposalId,
   } = inputs;
 
-  const fundingYocto = (lockYocto ?? 0n) + (stakeYocto ?? 0n);
-
-  const defs: StationDef[] = [
+  return [
     {
       id: "apply",
       index: 1,
@@ -148,20 +163,33 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       id: "approve",
       index: 2,
       phase: "stand-up",
-      title: "Approve the application",
+      title: "Approve and assign",
       signer: "session",
       purpose:
-        "An admin session approves the application and creates the tenant, node and domain binding. Off-chain work — it needs a signed-in admin, not a treasury.",
+        "An admin session approves the application and creates the tenant, node and domain binding, assigning the team DAO and its pre-deployed pool to the node.",
+      requires: { applicationProposed: "submit the application first" },
       steps: [OFFCHAIN("approve", "approve the application")],
     },
     {
-      id: "publish",
+      id: "fund",
       index: 3,
       phase: "stand-up",
+      title: "Fund the team treasury",
+      signer: "session",
+      purpose:
+        "The admin's wallet transfers what the remaining stations cost — their attached deposits — straight into the team's public treasury.",
+      requires: { tenantDeployed: "approve the application first" },
+      steps: [OFFCHAIN("fund-treasury", "fund the team treasury")],
+    },
+    {
+      id: "publish",
+      index: 4,
+      phase: "bootstrap",
       title: "Publish and go live",
       signer: "team",
       purpose:
-        "The team publishes the tenant's UI bundle to the FastKV registry, so the node serves its own UI. Once the config is live, an admin marks the application applied.",
+        "The team publishes the tenant's config to the FastKV registry. The trezu proposal often reports failed even when the write lands — the config-live check is the source of truth. Once live, an admin marks the application applied.",
+      requires: { tenantDeployed: "approve the application first" },
       steps: [
         {
           id: "publish",
@@ -178,17 +206,49 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       ],
     },
     {
-      id: "endow",
-      index: 4,
-      phase: "fund",
-      title: "Lock the sponsor's NEAR",
-      signer: "endowment",
+      id: "stake",
+      index: 5,
+      phase: "bootstrap",
+      title: "Stake the node's pool",
+      signer: "team",
       purpose:
-        "The endowment registers in veNEAR, deploys its lockup, funds it and locks the NEAR. Locked NEAR is what mints voting power.",
+        "The team stakes exactly 1 NEAR of its own into its pool — skin in the game, earning rewards and backing the node's validator.",
+      requires: {
+        poolAssigned: "assign the pool first",
+        treasuryFunded: "fund the team treasury first — the stake needs 1 NEAR",
+      },
+      steps: [
+        {
+          id: "stake",
+          label: "stake 1 NEAR from the team treasury",
+          costYocto: MIN_TEAM_STAKE_YOCTO.toString(),
+          plan: {
+            kind: "call",
+            receiverId: pool,
+            methodName: "deposit_and_stake",
+            args: {},
+            gas: "200 Tgas",
+            attachedDeposit: MIN_TEAM_STAKE_YOCTO.toString(),
+          },
+        },
+      ],
+    },
+    {
+      id: "setup-hos",
+      index: 6,
+      phase: "bootstrap",
+      title: "Setup House of Stake",
+      signer: "team",
+      purpose:
+        "Registers the team in veNEAR, deploys its lockup, and locks all of its liquid NEAR — the deploy deposit itself. Locked NEAR is what mints the team's voting power. This is the only gate for voting.",
+      requires: {
+        treasuryFunded: "fund the team treasury first — House of Stake setup needs 2.1 NEAR",
+      },
       steps: [
         {
           id: "register",
           label: "register in veNEAR (0.1 NEAR)",
+          costYocto: REGISTER_DEPOSIT,
           plan: {
             kind: "call",
             receiverId: VENEAR_ACCOUNT,
@@ -201,6 +261,57 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         {
           id: "deploy-lockup",
           label: "deploy the lockup (2 NEAR)",
+          costYocto: LOCKUP_DEPLOY_DEPOSIT,
+          plan: {
+            kind: "call",
+            receiverId: VENEAR_ACCOUNT,
+            methodName: "deploy_lockup",
+            args: {},
+            gas: "100 Tgas",
+            attachedDeposit: LOCKUP_DEPLOY_DEPOSIT,
+          },
+        },
+        {
+          id: "lock",
+          label: "lock NEAR for veNEAR",
+          plan: {
+            kind: "call",
+            receiverId: teamLockup,
+            methodName: "lock_near",
+            args: {},
+            gas: "100 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+      ],
+    },
+    {
+      id: "sponsor-lock",
+      index: 7,
+      phase: "sponsor",
+      title: "Lock the sponsor's NEAR",
+      signer: "endowment",
+      purpose:
+        "The endowment registers in veNEAR, deploys its lockup, transfers its capital in, and locks it all. Locked NEAR mints the sponsor's veNEAR voting power.",
+      requires: { tenantDeployed: "approve the application first" },
+      steps: [
+        {
+          id: "register-endowment",
+          label: "register in veNEAR (0.1 NEAR)",
+          costYocto: REGISTER_DEPOSIT,
+          plan: {
+            kind: "call",
+            receiverId: VENEAR_ACCOUNT,
+            methodName: "storage_deposit",
+            args: {},
+            gas: "30 Tgas",
+            attachedDeposit: REGISTER_DEPOSIT,
+          },
+        },
+        {
+          id: "deploy-lockup-endowment",
+          label: "deploy the lockup (2 NEAR)",
+          costYocto: LOCKUP_DEPLOY_DEPOSIT,
           plan: {
             kind: "call",
             receiverId: VENEAR_ACCOUNT,
@@ -212,35 +323,41 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
         {
           id: "fund-lockup",
-          label: "fund the lockup",
-          plan: {
-            kind: "transfer",
-            receiverId: endowmentLockup,
-            amountYocto: fundingYocto.toString(),
-          },
+          label: "transfer the sponsor NEAR into the lockup",
+          plan: sponsorYocto
+            ? {
+                kind: "transfer",
+                receiverId: endowmentLockup,
+                amountYocto: sponsorYocto.toString(),
+              }
+            : undefined,
         },
         {
-          id: "lock",
-          label: "lock NEAR",
+          id: "lock-endowment",
+          label: "lock all NEAR for veNEAR",
           plan: {
             kind: "call",
             receiverId: endowmentLockup,
             methodName: "lock_near",
-            args: lockYocto ? { amount: lockYocto.toString() } : {},
-            gas: "50 Tgas",
+            args: {},
+            gas: "100 Tgas",
             attachedDeposit: ONE_YOCTO,
           },
         },
       ],
     },
     {
-      id: "stake",
-      index: 5,
-      phase: "fund",
-      title: "Stake the node's pool",
+      id: "sponsor-stake",
+      index: 8,
+      phase: "sponsor",
+      title: "Stake the pool from the lockup",
       signer: "endowment",
       purpose:
-        "Points the lockup at the node's pool and stakes into it. This stake earns the rewards.",
+        "Points the endowment's lockup at the node's pool and stakes into it. NEAR stays veNEAR-earning while it secures the team's validator — this stake is the sponsor's real capital.",
+      requires: {
+        poolAssigned: "assign the pool first",
+        endowmentFunded: "transfer the sponsor NEAR into the lockup first",
+      },
       steps: [
         {
           id: "select-pool",
@@ -255,73 +372,29 @@ export function buildStations(inputs: StationInputs): StationDef[] {
           },
         },
         {
-          id: "stake",
+          id: "stake-endowment",
           label: "stake from the lockup",
-          plan: {
-            kind: "call",
-            receiverId: endowmentLockup,
-            methodName: "deposit_and_stake",
-            args: stakeYocto ? { amount: stakeYocto.toString() } : {},
-            gas: "125 Tgas",
-            attachedDeposit: ONE_YOCTO,
-          },
+          plan: sponsorStakeYocto
+            ? {
+                kind: "call",
+                receiverId: endowmentLockup,
+                methodName: "deposit_and_stake",
+                args: { amount: sponsorStakeYocto.toString() },
+                gas: "125 Tgas",
+                attachedDeposit: ONE_YOCTO,
+              }
+            : undefined,
         },
       ],
     },
     {
-      id: "stake-team",
-      index: 6,
-      phase: "fund",
-      title: "Stake the team's NEAR",
-      signer: "team",
-      purpose:
-        "The team stakes exactly 1 NEAR of its own into the node's pool — its own skin in the game, earning rewards and backing the node's validator. The endowment stakes whatever it wants separately.",
-      steps: [
-        {
-          id: "stake-team",
-          label: "stake 1 NEAR from the team treasury",
-          plan: {
-            kind: "call",
-            receiverId: pool,
-            methodName: "deposit_and_stake",
-            args: {},
-            gas: "200 Tgas",
-            attachedDeposit: MIN_TEAM_STAKE_YOCTO.toString(),
-          },
-        },
-      ],
-    },
-    {
-      id: "register-team",
-      index: 7,
-      phase: "vote",
-      title: "Register the team in veNEAR",
-      signer: "team",
-      purpose:
-        "A wallet can only receive delegated voting power once registered. Skipped when team and endowment are one account.",
-      steps: [
-        {
-          id: "register-team",
-          label: "register in veNEAR (0.1 NEAR)",
-          plan: {
-            kind: "call",
-            receiverId: VENEAR_ACCOUNT,
-            methodName: "storage_deposit",
-            args: {},
-            gas: "30 Tgas",
-            attachedDeposit: REGISTER_DEPOSIT,
-          },
-        },
-      ],
-    },
-    {
-      id: "delegate",
-      index: 8,
-      phase: "vote",
-      title: "Assign delegation",
+      id: "sponsor-delegate",
+      index: 9,
+      phase: "sponsor",
+      title: "Delegate the voting power",
       signer: "endowment",
       purpose:
-        "The endowment delegates its veNEAR voting power to the team wallet, replacing its whole delegation set. Skipped when both are one account.",
+        "The endowment delegates its veNEAR to the team wallet, replacing its whole delegation set. The team's votes are what the sponsor's stake buys.",
       requires: {
         teamRegistered: "the team must register in veNEAR before it can receive the delegation",
       },
@@ -329,6 +402,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         {
           id: "set-delegations",
           label: "set delegations",
+          costYocto: DELEGATE_DEPOSIT,
           plan: {
             kind: "call",
             receiverId: VENEAR_ACCOUNT,
@@ -345,12 +419,13 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "vote",
-      index: 9,
+      index: 10,
       phase: "vote",
       title: "Vote in House of Stake",
       signer: "team",
       purpose:
-        "Casts a vote with the delegated power. Carries a fresh merkle proof of the account's veNEAR, so it cannot be staged early.",
+        "Casts a vote with the team's veNEAR — its own lock plus any delegated sponsor power. Carries a fresh merkle proof of the account, so it cannot be staged early.",
+      requires: { nearLocked: "lock NEAR in House of Stake first — voting needs veNEAR" },
       steps: [
         {
           id: "vote",
@@ -360,15 +435,52 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     },
     {
       id: "unstake",
-      index: 10,
+      index: 11,
       phase: "refresh",
-      title: "Unstake the pool",
-      signer: "endowment",
+      title: "Unstake the team's stake",
+      signer: "team",
       purpose:
-        "Unstakes everything from the pool, withdraws it back to the lockup once the epoch window passes, and releases the pool so a new one can be selected.",
+        "Unstakes the team's direct stake from the pool and withdraws it back to the team treasury once the epoch window passes.",
+      requires: { teamStaked: "nothing staked by the team yet" },
       steps: [
         {
           id: "unstake-all",
+          label: "unstake everything",
+          plan: {
+            kind: "call",
+            receiverId: pool,
+            methodName: "unstake_all",
+            args: {},
+            gas: "125 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+        {
+          id: "withdraw",
+          label: "withdraw to the team",
+          plan: {
+            kind: "call",
+            receiverId: pool,
+            methodName: "withdraw",
+            args: {},
+            gas: "125 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
+      ],
+    },
+    {
+      id: "sponsor-unwind",
+      index: 12,
+      phase: "refresh",
+      title: "Unwind the sponsor",
+      signer: "endowment",
+      purpose:
+        "Takes the endowment back out: unstakes from the pool, withdraws to the lockup, releases the pool, and clears its delegations so the voting power returns to itself.",
+      requires: { endowmentStaked: "nothing staked from the lockup yet" },
+      steps: [
+        {
+          id: "unstake-endowment",
           label: "unstake everything",
           plan: {
             kind: "call",
@@ -380,7 +492,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
           },
         },
         {
-          id: "withdraw-all",
+          id: "withdraw-endowment",
           label: "withdraw to the lockup",
           plan: {
             kind: "call",
@@ -403,20 +515,10 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             attachedDeposit: ONE_YOCTO,
           },
         },
-      ],
-    },
-    {
-      id: "undelegate",
-      index: 11,
-      phase: "refresh",
-      title: "Take the vote back",
-      signer: "endowment",
-      purpose:
-        "Clears the endowment's veNEAR delegations, returning all of its voting power to itself.",
-      steps: [
         {
           id: "clear-delegations",
           label: "remove all delegations",
+          costYocto: DELEGATE_DEPOSIT,
           plan: {
             kind: "call",
             receiverId: VENEAR_ACCOUNT,
@@ -428,53 +530,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
         },
       ],
     },
-    {
-      id: "unstake-team",
-      index: 12,
-      phase: "refresh",
-      title: "Unstake the team's stake",
-      signer: "team",
-      purpose:
-        "Unstakes the team's direct stake from the pool and withdraws it back to the team treasury once the epoch window passes.",
-      steps: [
-        {
-          id: "unstake-team-all",
-          label: "unstake everything",
-          plan: {
-            kind: "call",
-            receiverId: pool,
-            methodName: "unstake_all",
-            args: {},
-            gas: "125 Tgas",
-            attachedDeposit: ONE_YOCTO,
-          },
-        },
-        {
-          id: "withdraw-team",
-          label: "withdraw to the team",
-          plan: {
-            kind: "call",
-            receiverId: pool,
-            methodName: "withdraw",
-            args: {},
-            gas: "125 Tgas",
-            attachedDeposit: ONE_YOCTO,
-          },
-        },
-      ],
-    },
   ];
-
-  return defs.map((station) => ({
-    ...station,
-    signer: resolveSigner(station.signer, endowmentAccount),
-  }));
-}
-
-/** Endowment stations fall back to the team wallet when no endowment is set. */
-function resolveSigner(signer: SignerKind, endowmentAccount: string): SignerKind {
-  if (signer === "endowment" && !endowmentAccount) return "team";
-  return signer;
 }
 
 export function signerAccount(
@@ -488,47 +544,31 @@ export function signerAccount(
 
 /* ------------------------------------------------------------ status derivation */
 
-/**
- * Stations whose completion is not a prerequisite for what follows. Publish
- * goes live through a DAO vote and an admin mark-applied — neither gates
- * funding or governance. The team's own stake and veNEAR registration are
- * signed by the team treasury alone and need nothing from the endowment
- * track, so they never hold up the stations after them.
- */
-const NON_GATING_STATIONS: ReadonlySet<StationId> = new Set([
-  "publish",
-  "stake-team",
-  "register-team",
-]);
-
-/** Stations that ignore upstream ordering entirely. */
-const UPSTREAM_EXEMPT_STATIONS: ReadonlySet<StationId> = new Set(["stake-team", "register-team"]);
-
 export interface ChainFacts {
-  tenantDeployed: boolean;
   applicationProposed: boolean;
-  /** The tenant's config is live in the FastKV registry (publish step). */
-  configPublished: boolean;
   applicationApplied: boolean;
-  endowmentRegistered: boolean;
-  lockupDeployed: boolean;
-  lockupFunded: boolean;
-  nearLocked: boolean;
-  poolSelected: boolean;
-  stakedFromLockup: boolean;
-  /** The team's direct stake in the pool is live. */
+  tenantDeployed: boolean;
+  poolAssigned: boolean;
+  treasuryFunded: boolean;
+  configPublished: boolean;
   teamStaked: boolean;
   teamRegistered: boolean;
+  lockupDeployed: boolean;
+  nearLocked: boolean;
+  endowmentRegistered: boolean;
+  endowmentLockupDeployed: boolean;
+  endowmentFunded: boolean;
+  endowmentLocked: boolean;
+  endowmentPoolSelected: boolean;
+  endowmentStaked: boolean;
   delegated: boolean;
   voteCast: boolean;
-  unstaked: boolean;
-  withdrawn: boolean;
-  poolReleased: boolean;
-  delegationsCleared: boolean;
-  /** The team's direct stake is out of the pool. */
   teamUnstaked: boolean;
-  /** The team's unstaked balance is back in its treasury. */
   teamWithdrawn: boolean;
+  endowmentUnstaked: boolean;
+  endowmentWithdrawn: boolean;
+  endowmentPoolReleased: boolean;
+  delegationsCleared: boolean;
   /** Endowment and team wallet are the same account. */
   treasuriesShared: boolean;
 }
@@ -536,25 +576,59 @@ export interface ChainFacts {
 const STEP_FACT: Record<string, keyof ChainFacts> = {
   propose: "applicationProposed",
   approve: "tenantDeployed",
+  "fund-treasury": "treasuryFunded",
   publish: "configPublished",
   "mark-applied": "applicationApplied",
-  register: "endowmentRegistered",
+  stake: "teamStaked",
+  register: "teamRegistered",
   "deploy-lockup": "lockupDeployed",
-  "fund-lockup": "lockupFunded",
   lock: "nearLocked",
-  "select-pool": "poolSelected",
-  stake: "stakedFromLockup",
-  "stake-team": "teamStaked",
-  "register-team": "teamRegistered",
+  "register-endowment": "endowmentRegistered",
+  "deploy-lockup-endowment": "endowmentLockupDeployed",
+  "fund-lockup": "endowmentFunded",
+  "lock-endowment": "endowmentLocked",
+  "select-pool": "endowmentPoolSelected",
+  "stake-endowment": "endowmentStaked",
   "set-delegations": "delegated",
   vote: "voteCast",
-  "unstake-all": "unstaked",
-  "withdraw-all": "withdrawn",
-  "unselect-pool": "poolReleased",
+  "unstake-all": "teamUnstaked",
+  withdraw: "teamWithdrawn",
+  "unstake-endowment": "endowmentUnstaked",
+  "withdraw-endowment": "endowmentWithdrawn",
+  "unselect-pool": "endowmentPoolReleased",
   "clear-delegations": "delegationsCleared",
-  "unstake-team-all": "teamUnstaked",
-  "withdraw-team": "teamWithdrawn",
 };
+
+/** Stations that are no-ops because both treasuries are one account. */
+const SHARED_TREASURY_SKIP: ReadonlySet<StationId> = new Set([
+  "sponsor-lock",
+  "sponsor-stake",
+  "sponsor-delegate",
+  "sponsor-unwind",
+]);
+
+/** True when a station is a no-op because both treasuries are one account. */
+export function isSharedTreasurySkip(stationId: StationId, facts: ChainFacts): boolean {
+  if (!facts.treasuriesShared) return false;
+  return SHARED_TREASURY_SKIP.has(stationId);
+}
+
+/** Why a shared-treasury skip is a no-op rather than missing work. */
+export function sharedTreasurySkipReason(stationId: StationId): string | null {
+  if (!SHARED_TREASURY_SKIP.has(stationId)) return null;
+  if (stationId === "sponsor-delegate") return "the endowment cannot delegate to itself";
+  return "team and endowment are one account — the sponsor phase is folded into the team stations";
+}
+
+/** Attached deposits the team's remaining stations still need from its treasury. */
+export function teamTreasuryRequirementYocto(facts: ChainFacts): bigint {
+  let total = 0n;
+  if (!facts.teamStaked) total += MIN_TEAM_STAKE_YOCTO;
+  if (!facts.teamRegistered) total += BigInt(REGISTER_DEPOSIT);
+  if (!facts.lockupDeployed) total += BigInt(LOCKUP_DEPLOY_DEPOSIT);
+  if (!facts.voteCast) total += BigInt(VOTE_STORAGE_FEE_FALLBACK);
+  return total;
+}
 
 export interface StepState extends StepDef {
   status: StepStatus;
@@ -570,12 +644,11 @@ export interface StationState {
   /** Populated when the station is skipped, explaining the no-op. */
   skipReason: string | null;
   /**
-   * Why the station is blocked. `upstream` clears itself as earlier stations
-   * land, so a chained run may walk through it; `input` needs the user to fix
-   * something first, so a run must stop there. Upstream-exempt stations (the
-   * team's stake, the team's veNEAR registration) never report `upstream`.
+   * Why the station is blocked: `input` needs the user to fix something first,
+   * so a chained run must stop there rather than walk through and fail
+   * on-chain. There is no `upstream` anymore — requirements are declarative.
    */
-  blockedBy: "upstream" | "input" | null;
+  blockedBy: "input" | null;
   /** Account that must sign, resolved from the current inputs. */
   signerAccountId: string | null;
   /** Whether the required signer is the currently connected treasury. */
@@ -599,27 +672,10 @@ export interface DeriveOptions {
   failedStations?: Partial<Record<StationId, string>>;
 }
 
-/** True when a station is a no-op because both treasuries are one account. */
-export function isSharedTreasurySkip(stationId: StationId, facts: ChainFacts): boolean {
-  if (!facts.treasuriesShared) return false;
-  return stationId === "register-team" || stationId === "delegate";
-}
-
-/** Why a shared-treasury skip is a no-op rather than missing work. */
-export function sharedTreasurySkipReason(stationId: StationId, facts: ChainFacts): string | null {
-  if (!isSharedTreasurySkip(stationId, facts)) return null;
-  if (stationId === "register-team") {
-    return "team and endowment are one account — the shared wallet registers in Lock the sponsor's NEAR";
-  }
-  return "the endowment cannot delegate to itself";
-}
-
 export function deriveStations(options: DeriveOptions): StationState[] {
   const { stations, facts, proposalsBySigner, accounts, connectedDao } = options;
   const blockers = options.blockers ?? {};
   const failures = options.failedStations ?? {};
-
-  let upstreamIncomplete = false;
 
   return stations.map((def) => {
     const signerAccountId = signerAccount(def.signer, accounts);
@@ -636,7 +692,7 @@ export function deriveStations(options: DeriveOptions): StationState[] {
     });
 
     /**
-     * An unmet requirement blocks as `input`, not `upstream`: the fix is
+     * An unmet requirement blocks as `input`, not ordering: the fix is
      * running another station, often as another signer, so a chained run must
      * stop here rather than walk through and fail on-chain.
      */
@@ -649,8 +705,6 @@ export function deriveStations(options: DeriveOptions): StationState[] {
     })();
 
     const blockedByInput = blockers[def.id] || unmetRequirement ? "input" : null;
-    const blockedByUpstream =
-      upstreamIncomplete && !UPSTREAM_EXEMPT_STATIONS.has(def.id) ? "upstream" : null;
 
     const status = ((): StationStatus => {
       if (isSharedTreasurySkip(def.id, facts)) return "skipped";
@@ -658,20 +712,12 @@ export function deriveStations(options: DeriveOptions): StationState[] {
       if (options.runningStation === def.id) return "running";
       if (steps.every((step) => step.status === "done")) return "done";
       if (steps.some((step) => step.status === "staged")) return "staged";
-      if (blockedByInput || blockedByUpstream) return "blocked";
+      if (blockedByInput) return "blocked";
       return "ready";
     })();
 
-    if (!NON_GATING_STATIONS.has(def.id) && status !== "done" && status !== "skipped") {
-      upstreamIncomplete = true;
-    }
-
-    const blockedBy = status === "blocked" ? (blockedByInput ?? blockedByUpstream) : null;
-    const blockedReason =
-      failures[def.id] ??
-      blockers[def.id] ??
-      unmetRequirement ??
-      (blockedBy === "upstream" ? "waiting on an earlier station" : null);
+    const blockedBy = status === "blocked" ? blockedByInput : null;
+    const blockedReason = failures[def.id] ?? blockers[def.id] ?? unmetRequirement ?? null;
 
     const { canRun, runBlockReason } = deriveRunGate({
       status,
@@ -686,7 +732,7 @@ export function deriveStations(options: DeriveOptions): StationState[] {
       status,
       steps,
       blockedReason,
-      skipReason: sharedTreasurySkipReason(def.id, facts),
+      skipReason: isSharedTreasurySkip(def.id, facts) ? sharedTreasurySkipReason(def.id) : null,
       blockedBy,
       signerAccountId,
       signerConnected,
@@ -703,7 +749,7 @@ export function deriveStations(options: DeriveOptions): StationState[] {
  */
 export function deriveRunGate(input: {
   status: StationStatus;
-  blockedBy: "upstream" | "input" | null;
+  blockedBy: "input" | null;
   blockerReason: string | null;
   signerConnected: boolean;
   hasPendingSteps: boolean;
@@ -713,9 +759,6 @@ export function deriveRunGate(input: {
   }
   if (input.blockedBy === "input") {
     return { canRun: false, runBlockReason: input.blockerReason ?? "input needed" };
-  }
-  if (input.blockedBy === "upstream") {
-    return { canRun: false, runBlockReason: "waiting on an earlier station" };
   }
   if (!input.signerConnected) {
     return { canRun: false, runBlockReason: "connect the treasury to continue" };
@@ -729,23 +772,25 @@ export function deriveRunGate(input: {
 /* ----------------------------------------------------------- one-click helpers */
 
 /**
- * The longest run of consecutive stations that the currently connected wallet
- * can sign right now. Drives "run what I can sign": it never crosses a signer
- * boundary, because switching treasuries needs a new Trezu connection. Stations
- * blocked only by upstream ordering are included, since running the earlier
- * station is what unblocks them.
+ * Every station the currently connected wallet can sign right now, in order.
+ * Drives "run what I can sign": it never crosses a signer boundary, because
+ * switching treasuries needs a new Trezu connection, but it does not require
+ * the stations to be adjacent — the bootstrap and sponsor tracks run in any
+ * order.
  */
 export function runnableRun(stations: StationState[]): StationState[] {
-  const run: StationState[] = [];
-  for (const station of stations) {
-    if (station.status === "done" || station.status === "skipped") continue;
-    if (!station.steps.some((step) => step.status === "pending")) continue;
-    if (station.status === "failed" || station.blockedBy === "input") break;
-    if (!station.signerConnected) break;
-    if (run.length > 0 && run[0].def.signer !== station.def.signer) break;
-    run.push(station);
-  }
-  return run;
+  const runnable = stations.filter(
+    (station) =>
+      station.status !== "done" &&
+      station.status !== "skipped" &&
+      station.status !== "staged" &&
+      station.steps.some((step) => step.status === "pending") &&
+      station.canRun &&
+      station.signerConnected,
+  );
+  const signer = runnable[0]?.def.signer;
+  if (!signer) return [];
+  return runnable.filter((station) => station.def.signer === signer);
 }
 
 /** The first station that still needs work, whether or not it can run now. */
@@ -770,3 +815,11 @@ export const SIGNER_LABEL: Record<SignerKind, string> = {
   endowment: "endowment",
   team: "team",
 };
+
+export const LENS_OPTIONS: readonly { id: LensId; label: string }[] = [
+  { id: "you", label: "you" },
+  { id: "team", label: "team" },
+  { id: "endowment", label: "endowment" },
+];
+
+export const signerLens = (signer: SignerKind): LensId => (signer === "session" ? "you" : signer);

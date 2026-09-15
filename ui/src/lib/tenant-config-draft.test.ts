@@ -2,11 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TenantUiOverride } from "./dao-policy";
 import {
   buildDraftFromResolvedConfig,
+  computeSsrEntryIntegrity,
   computeSubresourceIntegrity,
+  computeUiEntryIntegrity,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
+  normalizeBundleBaseUrl,
+  resolveClientEntryUrl,
+  resolveServerEntryUrl,
   tenantConfigDraftSchema,
+  verifySsrIntegrity,
   verifyUiIntegrity,
 } from "./tenant-config-draft";
 
@@ -135,39 +141,108 @@ describe("draftUiOverride", () => {
       ...emptyTenantConfigDraft,
       title: "Chicago",
       description: "Chicago",
-      uiProduction: "https://cdn.example.com/ui.js",
+      uiProduction: "https://cdn.example.com/ui",
       uiIntegrity: "sha384-abc",
     };
     expect(draftUiOverride(base)).toEqual({
-      ui: { production: "https://cdn.example.com/ui.js", integrity: "sha384-abc" },
+      ui: { production: "https://cdn.example.com/ui", integrity: "sha384-abc" },
     });
-    expect(draftUiOverride({ ...base, ssrUrl: "https://cdn.example.com/ssr.js" })).toEqual({
-      ui: { production: "https://cdn.example.com/ui.js", integrity: "sha384-abc" },
+    expect(draftUiOverride({ ...base, ssrUrl: "https://cdn.example.com/ssr" })).toEqual({
+      ui: { production: "https://cdn.example.com/ui", integrity: "sha384-abc" },
     });
     expect(
       draftUiOverride({
         ...base,
-        ssrUrl: "https://cdn.example.com/ssr.js",
+        ssrUrl: "https://cdn.example.com/ssr",
         ssrIntegrity: "sha384-def",
       }),
     ).toEqual({
       ui: {
-        production: "https://cdn.example.com/ui.js",
+        production: "https://cdn.example.com/ui",
         integrity: "sha384-abc",
-        ssr: "https://cdn.example.com/ssr.js",
+        ssr: "https://cdn.example.com/ssr",
+        ssrIntegrity: "sha384-def",
+      },
+    } satisfies { ui: TenantUiOverride });
+  });
+
+  it("publishes bundle base URLs even when an entry URL was pasted", () => {
+    expect(
+      draftUiOverride({
+        ...emptyTenantConfigDraft,
+        title: "Chicago",
+        description: "Chicago",
+        uiProduction: "https://cdn.example.com/ui/remoteEntry.js",
+        uiIntegrity: "sha384-abc",
+        ssrUrl: "https://cdn.example.com/ssr/remoteEntry.server.js",
+        ssrIntegrity: "sha384-def",
+      }),
+    ).toEqual({
+      ui: {
+        production: "https://cdn.example.com/ui",
+        integrity: "sha384-abc",
+        ssr: "https://cdn.example.com/ssr",
         ssrIntegrity: "sha384-def",
       },
     } satisfies { ui: TenantUiOverride });
   });
 });
 
-describe("integrity preflight", () => {
-  const bundleUrl = "https://cdn.example.com/ui.js";
-  const stubBundle = (content: string) =>
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(content)),
+describe("entry url resolution", () => {
+  it("resolves client entry urls the way the host does", () => {
+    expect(resolveClientEntryUrl("https://cdn.example.com/ui")).toBe(
+      "https://cdn.example.com/ui/remoteEntry.js",
     );
+    expect(resolveClientEntryUrl("https://cdn.example.com/ui/")).toBe(
+      "https://cdn.example.com/ui/remoteEntry.js",
+    );
+    expect(resolveClientEntryUrl("https://cdn.example.com/ui/remoteEntry.js")).toBe(
+      "https://cdn.example.com/ui/remoteEntry.js",
+    );
+    expect(resolveClientEntryUrl("https://cdn.example.com/ui/mf-manifest.json")).toBe(
+      "https://cdn.example.com/ui/remoteEntry.js",
+    );
+  });
+
+  it("resolves server entry urls the way the host does", () => {
+    expect(resolveServerEntryUrl("https://cdn.example.com/ssr")).toBe(
+      "https://cdn.example.com/ssr/remoteEntry.server.js",
+    );
+    expect(resolveServerEntryUrl("https://cdn.example.com/ssr/")).toBe(
+      "https://cdn.example.com/ssr/remoteEntry.server.js",
+    );
+  });
+
+  it("normalizes pasted entry urls back to bundle base urls", () => {
+    expect(normalizeBundleBaseUrl("https://cdn.example.com/ui/remoteEntry.js")).toBe(
+      "https://cdn.example.com/ui",
+    );
+    expect(normalizeBundleBaseUrl("https://cdn.example.com/ssr/remoteEntry.server.js")).toBe(
+      "https://cdn.example.com/ssr",
+    );
+    expect(normalizeBundleBaseUrl("https://cdn.example.com/ui/mf-manifest.json")).toBe(
+      "https://cdn.example.com/ui",
+    );
+    expect(normalizeBundleBaseUrl("  https://cdn.example.com/ui  ")).toBe(
+      "https://cdn.example.com/ui",
+    );
+    expect(normalizeBundleBaseUrl("")).toBe("");
+  });
+});
+
+describe("integrity preflight", () => {
+  const bundleUrl = "https://cdn.example.com/ui";
+  const ssrUrl = "https://cdn.example.com/ssr";
+
+  const stubBundle = (content: string) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("remoteEntry.server.js")) return new Response(`${content}-server`);
+      return new Response(content);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
 
   it("computes a sha384 integrity hash from a fetched bundle", async () => {
     stubBundle("console.log('hi')");
@@ -176,17 +251,58 @@ describe("integrity preflight", () => {
     );
   });
 
+  it("hashes the client entry, not the pasted base url", async () => {
+    const fetchMock = stubBundle("console.log('hi')");
+    await computeUiEntryIntegrity(bundleUrl);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://cdn.example.com/ui/remoteEntry.js",
+      expect.anything(),
+    );
+  });
+
+  it("hashes the server entry, not the pasted base url", async () => {
+    const fetchMock = stubBundle("console.log('hi')");
+    await computeSsrEntryIntegrity(ssrUrl);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://cdn.example.com/ssr/remoteEntry.server.js",
+      expect.anything(),
+    );
+  });
+
   it("matches when the expected hash equals the computed one", async () => {
     stubBundle("console.log('hi')");
-    const expected = await computeSubresourceIntegrity(bundleUrl);
+    const expected = await computeUiEntryIntegrity(bundleUrl);
     expect(await verifyUiIntegrity(bundleUrl, expected)).toEqual({ status: "match" });
   });
 
   it("mismatches when the bundle hashes differently", async () => {
     stubBundle("console.log('hi')");
-    const expected = await computeSubresourceIntegrity(bundleUrl);
+    const expected = await computeUiEntryIntegrity(bundleUrl);
     stubBundle("console.log('tampered')");
     const check = await verifyUiIntegrity(bundleUrl, expected);
+    expect(check.status).toBe("mismatch");
+  });
+
+  it("rejects the html landing page a bare base url serves", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "https://cdn.example.com/ui/remoteEntry.js")
+        return new Response("console.log('hi')");
+      return new Response("<!doctype html>landing page");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const expected = await computeUiEntryIntegrity(bundleUrl);
+    const wrongHash = await computeSubresourceIntegrity(bundleUrl);
+    expect(wrongHash).not.toBe(expected);
+    const check = await verifyUiIntegrity(bundleUrl, wrongHash);
+    expect(check.status).toBe("mismatch");
+  });
+
+  it("verifies the ssr pair against the server entry", async () => {
+    stubBundle("console.log('hi')");
+    const expected = await computeSsrEntryIntegrity(ssrUrl);
+    expect(await verifySsrIntegrity(ssrUrl, expected)).toEqual({ status: "match" });
+    const check = await verifySsrIntegrity(ssrUrl, "sha384-other");
     expect(check.status).toBe("mismatch");
   });
 
@@ -195,5 +311,7 @@ describe("integrity preflight", () => {
     const check = await verifyUiIntegrity(bundleUrl, "sha384-abc");
     expect(check.status).toBe("unverified");
     if (check.status === "unverified") expect(check.reason).toContain("network blocked");
+    const ssrCheck = await verifySsrIntegrity(ssrUrl, "sha384-abc");
+    expect(ssrCheck.status).toBe("unverified");
   });
 });

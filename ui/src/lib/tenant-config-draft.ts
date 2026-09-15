@@ -115,10 +115,10 @@ export function draftUiOverride(draft: TenantConfigDraft): { ui: TenantUiOverrid
   if (!draft.uiProduction || !draft.uiIntegrity) return undefined;
   return {
     ui: {
-      production: draft.uiProduction,
+      production: normalizeBundleBaseUrl(draft.uiProduction),
       integrity: draft.uiIntegrity,
       ...(draft.ssrUrl && draft.ssrIntegrity
-        ? { ssr: draft.ssrUrl, ssrIntegrity: draft.ssrIntegrity }
+        ? { ssr: normalizeBundleBaseUrl(draft.ssrUrl), ssrIntegrity: draft.ssrIntegrity }
         : {}),
     },
   };
@@ -148,12 +148,38 @@ export async function computeSubresourceIntegrity(url: string): Promise<string> 
   return `sha384-${toBase64(new Uint8Array(digest))}`;
 }
 
-export async function verifyUiIntegrity(
-  url: string,
+export function resolveClientEntryUrl(url: string): string {
+  if (url.endsWith("/remoteEntry.js")) return url;
+  if (url.endsWith("/mf-manifest.json"))
+    return `${url.replace(/\/mf-manifest\.json$/, "")}/remoteEntry.js`;
+  return `${url.replace(/\/$/, "")}/remoteEntry.js`;
+}
+
+export function resolveServerEntryUrl(url: string): string {
+  return `${url.replace(/\/$/, "")}/remoteEntry.server.js`;
+}
+
+export function normalizeBundleBaseUrl(url: string): string {
+  return url
+    .trim()
+    .replace(/\/remoteEntry(\.server)?\.js$/, "")
+    .replace(/\/mf-manifest\.json$/, "");
+}
+
+export async function computeUiEntryIntegrity(baseUrl: string): Promise<string> {
+  return computeSubresourceIntegrity(resolveClientEntryUrl(baseUrl.trim()));
+}
+
+export async function computeSsrEntryIntegrity(baseUrl: string): Promise<string> {
+  return computeSubresourceIntegrity(resolveServerEntryUrl(baseUrl.trim()));
+}
+
+async function verifyEntryIntegrity(
+  entryUrl: string,
   expected: string,
 ): Promise<IntegrityCheckResult> {
   try {
-    const computed = await computeSubresourceIntegrity(url);
+    const computed = await computeSubresourceIntegrity(entryUrl);
     return computed === expected ? { status: "match" } : { status: "mismatch", computed };
   } catch (error) {
     return {
@@ -161,4 +187,18 @@ export async function verifyUiIntegrity(
       reason: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+export async function verifyUiIntegrity(
+  baseUrl: string,
+  expected: string,
+): Promise<IntegrityCheckResult> {
+  return verifyEntryIntegrity(resolveClientEntryUrl(baseUrl.trim()), expected);
+}
+
+export async function verifySsrIntegrity(
+  baseUrl: string,
+  expected: string,
+): Promise<IntegrityCheckResult> {
+  return verifyEntryIntegrity(resolveServerEntryUrl(baseUrl.trim()), expected);
 }
