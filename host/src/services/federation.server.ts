@@ -96,7 +96,7 @@ function getSsrEntryUrl(config: RuntimeConfig) {
   return entryUrl;
 }
 
-const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => 500);
+const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => Effect.succeed(500));
 
 export const loadRouterModule = (config: RuntimeConfig) =>
   Effect.gen(function* () {

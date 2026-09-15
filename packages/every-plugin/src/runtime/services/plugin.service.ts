@@ -9,10 +9,7 @@ import type {
   SecretsConfig,
 } from "../../types";
 import type { PluginRuntimeError } from "../errors";
-import {
-  ModuleFederationService,
-  ModuleFederationServiceDefault,
-} from "./module-federation.service";
+import { ModuleFederationServiceDefault } from "./module-federation.service";
 import {
   PluginLifecycleService,
   PluginLifecycleServiceDefault,
@@ -22,10 +19,9 @@ import {
   PluginLoaderServiceDefault,
   PluginMapTag,
   PluginRegistryTag,
-  RegistryService,
   RegistryServiceDefault,
 } from "./plugin-loader.service";
-import { SecretsConfigTag, SecretsService, SecretsServiceDefault } from "./secrets.service";
+import { SecretsConfigTag, SecretsServiceDefault } from "./secrets.service";
 
 export interface PluginServiceShape {
   loadPlugin: (pluginId: string) => Effect.Effect<LoadedPlugin, PluginRuntimeError>;

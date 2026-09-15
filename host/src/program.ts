@@ -155,7 +155,7 @@ export const createStartServer = (onReady?: () => void) =>
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
         yield* Effect.promise(() => closeMcpServer());
-        yield* Effect.async<void, never>((resume) => {
+        yield* Effect.callback<void, never>((resume) => {
           logger.info("[Server] Closing HTTP server...");
           httpServer.close(() => {
             logger.info("[Server] HTTP server closed");
@@ -195,7 +195,7 @@ export const runServer = (input: ServerInput): ServerHandle => {
   const stopMonitor = startIntegrityMonitor(input.config);
 
   const runtime = ManagedRuntime.make(ServerLive);
-  let programFiber: Fiber.RuntimeFiber<void, unknown> | null = null;
+  let programFiber: Fiber.Fiber<void, unknown> | null = null;
 
   const ready = new Promise<void>((resolveReady, rejectReady) => {
     const serverEffect = createStartServer(() => resolveReady());
@@ -209,7 +209,7 @@ export const runServer = (input: ServerInput): ServerHandle => {
     programFiber = runtime.runFork(program);
 
     programFiber.addObserver((exit) => {
-      if (Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause)) {
+      if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) {
         rejectReady(Cause.squash(exit.cause));
       }
     });
@@ -223,7 +223,7 @@ export const runServer = (input: ServerInput): ServerHandle => {
       await Effect.runPromise(
         Fiber.interrupt(programFiber).pipe(
           Effect.timeout("5 seconds"),
-          Effect.catchAll(() => Effect.void),
+          Effect.catch(() => Effect.void),
         ),
       );
     }

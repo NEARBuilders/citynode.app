@@ -1,7 +1,7 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { createPluginRuntime } from "every-plugin";
-import { Config, ConfigProvider, Context, Data, Effect, Layer, Secret } from "every-plugin/effect";
+import { Context, Data, Effect, Layer } from "every-plugin/effect";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -278,11 +278,8 @@ function collectSecrets(config: { secrets?: string[] }): Record<string, string> 
   return secretsFromEnv(config.secrets ?? []);
 }
 
-function readDbSecret(key: string): Effect.Effect<Secret.Secret> {
-  return Config.secret(key).pipe(
-    Effect.catchAll(() => Effect.succeed(Secret.fromString("unset"))),
-    Effect.withConfigProvider(ConfigProvider.fromEnv()),
-  );
+function readDbSecret(key: string): Effect.Effect<string> {
+  return Effect.sync(() => process.env[key] ?? "unset");
 }
 
 function buildAuthBaseVariables(
@@ -355,7 +352,7 @@ function loadPluginEntryEffect(
         : "API_DATABASE_URL"
       : pluginDbSecretKey;
     const dbSecret = secretKey ? yield* readDbSecret(secretKey) : null;
-    const rawDbUrl = dbSecret ? Secret.value(dbSecret) : null;
+    const rawDbUrl = dbSecret ?? null;
 
     const variables: Record<string, unknown> = { ...baseVariables, ...entry.config.variables };
     const args: [unknown, unknown?] = [{ variables, secrets: collectSecrets(entry.config) }];
@@ -604,7 +601,7 @@ export const initializePlugins = Effect.gen(function* () {
     },
   } satisfies PluginResult;
 }).pipe(
-  Effect.catchAll((error) =>
+  Effect.catch((error) =>
     Effect.gen(function* () {
       const pluginName = error instanceof PluginError ? error.pluginName : null;
       const pluginUrl = error instanceof PluginError ? error.pluginUrl : null;
@@ -622,11 +619,10 @@ export const initializePlugins = Effect.gen(function* () {
   ),
 );
 
-export class PluginsService extends Context.Tag("host/PluginsService")<
-  PluginsService,
-  PluginResult
->() {
-  static Live = Layer.scoped(
+export class PluginsService extends Context.Service<PluginsService, PluginResult>()(
+  "host/PluginsService",
+) {
+  static Live = Layer.effect(
     PluginsService,
     Effect.gen(function* () {
       const plugins = yield* initializePlugins;

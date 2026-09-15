@@ -20,15 +20,12 @@ export function getCspStrict(isDev: boolean): boolean {
   return process.env.CSP_STRICT === "false" ? false : !isDev;
 }
 
-export class SecurityMiddleware extends Context.Tag("host/SecurityMiddleware")<
-  SecurityMiddleware,
-  {
-    cors: MiddlewareHandler;
-    csrf: MiddlewareHandler;
-    rateLimit: MiddlewareHandler;
-    csp: MiddlewareHandler;
-  }
->() {
+export class SecurityMiddleware extends Context.Service<SecurityMiddleware, {
+  cors: MiddlewareHandler;
+  csrf: MiddlewareHandler;
+  rateLimit: MiddlewareHandler;
+  csp: MiddlewareHandler;
+}>()("host/SecurityMiddleware") {
   static Live = Layer.effect(
     SecurityMiddleware,
     Effect.gen(function* () {

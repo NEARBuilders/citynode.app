@@ -1,9 +1,10 @@
+import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
+import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
 import { RPCHandler } from "@orpc/server/fetch";
 import { BatchHandlerPlugin } from "@orpc/server/plugins";
-import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import { formatORPCError } from "every-plugin/errors";
+import { ZodToJsonSchemaConverter } from "@orpc/zod";
+import { formatORPCError, PLUGIN_ERROR_STATUS_MAP } from "every-plugin/errors";
 import { onError } from "every-plugin/orpc";
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -36,6 +37,7 @@ function registerPublicRpcRouter(
   publicRpcRouters.set(
     prefix,
     new RPCHandler(router as any, {
+      errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
       plugins: [new BatchHandlerPlugin()],
       interceptors: [
         onError((error: unknown) => {
@@ -177,6 +179,7 @@ export async function setupApiRoutes(
   }
 
   const rpcHandler = new RPCHandler(apiRouter as any, {
+    errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
     plugins: [new BatchHandlerPlugin()],
     interceptors: [
       onError((error: unknown) => {
@@ -187,17 +190,23 @@ export async function setupApiRoutes(
     ],
   });
 
+  const openApiGenerator = new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] });
+
   const apiHandler = new OpenAPIHandler(apiRouter as any, {
+    errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
     plugins: [
-      new OpenAPIReferencePlugin({
-        schemaConverters: [new ZodToJsonSchemaConverter()],
-        specGenerateOptions: {
-          info: {
-            title: `${config.title ?? config.account} API`,
-            version: "1.0.0",
-          },
-          servers: [{ url: "/api" }, { url: `${config.host?.url ?? ""}/api` }],
-        },
+      new OpenAPIReferenceHandlerPlugin({
+        spec: () =>
+          openApiGenerator.generate(apiRouter as any, {
+            version: "3.1.1",
+            base: {
+              info: {
+                title: `${config.title ?? config.account} API`,
+                version: "1.0.0",
+              },
+              servers: [{ url: "/api" }, { url: `${config.host?.url ?? ""}/api` }],
+            },
+          }),
       }),
     ],
     interceptors: [

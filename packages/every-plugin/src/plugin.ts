@@ -47,7 +47,7 @@ type PluginDefinition<
   initialize?: (
     config: PluginInitializeInput<V, S>,
     plugins: P,
-  ) => Effect.Effect<TDeps, Error, Scope.Scope>;
+  ) => Effect.Effect<TDeps, Error, Scope.Scope | PluginIdTag>;
   createRouter: (
     deps: TDeps,
     builder: Implementer<TContract, ContextOutput<TRequestContext>>,
@@ -91,7 +91,7 @@ export interface Plugin<
   initialize(
     config: PluginInitializeInput<TVariables, TSecrets>,
     plugins: Record<string, unknown>,
-  ): Effect.Effect<TDeps, unknown, Scope.Scope>;
+  ): Effect.Effect<TDeps, unknown, Scope.Scope | PluginIdTag>;
 
   shutdown(): Effect.Effect<void, never>;
 
@@ -144,7 +144,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
     initialize(
       pluginConfig: PluginInitializeInput<V, S>,
       plugins: Record<string, unknown> = {},
-    ): Effect.Effect<TDeps, unknown, Scope.Scope> {
+    ): Effect.Effect<TDeps, unknown, Scope.Scope | PluginIdTag> {
       const init = config.initialize ?? (() => Effect.succeed({} as TDeps));
 
       return init(pluginConfig, plugins as P).pipe(

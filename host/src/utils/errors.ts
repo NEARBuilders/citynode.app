@@ -38,7 +38,7 @@ export function extractErrorDetails(error: unknown): {
   if (typeof error === "object" && error !== null) {
     if ("_tag" in error) {
       try {
-        const squashed = Cause.squash(error as Cause.Cause<unknown>);
+        const squashed = Cause.squash(error as unknown as Cause.Cause<unknown>);
         return extractErrorDetails(squashed);
       } catch {
         return { message: `[Effect] ${JSON.stringify(error)}` };

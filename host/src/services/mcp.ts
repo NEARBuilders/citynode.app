@@ -6,7 +6,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { OpenAPIGenerator } from "@orpc/openapi";
 import type { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
+import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import type { Context, Hono } from "hono";
 import type { AuthPluginContext, HonoEnv } from "../lib/auth";
 import { logger } from "../utils/logger";
@@ -40,13 +40,16 @@ export async function mountMcpRoute(
   const { apiRouter, apiHandler, config } = options;
 
   const generator = new OpenAPIGenerator({
-    schemaConverters: [new ZodToJsonSchemaConverter()],
+    converters: [new ZodToJsonSchemaConverter()],
   });
 
   const spec = await generator.generate(apiRouter as any, {
-    info: {
-      title: `${config.title ?? config.account} API`,
-      version: "1.0.0",
+    version: "3.1.1",
+    base: {
+      info: {
+        title: `${config.title ?? config.account} API`,
+        version: "1.0.0",
+      },
     },
   });
 
