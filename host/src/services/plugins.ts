@@ -1,13 +1,14 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { createPluginRuntime } from "every-plugin";
-import { Context, Data, Effect, Layer } from "every-plugin/effect";
+import { Config, Context, Data, Effect, Layer, Option, Redacted } from "every-plugin/effect";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
 import type { RuntimeConfig, SharedConfig } from "everything-dev/types";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
+import { maskDbUrl } from "../utils/mask-db-url";
 import { toProtocolUrl } from "../utils/normalize";
 import { ConfigService, readCorsOrigins } from "./config";
 import { PluginError } from "./errors";
@@ -67,7 +68,7 @@ function dbUrlSummary(url: string | undefined): string {
     const u = new URL(url);
     return `${u.hostname}:${u.port || 5432}/${u.pathname.split("/").filter(Boolean).pop() || "?"}`;
   } catch {
-    return url.replace(/:[^:@]+@/, ":****@");
+    return maskDbUrl(url);
   }
 }
 
@@ -102,13 +103,25 @@ export interface PluginResult {
   status: PluginStatus;
 }
 
-function secretsFromEnv(keys: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const k of keys) {
-    const v = process.env[k];
-    if (typeof v === "string" && v.length > 0) out[k] = v;
-  }
-  return out;
+export function secretsFromEnv(
+  keys: string[],
+): Effect.Effect<Record<string, Redacted.Redacted<string>>, Config.ConfigError> {
+  return Effect.gen(function* () {
+    const out: Record<string, Redacted.Redacted<string>> = {};
+    for (const key of keys) {
+      const value = yield* Config.redacted(key).pipe(Config.option);
+      if (Option.isSome(value) && Redacted.value(value.value).length > 0) {
+        out[key] = value.value;
+      }
+    }
+    return out;
+  });
+}
+
+export function readDbSecret(
+  key: string,
+): Effect.Effect<Redacted.Redacted<string>, Config.ConfigError> {
+  return Config.redacted(key).pipe(Config.withDefault(Redacted.make("unset")));
 }
 
 function formatError(error: unknown): string {
@@ -274,12 +287,12 @@ interface RuntimePluginEntry {
   config: RuntimeConfig["api"] | RuntimePlugin;
 }
 
-function collectSecrets(config: { secrets?: string[] }): Record<string, string> {
-  return secretsFromEnv(config.secrets ?? []);
-}
-
-function readDbSecret(key: string): Effect.Effect<string> {
-  return Effect.sync(() => process.env[key] ?? "unset");
+function unredactSecrets(
+  secrets: Record<string, Redacted.Redacted<string>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(secrets).map(([key, value]) => [key, Redacted.value(value)]),
+  );
 }
 
 function buildAuthBaseVariables(
@@ -336,7 +349,7 @@ function loadPluginEntryEffect(
   integrityRegistry: IntegrityRegistry,
   pluginsClient?: Record<string, unknown>,
   baseVariables?: Record<string, unknown>,
-): Effect.Effect<HostPluginEntry, PluginBootstrapError> {
+): Effect.Effect<HostPluginEntry, PluginBootstrapError | Config.ConfigError> {
   return Effect.gen(function* () {
     if (entry.config.integrity) {
       integrityRegistry.registerEntry(entry.config.url, entry.config.integrity);
@@ -352,22 +365,23 @@ function loadPluginEntryEffect(
         : "API_DATABASE_URL"
       : pluginDbSecretKey;
     const dbSecret = secretKey ? yield* readDbSecret(secretKey) : null;
-    const rawDbUrl = dbSecret ?? null;
 
     const variables: Record<string, unknown> = { ...baseVariables, ...entry.config.variables };
-    const args: [unknown, unknown?] = [{ variables, secrets: collectSecrets(entry.config) }];
+    const secrets = unredactSecrets(yield* secretsFromEnv(entry.config.secrets ?? []));
+    const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
     const result = yield* Effect.tryPromise({
       try: (): Promise<Omit<HostPluginEntry, "key" | "name">> =>
         runtime.usePlugin(entry.runtimeId, ...args),
       catch: (error) => {
-        if (rawDbUrl !== null && secretKey) {
-          const maskedUrl = rawDbUrl === "unset" ? "unset" : rawDbUrl.replace(/:[^:@]+@/, ":****@");
+        if (dbSecret !== null && secretKey) {
+          const url = Redacted.value(dbSecret);
+          const maskedUrl = url === "unset" ? "unset" : maskDbUrl(url);
           return new PluginBootstrapError({
             pluginKey: entry.key,
             pluginUrl: entry.config.url,
-            stage: rawDbUrl === "unset" ? "init" : "db-migration",
+            stage: url === "unset" ? "init" : "db-migration",
             dbSecret: secretKey,
             dbUrlMasked: maskedUrl,
             execution: "local-host-process",
