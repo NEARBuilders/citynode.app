@@ -1,5 +1,5 @@
 import type { AnyContractRouter, AnySchema, InferSchemaOutput } from "@orpc/contract";
-import { ORPCError } from "@orpc/contract";
+import { ORPCError } from "@orpc/server";
 import type { Implementer, Router } from "@orpc/server";
 import { implement, onError } from "@orpc/server";
 import { Context, Effect, type Context as EffectContext, type Layer, type Scope } from "effect";

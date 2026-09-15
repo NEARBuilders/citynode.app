@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/contract";
+import { ORPCError } from "@orpc/server";
 import { Cause, Data } from "effect";
 import type { z } from "zod";
 
