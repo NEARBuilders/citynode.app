@@ -32,7 +32,9 @@ export class PortAllocationError extends Data.TaggedError("PortAllocationError")
   cause?: unknown;
 }> {}
 
-export class PortAllocator extends Context.Service<PortAllocator, {
+export class PortAllocator extends Context.Service<
+  PortAllocator,
+  {
     pickAvailable: (
       preferred: number,
       budget?: PortBudget,

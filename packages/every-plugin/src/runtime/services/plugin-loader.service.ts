@@ -26,7 +26,9 @@ export class PluginMapTag extends Context.Service<
 >()("PluginMap") {}
 
 export interface RegistryServiceShape {
-  get: (pluginId: string) => Effect.Effect<
+  get: (
+    pluginId: string,
+  ) => Effect.Effect<
     { constructor: (new () => AnyPlugin) | null; metadata: PluginMetadata },
     PluginRuntimeError
   >;
@@ -43,46 +45,46 @@ export const RegistryServiceDefault = Layer.effect(
     const registry = yield* PluginRegistryTag;
     const pluginMap = yield* PluginMapTag;
 
-      return {
-        get: (pluginId: string) =>
-          Effect.gen(function* () {
-            const entry = registry[pluginId];
+    return {
+      get: (pluginId: string) =>
+        Effect.gen(function* () {
+          const entry = registry[pluginId];
 
-            if (!entry) {
-              return yield* Effect.fail(
-                new PluginRuntimeError({
-                  pluginId,
-                  operation: "validate-plugin-id",
-                  cause: new Error(`Plugin ${pluginId} not found in registry`),
-                  retryable: false,
-                }),
-              );
-            }
+          if (!entry) {
+            return yield* Effect.fail(
+              new PluginRuntimeError({
+                pluginId,
+                operation: "validate-plugin-id",
+                cause: new Error(`Plugin ${pluginId} not found in registry`),
+                retryable: false,
+              }),
+            );
+          }
 
-            if ("module" in entry) {
-              return {
-                constructor: entry.module,
-                metadata: {
-                  remoteUrl: entry.remote || "",
-                  version: entry.version,
-                  description: entry.description,
-                } as PluginMetadata,
-              };
-            }
-
+          if ("module" in entry) {
             return {
-              constructor: null,
+              constructor: entry.module,
               metadata: {
-                remoteUrl: entry.remote,
+                remoteUrl: entry.remote || "",
                 version: entry.version,
                 description: entry.description,
               } as PluginMetadata,
             };
-          }),
+          }
 
-        getModule: (pluginId: string) => Effect.succeed(pluginMap[pluginId] || null),
-      };
-    }),
+          return {
+            constructor: null,
+            metadata: {
+              remoteUrl: entry.remote,
+              version: entry.version,
+              description: entry.description,
+            } as PluginMetadata,
+          };
+        }),
+
+      getModule: (pluginId: string) => Effect.succeed(pluginMap[pluginId] || null),
+    };
+  }),
 );
 
 export interface PluginLoaderServiceShape {
@@ -113,205 +115,202 @@ export const PluginLoaderServiceDefault = Layer.effect(
     const secretsService = yield* SecretsService;
     const registryService = yield* RegistryService;
 
-      const resolveUrl = (baseUrl: string, version?: string): string =>
-        version && version !== "latest" ? baseUrl.replace("@latest", `@${version}`) : baseUrl;
+    const resolveUrl = (baseUrl: string, version?: string): string =>
+      version && version !== "latest" ? baseUrl.replace("@latest", `@${version}`) : baseUrl;
 
-      return {
-        loadPlugin: (pluginId: string) =>
-          Effect.gen(function* () {
-            const entry = yield* registryService.get(pluginId);
+    return {
+      loadPlugin: (pluginId: string) =>
+        Effect.gen(function* () {
+          const entry = yield* registryService.get(pluginId);
 
-            if (entry.constructor) {
-              yield* Effect.logDebug("Loading plugin from direct module", { pluginId });
-
-              return {
-                ctor: entry.constructor,
-                metadata: entry.metadata,
-              } satisfies LoadedPlugin;
-            }
-
-            const url = entry.metadata.remoteUrl;
-            if (!url) {
-              return yield* Effect.fail(
-                new PluginRuntimeError({
-                  pluginId,
-                  operation: "load-plugin",
-                  cause: new Error(`Plugin ${pluginId} has no module or remote URL configured`),
-                  retryable: false,
-                }),
-              );
-            }
-
-            const resolvedUrl = resolveUrl(url);
-
-            yield* moduleFederationService.registerRemote(pluginId, resolvedUrl).pipe(
-              Effect.tapError((error) =>
-                Effect.logError(`Plugin ${pluginId} failed during register-remote: ${error}`),
-              ),
-              Effect.mapError((error) =>
-                toPluginRuntimeError(error, pluginId, undefined, "register-remote", true),
-              ),
-            );
-
-            yield* Effect.logDebug("Loading plugin from remote", { pluginId, url: resolvedUrl });
-
-            const ctor = yield* moduleFederationService
-              .loadRemoteConstructor(pluginId, resolvedUrl)
-              .pipe(
-                Effect.tapError((error) =>
-                  Effect.logError(`Plugin ${pluginId} failed during load-remote: ${error}`),
-                ),
-                Effect.mapError((error) =>
-                  toPluginRuntimeError(error, pluginId, undefined, "load-remote", false),
-                ),
-              );
+          if (entry.constructor) {
+            yield* Effect.logDebug("Loading plugin from direct module", { pluginId });
 
             return {
-              ctor,
+              ctor: entry.constructor,
               metadata: entry.metadata,
             } satisfies LoadedPlugin;
-          }),
+          }
 
-        instantiatePlugin: <T extends AnyPlugin>(pluginId: string, loadedPlugin: LoadedPlugin<T>) =>
-          Effect.gen(function* () {
-            const instance = yield* Effect.try(() => new loadedPlugin.ctor()).pipe(
+          const url = entry.metadata.remoteUrl;
+          if (!url) {
+            return yield* Effect.fail(
+              new PluginRuntimeError({
+                pluginId,
+                operation: "load-plugin",
+                cause: new Error(`Plugin ${pluginId} has no module or remote URL configured`),
+                retryable: false,
+              }),
+            );
+          }
+
+          const resolvedUrl = resolveUrl(url);
+
+          yield* moduleFederationService.registerRemote(pluginId, resolvedUrl).pipe(
+            Effect.tapError((error) =>
+              Effect.logError(`Plugin ${pluginId} failed during register-remote: ${error}`),
+            ),
+            Effect.mapError((error) =>
+              toPluginRuntimeError(error, pluginId, undefined, "register-remote", true),
+            ),
+          );
+
+          yield* Effect.logDebug("Loading plugin from remote", { pluginId, url: resolvedUrl });
+
+          const ctor = yield* moduleFederationService
+            .loadRemoteConstructor(pluginId, resolvedUrl)
+            .pipe(
               Effect.tapError((error) =>
-                Effect.logError(`Plugin ${pluginId} failed during instantiate-plugin: ${error}`),
+                Effect.logError(`Plugin ${pluginId} failed during load-remote: ${error}`),
               ),
               Effect.mapError((error) =>
-                toPluginRuntimeError(error, pluginId, undefined, "instantiate-plugin", false),
+                toPluginRuntimeError(error, pluginId, undefined, "load-remote", false),
               ),
             );
 
-            (instance.id as string) = pluginId;
+          return {
+            ctor,
+            metadata: entry.metadata,
+          } satisfies LoadedPlugin;
+        }),
 
-            return {
-              plugin: instance,
-              metadata: loadedPlugin.metadata,
-            } satisfies PluginInstance<T>;
-          }),
+      instantiatePlugin: <T extends AnyPlugin>(pluginId: string, loadedPlugin: LoadedPlugin<T>) =>
+        Effect.gen(function* () {
+          const instance = yield* Effect.try(() => new loadedPlugin.ctor()).pipe(
+            Effect.tapError((error) =>
+              Effect.logError(`Plugin ${pluginId} failed during instantiate-plugin: ${error}`),
+            ),
+            Effect.mapError((error) =>
+              toPluginRuntimeError(error, pluginId, undefined, "instantiate-plugin", false),
+            ),
+          );
 
-        initializePlugin: <T extends AnyPlugin>(
-          pluginInstance: PluginInstance<T>,
-          config: {
-            variables: InferSchemaInput<T["configSchema"]["variables"]>;
-            secrets: InferSchemaInput<T["configSchema"]["secrets"]>;
-          },
-          plugins?: Record<string, unknown>,
-        ) =>
-          Effect.gen(function* () {
-            const { plugin } = pluginInstance;
+          (instance.id as string) = pluginId;
 
-            // Validate and hydrate config
-            const validatedVariables = yield* validate(
-              plugin.configSchema.variables as z.ZodSchema<
-                InferSchemaOutput<T["configSchema"]["variables"]>
-              >,
-              config.variables,
-              plugin.id,
-              "config",
-            ).pipe(
-              Effect.mapError(
-                (validationError) =>
-                  new PluginRuntimeError({
-                    pluginId: plugin.id,
-                    operation: "validate-config",
-                    cause: validationError.zodError,
-                    retryable: false,
-                  }),
-              ),
-            );
+          return {
+            plugin: instance,
+            metadata: loadedPlugin.metadata,
+          } satisfies PluginInstance<T>;
+        }),
 
-            // Validate secrets
-            const validatedSecrets = yield* validate(
-              plugin.configSchema.secrets as z.ZodSchema<
-                InferSchemaOutput<T["configSchema"]["secrets"]>
-              >,
-              config.secrets,
-              plugin.id,
-              "config",
-            ).pipe(
-              Effect.mapError(
-                (validationError) =>
-                  new PluginRuntimeError({
-                    pluginId: plugin.id,
-                    operation: "validate-secrets",
-                    cause: validationError.zodError,
-                    retryable: false,
-                  }),
-              ),
-            );
+      initializePlugin: <T extends AnyPlugin>(
+        pluginInstance: PluginInstance<T>,
+        config: {
+          variables: InferSchemaInput<T["configSchema"]["variables"]>;
+          secrets: InferSchemaInput<T["configSchema"]["secrets"]>;
+        },
+        plugins?: Record<string, unknown>,
+      ) =>
+        Effect.gen(function* () {
+          const { plugin } = pluginInstance;
 
-            // Hydrate secrets in variables
-            const hydratedConfig = yield* secretsService.hydrateSecrets({
-              variables: validatedVariables,
-              secrets: validatedSecrets,
-            });
+          // Validate and hydrate config
+          const validatedVariables = yield* validate(
+            plugin.configSchema.variables as z.ZodSchema<
+              InferSchemaOutput<T["configSchema"]["variables"]>
+            >,
+            config.variables,
+            plugin.id,
+            "config",
+          ).pipe(
+            Effect.mapError(
+              (validationError) =>
+                new PluginRuntimeError({
+                  pluginId: plugin.id,
+                  operation: "validate-config",
+                  cause: validationError.zodError,
+                  retryable: false,
+                }),
+            ),
+          );
 
-            const _variables = yield* validate(
-              plugin.configSchema.variables as z.ZodSchema<
-                InferSchemaOutput<T["configSchema"]["variables"]>
-              >,
-              hydratedConfig.variables,
-              plugin.id,
-              "config",
-            ).pipe(
-              Effect.mapError(
-                (validationError) =>
-                  new PluginRuntimeError({
-                    pluginId: plugin.id,
-                    operation: "validate-hydrated-config",
-                    cause: validationError.zodError,
-                    retryable: false,
-                  }),
-              ),
-            );
+          // Validate secrets
+          const validatedSecrets = yield* validate(
+            plugin.configSchema.secrets as z.ZodSchema<
+              InferSchemaOutput<T["configSchema"]["secrets"]>
+            >,
+            config.secrets,
+            plugin.id,
+            "config",
+          ).pipe(
+            Effect.mapError(
+              (validationError) =>
+                new PluginRuntimeError({
+                  pluginId: plugin.id,
+                  operation: "validate-secrets",
+                  cause: validationError.zodError,
+                  retryable: false,
+                }),
+            ),
+          );
 
-            // Create a long-lived scope for this plugin instance. Initialize
-            // composes Layers against this scope (yield* Effect.scope), so
-            // scoped resources release on plugin shutdown.
-            const scope = yield* Scope.make();
+          // Hydrate secrets in variables
+          const hydratedConfig = yield* secretsService.hydrateSecrets({
+            variables: validatedVariables,
+            secrets: validatedSecrets,
+          });
 
-            // Initialize plugin within the scope.
-            // If initialize fails, close the scope immediately so scoped
-            // resources (DB pools, caches) are released — otherwise every
-            // failed initialization leaks until the process exits.
-            const context = yield* plugin
-              .initialize(
-                { variables: _variables, secrets: hydratedConfig.secrets },
-                plugins ?? {},
-              )
-              .pipe(
-                Effect.provideService(PluginIdTag, plugin.id),
-                Effect.provideService(Scope.Scope, scope),
-                Effect.onExit((exit) =>
-                  Exit.isSuccess(exit)
-                    ? Effect.void
-                    : Scope.close(scope, exit).pipe(
-                        Effect.catchCause((closeCause) =>
-                          Effect.logWarning(
-                            `Failed to close scope for plugin ${plugin.id} after initialize error`,
-                            closeCause,
-                          ),
+          const _variables = yield* validate(
+            plugin.configSchema.variables as z.ZodSchema<
+              InferSchemaOutput<T["configSchema"]["variables"]>
+            >,
+            hydratedConfig.variables,
+            plugin.id,
+            "config",
+          ).pipe(
+            Effect.mapError(
+              (validationError) =>
+                new PluginRuntimeError({
+                  pluginId: plugin.id,
+                  operation: "validate-hydrated-config",
+                  cause: validationError.zodError,
+                  retryable: false,
+                }),
+            ),
+          );
+
+          // Create a long-lived scope for this plugin instance. Initialize
+          // composes Layers against this scope (yield* Effect.scope), so
+          // scoped resources release on plugin shutdown.
+          const scope = yield* Scope.make();
+
+          // Initialize plugin within the scope.
+          // If initialize fails, close the scope immediately so scoped
+          // resources (DB pools, caches) are released — otherwise every
+          // failed initialization leaks until the process exits.
+          const context = yield* plugin
+            .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
+            .pipe(
+              Effect.provideService(PluginIdTag, plugin.id),
+              Effect.provideService(Scope.Scope, scope),
+              Effect.onExit((exit) =>
+                Exit.isSuccess(exit)
+                  ? Effect.void
+                  : Scope.close(scope, exit).pipe(
+                      Effect.catchCause((closeCause) =>
+                        Effect.logWarning(
+                          `Failed to close scope for plugin ${plugin.id} after initialize error`,
+                          closeCause,
                         ),
                       ),
-                ),
-                Effect.tapError((error) =>
-                  Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin: ${error}`),
-                ),
-                Effect.mapError((error) =>
-                  toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
-                ),
-              );
+                    ),
+              ),
+              Effect.tapError((error) =>
+                Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin: ${error}`),
+              ),
+              Effect.mapError((error) =>
+                toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
+              ),
+            );
 
-            return {
-              plugin,
-              metadata: pluginInstance.metadata,
-              config: { variables: _variables, secrets: hydratedConfig.secrets },
-              context,
-              scope,
-            } satisfies InitializedPlugin<T>;
-          }),
-      };
-    }),
+          return {
+            plugin,
+            metadata: pluginInstance.metadata,
+            config: { variables: _variables, secrets: hydratedConfig.secrets },
+            context,
+            scope,
+          } satisfies InitializedPlugin<T>;
+        }),
+    };
+  }),
 );

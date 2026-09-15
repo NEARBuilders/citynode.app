@@ -127,7 +127,9 @@ async function appendAudit(
   });
 }
 
-export class ProposalService extends Context.Service<ProposalService, {
+export class ProposalService extends Context.Service<
+  ProposalService,
+  {
     propose: (input: {
       pluginId: string;
       entityId: string;

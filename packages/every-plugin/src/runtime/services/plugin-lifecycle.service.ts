@@ -44,13 +44,7 @@ export const PluginLifecycleServiceDefault = Layer.effect(
             .shutdown()
             .pipe(
               Effect.mapError((error) =>
-                toPluginRuntimeError(
-                  error,
-                  plugin.plugin.id,
-                  undefined,
-                  "shutdown-plugin",
-                  false,
-                ),
+                toPluginRuntimeError(error, plugin.plugin.id, undefined, "shutdown-plugin", false),
               ),
             );
         }),

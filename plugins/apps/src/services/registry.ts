@@ -185,8 +185,9 @@ export interface PreparedKvWrite {
   attachedDeposit: string;
 }
 
-export class RegistryService extends Context.Service<RegistryService, {
-
+export class RegistryService extends Context.Service<
+  RegistryService,
+  {
     listRegistryApps: (input: RegistryListInput) => Promise<{
       data: RegistryAppSummary[];
       meta: { total: number; hasMore: boolean; nextCursor: string | null };

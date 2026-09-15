@@ -1,5 +1,5 @@
-import { Cause, Effect, Exit } from "effect";
 import { ORPCError } from "@orpc/server";
+import { Cause, Effect, Exit } from "effect";
 
 export function flattenError(error: unknown): string {
   if (error instanceof Error) {

@@ -5,8 +5,8 @@
  * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
  */
 
-import { z } from "every-plugin/zod";
 import { flattenError, runEffect } from "every-plugin";
+import { z } from "every-plugin/zod";
 import type { AuthContext } from "./auth";
 
 export const ContextSchema = z.custom<AuthContext>();

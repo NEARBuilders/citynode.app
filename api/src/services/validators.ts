@@ -62,7 +62,9 @@ export interface ValidatorsService {
   resolveByAccountId(accountId: string): Promise<ValidatorRecord | null>;
 }
 
-export class ValidatorsTag extends Context.Service<ValidatorsService, ValidatorsService>()("api/Validators") {}
+export class ValidatorsTag extends Context.Service<ValidatorsService, ValidatorsService>()(
+  "api/Validators",
+) {}
 
 type ValidatorRow = typeof validatorsTable.$inferSelect;
 

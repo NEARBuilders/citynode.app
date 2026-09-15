@@ -53,7 +53,9 @@ export default createPlugin({
         yield* Effect.scope,
       );
       const proposal = Context.get(services, ProposalService);
-      const publisher = new MemoryPublisher<ProposalEvents>({ resume: { enabled: true, seconds: 120 } });
+      const publisher = new MemoryPublisher<ProposalEvents>({
+        resume: { enabled: true, seconds: 120 },
+      });
 
       console.log("[Proposals] Services Initialized");
       return {

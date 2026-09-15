@@ -3,7 +3,9 @@ import { Context, Effect, Layer } from "every-plugin/effect";
 import type { TemplateDatabase } from "./index";
 import { migrate } from "./migrator";
 
-export const DatabaseTag = Context.Service<TemplateDatabase, TemplateDatabase>()("template/Database");
+export const DatabaseTag = Context.Service<TemplateDatabase, TemplateDatabase>()(
+  "template/Database",
+);
 
 function normalizeSlug(pluginId: string): string {
   return pluginId

@@ -53,7 +53,7 @@ export declare const ListThingsSchema: z.ZodObject<{
     }, z.core.$strip>;
 }, z.core.$strip>;
 export declare const contract: {
-    getById: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    getById: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         id: z.ZodString;
     }, z.core.$strip>, z.ZodObject<{
         item: z.ZodObject<{
@@ -62,7 +62,7 @@ export declare const contract: {
             createdAt: z.ZodString;
         }, z.core.$strip>;
         userId: z.ZodString;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+    }, z.core.$strip>, {
         UNAUTHORIZED: {
             status: number;
             message: string;
@@ -83,8 +83,8 @@ export declare const contract: {
             status: number;
             message: string;
         };
-    }>>, Record<never, never>>;
-    search: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }>;
+    search: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         query: z.ZodString;
         limit: z.ZodDefault<z.ZodNumber>;
     }, z.core.$strip>, import("@orpc/contract").Schema<AsyncIteratorObject<{
@@ -94,36 +94,36 @@ export declare const contract: {
             createdAt: string;
         };
         score: number;
-    }, unknown, void>, import("@orpc/shared").AsyncIteratorClass<{
+    }, unknown, void>, import("@standard-server/shared").AsyncIteratorClass<{
         item: {
             id: string;
             title: string;
             createdAt: string;
         };
         score: number;
-    }, unknown, void>>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
-    ping: import("@orpc/contract").ContractProcedure<import("@orpc/contract").Schema<unknown, unknown>, z.ZodObject<{
+    }, unknown, void>>, object>;
+    ping: import("@orpc/contract").ProcedureContract<import("@orpc/contract").InitialInputSchema, z.ZodObject<{
         status: z.ZodLiteral<"ok">;
         timestamp: z.ZodString;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
-    listenBackground: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }, z.core.$strip>, object>;
+    listenBackground: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         maxResults: z.ZodOptional<z.ZodNumber>;
         lastEventId: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>, import("@orpc/contract").Schema<AsyncIteratorObject<{
         id: string;
         index: number;
         timestamp: number;
-    }, unknown, void>, import("@orpc/shared").AsyncIteratorClass<{
+    }, unknown, void>, import("@standard-server/shared").AsyncIteratorClass<{
         id: string;
         index: number;
         timestamp: number;
-    }, unknown, void>>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
-    enqueueBackground: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }, unknown, void>>, object>;
+    enqueueBackground: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         id: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>, z.ZodObject<{
         ok: z.ZodBoolean;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
-    createThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }, z.core.$strip>, object>;
+    createThing: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         thingId: z.ZodString;
         payload: z.ZodUnknown;
     }, z.core.$strip>, z.ZodObject<{
@@ -133,13 +133,13 @@ export declare const contract: {
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
         action: z.ZodString;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+    }, z.core.$strip>, {
         CONFLICT: {
             status: number;
             message: string;
         };
-    }>>, Record<never, never>>;
-    getThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }>;
+    getThing: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         thingId: z.ZodString;
     }, z.core.$strip>, z.ZodObject<{
         thingId: z.ZodString;
@@ -147,13 +147,13 @@ export declare const contract: {
         payload: z.ZodUnknown;
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+    }, z.core.$strip>, {
         NOT_FOUND: {
             status: number;
             message: string;
         };
-    }>>, Record<never, never>>;
-    listThings: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }>;
+    listThings: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         type: z.ZodOptional<z.ZodString>;
         limit: z.ZodDefault<z.ZodNumber>;
         cursor: z.ZodOptional<z.ZodString>;
@@ -170,8 +170,8 @@ export declare const contract: {
             hasMore: z.ZodBoolean;
             nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strip>;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
-    subscribeThings: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }, z.core.$strip>, object>;
+    subscribeThings: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         thingId: z.ZodOptional<z.ZodString>;
         type: z.ZodOptional<z.ZodString>;
         action: z.ZodOptional<z.ZodString>;
@@ -180,23 +180,23 @@ export declare const contract: {
         type: string;
         action: string;
         timestamp: string;
-    }, unknown, void>, import("@orpc/shared").AsyncIteratorClass<{
+    }, unknown, void>, import("@standard-server/shared").AsyncIteratorClass<{
         thingId: string;
         type: string;
         action: string;
         timestamp: string;
-    }, unknown, void>>, import("@orpc/contract").MergedErrorMap<Record<never, never>, Record<never, never>>, Record<never, never>>;
-    deleteThing: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }, unknown, void>>, object>;
+    deleteThing: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         thingId: z.ZodString;
     }, z.core.$strip>, z.ZodObject<{
         success: z.ZodLiteral<true>;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+    }, z.core.$strip>, {
         NOT_FOUND: {
             status: number;
             message: string;
         };
-    }>>, Record<never, never>>;
-    testError: import("@orpc/contract").ContractProcedure<z.ZodObject<{
+    }>;
+    testError: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         kind: z.ZodEnum<{
             unauthorized: "unauthorized";
             forbidden: "forbidden";
@@ -207,7 +207,7 @@ export declare const contract: {
         }>;
     }, z.core.$strip>, z.ZodObject<{
         ok: z.ZodLiteral<true>;
-    }, z.core.$strip>, import("@orpc/contract").MergedErrorMap<Record<never, never>, import("@orpc/contract").MergedErrorMap<Record<never, never>, {
+    }, z.core.$strip>, {
         UNAUTHORIZED: {
             status: number;
             message: string;
@@ -228,6 +228,6 @@ export declare const contract: {
             status: number;
             message: string;
         };
-    }>>, Record<never, never>>;
+    }>;
 };
 export type ContractType = typeof contract;

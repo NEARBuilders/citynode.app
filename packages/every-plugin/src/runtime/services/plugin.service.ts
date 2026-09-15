@@ -10,10 +10,7 @@ import type {
 } from "../../types";
 import type { PluginRuntimeError } from "../errors";
 import { ModuleFederationServiceDefault } from "./module-federation.service";
-import {
-  PluginLifecycleService,
-  PluginLifecycleServiceDefault,
-} from "./plugin-lifecycle.service";
+import { PluginLifecycleService, PluginLifecycleServiceDefault } from "./plugin-lifecycle.service";
 import {
   PluginLoaderService,
   PluginLoaderServiceDefault,

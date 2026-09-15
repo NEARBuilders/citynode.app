@@ -5,8 +5,8 @@ import { buildPocFormValues, loadPocFormDraft, POC_FORM_DEFAULTS, usePocForm } f
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
-const KEY_A = "poc-form:" + ORG_A;
-const KEY_B = "poc-form:" + ORG_B;
+const KEY_A = `poc-form:${ORG_A}`;
+const KEY_B = `poc-form:${ORG_B}`;
 
 beforeEach(() => {
   localStorage.clear();

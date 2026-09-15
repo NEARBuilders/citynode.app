@@ -367,11 +367,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         const exitCodeValue = yield* exitCode;
         const currentStatus = yield* Ref.get(statusRef);
         if (currentStatus === "ready" || currentStatus === "error") return;
-        callbacks.onLog(
-          name,
-          `Process exited before ready (exit code: ${exitCodeValue})`,
-          true,
-        );
+        callbacks.onLog(name, `Process exited before ready (exit code: ${exitCodeValue})`, true);
         yield* markError(`Process exited before ready: ${name}`);
       }),
     );

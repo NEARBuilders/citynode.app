@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PluginIdTag } from "every-plugin";
-import { Cause, type Context, Effect, Exit, Layer } from "every-plugin/effect";
+import { Cause, Effect, Exit, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive } from "@/db/layer";

@@ -210,8 +210,7 @@ describe("loadRouterModule failure paths", () => {
       if (Exit.isSuccess(result)) throw new Error("Expected Left");
       const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error.cause).toBeDefined();
-      const rawCause =
-        error.cause instanceof FederationError ? error.cause.cause : error.cause;
+      const rawCause = error.cause instanceof FederationError ? error.cause.cause : error.cause;
       const causeStr = String((rawCause as Error)?.stack ?? rawCause);
       expect(causeStr).toContain("remoteEntry.js");
     });

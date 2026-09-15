@@ -54,7 +54,9 @@ export function resolveType(payload: unknown): string {
   return "template.thing";
 }
 
-export class ThingsService extends Context.Service<ThingsService, {
+export class ThingsService extends Context.Service<
+  ThingsService,
+  {
     createThing: (thingId: string, payload: unknown) => Effect.Effect<CreatedThing, ThingsError>;
 
     getThing: (thingId: string) => Effect.Effect<Thing, ThingsError>;
