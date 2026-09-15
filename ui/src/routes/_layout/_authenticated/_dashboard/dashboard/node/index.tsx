@@ -40,13 +40,6 @@ function NodeOverview() {
     <div className="space-y-8">
       <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Direct children" value={summary.childrenCount} />
-        <StatCard label="Subtree nodes" value={summary.subtreeNodeCount} />
-        <StatCard label="Validators" value={summary.validators.length} />
-        <StatCard label="Subtree validators" value={summary.subtreeValidatorCount} />
-      </section>
-
       <section className="space-y-3">
         <SectionHeader title="Validators" />
         <Card className="overflow-hidden">
@@ -120,16 +113,5 @@ function NodeOverview() {
         </Card>
       </section>
     </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card className="space-y-1 p-4">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-2xl font-semibold text-foreground">{value}</div>
-    </Card>
   );
 }
