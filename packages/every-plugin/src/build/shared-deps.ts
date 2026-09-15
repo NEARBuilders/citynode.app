@@ -96,7 +96,9 @@ export function getPluginSharedDependenciesVersionRange(): Record<string, string
 
 export function getMajorMinorVersion(version: string): string {
   const clean = version.replace(/^[\^~>=<]+/, "");
-  const match = clean.match(/^(\d+)\.(\d+)/);
+  const match = clean.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
   if (!match) return "^0.0.0";
-  return `^${match[1]}.${match[2]}.0`;
+  const [, major, minor, patch, prerelease] = match;
+  if (prerelease) return `^${major}.${minor}.${patch}-${prerelease}`;
+  return `^${major}.${minor}.0`;
 }
