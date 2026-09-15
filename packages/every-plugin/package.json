@@ -134,9 +134,9 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
-    "@effect/vitest": "^0.29.0",
-    "@orpc/client": "^1.13.4",
-    "@orpc/openapi": "^1.13.4",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@orpc/client": "2.0.0-beta.35",
+    "@orpc/openapi": "2.0.0-beta.35",
     "@rspack/cli": "catalog:",
     "@tanstack/intent": "catalog:",
     "@types/bun": "^1.3.7",
@@ -153,8 +153,9 @@
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
     "@orpc/contract": "catalog:",
-    "@orpc/experimental-publisher": "catalog:",
     "@orpc/server": "catalog:",
+    "@orpc/experimental-effect": "catalog:",
+    "@orpc/publisher": "catalog:",
     "@orpc/tanstack-query": "catalog:"
   },
   "keywords": [
