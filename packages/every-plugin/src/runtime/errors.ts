@@ -128,7 +128,7 @@ export const formatORPCError = (error: any): string | null => {
 
   const lines: string[] = [];
   const code = error.code || "UNKNOWN";
-  const status = error.status || 500;
+  const status = (error as any).status || 500;
   const message = error.message || "An error occurred";
 
   lines.push(`\n╭─ oRPC Error ${"─".repeat(40)}`);
@@ -235,7 +235,7 @@ export const extractFromFiberFailure = (error: unknown): unknown => {
 
     if (cause && typeof cause === "object" && "_tag" in cause) {
       try {
-        const squashed = Cause.squash(cause as Cause.Cause<unknown>);
+        const squashed = Cause.squash(cause as unknown as Cause.Cause<unknown>);
         if (squashed instanceof ORPCError) {
           return squashed;
         }

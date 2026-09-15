@@ -124,7 +124,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     const exit = await this.runtime.runPromiseExit(effect);
 
     if (Exit.isFailure(exit)) {
-      const error = Cause.failureOption(exit.cause);
+      const error = Cause.findErrorOption(exit.cause);
       if (Option.isSome(error)) {
         throw error.value;
       }
@@ -143,7 +143,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
 
     let cachedPlugin = this.pluginCache.get(cacheKey);
     if (!cachedPlugin) {
-      const operation = Effect.gen(this, function* () {
+      const operation = Effect.gen({ self: this }, function* () {
         const pluginService = yield* PluginService;
         const validatedId = yield* this.validatePluginId(pluginId);
 
@@ -154,7 +154,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
         yield* pluginService.registerPlugin(initialized);
 
         return initialized;
-      }).pipe(Effect.annotateLogs({ plugin: pluginId }), Effect.provide(this.runtime));
+      }).pipe(Effect.annotateLogs({ plugin: pluginId }));
 
       cachedPlugin = this.runPromise(operation);
       this.pluginCache.set(cacheKey, cachedPlugin);
@@ -250,7 +250,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
   ): Promise<void> {
     const cacheKey = this.generateCacheKey(pluginId, { ...config, __plugins: plugins ?? {} });
 
-    const effect = Effect.gen(this, function* () {
+    const effect = Effect.gen({ self: this }, function* () {
       const pluginService = yield* PluginService;
       const cachedPlugin = this.pluginCache.get(cacheKey);
 
@@ -261,22 +261,20 @@ export class PluginRuntime<R = RegisteredPlugins> {
         const pluginResult = yield* Effect.tryPromise({
           try: () => cachedPlugin,
           catch: (error) => error,
-        }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+        }).pipe(Effect.catch(() => Effect.succeed(null)));
 
         if (pluginResult) {
           yield* pluginService
             .shutdownPlugin(pluginResult)
             .pipe(
-              Effect.catchAll((error) =>
+              Effect.catch((error) =>
                 Effect.logWarning(`Failed to shutdown evicted plugin ${pluginId}`, error),
               ),
             );
         }
       }
     }).pipe(
-      Effect.catchAll((error) =>
-        Effect.logWarning(`Plugin eviction failed for ${pluginId}`, error),
-      ),
+      Effect.catch((error) => Effect.logWarning(`Plugin eviction failed for ${pluginId}`, error)),
     );
 
     return this.runPromise(effect);

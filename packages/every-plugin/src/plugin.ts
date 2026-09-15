@@ -1,6 +1,6 @@
 import type { AnyContractRouter, AnySchema, InferSchemaOutput } from "@orpc/contract";
 import { ORPCError } from "@orpc/server";
-import type { Implementer, Router } from "@orpc/server";
+import type { ContractedRouter, Implementer } from "@orpc/server";
 import { implement, onError } from "@orpc/server";
 import { Context, Effect, type Context as EffectContext, type Layer, type Scope } from "effect";
 import { extractFromFiberFailure, formatORPCError } from "./runtime/errors";
@@ -25,13 +25,13 @@ type PluginInitializeInput<V extends AnySchema, S extends AnySchema> = {
 /**
  * Tools provided to plugin initialize/services for building long-lived scoped resources.
  */
-type ServiceOf<T> = T extends EffectContext.Tag<any, infer S> ? S : never;
+type ServiceOf<T> = T extends EffectContext.Key<any, infer S> ? S : never;
 
 export type PluginServicesTools = {
   buildService: <T>(tag: T, layer: Layer.Layer<any, any, any>) => Effect.Effect<ServiceOf<T>>;
 };
 
-export class PluginIdTag extends Context.Tag("PluginId")<PluginIdTag, string>() {}
+export class PluginIdTag extends Context.Service<PluginIdTag, string>()("PluginId") {}
 
 type PluginDefinition<
   V extends AnySchema,
@@ -57,8 +57,8 @@ type PluginDefinition<
   ) => Effect.Effect<TDeps, Error, Scope.Scope>;
   createRouter: (
     deps: TDeps,
-    builder: Implementer<TContract, ContextOutput<TRequestContext>, ContextOutput<TRequestContext>>,
-  ) => Router<TContract, any>;
+    builder: Implementer<TContract, ContextOutput<TRequestContext>>,
+  ) => ContractedRouter<TContract, any>;
   shutdown?: (deps: TDeps) => Effect.Effect<void, Error, never>;
 };
 
@@ -109,7 +109,7 @@ export interface Plugin<
    * @param deps The initialized plugin dependencies
    * @returns A router with procedures matching the plugin's contract
    */
-  createRouter(deps: TDeps): Router<TContract, any>;
+  createRouter(deps: TDeps): ContractedRouter<TContract, any>;
 }
 
 export interface CreatePluginFn {
@@ -174,7 +174,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
           yield* config
             .shutdown(self._deps)
             .pipe(
-              Effect.catchAll((error) =>
+              Effect.catch((error) =>
                 Effect.logWarning(`Plugin shutdown hook failed for ${self.id}`, error),
               ),
             );
@@ -183,7 +183,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
       });
     }
 
-    createRouter(deps: TDeps): Router<TContract, any> {
+    createRouter(deps: TDeps): ContractedRouter<TContract, any> {
       const base = implement(config.contract).$context<ContextOutput<TRequestContext>>();
       const errorMiddleware = onError((error: unknown) => {
         const unwrapped = extractFromFiberFailure(error);
@@ -199,7 +199,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
 
       const builder = (base as any).use(errorMiddleware);
       const router = config.createRouter(deps, builder as any);
-      return router as Router<TContract, any>;
+      return router as ContractedRouter<TContract, any>;
     }
   }
 

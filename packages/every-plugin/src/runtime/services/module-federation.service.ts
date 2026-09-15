@@ -1,6 +1,6 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
-import { Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import type { AnyPlugin } from "../../types";
 import { ModuleFederationError } from "../errors";
 import { type CoreSharedDepName, MF_CORE_SHARED_DEPS } from "../mf-config";
@@ -77,10 +77,21 @@ const createModuleFederationInstance = Effect.cached(
   }),
 );
 
-export class ModuleFederationService extends Effect.Service<ModuleFederationService>()(
-  "ModuleFederationService",
-  {
-    effect: Effect.gen(function* () {
+export interface ModuleFederationServiceShape {
+  registerRemote: (pluginId: string, url: string) => Effect.Effect<void, ModuleFederationError>;
+  loadRemoteConstructor: (
+    pluginId: string,
+    url: string,
+  ) => Effect.Effect<new () => AnyPlugin, ModuleFederationError>;
+}
+
+export class ModuleFederationService extends Context.Service<
+  ModuleFederationService,
+  ModuleFederationServiceShape
+>()("ModuleFederationService") {
+  static Default = Layer.effect(
+    this,
+    Effect.gen(function* () {
       const mf = yield* Effect.flatten(createModuleFederationInstance);
 
       return {
@@ -196,5 +207,5 @@ export class ModuleFederationService extends Effect.Service<ModuleFederationServ
           }),
       };
     }),
-  },
-) {}
+  );
+}

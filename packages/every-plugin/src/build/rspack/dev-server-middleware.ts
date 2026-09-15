@@ -96,8 +96,9 @@ export function setupPluginMiddleware(
       const { createPluginRuntime } = await import("every-plugin");
       const { RPCHandler } = await import("@orpc/server/fetch");
       const { OpenAPIHandler } = await import("@orpc/openapi/fetch");
-      const { OpenAPIReferencePlugin } = await import("@orpc/openapi/plugins");
-      const { ZodToJsonSchemaConverter } = await import("@orpc/zod/zod4");
+      const { OpenAPIGenerator } = await import("@orpc/openapi");
+      const { OpenAPIReferenceHandlerPlugin } = await import("@orpc/openapi/plugins");
+      const { ZodToJsonSchemaConverter } = await import("@orpc/zod");
       const { onError } = await import("every-plugin/orpc");
       const { formatORPCError } = await import("every-plugin/errors");
 
@@ -154,10 +155,12 @@ export function setupPluginMiddleware(
         ],
       });
 
+      const generator = new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] });
+
       handlers.api = new OpenAPIHandler(loaded.router, {
         plugins: [
-          new OpenAPIReferencePlugin({
-            schemaConverters: [new ZodToJsonSchemaConverter()],
+          new OpenAPIReferenceHandlerPlugin({
+            spec: () => generator.generate(loaded.router, { version: "3.1.1" }),
           }),
         ],
         interceptors: [

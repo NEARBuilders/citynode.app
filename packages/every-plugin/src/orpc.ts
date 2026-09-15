@@ -1,3 +1,5 @@
+import "@orpc/openapi/extensions/route";
+
 export * from "@orpc/contract";
 export type { MemoryPublisherOptions } from "@orpc/publisher/memory";
 export { MemoryPublisher } from "@orpc/publisher/memory";

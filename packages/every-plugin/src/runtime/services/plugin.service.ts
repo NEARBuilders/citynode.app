@@ -1,11 +1,14 @@
-import { Effect, Exit, Layer, Scope } from "effect";
+import { Context, Effect, Exit, Layer, Scope } from "effect";
 import type {
   AnyPlugin,
   AnyPluginConstructor,
   InitializedPlugin,
+  LoadedPlugin,
+  PluginInstance,
   PluginRegistry,
   SecretsConfig,
 } from "../../types";
+import type { PluginRuntimeError } from "../errors";
 import { ModuleFederationService } from "./module-federation.service";
 import { PluginLifecycleService } from "./plugin-lifecycle.service";
 import {
@@ -16,34 +19,55 @@ import {
 } from "./plugin-loader.service";
 import { SecretsConfigTag, SecretsService } from "./secrets.service";
 
-export class PluginService extends Effect.Service<PluginService>()("PluginService", {
-  scoped: Effect.gen(function* () {
-    const loader = yield* PluginLoaderService;
-    const lifecycle = yield* PluginLifecycleService;
+export interface PluginServiceShape {
+  loadPlugin: (pluginId: string) => Effect.Effect<LoadedPlugin, PluginRuntimeError>;
+  instantiatePlugin: <T extends AnyPlugin>(
+    pluginId: string,
+    loadedPlugin: LoadedPlugin<T>,
+  ) => Effect.Effect<PluginInstance<T>, PluginRuntimeError>;
+  initializePlugin: <T extends AnyPlugin>(
+    pluginInstance: PluginInstance<T>,
+    config: any,
+    plugins?: Record<string, unknown>,
+  ) => Effect.Effect<InitializedPlugin<T>, PluginRuntimeError>;
+  registerPlugin: (plugin: InitializedPlugin<AnyPlugin>) => Effect.Effect<void>;
+  shutdownPlugin: (plugin: InitializedPlugin<AnyPlugin>) => Effect.Effect<void>;
+  cleanup: () => Effect.Effect<void>;
+}
 
-    return {
-      loadPlugin: loader.loadPlugin,
-      instantiatePlugin: loader.instantiatePlugin,
-      initializePlugin: loader.initializePlugin,
-      registerPlugin: (plugin: InitializedPlugin<AnyPlugin>) => lifecycle.register(plugin),
-      shutdownPlugin: (plugin: InitializedPlugin<AnyPlugin>) =>
-        plugin.plugin.shutdown().pipe(
-          Effect.catchAllCause((cause) =>
-            Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
-          ),
-          Effect.ensuring(
-            Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
-              Effect.catchAllCause((cause) =>
-                Effect.logWarning(`Failed to close scope for plugin ${plugin.plugin.id}`, cause),
+export class PluginService extends Context.Service<PluginService, PluginServiceShape>()(
+  "PluginService",
+) {
+  static Default = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const loader = yield* PluginLoaderService;
+      const lifecycle = yield* PluginLifecycleService;
+
+      return {
+        loadPlugin: loader.loadPlugin,
+        instantiatePlugin: loader.instantiatePlugin,
+        initializePlugin: loader.initializePlugin,
+        registerPlugin: (plugin: InitializedPlugin<AnyPlugin>) => lifecycle.register(plugin),
+        shutdownPlugin: (plugin: InitializedPlugin<AnyPlugin>) =>
+          plugin.plugin.shutdown().pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
+            ),
+            Effect.ensuring(
+              Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning(`Failed to close scope for plugin ${plugin.plugin.id}`, cause),
+                ),
               ),
             ),
+            Effect.ensuring(lifecycle.unregister(plugin)),
           ),
-          Effect.ensuring(lifecycle.unregister(plugin)),
-        ),
-      cleanup: lifecycle.cleanup,
-    };
-  }),
-}) {
+        cleanup: lifecycle.cleanup,
+      };
+    }),
+  );
+
   static Live = (
     registry: PluginRegistry,
     secrets: SecretsConfig,

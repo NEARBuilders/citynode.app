@@ -1,11 +1,21 @@
-import { Effect, Exit, Ref, Scope } from "effect";
+import { Context, Effect, Exit, Layer, Ref, Scope } from "effect";
 import type { AnyPlugin, InitializedPlugin } from "../../types";
-import { toPluginRuntimeError } from "../errors";
+import { type PluginRuntimeError, toPluginRuntimeError } from "../errors";
 
-export class PluginLifecycleService extends Effect.Service<PluginLifecycleService>()(
-  "PluginLifecycleService",
-  {
-    effect: Effect.gen(function* () {
+export interface PluginLifecycleServiceShape {
+  register: <T extends AnyPlugin>(plugin: InitializedPlugin<T>) => Effect.Effect<void>;
+  unregister: (plugin: InitializedPlugin<AnyPlugin>) => Effect.Effect<void>;
+  shutdown: (plugin: InitializedPlugin<AnyPlugin>) => Effect.Effect<void, PluginRuntimeError>;
+  cleanup: () => Effect.Effect<void>;
+}
+
+export class PluginLifecycleService extends Context.Service<
+  PluginLifecycleService,
+  PluginLifecycleServiceShape
+>()("PluginLifecycleService") {
+  static Default = Layer.effect(
+    this,
+    Effect.gen(function* () {
       const activePlugins = yield* Ref.make(new Set<InitializedPlugin<AnyPlugin>>());
 
       return {
@@ -23,14 +33,12 @@ export class PluginLifecycleService extends Effect.Service<PluginLifecycleServic
 
         shutdown: (plugin: InitializedPlugin<AnyPlugin>) =>
           Effect.gen(function* () {
-            // Remove from active plugins
             yield* Ref.update(activePlugins, (plugins) => {
               const newSet = new Set(plugins);
               newSet.delete(plugin);
               return newSet;
             });
 
-            // Shutdown the plugin
             yield* plugin.plugin
               .shutdown()
               .pipe(
@@ -59,12 +67,12 @@ export class PluginLifecycleService extends Effect.Service<PluginLifecycleServic
               plugins,
               (plugin) =>
                 plugin.plugin.shutdown().pipe(
-                  Effect.catchAllCause((cause) =>
+                  Effect.catchCause((cause) =>
                     Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
                   ),
                   Effect.ensuring(
                     Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
-                      Effect.catchAllCause((cause) =>
+                      Effect.catchCause((cause) =>
                         Effect.logWarning(
                           `Failed to close scope for plugin ${plugin.plugin.id}`,
                           cause,
@@ -77,10 +85,8 @@ export class PluginLifecycleService extends Effect.Service<PluginLifecycleServic
             );
 
             yield* Ref.set(activePlugins, new Set());
-          }).pipe(
-            Effect.catchAllCause((cause) => Effect.logWarning("Plugin cleanup failed", cause)),
-          ),
+          }).pipe(Effect.catchCause((cause) => Effect.logWarning("Plugin cleanup failed", cause))),
       };
     }),
-  },
-) {}
+  );
+}

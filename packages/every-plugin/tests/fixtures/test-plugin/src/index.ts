@@ -63,7 +63,7 @@ export const TestPlugin = createPlugin({
 
       // Create publisher for background events with resume support for serverless
       const publisher = new MemoryPublisher<BackgroundEvents>({
-        resumeRetentionSeconds: 60 * 2, // Retain events for 2 minutes to support resume
+        resume: { enabled: true, seconds: 60 * 2 }, // Retain events for 2 minutes to support resume
       });
 
       // Start background producer if enabled
@@ -83,7 +83,7 @@ export const TestPlugin = createPlugin({
               };
 
               yield* Effect.tryPromise(() => publisher.publish("background-updates", event)).pipe(
-                Effect.catchAll((error) => {
+                Effect.catch((error) => {
                   console.log(`[TestPlugin] Publish failed for event ${i}:`, error);
                   return Effect.void;
                 }),

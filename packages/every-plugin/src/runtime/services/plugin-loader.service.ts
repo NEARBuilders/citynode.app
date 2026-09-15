@@ -1,5 +1,5 @@
 import type { InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
-import { Context, Effect, Context as EffectContext, Exit, Layer, Scope } from "effect";
+import { Context, Effect, Exit, Layer, Scope } from "effect";
 import type { z } from "zod";
 import { PluginIdTag, type PluginServicesTools } from "../../plugin";
 import type {
@@ -16,67 +16,98 @@ import { validate } from "../validation";
 import { ModuleFederationService } from "./module-federation.service";
 import { SecretsService } from "./secrets.service";
 
-export class PluginRegistryTag extends Context.Tag("PluginRegistry")<
-  PluginRegistryTag,
-  PluginRegistry
->() {}
+export class PluginRegistryTag extends Context.Service<PluginRegistryTag, PluginRegistry>()(
+  "PluginRegistry",
+) {}
 
-export class PluginMapTag extends Context.Tag("PluginMap")<
+export class PluginMapTag extends Context.Service<
   PluginMapTag,
   Record<string, AnyPluginConstructor>
->() {}
+>()("PluginMap") {}
 
-export class RegistryService extends Effect.Service<RegistryService>()("RegistryService", {
-  effect: Effect.gen(function* () {
-    const registry = yield* PluginRegistryTag;
-    const pluginMap = yield* PluginMapTag;
+export interface RegistryServiceShape {
+  get: (pluginId: string) => Effect.Effect<
+    { constructor: (new () => AnyPlugin) | null; metadata: PluginMetadata },
+    PluginRuntimeError
+  >;
+  getModule: (pluginId: string) => Effect.Effect<AnyPluginConstructor | null>;
+}
 
-    return {
-      get: (pluginId: string) =>
-        Effect.gen(function* () {
-          const entry = registry[pluginId];
+export class RegistryService extends Context.Service<RegistryService, RegistryServiceShape>()(
+  "RegistryService",
+) {
+  static Default = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const registry = yield* PluginRegistryTag;
+      const pluginMap = yield* PluginMapTag;
 
-          if (!entry) {
-            return yield* Effect.fail(
-              new PluginRuntimeError({
-                pluginId,
-                operation: "validate-plugin-id",
-                cause: new Error(`Plugin ${pluginId} not found in registry`),
-                retryable: false,
-              }),
-            );
-          }
+      return {
+        get: (pluginId: string) =>
+          Effect.gen(function* () {
+            const entry = registry[pluginId];
 
-          if ("module" in entry) {
+            if (!entry) {
+              return yield* Effect.fail(
+                new PluginRuntimeError({
+                  pluginId,
+                  operation: "validate-plugin-id",
+                  cause: new Error(`Plugin ${pluginId} not found in registry`),
+                  retryable: false,
+                }),
+              );
+            }
+
+            if ("module" in entry) {
+              return {
+                constructor: entry.module,
+                metadata: {
+                  remoteUrl: entry.remote || "",
+                  version: entry.version,
+                  description: entry.description,
+                } as PluginMetadata,
+              };
+            }
+
             return {
-              constructor: entry.module,
+              constructor: null,
               metadata: {
-                remoteUrl: entry.remote || "",
+                remoteUrl: entry.remote,
                 version: entry.version,
                 description: entry.description,
               } as PluginMetadata,
             };
-          }
+          }),
 
-          return {
-            constructor: null,
-            metadata: {
-              remoteUrl: entry.remote,
-              version: entry.version,
-              description: entry.description,
-            } as PluginMetadata,
-          };
-        }),
+        getModule: (pluginId: string) => Effect.succeed(pluginMap[pluginId] || null),
+      };
+    }),
+  );
+}
 
-      getModule: (pluginId: string) => Effect.succeed(pluginMap[pluginId] || null),
-    };
-  }),
-}) {}
+export interface PluginLoaderServiceShape {
+  loadPlugin: (pluginId: string) => Effect.Effect<LoadedPlugin, PluginRuntimeError>;
+  instantiatePlugin: <T extends AnyPlugin>(
+    pluginId: string,
+    loadedPlugin: LoadedPlugin<T>,
+  ) => Effect.Effect<PluginInstance<T>, PluginRuntimeError>;
+  initializePlugin: <T extends AnyPlugin>(
+    pluginInstance: PluginInstance<T>,
+    config: {
+      variables: InferSchemaInput<T["configSchema"]["variables"]>;
+      secrets: InferSchemaInput<T["configSchema"]["secrets"]>;
+    },
+    plugins?: Record<string, unknown>,
+  ) => Effect.Effect<InitializedPlugin<T>, PluginRuntimeError>;
+}
 
-export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
-  "PluginLoaderService",
-  {
-    effect: Effect.gen(function* () {
+export class PluginLoaderService extends Context.Service<
+  PluginLoaderService,
+  PluginLoaderServiceShape
+>()("PluginLoaderService") {
+  static Default = Layer.effect(
+    this,
+    Effect.gen(function* () {
       const moduleFederationService = yield* ModuleFederationService;
       const secretsService = yield* SecretsService;
       const registryService = yield* RegistryService;
@@ -244,7 +275,7 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
             const tools: PluginServicesTools = {
               buildService: (tag: any, layer: any) =>
                 (Layer.buildWithMemoMap(layer, memoMap, scope) as any).pipe(
-                  Effect.map((ctx: any) => EffectContext.get(ctx, tag)) as any,
+                  Effect.map((ctx: any) => Context.get(ctx, tag)) as any,
                 ),
             };
 
@@ -265,7 +296,7 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
                   Exit.isSuccess(exit)
                     ? Effect.void
                     : Scope.close(scope, exit).pipe(
-                        Effect.catchAllCause((closeCause) =>
+                        Effect.catchCause((closeCause) =>
                           Effect.logWarning(
                             `Failed to close scope for plugin ${plugin.id} after initialize error`,
                             closeCause,
@@ -291,5 +322,5 @@ export class PluginLoaderService extends Effect.Service<PluginLoaderService>()(
           }),
       };
     }),
-  },
-) {}
+  );
+}

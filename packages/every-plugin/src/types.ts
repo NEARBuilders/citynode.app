@@ -4,7 +4,7 @@ import type {
   InferSchemaInput,
   InferSchemaOutput,
 } from "@orpc/contract";
-import type { Router, RouterClient } from "@orpc/server";
+import type { ContractedRouter, RouterClient } from "@orpc/server";
 import type { Scope } from "effect";
 import type { Plugin } from "./plugin";
 
@@ -100,7 +100,7 @@ export type PluginContext<T> = T extends {
  * Extract router type from plugin binding
  * Uses 'any' for context to support nested router compositions
  */
-export type PluginRouterType<T> = Router<PluginContract<T>, any>;
+export type PluginRouterType<T> = ContractedRouter<PluginContract<T>, any>;
 
 /**
  * Extract client type from plugin binding
@@ -206,7 +206,7 @@ export interface InitializedPlugin<T extends AnyPlugin = AnyPlugin> {
     secrets: InferSchemaOutput<T["configSchema"]["secrets"]>;
   };
   readonly context: ContextOf<T>;
-  readonly scope: Scope.CloseableScope;
+  readonly scope: Scope.Closeable;
 }
 
 /**

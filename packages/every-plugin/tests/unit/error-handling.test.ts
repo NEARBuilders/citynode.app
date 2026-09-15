@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/contract";
+import { ORPCError } from "@orpc/server";
 import { describe, expect, it } from "vitest";
 import { PluginRuntimeError, toPluginRuntimeError } from "../../src/runtime/errors";
 

@@ -12,9 +12,9 @@ describe("Scope lifecycle", () => {
   it("tools.buildService resources persist after plugin initialization", async () => {
     let released = false;
 
-    class TestTag extends Context.Tag("TestTag")<TestTag, { value: string }>() {}
+    class TestTag extends Context.Service<TestTag, { value: string }>()("TestTag") {}
 
-    const TestLive = Layer.scoped(
+    const TestLive = Layer.effect(
       TestTag,
       Effect.gen(function* () {
         yield* Effect.acquireRelease(
