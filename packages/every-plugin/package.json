@@ -63,15 +63,6 @@
       "import": "./dist/zod.mjs",
       "require": "./dist/zod.cjs"
     },
-    "./zod/v4/core": {
-      "development": {
-        "types": "./src/zod-core.ts",
-        "import": "./src/zod-core.ts"
-      },
-      "types": "./dist/zod-core.d.mts",
-      "import": "./dist/zod-core.mjs",
-      "require": "./dist/zod-core.cjs"
-    },
     "./orpc": {
       "development": {
         "types": "./src/orpc.ts",
@@ -80,15 +71,6 @@
       "types": "./dist/orpc.d.mts",
       "import": "./dist/orpc.mjs",
       "require": "./dist/orpc.cjs"
-    },
-    "./orpc/openapi": {
-      "development": {
-        "types": "./src/orpc-openapi.ts",
-        "import": "./src/orpc-openapi.ts"
-      },
-      "types": "./dist/orpc-openapi.d.mts",
-      "import": "./dist/orpc-openapi.mjs",
-      "require": "./dist/orpc-openapi.cjs"
     },
     "./errors": {
       "development": {
