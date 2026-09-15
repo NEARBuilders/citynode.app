@@ -35,12 +35,16 @@ import {
 } from "@/lib/sputnik-proposals";
 import {
   buildDraftFromResolvedConfig,
-  computeSubresourceIntegrity,
+  computeSsrEntryIntegrity,
+  computeUiEntryIntegrity,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
+  type IntegrityCheckResult,
+  normalizeBundleBaseUrl,
   type TenantConfigDraft,
   tenantConfigDraftSchema,
+  verifySsrIntegrity,
   verifyUiIntegrity,
 } from "@/lib/tenant-config-draft";
 import { publishTenantConfigForMode } from "@/lib/tenant-deploy";
@@ -206,23 +210,25 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
       toast.error(describeDaoError(error, daoOwned ? tenantAccount : "the session wallet")),
   });
 
-  const onVerifyBundle = async () => {
-    if (!draft.uiProduction) {
-      toast.error("enter the UI bundle URL first");
-      return;
-    }
+  const onVerifyBundle = async (
+    url: string,
+    currentIntegrity: string,
+    compute: (url: string) => Promise<string>,
+    apply: (computed: string) => void,
+    label: string,
+  ) => {
     setComputing(true);
     try {
-      const computed = await computeSubresourceIntegrity(draft.uiProduction);
-      if (!draft.uiIntegrity) {
-        setDraft((prev) => ({ ...prev, uiIntegrity: computed }));
-        toast.success("integrity filled from the bundle");
+      const computed = await compute(url);
+      if (!currentIntegrity) {
+        apply(computed);
+        toast.success(`${label} integrity filled from the bundle`);
         return;
       }
-      if (computed === draft.uiIntegrity) {
-        toast.success("integrity matches the bundle");
+      if (computed === currentIntegrity) {
+        toast.success(`${label} integrity matches the bundle`);
       } else {
-        toast.error(`integrity mismatch — the bundle hashes to ${computed}`);
+        toast.error(`${label} integrity mismatch — the bundle hashes to ${computed}`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -231,28 +237,73 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
     }
   };
 
+  const onVerifyUiBundle = () => {
+    if (!draft.uiProduction) {
+      toast.error("enter the UI bundle URL first");
+      return;
+    }
+    return onVerifyBundle(
+      draft.uiProduction,
+      draft.uiIntegrity,
+      computeUiEntryIntegrity,
+      (computed) => setDraft((prev) => ({ ...prev, uiIntegrity: computed })),
+      "UI",
+    );
+  };
+
+  const onVerifySsrBundle = () => {
+    if (!draft.ssrUrl) {
+      toast.error("enter the SSR bundle URL first");
+      return;
+    }
+    return onVerifyBundle(
+      draft.ssrUrl,
+      draft.ssrIntegrity,
+      computeSsrEntryIntegrity,
+      (computed) => setDraft((prev) => ({ ...prev, ssrIntegrity: computed })),
+      "SSR",
+    );
+  };
+
   const onPropose = async () => {
     if (!parsedDraft.success) {
       toast.error(parsedDraft.error.issues[0]?.message ?? "fix the form first");
       return;
     }
     const value = parsedDraft.data;
+    const checks: { label: string; check: IntegrityCheckResult }[] = [];
     if (value.uiProduction && value.uiIntegrity) {
       setVerifying(true);
       try {
-        const check = await verifyUiIntegrity(value.uiProduction, value.uiIntegrity);
-        if (check.status === "mismatch") {
-          toast.error(`integrity mismatch — the bundle hashes to ${check.computed}`);
-          return;
-        }
-        if (
-          check.status === "unverified" &&
-          !confirm(`couldn't fetch the bundle to verify (${check.reason}) — propose anyway?`)
-        ) {
-          return;
-        }
+        checks.push({
+          label: "UI",
+          check: await verifyUiIntegrity(value.uiProduction, value.uiIntegrity),
+        });
       } finally {
         setVerifying(false);
+      }
+    }
+    if (value.ssrUrl && value.ssrIntegrity) {
+      setVerifying(true);
+      try {
+        checks.push({
+          label: "SSR",
+          check: await verifySsrIntegrity(value.ssrUrl, value.ssrIntegrity),
+        });
+      } finally {
+        setVerifying(false);
+      }
+    }
+    for (const { label, check } of checks) {
+      if (check.status === "mismatch") {
+        toast.error(`${label} integrity mismatch — the bundle hashes to ${check.computed}`);
+        return;
+      }
+      if (
+        check.status === "unverified" &&
+        !confirm(`couldn't fetch the ${label} bundle to verify (${check.reason}) — propose anyway?`)
+      ) {
+        return;
       }
     }
     proposeMutation.mutate();
@@ -470,7 +521,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                 <h3 className="text-sm font-semibold text-foreground">Custom UI bundle</h3>
                 <InfoPopover
                   title="Custom UI bundle"
-                  body="A deployed UI bundle (URL + sha384 integrity) that replaces the platform UI for this tenant. Verify before proposing — a mismatching pair makes the host refuse the tenant until it is fixed."
+                  body="A deployed UI bundle that replaces the platform UI for this tenant. Paste the bundle's base URL — the integrity is the sha384 of <base>/remoteEntry.js (SSR: <base>/remoteEntry.server.js), the same convention the deploy pipeline and the host use. A mismatching pair makes the host refuse the tenant until it is fixed."
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -480,12 +531,18 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                     label="UI bundle URL"
                     value={draft.uiProduction}
                     onChange={(value) => setDraft((prev) => ({ ...prev, uiProduction: value }))}
+                    onBlur={() =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        uiProduction: normalizeBundleBaseUrl(prev.uiProduction),
+                      }))
+                    }
                     placeholder="https://…zephyrcloud.app"
                     disabled={!editable}
                   />
                   <button
                     type="button"
-                    onClick={() => void onVerifyBundle()}
+                    onClick={() => void onVerifyUiBundle()}
                     disabled={!editable || computing || !draft.uiProduction}
                     className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground disabled:opacity-50"
                     data-testid="orgs-node-config-verify"
@@ -504,14 +561,31 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                 />
                 {tenant.allowSsr && (
                   <>
-                    <ConfigField
-                      id="orgs-node-config-ssr-url"
-                      label="SSR bundle URL"
-                      value={draft.ssrUrl}
-                      onChange={(value) => setDraft((prev) => ({ ...prev, ssrUrl: value }))}
-                      placeholder="https://…"
-                      disabled={!editable}
-                    />
+                    <div className="space-y-1">
+                      <ConfigField
+                        id="orgs-node-config-ssr-url"
+                        label="SSR bundle URL"
+                        value={draft.ssrUrl}
+                        onChange={(value) => setDraft((prev) => ({ ...prev, ssrUrl: value }))}
+                        onBlur={() =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            ssrUrl: normalizeBundleBaseUrl(prev.ssrUrl),
+                          }))
+                        }
+                        placeholder="https://…zephyrcloud.app"
+                        disabled={!editable}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void onVerifySsrBundle()}
+                        disabled={!editable || computing || !draft.ssrUrl}
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                        data-testid="orgs-node-config-verify-ssr"
+                      >
+                        {computing ? "hashing…" : "verify · fill integrity from the bundle"}
+                      </button>
+                    </div>
                     <ConfigField
                       id="orgs-node-config-ssr-integrity"
                       label="SSR integrity"
@@ -580,6 +654,7 @@ function ConfigField({
   label,
   value,
   onChange,
+  onBlur,
   placeholder,
   disabled,
   mono,
@@ -588,6 +663,7 @@ function ConfigField({
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   disabled?: boolean;
   mono?: boolean;
@@ -602,6 +678,7 @@ function ConfigField({
         placeholder={placeholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
         className={mono ? "font-mono text-xs" : undefined}
         data-testid={id}
       />
