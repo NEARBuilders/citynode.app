@@ -128,6 +128,19 @@ export const PluginErrors = {
  */
 export const CommonPluginErrors = PluginErrors;
 
+/**
+ * Error-code -> HTTP-status map for handlers.
+ *
+ * oRPC v2 resolves statuses at the handler boundary via `errorStatusMap`
+ * (default `COMMON_ERROR_STATUS_MAP`, where TIMEOUT is 408). These custom
+ * entries preserve the v1 wire behavior: TIMEOUT -> 504,
+ * CONNECTION_ERROR -> 502.
+ */
+export const PLUGIN_ERROR_STATUS_MAP: Record<string, number> = {
+  TIMEOUT: 504,
+  CONNECTION_ERROR: 502,
+} as const;
+
 export {
   extractFromFiberFailure,
   formatORPCError,

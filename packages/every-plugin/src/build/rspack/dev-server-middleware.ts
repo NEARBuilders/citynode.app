@@ -1,3 +1,4 @@
+import { PLUGIN_ERROR_STATUS_MAP } from "../../errors";
 import type { PluginInfo } from "./utils";
 
 const corsHeaders = {
@@ -147,6 +148,7 @@ export function setupPluginMiddleware(
       };
 
       handlers.rpc = new RPCHandler(loaded.router, {
+        errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
         interceptors: [
           onError((error: any) => {
             const formatted = formatORPCError(error);
@@ -158,6 +160,7 @@ export function setupPluginMiddleware(
       const generator = new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] });
 
       handlers.api = new OpenAPIHandler(loaded.router, {
+        errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
         plugins: [
           new OpenAPIReferenceHandlerPlugin({
             spec: () => generator.generate(loaded.router, { version: "3.1.1" }),
