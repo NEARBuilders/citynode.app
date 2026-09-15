@@ -2,7 +2,7 @@ import type { AnyContractRouter, AnySchema, InferSchemaOutput } from "@orpc/cont
 import { ORPCError } from "@orpc/server";
 import type { ContractedRouter, Implementer } from "@orpc/server";
 import { implement, onError } from "@orpc/server";
-import { Context, Effect, type Context as EffectContext, type Layer, type Scope } from "effect";
+import { Context, Effect, type Scope } from "effect";
 import { extractFromFiberFailure, formatORPCError } from "./runtime/errors";
 
 type ContextOutput<T> = T extends AnySchema ? InferSchemaOutput<T> : Record<string, never>;
@@ -22,15 +22,6 @@ type PluginInitializeInput<V extends AnySchema, S extends AnySchema> = {
   secrets: InferSchemaOutput<S>;
 };
 
-/**
- * Tools provided to plugin initialize/services for building long-lived scoped resources.
- */
-type ServiceOf<T> = T extends EffectContext.Key<any, infer S> ? S : never;
-
-export type PluginServicesTools = {
-  buildService: <T>(tag: T, layer: Layer.Layer<any, any, any>) => Effect.Effect<ServiceOf<T>>;
-};
-
 export class PluginIdTag extends Context.Service<PluginIdTag, string>()("PluginId") {}
 
 type PluginDefinition<
@@ -47,13 +38,15 @@ type PluginDefinition<
   context?: TRequestContext;
   /**
    * Initialize the plugin and build dependencies.
-   * A third argument `tools` is provided for building long-lived scoped resources
-   * (e.g. database pools) via `tools.buildService(tag, layer)`.
+   *
+   * Compose Effect Layers and build them into the plugin's lifecycle scope:
+   * `yield* Layer.buildWithScope(layer, yield* Effect.scope)` — scoped
+   * resources (db pools, repositories, caches, publishers) release when
+   * the plugin shuts down.
    */
   initialize?: (
     config: PluginInitializeInput<V, S>,
     plugins: P,
-    tools: PluginServicesTools,
   ) => Effect.Effect<TDeps, Error, Scope.Scope>;
   createRouter: (
     deps: TDeps,
@@ -98,7 +91,6 @@ export interface Plugin<
   initialize(
     config: PluginInitializeInput<TVariables, TSecrets>,
     plugins: Record<string, unknown>,
-    tools: PluginServicesTools,
   ): Effect.Effect<TDeps, unknown, Scope.Scope>;
 
   shutdown(): Effect.Effect<void, never>;
@@ -152,11 +144,10 @@ export const createPlugin: CreatePluginFn = function createPlugin<
     initialize(
       pluginConfig: PluginInitializeInput<V, S>,
       plugins: Record<string, unknown> = {},
-      tools: PluginServicesTools,
     ): Effect.Effect<TDeps, unknown, Scope.Scope> {
       const init = config.initialize ?? (() => Effect.succeed({} as TDeps));
 
-      return init(pluginConfig, plugins as P, tools).pipe(
+      return init(pluginConfig, plugins as P).pipe(
         Effect.tap((deps) =>
           Effect.sync(() => {
             this._deps = deps;

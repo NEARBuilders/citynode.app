@@ -17,7 +17,7 @@ import type {
   UsePluginResult,
 } from "../types";
 import { PluginRuntimeError } from "./errors";
-import { PluginService } from "./services/plugin.service";
+import { PluginService, PluginServiceLive } from "./services/plugin.service";
 
 const MAX_CACHE_KEY_DEPTH = 32;
 
@@ -356,7 +356,7 @@ export function createPluginRuntime<TRegistry extends Record<string, PluginRegis
   const normalizedRegistry = normalizeRegistry(config.registry);
   const pluginMap = extractPluginMap(config.registry);
 
-  const layer = PluginService.Live(normalizedRegistry, secrets, pluginMap);
+  const layer = PluginServiceLive(normalizedRegistry, secrets, pluginMap);
   const runtime = ManagedRuntime.make(layer);
 
   return new PluginRuntime(runtime, normalizedRegistry) as PluginRuntime<

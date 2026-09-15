@@ -9,7 +9,7 @@ const testContract = oc.router({
 });
 
 describe("Scope lifecycle", () => {
-  it("tools.buildService resources persist after plugin initialization", async () => {
+  it("Layer-built resources persist after plugin initialization", async () => {
     let released = false;
 
     class TestTag extends Context.Service<TestTag, { value: string }>()("TestTag") {}
@@ -32,10 +32,10 @@ describe("Scope lifecycle", () => {
       variables: z.object({}),
       secrets: z.object({}),
       contract: testContract,
-      initialize: (_config, _plugins, tools) =>
+      initialize: () =>
         Effect.gen(function* () {
-          const svc = yield* tools.buildService(TestTag, TestLive);
-          return { svc };
+          const ctx = yield* Layer.buildWithScope(TestLive, yield* Effect.scope);
+          return { svc: Context.get(ctx, TestTag) };
         }),
       createRouter: (_deps, builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true })),

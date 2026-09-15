@@ -88,11 +88,12 @@ export interface ModuleFederationServiceShape {
 export class ModuleFederationService extends Context.Service<
   ModuleFederationService,
   ModuleFederationServiceShape
->()("ModuleFederationService") {
-  static Default = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      const mf = yield* Effect.flatten(createModuleFederationInstance);
+>()("ModuleFederationService") {}
+
+export const ModuleFederationServiceDefault = Layer.effect(
+  ModuleFederationService,
+  Effect.gen(function* () {
+    const mf = yield* Effect.flatten(createModuleFederationInstance);
 
       return {
         registerRemote: (pluginId: string, url: string) =>
@@ -207,5 +208,4 @@ export class ModuleFederationService extends Context.Service<
           }),
       };
     }),
-  );
-}
+);

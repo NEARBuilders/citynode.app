@@ -12,81 +12,81 @@ export interface PluginLifecycleServiceShape {
 export class PluginLifecycleService extends Context.Service<
   PluginLifecycleService,
   PluginLifecycleServiceShape
->()("PluginLifecycleService") {
-  static Default = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      const activePlugins = yield* Ref.make(new Set<InitializedPlugin<AnyPlugin>>());
+>()("PluginLifecycleService") {}
 
-      return {
-        register: <T extends AnyPlugin>(plugin: InitializedPlugin<T>) =>
-          Ref.update(activePlugins, (plugins) =>
-            new Set(plugins).add(plugin as InitializedPlugin<AnyPlugin>),
-          ),
+export const PluginLifecycleServiceDefault = Layer.effect(
+  PluginLifecycleService,
+  Effect.gen(function* () {
+    const activePlugins = yield* Ref.make(new Set<InitializedPlugin<AnyPlugin>>());
 
-        unregister: (plugin: InitializedPlugin<AnyPlugin>) =>
-          Ref.update(activePlugins, (plugins) => {
+    return {
+      register: <T extends AnyPlugin>(plugin: InitializedPlugin<T>) =>
+        Ref.update(activePlugins, (plugins) =>
+          new Set(plugins).add(plugin as InitializedPlugin<AnyPlugin>),
+        ),
+
+      unregister: (plugin: InitializedPlugin<AnyPlugin>) =>
+        Ref.update(activePlugins, (plugins) => {
+          const newSet = new Set(plugins);
+          newSet.delete(plugin);
+          return newSet;
+        }),
+
+      shutdown: (plugin: InitializedPlugin<AnyPlugin>) =>
+        Effect.gen(function* () {
+          yield* Ref.update(activePlugins, (plugins) => {
             const newSet = new Set(plugins);
             newSet.delete(plugin);
             return newSet;
-          }),
+          });
 
-        shutdown: (plugin: InitializedPlugin<AnyPlugin>) =>
-          Effect.gen(function* () {
-            yield* Ref.update(activePlugins, (plugins) => {
-              const newSet = new Set(plugins);
-              newSet.delete(plugin);
-              return newSet;
-            });
-
-            yield* plugin.plugin
-              .shutdown()
-              .pipe(
-                Effect.mapError((error) =>
-                  toPluginRuntimeError(
-                    error,
-                    plugin.plugin.id,
-                    undefined,
-                    "shutdown-plugin",
-                    false,
-                  ),
+          yield* plugin.plugin
+            .shutdown()
+            .pipe(
+              Effect.mapError((error) =>
+                toPluginRuntimeError(
+                  error,
+                  plugin.plugin.id,
+                  undefined,
+                  "shutdown-plugin",
+                  false,
                 ),
-              );
-          }),
+              ),
+            );
+        }),
 
-        cleanup: () =>
-          Effect.gen(function* () {
-            const plugins = yield* Ref.get(activePlugins);
-            if (typeof process !== "undefined" && process.env?.EVERY_PLUGIN_DEBUG_SCOPES === "1") {
-              yield* Effect.logWarning(
-                `[PluginLifecycle] cleaning up ${plugins.size} active plugin(s)`,
-              );
-            }
+      cleanup: () =>
+        Effect.gen(function* () {
+          const plugins = yield* Ref.get(activePlugins);
+          if (typeof process !== "undefined" && process.env?.EVERY_PLUGIN_DEBUG_SCOPES === "1") {
+            yield* Effect.logWarning(
+              `[PluginLifecycle] cleaning up ${plugins.size} active plugin(s)`,
+            );
+          }
 
-            yield* Effect.forEach(
-              plugins,
-              (plugin) =>
-                plugin.plugin.shutdown().pipe(
-                  Effect.catchCause((cause) =>
-                    Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
-                  ),
-                  Effect.ensuring(
-                    Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning(
-                          `Failed to close scope for plugin ${plugin.plugin.id}`,
-                          cause,
-                        ),
+          yield* Effect.forEach(
+            plugins,
+            (plugin) =>
+              plugin.plugin.shutdown().pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
+                ),
+                Effect.ensuring(
+                  Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
+                    Effect.catchCause((cause) =>
+                      Effect.logWarning(
+                        `Failed to close scope for plugin ${plugin.plugin.id}`,
+                        cause,
                       ),
                     ),
                   ),
                 ),
-              { concurrency: "unbounded" },
-            );
+              ),
+            { concurrency: "unbounded" },
+          );
 
-            yield* Ref.set(activePlugins, new Set());
-          }).pipe(Effect.catchCause((cause) => Effect.logWarning("Plugin cleanup failed", cause))),
-      };
-    }),
-  );
-}
+          yield* Ref.set(activePlugins, new Set());
+        }).pipe(Effect.catchCause((cause) => Effect.logWarning("Plugin cleanup failed", cause))),
+    };
+  }),
+);

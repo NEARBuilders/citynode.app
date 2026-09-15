@@ -1,7 +1,7 @@
 import type { InferSchemaInput, InferSchemaOutput } from "@orpc/contract";
 import { Context, Effect, Exit, Layer, Scope } from "effect";
 import type { z } from "zod";
-import { PluginIdTag, type PluginServicesTools } from "../../plugin";
+import { PluginIdTag } from "../../plugin";
 import type {
   AnyPlugin,
   AnyPluginConstructor,
@@ -35,12 +35,13 @@ export interface RegistryServiceShape {
 
 export class RegistryService extends Context.Service<RegistryService, RegistryServiceShape>()(
   "RegistryService",
-) {
-  static Default = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      const registry = yield* PluginRegistryTag;
-      const pluginMap = yield* PluginMapTag;
+) {}
+
+export const RegistryServiceDefault = Layer.effect(
+  RegistryService,
+  Effect.gen(function* () {
+    const registry = yield* PluginRegistryTag;
+    const pluginMap = yield* PluginMapTag;
 
       return {
         get: (pluginId: string) =>
@@ -82,8 +83,7 @@ export class RegistryService extends Context.Service<RegistryService, RegistrySe
         getModule: (pluginId: string) => Effect.succeed(pluginMap[pluginId] || null),
       };
     }),
-  );
-}
+);
 
 export interface PluginLoaderServiceShape {
   loadPlugin: (pluginId: string) => Effect.Effect<LoadedPlugin, PluginRuntimeError>;
@@ -104,13 +104,14 @@ export interface PluginLoaderServiceShape {
 export class PluginLoaderService extends Context.Service<
   PluginLoaderService,
   PluginLoaderServiceShape
->()("PluginLoaderService") {
-  static Default = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      const moduleFederationService = yield* ModuleFederationService;
-      const secretsService = yield* SecretsService;
-      const registryService = yield* RegistryService;
+>()("PluginLoaderService") {}
+
+export const PluginLoaderServiceDefault = Layer.effect(
+  PluginLoaderService,
+  Effect.gen(function* () {
+    const moduleFederationService = yield* ModuleFederationService;
+    const secretsService = yield* SecretsService;
+    const registryService = yield* RegistryService;
 
       const resolveUrl = (baseUrl: string, version?: string): string =>
         version && version !== "latest" ? baseUrl.replace("@latest", `@${version}`) : baseUrl;
@@ -266,18 +267,10 @@ export class PluginLoaderService extends Context.Service<
               ),
             );
 
-            // Create a long-lived scope for this plugin instance
+            // Create a long-lived scope for this plugin instance. Initialize
+            // composes Layers against this scope (yield* Effect.scope), so
+            // scoped resources release on plugin shutdown.
             const scope = yield* Scope.make();
-
-            // Create a per-plugin MemoMap so tool-built layers are memoized
-            const memoMap = yield* Layer.makeMemoMap;
-
-            const tools: PluginServicesTools = {
-              buildService: (tag: any, layer: any) =>
-                (Layer.buildWithMemoMap(layer, memoMap, scope) as any).pipe(
-                  Effect.map((ctx: any) => Context.get(ctx, tag)) as any,
-                ),
-            };
 
             // Initialize plugin within the scope.
             // If initialize fails, close the scope immediately so scoped
@@ -287,7 +280,6 @@ export class PluginLoaderService extends Context.Service<
               .initialize(
                 { variables: _variables, secrets: hydratedConfig.secrets },
                 plugins ?? {},
-                tools,
               )
               .pipe(
                 Effect.provideService(PluginIdTag, plugin.id),
@@ -322,5 +314,4 @@ export class PluginLoaderService extends Context.Service<
           }),
       };
     }),
-  );
-}
+);
