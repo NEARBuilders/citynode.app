@@ -1,3 +1,4 @@
+import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
@@ -38,6 +39,7 @@ function NodeOverview() {
 
   return (
     <div className="space-y-8">
+      <ProfileEditor nodeId={selectedNode.id} />
       <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
 
       <section className="space-y-3">

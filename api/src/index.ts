@@ -1,3 +1,4 @@
+import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import { createPlugin } from "every-plugin";
 import { Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
@@ -60,6 +61,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       const nodesLayer = NodesLive.pipe(Layer.provide(database));
       const validatorsLayer = ValidatorsLive.pipe(Layer.provide(database));
 
+      const discovery = yield* tools.buildService(DiscoveryTag, DiscoveryLive.pipe(Layer.provide(database)));
       const tenantsService = yield* tools.buildService(TenantsTag, tenantsLayer);
       const nodesService = yield* tools.buildService(NodesTag, nodesLayer);
       const validatorsService = yield* tools.buildService(ValidatorsTag, validatorsLayer);
@@ -108,6 +110,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       console.log("[API] Services Initialized");
 
       return {
+      discovery,
         tenants: tenantsService,
         nodes: nodesService,
         validators: validatorsService,
@@ -192,7 +195,11 @@ export default createPlugin.withPlugins<PluginsClient>()({
     };
 
     return {
-      ping: builder.ping.handler(async () => ({
+      listDiscovery: builder.listDiscovery.handler(({ input }) => services.discovery.list(input)),
+      getDiscoveryNode: builder.getDiscoveryNode.handler(({ input }) => services.discovery.get(input.nodeId)),
+      getDiscoveryProfile: builder.getDiscoveryProfile.handler(({ input, context }) => services.discovery.profile(input.nodeId, context)),
+      saveDiscoveryProfile: builder.saveDiscoveryProfile.handler(({ input, context }) => services.discovery.saveProfile(input, context)),
+        ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),
       })),

@@ -20,6 +20,7 @@ import { Route as LayoutAuthenticatedDashboardRouteImport } from './routes/_layo
 import { Route as LayoutPublicIndexRouteImport } from './routes/_layout/_public/index'
 import { Route as LayoutPublicAccountIdRouteImport } from './routes/_layout/_public/$accountId'
 import { Route as LayoutPublicAboutRouteImport } from './routes/_layout/_public/about'
+import { Route as LayoutPublicExploreRouteImport } from './routes/_layout/_public/explore'
 import { Route as LayoutPublicSkillRouteImport } from './routes/_layout/_public/skill'
 import { Route as LayoutAdminDashboardAdminRouteImport } from './routes/_layout/_admin/_dashboard/admin'
 import { Route as LayoutAuthenticatedDashboardApplyRouteImport } from './routes/_layout/_authenticated/_dashboard/apply'
@@ -105,6 +106,11 @@ const LayoutPublicAccountIdRoute = LayoutPublicAccountIdRouteImport.update({
 const LayoutPublicAboutRoute = LayoutPublicAboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => LayoutPublicRoute,
+} as any)
+const LayoutPublicExploreRoute = LayoutPublicExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
   getParentRoute: () => LayoutPublicRoute,
 } as any)
 const LayoutPublicSkillRoute = LayoutPublicSkillRouteImport.update({
@@ -333,6 +339,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LayoutAnonLoginRoute
   '/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/about': typeof LayoutPublicAboutRoute
+  '/explore': typeof LayoutPublicExploreRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/admin': typeof LayoutAdminDashboardAdminRouteWithChildren
   '/apply': typeof LayoutAuthenticatedDashboardApplyRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByTo {
   '/': typeof LayoutPublicIndexRoute
   '/login': typeof LayoutAnonLoginRoute
   '/about': typeof LayoutPublicAboutRoute
+  '/explore': typeof LayoutPublicExploreRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/apply': typeof LayoutAuthenticatedDashboardApplyRoute
   '/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
@@ -420,6 +428,7 @@ export interface FileRoutesById {
   '/_layout/_authenticated/_dashboard': typeof LayoutAuthenticatedDashboardRouteWithChildren
   '/_layout/_public/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/_layout/_public/about': typeof LayoutPublicAboutRoute
+  '/_layout/_public/explore': typeof LayoutPublicExploreRoute
   '/_layout/_public/skill': typeof LayoutPublicSkillRoute
   '/_layout/_public/': typeof LayoutPublicIndexRoute
   '/_layout/_admin/_dashboard/admin': typeof LayoutAdminDashboardAdminRouteWithChildren
@@ -466,6 +475,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/$accountId'
     | '/about'
+    | '/explore'
     | '/skill'
     | '/admin'
     | '/apply'
@@ -508,6 +518,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/about'
+    | '/explore'
     | '/skill'
     | '/apply'
     | '/prototype-staking-poc'
@@ -552,6 +563,7 @@ export interface FileRouteTypes {
     | '/_layout/_authenticated/_dashboard'
     | '/_layout/_public/$accountId'
     | '/_layout/_public/about'
+    | '/_layout/_public/explore'
     | '/_layout/_public/skill'
     | '/_layout/_public/'
     | '/_layout/_admin/_dashboard/admin'
@@ -673,6 +685,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof LayoutPublicAboutRouteImport
+      parentRoute: typeof LayoutPublicRoute
+    }
+    '/_layout/_public/explore': {
+      id: '/_layout/_public/explore'
+      path: '/explore'
+      fullPath: '/explore'
+      preLoaderRoute: typeof LayoutPublicExploreRouteImport
       parentRoute: typeof LayoutPublicRoute
     }
     '/_layout/_public/skill': {
@@ -1169,6 +1188,7 @@ const LayoutPublicAccountIdRouteWithChildren =
 interface LayoutPublicRouteChildren {
   LayoutPublicAccountIdRoute: typeof LayoutPublicAccountIdRouteWithChildren
   LayoutPublicAboutRoute: typeof LayoutPublicAboutRoute
+  LayoutPublicExploreRoute: typeof LayoutPublicExploreRoute
   LayoutPublicSkillRoute: typeof LayoutPublicSkillRoute
   LayoutPublicIndexRoute: typeof LayoutPublicIndexRoute
   LayoutPublicNSlugRoute: typeof LayoutPublicNSlugRoute
@@ -1177,6 +1197,7 @@ interface LayoutPublicRouteChildren {
 const LayoutPublicRouteChildren: LayoutPublicRouteChildren = {
   LayoutPublicAccountIdRoute: LayoutPublicAccountIdRouteWithChildren,
   LayoutPublicAboutRoute: LayoutPublicAboutRoute,
+  LayoutPublicExploreRoute: LayoutPublicExploreRoute,
   LayoutPublicSkillRoute: LayoutPublicSkillRoute,
   LayoutPublicIndexRoute: LayoutPublicIndexRoute,
   LayoutPublicNSlugRoute: LayoutPublicNSlugRoute,

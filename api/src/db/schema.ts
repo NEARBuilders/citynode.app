@@ -109,3 +109,17 @@ export const domainBindings = pgTable(
       .where(sql`is_primary = true`),
   }),
 );
+
+export const discoveryProfiles = pgTable("discovery_profiles", {
+  nodeId: uuid("node_id").primaryKey().references(() => nodes.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<import("../discovery-contract").DiscoveryProfile>().notNull(),
+});
+
+export const discoveryHistory = pgTable("discovery_history", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  nodeId: uuid("node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
+  targetId: text("target_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  action: text("action").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+});

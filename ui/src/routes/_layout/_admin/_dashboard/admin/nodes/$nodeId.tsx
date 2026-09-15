@@ -1,3 +1,4 @@
+import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Network } from "lucide-react";
@@ -166,6 +167,7 @@ function AdminNodeDetail() {
         </Card>
       </section>
 
+      <ProfileEditor nodeId={node.id} />
       <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
 
       <NodeBindings
