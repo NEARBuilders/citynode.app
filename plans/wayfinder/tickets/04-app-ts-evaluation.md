@@ -15,3 +15,11 @@ Key sub-questions:
 - If `app.ts` runs at build time, how do we handle secrets/environment variables that differ between dev and prod?
 - Can `Plugin("registry").path("plugins/registry")` resolve to a URL at build time by scanning `plugins/registry/package.json` + `rsbuild.config.ts`?
 - How does `extends: "bos://auth.near/auth.dev#app.auth"` resolve? Fetch from FastKV at build time? Or resolve at host runtime as today?
+
+## Sharpened (platform-services pass)
+
+The deploy service (map decision 11) changes this ticket's center of gravity:
+
+- **URL write-back may dissolve entirely** — today `onDeployComplete` writes Zephyr URLs back into `bos.config.json` and `bos publish` re-reads it. With `app.ts`, authoring config is never mutated (already a resolved-config decision): the deploy service returns refs, `bos publish` resolves `path`/`local://` entries through the deploy map, and the published config carries refs — no config file round-trip at all. Evaluation question becomes "who calls the deploy service and when", not "how do URLs get written back".
+- **`bos://` resolution timing interacts with eligibility** — publishing under another account (member/tenant preview) is now a deploy-service + publish-flag concern, not an authoring-format concern. Whichever evaluation option wins must keep the authoring file account-agnostic.
+- Still open as originally framed: dev-time vs deploy-time evaluation, secrets, `extends` resolution timing.

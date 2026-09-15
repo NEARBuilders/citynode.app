@@ -44,7 +44,7 @@ is verifiable on-chain via FastKV.
 | Document | Covers | Status |
 |---|---|---|
 | [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning | Phases 1–3 DONE, Phase 4 PARTIAL |
-| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | Referenced by [composable.md](./beta-v2/composable.md) Phase 3 |
+| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | Unblocked ([ticket 07](./wayfinder/tickets/07-effect-idiomatic.md) resolved) — opening phase of the `v2` branch |
 
 ## offline — offline support
 
@@ -70,8 +70,8 @@ is verifiable on-chain via FastKV.
 
 | Document | Covers |
 |---|---|
-| [beta-v2-map.md](./wayfinder/beta-v2-map.md) | Decision map — registry & FastKV architecture, namespace model, caching layers, gateway services |
-| [tickets/](./wayfinder/tickets/) | 7 decision tickets (2 resolved, 1 partially resolved, 4 open) |
+| [beta-v2-map.md](./wayfinder/beta-v2-map.md) | Decision map — registry & FastKV architecture, namespace model, caching layers, gateway services, platform services (decisions 11–17: deploy service, provider-as-alchemy-program, OTA runtime, sandboxes, upstream strategy) |
+| [tickets/](./wayfinder/tickets/) | 11 decision tickets (6 resolved, 1 partially resolved, 4 open) |
 
 ### Ticket status
 
@@ -80,10 +80,14 @@ is verifiable on-chain via FastKV.
 | [01-route-grafting.md](./wayfinder/tickets/01-route-grafting.md) | Web plugin grafting strategy | **RESOLVED** — proven by [beta-v2 prototype](./prototypes/beta-v2/) |
 | [02-typed-api-client.md](./wayfinder/tickets/02-typed-api-client.md) | Typed `apiClient` for MF remotes | **RESOLVED** — proven by [override prototype](./prototypes/beta-v2-override/) |
 | [03-plugin-type-deeps.md](./wayfinder/tickets/03-plugin-type-deps.md) | Plugin-to-plugin type dependencies | Open |
-| [04-app-ts-evaluation.md](./wayfinder/tickets/04-app-ts-evaluation.md) | `app.ts` evaluation to deployable config | Open |
+| [04-app-ts-evaluation.md](./wayfinder/tickets/04-app-ts-evaluation.md) | `app.ts` evaluation to deployable config | Open — sharpened by the deploy service (URL write-back may dissolve) |
 | [05-backwards-compat.md](./wayfinder/tickets/05-backwards-compat.md) | Host supports both `app.ts` and `bos.config.json` | Open |
-| [06-ssr-per-request.md](./wayfinder/tickets/06-ssr-per-request.md) | Per-request SSR route tree composition | **PARTIALLY RESOLVED** — SSR-by-exclusion proven, per-request tenant trees still open |
-| [07-effect-idiomatic.md](./wayfinder/tickets/07-effect-idiomatic.md) | Effect.ts idiomatic `createPlugin` | Open |
+| [06-ssr-per-request.md](./wayfinder/tickets/06-ssr-per-request.md) | Per-request SSR route tree composition | **PARTIALLY RESOLVED** — SSR-by-exclusion proven; now also gates member subdomains |
+| [07-effect-idiomatic.md](./wayfinder/tickets/07-effect-idiomatic.md) | Effect.ts idiomatic `createPlugin` | **RESOLVED (direction)** — `@orpc/experimental-effect` shipped with oRPC v2 beta; sequenced first on the `v2` branch |
+| [08-extends-depth.md](./wayfinder/tickets/08-extends-depth.md) | Transitive `extends` chains | **RESOLVED** — multi-level, verified per hop, depth-capped at 5, publish-time flattening |
+| [09-stitching-order.md](./wayfinder/tickets/09-stitching-order.md) | Grafting vs UI-extends-UI sequencing | **RESOLVED** — grafting first (validated); inheritance is a layer on top, prototype-gated |
+| [10-hot-swap-lifecycle.md](./wayfinder/tickets/10-hot-swap-lifecycle.md) | OTA hot-swap lifecycle (in-flight requests, teardown, ESM disposal) | Open — prototype required |
+| [11-sandbox-db.md](./wayfinder/tickets/11-sandbox-db.md) | Sandbox database engine | **RESOLVED** — tiered PGlite (workshop) / Neon via alchemy (production) |
 
 ## Completed plans (removed)
 

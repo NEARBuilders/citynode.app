@@ -19,3 +19,12 @@ Key constraint from ticket #1: all remotes must load before `createRouter()`. If
 **SSR-by-exclusion proven** by the [beta-v2 prototype](../../prototypes/beta-v2/) — session-gated mounts (`authenticated`, `admin`, `organization`) are `ssr: false`; the server renders nothing for those subtrees, so SSR never sees session-dependent content. Public and `anon` mounts SSR fully. Verified in `verify-ssr.tsx`.
 
 **Still open**: per-request tenant-specific route tree composition (questions 1-6 above). The prototype proves the base case but not the multi-tenant SSR cache. The override prototype ([../../prototypes/beta-v2-override/](../../prototypes/beta-v2-override/)) proves `?config=` selection of base vs tenant trees in the browser, but does not test SSR for tenant-specific trees.
+
+## Sharpened (platform-services pass)
+
+This ticket now gates two downstream flows, not one:
+
+1. **Tier-1 tenant route stitching** (as before), and
+2. **Member subdomains** (`<user>.<city>.<domain>`, map decision 15) — org-eligible members deploy UI-level overrides served per-request by a city node's dedicated host. Same composition problem, one more source of per-request variance (member runtime configs resolved via the tenant bindings table alongside tenant overrides).
+
+Any resolution must therefore handle three config sources per request: base runtime, tenant override, member override — with the member layer touching `ui`/`plugins.<id>.ui` only. The single-tree-runtime-override alternative (question 6) becomes more attractive as variance grows; measure before committing to per-request tree composition.
