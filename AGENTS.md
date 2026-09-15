@@ -469,7 +469,7 @@ Each plugin is self-contained with its own:
 
 The UI accesses plugin routes via namespaced clients: `apiClient.registry.listRegistryApps()`, etc.
 
-**Scoped resources**: For plugins using long-lived scoped resources (database pools, repository layers, caches, publishers), use `tools.buildService(tag, layer)` inside `initialize`. This binds resources to the plugin's lifecycle scope. Do NOT use `Effect.provide(Tag, Layer.scoped(...))` for persistent dependencies inside plugin `initialize` — it creates a transient scope that releases the resource immediately. Use `tools` (the third argument of `initialize`) to build scoped services.
+**Scoped resources**: For plugins using long-lived scoped resources (database pools, repository layers, caches, publishers), build them as `Layer`s inside `initialize` and resolve with `yield* Layer.buildWithScope(layer, yield* Effect.scope)` followed by `Context.get(services, tag)`. This binds resources to the plugin's lifecycle scope. Do NOT use `Effect.provide(Tag, Layer.effect(...))` for persistent dependencies inside plugin `initialize` — it creates a transient scope that releases the resource immediately. Compose dependent layers with `Layer.mergeAll(...).pipe(Layer.provide(dep))` before building. Services use `Context.Service<Self, Shape>()("id")` class tags (Effect 4 removed `Context.Tag`).
 
 ### Plugin Client (pluginsClient)
 

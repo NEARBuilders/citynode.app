@@ -7,7 +7,7 @@ export {
 } from "every-plugin";
 export { Context, Effect, Layer, Scope } from "every-plugin/effect";
 export {
-  type AnyContractRouter,
+  type RouterContract,
   type AnySchema,
   oc,
 } from "every-plugin/orpc";

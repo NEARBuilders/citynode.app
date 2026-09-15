@@ -128,7 +128,6 @@ export const formatORPCError = (error: any): string | null => {
 
   const lines: string[] = [];
   const code = error.code || "UNKNOWN";
-  const status = (error as any).status || 500;
   const message = error.message || "An error occurred";
 
   lines.push(`\n╭─ oRPC Error ${"─".repeat(40)}`);
@@ -136,7 +135,7 @@ export const formatORPCError = (error: any): string | null => {
   for (const line of messageLines) {
     lines.push(`│  ${line}`);
   }
-  lines.push(`│  Code: ${code} (${status})`);
+  lines.push(`│  Code: ${code}`);
   lines.push(`│`);
 
   if (error.data) {

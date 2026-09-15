@@ -266,9 +266,9 @@ function writePluginClientGen(opts: {
     lines.push(`import type { ContractType as ${source.importName} } from "${importPath}";`);
   }
 
-  lines.push('import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";');
+  lines.push('import type { RouterContractClient, RouterContract } from "@orpc/contract";');
   lines.push(
-    "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+    "type ClientFactory<C extends RouterContract> = (context?: Record<string, unknown>) => RouterContractClient<C>;",
   );
   lines.push("");
 
@@ -369,10 +369,10 @@ export function writeGeneratedFiles(opts: {
     }
 
     pluginsClientLines.push(
-      'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
+      'import type { RouterContractClient, RouterContract } from "@orpc/contract";',
     );
     pluginsClientLines.push(
-      "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+      "type ClientFactory<C extends RouterContract> = (context?: Record<string, unknown>) => RouterContractClient<C>;",
     );
     pluginsClientLines.push("");
 
@@ -388,7 +388,7 @@ export function writeGeneratedFiles(opts: {
       }
       for (const key of unresolvedDepKeys) {
         const keyStr = /^[$A-Z_][0-9A-Z_$]*$/i.test(key) ? key : JSON.stringify(key);
-        pluginsClientLines.push(`  ${keyStr}?: ClientFactory<AnyContractRouter>;`);
+        pluginsClientLines.push(`  ${keyStr}?: ClientFactory<RouterContract>;`);
       }
       pluginsClientLines.push("};");
     }
