@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { lazy, Suspense, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Button, Input } from "@/components";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ActivityCard } from "./activity-editor";
+import { MeasurementPreference, useDiscoveryMeasurement } from "./discovery-measurement";
 import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
   import("./geographic-map").then((m) => ({ default: m.GeographicMap })),
 );
 export type DiscoverySearch = {
+  campaign?: string;
   node?: string;
   query?: string;
   active?: boolean;
@@ -26,6 +28,19 @@ export function DiscoveryExplorer({
   search: DiscoverySearch;
   navigate: (search: DiscoverySearch) => void;
 }) {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 639px)");
+    const update = () => setMobile(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const measurement = useDiscoveryMeasurement(api, search.campaign);
+  const [shareMessage, setShareMessage] = useState("");
+  useEffect(() => {
+    if (search.node) measurement.track("open", search.node);
+  }, [search.node, measurement.track]);
   const origin = useRef<HTMLElement | null>(null);
   const list = useQuery({
     queryKey: ["discovery", search.query, search.region, search.active, search.upcoming],
@@ -60,6 +75,7 @@ export function DiscoveryExplorer({
           Find a community. See what’s happening. Get involved.
         </p>
       </header>
+      <MeasurementPreference consent={measurement.consent} choose={measurement.choose} />
       <div className="flex flex-wrap gap-3">
         <label className="space-y-1" htmlFor="discovery-explorer-1">
           Search nodes
@@ -138,15 +154,17 @@ export function DiscoveryExplorer({
         }}
       >
         <SheetContent
-          side="right"
+          side={mobile ? "bottom" : "right"}
           className="w-full overflow-y-auto sm:max-w-lg"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             origin.current?.focus();
           }}
         >
-          <SheetTitle>{selected?.name ?? "Node details"}</SheetTitle>
-          <SheetDescription>{selected?.location || "Community discovery"}</SheetDescription>
+          <SheetHeader className="p-4 pr-16">
+            <SheetTitle>{selected?.name ?? "Node details"}</SheetTitle>
+            <SheetDescription>{selected?.location || "Community discovery"}</SheetDescription>
+          </SheetHeader>
           {detail.isPending ? (
             <p>Loading node…</p>
           ) : detail.isError ? (
@@ -160,13 +178,29 @@ export function DiscoveryExplorer({
               <p>{selected.activityReason}</p>
               <h2 className="font-semibold">Upcoming events</h2>
               {selected.events.length ? (
-                selected.events.map((a) => <ActivityCard key={a.id} activity={a} />)
+                selected.events.map((a) => (
+                  <ActivityCard
+                    key={a.id}
+                    activity={a}
+                    onOutbound={() => {
+                      if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
+                    }}
+                  />
+                ))
               ) : (
                 <p>No upcoming events.</p>
               )}
               <h2 className="font-semibold">Latest social updates</h2>
               {selected.updates.length ? (
-                selected.updates.map((a) => <ActivityCard key={a.id} activity={a} />)
+                selected.updates.map((a) => (
+                  <ActivityCard
+                    key={a.id}
+                    activity={a}
+                    onOutbound={() => {
+                      if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
+                    }}
+                  />
+                ))
               ) : (
                 <p>No social updates yet.</p>
               )}
@@ -174,6 +208,7 @@ export function DiscoveryExplorer({
                 {selected.channels.map((channel) => (
                   <a
                     key={channel.url}
+                    onClick={() => measurement.track("channel", selected.nodeId, channel.url)}
                     href={channel.url}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -191,9 +226,20 @@ export function DiscoveryExplorer({
               >
                 Full node page
               </Link>
-              <Button onClick={() => navigator.clipboard.writeText(window.location.href)}>
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    setShareMessage("Node link copied.");
+                    measurement.track("share", selected.nodeId);
+                  } catch {
+                    setShareMessage("Copy the address from your browser to share this node.");
+                  }
+                }}
+              >
                 Copy node link
               </Button>
+              <p role="status">{shareMessage}</p>
             </div>
           )}
         </SheetContent>

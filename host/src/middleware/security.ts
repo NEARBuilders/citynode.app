@@ -153,6 +153,7 @@ export class SecurityMiddleware extends Context.Tag("host/SecurityMiddleware")<
             styleSrc: ["'self'", "'unsafe-inline'", "https:", ...uniqueOrigins, ...cdnOrigins],
             imgSrc: [
               "'self'",
+              "https://tile.openstreetmap.org",
               "data:",
               ...(isDev ? ["http:"] : ["https:"]),
               ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),

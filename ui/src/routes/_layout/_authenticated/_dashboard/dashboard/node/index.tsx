@@ -1,9 +1,9 @@
-import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Badge, Card, NodeValidatorTable, SectionHeader, TeamStakeCard } from "@/components";
+import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import { buildTenantUrl } from "@/lib/tenant-url";
 

@@ -74,7 +74,7 @@ export function GeographicMap({
                 return;
               }
               const list = document.createElement("div");
-              list.className = "flex flex-col gap-2";
+              list.className = "flex max-h-64 flex-col gap-2 overflow-y-auto";
               for (const { node } of group) {
                 const button = document.createElement("button");
                 button.type = "button";

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
 import { DiscoveryAction } from "./discovery-action";
+import { DiscoveryMetrics } from "./discovery-measurement";
 
 export function DiscoveryStudio() {
   const api = useApiClient();
@@ -24,6 +25,7 @@ export function DiscoveryStudio() {
         <h1 className="text-3xl font-bold">Discovery studio</h1>
         <p>Curate communities and keep discovery useful.</p>
       </header>
+      <DiscoveryMetrics />
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Content checklist and freshness</h2>
         <p>
@@ -140,7 +142,8 @@ export function DiscoveryStudio() {
                     <label htmlFor={`action-${report.id}`}>
                       Action
                       <select
-                        aria-label="Moderation action" id={`action-${report.id}`}
+                        aria-label="Moderation action"
+                        id={`action-${report.id}`}
                         name="action"
                         className="ml-3 rounded border border-border bg-background p-2"
                       >

@@ -256,3 +256,52 @@ it("limits curation grants, expires features and privately moderates visitor rep
   await admin.setDiscoveryCurator({ userId: "growth-editor", enabled: false });
   await expect(growth.getDiscoveryStudio()).rejects.toMatchObject({ code: "FORBIDDEN" });
 });
+
+it("counts opted-in public visits once and restricts aggregate reports", async () => {
+  const { node, editor, publicClient } = await fixture();
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
+  const admin = await getPluginClient(authedContext("metrics-admin", "admin"));
+  const visitId = crypto.randomUUID();
+  const input = {
+    visitId,
+    campaign: "community-week",
+    nodeId: null,
+    target: "",
+    kind: "visit" as const,
+    consent: true,
+  };
+  await publicClient.trackDiscovery(input);
+  await publicClient.trackDiscovery(input);
+  await publicClient.trackDiscovery({ ...input, kind: "open", nodeId: node.id });
+  await publicClient.trackDiscovery({
+    ...input,
+    kind: "channel",
+    nodeId: node.id,
+    target: profile.channels[0]!.url,
+  });
+  await publicClient.trackDiscovery({
+    ...input,
+    kind: "channel",
+    nodeId: node.id,
+    target: profile.channels[0]!.url,
+  });
+  expect(
+    await publicClient.trackDiscovery({ ...input, visitId: crypto.randomUUID(), consent: false }),
+  ).toMatchObject({ accepted: false });
+  expect(await editor.trackDiscovery({ ...input, visitId: crypto.randomUUID() })).toMatchObject({
+    accepted: false,
+  });
+  await expect(publicClient.getDiscoveryMetrics()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  const metrics = await admin.getDiscoveryMetrics();
+  expect(metrics).toMatchObject({ visits: 1, activatedVisits: 1 });
+  expect(metrics.rows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: node.id,
+        campaign: "community-week",
+        kind: "channel",
+        count: 1,
+      }),
+    ]),
+  );
+});

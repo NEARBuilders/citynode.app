@@ -1,4 +1,4 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
@@ -8,12 +8,17 @@ import {
   discoveryCurators,
   discoveryFeatures,
   discoveryHistory,
+  discoveryMeasurements,
   discoveryProfiles,
   discoveryReports,
   nodes,
   tenants,
 } from "../db/schema";
-import type { DiscoveryActivity, DiscoveryProfile } from "../discovery-contract";
+import type {
+  DiscoveryActivity,
+  DiscoveryMeasurement,
+  DiscoveryProfile,
+} from "../discovery-contract";
 import type { AuthContext } from "../lib/auth";
 
 function createDiscovery(db: Database) {
@@ -174,6 +179,88 @@ function createDiscovery(db: Database) {
   }
   return {
     list,
+    track: async (input: DiscoveryMeasurement, context: AuthContext) => {
+      if (
+        !input.consent ||
+        context.user?.role === "admin" ||
+        ["owner", "admin"].includes(context.organization?.member?.role ?? "")
+      )
+        return { accepted: false };
+      if (
+        context.userId &&
+        (
+          await db
+            .select()
+            .from(discoveryCurators)
+            .where(eq(discoveryCurators.userId, context.userId))
+        ).length
+      )
+        return { accepted: false };
+      const now = Date.now();
+      await db
+        .delete(discoveryMeasurements)
+        .where(lt(discoveryMeasurements.createdAt, new Date(now - 28 * 86400000)));
+      if (input.kind !== "visit") {
+        const [visit] = await db
+          .select()
+          .from(discoveryMeasurements)
+          .where(eq(discoveryMeasurements.key, `${input.visitId}:visit`));
+        if (
+          !visit ||
+          visit.createdAt.getTime() < now - 30 * 60000 ||
+          visit.campaign !== input.campaign
+        )
+          return { accepted: false };
+        const node = (await list({})).find((n) => n.nodeId === input.nodeId);
+        if (!node) return { accepted: false };
+        if (input.kind === "channel" && !node.channels.some((c) => c.url === input.target))
+          return { accepted: false };
+        if (input.kind === "event" && !node.events.some((a) => a.id === input.target))
+          return { accepted: false };
+      }
+      const target = input.kind === "channel" || input.kind === "event" ? input.target : "";
+      const key =
+        input.kind === "visit"
+          ? `${input.visitId}:visit`
+          : `${input.visitId}:${input.kind}:${input.nodeId}:${target}`;
+      await db
+        .insert(discoveryMeasurements)
+        .values({
+          key,
+          visitId: input.visitId,
+          nodeId: input.kind === "visit" ? null : input.nodeId,
+          campaign: input.campaign,
+          kind: input.kind,
+        })
+        .onConflictDoNothing();
+      return { accepted: true };
+    },
+    metrics: async (context: AuthContext) => {
+      await requireCurator(context);
+      const since = gte(discoveryMeasurements.createdAt, new Date(Date.now() - 28 * 86400000));
+      const [totals] = await db
+        .select({
+          visits: sql<number>`count(distinct case when kind = 'visit' then visit_id end)::int`,
+          activatedVisits: sql<number>`count(distinct case when kind in ('event', 'channel') then visit_id end)::int`,
+        })
+        .from(discoveryMeasurements)
+        .where(since);
+      const rows = await db
+        .select({
+          nodeId: discoveryMeasurements.nodeId,
+          campaign: discoveryMeasurements.campaign,
+          kind: discoveryMeasurements.kind,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(discoveryMeasurements)
+        .where(since)
+        .groupBy(
+          discoveryMeasurements.nodeId,
+          discoveryMeasurements.campaign,
+          discoveryMeasurements.kind,
+        );
+      return { visits: totals?.visits ?? 0, activatedVisits: totals?.activatedVisits ?? 0, rows };
+    },
     studio: async (context: AuthContext) => {
       await requireCurator(context);
       const isAdmin = context.user?.role === "admin";

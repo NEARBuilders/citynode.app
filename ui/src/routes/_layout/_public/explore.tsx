@@ -5,6 +5,12 @@ import { DiscoveryExplorer } from "@/components/discovery/discovery-explorer";
 import { PageContainer } from "@/components/layout/page-container";
 export const Route = createFileRoute("/_layout/_public/explore")({
   validateSearch: z.object({
+    campaign: z
+      .string()
+      .max(80)
+      .regex(/^[a-zA-Z0-9_-]*$/)
+      .optional()
+      .catch(undefined),
     active: z.boolean().optional().catch(undefined),
     upcoming: z.boolean().optional().catch(undefined),
     node: z.uuid().optional().catch(undefined),

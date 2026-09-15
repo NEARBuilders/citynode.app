@@ -101,7 +101,39 @@ export const reportInput = z.object({
   reason: z.string().trim().min(5).max(1000),
   token: z.uuid(),
 });
+export const measurementInput = z.object({
+  visitId: z.uuid(),
+  nodeId: z.uuid().nullable(),
+  campaign: z
+    .string()
+    .max(80)
+    .regex(/^[a-zA-Z0-9_-]*$/),
+  kind: z.enum(["visit", "open", "event", "channel", "share"]),
+  target: z.string().max(2000).default(""),
+  consent: z.boolean(),
+});
+export type DiscoveryMeasurement = z.infer<typeof measurementInput>;
 export const discoveryContract = {
+  trackDiscovery: oc
+    .input(measurementInput)
+    .output(z.object({ accepted: z.boolean() }))
+    .errors({ BAD_REQUEST }),
+  getDiscoveryMetrics: oc
+    .output(
+      z.object({
+        visits: z.number(),
+        activatedVisits: z.number(),
+        rows: z.array(
+          z.object({
+            nodeId: z.string().nullable(),
+            campaign: z.string(),
+            kind: z.string(),
+            count: z.number(),
+          }),
+        ),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
   getDiscoveryStudio: oc
     .output(
       z.object({

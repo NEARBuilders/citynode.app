@@ -1,4 +1,3 @@
-import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import { createPlugin } from "every-plugin";
 import { Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
@@ -10,6 +9,7 @@ import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
+import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import { NodesLive, NodesTag } from "./services/nodes";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
@@ -61,7 +61,10 @@ export default createPlugin.withPlugins<PluginsClient>()({
       const nodesLayer = NodesLive.pipe(Layer.provide(database));
       const validatorsLayer = ValidatorsLive.pipe(Layer.provide(database));
 
-      const discovery = yield* tools.buildService(DiscoveryTag, DiscoveryLive.pipe(Layer.provide(database)));
+      const discovery = yield* tools.buildService(
+        DiscoveryTag,
+        DiscoveryLive.pipe(Layer.provide(database)),
+      );
       const tenantsService = yield* tools.buildService(TenantsTag, tenantsLayer);
       const nodesService = yield* tools.buildService(NodesTag, nodesLayer);
       const validatorsService = yield* tools.buildService(ValidatorsTag, validatorsLayer);
@@ -110,7 +113,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       console.log("[API] Services Initialized");
 
       return {
-      discovery,
+        discovery,
         tenants: tenantsService,
         nodes: nodesService,
         validators: validatorsService,
@@ -195,20 +198,50 @@ export default createPlugin.withPlugins<PluginsClient>()({
     };
 
     return {
-      getDiscoveryStudio: builder.getDiscoveryStudio.handler(({ context }) => services.discovery.studio(context)),
-      setDiscoveryCurator: builder.setDiscoveryCurator.handler(({ input, context }) => services.discovery.setCurator(input, context)),
-      featureDiscoveryNode: builder.featureDiscoveryNode.handler(({ input, context }) => services.discovery.feature(input, context)),
-      reportDiscoveryContent: builder.reportDiscoveryContent.handler(({ input }) => services.discovery.report(input)),
-      moderateDiscoveryReport: builder.moderateDiscoveryReport.handler(({ input, context }) => services.discovery.moderate(input, context)),
-      getDiscoveryHistory: builder.getDiscoveryHistory.handler(({ input, context }) => services.discovery.history(input.nodeId, context)),
-      saveDiscoveryActivity: builder.saveDiscoveryActivity.handler(({ input, context }) => services.discovery.saveActivity(input, context)),
-      listDiscoveryActivities: builder.listDiscoveryActivities.handler(({ input, context }) => services.discovery.activities(input.nodeId, context)),
-      getDiscoveryActivity: builder.getDiscoveryActivity.handler(({ input }) => services.discovery.activity(input.id)),
+      trackDiscovery: builder.trackDiscovery.handler(({ input, context }) =>
+        services.discovery.track(input, context),
+      ),
+      getDiscoveryMetrics: builder.getDiscoveryMetrics.handler(({ context }) =>
+        services.discovery.metrics(context),
+      ),
+      getDiscoveryStudio: builder.getDiscoveryStudio.handler(({ context }) =>
+        services.discovery.studio(context),
+      ),
+      setDiscoveryCurator: builder.setDiscoveryCurator.handler(({ input, context }) =>
+        services.discovery.setCurator(input, context),
+      ),
+      featureDiscoveryNode: builder.featureDiscoveryNode.handler(({ input, context }) =>
+        services.discovery.feature(input, context),
+      ),
+      reportDiscoveryContent: builder.reportDiscoveryContent.handler(({ input }) =>
+        services.discovery.report(input),
+      ),
+      moderateDiscoveryReport: builder.moderateDiscoveryReport.handler(({ input, context }) =>
+        services.discovery.moderate(input, context),
+      ),
+      getDiscoveryHistory: builder.getDiscoveryHistory.handler(({ input, context }) =>
+        services.discovery.history(input.nodeId, context),
+      ),
+      saveDiscoveryActivity: builder.saveDiscoveryActivity.handler(({ input, context }) =>
+        services.discovery.saveActivity(input, context),
+      ),
+      listDiscoveryActivities: builder.listDiscoveryActivities.handler(({ input, context }) =>
+        services.discovery.activities(input.nodeId, context),
+      ),
+      getDiscoveryActivity: builder.getDiscoveryActivity.handler(({ input }) =>
+        services.discovery.activity(input.id),
+      ),
       listDiscovery: builder.listDiscovery.handler(({ input }) => services.discovery.list(input)),
-      getDiscoveryNode: builder.getDiscoveryNode.handler(({ input }) => services.discovery.get(input.nodeId)),
-      getDiscoveryProfile: builder.getDiscoveryProfile.handler(({ input, context }) => services.discovery.profile(input.nodeId, context)),
-      saveDiscoveryProfile: builder.saveDiscoveryProfile.handler(({ input, context }) => services.discovery.saveProfile(input, context)),
-        ping: builder.ping.handler(async () => ({
+      getDiscoveryNode: builder.getDiscoveryNode.handler(({ input }) =>
+        services.discovery.get(input.nodeId),
+      ),
+      getDiscoveryProfile: builder.getDiscoveryProfile.handler(({ input, context }) =>
+        services.discovery.profile(input.nodeId, context),
+      ),
+      saveDiscoveryProfile: builder.saveDiscoveryProfile.handler(({ input, context }) =>
+        services.discovery.saveProfile(input, context),
+      ),
+      ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),
       })),

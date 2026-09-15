@@ -1,7 +1,7 @@
-import { discoveryContract } from "./discovery-contract";
 import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
 import { oc } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
+import { discoveryContract } from "./discovery-contract";
 
 const ErrorTestKindSchema = z.enum([
   "unauthorized",

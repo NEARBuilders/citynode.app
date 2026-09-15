@@ -64,7 +64,9 @@ function LandingPage() {
         </section>
 
         <section className="space-y-6">
-          <Button asChild><Link to="/explore">Explore the node map</Link></Button>
+          <Button asChild>
+            <Link to="/explore">Explore the node map</Link>
+          </Button>
           <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
             How staking works
           </h2>

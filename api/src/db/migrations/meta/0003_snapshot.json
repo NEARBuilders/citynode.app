@@ -39,12 +39,8 @@
           "name": "discovery_activities_owner_node_id_nodes_id_fk",
           "tableFrom": "discovery_activities",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "owner_node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -54,9 +50,7 @@
         "discovery_activities_canonical_url_unique": {
           "name": "discovery_activities_canonical_url_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "canonical_url"
-          ]
+          "columns": ["canonical_url"]
         }
       },
       "policies": {},
@@ -112,12 +106,8 @@
           "name": "discovery_history_node_id_nodes_id_fk",
           "tableFrom": "discovery_history",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -151,12 +141,8 @@
           "name": "discovery_profiles_node_id_nodes_id_fk",
           "tableFrom": "discovery_profiles",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -269,12 +255,8 @@
           "name": "domain_bindings_tenant_id_tenants_id_fk",
           "tableFrom": "domain_bindings",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -284,9 +266,7 @@
         "domain_bindings_hostname_unique": {
           "name": "domain_bindings_hostname_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "hostname"
-          ]
+          "columns": ["hostname"]
         }
       },
       "policies": {},
@@ -432,12 +412,8 @@
           "name": "nodes_parent_id_nodes_id_fk",
           "tableFrom": "nodes",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -445,12 +421,8 @@
           "name": "nodes_tenant_id_tenants_id_fk",
           "tableFrom": "nodes",
           "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tenant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -554,9 +526,7 @@
         "tenants_account_id_unique": {
           "name": "tenants_account_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "account_id"
-          ]
+          "columns": ["account_id"]
         }
       },
       "policies": {},
@@ -675,12 +645,8 @@
           "name": "validators_node_id_nodes_id_fk",
           "tableFrom": "validators",
           "tableTo": "nodes",
-          "columnsFrom": [
-            "node_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["node_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -696,29 +662,17 @@
     "public.node_kind": {
       "name": "node_kind",
       "schema": "public",
-      "values": [
-        "country",
-        "state",
-        "city"
-      ]
+      "values": ["country", "state", "city"]
     },
     "public.tenant_status": {
       "name": "tenant_status",
       "schema": "public",
-      "values": [
-        "active",
-        "pending",
-        "suspended",
-        "pending_deletion"
-      ]
+      "values": ["active", "pending", "suspended", "pending_deletion"]
     },
     "public.validator_role": {
       "name": "validator_role",
       "schema": "public",
-      "values": [
-        "official",
-        "community"
-      ]
+      "values": ["official", "community"]
     }
   },
   "schemas": {},

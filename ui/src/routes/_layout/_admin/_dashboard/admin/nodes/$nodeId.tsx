@@ -1,4 +1,3 @@
-import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Network } from "lucide-react";
@@ -14,6 +13,7 @@ import {
   SectionHeader,
   Skeleton,
 } from "@/components";
+import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { NodeBindings } from "./-node-bindings";
