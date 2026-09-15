@@ -3,6 +3,7 @@ import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
 import { ActivityEditor } from "./activity-editor";
+import { DiscoveryHistory } from "./discovery-studio";
 
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
 export function ProfileEditor({ nodeId }: { nodeId: string }) {
@@ -39,6 +40,7 @@ export function ProfileEditor({ nodeId }: { nodeId: string }) {
         }
       />
       <ActivityEditor nodeId={nodeId} />
+      <DiscoveryHistory nodeId={nodeId} />
     </>
   );
 }

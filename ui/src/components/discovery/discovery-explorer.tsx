@@ -5,6 +5,7 @@ import type { ApiClient } from "@/app";
 import { Button, Input } from "@/components";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { ActivityCard } from "./activity-editor";
+import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
   import("./geographic-map").then((m) => ({ default: m.GeographicMap })),
@@ -52,6 +53,9 @@ export function DiscoveryExplorer({
     <div className="space-y-6">
       <header className="space-y-2">
         <h1 className="text-3xl font-bold">Explore City Nodes</h1>
+        <Link to="/discovery-studio" className="text-sm underline">
+          Discovery studio
+        </Link>
         <p className="text-muted-foreground">
           Find a community. See what’s happening. Get involved.
         </p>
@@ -112,6 +116,7 @@ export function DiscoveryExplorer({
                 className="rounded-xl border border-border bg-card p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <h2 className="font-semibold">{node.name}</h2>
+                {node.featured && <p>Featured · {node.featured}</p>}
                 <p className="text-sm">
                   {node.active ? "Active · " : ""}
                   {node.activityReason}
@@ -151,6 +156,7 @@ export function DiscoveryExplorer({
           ) : (
             <div className="space-y-5 p-4">
               <p>{selected.summary}</p>
+              <ReportContent targetId={selected.nodeId} kind="profile" />
               <p>{selected.activityReason}</p>
               <h2 className="font-semibold">Upcoming events</h2>
               {selected.events.length ? (

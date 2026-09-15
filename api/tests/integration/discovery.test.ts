@@ -209,3 +209,50 @@ it("uses original dates at activity boundaries and never inherits freshness", as
     clock.mockRestore();
   }
 });
+
+it("limits curation grants, expires features and privately moderates visitor reports", async () => {
+  const { node, editor, publicClient } = await fixture();
+  const admin = await getPluginClient(authedContext("moderator", "admin"));
+  const growth = await getPluginClient(authedContext("growth-editor"));
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
+  await expect(growth.getDiscoveryStudio()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await admin.setDiscoveryCurator({ userId: "growth-editor", enabled: true });
+  await growth.featureDiscoveryNode({
+    nodeId: node.id,
+    label: "Community week",
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
+  });
+  expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toMatchObject({
+    featured: "Community week",
+    active: false,
+  });
+  await expect(
+    growth.saveDiscoveryProfile({ nodeId: node.id, ...profile, summary: "Hijacked" }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 120000);
+  expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toMatchObject({
+    featured: null,
+  });
+  clock.mockRestore();
+  await publicClient.reportDiscoveryContent({
+    targetId: node.id,
+    kind: "profile",
+    reason: "Incorrect official link",
+    token: crypto.randomUUID(),
+  });
+  expect((await growth.getDiscoveryStudio()).reports).toEqual([]);
+  const studio = await admin.getDiscoveryStudio();
+  const report = studio.reports.find((r) => r.targetId === node.id)!;
+  expect(report.reason).toBe("Incorrect official link");
+  await admin.moderateDiscoveryReport({
+    reportId: report.id,
+    action: "unpublish",
+    note: "Verified",
+  });
+  expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toBeNull();
+  expect(await editor.getDiscoveryHistory({ nodeId: node.id })).toEqual(
+    expect.arrayContaining([expect.objectContaining({ action: "moderation: unpublish" })]),
+  );
+  await admin.setDiscoveryCurator({ userId: "growth-editor", enabled: false });
+  await expect(growth.getDiscoveryStudio()).rejects.toMatchObject({ code: "FORBIDDEN" });
+});

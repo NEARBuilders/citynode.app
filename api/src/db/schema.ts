@@ -130,3 +130,18 @@ export const discoveryActivities = pgTable("discovery_activities", {
   canonicalUrl: text("canonical_url").notNull().unique(),
   data: jsonb("data").$type<import("../discovery-contract").DiscoveryActivity>().notNull(),
 });
+
+export const discoveryCurators = pgTable("discovery_curators", {
+  userId: text("user_id").primaryKey(),
+});
+export const discoveryFeatures = pgTable("discovery_features", {
+  nodeId: uuid("node_id").primaryKey().references(() => nodes.id, { onDelete: "cascade" }),
+  label: text("label").notNull(), expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+export const discoveryReports = pgTable("discovery_reports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  targetId: uuid("target_id").notNull(), kind: text("kind").$type<"profile" | "activity">().notNull(),
+  reason: text("reason").notNull(), note: text("note").default("").notNull(),
+  resolved: boolean("resolved").default(false).notNull(), token: uuid("token").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({ tokenTarget: uniqueIndex("discovery_report_token_target").on(t.token, t.targetId) }));

@@ -1,12 +1,15 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
 import {
   discoveryActivities,
+  discoveryCurators,
+  discoveryFeatures,
   discoveryHistory,
   discoveryProfiles,
+  discoveryReports,
   nodes,
   tenants,
 } from "../db/schema";
@@ -46,6 +49,10 @@ function createDiscovery(db: Database) {
       .where(eq(tenants.status, "active"));
     const activities = (await db.select().from(discoveryActivities)).map((r) => r.data);
     const eligible = new Set(rows.filter((r) => r.profile.published).map((r) => r.node.id));
+    const features = await db
+      .select()
+      .from(discoveryFeatures)
+      .where(gte(discoveryFeatures.expiresAt, new Date(Date.now())));
     const now = Date.now();
     const day = 86_400_000;
     return rows
@@ -81,6 +88,7 @@ function createDiscovery(db: Database) {
           );
         return {
           ...profile,
+          featured: features.find((f) => f.nodeId === node.id)?.label ?? null,
           active: upcoming || recent,
           upcoming,
           activityReason: upcoming
@@ -151,8 +159,158 @@ function createDiscovery(db: Database) {
     });
     return data;
   }
+  function requireAdmin(context: AuthContext) {
+    if (!context.userId || !context.user) throw new ORPCError("UNAUTHORIZED");
+    if (context.user.role !== "admin") throw new ORPCError("FORBIDDEN");
+  }
+  async function requireCurator(context: AuthContext) {
+    if (!context.userId || !context.user) throw new ORPCError("UNAUTHORIZED");
+    if (context.user.role === "admin") return;
+    const [grant] = await db
+      .select()
+      .from(discoveryCurators)
+      .where(eq(discoveryCurators.userId, context.userId));
+    if (!grant) throw new ORPCError("FORBIDDEN");
+  }
   return {
     list,
+    studio: async (context: AuthContext) => {
+      await requireCurator(context);
+      const isAdmin = context.user?.role === "admin";
+      const reports = isAdmin
+        ? await db
+            .select()
+            .from(discoveryReports)
+            .orderBy(desc(discoveryReports.createdAt))
+            .limit(200)
+        : [];
+      return {
+        isAdmin,
+        nodes: await list({}),
+        curators: isAdmin ? (await db.select().from(discoveryCurators)).map((r) => r.userId) : [],
+        reports: reports.map(({ token, ...r }) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+      };
+    },
+    setCurator: async (input: { userId: string; enabled: boolean }, context: AuthContext) => {
+      requireAdmin(context);
+      if (input.enabled)
+        await db.insert(discoveryCurators).values({ userId: input.userId }).onConflictDoNothing();
+      else await db.delete(discoveryCurators).where(eq(discoveryCurators.userId, input.userId));
+      return { success: true };
+    },
+    feature: async (
+      input: { nodeId: string; label: string; expiresAt: string },
+      context: AuthContext,
+    ) => {
+      await requireCurator(context);
+      if (Date.parse(input.expiresAt) > Date.now() + 90 * 86400000)
+        throw new ORPCError("BAD_REQUEST", { message: "Feature expiry must be within 90 days" });
+      if (!(await list({})).some((n) => n.nodeId === input.nodeId))
+        throw new ORPCError("NOT_FOUND");
+      const data = { ...input, expiresAt: new Date(input.expiresAt) };
+      await db
+        .insert(discoveryFeatures)
+        .values(data)
+        .onConflictDoUpdate({ target: discoveryFeatures.nodeId, set: data });
+      return { success: true };
+    },
+    report: async (input: {
+      targetId: string;
+      kind: "profile" | "activity";
+      reason: string;
+      token: string;
+    }) => {
+      const eligible = new Set((await list({})).map((n) => n.nodeId));
+      const activity = input.kind === "activity" ? await activityById(input.targetId) : null;
+      if (
+        input.kind === "profile"
+          ? !eligible.has(input.targetId)
+          : !activity ||
+            activity.status === "draft" ||
+            Date.parse(activity.publishedAt) > Date.now() ||
+            !eligible.has(activity.ownerNodeId)
+      )
+        throw new ORPCError("NOT_FOUND");
+      const recent = await db
+        .select({ id: discoveryReports.id })
+        .from(discoveryReports)
+        .where(
+          and(
+            eq(discoveryReports.token, input.token),
+            gte(discoveryReports.createdAt, new Date(Date.now() - 3600000)),
+          ),
+        )
+        .limit(5);
+      if (recent.length >= 5)
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Please wait before submitting more reports",
+        });
+      await db.insert(discoveryReports).values(input).onConflictDoNothing();
+      return { success: true };
+    },
+    moderate: async (
+      input: { reportId: string; action: "dismiss" | "unpublish"; note: string },
+      context: AuthContext,
+    ) => {
+      requireAdmin(context);
+      const [report] = await db
+        .select()
+        .from(discoveryReports)
+        .where(eq(discoveryReports.id, input.reportId));
+      if (!report) throw new ORPCError("NOT_FOUND");
+      await db.transaction(async (tx) => {
+        if (input.action === "unpublish") {
+          let ownerNodeId: string;
+          if (report.kind === "profile") {
+            const [row] = await tx
+              .select()
+              .from(discoveryProfiles)
+              .where(eq(discoveryProfiles.nodeId, report.targetId));
+            if (!row) throw new ORPCError("NOT_FOUND");
+            ownerNodeId = row.nodeId;
+            await tx
+              .update(discoveryProfiles)
+              .set({ data: { ...row.data, published: false } })
+              .where(eq(discoveryProfiles.nodeId, report.targetId));
+          } else {
+            const [row] = await tx
+              .select()
+              .from(discoveryActivities)
+              .where(eq(discoveryActivities.id, report.targetId));
+            if (!row) throw new ORPCError("NOT_FOUND");
+            ownerNodeId = row.ownerNodeId;
+            await tx
+              .update(discoveryActivities)
+              .set({ data: { ...row.data, status: "draft" } })
+              .where(eq(discoveryActivities.id, report.targetId));
+          }
+          await tx.insert(discoveryHistory).values({
+            nodeId: ownerNodeId,
+            targetId: report.targetId,
+            actorId: context.userId!,
+            action: "moderation: unpublish",
+          });
+        }
+        await tx
+          .update(discoveryReports)
+          .set({ resolved: true, note: input.note })
+          .where(eq(discoveryReports.id, report.id));
+      });
+      return { success: true };
+    },
+    history: async (nodeId: string, context: AuthContext) => {
+      await authorize(nodeId, context);
+      const rows = await db
+        .select()
+        .from(discoveryHistory)
+        .where(eq(discoveryHistory.nodeId, nodeId))
+        .orderBy(desc(discoveryHistory.recordedAt))
+        .limit(100);
+      return rows.map(({ nodeId: _, ...row }) => ({
+        ...row,
+        recordedAt: row.recordedAt.toISOString(),
+      }));
+    },
     saveActivity,
     activities: async (nodeId: string, context: AuthContext) => {
       await authorize(nodeId, context);

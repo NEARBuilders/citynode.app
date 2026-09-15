@@ -17,6 +17,7 @@ import { Route as LayoutPublicRouteImport } from './routes/_layout/_public'
 import { Route as LayoutAdminDashboardRouteImport } from './routes/_layout/_admin/_dashboard'
 import { Route as LayoutAnonLoginRouteImport } from './routes/_layout/_anon/login'
 import { Route as LayoutAuthenticatedDashboardRouteImport } from './routes/_layout/_authenticated/_dashboard'
+import { Route as LayoutAuthenticatedDiscoveryStudioRouteImport } from './routes/_layout/_authenticated/discovery-studio'
 import { Route as LayoutPublicIndexRouteImport } from './routes/_layout/_public/index'
 import { Route as LayoutPublicAccountIdRouteImport } from './routes/_layout/_public/$accountId'
 import { Route as LayoutPublicAboutRouteImport } from './routes/_layout/_public/about'
@@ -92,6 +93,12 @@ const LayoutAnonLoginRoute = LayoutAnonLoginRouteImport.update({
 const LayoutAuthenticatedDashboardRoute =
   LayoutAuthenticatedDashboardRouteImport.update({
     id: '/_dashboard',
+    getParentRoute: () => LayoutAuthenticatedRoute,
+  } as any)
+const LayoutAuthenticatedDiscoveryStudioRoute =
+  LayoutAuthenticatedDiscoveryStudioRouteImport.update({
+    id: '/discovery-studio',
+    path: '/discovery-studio',
     getParentRoute: () => LayoutAuthenticatedRoute,
   } as any)
 const LayoutPublicIndexRoute = LayoutPublicIndexRouteImport.update({
@@ -344,6 +351,7 @@ const LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute =
 export interface FileRoutesByFullPath {
   '/': typeof LayoutPublicIndexRoute
   '/login': typeof LayoutAnonLoginRoute
+  '/discovery-studio': typeof LayoutAuthenticatedDiscoveryStudioRoute
   '/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/about': typeof LayoutPublicAboutRoute
   '/explore': typeof LayoutPublicExploreRoute
@@ -389,6 +397,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof LayoutPublicIndexRoute
   '/login': typeof LayoutAnonLoginRoute
+  '/discovery-studio': typeof LayoutAuthenticatedDiscoveryStudioRoute
   '/about': typeof LayoutPublicAboutRoute
   '/explore': typeof LayoutPublicExploreRoute
   '/skill': typeof LayoutPublicSkillRoute
@@ -435,6 +444,7 @@ export interface FileRoutesById {
   '/_layout/_admin/_dashboard': typeof LayoutAdminDashboardRouteWithChildren
   '/_layout/_anon/login': typeof LayoutAnonLoginRoute
   '/_layout/_authenticated/_dashboard': typeof LayoutAuthenticatedDashboardRouteWithChildren
+  '/_layout/_authenticated/discovery-studio': typeof LayoutAuthenticatedDiscoveryStudioRoute
   '/_layout/_public/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/_layout/_public/about': typeof LayoutPublicAboutRoute
   '/_layout/_public/explore': typeof LayoutPublicExploreRoute
@@ -483,6 +493,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/discovery-studio'
     | '/$accountId'
     | '/about'
     | '/explore'
@@ -528,6 +539,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/discovery-studio'
     | '/about'
     | '/explore'
     | '/skill'
@@ -573,6 +585,7 @@ export interface FileRouteTypes {
     | '/_layout/_admin/_dashboard'
     | '/_layout/_anon/login'
     | '/_layout/_authenticated/_dashboard'
+    | '/_layout/_authenticated/discovery-studio'
     | '/_layout/_public/$accountId'
     | '/_layout/_public/about'
     | '/_layout/_public/explore'
@@ -677,6 +690,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof LayoutAuthenticatedDashboardRouteImport
+      parentRoute: typeof LayoutAuthenticatedRoute
+    }
+    '/_layout/_authenticated/discovery-studio': {
+      id: '/_layout/_authenticated/discovery-studio'
+      path: '/discovery-studio'
+      fullPath: '/discovery-studio'
+      preLoaderRoute: typeof LayoutAuthenticatedDiscoveryStudioRouteImport
       parentRoute: typeof LayoutAuthenticatedRoute
     }
     '/_layout/_public/': {
@@ -1182,11 +1202,14 @@ const LayoutAuthenticatedDashboardRouteWithChildren =
 
 interface LayoutAuthenticatedRouteChildren {
   LayoutAuthenticatedDashboardRoute: typeof LayoutAuthenticatedDashboardRouteWithChildren
+  LayoutAuthenticatedDiscoveryStudioRoute: typeof LayoutAuthenticatedDiscoveryStudioRoute
 }
 
 const LayoutAuthenticatedRouteChildren: LayoutAuthenticatedRouteChildren = {
   LayoutAuthenticatedDashboardRoute:
     LayoutAuthenticatedDashboardRouteWithChildren,
+  LayoutAuthenticatedDiscoveryStudioRoute:
+    LayoutAuthenticatedDiscoveryStudioRoute,
 }
 
 const LayoutAuthenticatedRouteWithChildren =

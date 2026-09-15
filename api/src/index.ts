@@ -195,6 +195,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
     };
 
     return {
+      getDiscoveryStudio: builder.getDiscoveryStudio.handler(({ context }) => services.discovery.studio(context)),
+      setDiscoveryCurator: builder.setDiscoveryCurator.handler(({ input, context }) => services.discovery.setCurator(input, context)),
+      featureDiscoveryNode: builder.featureDiscoveryNode.handler(({ input, context }) => services.discovery.feature(input, context)),
+      reportDiscoveryContent: builder.reportDiscoveryContent.handler(({ input }) => services.discovery.report(input)),
+      moderateDiscoveryReport: builder.moderateDiscoveryReport.handler(({ input, context }) => services.discovery.moderate(input, context)),
+      getDiscoveryHistory: builder.getDiscoveryHistory.handler(({ input, context }) => services.discovery.history(input.nodeId, context)),
       saveDiscoveryActivity: builder.saveDiscoveryActivity.handler(({ input, context }) => services.discovery.saveActivity(input, context)),
       listDiscoveryActivities: builder.listDiscoveryActivities.handler(({ input, context }) => services.discovery.activities(input.nodeId, context)),
       getDiscoveryActivity: builder.getDiscoveryActivity.handler(({ input }) => services.discovery.activity(input.id)),

@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { createRoot } from "react-dom/client";
 import { DiscoveryExplorer } from "../../ui/src/components/discovery/discovery-explorer";
+import { DiscoveryStudio } from "../../ui/src/components/discovery/discovery-studio";
 import { ProfileEditor } from "../../ui/src/components/discovery/profile-editor";
 import { createApiClient } from "../../ui/src/lib/api";
 import "../../ui/src/styles.css";
@@ -21,7 +22,9 @@ const route = createRoute({
     const navigate = route.useNavigate();
     return (
       <main className="p-6">
-        {typeof search.editor === "string" ? (
+        {search.studio ? (
+          <DiscoveryStudio />
+        ) : typeof search.editor === "string" ? (
           <ProfileEditor nodeId={search.editor} />
         ) : (
           <DiscoveryExplorer

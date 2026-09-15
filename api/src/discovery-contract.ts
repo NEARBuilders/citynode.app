@@ -70,6 +70,7 @@ export const activityInput = activitySchema
       });
   });
 export const discoveryNodeSchema = profileSchema.safeExtend({
+  featured: z.string().nullable(),
   active: z.boolean(),
   activityReason: z.string(),
   upcoming: z.boolean(),
@@ -80,7 +81,73 @@ export const discoveryNodeSchema = profileSchema.safeExtend({
   parentId: z.string().nullable(),
   kind: z.enum(["country", "state", "city"]),
 });
+export const reportSchema = z.object({
+  id: z.uuid(),
+  targetId: z.uuid(),
+  kind: z.enum(["profile", "activity"]),
+  reason: z.string(),
+  note: z.string(),
+  resolved: z.boolean(),
+  createdAt: z.string(),
+});
+export const featureInput = z.object({
+  nodeId: z.uuid(),
+  label: z.string().trim().min(1).max(80),
+  expiresAt: z.iso.datetime(),
+});
+export const reportInput = z.object({
+  targetId: z.uuid(),
+  kind: z.enum(["profile", "activity"]),
+  reason: z.string().trim().min(5).max(1000),
+  token: z.uuid(),
+});
 export const discoveryContract = {
+  getDiscoveryStudio: oc
+    .output(
+      z.object({
+        isAdmin: z.boolean(),
+        nodes: z.array(discoveryNodeSchema),
+        reports: z.array(reportSchema),
+        curators: z.array(z.string()),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+  setDiscoveryCurator: oc
+    .input(z.object({ userId: z.string().trim().min(1).max(200), enabled: z.boolean() }))
+    .output(z.object({ success: z.boolean() }))
+    .errors({ UNAUTHORIZED, FORBIDDEN }),
+  featureDiscoveryNode: oc
+    .input(featureInput)
+    .output(z.object({ success: z.boolean() }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  reportDiscoveryContent: oc
+    .input(reportInput)
+    .output(z.object({ success: z.boolean() }))
+    .errors({ NOT_FOUND, BAD_REQUEST }),
+  moderateDiscoveryReport: oc
+    .input(
+      z.object({
+        reportId: z.uuid(),
+        action: z.enum(["dismiss", "unpublish"]),
+        note: z.string().trim().min(1).max(1000),
+      }),
+    )
+    .output(z.object({ success: z.boolean() }))
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
+  getDiscoveryHistory: oc
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(
+      z.array(
+        z.object({
+          id: z.uuid(),
+          targetId: z.string(),
+          actorId: z.string(),
+          action: z.string(),
+          recordedAt: z.string(),
+        }),
+      ),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
   saveDiscoveryActivity: oc
     .input(activityInput)
     .output(activitySchema)

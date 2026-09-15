@@ -3,7 +3,7 @@ import { expect as browserExpect, chromium } from "@playwright/test";
 import tailwind from "@tailwindcss/postcss";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, getTestRpcUrl, orgContext, teardown } from "../setup";
+import { authedContext, daoContext, getPluginClient, getTestRpcUrl, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(async () => ({
@@ -20,7 +20,7 @@ afterAll(async () => {
   await teardown();
 });
 it("publishes a profile and explores a real map with synchronized accessible selection", async () => {
-  const context = orgContext("map-owner", "map-org");
+  let context = orgContext("map-owner", "map-org");
   const api = await getPluginClient(daoContext("map-owner", "map-org", "map-fixture.near"));
   const tenant = await api.createTenant({ name: "Map fixture", accountId: "map-fixture.near" });
   const node = await api.createNode({
@@ -116,6 +116,25 @@ it("publishes a profile and explores a real map with synchronized accessible sel
       page.getByText("Map tiles are unavailable. Use the node list below."),
     ).toBeVisible();
     await browserExpect(page.getByRole("region", { name: "Node list" })).toContainText("Karachi");
+    context = authedContext("map-admin", "admin");
+    await page.goto(`${base}?studio=true`);
+    await page.getByLabel("Feature label").fill("Community week");
+    await page.getByLabel("Feature expires (your local time)").fill("2026-10-01T12:00");
+    await page.getByRole("button", { name: "Feature Karachi", exact: true }).click();
+    await browserExpect(page.getByText("Featured: Community week")).toBeVisible();
+    await page.goto(`${base}?node=${node.id}`);
+    await page.getByText("Report this node", { exact: true }).click();
+    await page.getByLabel("Reason", { exact: true }).first().fill("Incorrect official community information");
+    await page.getByRole("button", { name: "Submit report", exact: true }).first().click();
+    await browserExpect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
+    await page.goto(`${base}?studio=true`);
+    await page.getByLabel("Private moderation note").fill("Verified incorrect information");
+    await page.getByLabel("Moderation action", { exact: true }).selectOption("unpublish");
+    await page.getByRole("button", { name: "Resolve report" }).click();
+    await browserExpect(page.getByText("Resolved: Verified incorrect information")).toBeVisible();
+    await page.goto(`${base}?node=${node.id}`);
+    await browserExpect(page.getByText("This node is unavailable.")).toBeVisible();
+
   } finally {
     await browser.close();
   }

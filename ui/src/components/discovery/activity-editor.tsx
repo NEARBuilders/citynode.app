@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
+import { ReportContent } from "./report-content";
 
 type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
 type Draft = Parameters<ApiClient["saveDiscoveryActivity"]>[0];
@@ -283,6 +284,7 @@ export function ActivityCard({
       >
         {activity.kind === "event" ? "Event details / registration" : "Read original post"}
       </a>
+      <ReportContent targetId={activity.id} kind="activity" />
     </article>
   );
 }
