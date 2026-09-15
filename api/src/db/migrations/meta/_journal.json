@@ -22,6 +22,13 @@
       "when": 1789514956155,
       "tag": "0002_faulty_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789515460045,
+      "tag": "0003_sleepy_master_mold",
+      "breakpoints": true
     }
   ]
 }

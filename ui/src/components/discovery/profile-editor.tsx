@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
+import { ActivityEditor } from "./activity-editor";
 
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
 export function ProfileEditor({ nodeId }: { nodeId: string }) {
@@ -20,21 +21,25 @@ export function ProfileEditor({ nodeId }: { nodeId: string }) {
       </p>
     );
   return (
-    <ProfileForm
-      key={nodeId}
-      initial={
-        query.data ?? {
-          nodeId,
-          summary: "",
-          location: "",
-          region: "",
-          latitude: null,
-          longitude: null,
-          channels: [],
-          published: false,
+    <>
+      {" "}
+      <ProfileForm
+        key={nodeId}
+        initial={
+          query.data ?? {
+            nodeId,
+            summary: "",
+            location: "",
+            region: "",
+            latitude: null,
+            longitude: null,
+            channels: [],
+            published: false,
+          }
         }
-      }
-    />
+      />
+      <ActivityEditor nodeId={nodeId} />
+    </>
   );
 }
 function ProfileForm({ initial }: { initial: Profile }) {
@@ -61,7 +66,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
       </p>
       <label className="block" htmlFor="profile-editor-1">
         Community summary
-        <Textarea id="profile-editor-1"
+        <Textarea
+          id="profile-editor-1"
           value={profile.summary}
           maxLength={1000}
           onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
@@ -70,7 +76,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label htmlFor="profile-editor-2">
           Location
-          <Input id="profile-editor-2"
+          <Input
+            id="profile-editor-2"
             value={profile.location}
             maxLength={120}
             onChange={(e) => setProfile({ ...profile, location: e.target.value })}
@@ -78,7 +85,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
         </label>
         <label htmlFor="profile-editor-3">
           Region
-          <Input id="profile-editor-3"
+          <Input
+            id="profile-editor-3"
             value={profile.region}
             maxLength={120}
             onChange={(e) => setProfile({ ...profile, region: e.target.value })}
@@ -86,7 +94,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
         </label>
         <label htmlFor="profile-editor-4">
           Latitude
-          <Input id="profile-editor-4"
+          <Input
+            id="profile-editor-4"
             type="number"
             step="any"
             min={-85}
@@ -102,7 +111,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
         </label>
         <label htmlFor="profile-editor-5">
           Longitude
-          <Input id="profile-editor-5"
+          <Input
+            id="profile-editor-5"
             type="number"
             step="any"
             min={-180}
@@ -123,7 +133,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
           <div key={index} className="flex flex-wrap gap-2">
             <label htmlFor="profile-editor-6">
               Channel name
-              <Input id="profile-editor-6"
+              <Input
+                id="profile-editor-6"
                 required
                 value={channel.label}
                 onChange={(e) =>
@@ -138,7 +149,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
             </label>
             <label htmlFor="profile-editor-7">
               Channel URL
-              <Input id="profile-editor-7"
+              <Input
+                id="profile-editor-7"
                 required
                 type="url"
                 value={channel.url}

@@ -73,10 +73,34 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     await page.getByLabel("Publish in discovery").check();
     await page.getByRole("button", { name: "Save discovery profile" }).click();
     await browserExpect(page.getByRole("status")).toHaveText("Discovery profile saved.");
+    await page.getByRole("button", { name: "New event", exact: true }).click();
+    await page.getByLabel("Title", { exact: true }).fill("Builders meetup");
+    await page.getByLabel("Source / organizer").fill("Karachi community");
+    await page.getByLabel("Original URL").fill("https://example.com/meetup");
+    await page.getByLabel("Starts", { exact: true }).fill("2027-01-01T12:00");
+    await page.getByLabel("Ends", { exact: true }).fill("2027-01-01T14:00");
+    await page.getByLabel("Venue or online meeting location").fill("Online");
+    await page.getByLabel("Publication status").selectOption("published");
+    await page.getByRole("button", { name: "Save activity", exact: true }).click();
+    await browserExpect(page.getByText("Activity saved.", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "New social update" }).click();
+    await page.getByLabel("Title", { exact: true }).fill("Community launch");
+    await page.getByLabel("Source / organizer").fill("Official community");
+    await page.getByLabel("Original URL").fill("https://example.com/launch");
+    await page.getByLabel("Publication status").selectOption("published");
+    await page.getByRole("button", { name: "Save activity", exact: true }).click();
+    await browserExpect(page.getByText("Activity saved.", { exact: true })).toBeVisible();
     await page.goto(base);
     await browserExpect(page.locator(".leaflet-container")).toBeVisible();
     await page.getByRole("button", { name: "Karachi (city)", exact: true }).click();
     await browserExpect(page.getByRole("dialog")).toContainText("A community by the sea");
+    await browserExpect(
+      page.getByRole("link", { name: "Event details / registration" }),
+    ).toHaveAttribute("href", "https://example.com/meetup");
+    await browserExpect(page.getByRole("link", { name: "Read original post" })).toHaveAttribute(
+      "href",
+      "https://example.com/launch",
+    );
     expect(new URL(page.url()).searchParams.get("node")).toBe(node.id);
     await page.keyboard.press("Escape");
     await page.getByLabel("Search nodes").fill("No match");

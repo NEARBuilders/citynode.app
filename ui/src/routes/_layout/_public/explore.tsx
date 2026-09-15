@@ -5,6 +5,8 @@ import { DiscoveryExplorer } from "@/components/discovery/discovery-explorer";
 import { PageContainer } from "@/components/layout/page-container";
 export const Route = createFileRoute("/_layout/_public/explore")({
   validateSearch: z.object({
+    active: z.boolean().optional().catch(undefined),
+    upcoming: z.boolean().optional().catch(undefined),
     node: z.uuid().optional().catch(undefined),
     query: z.string().max(120).optional().catch(undefined),
     region: z.string().max(120).optional().catch(undefined),

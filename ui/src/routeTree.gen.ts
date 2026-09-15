@@ -29,6 +29,7 @@ import { Route as LayoutAuthenticatedDashboardPrototypeStakingPocRouteImport } f
 import { Route as LayoutAuthenticatedDashboardSettingsRouteImport } from './routes/_layout/_authenticated/_dashboard/settings'
 import { Route as LayoutAuthenticatedDashboardStakeRouteImport } from './routes/_layout/_authenticated/_dashboard/stake'
 import { Route as LayoutPublicAccountIdIndexRouteImport } from './routes/_layout/_public/$accountId/index'
+import { Route as LayoutPublicActivityActivityIdRouteImport } from './routes/_layout/_public/activity/$activityId'
 import { Route as LayoutPublicNSlugRouteImport } from './routes/_layout/_public/n/$slug'
 import { Route as LayoutAdminDashboardAdminIndexRouteImport } from './routes/_layout/_admin/_dashboard/admin/index'
 import { Route as LayoutAdminDashboardAdminRelayerRouteImport } from './routes/_layout/_admin/_dashboard/admin/relayer'
@@ -159,6 +160,12 @@ const LayoutPublicAccountIdIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => LayoutPublicAccountIdRoute,
+  } as any)
+const LayoutPublicActivityActivityIdRoute =
+  LayoutPublicActivityActivityIdRouteImport.update({
+    id: '/activity/$activityId',
+    path: '/activity/$activityId',
+    getParentRoute: () => LayoutPublicRoute,
   } as any)
 const LayoutPublicNSlugRoute = LayoutPublicNSlugRouteImport.update({
   id: '/n/$slug',
@@ -347,6 +354,7 @@ export interface FileRoutesByFullPath {
   '/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   '/settings': typeof LayoutAuthenticatedDashboardSettingsRouteWithChildren
   '/stake': typeof LayoutAuthenticatedDashboardStakeRoute
+  '/activity/$activityId': typeof LayoutPublicActivityActivityIdRoute
   '/n/$slug': typeof LayoutPublicNSlugRoute
   '/$accountId/': typeof LayoutPublicAccountIdIndexRoute
   '/admin/relayer': typeof LayoutAdminDashboardAdminRelayerRoute
@@ -387,6 +395,7 @@ export interface FileRoutesByTo {
   '/apply': typeof LayoutAuthenticatedDashboardApplyRoute
   '/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   '/stake': typeof LayoutAuthenticatedDashboardStakeRoute
+  '/activity/$activityId': typeof LayoutPublicActivityActivityIdRoute
   '/n/$slug': typeof LayoutPublicNSlugRoute
   '/$accountId': typeof LayoutPublicAccountIdIndexRoute
   '/admin/relayer': typeof LayoutAdminDashboardAdminRelayerRoute
@@ -437,6 +446,7 @@ export interface FileRoutesById {
   '/_layout/_authenticated/_dashboard/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   '/_layout/_authenticated/_dashboard/settings': typeof LayoutAuthenticatedDashboardSettingsRouteWithChildren
   '/_layout/_authenticated/_dashboard/stake': typeof LayoutAuthenticatedDashboardStakeRoute
+  '/_layout/_public/activity/$activityId': typeof LayoutPublicActivityActivityIdRoute
   '/_layout/_public/n/$slug': typeof LayoutPublicNSlugRoute
   '/_layout/_public/$accountId/': typeof LayoutPublicAccountIdIndexRoute
   '/_layout/_admin/_dashboard/admin/relayer': typeof LayoutAdminDashboardAdminRelayerRoute
@@ -483,6 +493,7 @@ export interface FileRouteTypes {
     | '/prototype-staking-poc'
     | '/settings'
     | '/stake'
+    | '/activity/$activityId'
     | '/n/$slug'
     | '/$accountId/'
     | '/admin/relayer'
@@ -523,6 +534,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/prototype-staking-poc'
     | '/stake'
+    | '/activity/$activityId'
     | '/n/$slug'
     | '/$accountId'
     | '/admin/relayer'
@@ -572,6 +584,7 @@ export interface FileRouteTypes {
     | '/_layout/_authenticated/_dashboard/prototype-staking-poc'
     | '/_layout/_authenticated/_dashboard/settings'
     | '/_layout/_authenticated/_dashboard/stake'
+    | '/_layout/_public/activity/$activityId'
     | '/_layout/_public/n/$slug'
     | '/_layout/_public/$accountId/'
     | '/_layout/_admin/_dashboard/admin/relayer'
@@ -749,6 +762,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$accountId/'
       preLoaderRoute: typeof LayoutPublicAccountIdIndexRouteImport
       parentRoute: typeof LayoutPublicAccountIdRoute
+    }
+    '/_layout/_public/activity/$activityId': {
+      id: '/_layout/_public/activity/$activityId'
+      path: '/activity/$activityId'
+      fullPath: '/activity/$activityId'
+      preLoaderRoute: typeof LayoutPublicActivityActivityIdRouteImport
+      parentRoute: typeof LayoutPublicRoute
     }
     '/_layout/_public/n/$slug': {
       id: '/_layout/_public/n/$slug'
@@ -1191,6 +1211,7 @@ interface LayoutPublicRouteChildren {
   LayoutPublicExploreRoute: typeof LayoutPublicExploreRoute
   LayoutPublicSkillRoute: typeof LayoutPublicSkillRoute
   LayoutPublicIndexRoute: typeof LayoutPublicIndexRoute
+  LayoutPublicActivityActivityIdRoute: typeof LayoutPublicActivityActivityIdRoute
   LayoutPublicNSlugRoute: typeof LayoutPublicNSlugRoute
 }
 
@@ -1200,6 +1221,7 @@ const LayoutPublicRouteChildren: LayoutPublicRouteChildren = {
   LayoutPublicExploreRoute: LayoutPublicExploreRoute,
   LayoutPublicSkillRoute: LayoutPublicSkillRoute,
   LayoutPublicIndexRoute: LayoutPublicIndexRoute,
+  LayoutPublicActivityActivityIdRoute: LayoutPublicActivityActivityIdRoute,
   LayoutPublicNSlugRoute: LayoutPublicNSlugRoute,
 }
 

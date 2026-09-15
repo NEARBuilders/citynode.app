@@ -4,11 +4,18 @@ import { lazy, Suspense, useRef } from "react";
 import type { ApiClient } from "@/app";
 import { Button, Input } from "@/components";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { ActivityCard } from "./activity-editor";
 
 const GeographicMap = lazy(() =>
   import("./geographic-map").then((m) => ({ default: m.GeographicMap })),
 );
-export type DiscoverySearch = { node?: string; query?: string; region?: string };
+export type DiscoverySearch = {
+  node?: string;
+  query?: string;
+  active?: boolean;
+  upcoming?: boolean;
+  region?: string;
+};
 export function DiscoveryExplorer({
   api,
   search,
@@ -20,8 +27,14 @@ export function DiscoveryExplorer({
 }) {
   const origin = useRef<HTMLElement | null>(null);
   const list = useQuery({
-    queryKey: ["discovery", search.query, search.region],
-    queryFn: () => api.listDiscovery({ query: search.query, region: search.region }),
+    queryKey: ["discovery", search.query, search.region, search.active, search.upcoming],
+    queryFn: () =>
+      api.listDiscovery({
+        query: search.query,
+        region: search.region,
+        active: search.active,
+        upcoming: search.upcoming,
+      }),
     refetchInterval: 30_000,
   });
   const detail = useQuery({
@@ -46,7 +59,8 @@ export function DiscoveryExplorer({
       <div className="flex flex-wrap gap-3">
         <label className="space-y-1" htmlFor="discovery-explorer-1">
           Search nodes
-          <Input id="discovery-explorer-1"
+          <Input
+            id="discovery-explorer-1"
             value={search.query ?? ""}
             onChange={(e) => navigate({ ...search, query: e.target.value || undefined })}
             placeholder="Name or city"
@@ -54,11 +68,28 @@ export function DiscoveryExplorer({
         </label>
         <label className="space-y-1" htmlFor="discovery-explorer-2">
           Region
-          <Input id="discovery-explorer-2"
+          <Input
+            id="discovery-explorer-2"
             value={search.region ?? ""}
             onChange={(e) => navigate({ ...search, region: e.target.value || undefined })}
             placeholder="Country or region"
           />
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!search.active}
+            onChange={(e) => navigate({ ...search, active: e.target.checked || undefined })}
+          />
+          Active nodes
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!search.upcoming}
+            onChange={(e) => navigate({ ...search, upcoming: e.target.checked || undefined })}
+          />
+          Upcoming events
         </label>
       </div>
       {list.isError ? (
@@ -81,6 +112,10 @@ export function DiscoveryExplorer({
                 className="rounded-xl border border-border bg-card p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <h2 className="font-semibold">{node.name}</h2>
+                <p className="text-sm">
+                  {node.active ? "Active · " : ""}
+                  {node.activityReason}
+                </p>
                 <p>
                   {node.location || "Location not provided"} · {node.kind}
                 </p>
@@ -116,7 +151,19 @@ export function DiscoveryExplorer({
           ) : (
             <div className="space-y-5 p-4">
               <p>{selected.summary}</p>
-              <p>No recent updates.</p>
+              <p>{selected.activityReason}</p>
+              <h2 className="font-semibold">Upcoming events</h2>
+              {selected.events.length ? (
+                selected.events.map((a) => <ActivityCard key={a.id} activity={a} />)
+              ) : (
+                <p>No upcoming events.</p>
+              )}
+              <h2 className="font-semibold">Latest social updates</h2>
+              {selected.updates.length ? (
+                selected.updates.map((a) => <ActivityCard key={a.id} activity={a} />)
+              ) : (
+                <p>No social updates yet.</p>
+              )}
               <div className="flex flex-wrap gap-3">
                 {selected.channels.map((channel) => (
                   <a

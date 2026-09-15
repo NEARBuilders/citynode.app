@@ -123,3 +123,10 @@ export const discoveryHistory = pgTable("discovery_history", {
   action: text("action").notNull(),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const discoveryActivities = pgTable("discovery_activities", {
+  id: uuid("id").primaryKey(),
+  ownerNodeId: uuid("owner_node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
+  canonicalUrl: text("canonical_url").notNull().unique(),
+  data: jsonb("data").$type<import("../discovery-contract").DiscoveryActivity>().notNull(),
+});

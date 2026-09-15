@@ -68,7 +68,7 @@ export function GeographicMap({
               icon: L.divIcon({ html: content, className: "", iconSize: [32, 32] }),
             }).addTo(markers);
             marker.getElement()?.setAttribute("aria-label", label);
-          marker.on("click", () => {
+            marker.on("click", () => {
               if (group.length === 1) {
                 select.current(first.node.nodeId);
                 return;
