@@ -1,5 +1,5 @@
 import { createPlugin } from "every-plugin";
-import { Effect } from "every-plugin/effect";
+import { Context, Effect, Layer } from "every-plugin/effect";
 import { z } from "every-plugin/zod";
 
 export type { AuthServices } from "./auth-export";
@@ -31,12 +31,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
-      const db = yield* tools.buildService(
-        DatabaseTag,
+      const db = yield* Layer.buildWithScope(
         DatabaseLive(config.secrets.AUTH_DATABASE_URL),
-      );
+        yield* Effect.scope,
+      ).pipe(Effect.map((context) => Context.get(context, DatabaseTag)));
 
       const { authConfig, apiKeyHeaders } = normalizeAuthConfig(config.variables, config.secrets);
 

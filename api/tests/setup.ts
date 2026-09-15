@@ -76,7 +76,8 @@ export async function getPluginClient(
   }
 
   const link = new RPCLink({
-    url: `${baseUrl}/rpc`,
+    origin: baseUrl,
+    url: "/rpc",
     fetch: globalThis.fetch,
     headers: context
       ? {

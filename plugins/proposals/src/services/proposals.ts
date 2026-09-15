@@ -127,9 +127,7 @@ async function appendAudit(
   });
 }
 
-export class ProposalService extends Context.Tag("proposals/ProposalService")<
-  ProposalService,
-  {
+export class ProposalService extends Context.Service<ProposalService, {
     propose: (input: {
       pluginId: string;
       entityId: string;
@@ -232,7 +230,7 @@ export class ProposalService extends Context.Tag("proposals/ProposalService")<
       cursor?: string;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
   }
->() {}
+>()("proposals/ProposalService") {}
 
 export const ProposalServiceLive = Layer.effect(
   ProposalService,

@@ -1,5 +1,5 @@
 import { createPlugin } from "every-plugin";
-import { Cause, Effect, Exit, Layer } from "every-plugin/effect";
+import { Cause, Context, Effect, Exit, Layer } from "every-plugin/effect";
 import { MemoryPublisher, ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract, type ProposalEventSchema } from "./contract";
@@ -45,12 +45,15 @@ export default createPlugin({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
       const Database = DatabaseLive(config.secrets.PROPOSALS_DATABASE_URL);
-      const ProposalServices = ProposalServiceLive.pipe(Layer.provide(Database));
-      const proposal = yield* tools.buildService(ProposalService, ProposalServices);
-      const publisher = new MemoryPublisher<ProposalEvents>({ resumeRetentionSeconds: 120 });
+      const services = yield* Layer.buildWithScope(
+        ProposalServiceLive.pipe(Layer.provide(Database)),
+        yield* Effect.scope,
+      );
+      const proposal = Context.get(services, ProposalService);
+      const publisher = new MemoryPublisher<ProposalEvents>({ resume: { enabled: true, seconds: 120 } });
 
       console.log("[Proposals] Services Initialized");
       return {

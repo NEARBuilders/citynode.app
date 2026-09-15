@@ -16,10 +16,9 @@ export interface DrizzleKitService {
   readonly migrate: (binding: DatabaseBinding) => Effect.Effect<void, DrizzleKitError>;
 }
 
-export class DrizzleKit extends Context.Tag("everything-dev/DrizzleKit")<
-  DrizzleKit,
-  DrizzleKitService
->() {}
+export class DrizzleKit extends Context.Service<DrizzleKit, DrizzleKitService>()(
+  "everything-dev/DrizzleKit",
+) {}
 
 interface SpawnSpec {
   readonly args: readonly string[];
@@ -35,7 +34,7 @@ interface SpawnSpec {
  * evaluates never has to re-derive credentials from ambient state.
  */
 function spawnDrizzleKit(spec: SpawnSpec): Effect.Effect<void, DrizzleKitError> {
-  return Effect.async((resume) => {
+  return Effect.callback((resume) => {
     let stderr = "";
     let settled = false;
     const settle = (effect: Effect.Effect<void, DrizzleKitError>) => {

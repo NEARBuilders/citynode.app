@@ -1,5 +1,5 @@
 import { createPlugin } from "every-plugin";
-import { Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
@@ -23,7 +23,7 @@ export default createPlugin({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
       const RegistryConfig = RegistryConfigService.Live({
         namespace: config.variables.registryNamespace,
@@ -32,9 +32,11 @@ export default createPlugin({
         relayNetwork: config.secrets.REGISTRY_RELAY_NETWORK,
       });
 
-      const RegistryServices = RegistryService.Live.pipe(Layer.provide(RegistryConfig));
-
-      const registryService = yield* tools.buildService(RegistryService, RegistryServices);
+      const services = yield* Layer.buildWithScope(
+        RegistryService.Live.pipe(Layer.provide(RegistryConfig)),
+        yield* Effect.scope,
+      );
+      const registryService = Context.get(services, RegistryService);
 
       yield* Effect.logInfo("[Registry] Services Initialized");
       return { registryService };

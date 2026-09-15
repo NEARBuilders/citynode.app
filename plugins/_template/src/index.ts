@@ -1,5 +1,5 @@
 import { createPlugin } from "every-plugin";
-import { Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "every-plugin/effect";
 import { getEventMeta, MemoryPublisher, ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 
@@ -65,7 +65,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
       const service = new TemplateService(
         config.variables.baseUrl,
@@ -76,13 +76,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
       yield* service.ping();
 
       // Scoped DB-backed service (pool lifecycle is bound to the plugin scope).
-      const thingsService = yield* tools.buildService(
-        ThingsService,
+      const thingsService = yield* Layer.buildWithScope(
         ThingsService.Live.pipe(Layer.provide(DatabaseLive(config.secrets.TEMPLATE_DATABASE_URL))),
-      );
+        yield* Effect.scope,
+      ).pipe(Effect.map((context) => Context.get(context, ThingsService)));
 
       const publisher = new MemoryPublisher<TemplateEvents>({
-        resumeRetentionSeconds: 60 * 2,
+        resume: { enabled: true, seconds: 60 * 2 },
       });
 
       if (config.variables.backgroundEnabled) {
@@ -98,7 +98,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
               };
 
               yield* Effect.tryPromise(() => publisher.publish("background-updates", event)).pipe(
-                Effect.catchAll((error) =>
+                Effect.catch((error) =>
                   Effect.logWarning(`[TemplatePlugin] Publish failed for event ${i}:`, error).pipe(
                     Effect.andThen(Effect.void),
                   ),

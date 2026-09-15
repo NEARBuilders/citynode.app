@@ -3,7 +3,7 @@ import { Context, Effect, Layer } from "every-plugin/effect";
 import type { TemplateDatabase } from "./index";
 import { migrate } from "./migrator";
 
-export const DatabaseTag = Context.Tag("template/Database")<TemplateDatabase, TemplateDatabase>();
+export const DatabaseTag = Context.Service<TemplateDatabase, TemplateDatabase>()("template/Database");
 
 function normalizeSlug(pluginId: string): string {
   return pluginId
@@ -14,7 +14,7 @@ function normalizeSlug(pluginId: string): string {
 }
 
 export const DatabaseLive = (url: string) =>
-  Layer.scoped(
+  Layer.effect(
     DatabaseTag,
     Effect.gen(function* () {
       const pluginId = yield* PluginIdTag;

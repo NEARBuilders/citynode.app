@@ -75,7 +75,7 @@ function getExistingTables(
       );
       return existing;
     }),
-    Effect.catchAll(() => Effect.succeed(new Set<string>())),
+    Effect.catch(() => Effect.succeed(new Set<string>())),
   );
 }
 
@@ -97,29 +97,33 @@ function readAppliedHashes(
       const hashes = normalizeRows<{ hash: string }>(result).map((r) => r.hash);
       return new Set(hashes);
     }),
-    Effect.catchAll(() => Effect.succeed(new Set<string>())),
+    Effect.catch(() => Effect.succeed(new Set<string>())),
   );
 }
 
 export function loadMigrations(): Effect.Effect<LoadedMigrations, DatabaseError> {
   return Effect.gen(function* () {
-    const result = yield* Effect.tryPromise({
+    const virtualResult = yield* Effect.tryPromise({
       try: () => import("virtual:drizzle-migrations.sql") as Promise<{ default?: Migration[] }>,
       catch: (cause) => new DatabaseError({ stage: "load", cause }),
-    }).pipe(Effect.either);
+    }).pipe(
+      Effect.map((value) => ({ ok: true as const, value })),
+      Effect.catch((error: DatabaseError) => Effect.succeed({ ok: false as const, error })),
+    );
 
-    if (result._tag === "Right" && result.right?.default?.length) {
-      const migrations = result.right.default;
+    if (virtualResult.ok && virtualResult.value?.default?.length) {
+      const migrations = virtualResult.value.default;
       yield* Effect.logInfo(
         `[Database] Loaded ${migrations.length} migration(s) from virtual module`,
       );
       return { migrations, source: "virtual" as const };
     }
 
-    const reason =
-      result._tag === "Left" ? String(result.left.cause) : "no migrations in virtual module";
+    const reason = virtualResult.ok
+      ? "no migrations in virtual module"
+      : String(virtualResult.error.cause);
 
-    if (result._tag === "Left") {
+    if (!virtualResult.ok) {
       yield* Effect.logDebug(
         `[Database] Virtual migrations unavailable (${reason}), loading from disk`,
       );
@@ -127,16 +131,19 @@ export function loadMigrations(): Effect.Effect<LoadedMigrations, DatabaseError>
       yield* Effect.logInfo("[Database] Virtual migrations empty, loading from disk");
     }
 
-    const diskResult = yield* loadMigrationsFromDisk().pipe(Effect.either);
+    const diskResult = yield* loadMigrationsFromDisk().pipe(
+      Effect.map((migrations) => ({ ok: true as const, migrations })),
+      Effect.catch((error: DatabaseError) => Effect.succeed({ ok: false as const, error })),
+    );
 
-    if (diskResult._tag === "Right") {
-      const migrations = diskResult.right;
+    if (diskResult.ok) {
+      const migrations = diskResult.migrations;
       yield* Effect.logInfo(`[Database] Loaded ${migrations.length} migration(s) from disk`);
       return { migrations, source: "disk" as const };
     }
 
     yield* Effect.logWarning(
-      `[Database] No migrations found from virtual or disk: ${diskResult.left.message}`,
+      `[Database] No migrations found from virtual or disk: ${diskResult.error.message}`,
     );
     return { migrations: [], source: "disk" as const };
   });

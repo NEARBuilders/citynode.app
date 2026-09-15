@@ -1,5 +1,5 @@
 import { createPlugin } from "every-plugin";
-import { Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { contract } from "./contract";
@@ -18,11 +18,14 @@ export default createPlugin({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
       const Database = DatabaseLive(config.secrets.VOTES_DATABASE_URL);
-      const Votes = VoteServiceLive.pipe(Layer.provide(Database));
-      const voteService = yield* tools.buildService(VoteService, Votes);
+      const services = yield* Layer.buildWithScope(
+        VoteServiceLive.pipe(Layer.provide(Database)),
+        yield* Effect.scope,
+      );
+      const voteService = Context.get(services, VoteService);
 
       return { voteService };
     }),

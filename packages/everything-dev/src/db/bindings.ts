@@ -23,10 +23,9 @@ export interface DatabaseBindingsService {
   ) => Effect.Effect<DatabaseBinding, DatabaseBindingError>;
 }
 
-export class DatabaseBindings extends Context.Tag("everything-dev/DatabaseBindings")<
-  DatabaseBindings,
-  DatabaseBindingsService
->() {}
+export class DatabaseBindings extends Context.Service<DatabaseBindings, DatabaseBindingsService>()(
+  "everything-dev/DatabaseBindings",
+) {}
 
 interface RuntimePluginEntry {
   readonly source?: string;

@@ -26,7 +26,7 @@ function freshLayer() {
   );
 }
 
-type ThingsSvc = Context.Tag.Service<typeof ThingsService>;
+type ThingsSvc = typeof ThingsService.Service;
 
 async function runService<A>(
   layer: Layer.Layer<ThingsService, never, never>,

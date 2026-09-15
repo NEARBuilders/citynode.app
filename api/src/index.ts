@@ -1,5 +1,5 @@
 import { createPlugin } from "every-plugin";
-import { Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import { z } from "every-plugin/zod";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
@@ -53,16 +53,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, plugins, tools) =>
+  initialize: (config, plugins) =>
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
-      const tenantsLayer = TenantsLive.pipe(Layer.provide(database));
-      const nodesLayer = NodesLive.pipe(Layer.provide(database));
-      const validatorsLayer = ValidatorsLive.pipe(Layer.provide(database));
+      const services = yield* Layer.buildWithScope(
+        Layer.mergeAll(TenantsLive, NodesLive, ValidatorsLive).pipe(Layer.provide(database)),
+        yield* Effect.scope,
+      );
 
-      const tenantsService = yield* tools.buildService(TenantsTag, tenantsLayer);
-      const nodesService = yield* tools.buildService(NodesTag, nodesLayer);
-      const validatorsService = yield* tools.buildService(ValidatorsTag, validatorsLayer);
+      const tenantsService = Context.get(services, TenantsTag);
+      const nodesService = Context.get(services, NodesTag);
+      const validatorsService = Context.get(services, ValidatorsTag);
 
       const templateFactory = (plugins as Record<string, unknown>).template as
         | (() => {
