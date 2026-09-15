@@ -23,15 +23,14 @@ export interface ServiceDescriptor {
   errorPatterns?: RegExp[];
 }
 
-export class ServiceDescriptorMap extends Context.Tag("ServiceDescriptorMap")<
+export class ServiceDescriptorMap extends Context.Service<
   ServiceDescriptorMap,
   Map<string, ServiceDescriptor>
->() {}
+>()("ServiceDescriptorMap") {}
 
-export class DevRuntimeConfig extends Context.Tag("DevRuntimeConfig")<
-  DevRuntimeConfig,
-  RuntimeConfig
->() {}
+export class DevRuntimeConfig extends Context.Service<DevRuntimeConfig, RuntimeConfig>()(
+  "DevRuntimeConfig",
+) {}
 
 const PLUGIN_READY_PATTERNS = [/ready in/i, /compiled.*successfully/i, /listening/i, /started/i];
 

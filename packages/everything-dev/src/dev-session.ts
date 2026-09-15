@@ -1,4 +1,3 @@
-import * as NodeContext from "@effect/platform-node/NodeContext";
 import { Deferred, Effect, Exit } from "effect";
 import {
   type DevViewHandle,
@@ -208,7 +207,7 @@ export const runDevSession = (
             callbacks.onStatus(pkg, "error");
           }),
         ),
-        Effect.catchAll(() =>
+        Effect.catch(() =>
           Effect.succeed({
             name: pkg,
             pid: undefined,
@@ -226,7 +225,7 @@ export const runDevSession = (
     const awaitReady = (pkg: string, handle: ProcessHandle) =>
       handle.waitForReady.pipe(
         Effect.timeout("120 seconds"),
-        Effect.catchAll((err) =>
+        Effect.catch((err) =>
           Effect.sync(() => {
             callbacks.onLog(
               pkg,
@@ -350,8 +349,7 @@ const runApp = (
   ).pipe(
     Effect.provide(ServiceDescriptorMapLive(services)),
     Effect.provide(DevRuntimeConfigLive(runtimeConfig)),
-    Effect.provide(NodeContext.layer),
-    Effect.catchAllDefect((defect) =>
+    Effect.catchDefect((defect) =>
       Effect.sync(() => {
         console.error("[Dev] Unhandled defect in orchestrator:", defect);
       }),

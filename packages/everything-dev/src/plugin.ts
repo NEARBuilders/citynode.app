@@ -5,7 +5,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
-import { Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import {
   buildBetterNearAuthQuietly,
@@ -331,7 +331,7 @@ export default createPlugin({
   }),
   secrets: z.object({}),
   contract: bosContract,
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
       const base = yield* Effect.promise(async () => {
         const configResult = await loadResolvedConfig({ path: config.variables.configPath });
@@ -342,27 +342,26 @@ export default createPlugin({
         };
       });
 
-      const databaseBindings = yield* tools.buildService(
-        DatabaseBindings,
-        makeDatabaseBindings({
-          projectDir: base.configDir,
-          loadRuntimeConfig: async () =>
-            (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
-          loadEnv: () => loadProjectEnv(base.configDir),
-        }),
-      );
-      const drizzleKit = yield* tools.buildService(
-        DrizzleKit,
-        makeDrizzleKitLive({
-          projectDir: base.configDir,
-          onLog: (message) => p.log.info(message),
-        }),
+      const services = yield* Layer.buildWithScope(
+        Layer.mergeAll(
+          makeDatabaseBindings({
+            projectDir: base.configDir,
+            loadRuntimeConfig: async () =>
+              (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
+            loadEnv: () => loadProjectEnv(base.configDir),
+          }),
+          makeDrizzleKitLive({
+            projectDir: base.configDir,
+            onLog: (message) => p.log.info(message),
+          }),
+        ),
+        yield* Effect.scope,
       );
 
       return {
         ...base,
-        databaseBindings,
-        drizzleKit,
+        databaseBindings: Context.get(services, DatabaseBindings),
+        drizzleKit: Context.get(services, DrizzleKit),
       } satisfies BosDeps;
     }),
   shutdown: () => Effect.void,

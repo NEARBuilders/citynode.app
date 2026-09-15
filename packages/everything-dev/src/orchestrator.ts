@@ -1,5 +1,5 @@
-import { Command } from "@effect/platform";
-import type { ExitCode } from "@effect/platform/CommandExecutor";
+import { spawn } from "node:child_process";
+import { Readable } from "node:stream";
 import { Deferred, Effect, Option, Ref, Stream } from "effect";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
@@ -27,7 +27,7 @@ export interface ProcessHandle {
   pid: number | undefined;
   kill: Effect.Effect<void, unknown>;
   waitForReady: Effect.Effect<void, Error>;
-  waitForExit: Effect.Effect<ExitCode, unknown>;
+  waitForExit: Effect.Effect<number, unknown>;
 }
 
 export type ProcessStatus = "pending" | "starting" | "ready" | "error";
@@ -291,12 +291,24 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
 
-    const cmd = Command.make(command, ...args).pipe(
-      Command.workingDirectory(fullCwd),
-      Command.env(envVars),
-    );
+    const cmd = spawn(command, args, {
+      cwd: fullCwd,
+      env: envVars,
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    });
 
-    const proc = yield* Command.start(cmd);
+    const exitCode = Effect.callback<number, Error>((resume) => {
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
+        resume(Effect.succeed(code ?? (signal ? 1 : 0)));
+      const onError = (err: Error) => resume(Effect.fail(err));
+      cmd.once("exit", onExit);
+      cmd.once("error", onError);
+      return Effect.sync(() => {
+        cmd.off("exit", onExit);
+        cmd.off("error", onError);
+      });
+    });
 
     const markReady = Effect.gen(function* () {
       const currentStatus = yield* Ref.get(statusRef);
@@ -348,14 +360,18 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       }),
     );
 
-    const pid = Number(proc.pid);
+    const pid = cmd.pid ?? undefined;
 
     yield* Effect.forkScoped(
       Effect.gen(function* () {
-        const exitCode = yield* proc.exitCode;
+        const exitCodeValue = yield* exitCode;
         const currentStatus = yield* Ref.get(statusRef);
         if (currentStatus === "ready" || currentStatus === "error") return;
-        callbacks.onLog(name, `Process exited before ready (exit code: ${exitCode})`, true);
+        callbacks.onLog(
+          name,
+          `Process exited before ready (exit code: ${exitCodeValue})`,
+          true,
+        );
         yield* markError(`Process exited before ready: ${name}`);
       }),
     );
@@ -384,34 +400,61 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         }
       });
 
-    yield* Effect.forkScoped(
-      Stream.runForEach((line: string) => handleLine(line, false))(
-        Stream.splitLines(Stream.decodeText(proc.stdout, "utf-8")),
-      ),
-    );
+    const stdoutStream = cmd.stdout
+      ? (Readable.toWeb(cmd.stdout) as unknown as ReadableStream<Uint8Array>)
+      : null;
+    const stderrStream = cmd.stderr
+      ? (Readable.toWeb(cmd.stderr) as unknown as ReadableStream<Uint8Array>)
+      : null;
 
-    yield* Effect.forkScoped(
-      Stream.runForEach((line: string) => handleLine(line, true))(
-        Stream.splitLines(Stream.decodeText(proc.stderr, "utf-8")),
-      ),
-    );
+    if (stdoutStream) {
+      yield* Effect.forkScoped(
+        Stream.runForEach((line: string) => handleLine(line, false))(
+          Stream.splitLines(
+            Stream.decodeText(
+              Stream.fromReadableStream({
+                evaluate: () => stdoutStream,
+                onError: (cause) => new Error(String(cause)),
+              }),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (stderrStream) {
+      yield* Effect.forkScoped(
+        Stream.runForEach((line: string) => handleLine(line, true))(
+          Stream.splitLines(
+            Stream.decodeText(
+              Stream.fromReadableStream({
+                evaluate: () => stderrStream,
+                onError: (cause) => new Error(String(cause)),
+              }),
+            ),
+          ),
+        ),
+      );
+    }
 
     return {
       name,
       pid,
       kill: Effect.gen(function* () {
-        const groupPid = Number(proc.pid);
+        const groupPid = pid;
         const groupSignal = (signal: NodeJS.Signals) =>
-          Effect.try(() => process.kill(-groupPid, signal)).pipe(Effect.ignore);
+          Effect.try(() => {
+            if (groupPid !== undefined) process.kill(-groupPid, signal);
+          }).pipe(Effect.ignore);
         yield* groupSignal("SIGTERM");
-        const exited = yield* proc.exitCode.pipe(Effect.timeout("3 seconds"), Effect.option);
+        const exited = yield* exitCode.pipe(Effect.timeout("3 seconds"), Effect.option);
         if (Option.isNone(exited)) {
           yield* groupSignal("SIGKILL");
           yield* Effect.sleep("250 millis");
         }
       }).pipe(Effect.ignore),
       waitForReady: Deferred.await(readyDeferred),
-      waitForExit: proc.exitCode,
+      waitForExit: exitCode,
     } satisfies ProcessHandle;
   });
 

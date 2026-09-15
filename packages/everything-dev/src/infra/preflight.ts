@@ -31,7 +31,7 @@ function parseLocalUrl(url: string): { host: string; port: number } | null {
 }
 
 function checkTcpReachable(host: string, port: number, timeoutMs = 2000): Effect.Effect<boolean> {
-  return Effect.async<boolean>((resume) => {
+  return Effect.callback<boolean>((resume) => {
     const socket = createConnection({ host, port });
     const timer = setTimeout(() => {
       socket.destroy();
