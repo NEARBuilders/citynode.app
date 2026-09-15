@@ -42,12 +42,12 @@ export const WHITELIST_ACCOUNT = "lockup-whitelist.near";
 export const REGISTER_DEPOSIT = "100000000000000000000000";
 export const LOCKUP_DEPLOY_DEPOSIT = "2000000000000000000000000";
 export const DELEGATE_DEPOSIT = "100000000000000000000000";
-export const VOTE_DEPOSIT = "5000000000000000000000000";
+export const VOTE_STORAGE_FEE_FALLBACK = "1250000000000000000000";
 export const ONE_YOCTO = "1";
 /** The team's direct stake only counts as skin in the game from 1 NEAR up. */
 export const MIN_TEAM_STAKE_YOCTO = 10n ** 24n;
 
-export const ACTIVE_VOTE_STATUSES = ["Voting", "Sandbox"];
+export const ACTIVE_VOTE_STATUSES = ["Voting", "Sandbox", "Created"];
 export const VOTE_OPTIONS = ["For", "Against", "Abstain"] as const;
 export type VoteOption = (typeof VOTE_OPTIONS)[number];
 
@@ -109,13 +109,6 @@ export function remainingToFund(
   if (!state) return want;
   const have = balanceOf(state.liquid) + balanceOf(state.locked);
   return want > have ? want - have : 0n;
-}
-
-export function remainingToLock(lockYocto: string, state: LockupState | null | undefined): bigint {
-  const want = BigInt(lockYocto);
-  if (!state) return want;
-  const locked = balanceOf(state.locked);
-  return want > locked ? want - locked : 0n;
 }
 
 export function remainingToStake(
@@ -269,6 +262,41 @@ export function fetchLockupAccountId(accountId: string) {
   });
 }
 
+/** The deposit `vote.dao.vote` expects — `vote_storage_fee` from its config. */
+export async function fetchVoteStorageFee(): Promise<string> {
+  const config = await getNear()
+    .view<{ vote_storage_fee?: string }>(VOTING_ACCOUNT, "get_config", {})
+    .catch(() => null);
+  return config?.vote_storage_fee ?? VOTE_STORAGE_FEE_FALLBACK;
+}
+
+/** Raw liquid balance of an account in yoctoNEAR, or null when unreadable. */
+export async function fetchAccountBalance(accountId: string): Promise<string | null> {
+  if (!accountId) return null;
+  try {
+    const response = await fetch("https://rpc.mainnet.near.org", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "poc-balance",
+        method: "query",
+        params: {
+          request_type: "view_account",
+          account_id: accountId,
+          finality: "optimistic",
+        },
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { result?: { amount?: string } };
+    return body.result?.amount ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchActiveGovProposals(): Promise<GovProposalView[]> {
   const all = await getNear().view<GovProposalView[]>(VOTING_ACCOUNT, "get_proposals", {
     from_index: 0,
@@ -320,6 +348,29 @@ export async function signPlanAsDao(
 export interface SessionSigner {
   accountId: string;
   send(plan: Extract<DaoPlan, { kind: "call" }>): Promise<FinalExecutionOutcome>;
+}
+
+/** The wallet surface the session-account actions need, satisfied by the auth client. */
+export interface SessionWallet {
+  ensureConnected(): Promise<boolean>;
+  getAccountId(): string | null;
+  getNearClient(): Near;
+}
+
+/** Sends NEAR straight from the session wallet — the admin funding the treasury. */
+export async function transferFromSessionWallet(
+  wallet: SessionWallet,
+  receiverId: string,
+  amountYocto: bigint,
+): Promise<FinalExecutionOutcome> {
+  const connected = await wallet.ensureConnected();
+  const accountId = wallet.getAccountId();
+  if (!connected || !accountId) throw new Error("Connect your NEAR wallet first");
+  return wallet
+    .getNearClient()
+    .transaction(accountId)
+    .transfer(receiverId, Amount.yocto(amountYocto))
+    .send({ waitUntil: "EXECUTED" });
 }
 
 /** Votes on a pending DAO proposal as a policy member, signed by the session wallet. */

@@ -68,6 +68,7 @@ import {
   approveProposalPlan,
   type DaoPlan,
   describePlan,
+  fetchAccountBalance,
   fetchActiveGovProposals,
   fetchDaoProposals,
   fetchGovProof,
@@ -77,24 +78,25 @@ import {
   fetchPoolMeta,
   fetchSputnikPolicy,
   fetchVenearAccount,
+  fetchVoteStorageFee,
   formatNear,
   getNear,
   isPositive,
+  LOCKUP_DEPLOY_DEPOSIT,
   meetsTeamStakeMinimum,
   nearblocksAccount,
   type PoolAccountView,
   parseNearAmount,
   poolFeePercent,
-  poolValidatorUrl,
   remainingToFund,
-  remainingToLock,
   remainingToStake,
   type SputnikProposal,
   signPlanAsDao,
   sumVenear,
+  transferFromSessionWallet,
   txHash,
-  VOTE_DEPOSIT,
   VOTE_OPTIONS,
+  VOTE_STORAGE_FEE_FALLBACK,
   VOTING_ACCOUNT,
   type VoteOption,
   WHITELIST_ACCOUNT,
@@ -102,9 +104,18 @@ import {
   yoctoArg,
 } from "./-poc-chain";
 import {
+  buildPocFormValues,
+  type PocForm,
+  prefillIfEmpty,
+  usePocForm,
+  usePocFormValues,
+} from "./-poc-form";
+import {
   buildStations,
   type ChainFacts,
   deriveStations,
+  LENS_OPTIONS,
+  type LensId,
   nextStation,
   PHASES,
   pendingProposalCount,
@@ -114,23 +125,17 @@ import {
   type StationId,
   type StationState,
   type StepState,
+  signerLens,
+  teamTreasuryRequirementYocto,
 } from "./-poc-stations";
 
-const DEFAULT_POOL = "everything.pool.near";
 const REFETCH_MS = 15_000;
 const TREZU_CREATE_URL = "https://trezu.app/create";
 const HOS_URL = "https://gov.houseofstake.org";
+const POOL_PLACEHOLDER = "everything.pool.near";
+const TREASURY_FUND_FLOOR_YOCTO = 4n * 10n ** 24n;
+const TREASURY_FUND_BUFFER_YOCTO = 10n ** 24n;
 const hosDelegateUrl = (accountId: string) => `${HOS_URL}/delegates/${accountId}`;
-
-type LensId = "you" | "endowment" | "team";
-
-const LENS_OPTIONS: readonly { id: LensId; label: string }[] = [
-  { id: "you", label: "you" },
-  { id: "team", label: "team" },
-  { id: "endowment", label: "endowment" },
-];
-
-const signerLens = (signer: SignerKind): LensId => (signer === "session" ? "you" : signer);
 
 interface LogEntry {
   id: string;
@@ -150,7 +155,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/prototy
       {
         name: "description",
         content:
-          "One node, end to end: your wallet applies, a sponsor endowment funds its pool, the team votes in House of Stake.",
+          "One node, end to end: apply, approve and assign the pool, fund the team treasury, stake, lock veNEAR, sponsor, and vote in House of Stake.",
       },
     ],
   }),
@@ -171,20 +176,11 @@ function NodeLifecyclePocPage() {
   const activeOrgId = routeAuth.activeOrganizationId;
   const isAdmin = routeAuth.isAdmin;
 
-  const [linkTreasuries, setLinkTreasuries] = useState(true);
-  const [lens, setLens] = useState<LensId>("you");
+  const initialFormValues = useMemo(() => buildPocFormValues(activeOrgId), [activeOrgId]);
+  const form = usePocForm(activeOrgId, initialFormValues);
+  const values = usePocFormValues(form);
 
-  const [endowmentInput, setEndowmentInput] = useState("");
   const [connectedTeamDao, setConnectedTeamDao] = useState<string | null>(null);
-  const [poolInput, setPoolInput] = useState(DEFAULT_POOL);
-  const [nameInput, setNameInput] = useState("");
-  const [linkedAmounts, setLinkedAmounts] = useState(true);
-  const [lockAmount, setLockAmount] = useState("1");
-  const [stakeAmount, setStakeAmount] = useState("1");
-  const [delegatePct, setDelegatePct] = useState("100");
-  const [voteOption, setVoteOption] = useState<VoteOption>("For");
-  const [selectedGovProposal, setSelectedGovProposal] = useState("");
-
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [runningStation, setRunningStation] = useState<StationId | null>(null);
   const [failures, setFailures] = useState<Partial<Record<StationId, string>>>({});
@@ -218,22 +214,16 @@ function NodeLifecyclePocPage() {
   const activeOrg = organizations.find((org) => org.id === activeOrgId);
   const activeOrgName = activeOrg?.name ?? null;
 
-  const lastAutoName = useRef<string | null>(null);
   const lastOrgId = useRef<string | null>(null);
   useEffect(() => {
     if (activeOrgId === lastOrgId.current) return;
     lastOrgId.current = activeOrgId;
     setFailures({});
-    setSelectedGovProposal("");
-    setLinkTreasuries(true);
-    setEndowmentInput("");
     setConnectedTeamDao(null);
-    if (activeOrgName) {
-      const defaultName = titleCase(activeOrgName);
-      lastAutoName.current = defaultName;
-      setNameInput(defaultName);
-    }
-  }, [activeOrgId, activeOrgName]);
+    form.reset(
+      buildPocFormValues(activeOrgId, activeOrgName ? { name: titleCase(activeOrgName) } : {}),
+    );
+  }, [activeOrgId, activeOrgName, form]);
 
   const poc = <T,>(key: readonly unknown[], queryFn: () => Promise<T>, enabled = true) =>
     ({ queryKey: ["poc", ...key], queryFn, enabled, refetchInterval: REFETCH_MS }) as const;
@@ -275,48 +265,54 @@ function NodeLifecyclePocPage() {
   }, [application]);
 
   const team = orgDaoAccountId ?? proposedDaoAccountId ?? connectedTeamDao ?? "";
-  const endowment = (linkTreasuries ? team : endowmentInput).trim();
-  const pool = poolInput.trim();
+  const endowment = values.endowmentLinked ? team : values.endowment.trim();
+  const pool = values.pool.trim();
   const treasuriesShared = !!team && team === endowment;
 
-  const lockYocto = useMemo(() => parseNearAmount(lockAmount), [lockAmount]);
-  const stakeYocto = useMemo(() => parseNearAmount(stakeAmount), [stakeAmount]);
+  const sponsorYocto = useMemo(() => parseNearAmount(values.sponsorAmount), [values.sponsorAmount]);
+  const sponsorStakeYocto = sponsorYocto;
   const delegateBpsValue = useMemo(() => {
-    const value = Number(delegatePct);
-    if (!delegatePct || Number.isNaN(value) || value < 1 || value > 100) return null;
+    const value = Number(values.delegatePct);
+    if (!values.delegatePct || Number.isNaN(value) || value < 1 || value > 100) return null;
     return Math.floor(value) * 100;
-  }, [delegatePct]);
+  }, [values.delegatePct]);
 
+  const { data: teamVe } = useQuery(poc(["venear", team], () => fetchVenearAccount(team), !!team));
   const { data: endowmentVe } = useQuery(
     poc(["venear", endowment], () => fetchVenearAccount(endowment), !!endowment),
   );
-  const { data: teamVe } = useQuery(poc(["venear", team], () => fetchVenearAccount(team), !!team));
+  const { data: teamLockupId } = useQuery(
+    poc(["lockup-id", team], () => fetchLockupAccountId(team), !!team),
+  );
+  const teamLockup = teamLockupId ?? "";
   const { data: endowmentLockupId } = useQuery(
     poc(["lockup-id", endowment], () => fetchLockupAccountId(endowment), !!endowment),
   );
   const endowmentLockup = endowmentLockupId ?? "";
-  const lockupDeployed = endowmentVe?.internal.lockup_version != null;
 
-  const { data: lockupState } = useQuery(
+  const { data: teamLockupState } = useQuery(
+    poc(["lockup-state", teamLockup], () => fetchLockupState(teamLockup), !!teamLockup),
+  );
+  const { data: endowmentLockupState } = useQuery(
     poc(
       ["lockup-state", endowmentLockup],
       () => fetchLockupState(endowmentLockup),
-      !!endowmentLockup && lockupDeployed,
+      !!endowmentLockup,
     ),
   );
   const { data: poolMeta } = useQuery(poc(["pool-meta", pool], () => fetchPoolMeta(pool), !!pool));
-  const { data: poolAccount } = useQuery(
-    poc(
-      ["pool-account", pool, endowmentLockup],
-      () => getNear().view<PoolAccountView>(pool, "get_account", { account_id: endowmentLockup }),
-      !!pool && !!endowmentLockup,
-    ),
-  );
   const { data: teamPoolAccount } = useQuery(
     poc(
       ["pool-account", pool, team],
       () => getNear().view<PoolAccountView>(pool, "get_account", { account_id: team }),
       !!pool && !!team,
+    ),
+  );
+  const { data: endowmentPoolAccount } = useQuery(
+    poc(
+      ["pool-account", pool, endowmentLockup],
+      () => getNear().view<PoolAccountView>(pool, "get_account", { account_id: endowmentLockup }),
+      !!pool && !!endowmentLockup,
     ),
   );
   const { data: whitelisted } = useQuery(
@@ -329,6 +325,13 @@ function NodeLifecyclePocPage() {
       !!pool,
     ),
   );
+  const { data: treasuryBalance } = useQuery(
+    poc(["treasury-balance", team], () => fetchAccountBalance(team), !!team),
+  );
+  const { data: voteStorageFee } = useQuery({
+    queryKey: ["poc", "vote-fee"],
+    queryFn: fetchVoteStorageFee,
+  });
   const { data: govProposals = [] } = useQuery(poc(["gov-proposals"], fetchActiveGovProposals));
   const { data: daoPolicyForAudit } = useQuery(
     poc(["audit-policy", team], () => fetchSputnikPolicy(team), !!team),
@@ -347,7 +350,7 @@ function NodeLifecyclePocPage() {
   );
 
   const govProposal =
-    govProposals.find((p) => String(p.id) === selectedGovProposal) ?? govProposals[0] ?? null;
+    govProposals.find((p) => String(p.id) === values.govProposalId) ?? govProposals[0] ?? null;
 
   const { data: voteRecord } = useQuery(
     poc(
@@ -393,31 +396,73 @@ function NodeLifecyclePocPage() {
     ),
   );
 
+  /** The admin-assigned pool, once the node exists: its default staking validator. */
+  const { data: nodeBySlug } = useQuery(
+    poc(
+      ["node-by-slug", slug],
+      () => apiClient.resolveNodeBySlug({ slug }).catch(() => null),
+      !!slug,
+    ),
+  );
+  const { data: stakingValidators } = useQuery(
+    poc(
+      ["staking-validators", nodeBySlug?.id],
+      () => apiClient.resolveStakingValidators({ nodeId: nodeBySlug?.id ?? "" }),
+      !!nodeBySlug?.id,
+    ),
+  );
+  const savedPool =
+    stakingValidators?.validators.find((validator) => validator.isDefault)?.accountId ??
+    stakingValidators?.validators[0]?.accountId ??
+    null;
+
+  useEffect(() => {
+    prefillIfEmpty(form, "pool", savedPool ?? "");
+  }, [form, savedPool]);
+
   /* -------------------------------------------------------------------- model */
 
-  const facts: ChainFacts = {
+  const factsPartial: ChainFacts = {
     applicationProposed: !!application,
-    configPublished: !!registryApp,
     applicationApplied: application?.applyStatus === "applied",
     tenantDeployed: !!tenantBinding || !!orgTenant,
-    endowmentRegistered: endowmentVe != null,
-    lockupDeployed,
-    lockupFunded: isPositive(lockupState?.liquid) || isPositive(lockupState?.locked),
-    nearLocked: isPositive(lockupState?.locked),
-    poolSelected: !!lockupState?.stakingPool && lockupState.stakingPool === pool,
-    stakedFromLockup: isPositive(lockupState?.knownDeposited),
+    poolAssigned: !!pool,
+    treasuryFunded: false,
+    configPublished: !!registryApp,
     teamStaked: meetsTeamStakeMinimum(teamPoolAccount?.staked_balance),
     teamRegistered: teamVe != null,
+    lockupDeployed: teamVe?.internal.lockup_version != null,
+    nearLocked: isPositive(teamLockupState?.locked),
+    endowmentRegistered: endowmentVe != null,
+    endowmentLockupDeployed: endowmentVe?.internal.lockup_version != null,
+    endowmentFunded:
+      yoctoArg(endowmentLockupState?.liquid) + yoctoArg(endowmentLockupState?.locked) >
+      BigInt(LOCKUP_DEPLOY_DEPOSIT),
+    endowmentLocked: isPositive(endowmentLockupState?.locked),
+    endowmentPoolSelected:
+      !!endowmentLockupState?.stakingPool && endowmentLockupState.stakingPool === pool,
+    endowmentStaked: isPositive(endowmentLockupState?.knownDeposited),
     delegated: !!endowmentVe?.account.delegations.some((entry) => entry.account_id === team),
     voteCast: voteRecord != null,
-    unstaked: !isPositive(lockupState?.knownDeposited),
-    withdrawn: poolAccount ? !isPositive(poolAccount.unstaked_balance) : true,
-    poolReleased: !lockupState?.stakingPool,
-    delegationsCleared: endowmentVe ? endowmentVe.account.delegations.length === 0 : true,
     teamUnstaked: teamPoolAccount ? !isPositive(teamPoolAccount.staked_balance) : true,
     teamWithdrawn: teamPoolAccount ? !isPositive(teamPoolAccount.unstaked_balance) : true,
+    endowmentUnstaked: !isPositive(endowmentLockupState?.knownDeposited),
+    endowmentWithdrawn: endowmentPoolAccount
+      ? !isPositive(endowmentPoolAccount.unstaked_balance)
+      : true,
+    endowmentPoolReleased: !endowmentLockupState?.stakingPool,
+    delegationsCleared: endowmentVe ? endowmentVe.account.delegations.length === 0 : true,
     treasuriesShared,
   };
+
+  const requirementYocto = teamTreasuryRequirementYocto(factsPartial);
+  const treasuryFunded =
+    !!team && treasuryBalance != null && BigInt(treasuryBalance) >= requirementYocto;
+  const facts: ChainFacts = { ...factsPartial, treasuryFunded };
+  const fundYocto =
+    requirementYocto + TREASURY_FUND_BUFFER_YOCTO >= TREASURY_FUND_FLOOR_YOCTO
+      ? requirementYocto + TREASURY_FUND_BUFFER_YOCTO
+      : TREASURY_FUND_FLOOR_YOCTO;
 
   const daoTakenElsewhere =
     !!team && !!tenantByDao && tenantByDao.orgId != null && tenantByDao.orgId !== activeOrgId;
@@ -430,7 +475,7 @@ function NodeLifecyclePocPage() {
   else if (!team) blockers.apply = "connect your team DAO with Trezu";
   else if (daoBlocked) blockers.apply = daoBlocked;
   else if (!sessionAccount) blockers.apply = "sign in with your NEAR wallet";
-  else if (!nameInput.trim()) blockers.apply = "enter a node name";
+  else if (!values.name.trim()) blockers.apply = "enter a node name";
   if (!sessionAccount) blockers.approve = "sign in to approve";
   else if (!isAdmin) blockers.approve = "admin access required — sign in as an admin";
   else if (!team) blockers.approve = "connect your team DAO with Trezu";
@@ -438,54 +483,57 @@ function NodeLifecyclePocPage() {
   else if (daoPolicyForAudit && !isExplicitDaoMember(daoPolicyForAudit, sessionAccount)) {
     blockers.approve = `${sessionAccount} is not a member of ${team}`;
   }
+  if (!team) blockers.fund = "connect your team DAO with Trezu";
+  else if (!sessionAccount) blockers.fund = "sign in with your NEAR wallet";
+  else if (!isAdmin) blockers.fund = "admin access required — the admin's wallet does the funding";
+  if (!team) blockers.publish = "connect your team DAO with Trezu";
+  else if (application && facts.configPublished && !isAdmin) {
+    blockers.publish = "config is live — an admin must mark the application applied";
+  }
+  if (!team) blockers.stake = "connect your team DAO with Trezu";
+  else if (!pool) blockers.stake = "enter the staking pool";
+  if (!team) blockers["setup-hos"] = "connect your team DAO with Trezu";
+  if (!endowment) blockers["sponsor-lock"] = "set the endowment treasury";
+  else if (!sponsorYocto) blockers["sponsor-lock"] = "enter the sponsor amount";
+  if (!endowment) blockers["sponsor-stake"] = "set the endowment treasury";
+  else if (!pool) blockers["sponsor-stake"] = "enter the staking pool";
+  else if (!sponsorYocto) blockers["sponsor-stake"] = "enter the sponsor amount";
+  if (!endowment) blockers["sponsor-delegate"] = "set the endowment treasury";
+  else if (!delegateBpsValue) blockers["sponsor-delegate"] = "delegate between 1 and 100 percent";
+  if (!team) blockers.vote = "connect your team DAO with Trezu";
+  else if (!govProposal) blockers.vote = "no active House of Stake proposal";
+  if (!team) blockers.unstake = "connect your team DAO with Trezu";
+  else if (!pool) blockers.unstake = "enter the staking pool";
+  if (!endowment) blockers["sponsor-unwind"] = "set the endowment treasury";
+
   const platformAuditWarning =
     daoPolicyForAudit && baseAccount && !isExplicitDaoMember(daoPolicyForAudit, baseAccount) && team
       ? `the platform audit account ${baseAccount} is not a member of ${team}`
       : null;
   const trezuMembersUrl = team ? `https://trezu.app/${team}/members` : null;
-  if (!team) blockers.publish = "connect your team DAO with Trezu";
-  else if (application && facts.configPublished && !isAdmin) {
-    blockers.publish = "config is live — an admin must mark the application applied";
-  }
-  if (!team) blockers["register-team"] = "connect your team DAO with Trezu";
-  if (!team) blockers.vote = "connect your team DAO with Trezu";
-  if (!lockYocto || !stakeYocto) blockers.endow = "enter lock and stake amounts";
-  if (!pool) blockers.stake = "enter a staking pool";
-  if (lockYocto && stakeYocto && !endowmentLockup) {
-    blockers.stake = "resolving the endowment lockup…";
-  }
-  if (!team) blockers["stake-team"] = "connect your team DAO with Trezu";
-  else if (!pool) blockers["stake-team"] = "enter a staking pool";
-  if (!delegateBpsValue) blockers.delegate = "delegate between 1 and 100 percent";
-  if (!team) blockers.delegate = "connect your team DAO with Trezu";
-  else if (!govProposal) blockers.vote = "no active House of Stake proposal";
-  if (!endowment) blockers.unstake = "set an endowment treasury";
-  else if (!endowmentLockup) blockers.unstake = "resolving the endowment lockup…";
-  if (!endowment) blockers.undelegate = "set an endowment treasury";
-  if (!team) blockers["unstake-team"] = "connect your team DAO with Trezu";
-  else if (!pool) blockers["unstake-team"] = "enter a staking pool";
 
   const stationDefs = useMemo(
     () =>
       buildStations({
         slug,
         pool,
-        endowmentAccount: endowment,
         teamAccount: team,
+        endowmentAccount: endowment,
+        teamLockup,
         endowmentLockup,
-        lockYocto,
-        stakeYocto,
+        sponsorYocto,
+        sponsorStakeYocto,
         delegateBps: delegateBpsValue,
         govProposalId: govProposal?.id ?? null,
       }),
     [
       slug,
       pool,
-      endowment,
       team,
+      endowment,
+      teamLockup,
       endowmentLockup,
-      lockYocto,
-      stakeYocto,
+      sponsorYocto,
       delegateBpsValue,
       govProposal?.id,
     ],
@@ -610,9 +658,18 @@ function NodeLifecyclePocPage() {
       return { kind: "transfer", receiverId: plan.receiverId, amountYocto: remaining.toString() };
     }
     if (plan.kind !== "call") return plan;
+    const signerLockup = station.def.signer === "endowment" ? endowmentLockup : teamLockup;
     switch (step.id) {
+      case "publish": {
+        const live = await fetchPublishedNow();
+        if (live) {
+          log("config already live — skipping");
+          return null;
+        }
+        return plan;
+      }
       case "register":
-      case "register-team": {
+      case "register-endowment": {
         const account = accountFor(station.def.signer) ?? "";
         const ve = await fetchVenearAccount(account).catch(() => null);
         if (ve) {
@@ -621,16 +678,44 @@ function NodeLifecyclePocPage() {
         }
         return plan;
       }
-      case "deploy-lockup": {
-        if (!endowmentLockup) {
-          throw new Error("resolving the endowment lockup — run again in a moment");
+      case "deploy-lockup":
+      case "deploy-lockup-endowment": {
+        if (!signerLockup) {
+          throw new Error("resolving the lockup — run again in a moment");
         }
-        const state = await fetchLockupState(endowmentLockup).catch(() => null);
+        const state = await fetchLockupState(signerLockup).catch(() => null);
         if (state) {
           log("lockup already deployed — skipping");
           return null;
         }
         return plan;
+      }
+      case "lock":
+      case "lock-endowment": {
+        if (!signerLockup) {
+          throw new Error("resolving the lockup — run again in a moment");
+        }
+        const state = await fetchLockupState(signerLockup).catch(() => null);
+        if (!state) throw new Error("the lockup is not deployed yet — deploy it first");
+        if (isPositive(state.liquid)) return plan;
+        if (isPositive(state.locked)) {
+          log("already locked — skipping");
+          return null;
+        }
+        throw new Error("nothing in the lockup to lock yet — fund it first");
+      }
+      case "stake": {
+        const want = yoctoArg(plan.attachedDeposit);
+        if (want <= 0n) return plan;
+        const current = await fetchTeamPoolAccount();
+        if (!current) return plan;
+        const staked = yoctoArg(current.staked_balance);
+        const remaining = want > staked ? want - staked : 0n;
+        if (remaining <= 0n) {
+          log("team already staked at least 1 NEAR — skipping");
+          return null;
+        }
+        return { ...plan, attachedDeposit: remaining.toString() };
       }
       case "select-pool": {
         if (!endowmentLockup) {
@@ -643,8 +728,7 @@ function NodeLifecyclePocPage() {
         }
         return plan;
       }
-      case "lock":
-      case "stake": {
+      case "stake-endowment": {
         if (!endowmentLockup) {
           throw new Error("resolving the endowment lockup — run again in a moment");
         }
@@ -652,28 +736,12 @@ function NodeLifecyclePocPage() {
         if (want <= 0n) return plan;
         const state = await fetchLockupState(endowmentLockup).catch(() => null);
         if (!state) return plan;
-        const remaining =
-          step.id === "lock"
-            ? remainingToLock(want.toString(), state)
-            : remainingToStake(want.toString(), state);
+        const remaining = remainingToStake(want.toString(), state);
         if (remaining <= 0n) {
-          log(step.id === "lock" ? "already locked — skipping" : "already staked — skipping");
+          log("already staked from the lockup — skipping");
           return null;
         }
         return { ...plan, args: { ...plan.args, amount: remaining.toString() } };
-      }
-      case "stake-team": {
-        const want = yoctoArg(plan.attachedDeposit);
-        if (want <= 0n) return plan;
-        const current = await fetchTeamPoolAccount();
-        if (!current) return plan;
-        const staked = yoctoArg(current.staked_balance);
-        const remaining = want > staked ? want - staked : 0n;
-        if (remaining <= 0n) {
-          log("team already staked at least 1 NEAR — skipping");
-          return null;
-        }
-        return { ...plan, attachedDeposit: remaining.toString() };
       }
       case "set-delegations": {
         const entries = plan.args.entries as { account_id: string; bps: number }[] | undefined;
@@ -695,6 +763,27 @@ function NodeLifecyclePocPage() {
         return plan;
       }
       case "unstake-all": {
+        const current = await fetchTeamPoolAccount();
+        if (!current || !isPositive(current.staked_balance)) {
+          log("nothing staked by the team — skipping");
+          return null;
+        }
+        return plan;
+      }
+      case "withdraw": {
+        const current = await fetchTeamPoolAccount();
+        if (!current || !isPositive(current.unstaked_balance)) {
+          log("nothing for the team to withdraw — skipping");
+          return null;
+        }
+        if (!current.can_withdraw) {
+          throw new Error(
+            "unstaked balance is still locked in the epoch window — run again in a couple of days",
+          );
+        }
+        return plan;
+      }
+      case "unstake-endowment": {
         if (!endowmentLockup) {
           throw new Error("resolving the endowment lockup — run again in a moment");
         }
@@ -705,7 +794,7 @@ function NodeLifecyclePocPage() {
         }
         return plan;
       }
-      case "withdraw-all": {
+      case "withdraw-endowment": {
         if (!endowmentLockup) {
           throw new Error("resolving the endowment lockup — run again in a moment");
         }
@@ -750,27 +839,6 @@ function NodeLifecyclePocPage() {
         }
         return plan;
       }
-      case "unstake-team-all": {
-        const current = await fetchTeamPoolAccount();
-        if (!current || !isPositive(current.staked_balance)) {
-          log("nothing staked by the team — skipping");
-          return null;
-        }
-        return plan;
-      }
-      case "withdraw-team": {
-        const current = await fetchTeamPoolAccount();
-        if (!current || !isPositive(current.unstaked_balance)) {
-          log("nothing for the team to withdraw — skipping");
-          return null;
-        }
-        if (!current.can_withdraw) {
-          throw new Error(
-            "unstaked balance is still locked in the epoch window — run again in a couple of days",
-          );
-        }
-        return plan;
-      }
       default:
         return plan;
     }
@@ -789,9 +857,9 @@ function NodeLifecyclePocPage() {
         {
           kind: "country",
           parentId: null,
-          name: nameInput.trim(),
+          name: values.name.trim(),
           slug,
-          motivation: `Prototype application for ${nameInput.trim()}`,
+          motivation: `Prototype application for ${values.name.trim()}`,
         },
         { orgId: activeOrgId, daoAccountId: team, submitterAccountId: sessionAccount },
       );
@@ -828,15 +896,19 @@ function NodeLifecyclePocPage() {
         const node = await apiClient.applyNodeProposal({
           kind: "country",
           parentId: null,
-          name: nameInput.trim(),
+          name: values.name.trim(),
           slug,
-          motivation: `Prototype application for ${nameInput.trim()}`,
+          motivation: `Prototype application for ${values.name.trim()}`,
           orgId: activeOrgId ?? "",
           accountId: team,
           submitterAccountId: sessionAccount ?? "",
           hostname: `${slug}.${gatewayId}`,
+          ...(pool ? { poolAccountId: pool } : {}),
         });
-        log(`created tenant, node and binding for ${slug}`, `node ${node.nodeId}`);
+        log(
+          `created tenant, node and binding for ${slug}${pool ? `, assigned pool ${pool}` : ""}`,
+          `node ${node.nodeId}`,
+        );
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         await apiClient.proposals
@@ -852,13 +924,29 @@ function NodeLifecyclePocPage() {
       return;
     }
 
+    if (stepId === "fund-treasury") {
+      if (!team) throw new Error("Connect the team DAO first");
+      if (!sessionAccount) throw new Error("Sign in with your NEAR wallet first");
+      if (!isAdmin) throw new Error("admin access required — the admin's wallet does the funding");
+      if (treasuryFunded) {
+        log("treasury already funded — skipping");
+        return;
+      }
+      const result = await transferFromSessionWallet(auth.near, team, fundYocto);
+      log(
+        `funded ${team} with ${formatNear(fundYocto.toString())} from ${sessionAccount}`,
+        txHash(result),
+      );
+      return;
+    }
+
     if (stepId === "publish") {
       const result = await publishDaoTenantConfig(apiClient, {
         daoAccountId: team,
         gatewayId,
         baseAccount,
         hostname: `${slug}.${gatewayId}`,
-        title: nameInput.trim() || slug,
+        title: values.name.trim() || slug,
       });
       const immediate = await waitFor(async () => !!(await fetchPublishedNow()), 30_000, 3_000);
       if (immediate) {
@@ -916,14 +1004,17 @@ function NodeLifecyclePocPage() {
         methodName: "vote",
         args: {
           proposal_id: govProposal.id,
-          vote: voteOption,
+          vote: values.voteOption,
           merkle_proof: proof[0],
           v_account: proof[1],
         },
         gas: "300 Tgas",
-        attachedDeposit: VOTE_DEPOSIT,
+        attachedDeposit: voteStorageFee ?? VOTE_STORAGE_FEE_FALLBACK,
       });
-      log(`voted ${voteOption} on proposal ${govProposal.id} as ${signerId}`, txHash(result));
+      log(
+        `voted ${values.voteOption} on proposal ${govProposal.id} as ${signerId}`,
+        txHash(result),
+      );
       return;
     }
 
@@ -1003,8 +1094,8 @@ function NodeLifecyclePocPage() {
         dao = null;
       }
       if (!dao) dao = await connection.connect();
-      setLinkTreasuries(false);
-      setEndowmentInput(dao);
+      form.setFieldValue("endowmentLinked", false);
+      form.setFieldValue("endowment", dao);
       return dao;
     },
     onSuccess: (dao) => {
@@ -1043,8 +1134,8 @@ function NodeLifecyclePocPage() {
             label="Prototype"
             headerTestId="prototype-staking-poc.heading"
             title="Node lifecycle"
-            subtitle="initialize node → fund it → participate in governance"
-            description="Your wallet applies, a sponsor endowment funds the node's pool, the team takes its vote to House of Stake. Treasury calls are staged as proposals you can pass by vote."
+            subtitle="initialize node → fund it → sponsor it → participate in governance"
+            description="Your wallet applies, an admin approves and funds the team treasury, the team stakes its pool and locks veNEAR, and an endowment sponsors the stake and delegates its voting power to the team."
             actions={
               <Button variant="outline" size="sm" onClick={refresh} data-testid="poc-refresh">
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -1079,8 +1170,8 @@ function NodeLifecyclePocPage() {
           label="Prototype"
           headerTestId="prototype-staking-poc.heading"
           title="Node lifecycle"
-          subtitle="initialize node → fund it → participate in governance"
-          description="Your wallet applies, a sponsor endowment funds the node's pool, the team takes its vote to House of Stake. Treasury calls are staged as proposals you can pass by vote."
+          subtitle="initialize node → fund it → sponsor it → participate in governance"
+          description="Your wallet applies, an admin approves and funds the team treasury, the team stakes its pool and locks veNEAR, and an endowment sponsors the stake and delegates its voting power to the team. Treasury calls are staged as proposals you can pass by vote."
           actions={
             <Button variant="outline" size="sm" onClick={refresh} data-testid="poc-refresh">
               <RefreshCw className="h-3.5 w-3.5" />
@@ -1107,11 +1198,11 @@ function NodeLifecyclePocPage() {
                     icon={Wallet}
                     label="you"
                     account={sessionAccount}
-                    caption="applies; approves the tenant as admin; votes on treasury proposals"
+                    caption="applies; as admin — approves, assigns the pool, funds the treasury; votes on treasury proposals"
                     connected={!!sessionAccount}
                     popover={{
                       title: "You",
-                      body: "Your SIWN wallet. Submits the application and casts the member votes that release staged treasury proposals.",
+                      body: "Your SIWN wallet. Submits the application, and as the admin approves it, assigns the pre-deployed pool, and funds the team treasury from this wallet.",
                       links: sessionAccount
                         ? [
                             {
@@ -1126,11 +1217,11 @@ function NodeLifecyclePocPage() {
                     icon={Gavel}
                     label="team"
                     account={team || null}
-                    caption="the node's account — owns the tenant, receives the vote, votes"
+                    caption="the node's account — owns the pool and the tenant, locks veNEAR, votes in House of Stake"
                     connected={connection.daoAccountId === team && !!team}
                     popover={{
                       title: "Team",
-                      body: "The DAO linked to your organization. Owns the tenant config, receives the endowment's delegated voting power, votes in House of Stake.",
+                      body: "The DAO linked to your organization. Owns the node's validator pool and the tenant config, stakes its own skin in the game, locks NEAR for its veNEAR, and casts the votes the sponsor's stake buys.",
                       links: [
                         { label: "deploy one on trezu.app/create", href: TREZU_CREATE_URL },
                         ...(team
@@ -1143,11 +1234,11 @@ function NodeLifecyclePocPage() {
                     icon={Layers}
                     label="endowment"
                     account={endowment || null}
-                    caption="the sponsor — locks NEAR, stakes the pool, delegates its vote"
+                    caption="the sponsor — locks NEAR, stakes the pool from its lockup, delegates its voting power"
                     connected={connection.daoAccountId === endowment && !!endowment}
                     popover={{
                       title: "Endowment (sponsor)",
-                      body: "A confidential multisig that puts up the capital: locks NEAR, stakes the node's pool, hands its voting power to the team.",
+                      body: "A separate treasury that puts up the capital: locks its NEAR in a veNEAR lockup, stakes it into the node's pool from that lockup, and delegates all of its voting power to the team. Optional — it never blocks the team's track.",
                       links: [
                         { label: "deploy one on trezu.app/create", href: TREZU_CREATE_URL },
                         ...(endowment
@@ -1207,13 +1298,7 @@ function NodeLifecyclePocPage() {
                 )}
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <PocField
-                    id="poc-name"
-                    label="Node name"
-                    value={nameInput}
-                    onChange={setNameInput}
-                    placeholder="Thing"
-                  />
+                  <PocFormField form={form} name="name" label="Node name" placeholder="Thing" />
                   <PocField
                     id="poc-slug"
                     label="Node slug"
@@ -1244,7 +1329,15 @@ function NodeLifecyclePocPage() {
                     </PocConnectField>
                   )}
                   <div className="space-y-1">
-                    {!linkTreasuries && !endowmentInput ? (
+                    {values.endowmentLinked ? (
+                      <PocField
+                        id="poc-endowment"
+                        label="Endowment treasury"
+                        value={team}
+                        onChange={() => {}}
+                        disabled
+                      />
+                    ) : !values.endowment ? (
                       <PocConnectField
                         id="poc-endowment"
                         label="Endowment treasury"
@@ -1257,21 +1350,15 @@ function NodeLifecyclePocPage() {
                         connect endowment
                       </PocConnectField>
                     ) : (
-                      <PocField
-                        id="poc-endowment"
-                        label="Endowment treasury"
-                        value={linkTreasuries ? team : endowmentInput}
-                        onChange={setEndowmentInput}
-                        disabled={linkTreasuries}
-                      />
+                      <PocFormField form={form} name="endowment" label="Endowment treasury" />
                     )}
                     <button
                       type="button"
-                      onClick={() => setLinkTreasuries((prev) => !prev)}
+                      onClick={() => form.setFieldValue("endowmentLinked", !values.endowmentLinked)}
                       className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground"
                       data-testid="poc-link-treasuries"
                     >
-                      {linkTreasuries ? (
+                      {values.endowmentLinked ? (
                         <>
                           <Link2 className="h-3 w-3" /> same as team wallet
                         </>
@@ -1282,69 +1369,22 @@ function NodeLifecyclePocPage() {
                       )}
                     </button>
                   </div>
-                  <PocField
-                    id="poc-pool"
+                  <PocFormField
+                    form={form}
+                    name="pool"
                     label="Staking pool"
-                    value={poolInput}
-                    onChange={setPoolInput}
+                    placeholder={POOL_PLACEHOLDER}
                   />
-                  {linkedAmounts ? (
-                    <div className="space-y-1">
-                      <PocField
-                        id="poc-amount"
-                        label="Amount (NEAR)"
-                        value={lockAmount}
-                        onChange={(value) => {
-                          setLockAmount(value);
-                          setStakeAmount(value);
-                        }}
-                        type="number"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setLinkedAmounts(false)}
-                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground"
-                        data-testid="poc-link-amounts"
-                      >
-                        <Link2 className="h-3 w-3" /> lock and stake together
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <PocField
-                        id="poc-lock"
-                        label="Lock (NEAR)"
-                        value={lockAmount}
-                        onChange={setLockAmount}
-                        type="number"
-                      />
-                      <div className="space-y-1">
-                        <PocField
-                          id="poc-stake"
-                          label="Stake (NEAR)"
-                          value={stakeAmount}
-                          onChange={setStakeAmount}
-                          type="number"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setStakeAmount(lockAmount);
-                            setLinkedAmounts(true);
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground"
-                          data-testid="poc-link-amounts"
-                        >
-                          <Link2Off className="h-3 w-3" /> separate amounts
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  <PocField
-                    id="poc-delegate"
+                  <PocFormField
+                    form={form}
+                    name="sponsorAmount"
+                    label="Sponsor NEAR"
+                    type="number"
+                  />
+                  <PocFormField
+                    form={form}
+                    name="delegatePct"
                     label="Delegate to team (%)"
-                    value={delegatePct}
-                    onChange={setDelegatePct}
                     type="number"
                   />
                 </div>
@@ -1355,9 +1395,9 @@ function NodeLifecyclePocPage() {
               <span className="text-xs text-muted-foreground">act as</span>
               <ToggleGroup
                 type="single"
-                value={lens}
+                value={values.lens}
                 onValueChange={(value) => {
-                  if (value) setLens(value as LensId);
+                  if (value) form.setFieldValue("lens", value as LensId);
                 }}
                 data-testid="poc-lens"
               >
@@ -1441,7 +1481,7 @@ function NodeLifecyclePocPage() {
                             <StationRow
                               key={station.def.id}
                               station={station}
-                              dimmed={signerLens(station.def.signer) !== lens}
+                              dimmed={signerLens(station.def.signer) !== values.lens}
                               busy={busy}
                               policy={policyFor(station.def.signer)}
                               warning={station.def.id === "approve" ? platformAuditWarning : null}
@@ -1488,7 +1528,9 @@ function NodeLifecyclePocPage() {
                                     ) : (
                                       <span className="text-xs text-muted-foreground">
                                         config not published yet — the open link appears once the
-                                        DAO proposal passes
+                                        config goes live. The proposal itself often reports failed
+                                        even when the write lands — this check is the source of
+                                        truth.
                                         {team ? (
                                           <>
                                             {" · "}
@@ -1508,8 +1550,13 @@ function NodeLifecyclePocPage() {
                                 ) : station.def.id === "vote" && govProposals.length > 0 ? (
                                   <div className="flex flex-wrap gap-2">
                                     <Select
-                                      value={govProposal ? String(govProposal.id) : ""}
-                                      onValueChange={setSelectedGovProposal}
+                                      value={
+                                        values.govProposalId ||
+                                        (govProposal ? String(govProposal.id) : "")
+                                      }
+                                      onValueChange={(value) =>
+                                        form.setFieldValue("govProposalId", value)
+                                      }
                                     >
                                       <SelectTrigger size="sm" className="w-56">
                                         <SelectValue />
@@ -1523,8 +1570,10 @@ function NodeLifecyclePocPage() {
                                       </SelectContent>
                                     </Select>
                                     <Select
-                                      value={voteOption}
-                                      onValueChange={(value) => setVoteOption(value as VoteOption)}
+                                      value={values.voteOption}
+                                      onValueChange={(value) =>
+                                        form.setFieldValue("voteOption", value as VoteOption)
+                                      }
                                     >
                                       <SelectTrigger size="sm" className="w-28">
                                         <SelectValue />
@@ -1544,6 +1593,15 @@ function NodeLifecyclePocPage() {
                                       </SelectContent>
                                     </Select>
                                   </div>
+                                ) : station.def.id === "fund" ? (
+                                  <p
+                                    className="text-xs text-muted-foreground"
+                                    data-testid="poc-fund-detail"
+                                  >
+                                    transfers {formatNear(fundYocto.toString())} — the remaining
+                                    stations need {formatNear(requirementYocto.toString())} of
+                                    attached deposits
+                                  </p>
                                 ) : null
                               }
                             />
@@ -1571,8 +1629,8 @@ function NodeLifecyclePocPage() {
                   sectionTestId="poc-team-state"
                   action={
                     <InfoPopover
-                      title="Delegate and voter"
-                      body="Registers in veNEAR to receive the endowment's voting power. Its votes are what the node's stake buys."
+                      title="Voter and pool owner"
+                      body="Registers in veNEAR, locks NEAR for voting power, owns the node's pool, and casts the votes — its own lock plus any delegated sponsor power."
                       links={
                         team
                           ? [{ label: "House of Stake profile", href: hosDelegateUrl(team) }]
@@ -1599,6 +1657,20 @@ function NodeLifecyclePocPage() {
                   value={formatNear(sumVenear(teamVe?.account.delegated_balance))}
                   mono
                 />
+                <InfoRow label="treasury balance" value={formatNear(treasuryBalance)} mono />
+                <InfoRow
+                  label="bootstrap requirement"
+                  value={formatNear(requirementYocto.toString())}
+                  mono
+                />
+                <InfoRow
+                  label="funded"
+                  value={
+                    <Badge variant={treasuryFunded ? "default" : "outline"}>
+                      {String(treasuryFunded)}
+                    </Badge>
+                  }
+                />
                 <InfoRow
                   label="vote cast"
                   value={
@@ -1620,7 +1692,7 @@ function NodeLifecyclePocPage() {
                 />
                 {treasuriesShared && (
                   <p className="text-xs text-muted-foreground">
-                    same account as the endowment — the delegate stations are skipped
+                    same account as the endowment — the sponsor stations are skipped
                   </p>
                 )}
               </CardContent>
@@ -1634,7 +1706,7 @@ function NodeLifecyclePocPage() {
                   action={
                     <InfoPopover
                       title="veNEAR lockup"
-                      body="Locked NEAR mints veNEAR voting power. The lockup also holds the stake delegated to the node's validator pool."
+                      body="The sponsor's lockup: locked NEAR mints veNEAR voting power, and the same locked NEAR is staked into the node's pool from the lockup — the capital works twice."
                       links={[{ label: "House of Stake", href: HOS_URL }]}
                     />
                   }
@@ -1657,32 +1729,18 @@ function NodeLifecyclePocPage() {
                   }
                   mono
                 />
-                <InfoRow label="liquid" value={formatNear(lockupState?.liquid)} mono />
-                <InfoRow label="locked" value={formatNear(lockupState?.locked)} mono />
+                <InfoRow label="locked" value={formatNear(endowmentLockupState?.locked)} mono />
+                <InfoRow label="liquid" value={formatNear(endowmentLockupState?.liquid)} mono />
                 <InfoRow
-                  label="pool"
-                  value={
-                    lockupState?.stakingPool ? (
-                      <a
-                        href={poolValidatorUrl(lockupState.stakingPool)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground"
-                      >
-                        {lockupState.stakingPool}
-                      </a>
-                    ) : (
-                      "none"
-                    )
-                  }
+                  label="staked from lockup"
+                  value={formatNear(endowmentLockupState?.knownDeposited)}
                   mono
                 />
-                <InfoRow label="staked" value={formatNear(lockupState?.knownDeposited)} mono />
                 <InfoRow
                   label="unstaking"
                   value={
-                    poolAccount && isPositive(poolAccount.unstaked_balance)
-                      ? `${formatNear(poolAccount.unstaked_balance)}${poolAccount.can_withdraw ? "" : " — epoch window"}`
+                    endowmentPoolAccount && isPositive(endowmentPoolAccount.unstaked_balance)
+                      ? `${formatNear(endowmentPoolAccount.unstaked_balance)}${endowmentPoolAccount.can_withdraw ? "" : " — epoch window"}`
                       : "—"
                   }
                   mono
@@ -1754,13 +1812,13 @@ function NodeLifecyclePocPage() {
                     />
                     <InfoRow label="total staked" value={formatNear(poolMeta.totalStaked)} mono />
                     <InfoRow
-                      label="endowment stake"
-                      value={formatNear(poolAccount?.staked_balance)}
+                      label="team stake"
+                      value={formatNear(teamPoolAccount?.staked_balance)}
                       mono
                     />
                     <InfoRow
-                      label="team stake"
-                      value={formatNear(teamPoolAccount?.staked_balance)}
+                      label="endowment stake"
+                      value={formatNear(endowmentPoolAccount?.staked_balance)}
                       mono
                     />
                   </>
@@ -1781,7 +1839,7 @@ function NodeLifecyclePocPage() {
                     action={
                       <InfoPopover
                         title="Tenant state"
-                        body="The DB record and binding are created by the approve station; the config goes live in FastKV when the DAO's publish proposal passes. A tenant page that renders means its config is live — a 404 means it is not. Locally the link points at <slug>.localhost, which the host maps back to the gateway alias in development."
+                        body="The DB record and binding are created by the approve station; the config goes live in FastKV when the team's publish proposal passes. A tenant page that renders means its config is live — a 404 means it is not. Locally the link points at <slug>.localhost, which the host maps back to the gateway alias in development."
                         links={
                           tenantUrl && facts.configPublished
                             ? [{ label: "open the tenant", href: tenantUrl }]
@@ -1965,6 +2023,44 @@ function PocField({
         data-testid={id}
       />
     </Field>
+  );
+}
+
+type PocFormFieldName = "name" | "pool" | "endowment" | "sponsorAmount" | "delegatePct";
+
+function PocFormField({
+  form,
+  name,
+  label,
+  type,
+  placeholder,
+  disabled,
+}: {
+  form: PocForm;
+  name: PocFormFieldName;
+  label: string;
+  type?: string;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <form.Field name={name}>
+      {(field) => (
+        <Field>
+          <FieldLabel htmlFor={`poc-${name}`}>{label}</FieldLabel>
+          <Input
+            id={`poc-${name}`}
+            type={type}
+            value={field.state.value}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(event) => field.handleChange(event.target.value)}
+            className="font-mono text-xs"
+            data-testid={`poc-${name}`}
+          />
+        </Field>
+      )}
+    </form.Field>
   );
 }
 
