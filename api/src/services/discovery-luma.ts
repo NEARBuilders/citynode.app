@@ -19,7 +19,7 @@ const eventSchema = z.object({
   visibility: z.enum(["public", "private", "members-only"]),
   location_visibility: z.enum(["public", "guests-only"]),
   geo_address_json: z
-    .object({ full_address: z.string().optional(), city_state: z.string().optional() })
+    .object({ full_address: z.string().nullish(), city_state: z.string().nullish() })
     .nullish(),
 });
 const pageSchema = z.object({

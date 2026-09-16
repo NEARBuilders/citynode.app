@@ -1,8 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  Copy,
+  Globe2,
+  MapPin,
+  Radio,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
-import { Button, Input } from "@/components";
+import { Badge, Button, Input } from "@/components";
 import {
   Sheet,
   SheetContent,
@@ -10,15 +20,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ActivityCard } from "./activity-editor";
-import { MeasurementPreference, useDiscoveryMeasurement } from "./discovery-measurement";
+import { cn } from "@/lib/utils";
+import { ActivityCard, EventCalendar } from "./activity-editor";
+import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
   import("./geographic-map")
     .then((m) => ({ default: m.GeographicMap }))
     .catch(() => ({
-      default: () => <p role="status">Map is unavailable. Use the node list below.</p>,
+      default: () => <p role="status">Map isn’t available. Use the list instead.</p>,
     })),
 );
 export type DiscoverySearch = {
@@ -63,6 +74,11 @@ export function DiscoveryExplorer({
       }),
     refetchInterval: 30_000,
   });
+  const regions = useQuery({
+    queryKey: ["discovery", undefined, undefined, undefined, undefined],
+    queryFn: () => api.listDiscovery({}),
+    staleTime: 30_000,
+  });
   const detail = useQuery({
     queryKey: ["discovery-node", search.node],
     queryFn: () => api.getDiscoveryNode({ nodeId: search.node! }),
@@ -75,89 +91,168 @@ export function DiscoveryExplorer({
     navigate({ ...search, node });
   };
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Explore City Nodes</h1>
-        <Link to="/discovery-studio" className="text-sm underline">
-          Discovery studio
-        </Link>
-        <p className="text-muted-foreground">
-          Find a community. See what’s happening. Get involved.
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Explore</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Communities, upcoming events, and where people are gathering.
         </p>
       </header>
-      <MeasurementPreference consent={measurement.consent} choose={measurement.choose} />
-      <div className="flex flex-wrap gap-3">
-        <label className="space-y-1" htmlFor="discovery-explorer-1">
-          Search nodes
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-border-strong bg-card p-2">
+        <div className="relative min-w-48 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <label className="sr-only" htmlFor="discovery-search">
+            Search communities
+          </label>
           <Input
-            id="discovery-explorer-1"
+            id="discovery-search"
+            className="h-10 border-0 bg-transparent pl-10 shadow-none"
             value={search.query ?? ""}
             onChange={(e) => navigate({ ...search, query: e.target.value || undefined })}
-            placeholder="Name or city"
+            placeholder="Search a community or city"
           />
-        </label>
-        <label className="space-y-1" htmlFor="discovery-explorer-2">
-          Region
-          <Input
-            id="discovery-explorer-2"
+        </div>
+        <label className="flex items-center gap-2 px-2 text-sm" htmlFor="discovery-region">
+          <Globe2 className="size-4 text-muted-foreground" />
+          <span className="sr-only">Region</span>
+          <select
+            id="discovery-region"
+            aria-label="Region"
+            className="h-10 max-w-40 bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             value={search.region ?? ""}
             onChange={(e) => navigate({ ...search, region: e.target.value || undefined })}
-            placeholder="Country or region"
-          />
+          >
+            <option value="">All regions</option>
+            {[...new Set([...(regions.data ?? []).map((node) => node.region), search.region ?? ""])]
+              .filter(Boolean)
+              .sort()
+              .map((region) => (
+                <option key={region} value={region}>
+                  {region}
+                </option>
+              ))}
+          </select>
         </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!search.active}
-            onChange={(e) => navigate({ ...search, active: e.target.checked || undefined })}
-          />
-          Active nodes
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!search.upcoming}
-            onChange={(e) => navigate({ ...search, upcoming: e.target.checked || undefined })}
-          />
-          Upcoming events
-        </label>
+        {[
+          { key: "active", label: "Recently active", icon: Radio },
+          { key: "upcoming", label: "Upcoming events", icon: CalendarDays },
+        ].map(({ key, label, icon: Icon }) => (
+          <label key={key} className="cursor-pointer">
+            <input
+              type="checkbox"
+              className="peer sr-only"
+              checked={!!search[key as "active" | "upcoming"]}
+              onChange={(e) => navigate({ ...search, [key]: e.target.checked || undefined })}
+            />
+            <span className="flex h-10 items-center gap-2 rounded-[10px] px-3 text-sm text-muted-foreground hover:bg-muted peer-checked:bg-secondary peer-checked:text-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
+              <Icon className="size-4" />
+              {label}
+            </span>
+          </label>
+        ))}
       </div>
       {list.isError ? (
-        <p role="alert">
-          Unable to load nodes. <Button onClick={() => list.refetch()}>Try again</Button>
-        </p>
+        <div
+          role="alert"
+          className="flex flex-col items-center gap-3 rounded-2xl border border-border p-10 text-center"
+        >
+          <p>Couldn’t load communities.</p>
+          <Button onClick={() => list.refetch()}>Try again</Button>
+        </div>
       ) : list.isPending ? (
-        <p role="status">Loading nodes…</p>
+        <div
+          role="status"
+          className="flex h-[28rem] items-center justify-center rounded-2xl bg-muted text-sm text-muted-foreground"
+        >
+          Finding communities…
+        </div>
       ) : (
-        <>
-          <Suspense fallback={<p>Loading map…</p>}>
-            <GeographicMap nodes={list.data} onSelect={select} />
-          </Suspense>
-          <section aria-label="Node list" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {list.data.map((node) => (
-              <button
-                type="button"
-                key={node.nodeId}
-                data-testid={`discovery-node-${node.nodeId}`}
-                data-node-id={node.nodeId}
-                onClick={() => select(node.nodeId)}
-                className="rounded-xl border border-border bg-card p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <h2 className="font-semibold">{node.name}</h2>
-                {node.featured && <p>Featured · {node.featured}</p>}
-                <p className="text-sm">
-                  {node.active ? "Active · " : ""}
-                  {node.activityReason}
-                </p>
-                <p>
-                  {node.location || "Location not provided"} · {node.kind}
-                </p>
-                <p className="text-sm text-muted-foreground">{node.summary}</p>
-              </button>
-            ))}
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-stretch">
+          <section
+            aria-label="Communities"
+            className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border-strong bg-card lg:order-1 lg:max-h-[640px]"
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-sm font-medium">
+                {list.data.length} {list.data.length === 1 ? "community" : "communities"}
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {list.data.filter((node) => node.active).length} active
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {list.data.map((node) => (
+                <button
+                  type="button"
+                  key={node.nodeId}
+                  data-testid={`discovery-node-${node.nodeId}`}
+                  data-node-id={node.nodeId}
+                  aria-pressed={search.node === node.nodeId}
+                  onClick={() => select(node.nodeId)}
+                  className={cn(
+                    "flex w-full items-start gap-3 border-b border-border px-4 py-3.5 text-left last:border-0 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                    search.node === node.nodeId && "bg-muted",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-1.5 size-1.5 shrink-0 rounded-full",
+                      node.active ? "bg-primary" : "bg-muted-foreground",
+                    )}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium">{node.name}</span>
+                      {node.featured && (
+                        <Badge variant="secondary">
+                          <Sparkles />
+                          {node.featured}
+                        </Badge>
+                      )}
+                    </span>
+                    <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="size-3" />
+                      {node.location || "Location not provided"}
+                      {node.region ? ` · ${node.region}` : ""}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {node.upcoming
+                        ? "Upcoming event"
+                        : node.active
+                          ? "Recently active"
+                          : "Quiet lately"}
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {!list.data.length && (
+                <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+                  <p className="font-medium">No communities match these filters.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Try another city or broaden your search.
+                  </p>
+                  <Button
+                    variant="ghost"
+                    onClick={() => navigate({ node: search.node, campaign: search.campaign })}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
+            </div>
           </section>
-          {!list.data.length && <p>No nodes match these filters.</p>}
-        </>
+          <div className="order-1 min-w-0 overflow-hidden rounded-2xl border-2 border-border-strong bg-card lg:order-2">
+            <Suspense
+              fallback={
+                <div className="flex h-[28rem] items-center justify-center text-sm text-muted-foreground lg:h-[640px]">
+                  Loading map…
+                </div>
+              }
+            >
+              <GeographicMap nodes={list.data} onSelect={select} selectedId={search.node} />
+            </Suspense>
+          </div>
+        </div>
       )}
       <Sheet
         open={!!search.node}
@@ -175,89 +270,130 @@ export function DiscoveryExplorer({
               document.querySelector<HTMLButtonElement>(`[data-node-id="${search.node}"]`)?.focus();
           }}
         >
-          <SheetHeader className="p-4 pr-16">
-            <SheetTitle>{selected?.name ?? "Node details"}</SheetTitle>
-            <SheetDescription>{selected?.location || "Community discovery"}</SheetDescription>
+          <SheetHeader className="px-6 pb-4 pt-8 pr-16">
+            <SheetTitle className="text-2xl tracking-tight">
+              {selected?.name ?? "Community"}
+            </SheetTitle>
+            <SheetDescription className="flex items-center gap-1.5">
+              <MapPin className="size-3.5" />
+              {selected?.location || "Location coming soon"}
+            </SheetDescription>
           </SheetHeader>
           {detail.isPending ? (
-            <p>Loading node…</p>
+            <p className="px-6 text-sm text-muted-foreground">Loading…</p>
           ) : detail.isError ? (
-            <p role="alert">Unable to load this node.</p>
+            <p role="alert" className="px-6">
+              Couldn’t load this community.
+            </p>
           ) : !selected ? (
-            <p>This node is unavailable.</p>
+            <p className="px-6">This community isn’t available.</p>
           ) : (
-            <div className="space-y-5 p-4">
-              <p>{selected.summary}</p>
-              <ReportContent targetId={selected.nodeId} kind="profile" />
-              <p>{selected.activityReason}</p>
-              <h2 className="font-semibold">Upcoming events</h2>
-              {selected.events.length ? (
-                selected.events.map((a) => (
-                  <ActivityCard
-                    key={a.id}
-                    activity={a}
-                    nodeId={selected.nodeId}
-                    campaign={search.campaign}
-                    onOutbound={() => {
-                      if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
-                    }}
-                  />
-                ))
-              ) : (
-                <p>No upcoming events.</p>
-              )}
-              <h2 className="font-semibold">Latest social updates</h2>
-              {selected.updates.length ? (
-                selected.updates.map((a) => (
-                  <ActivityCard
-                    key={a.id}
-                    activity={a}
-                    nodeId={selected.nodeId}
-                    campaign={search.campaign}
-                    onOutbound={() => {
-                      if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
-                    }}
-                  />
-                ))
-              ) : (
-                <p>No social updates yet.</p>
-              )}
-              <div className="flex flex-wrap gap-3">
-                {selected.channels.map((channel) => (
-                  <a
-                    key={channel.url}
-                    onClick={() => measurement.track("channel", selected.nodeId, channel.url)}
-                    href={channel.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    {channel.label}
-                  </a>
-                ))}
+            <div className="flex flex-col gap-8 px-6 pb-8">
+              <div className="flex flex-wrap gap-2">
+                {selected.featured && (
+                  <Badge>
+                    <Sparkles />
+                    {selected.featured}
+                  </Badge>
+                )}
+                <Badge variant={selected.active ? "success" : "secondary"}>
+                  <Radio />
+                  {selected.activityReason}
+                </Badge>
               </div>
-              <Link
-                to="/n/$slug"
-                params={{ slug: selected.slug }}
-                search={{ parentId: selected.parentId ?? undefined }}
-                className="underline"
-              >
-                Full node page
-              </Link>
-              <Button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(window.location.href);
-                    setShareMessage("Node link copied.");
-                    measurement.track("share", selected.nodeId);
-                  } catch {
-                    setShareMessage("Copy the address from your browser to share this node.");
-                  }
-                }}
-              >
-                Copy node link
-              </Button>
-              <p role="status">{shareMessage}</p>
+              {selected.summary ? (
+                <p className="text-sm leading-relaxed text-muted-foreground">{selected.summary}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  This community has not added a description yet.
+                </p>
+              )}
+              {selected.channels.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selected.channels.map((channel) => (
+                    <Button key={channel.url} variant="outline" size="sm" asChild>
+                      <a
+                        onClick={() => measurement.track("channel", selected.nodeId, channel.url)}
+                        href={channel.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {channel.label}
+                        <ArrowUpRight />
+                      </a>
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <section className="flex flex-col gap-4">
+                <h2 className="text-sm font-semibold">Upcoming events</h2>
+                {selected.events.length ? (
+                  <EventCalendar
+                    events={selected.events}
+                    nodeId={selected.nodeId}
+                    campaign={search.campaign}
+                    onOutbound={(activity) => {
+                      if (activity.kind === "event")
+                        measurement.track("event", selected.nodeId, activity.id);
+                    }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No upcoming events. Check back for the next gathering.
+                  </p>
+                )}
+              </section>
+              <section className="flex flex-col gap-4">
+                <h2 className="text-sm font-semibold">Latest updates</h2>
+                {selected.updates.length ? (
+                  <div className="flex flex-col overflow-hidden rounded-xl bg-muted/50">
+                    {selected.updates.map((a) => (
+                      <ActivityCard
+                        key={a.id}
+                        activity={a}
+                        nodeId={selected.nodeId}
+                        campaign={search.campaign}
+                        onOutbound={() => {
+                          if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No updates yet.</p>
+                )}
+              </section>
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
+                <Button variant="outline" size="sm" asChild>
+                  <Link
+                    to="/n/$slug"
+                    params={{ slug: selected.slug }}
+                    search={{ parentId: selected.parentId ?? undefined }}
+                  >
+                    Community page
+                    <ArrowUpRight />
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(window.location.href);
+                      setShareMessage("Link copied.");
+                      measurement.track("share", selected.nodeId);
+                    } catch {
+                      setShareMessage("Copy the address from your browser to share this page.");
+                    }
+                  }}
+                >
+                  <Copy /> Copy link
+                </Button>
+              </div>
+              <p role="status" className="text-xs text-muted-foreground">
+                {shareMessage}
+              </p>
+              <ReportContent targetId={selected.nodeId} kind="profile" />
             </div>
           )}
         </SheetContent>

@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { useApiClient } from "@/app";
 import { ActivityCard } from "./activity-editor";
-import { MeasurementPreference, useDiscoveryMeasurement } from "./discovery-measurement";
+import { useDiscoveryMeasurement } from "./discovery-measurement";
 export function ActivityDetail({
   activityId,
   node,
@@ -22,27 +23,36 @@ export function ActivityDetail({
   const selectedNode =
     node && activity.data?.nodeIds.includes(node) ? node : activity.data?.ownerNodeId;
   return (
-    <div className="space-y-5">
-      <Link to="/explore" search={{ node: selectedNode, campaign }} className="underline">
-        Explore nodes
+    <div className="mx-auto flex max-w-xl flex-col gap-6">
+      <Link
+        to="/explore"
+        search={{ node: selectedNode, campaign }}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Back to Explore
       </Link>
-      <MeasurementPreference consent={measurement.consent} choose={measurement.choose} />
       {activity.isPending ? (
-        <p>Loading activity…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : activity.isError ? (
-        <p role="alert">Unable to load activity.</p>
+        <p role="alert">Couldn’t load this event.</p>
       ) : activity.data ? (
-        <ActivityCard
-          activity={activity.data}
-          nodeId={selectedNode}
-          campaign={campaign}
-          onOutbound={() => {
-            if (activity.data?.kind === "event" && selectedNode)
-              measurement.track("event", selectedNode, activity.data.id);
-          }}
-        />
+        <div className="overflow-hidden rounded-2xl border-2 border-border-strong bg-card">
+          <div className="bg-muted/50">
+            <ActivityCard
+              activity={activity.data}
+              nodeId={selectedNode}
+              campaign={campaign}
+              variant="detail"
+              onOutbound={() => {
+                if (activity.data?.kind === "event" && selectedNode)
+                  measurement.track("event", selectedNode, activity.data.id);
+              }}
+            />
+          </div>
+        </div>
       ) : (
-        <p>This activity is unavailable.</p>
+        <p>This event or post isn’t available.</p>
       )}
     </div>
   );

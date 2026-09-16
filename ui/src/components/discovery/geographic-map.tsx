@@ -6,14 +6,22 @@ type Node = Awaited<ReturnType<ApiClient["listDiscovery"]>>[number];
 export function GeographicMap({
   nodes,
   onSelect,
+  selectedId,
 }: {
   nodes: Node[];
   onSelect: (id: string) => void;
+  selectedId?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const select = useRef(onSelect);
+  const selected = useRef(selectedId);
+  const redraw = useRef<() => void>(undefined);
+  const mapRef = useRef<{ panTo: (latlng: [number, number]) => void } | null>(null);
+  const nodesRef = useRef(nodes);
   select.current = onSelect;
+  selected.current = selectedId;
+  nodesRef.current = nodes;
   useEffect(() => {
     let dispose: (() => void) | undefined;
     let cancelled = false;
@@ -26,8 +34,12 @@ export function GeographicMap({
           minZoom: 2,
           maxZoom: 18,
         }).setView([20, 0], 2);
+        mapRef.current = {
+          panTo: (latlng) => map.panTo(latlng, { animate: true }),
+        };
         const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 19,
+          referrerPolicy: "origin",
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(map);
@@ -54,20 +66,25 @@ export function GeographicMap({
           for (const group of groups.values()) {
             const first = group[0];
             if (!first) continue;
+            const active = group.some((entry) => entry.node.nodeId === selected.current);
             const label =
               group.length > 1
-                ? `${group.length} nodes near ${first.node.location}`
-                : `${first.node.name} (${first.node.kind})`;
+                ? `${group.length} communities near ${first.node.location}`
+                : first.node.name;
             const content = document.createElement("span");
-            content.className =
-              "flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-lg";
-            content.textContent = group.length > 1 ? String(group.length) : "●";
+            content.className = `flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-lg ${
+              active
+                ? "border-primary bg-primary text-primary-foreground ring-2 ring-ring ring-offset-2 ring-offset-background"
+                : "border-background bg-primary text-primary-foreground"
+            }`;
+            content.textContent = group.length > 1 ? String(group.length) : "";
             const marker = L.marker(first.point, {
               title: label,
               alt: label,
               icon: L.divIcon({ html: content, className: "", iconSize: [32, 32] }),
             }).addTo(markers);
             marker.getElement()?.setAttribute("aria-label", label);
+            marker.getElement()?.setAttribute("aria-current", active ? "true" : "false");
             marker
               .getElement()
               ?.setAttribute("data-testid", `discovery-map-marker-${first.node.nodeId}`);
@@ -77,12 +94,13 @@ export function GeographicMap({
                 return;
               }
               const list = document.createElement("div");
-              list.className = "flex max-h-64 flex-col gap-2 overflow-y-auto";
+              list.className = "flex max-h-64 flex-col gap-1 overflow-y-auto";
               for (const { node } of group) {
                 const button = document.createElement("button");
                 button.type = "button";
                 button.dataset.testid = `discovery-cluster-node-${node.nodeId}`;
-                button.textContent = `${node.name} · ${node.kind}`;
+                button.className = "rounded-lg px-3 py-2 text-left text-sm hover:bg-muted";
+                button.textContent = node.name;
                 button.addEventListener("click", () => {
                   marker.getElement()?.focus();
                   select.current(node.nodeId);
@@ -94,13 +112,18 @@ export function GeographicMap({
             });
           }
         };
+        redraw.current = draw;
         draw();
+        const focused = points.find((entry) => entry.node.nodeId === selected.current);
+        if (focused) map.panTo(focused.point);
         map.on("zoomend", draw);
         const observer = new ResizeObserver(() => map.invalidateSize());
         observer.observe(container.current);
         dispose = () => {
           observer.disconnect();
           map.remove();
+          mapRef.current = null;
+          redraw.current = undefined;
         };
       })
       .catch(() => setFailed(true));
@@ -109,13 +132,20 @@ export function GeographicMap({
       dispose?.();
     };
   }, [nodes]);
+  useEffect(() => {
+    redraw.current?.();
+    const node = nodesRef.current.find((entry) => entry.nodeId === selectedId);
+    if (node && node.latitude !== null && node.longitude !== null)
+      mapRef.current?.panTo([node.latitude, node.longitude]);
+  }, [selectedId]);
   return (
-    <section aria-label="Geographic map" className="space-y-2">
-      {failed && <p role="status">Map tiles are unavailable. Use the node list below.</p>}
-      <div
-        ref={container}
-        className="relative z-0 h-96 w-full rounded-xl border border-border lg:h-[32rem]"
-      />
+    <section aria-label="Map" className="flex flex-col">
+      {failed && (
+        <p role="status" className="border-b border-border px-4 py-2 text-sm text-muted-foreground">
+          Map isn’t loading. Use the list instead.
+        </p>
+      )}
+      <div ref={container} className="relative z-0 h-[350px] w-full sm:h-[440px] lg:h-[640px]" />
     </section>
   );
 }

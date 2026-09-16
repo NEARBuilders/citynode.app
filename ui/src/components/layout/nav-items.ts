@@ -1,4 +1,14 @@
-import { Boxes, Building2, CirclePlus, Home, Landmark, Network, Shield } from "lucide-react";
+import {
+  Boxes,
+  Building2,
+  CirclePlus,
+  Compass,
+  Home,
+  Landmark,
+  Network,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 
 export type SidebarRole = "anon" | "member" | "admin";
 
@@ -11,6 +21,8 @@ export interface SidebarItem {
 }
 
 export const NAV_ITEMS: SidebarItem[] = [
+  { icon: Compass, label: "explore", to: "/explore", roleRequired: "anon" },
+  { icon: Sparkles, label: "highlights", to: "/discovery-studio", roleRequired: "member" },
   {
     icon: Home,
     label: "dashboard",

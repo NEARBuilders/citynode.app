@@ -1,20 +1,20 @@
 # Discovery pilot runbook
 
-## Readiness and consent
+## Readiness and participation
 
 Use 5–10 opted-in communities. A fixture is not a recruited pilot participant. Record the responsible node editor and verify permission to publish the profile and official links. Confirm an approximate city/regional center, a useful summary, an official channel, and at least one real event or attributed post. Online-only communities can remain list-only. Check external destinations, timezone and cancellation information. Never seed invented activity into production.
 
-Manual events and [Luma imports](./luma-events.md) are both supported. Refresh connected Luma calendars before campaigns and during weekly reviews; review newly imported drafts before publishing.
+Manual events and [Luma imports](./luma-events.md) are both supported. Select a Luma calendar once per node; public events publish and update automatically. Check the connection status before campaigns.
 
 Curation/moderation must be ready before launch. Review the map-provider decision, deployment cost ceiling and hosting policy. Confirm an administrator can handle reports and revoke curator access. Separately authorize deployment and participant outreach.
 
 ## Measurement rules
 
-Measurement is opt-in. The map works with collection declined, blocked by the browser, or unavailable. Respect Do Not Track. Store preference locally; use a random tab-session visit ID with a 30-minute lifetime, not a user identity. A new campaign starts a new visit. Send no email, wallet, IP, raw referrer or arbitrary URL as analytics dimensions.
+Anonymous measurement is enabled by default, with no in-app toggle. The map works when collection is blocked by the browser or unavailable. Respect Do Not Track. Use a random tab-session visit ID with a 30-minute lifetime, not a user identity. A new campaign starts a new visit. Send no email, wallet, IP, raw referrer or arbitrary URL as analytics dimensions.
 
 Within a visit, count each kind/node/target combination once; count one visit and one activation regardless of repeated outbound actions. Campaign attribution is fixed at the visit start. Count node opens, event outbound clicks, official-channel clicks and share actions separately. Social-original-post clicks do not count as official-channel activation. Exclude authenticated platform admins, organization owners/admins and granted growth curators. These are aggregate interaction signals, not attendance, social follows or unique people. Client-originated signals can be fabricated; do not use them for rewards or financial decisions.
 
-The studio reports a rolling 28 days. Retain at most 28 days of detailed measurement rows, purging older rows on ingestion. A declined preference produces no measurement rows. Changing the preference stops future collection; it cannot identify and erase historical anonymous visits. Report-form anti-duplicate tokens are separate from analytics consent and last only for the tab session. A database-serialized budget allows at most 20 reports per content target per hour regardless of token rotation; the host also applies its general request limit.
+The studio reports a rolling 28 days. Retain at most 28 days of detailed measurement rows, purging older rows on ingestion. Browser Do Not Track suppresses collection. There is no persistent measurement preference. Report-form anti-duplicate tokens are separate from measurement visit IDs and last only for the tab session. A database-serialized budget allows at most 20 reports per content target per hour regardless of token rotation; the host also applies its general request limit.
 
 ## Four-week procedure
 

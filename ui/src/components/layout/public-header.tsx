@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+import { Compass } from "lucide-react";
 import { UserNav } from "./user-nav";
 
 interface PublicHeaderProps {
@@ -7,7 +9,25 @@ interface PublicHeaderProps {
 export function PublicHeader({ showConnect = true }: PublicHeaderProps) {
   return (
     <header className="shrink-0">
-      <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <nav aria-label="Main navigation" className="flex w-full items-center gap-5 sm:w-auto">
+          <Link to="/" className="text-sm font-semibold tracking-tight">
+            CityNode
+          </Link>
+          <Link
+            to="/explore"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Compass className="size-4" />
+            Explore
+          </Link>
+          <Link
+            to="/dashboard/node"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            My community
+          </Link>
+        </nav>
         <UserNav showConnect={showConnect} />
       </div>
     </header>

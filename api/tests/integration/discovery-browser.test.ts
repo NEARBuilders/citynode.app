@@ -84,6 +84,7 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     resolve: { alias: { "@": path.join(workspace, "ui/src") }, dedupe: ["react", "react-dom"] },
     esbuild: { jsx: "automatic" },
     server: {
+      headers: { "Referrer-Policy": "no-referrer" },
       watch: null,
       host: "127.0.0.1",
       port: 0,
@@ -102,39 +103,50 @@ it("publishes a profile and explores a real map with synchronized accessible sel
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.route("https://tile.openstreetmap.org/**", (route) =>
-      route.fulfill({
+    page.on("pageerror", (error) => console.error("Browser error:", error.message));
+    const tileReferrers: (string | undefined)[] = [];
+    await page.route("https://tile.openstreetmap.org/**", (route) => {
+      tileReferrers.push(route.request().headers().referer);
+      return route.fulfill({
         contentType: "image/png",
         body: Buffer.from(
           "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5z8AAAAASUVORK5CYII=",
           "base64",
         ),
-      }),
-    );
+      });
+    });
     const base = vite.resolvedUrls!.local[0]!;
     await page.goto(`${base}?editor=${node.id}`);
-    await page.getByLabel("Community summary").fill("A community by the sea");
+    await page.getByLabel("About this community").fill("A community by the sea");
     await page.getByLabel("Location", { exact: true }).fill("Karachi");
     await page.getByLabel("Region", { exact: true }).fill("Pakistan");
     await page.getByLabel("Latitude").fill("24.86");
     await page.getByLabel("Longitude").fill("67.01");
-    await page.getByLabel("Publish in discovery").check();
+    await page.getByLabel("Show this community on Explore").check();
     await page.getByTestId("discovery-profile-save").click();
-    await browserExpect(page.getByRole("status")).toHaveText("Discovery profile saved.");
-    await page.getByTestId("discovery-luma-import").click();
-    await browserExpect(page.getByRole("status").filter({ hasText: "1 imported" })).toBeVisible();
+    await browserExpect(page.getByRole("status")).toHaveText("Profile saved.");
+    await page.getByTestId("content-tab-events").click();
+    await page.getByTestId("discovery-luma-calendar").selectOption("cal-browser");
+    await browserExpect(
+      page.getByRole("status").filter({ hasText: "Connected to Community Luma" }),
+    ).toBeVisible();
     const imported = (await api.listDiscoveryActivities({ nodeId: node.id })).find(
       (activity) => activity.luma,
     )!;
-    await page.getByTestId(`discovery-edit-activity-${imported.id}`).click();
-    await browserExpect(page.getByLabel("Title", { exact: true })).toHaveAttribute("readonly", "");
-    await page.getByLabel("Publication status").selectOption("published");
-    await page.getByTestId("discovery-activity-save").click();
-    await browserExpect(page.getByText("Activity saved.", { exact: true })).toBeVisible();
+    expect(imported.status).toBe("published");
+    await browserExpect(page.getByRole("link", { name: "Manage in Luma" })).toHaveAttribute(
+      "href",
+      "https://luma.com/community-meetup",
+    );
     await page.getByTestId("discovery-new-event").click();
+    await page.screenshot({
+      path: "/tmp/discovery-event-editor.png",
+      fullPage: true,
+      animations: "disabled",
+    });
     await page.getByLabel("Title", { exact: true }).fill("Builders meetup");
-    await page.getByLabel("Source / organizer").fill("Karachi community");
-    await page.getByLabel("Original URL").fill("https://example.com/meetup");
+    await page.getByLabel("Organizer").fill("Karachi community");
+    await page.getByLabel("Link", { exact: true }).fill("https://example.com/meetup");
     await page
       .getByLabel("Starts", { exact: true })
       .fill(new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 16));
@@ -142,18 +154,24 @@ it("publishes a profile and explores a real map with synchronized accessible sel
       .getByLabel("Ends", { exact: true })
       .fill(new Date(Date.now() + 7 * 86400_000 + 7200_000).toISOString().slice(0, 16));
     await page.getByLabel("Venue or online meeting location").fill("Online");
-    await page.getByLabel("Publication status").selectOption("published");
+    await page.getByLabel("Who can see this").selectOption("published");
     await page.getByTestId("discovery-activity-save").click();
-    await browserExpect(page.getByText("Activity saved.", { exact: true })).toBeVisible();
+    await browserExpect(page.getByText("Saved.", { exact: true })).toBeVisible();
     await page.getByTestId("discovery-new-social").click();
     await page.getByLabel("Title", { exact: true }).fill("Community launch");
-    await page.getByLabel("Source / organizer").fill("Official community");
-    await page.getByLabel("Original URL").fill("https://example.com/launch");
-    await page.getByLabel("Publication status").selectOption("published");
+    await page.getByLabel("Organizer").fill("Official community");
+    await page.getByLabel("Link", { exact: true }).fill("https://example.com/launch");
+    await page.getByLabel("Who can see this").selectOption("published");
     await page.getByTestId("discovery-activity-save").click();
-    await browserExpect(page.getByText("Activity saved.", { exact: true })).toBeVisible();
+    await browserExpect(page.getByText("Saved.", { exact: true })).toBeVisible();
     await page.goto(base);
     await browserExpect(page.locator(".leaflet-container")).toBeVisible();
+    await browserExpect(page.locator(".leaflet-tile").first()).toHaveAttribute(
+      "referrerpolicy",
+      "origin",
+    );
+    await browserExpect.poll(() => tileReferrers.length).toBeGreaterThan(0);
+    expect(tileReferrers.every((referer) => referer === `${new URL(base).origin}/`)).toBe(true);
     await page.getByTestId(`discovery-map-marker-${node.id}`).click();
     await browserExpect(page.getByRole("dialog")).toContainText("A community by the sea");
     await browserExpect(page.locator('a[href="https://example.com/meetup"]')).toHaveAttribute(
@@ -169,8 +187,8 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     ).toHaveAttribute("href", "https://luma.com/community-meetup");
     expect(new URL(page.url()).searchParams.get("node")).toBe(node.id);
     await page.keyboard.press("Escape");
-    await page.getByLabel("Search nodes").fill("No match");
-    await browserExpect(page.getByText("No nodes match these filters.")).toBeVisible();
+    await page.getByLabel("Search communities").fill("No match");
+    await browserExpect(page.getByText("No communities match these filters.")).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}?node=${node.id}`);
     await browserExpect(page.getByRole("dialog")).toContainText("Karachi");
@@ -178,13 +196,11 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     await page.unroute("https://tile.openstreetmap.org/**");
     await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
     await page.reload();
-    await browserExpect(
-      page.getByText("Map tiles are unavailable. Use the node list below."),
-    ).toBeVisible();
-    await browserExpect(page.getByRole("region", { name: "Node list" })).toContainText("Karachi");
+    await browserExpect(page.getByText("Map isn’t loading. Use the list instead.")).toBeVisible();
+    await browserExpect(page.getByRole("region", { name: "Communities" })).toContainText("Karachi");
     context = {};
     await page.goto(`${base}?campaign=community-week`);
-    await page.getByTestId("discovery-measurement-toggle").click();
+    await browserExpect(page.getByTestId("discovery-measurement-toggle")).toHaveCount(0);
     await page.getByTestId(`discovery-node-${node.id}`).click();
     const tracked = page.waitForResponse(
       async (response) =>
@@ -200,28 +216,35 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     await tracked;
     context = authedContext("map-admin", "admin");
     await page.goto(`${base}?studio=true`);
-    await browserExpect(page.getByText("1 visits · 1 activated visits")).toBeVisible();
-    await page.getByLabel("Feature label").fill("Community week");
+    await page.getByTestId("studio-tab-engagement").click();
+    await browserExpect(page.getByText("1 visits · 1 visits with a link click")).toBeVisible();
+    await page.getByTestId("studio-tab-communities").click();
+    await page.screenshot({ path: "/tmp/discovery-studio-mobile.png", fullPage: true });
+    await page.getByTestId(`studio-manage-${node.id}`).click();
+    await page.getByLabel("Why it’s featured").fill("Community week");
     await page
-      .getByLabel("Feature expires (your local time)")
+      .getByLabel("Show until")
       .fill(new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 16));
     await page.getByTestId(`discovery-feature-${node.id}`).click();
     await browserExpect(page.getByText("Featured: Community week")).toBeVisible();
     await page.goto(`${base}?node=${node.id}`);
     await page.getByTestId(`discovery-report-${node.id}`).click();
     await page
-      .getByLabel("Reason", { exact: true })
-      .first()
+      .getByTestId(`discovery-report-reason-${node.id}`)
       .fill("Incorrect official community information");
     await page.getByTestId(`discovery-report-submit-${node.id}`).click();
     await browserExpect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
     await page.goto(`${base}?studio=true`);
-    await page.getByLabel("Private moderation note").fill("Verified incorrect information");
-    await page.getByLabel("Moderation action", { exact: true }).selectOption("unpublish");
+    await page.getByTestId("studio-tab-reports").click();
+    await browserExpect(
+      page.getByRole("link", { name: "Open reported community" }),
+    ).toHaveAttribute("href", expect.stringContaining(node.id));
+    await page.getByLabel("Note (only your team sees this)").fill("Verified incorrect information");
+    await page.getByLabel("What should we do", { exact: true }).selectOption("unpublish");
     await page.locator("[data-testid^=discovery-resolve-report-]").click();
     await browserExpect(page.getByText("Resolved: Verified incorrect information")).toBeVisible();
     await page.goto(`${base}?node=${node.id}`);
-    await browserExpect(page.getByText("This node is unavailable.")).toBeVisible();
+    await browserExpect(page.getByText("This community isn’t available.")).toBeVisible();
     const measurements = [];
     for (let index = 1; index <= 200; index++) {
       const sample = await api.createNode({
@@ -249,7 +272,7 @@ it("publishes a profile and explores a real map with synchronized accessible sel
         const browserStart = performance.now();
         await page.goto(`${base}?region=Benchmark`);
         await browserExpect(
-          page.getByRole("region", { name: "Node list" }).getByRole("button"),
+          page.getByRole("region", { name: "Communities" }).getByRole("button"),
         ).toHaveCount(index);
         await browserExpect(page.locator(".leaflet-marker-icon").first()).toBeVisible();
         measurements.push({
@@ -285,16 +308,14 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     await browserExpect(page.getByRole("dialog")).toContainText("Synthetic performance fixture");
     await page.keyboard.press("Escape");
     await browserExpect(page.locator(".leaflet-marker-icon:focus")).toHaveCount(1);
-    await page.getByRole("region", { name: "Node list" }).getByRole("button").first().click();
+    await page.getByRole("region", { name: "Communities" }).getByRole("button").first().click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: "/tmp/discovery-map-mobile.png", animations: "disabled" });
     await page.route("**/geographic-map.tsx*", (route) => route.abort());
     await page.goto(`${base}?region=Benchmark`);
+    await browserExpect(page.getByText("Map isn’t available. Use the list instead.")).toBeVisible();
     await browserExpect(
-      page.getByText("Map is unavailable. Use the node list below."),
-    ).toBeVisible();
-    await browserExpect(
-      page.getByRole("region", { name: "Node list" }).getByRole("button"),
+      page.getByRole("region", { name: "Communities" }).getByRole("button"),
     ).toHaveCount(200);
   } finally {
     await browser.close();

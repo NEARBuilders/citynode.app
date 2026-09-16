@@ -1,5 +1,5 @@
 import { afterAll, afterEach, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(async () => ({
@@ -24,7 +24,7 @@ vi.mock("../../plugin.dev", async (importOriginal) => {
 });
 afterEach(() => vi.unstubAllGlobals());
 afterAll(teardown);
-it("imports public Luma events as drafts and refreshes details without duplicates or private locations", async () => {
+it("connects a Luma calendar and automatically publishes and updates its public events", async () => {
   const realFetch = globalThis.fetch;
   let title = "Luma builders meetup";
   let visibility = "public";
@@ -51,7 +51,7 @@ it("imports public Luma events as drafts and refreshes details without duplicate
                 timezone: "UTC",
                 visibility,
                 location_visibility: "guests-only",
-                geo_address_json: { full_address: "Private guest address" },
+                geo_address_json: { full_address: "Private guest address", city_state: null },
               },
             ],
             has_more: partialFailure,
@@ -92,20 +92,25 @@ it("imports public Luma events as drafts and refreshes details without duplicate
   const [first] = await editor.listDiscoveryActivities({ nodeId: node.id });
   expect(first).toMatchObject({
     title,
-    status: "draft",
+    status: "published",
     source: "Luma · Builders",
     venue: "See Luma for location details",
     luma: { eventId: "evt-fixture", calendarId: "cal-fixture" },
   });
   expect(JSON.stringify(first)).not.toContain("Private guest address");
-  await editor.saveDiscoveryActivity({ ...first!, status: "published" });
+  expect(await editor.listDiscoveryLumaCalendars({ nodeId: node.id })).toMatchObject({
+    connection: { calendarId: "cal-fixture" },
+  });
   expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toMatchObject({
     status: "published",
   });
   title = "Updated in Luma";
-  expect(
-    await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" }),
-  ).toMatchObject({ imported: 0, updated: 1 });
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
+  await publicClient.listDiscovery({});
+  await expect
+    .poll(async () => (await publicClient.getDiscoveryActivity({ id: first!.id }))?.title)
+    .toBe(title);
+  clock.mockRestore();
   const refreshed = await editor.listDiscoveryActivities({ nodeId: node.id });
   expect(refreshed).toHaveLength(1);
   expect(refreshed[0]).toMatchObject({ id: first!.id, title, status: "published" });
@@ -152,10 +157,37 @@ it("imports public Luma events as drafts and refreshes details without duplicate
   await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
   const final = await editor.listDiscoveryActivities({ nodeId: node.id });
   expect(final.find((a) => a.id === first!.id)).toMatchObject({
-    status: "draft",
+    status: "published",
     luma: { available: true },
   });
   expect(final.find((a) => a.title === "Manual meetup")).toMatchObject({ status: "published" });
+  const otherNode = await provisioner.createNode({
+    name: "Second Luma city",
+    slug: "second-luma-city",
+    kind: "city",
+    tenantId: tenant.id,
+  });
+  await editor.importDiscoveryLuma({ nodeId: otherNode.id, calendarId: "cal-fixture" });
+  expect(await editor.listDiscoveryActivities({ nodeId: otherNode.id })).toEqual(
+    expect.arrayContaining([expect.objectContaining({ title, status: "published" })]),
+  );
+  const admin = await getPluginClient(authedContext("luma-admin", "admin"));
+  await publicClient.reportDiscoveryContent({
+    targetId: first!.id,
+    kind: "activity",
+    token: crypto.randomUUID(),
+    reason: "This event should be hidden",
+  });
+  const report = (await admin.getDiscoveryStudio()).reports.find(
+    (report) => report.targetId === first!.id,
+  )!;
+  await admin.moderateDiscoveryReport({
+    reportId: report.id,
+    action: "unpublish",
+    note: "Hidden by admin",
+  });
+  await editor.importDiscoveryLuma({ nodeId: node.id, calendarId: "cal-fixture" });
+  expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toBeNull();
   const beforeWithdrawal = final.find((a) => a.id === first!.id)!;
   visibility = "private";
   const races = await Promise.allSettled([
@@ -169,4 +201,13 @@ it("imports public Luma events as drafts and refreshes details without duplicate
     (await editor.listDiscoveryActivities({ nodeId: node.id })).find((a) => a.id === first!.id),
   ).toMatchObject({ status: "draft", luma: { available: false } });
   expect(await publicClient.getDiscoveryActivity({ id: first!.id })).toBeNull();
+  await editor.disconnectDiscoveryLuma({ nodeId: node.id });
+  expect(await editor.listDiscoveryLumaCalendars({ nodeId: node.id })).toMatchObject({
+    connection: null,
+  });
+  expect(
+    (await editor.listDiscoveryActivities({ nodeId: node.id })).find(
+      (a) => a.title === "Manual meetup",
+    ),
+  ).toMatchObject({ status: "published" });
 });

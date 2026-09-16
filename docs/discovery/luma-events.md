@@ -10,19 +10,20 @@ Luma requires a Plus subscription for API access. See [Luma's API setup](https:/
 
 ## Editor workflow
 
-1. Open the node's discovery editor and select a connected Luma calendar.
-2. Choose **Import / refresh calendar**. Public approved events are imported as drafts; private/member-only entries and guest-only location details are excluded.
-3. Review events and publish them, optionally attaching other nodes you can edit. Manual events continue through **New event**.
-4. Change imported titles, dates, timezone and venue in Luma. Refresh the calendar in CityNode to copy those changes. Publication and node associations are managed in CityNode.
+1. Open the community editor and select a Luma calendar. The selection is saved and public approved events publish automatically.
+2. Manage event details and registration in Luma. CityNode checks for updates every five minutes while the API is running; visits also trigger a due check in the background without delaying the public map.
+3. Use **Add an event** for manual events. These remain independent of Luma.
+4. Disconnect the calendar to withdraw its events from Explore. Manual events remain unchanged. Selecting another calendar replaces the connection.
 
-Imports are explicitly refreshed by an editor, not scheduled. Before a campaign and during weekly content reviews, refresh calendars and check the visible last-refreshed date. Visitors follow the Luma link for current details and RSVP. No guest lists, meeting links or registration data are imported.
+Each node has one selected calendar. The same calendar can be selected by several nodes. Existing manual imports are not automatically connected: select the calendar once to enable ongoing updates.
 
-## Refresh rules
+## Synchronization rules
 
-- Provider IDs retain the existing CityNode activity ID when event details or URLs change. Canonical URLs prevent duplicates with manual events and other calendars. Conflicting URLs are skipped and counted; shared events can be associated with additional nodes by an editor who has the required permissions.
-- Refresh preserves publication choices, including drafts, moderation withdrawals and local cancellation notices. It never republishes a withdrawn event automatically.
-- Events absent from a successfully fetched complete calendar, including events that became private, are withdrawn to drafts and cannot be republished until the source returns. Absence is not labeled as a cancellation.
-- Provider failures, invalid public event data, incomplete pagination and rate limits fail before database mutation. The last imported snapshot remains available with its timestamp; the editor sees an error.
-- Fetches have an eight-second timeout per request and a twenty-page cap (up to 1,000 events at the requested page size). Larger calendars fail explicitly instead of silently withdrawing unseen events. No arbitrary user-supplied URL is fetched.
-
-This refresh model is suitable for an editorial pilot. Scheduled refresh or provider webhooks can be added when rollout requirements justify them; they are not implied by these imports.
+- A complete snapshot is saved atomically. Stable Luma event IDs preserve CityNode IDs across edits, removals and returns.
+- Only public approved events are included; private/member-only events and guest-only addresses are excluded.
+- Removed or newly private events disappear on the next successful check. Returned public events reappear automatically, unless explicitly hidden in CityNode by an editor or moderator.
+- Moderation withdrawals remain hidden after sync. Manual events are never overwritten or withdrawn. A manually added event with the same URL on the same node is retained instead of duplicating it.
+- Calendar changes and disconnection serialize with synchronization so an old snapshot cannot restore disconnected events.
+- Provider failures, invalid public data, incomplete pagination and rate limits preserve the last complete snapshot. The editor shows a connection error and the server retries after five minutes.
+- Fetches have an eight-second timeout per request and a twenty-page cap (up to 1,000 events). Larger calendars fail explicitly rather than silently removing unseen events. Keys and guest data never enter browser responses.
+- The worker runs with the API service and stops when that service shuts down. The persisted connection and sync timestamps survive restarts.

@@ -10,39 +10,47 @@ export function ReportContent({
 }) {
   const api = useApiClient();
   return (
-    <details className="mt-3 text-sm">
-      <summary data-testid={`discovery-report-${targetId}`} className="cursor-pointer">
-        Report this {kind === "profile" ? "node" : "activity"}
-      </summary>
-      <DiscoveryAction
-        testId={`discovery-report-submit-${targetId}`}
-        label="Submit report"
-        run={(data) => {
-          let token = sessionStorage.getItem("discovery-report-token");
-          if (!token) {
-            token = crypto.randomUUID();
-            sessionStorage.setItem("discovery-report-token", token);
-          }
-          return api.reportDiscoveryContent({
-            targetId,
-            kind,
-            token,
-            reason: String(data.get("reason")),
-          });
-        }}
+    <details className="text-xs text-muted-foreground">
+      <summary
+        data-testid={`discovery-report-${targetId}`}
+        className="cursor-pointer hover:text-foreground"
       >
-        <label htmlFor={`report-${targetId}`}>
-          Reason
-          <Textarea
-            id={`report-${targetId}`}
-            name="reason"
-            required
-            minLength={5}
-            maxLength={1000}
-          />
-        </label>
-        <p>Reports are visible only to platform administrators.</p>
-      </DiscoveryAction>
+        Something wrong? Let us know
+      </summary>
+      <div className="mt-3">
+        <DiscoveryAction
+          testId={`discovery-report-submit-${targetId}`}
+          label="Send report"
+          run={(data) => {
+            let token = sessionStorage.getItem("discovery-report-token");
+            if (!token) {
+              token = crypto.randomUUID();
+              sessionStorage.setItem("discovery-report-token", token);
+            }
+            return api.reportDiscoveryContent({
+              targetId,
+              kind,
+              token,
+              reason: String(data.get("reason")),
+            });
+          }}
+        >
+          <label htmlFor={`report-${targetId}`}>
+            What happened?
+            <Textarea
+              id={`report-${targetId}`}
+              data-testid={`discovery-report-reason-${targetId}`}
+              name="reason"
+              required
+              minLength={5}
+              maxLength={1000}
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Only the people who look after CityNode can see your report.
+          </p>
+        </DiscoveryAction>
+      </div>
     </details>
   );
 }

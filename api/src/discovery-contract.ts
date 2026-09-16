@@ -32,6 +32,7 @@ export const activitySchema = z.object({
       eventId: z.string(),
       syncedAt: z.iso.datetime(),
       available: z.boolean(),
+      hidden: z.boolean().optional(),
     })
     .optional(),
   nodeIds: z.array(z.uuid()).min(1).max(30),
@@ -137,8 +138,20 @@ export const discoveryContract = {
       z.object({
         calendars: z.array(z.object({ id: z.string(), name: z.string(), url: webUrl })),
         unavailableCount: z.number(),
+        connection: z
+          .object({
+            calendarId: z.string(),
+            calendarName: z.string(),
+            syncedAt: z.iso.datetime(),
+            error: z.string().nullable(),
+          })
+          .nullable(),
       }),
     )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  disconnectDiscoveryLuma: oc
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(z.object({ disconnected: z.boolean() }))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   importDiscoveryLuma: oc
     .input(z.object({ nodeId: z.uuid(), calendarId: z.string().min(1).max(200) }))

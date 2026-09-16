@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_layout/_public/explore")({
     query: z.string().max(120).optional().catch(undefined),
     region: z.string().max(120).optional().catch(undefined),
   }),
-  head: () => ({ meta: [{ title: "Explore City Nodes" }] }),
+  head: () => ({ meta: [{ title: "Explore communities" }] }),
   component: Explore,
 });
 function Explore() {
@@ -25,7 +25,7 @@ function Explore() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   return (
-    <PageContainer>
+    <PageContainer variant="wide">
       <DiscoveryExplorer
         api={api}
         search={search}

@@ -226,6 +226,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listDiscoveryLumaCalendars: builder.listDiscoveryLumaCalendars.handler(({ input, context }) =>
         services.discovery.lumaCalendars(input.nodeId, context),
       ),
+      disconnectDiscoveryLuma: builder.disconnectDiscoveryLuma.handler(({ input, context }) =>
+        services.discovery.disconnectLuma(input.nodeId, context),
+      ),
       importDiscoveryLuma: builder.importDiscoveryLuma.handler(({ input, context }) =>
         services.discovery.importLuma(input, context),
       ),

@@ -8,6 +8,7 @@ import {
   discoveryCurators,
   discoveryFeatures,
   discoveryHistory,
+  discoveryLumaConnections,
   discoveryMeasurements,
   discoveryProfiles,
   discoveryReports,
@@ -90,6 +91,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
     upcoming?: boolean;
     nodeId?: string;
   }) {
+    void syncDueLuma().catch(() => {});
     const rows = await eligibleProfiles(input.nodeId ? [input.nodeId] : undefined);
     const activities = (
       await db
@@ -165,11 +167,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
           featured: featureLabels.get(node.id) ?? null,
           active: upcoming || recent,
           upcoming,
-          activityReason: upcoming
-            ? "Upcoming or ongoing event"
-            : recent
-              ? "Community activity in the last 30 days"
-              : "No recent updates",
+          activityReason: upcoming ? "Upcoming event" : recent ? "Recently active" : "Quiet lately",
           events: events
             .slice(0, 3)
             .map((a) => ({ ...a, nodeIds: a.nodeIds.filter((id) => eligible.has(id)) })),
@@ -230,7 +228,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
         ] as const;
         if (fields.some((field) => input[field] !== previous[field]))
           throw new ORPCError("BAD_REQUEST", {
-            message: "Edit imported event details in Luma, then refresh the calendar.",
+            message: "Edit this event in Luma. Changes appear here automatically.",
           });
         if (!previous.luma.available && input.status !== "draft")
           throw new ORPCError("BAD_REQUEST", {
@@ -239,7 +237,9 @@ function createDiscovery(db: Database, lumaKeys: string) {
       }
       const data = {
         ...input,
-        luma: previous?.luma,
+        luma: previous?.luma
+          ? { ...previous.luma, hidden: input.status !== "published" }
+          : undefined,
         id: input.id ?? crypto.randomUUID(),
         nodeIds: [...new Set(input.nodeIds)],
         url: canonicalActivityUrl(input.url),
@@ -279,102 +279,224 @@ function createDiscovery(db: Database, lumaKeys: string) {
       .where(eq(discoveryCurators.userId, context.userId));
     if (!grant) throw new ORPCError("FORBIDDEN");
   }
+  async function syncLuma(input: { nodeId: string; calendarId: string }, actorId?: string) {
+    return db.transaction(async (tx) => {
+      await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
+      const [connection] = await tx
+        .select()
+        .from(discoveryLumaConnections)
+        .where(eq(discoveryLumaConnections.nodeId, input.nodeId));
+      if (
+        !actorId &&
+        (!connection ||
+          connection.calendarId !== input.calendarId ||
+          connection.nextAttemptAt.getTime() > Date.now())
+      )
+        return { imported: 0, updated: 0, withdrawn: 0, skipped: 0 };
+      const snapshot = await luma.snapshot(input.calendarId);
+      const existing = await tx
+        .select()
+        .from(discoveryActivities)
+        .where(eq(discoveryActivities.ownerNodeId, input.nodeId))
+        .for("update");
+      const importedById = new Map(
+        existing.filter((row) => row.data.luma).map((row) => [row.data.luma!.eventId, row]),
+      );
+      const seen = new Set<string>();
+      const result = { imported: 0, updated: 0, withdrawn: 0, skipped: 0 };
+      const syncedAt = new Date().toISOString();
+      for (const event of snapshot.events) {
+        if (seen.has(event.id)) continue;
+        seen.add(event.id);
+        const previous = importedById.get(event.id);
+        const data: DiscoveryActivity = {
+          id: previous?.id ?? crypto.randomUUID(),
+          ownerNodeId: input.nodeId,
+          nodeIds: previous?.data.nodeIds ?? [input.nodeId],
+          kind: "event",
+          title: event.name.slice(0, 160),
+          summary: "Event details and registration are managed on Luma.",
+          url: canonicalActivityUrl(event.url),
+          source: `Luma · ${snapshot.calendar.name}`.slice(0, 120),
+          publishedAt: new Date(event.created_at).toISOString(),
+          startsAt: new Date(event.start_at).toISOString(),
+          endsAt: new Date(event.end_at).toISOString(),
+          timezone: event.timezone,
+          venue:
+            (event.location_visibility === "public"
+              ? event.geo_address_json?.full_address || event.geo_address_json?.city_state
+              : null
+            )?.slice(0, 240) || "See Luma for location details",
+          status: previous?.data.luma?.hidden ? "draft" : "published",
+          luma: {
+            calendarId: input.calendarId,
+            eventId: event.id,
+            syncedAt,
+            available: true,
+            hidden: previous?.data.luma?.hidden,
+          },
+        };
+        const [duplicate] = await tx
+          .select()
+          .from(discoveryActivities)
+          .where(
+            and(
+              eq(discoveryActivities.canonicalUrl, data.url),
+              eq(discoveryActivities.ownerNodeId, input.nodeId),
+            ),
+          );
+        if (duplicate && duplicate.id !== data.id) {
+          result.skipped++;
+          continue;
+        }
+        const saved = await tx
+          .insert(discoveryActivities)
+          .values({ id: data.id, ownerNodeId: input.nodeId, canonicalUrl: data.url, data })
+          .onConflictDoNothing()
+          .returning();
+        if (previous) {
+          await tx
+            .update(discoveryActivities)
+            .set({ data, canonicalUrl: data.url })
+            .where(eq(discoveryActivities.id, previous.id));
+          result.updated++;
+        } else if (saved.length) result.imported++;
+        else {
+          result.skipped++;
+        }
+      }
+      for (const row of existing) {
+        if (!row.data.luma || seen.has(row.data.luma.eventId)) continue;
+        await tx
+          .update(discoveryActivities)
+          .set({
+            data: {
+              ...row.data,
+              status: "draft",
+              luma: { ...row.data.luma, syncedAt, available: false },
+            },
+          })
+          .where(eq(discoveryActivities.id, row.id));
+        result.withdrawn++;
+      }
+      await tx
+        .insert(discoveryLumaConnections)
+        .values({
+          nodeId: input.nodeId,
+          calendarId: input.calendarId,
+          calendarName: snapshot.calendar.name,
+          syncedAt: new Date(),
+          nextAttemptAt: new Date(Date.now() + 5 * 60_000),
+          error: null,
+        })
+        .onConflictDoUpdate({
+          target: discoveryLumaConnections.nodeId,
+          set: {
+            calendarId: input.calendarId,
+            calendarName: snapshot.calendar.name,
+            syncedAt: new Date(),
+            nextAttemptAt: new Date(Date.now() + 5 * 60_000),
+            error: null,
+          },
+        });
+      if (actorId)
+        await tx.insert(discoveryHistory).values({
+          nodeId: input.nodeId,
+          targetId: input.calendarId,
+          actorId,
+          action: `Luma connected: ${result.imported} imported, ${result.updated} updated, ${result.withdrawn} withdrawn`,
+        });
+      return result;
+    });
+  }
+  let syncing: Promise<void> | undefined;
+  function syncDueLuma() {
+    if (syncing) return syncing;
+    syncing = (async () => {
+      const due = await db
+        .select()
+        .from(discoveryLumaConnections)
+        .where(lt(discoveryLumaConnections.nextAttemptAt, new Date(Date.now())));
+      for (const connection of due) {
+        try {
+          await syncLuma(connection);
+        } catch {
+          await db
+            .update(discoveryLumaConnections)
+            .set({
+              error:
+                "Luma is temporarily unavailable. Showing the last saved events; we’ll retry automatically.",
+              nextAttemptAt: new Date(Date.now() + 5 * 60_000),
+            })
+            .where(
+              and(
+                eq(discoveryLumaConnections.nodeId, connection.nodeId),
+                eq(discoveryLumaConnections.calendarId, connection.calendarId),
+              ),
+            );
+        }
+      }
+    })().finally(() => {
+      syncing = undefined;
+    });
+    return syncing;
+  }
   return {
     list,
     lumaCalendars: async (nodeId: string, context: AuthContext) => {
       await authorize(nodeId, context);
-      return luma.list();
+      const [connection] = await db
+        .select()
+        .from(discoveryLumaConnections)
+        .where(eq(discoveryLumaConnections.nodeId, nodeId));
+      return {
+        ...(await luma.list()),
+        connection: connection
+          ? {
+              calendarId: connection.calendarId,
+              calendarName: connection.calendarName,
+              syncedAt: connection.syncedAt.toISOString(),
+              error: connection.error,
+            }
+          : null,
+      };
     },
+    syncDueLuma,
     importLuma: async (input: { nodeId: string; calendarId: string }, context: AuthContext) => {
       await authorize(input.nodeId, context);
-      const snapshot = await luma.snapshot(input.calendarId);
-      return db.transaction(async (tx) => {
-        await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
-        const existing = await tx
+      return syncLuma(input, context.userId!);
+    },
+    disconnectLuma: async (nodeId: string, context: AuthContext) => {
+      await authorize(nodeId, context);
+      await db.transaction(async (tx) => {
+        await tx.select().from(nodes).where(eq(nodes.id, nodeId)).for("update");
+        await tx
+          .delete(discoveryLumaConnections)
+          .where(eq(discoveryLumaConnections.nodeId, nodeId));
+        const rows = await tx
           .select()
           .from(discoveryActivities)
-          .where(eq(discoveryActivities.ownerNodeId, input.nodeId))
-          .for("update");
-        const importedById = new Map(
-          existing
-            .filter((row) => row.data.luma?.calendarId === input.calendarId)
-            .map((row) => [row.data.luma!.eventId, row]),
-        );
-        const seen = new Set<string>();
-        const result = { imported: 0, updated: 0, withdrawn: 0, skipped: 0 };
-        const syncedAt = new Date().toISOString();
-        for (const event of snapshot.events) {
-          if (seen.has(event.id)) continue;
-          seen.add(event.id);
-          const previous = importedById.get(event.id);
-          const data: DiscoveryActivity = {
-            id: previous?.id ?? crypto.randomUUID(),
-            ownerNodeId: input.nodeId,
-            nodeIds: previous?.data.nodeIds ?? [input.nodeId],
-            kind: "event",
-            title: event.name.slice(0, 160),
-            summary: "Event details and registration are managed on Luma.",
-            url: canonicalActivityUrl(event.url),
-            source: `Luma · ${snapshot.calendar.name}`.slice(0, 120),
-            publishedAt: new Date(event.created_at).toISOString(),
-            startsAt: new Date(event.start_at).toISOString(),
-            endsAt: new Date(event.end_at).toISOString(),
-            timezone: event.timezone,
-            venue:
-              (event.location_visibility === "public"
-                ? event.geo_address_json?.full_address || event.geo_address_json?.city_state
-                : null
-              )?.slice(0, 240) || "See Luma for location details",
-            status: previous?.data.status ?? "draft",
-            luma: { calendarId: input.calendarId, eventId: event.id, syncedAt, available: true },
-          };
-          const [duplicate] = await tx
-            .select()
-            .from(discoveryActivities)
-            .where(eq(discoveryActivities.canonicalUrl, data.url));
-          if (duplicate && duplicate.id !== data.id) {
-            result.skipped++;
-            continue;
-          }
-          const saved = await tx
-            .insert(discoveryActivities)
-            .values({ id: data.id, ownerNodeId: input.nodeId, canonicalUrl: data.url, data })
-            .onConflictDoNothing()
-            .returning();
-          if (previous) {
+          .where(eq(discoveryActivities.ownerNodeId, nodeId));
+        for (const row of rows)
+          if (row.data.luma)
             await tx
               .update(discoveryActivities)
-              .set({ data, canonicalUrl: data.url })
-              .where(eq(discoveryActivities.id, previous.id));
-            result.updated++;
-          } else if (saved.length) result.imported++;
-          else {
-            result.skipped++;
-          }
-        }
-        for (const row of existing) {
-          if (row.data.luma?.calendarId !== input.calendarId || seen.has(row.data.luma.eventId))
-            continue;
-          await tx
-            .update(discoveryActivities)
-            .set({
-              data: {
-                ...row.data,
-                status: "draft",
-                luma: { ...row.data.luma, syncedAt, available: false },
-              },
-            })
-            .where(eq(discoveryActivities.id, row.id));
-          result.withdrawn++;
-        }
+              .set({
+                data: {
+                  ...row.data,
+                  status: "draft",
+                  luma: { ...row.data.luma, available: false },
+                },
+              })
+              .where(eq(discoveryActivities.id, row.id));
         await tx.insert(discoveryHistory).values({
-          nodeId: input.nodeId,
-          targetId: input.calendarId,
+          nodeId,
+          targetId: nodeId,
           actorId: context.userId!,
-          action: `Luma refresh: ${result.imported} imported, ${result.updated} updated, ${result.withdrawn} withdrawn`,
+          action: "Luma calendar disconnected",
         });
-        return result;
       });
+      return { disconnected: true };
     },
     track: async (input: DiscoveryMeasurement, context: AuthContext) => {
       if (
@@ -573,7 +695,13 @@ function createDiscovery(db: Database, lumaKeys: string) {
             ownerNodeId = row.ownerNodeId;
             await tx
               .update(discoveryActivities)
-              .set({ data: { ...row.data, status: "draft" } })
+              .set({
+                data: {
+                  ...row.data,
+                  status: "draft",
+                  luma: row.data.luma ? { ...row.data.luma, hidden: true } : undefined,
+                },
+              })
               .where(eq(discoveryActivities.id, report.targetId));
           }
           await tx.insert(discoveryHistory).values({
@@ -613,7 +741,10 @@ function createDiscovery(db: Database, lumaKeys: string) {
           .where(eq(discoveryActivities.ownerNodeId, nodeId))
       ).map((r) => r.data);
     },
-    activity: publicActivity,
+    activity: async (id: string) => {
+      void syncDueLuma().catch(() => {});
+      return publicActivity(id);
+    },
     get: async (nodeId: string) => (await list({ nodeId }))[0] ?? null,
     profile: async (nodeId: string, context: AuthContext) => {
       await authorize(nodeId, context);
@@ -646,9 +777,18 @@ export class DiscoveryTag extends Context.Tag("api/Discovery")<
   ReturnType<typeof createDiscovery>
 >() {}
 export const DiscoveryLive = (lumaKeys = "") =>
-  Layer.effect(
+  Layer.scoped(
     DiscoveryTag,
     Effect.gen(function* () {
-      return createDiscovery(yield* DatabaseTag, lumaKeys);
+      const service = createDiscovery(yield* DatabaseTag, lumaKeys);
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          setInterval(() => {
+            void service.syncDueLuma().catch(() => {});
+          }, 60_000),
+        ),
+        (timer) => Effect.sync(() => clearInterval(timer)),
+      );
+      return service;
     }),
   );

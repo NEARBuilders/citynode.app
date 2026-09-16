@@ -20,7 +20,7 @@ export function DiscoveryAction({
   });
   return (
     <form
-      className="space-y-3"
+      className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         mutation.mutate(new FormData(event.currentTarget));
