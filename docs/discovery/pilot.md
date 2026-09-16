@@ -12,7 +12,7 @@ Measurement is opt-in. The map works with collection declined, blocked by the br
 
 Within a visit, count each kind/node/target combination once; count one visit and one activation regardless of repeated outbound actions. Campaign attribution is fixed at the visit start. Count node opens, event outbound clicks, official-channel clicks and share actions separately. Social-original-post clicks do not count as official-channel activation. Exclude authenticated platform admins, organization owners/admins and granted growth curators. These are aggregate interaction signals, not attendance, social follows or unique people. Client-originated signals can be fabricated; do not use them for rewards or financial decisions.
 
-The studio reports a rolling 28 days. Retain at most 28 days of detailed measurement rows, purging older rows on ingestion. A declined preference produces no measurement rows. Changing the preference stops future collection; it cannot identify and erase historical anonymous visits. Report-form anti-duplicate tokens are separate from analytics consent and last only for the tab session.
+The studio reports a rolling 28 days. Retain at most 28 days of detailed measurement rows, purging older rows on ingestion. A declined preference produces no measurement rows. Changing the preference stops future collection; it cannot identify and erase historical anonymous visits. Report-form anti-duplicate tokens are separate from analytics consent and last only for the tab session. A database-serialized budget allows at most 20 reports per content target per hour regardless of token rotation; the host also applies its general request limit.
 
 ## Four-week procedure
 

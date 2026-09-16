@@ -1,35 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useApiClient } from "@/app";
-import { ActivityCard } from "@/components/discovery/activity-editor";
+import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
+import { ActivityDetail } from "@/components/discovery/activity-detail";
 import { PageContainer } from "@/components/layout/page-container";
 export const Route = createFileRoute("/_layout/_public/activity/$activityId")({
+  validateSearch: z.object({
+    node: z.uuid().optional().catch(undefined),
+    campaign: z
+      .string()
+      .max(80)
+      .regex(/^[a-zA-Z0-9_-]*$/)
+      .optional()
+      .catch(undefined),
+  }),
   component: ActivityPage,
 });
 function ActivityPage() {
   const { activityId } = Route.useParams();
-  const api = useApiClient();
-  const activity = useQuery({
-    queryKey: ["discovery-activity", activityId],
-    queryFn: () => api.getDiscoveryActivity({ id: activityId }),
-    refetchInterval: 30_000,
-  });
+  const search = Route.useSearch();
   return (
     <PageContainer>
-      <Link to="/explore" className="underline">
-        Explore nodes
-      </Link>
-      <div className="mt-6">
-        {activity.isPending ? (
-          <p>Loading activity…</p>
-        ) : activity.isError ? (
-          <p role="alert">Unable to load activity.</p>
-        ) : activity.data ? (
-          <ActivityCard activity={activity.data} />
-        ) : (
-          <p>This activity is unavailable.</p>
-        )}
-      </div>
+      <ActivityDetail activityId={activityId} {...search} />
     </PageContainer>
   );
 }

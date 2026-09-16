@@ -5,9 +5,11 @@ export function DiscoveryAction({
   children,
   label,
   run,
+  testId,
 }: {
   children?: ReactNode;
   label: string;
+  testId?: string;
   run: (data: FormData) => Promise<unknown>;
 }) {
   const client = useQueryClient();
@@ -25,7 +27,9 @@ export function DiscoveryAction({
       }}
     >
       {children}
-      <Button disabled={mutation.isPending}>{label}</Button>
+      <Button data-testid={testId} disabled={mutation.isPending}>
+        {label}
+      </Button>
       {mutation.isError && <p role="alert">{mutation.error.message}</p>}
       {mutation.isSuccess && <p role="status">Saved.</p>}
     </form>

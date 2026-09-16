@@ -81,7 +81,11 @@ export function MeasurementPreference({
         Optional anonymous engagement measurement: {consent ? "on" : "off"}. Browsing works either
         way.
       </p>
-      <Button variant="outline" onClick={() => choose(!consent)}>
+      <Button
+        data-testid="discovery-measurement-toggle"
+        variant="outline"
+        onClick={() => choose(!consent)}
+      >
         {consent ? "Turn measurement off" : "Allow measurement"}
       </Button>
     </div>

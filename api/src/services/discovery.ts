@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "every-plugin/effect";
 import { ORPCError } from "every-plugin/orpc";
 import type { Database } from "../db";
@@ -40,24 +40,86 @@ function createDiscovery(db: Database) {
       throw new ORPCError("FORBIDDEN");
     return record;
   }
+  async function eligibleProfiles(ids?: string[]) {
+    if (ids?.length === 0) return [];
+    return db
+      .select({ profile: discoveryProfiles.data, node: nodes })
+      .from(discoveryProfiles)
+      .innerJoin(nodes, eq(discoveryProfiles.nodeId, nodes.id))
+      .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+      .where(
+        and(
+          eq(tenants.status, "active"),
+          sql`${discoveryProfiles.data}->>'published' = 'true'`,
+          ids ? inArray(nodes.id, ids) : undefined,
+        ),
+      );
+  }
+  async function eligibleProfile(nodeId: string | null) {
+    return nodeId ? ((await eligibleProfiles([nodeId]))[0]?.profile ?? null) : null;
+  }
+  async function publicActivity(id: string) {
+    const activity = await activityById(id);
+    if (
+      !activity ||
+      activity.status === "draft" ||
+      Date.parse(activity.publishedAt) > Date.now() ||
+      !(await eligibleProfile(activity.ownerNodeId))
+    )
+      return null;
+    const eligible = new Set((await eligibleProfiles(activity.nodeIds)).map((r) => r.node.id));
+    return { ...activity, nodeIds: activity.nodeIds.filter((id) => eligible.has(id)) };
+  }
   async function list(input: {
     query?: string;
     region?: string;
     active?: boolean;
     upcoming?: boolean;
+    nodeId?: string;
   }) {
-    const rows = await db
-      .select({ profile: discoveryProfiles.data, node: nodes })
-      .from(discoveryProfiles)
-      .innerJoin(nodes, eq(discoveryProfiles.nodeId, nodes.id))
-      .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
-      .where(eq(tenants.status, "active"));
-    const activities = (await db.select().from(discoveryActivities)).map((r) => r.data);
-    const eligible = new Set(rows.filter((r) => r.profile.published).map((r) => r.node.id));
+    const rows = await eligibleProfiles(input.nodeId ? [input.nodeId] : undefined);
+    const activities = (
+      await db
+        .select({ data: discoveryActivities.data })
+        .from(discoveryActivities)
+        .innerJoin(discoveryProfiles, eq(discoveryActivities.ownerNodeId, discoveryProfiles.nodeId))
+        .innerJoin(nodes, eq(nodes.id, discoveryProfiles.nodeId))
+        .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+        .where(
+          and(
+            eq(tenants.status, "active"),
+            sql`${discoveryProfiles.data}->>'published' = 'true'`,
+            sql`${discoveryActivities.data}->>'status' = 'published'`,
+            sql`(${discoveryActivities.data}->>'publishedAt')::timestamptz <= ${new Date(Date.now()).toISOString()}`,
+            input.nodeId
+              ? sql`${discoveryActivities.data}->'nodeIds' ? ${input.nodeId}`
+              : undefined,
+          ),
+        )
+    ).map((r) => r.data);
+    const eligible = new Set(
+      (input.nodeId
+        ? await eligibleProfiles([...new Set(activities.flatMap((a) => a.nodeIds))])
+        : rows
+      ).map((r) => r.node.id),
+    );
+    const byNode = new Map<string, DiscoveryActivity[]>();
+    for (const activity of activities)
+      for (const id of activity.nodeIds) {
+        const group = byNode.get(id) ?? [];
+        group.push(activity);
+        byNode.set(id, group);
+      }
     const features = await db
       .select()
       .from(discoveryFeatures)
-      .where(gte(discoveryFeatures.expiresAt, new Date(Date.now())));
+      .where(
+        and(
+          gte(discoveryFeatures.expiresAt, new Date(Date.now())),
+          input.nodeId ? eq(discoveryFeatures.nodeId, input.nodeId) : undefined,
+        ),
+      );
+    const featureLabels = new Map(features.map((f) => [f.nodeId, f.label]));
     const now = Date.now();
     const day = 86_400_000;
     return rows
@@ -69,13 +131,7 @@ function createDiscovery(db: Database) {
           (!input.region || profile.region === input.region),
       )
       .map(({ profile, node }) => {
-        const content = activities.filter(
-          (a) =>
-            eligible.has(a.ownerNodeId) &&
-            a.nodeIds.includes(node.id) &&
-            a.status === "published" &&
-            Date.parse(a.publishedAt) <= now,
-        );
+        const content = byNode.get(node.id) ?? [];
         const events = content
           .filter((a) => a.kind === "event" && Date.parse(a.endsAt!) >= now)
           .sort((a, b) => a.startsAt!.localeCompare(b.startsAt!));
@@ -93,7 +149,7 @@ function createDiscovery(db: Database) {
           );
         return {
           ...profile,
-          featured: features.find((f) => f.nodeId === node.id)?.label ?? null,
+          featured: featureLabels.get(node.id) ?? null,
           active: upcoming || recent,
           upcoming,
           activityReason: upcoming
@@ -211,12 +267,20 @@ function createDiscovery(db: Database) {
           visit.campaign !== input.campaign
         )
           return { accepted: false };
-        const node = (await list({})).find((n) => n.nodeId === input.nodeId);
+        const node = await eligibleProfile(input.nodeId);
         if (!node) return { accepted: false };
         if (input.kind === "channel" && !node.channels.some((c) => c.url === input.target))
           return { accepted: false };
-        if (input.kind === "event" && !node.events.some((a) => a.id === input.target))
-          return { accepted: false };
+        if (input.kind === "event") {
+          const activity = await publicActivity(input.target);
+          if (
+            !activity ||
+            activity.kind !== "event" ||
+            activity.status !== "published" ||
+            !activity.nodeIds.includes(node.nodeId)
+          )
+            return { accepted: false };
+        }
       }
       const target = input.kind === "channel" || input.kind === "event" ? input.target : "";
       const key =
@@ -292,8 +356,7 @@ function createDiscovery(db: Database) {
       await requireCurator(context);
       if (Date.parse(input.expiresAt) > Date.now() + 90 * 86400000)
         throw new ORPCError("BAD_REQUEST", { message: "Feature expiry must be within 90 days" });
-      if (!(await list({})).some((n) => n.nodeId === input.nodeId))
-        throw new ORPCError("NOT_FOUND");
+      if (!(await eligibleProfile(input.nodeId))) throw new ORPCError("NOT_FOUND");
       const data = { ...input, expiresAt: new Date(input.expiresAt) };
       await db
         .insert(discoveryFeatures)
@@ -307,32 +370,32 @@ function createDiscovery(db: Database) {
       reason: string;
       token: string;
     }) => {
-      const eligible = new Set((await list({})).map((n) => n.nodeId));
-      const activity = input.kind === "activity" ? await activityById(input.targetId) : null;
-      if (
-        input.kind === "profile"
-          ? !eligible.has(input.targetId)
-          : !activity ||
-            activity.status === "draft" ||
-            Date.parse(activity.publishedAt) > Date.now() ||
-            !eligible.has(activity.ownerNodeId)
-      )
+      const activity = input.kind === "activity" ? await publicActivity(input.targetId) : null;
+      const ownerNodeId = activity?.ownerNodeId ?? input.targetId;
+      if (input.kind === "profile" ? !(await eligibleProfile(input.targetId)) : !activity)
         throw new ORPCError("NOT_FOUND");
-      const recent = await db
-        .select({ id: discoveryReports.id })
-        .from(discoveryReports)
-        .where(
-          and(
-            eq(discoveryReports.token, input.token),
-            gte(discoveryReports.createdAt, new Date(Date.now() - 3600000)),
-          ),
-        )
-        .limit(5);
-      if (recent.length >= 5)
-        throw new ORPCError("BAD_REQUEST", {
-          message: "Please wait before submitting more reports",
-        });
-      await db.insert(discoveryReports).values(input).onConflictDoNothing();
+      await db.transaction(async (tx) => {
+        await tx
+          .select({ id: nodes.id })
+          .from(nodes)
+          .where(eq(nodes.id, ownerNodeId))
+          .for("update");
+        const recent = await tx
+          .select({ id: discoveryReports.id })
+          .from(discoveryReports)
+          .where(
+            and(
+              eq(discoveryReports.targetId, input.targetId),
+              gte(discoveryReports.createdAt, new Date(Date.now() - 3600000)),
+            ),
+          )
+          .limit(20);
+        if (recent.length >= 20)
+          throw new ORPCError("BAD_REQUEST", {
+            message: "This content has already received many reports. Please try again later.",
+          });
+        await tx.insert(discoveryReports).values(input).onConflictDoNothing();
+      });
       return { success: true };
     },
     moderate: async (
@@ -408,16 +471,8 @@ function createDiscovery(db: Database) {
           .where(eq(discoveryActivities.ownerNodeId, nodeId))
       ).map((r) => r.data);
     },
-    activity: async (id: string) => {
-      const activity = await activityById(id);
-      if (!activity || activity.status === "draft" || Date.parse(activity.publishedAt) > Date.now())
-        return null;
-      const eligible = new Set((await list({})).map((p) => p.nodeId));
-      return eligible.has(activity.ownerNodeId)
-        ? { ...activity, nodeIds: activity.nodeIds.filter((id) => eligible.has(id)) }
-        : null;
-    },
-    get: async (nodeId: string) => (await list({})).find((p) => p.nodeId === nodeId) ?? null,
+    activity: publicActivity,
+    get: async (nodeId: string) => (await list({ nodeId }))[0] ?? null,
     profile: async (nodeId: string, context: AuthContext) => {
       await authorize(nodeId, context);
       const [row] = await db

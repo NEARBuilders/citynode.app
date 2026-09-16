@@ -133,10 +133,10 @@ function ProfileForm({ initial }: { initial: Profile }) {
         <legend>Official channels</legend>
         {profile.channels.map((channel, index) => (
           <div key={index} className="flex flex-wrap gap-2">
-            <label htmlFor="profile-editor-6">
+            <label htmlFor={`channel-label-${index}`}>
               Channel name
               <Input
-                id="profile-editor-6"
+                id={`channel-label-${index}`}
                 required
                 value={channel.label}
                 onChange={(e) =>
@@ -149,10 +149,10 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 }
               />
             </label>
-            <label htmlFor="profile-editor-7">
+            <label htmlFor={`channel-url-${index}`}>
               Channel URL
               <Input
-                id="profile-editor-7"
+                id={`channel-url-${index}`}
                 required
                 type="url"
                 value={channel.url}
@@ -196,7 +196,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
         />
         Publish in discovery
       </label>
-      <Button disabled={save.isPending}>Save discovery profile</Button>
+      <Button data-testid="discovery-profile-save" disabled={save.isPending}>
+        Save discovery profile
+      </Button>
       {save.isError && <p role="alert">{save.error.message}</p>}
       {save.isSuccess && <p role="status">Discovery profile saved.</p>}
     </form>

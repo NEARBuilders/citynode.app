@@ -54,6 +54,7 @@ export function DiscoveryStudio() {
             </ul>
             {node.featured && <p>Featured: {node.featured}</p>}
             <DiscoveryAction
+              testId={`discovery-feature-${node.nodeId}`}
               label={`Feature ${node.name}`}
               run={(data) =>
                 api.featureDiscoveryNode({
@@ -126,6 +127,7 @@ export function DiscoveryStudio() {
                   <p>Resolved: {report.note}</p>
                 ) : (
                   <DiscoveryAction
+                    testId={`discovery-resolve-report-${report.id}`}
                     label="Resolve report"
                     run={(data) =>
                       api.moderateDiscoveryReport({

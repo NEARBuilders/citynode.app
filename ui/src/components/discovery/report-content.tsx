@@ -11,10 +11,11 @@ export function ReportContent({
   const api = useApiClient();
   return (
     <details className="mt-3 text-sm">
-      <summary className="cursor-pointer">
+      <summary data-testid={`discovery-report-${targetId}`} className="cursor-pointer">
         Report this {kind === "profile" ? "node" : "activity"}
       </summary>
       <DiscoveryAction
+        testId={`discovery-report-submit-${targetId}`}
         label="Submit report"
         run={(data) => {
           let token = sessionStorage.getItem("discovery-report-token");

@@ -3,13 +3,23 @@ import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Button, Input } from "@/components";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ActivityCard } from "./activity-editor";
 import { MeasurementPreference, useDiscoveryMeasurement } from "./discovery-measurement";
 import { ReportContent } from "./report-content";
 
 const GeographicMap = lazy(() =>
-  import("./geographic-map").then((m) => ({ default: m.GeographicMap })),
+  import("./geographic-map")
+    .then((m) => ({ default: m.GeographicMap }))
+    .catch(() => ({
+      default: () => <p role="status">Map is unavailable. Use the node list below.</p>,
+    })),
 );
 export type DiscoverySearch = {
   campaign?: string;
@@ -128,6 +138,8 @@ export function DiscoveryExplorer({
               <button
                 type="button"
                 key={node.nodeId}
+                data-testid={`discovery-node-${node.nodeId}`}
+                data-node-id={node.nodeId}
                 onClick={() => select(node.nodeId)}
                 className="rounded-xl border border-border bg-card p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -158,7 +170,9 @@ export function DiscoveryExplorer({
           className="w-full overflow-y-auto sm:max-w-lg"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            origin.current?.focus();
+            if (origin.current?.isConnected) origin.current.focus();
+            else
+              document.querySelector<HTMLButtonElement>(`[data-node-id="${search.node}"]`)?.focus();
           }}
         >
           <SheetHeader className="p-4 pr-16">
@@ -182,6 +196,8 @@ export function DiscoveryExplorer({
                   <ActivityCard
                     key={a.id}
                     activity={a}
+                    nodeId={selected.nodeId}
+                    campaign={search.campaign}
                     onOutbound={() => {
                       if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
                     }}
@@ -196,6 +212,8 @@ export function DiscoveryExplorer({
                   <ActivityCard
                     key={a.id}
                     activity={a}
+                    nodeId={selected.nodeId}
+                    campaign={search.campaign}
                     onOutbound={() => {
                       if (a.kind === "event") measurement.track("event", selected.nodeId, a.id);
                     }}

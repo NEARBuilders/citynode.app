@@ -68,6 +68,9 @@ export function GeographicMap({
               icon: L.divIcon({ html: content, className: "", iconSize: [32, 32] }),
             }).addTo(markers);
             marker.getElement()?.setAttribute("aria-label", label);
+            marker
+              .getElement()
+              ?.setAttribute("data-testid", `discovery-map-marker-${first.node.nodeId}`);
             marker.on("click", () => {
               if (group.length === 1) {
                 select.current(first.node.nodeId);
@@ -78,8 +81,10 @@ export function GeographicMap({
               for (const { node } of group) {
                 const button = document.createElement("button");
                 button.type = "button";
+                button.dataset.testid = `discovery-cluster-node-${node.nodeId}`;
                 button.textContent = `${node.name} · ${node.kind}`;
                 button.addEventListener("click", () => {
+                  marker.getElement()?.focus();
                   select.current(node.nodeId);
                   map.closePopup();
                 });

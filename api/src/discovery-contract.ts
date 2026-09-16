@@ -101,17 +101,26 @@ export const reportInput = z.object({
   reason: z.string().trim().min(5).max(1000),
   token: z.uuid(),
 });
-export const measurementInput = z.object({
-  visitId: z.uuid(),
-  nodeId: z.uuid().nullable(),
-  campaign: z
-    .string()
-    .max(80)
-    .regex(/^[a-zA-Z0-9_-]*$/),
-  kind: z.enum(["visit", "open", "event", "channel", "share"]),
-  target: z.string().max(2000).default(""),
-  consent: z.boolean(),
-});
+export const measurementInput = z
+  .object({
+    visitId: z.uuid(),
+    nodeId: z.uuid().nullable(),
+    campaign: z
+      .string()
+      .max(80)
+      .regex(/^[a-zA-Z0-9_-]*$/),
+    kind: z.enum(["visit", "open", "event", "channel", "share"]),
+    target: z.string().max(2000).default(""),
+    consent: z.boolean(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind === "event" && !z.uuid().safeParse(value.target).success)
+      ctx.addIssue({
+        code: "custom",
+        path: ["target"],
+        message: "Event target must be an activity ID",
+      });
+  });
 export type DiscoveryMeasurement = z.infer<typeof measurementInput>;
 export const discoveryContract = {
   trackDiscovery: oc

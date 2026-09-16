@@ -54,6 +54,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       <h2 className="text-xl font-semibold">Events and social updates</h2>
       <div className="flex gap-3">
         <Button
+          data-testid="discovery-new-event"
           onClick={() => {
             save.reset();
             setDraft(blank(nodeId, "event"));
@@ -62,6 +63,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           New event
         </Button>
         <Button
+          data-testid="discovery-new-social"
           onClick={() => {
             save.reset();
             setDraft(blank(nodeId, "social"));
@@ -222,7 +224,9 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             </select>
           </label>
           <div className="flex gap-3">
-            <Button disabled={save.isPending}>Save activity</Button>
+            <Button data-testid="discovery-activity-save" disabled={save.isPending}>
+              Save activity
+            </Button>
             <Button type="button" variant="outline" onClick={() => setDraft(null)}>
               Discard edits
             </Button>
@@ -242,14 +246,23 @@ function localTime(value: string | null) {
 export function ActivityCard({
   activity,
   onOutbound,
+  nodeId,
+  campaign,
 }: {
   activity: Activity;
   onOutbound?: () => void;
+  nodeId?: string;
+  campaign?: string;
 }) {
   return (
     <article className="space-y-2 rounded-lg border border-border p-3">
       <h3 className="font-semibold">
-        <Link to="/activity/$activityId" params={{ activityId: activity.id }}>
+        <Link
+          data-testid={`discovery-activity-detail-${activity.id}`}
+          to="/activity/$activityId"
+          params={{ activityId: activity.id }}
+          search={{ node: nodeId, campaign }}
+        >
           {activity.title}
         </Link>
       </h3>
@@ -277,6 +290,7 @@ export function ActivityCard({
       </p>
       <a
         className="underline"
+        data-testid={`discovery-activity-outbound-${activity.id}`}
         href={activity.url}
         target="_blank"
         rel="noopener noreferrer"

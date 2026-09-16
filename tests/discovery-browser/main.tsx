@@ -6,6 +6,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { createRoot } from "react-dom/client";
+import { ActivityDetail } from "../../ui/src/components/discovery/activity-detail";
 import { DiscoveryExplorer } from "../../ui/src/components/discovery/discovery-explorer";
 import { DiscoveryStudio } from "../../ui/src/components/discovery/discovery-studio";
 import { ProfileEditor } from "../../ui/src/components/discovery/profile-editor";
@@ -37,7 +38,21 @@ const route = createRoute({
     );
   },
 });
-const router = createRouter({ routeTree: root.addChildren([route]), context: { apiClient } });
+const detailRoute = createRoute({
+  getParentRoute: () => root,
+  path: "/activity/$activityId",
+  validateSearch: (s: Record<string, unknown>) => ({
+    node: typeof s.node === "string" ? s.node : undefined,
+    campaign: typeof s.campaign === "string" ? s.campaign : undefined,
+  }),
+  component: () => (
+    <ActivityDetail activityId={detailRoute.useParams().activityId} {...detailRoute.useSearch()} />
+  ),
+});
+const router = createRouter({
+  routeTree: root.addChildren([route, detailRoute]),
+  context: { apiClient },
+});
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={new QueryClient()}>
     <RouterProvider router={router} />

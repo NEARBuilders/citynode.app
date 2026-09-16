@@ -272,6 +272,9 @@ it("counts opted-in public visits once and restricts aggregate reports", async (
   };
   await publicClient.trackDiscovery(input);
   await publicClient.trackDiscovery(input);
+  await expect(
+    publicClient.trackDiscovery({ ...input, nodeId: node.id, kind: "event", target: "invalid" }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   await publicClient.trackDiscovery({ ...input, kind: "open", nodeId: node.id });
   await publicClient.trackDiscovery({
     ...input,
@@ -304,4 +307,24 @@ it("counts opted-in public visits once and restricts aggregate reports", async (
       }),
     ]),
   );
+});
+
+it("enforces a server-side report budget even when anonymous tokens rotate", async () => {
+  const { node, editor, publicClient } = await fixture();
+  await editor.saveDiscoveryProfile({ nodeId: node.id, ...profile });
+  for (let index = 0; index < 20; index++)
+    await publicClient.reportDiscoveryContent({
+      targetId: node.id,
+      kind: "profile",
+      reason: "Please review this content",
+      token: crypto.randomUUID(),
+    });
+  await expect(
+    publicClient.reportDiscoveryContent({
+      targetId: node.id,
+      kind: "profile",
+      reason: "Another report",
+      token: crypto.randomUUID(),
+    }),
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
