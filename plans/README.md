@@ -44,7 +44,8 @@ is verifiable on-chain via FastKV.
 | Document | Covers | Status |
 |---|---|---|
 | [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning | Phases 1–3 DONE, Phase 4 PARTIAL |
-| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | Unblocked ([ticket 07](./wayfinder/tickets/07-effect-idiomatic.md) resolved) — opening phase of the `v2` branch |
+| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | In progress on `orpc-v2` branch — infrastructure half landed; handler-idiom half continues in [effect-native-plugins.md](./infra/effect-native-plugins.md) |
+| [effect-native-plugins.md](./infra/effect-native-plugins.md) | Effect-native plugins — `.effect()` handlers, Layer-returning `initialize`, nested router merging, `every-plugin` barrel removal | Follow-up to the orpc-v2 migration; sequenced on the `orpc-v2` branch |
 
 ## offline — offline support
 
