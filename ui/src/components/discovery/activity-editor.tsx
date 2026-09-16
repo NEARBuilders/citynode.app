@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
+import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
 type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
@@ -47,11 +48,13 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     },
   });
   if (list.isError) return null;
+  const imported = list.data?.find((activity) => activity.id === draft?.id)?.luma;
   const update = (key: keyof Draft, value: string | null) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   return (
     <section className="space-y-4 rounded-xl border border-border p-5">
       <h2 className="text-xl font-semibold">Events and social updates</h2>
+      <LumaImport nodeId={nodeId} />
       <div className="flex gap-3">
         <Button
           data-testid="discovery-new-event"
@@ -77,8 +80,10 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         <div key={a.id} className="flex items-center justify-between gap-3">
           <span>
             {a.title} · {a.status}
+            {a.luma ? " · Imported from Luma" : ""}
           </span>
           <Button
+            data-testid={`discovery-edit-activity-${a.id}`}
             variant="outline"
             onClick={() => {
               save.reset();
@@ -100,6 +105,17 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <h3 className="font-semibold">
             {draft.kind === "event" ? "Node Event" : "Social Update"}
           </h3>
+          {imported && (
+            <p className="text-sm text-muted-foreground">
+              Edit details on{" "}
+              <a href={draft.url} target="_blank" rel="noopener noreferrer" className="underline">
+                Luma
+              </a>
+              , then refresh the calendar. Last refreshed{" "}
+              {new Date(imported.syncedAt).toLocaleString()}.
+              {!imported.available && " This event is no longer public on its calendar."}
+            </p>
+          )}
           {(
             [
               ["title", "Title"],
@@ -111,6 +127,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               {label}
               <Input
                 id={`activity-${key}`}
+                readOnly={Boolean(imported)}
                 required
                 type={key === "url" ? "url" : "text"}
                 maxLength={key === "url" ? 2000 : 160}
@@ -122,6 +139,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <label htmlFor="activity-summary" className="block">
             Summary
             <Textarea
+              readOnly={Boolean(imported)}
               id="activity-summary"
               maxLength={2000}
               value={draft.summary}
@@ -131,6 +149,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <label htmlFor="activity-published" className="block">
             Original publication time (your local time)
             <Input
+              readOnly={Boolean(imported)}
               id="activity-published"
               type="datetime-local"
               required
@@ -156,6 +175,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                   {label}
                   <Input
                     id={`activity-${key}`}
+                    readOnly={Boolean(imported)}
                     type="datetime-local"
                     required
                     value={localTime(draft[key])}
@@ -168,6 +188,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               <label htmlFor="activity-timezone" className="block">
                 Display timezone
                 <Input
+                  readOnly={Boolean(imported)}
                   id="activity-timezone"
                   required
                   value={draft.timezone}
@@ -177,6 +198,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               <label htmlFor="activity-venue" className="block">
                 Venue or online meeting location
                 <Input
+                  readOnly={Boolean(imported)}
                   id="activity-venue"
                   required
                   value={draft.venue}
@@ -219,8 +241,14 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               }}
             >
               <option value="draft">Draft / unpublished</option>
-              <option value="published">Published</option>
-              {draft.kind === "event" && <option value="cancelled">Cancelled</option>}
+              <option value="published" disabled={imported?.available === false}>
+                Published
+              </option>
+              {draft.kind === "event" && (
+                <option value="cancelled" disabled={imported?.available === false}>
+                  Cancelled
+                </option>
+              )}
             </select>
           </label>
           <div className="flex gap-3">
@@ -285,6 +313,13 @@ export function ActivityCard({
         </p>
       )}
       <p>{activity.summary}</p>
+      {activity.luma && (
+        <p className="text-sm text-muted-foreground">
+          Imported from Luma · Last refreshed{" "}
+          {new Date(activity.luma.syncedAt).toLocaleDateString()}. Check Luma for the latest
+          details.
+        </p>
+      )}
       <p className="text-sm text-muted-foreground">
         {activity.source} · {new Date(activity.publishedAt).toLocaleDateString()}
       </p>

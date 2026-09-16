@@ -22,12 +22,51 @@ vi.mock("@/services/dao", () => ({
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));
+vi.mock("../../plugin.dev", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../plugin.dev")>();
+  return {
+    default: {
+      ...original.default,
+      config: {
+        ...original.default.config,
+        secrets: { ...original.default.config.secrets, LUMA_CALENDAR_API_KEYS: "fixture-key" },
+      },
+    },
+  };
+});
 let vite: ViteDevServer | undefined;
 afterAll(async () => {
   await vite?.close();
   await teardown();
+  vi.unstubAllGlobals();
 });
 it("publishes a profile and explores a real map with synchronized accessible selection", async () => {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== "https://public-api.luma.com") return realFetch(input, init);
+    return Response.json(
+      url.pathname === "/v1/calendars/get"
+        ? { id: "cal-browser", name: "Community Luma", url: "https://luma.com/community" }
+        : {
+            entries: [
+              {
+                id: "evt-browser",
+                platform: "luma",
+                name: "Luma community meetup",
+                url: "https://luma.com/community-meetup",
+                start_at: new Date(Date.now() + 3 * 86400_000).toISOString(),
+                end_at: new Date(Date.now() + 3 * 86400_000 + 7200_000).toISOString(),
+                created_at: new Date(Date.now() - 86400_000).toISOString(),
+                timezone: "UTC",
+                visibility: "public",
+                location_visibility: "guests-only",
+              },
+            ],
+            has_more: false,
+          },
+    );
+  });
   let context = orgContext("map-owner", "map-org");
   const api = await getPluginClient(daoContext("map-owner", "map-org", "map-fixture.near"));
   const tenant = await api.createTenant({ name: "Map fixture", accountId: "map-fixture.near" });
@@ -82,6 +121,16 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     await page.getByLabel("Publish in discovery").check();
     await page.getByTestId("discovery-profile-save").click();
     await browserExpect(page.getByRole("status")).toHaveText("Discovery profile saved.");
+    await page.getByTestId("discovery-luma-import").click();
+    await browserExpect(page.getByRole("status").filter({ hasText: "1 imported" })).toBeVisible();
+    const imported = (await api.listDiscoveryActivities({ nodeId: node.id })).find(
+      (activity) => activity.luma,
+    )!;
+    await page.getByTestId(`discovery-edit-activity-${imported.id}`).click();
+    await browserExpect(page.getByLabel("Title", { exact: true })).toHaveAttribute("readonly", "");
+    await page.getByLabel("Publication status").selectOption("published");
+    await page.getByTestId("discovery-activity-save").click();
+    await browserExpect(page.getByText("Activity saved.", { exact: true })).toBeVisible();
     await page.getByTestId("discovery-new-event").click();
     await page.getByLabel("Title", { exact: true }).fill("Builders meetup");
     await page.getByLabel("Source / organizer").fill("Karachi community");
@@ -107,13 +156,17 @@ it("publishes a profile and explores a real map with synchronized accessible sel
     await browserExpect(page.locator(".leaflet-container")).toBeVisible();
     await page.getByTestId(`discovery-map-marker-${node.id}`).click();
     await browserExpect(page.getByRole("dialog")).toContainText("A community by the sea");
-    await browserExpect(
-      page.getByRole("link", { name: "Event details / registration" }),
-    ).toHaveAttribute("href", "https://example.com/meetup");
+    await browserExpect(page.locator('a[href="https://example.com/meetup"]')).toHaveAttribute(
+      "href",
+      "https://example.com/meetup",
+    );
     await browserExpect(page.getByRole("link", { name: "Read original post" })).toHaveAttribute(
       "href",
       "https://example.com/launch",
     );
+    await browserExpect(
+      page.getByTestId(`discovery-activity-outbound-${imported.id}`),
+    ).toHaveAttribute("href", "https://luma.com/community-meetup");
     expect(new URL(page.url()).searchParams.get("node")).toBe(node.id);
     await page.keyboard.press("Escape");
     await page.getByLabel("Search nodes").fill("No match");
@@ -139,7 +192,7 @@ it("publishes a profile and explores a real map with synchronized accessible sel
         (response.request().postData() ?? "").includes('"event"'),
     );
     const event = (await api.listDiscoveryActivities({ nodeId: node.id })).find(
-      (a) => a.kind === "event",
+      (a) => a.url === "https://example.com/meetup",
     )!;
     await page.getByTestId(`discovery-activity-detail-${event.id}`).click();
     expect(new URL(page.url()).searchParams.get("campaign")).toBe("community-week");

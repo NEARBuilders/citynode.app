@@ -20,8 +20,20 @@ import type {
   DiscoveryProfile,
 } from "../discovery-contract";
 import type { AuthContext } from "../lib/auth";
+import { createLumaCalendars } from "./discovery-luma";
 
-function createDiscovery(db: Database) {
+function canonicalActivityUrl(value: string) {
+  const url = new URL(value);
+  url.hash = "";
+  if (["lu.ma", "www.lu.ma", "www.luma.com"].includes(url.hostname)) url.hostname = "luma.com";
+  for (const key of [...url.searchParams.keys()])
+    if (key.startsWith("utm_") || key === "fbclid") url.searchParams.delete(key);
+  url.searchParams.sort();
+  return url.toString();
+}
+
+function createDiscovery(db: Database, lumaKeys: string) {
+  const luma = createLumaCalendars(lumaKeys);
   async function authorize(nodeId: string, context: AuthContext) {
     if (!context.userId || !context.user) throw new ORPCError("UNAUTHORIZED");
     const [record] = await db
@@ -63,6 +75,7 @@ function createDiscovery(db: Database) {
     if (
       !activity ||
       activity.status === "draft" ||
+      activity.luma?.available === false ||
       Date.parse(activity.publishedAt) > Date.now() ||
       !(await eligibleProfile(activity.ownerNodeId))
     )
@@ -175,35 +188,68 @@ function createDiscovery(db: Database) {
     return row?.data ?? null;
   }
   async function saveActivity(
-    input: Omit<DiscoveryActivity, "id"> & { id?: string },
+    input: Omit<DiscoveryActivity, "id" | "luma"> & { id?: string },
     context: AuthContext,
   ) {
-    const previous = input.id ? await activityById(input.id) : null;
-    if (input.id && !previous) throw new ORPCError("NOT_FOUND");
-    await authorize(previous?.ownerNodeId ?? input.ownerNodeId, context);
-    if (previous && (previous.ownerNodeId !== input.ownerNodeId || previous.kind !== input.kind))
-      throw new ORPCError("BAD_REQUEST", { message: "Activity ownership and kind cannot change" });
+    const initial = input.id ? await activityById(input.id) : null;
+    if (input.id && !initial) throw new ORPCError("NOT_FOUND");
+    await authorize(initial?.ownerNodeId ?? input.ownerNodeId, context);
     for (const nodeId of new Set(input.nodeIds)) {
-      if (!previous?.nodeIds.includes(nodeId)) await authorize(nodeId, context);
+      if (!initial?.nodeIds.includes(nodeId)) await authorize(nodeId, context);
     }
-    const url = new URL(input.url);
-    url.hash = "";
-    for (const key of [...url.searchParams.keys()])
-      if (key.startsWith("utm_") || key === "fbclid") url.searchParams.delete(key);
-    url.searchParams.sort();
-    const data = {
-      ...input,
-      id: input.id ?? crypto.randomUUID(),
-      nodeIds: [...new Set(input.nodeIds)],
-      url: url.toString(),
-    };
-    const [duplicate] = await db
-      .select()
-      .from(discoveryActivities)
-      .where(eq(discoveryActivities.canonicalUrl, data.url));
-    if (duplicate && duplicate.id !== data.id)
-      throw new ORPCError("BAD_REQUEST", { message: "This source URL already has an activity" });
-    await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
+      await tx
+        .select()
+        .from(nodes)
+        .where(eq(nodes.id, initial?.ownerNodeId ?? input.ownerNodeId))
+        .for("update");
+      const [row] = input.id
+        ? await tx
+            .select()
+            .from(discoveryActivities)
+            .where(eq(discoveryActivities.id, input.id))
+            .for("update")
+        : [];
+      const previous = row?.data;
+      if (input.id && !previous) throw new ORPCError("NOT_FOUND");
+      if (previous && (previous.ownerNodeId !== input.ownerNodeId || previous.kind !== input.kind))
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Activity ownership and kind cannot change",
+        });
+      if (previous?.luma) {
+        const fields = [
+          "title",
+          "summary",
+          "url",
+          "source",
+          "publishedAt",
+          "startsAt",
+          "endsAt",
+          "timezone",
+          "venue",
+        ] as const;
+        if (fields.some((field) => input[field] !== previous[field]))
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Edit imported event details in Luma, then refresh the calendar.",
+          });
+        if (!previous.luma.available && input.status !== "draft")
+          throw new ORPCError("BAD_REQUEST", {
+            message: "This event is no longer public on its Luma calendar.",
+          });
+      }
+      const data = {
+        ...input,
+        luma: previous?.luma,
+        id: input.id ?? crypto.randomUUID(),
+        nodeIds: [...new Set(input.nodeIds)],
+        url: canonicalActivityUrl(input.url),
+      };
+      const [duplicate] = await tx
+        .select()
+        .from(discoveryActivities)
+        .where(eq(discoveryActivities.canonicalUrl, data.url));
+      if (duplicate && duplicate.id !== data.id)
+        throw new ORPCError("BAD_REQUEST", { message: "This source URL already has an activity" });
       await tx
         .insert(discoveryActivities)
         .values({ id: data.id, ownerNodeId: data.ownerNodeId, canonicalUrl: data.url, data })
@@ -217,8 +263,8 @@ function createDiscovery(db: Database) {
         actorId: context.userId!,
         action: `${data.kind} ${data.status}`,
       });
+      return data;
     });
-    return data;
   }
   function requireAdmin(context: AuthContext) {
     if (!context.userId || !context.user) throw new ORPCError("UNAUTHORIZED");
@@ -235,6 +281,101 @@ function createDiscovery(db: Database) {
   }
   return {
     list,
+    lumaCalendars: async (nodeId: string, context: AuthContext) => {
+      await authorize(nodeId, context);
+      return luma.list();
+    },
+    importLuma: async (input: { nodeId: string; calendarId: string }, context: AuthContext) => {
+      await authorize(input.nodeId, context);
+      const snapshot = await luma.snapshot(input.calendarId);
+      return db.transaction(async (tx) => {
+        await tx.select().from(nodes).where(eq(nodes.id, input.nodeId)).for("update");
+        const existing = await tx
+          .select()
+          .from(discoveryActivities)
+          .where(eq(discoveryActivities.ownerNodeId, input.nodeId))
+          .for("update");
+        const importedById = new Map(
+          existing
+            .filter((row) => row.data.luma?.calendarId === input.calendarId)
+            .map((row) => [row.data.luma!.eventId, row]),
+        );
+        const seen = new Set<string>();
+        const result = { imported: 0, updated: 0, withdrawn: 0, skipped: 0 };
+        const syncedAt = new Date().toISOString();
+        for (const event of snapshot.events) {
+          if (seen.has(event.id)) continue;
+          seen.add(event.id);
+          const previous = importedById.get(event.id);
+          const data: DiscoveryActivity = {
+            id: previous?.id ?? crypto.randomUUID(),
+            ownerNodeId: input.nodeId,
+            nodeIds: previous?.data.nodeIds ?? [input.nodeId],
+            kind: "event",
+            title: event.name.slice(0, 160),
+            summary: "Event details and registration are managed on Luma.",
+            url: canonicalActivityUrl(event.url),
+            source: `Luma · ${snapshot.calendar.name}`.slice(0, 120),
+            publishedAt: new Date(event.created_at).toISOString(),
+            startsAt: new Date(event.start_at).toISOString(),
+            endsAt: new Date(event.end_at).toISOString(),
+            timezone: event.timezone,
+            venue:
+              (event.location_visibility === "public"
+                ? event.geo_address_json?.full_address || event.geo_address_json?.city_state
+                : null
+              )?.slice(0, 240) || "See Luma for location details",
+            status: previous?.data.status ?? "draft",
+            luma: { calendarId: input.calendarId, eventId: event.id, syncedAt, available: true },
+          };
+          const [duplicate] = await tx
+            .select()
+            .from(discoveryActivities)
+            .where(eq(discoveryActivities.canonicalUrl, data.url));
+          if (duplicate && duplicate.id !== data.id) {
+            result.skipped++;
+            continue;
+          }
+          const saved = await tx
+            .insert(discoveryActivities)
+            .values({ id: data.id, ownerNodeId: input.nodeId, canonicalUrl: data.url, data })
+            .onConflictDoNothing()
+            .returning();
+          if (previous) {
+            await tx
+              .update(discoveryActivities)
+              .set({ data, canonicalUrl: data.url })
+              .where(eq(discoveryActivities.id, previous.id));
+            result.updated++;
+          } else if (saved.length) result.imported++;
+          else {
+            result.skipped++;
+          }
+        }
+        for (const row of existing) {
+          if (row.data.luma?.calendarId !== input.calendarId || seen.has(row.data.luma.eventId))
+            continue;
+          await tx
+            .update(discoveryActivities)
+            .set({
+              data: {
+                ...row.data,
+                status: "draft",
+                luma: { ...row.data.luma, syncedAt, available: false },
+              },
+            })
+            .where(eq(discoveryActivities.id, row.id));
+          result.withdrawn++;
+        }
+        await tx.insert(discoveryHistory).values({
+          nodeId: input.nodeId,
+          targetId: input.calendarId,
+          actorId: context.userId!,
+          action: `Luma refresh: ${result.imported} imported, ${result.updated} updated, ${result.withdrawn} withdrawn`,
+        });
+        return result;
+      });
+    },
     track: async (input: DiscoveryMeasurement, context: AuthContext) => {
       if (
         !input.consent ||
@@ -426,7 +567,8 @@ function createDiscovery(db: Database) {
             const [row] = await tx
               .select()
               .from(discoveryActivities)
-              .where(eq(discoveryActivities.id, report.targetId));
+              .where(eq(discoveryActivities.id, report.targetId))
+              .for("update");
             if (!row) throw new ORPCError("NOT_FOUND");
             ownerNodeId = row.ownerNodeId;
             await tx
@@ -503,9 +645,10 @@ export class DiscoveryTag extends Context.Tag("api/Discovery")<
   DiscoveryTag,
   ReturnType<typeof createDiscovery>
 >() {}
-export const DiscoveryLive = Layer.effect(
-  DiscoveryTag,
-  Effect.gen(function* () {
-    return createDiscovery(yield* DatabaseTag);
-  }),
-);
+export const DiscoveryLive = (lumaKeys = "") =>
+  Layer.effect(
+    DiscoveryTag,
+    Effect.gen(function* () {
+      return createDiscovery(yield* DatabaseTag, lumaKeys);
+    }),
+  );

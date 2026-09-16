@@ -4,6 +4,8 @@
 
 Use 5–10 opted-in communities. A fixture is not a recruited pilot participant. Record the responsible node editor and verify permission to publish the profile and official links. Confirm an approximate city/regional center, a useful summary, an official channel, and at least one real event or attributed post. Online-only communities can remain list-only. Check external destinations, timezone and cancellation information. Never seed invented activity into production.
 
+Manual events and [Luma imports](./luma-events.md) are both supported. Refresh connected Luma calendars before campaigns and during weekly reviews; review newly imported drafts before publishing.
+
 Curation/moderation must be ready before launch. Review the map-provider decision, deployment cost ceiling and hosting policy. Confirm an administrator can handle reports and revoke curator access. Separately authorize deployment and participant outreach.
 
 ## Measurement rules

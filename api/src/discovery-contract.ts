@@ -26,6 +26,14 @@ export type DiscoveryProfile = z.infer<typeof profileSchema>;
 export const activitySchema = z.object({
   id: z.uuid(),
   ownerNodeId: z.uuid(),
+  luma: z
+    .object({
+      calendarId: z.string(),
+      eventId: z.string(),
+      syncedAt: z.iso.datetime(),
+      available: z.boolean(),
+    })
+    .optional(),
   nodeIds: z.array(z.uuid()).min(1).max(30),
   kind: z.enum(["event", "social"]),
   title: z.string().trim().min(1).max(160),
@@ -51,7 +59,7 @@ export const activitySchema = z.object({
 });
 export type DiscoveryActivity = z.infer<typeof activitySchema>;
 export const activityInput = activitySchema
-  .omit({ id: true })
+  .omit({ id: true, luma: true })
   .extend({ id: z.uuid().optional() })
   .superRefine((v, ctx) => {
     if (!v.nodeIds.includes(v.ownerNodeId))
@@ -123,6 +131,26 @@ export const measurementInput = z
   });
 export type DiscoveryMeasurement = z.infer<typeof measurementInput>;
 export const discoveryContract = {
+  listDiscoveryLumaCalendars: oc
+    .input(z.object({ nodeId: z.uuid() }))
+    .output(
+      z.object({
+        calendars: z.array(z.object({ id: z.string(), name: z.string(), url: webUrl })),
+        unavailableCount: z.number(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+  importDiscoveryLuma: oc
+    .input(z.object({ nodeId: z.uuid(), calendarId: z.string().min(1).max(200) }))
+    .output(
+      z.object({
+        imported: z.number(),
+        updated: z.number(),
+        withdrawn: z.number(),
+        skipped: z.number(),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
   trackDiscovery: oc
     .input(measurementInput)
     .output(z.object({ accepted: z.boolean() }))

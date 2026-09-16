@@ -47,6 +47,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
   }),
 
   secrets: z.object({
+    LUMA_CALENDAR_API_KEYS: z.string().default(""),
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
   }),
 
@@ -63,7 +64,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       const discovery = yield* tools.buildService(
         DiscoveryTag,
-        DiscoveryLive.pipe(Layer.provide(database)),
+        DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS).pipe(Layer.provide(database)),
       );
       const tenantsService = yield* tools.buildService(TenantsTag, tenantsLayer);
       const nodesService = yield* tools.buildService(NodesTag, nodesLayer);
@@ -221,6 +222,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ),
       getDiscoveryHistory: builder.getDiscoveryHistory.handler(({ input, context }) =>
         services.discovery.history(input.nodeId, context),
+      ),
+      listDiscoveryLumaCalendars: builder.listDiscoveryLumaCalendars.handler(({ input, context }) =>
+        services.discovery.lumaCalendars(input.nodeId, context),
+      ),
+      importDiscoveryLuma: builder.importDiscoveryLuma.handler(({ input, context }) =>
+        services.discovery.importLuma(input, context),
       ),
       saveDiscoveryActivity: builder.saveDiscoveryActivity.handler(({ input, context }) =>
         services.discovery.saveActivity(input, context),
