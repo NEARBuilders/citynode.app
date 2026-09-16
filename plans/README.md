@@ -59,7 +59,7 @@ is verifiable on-chain via FastKV.
 | Document | Covers | Status |
 |---|---|---|
 | [tenant-feature-completeness.md](./v1-current/tenant-feature-completeness.md) | Tenant lifecycle hardening — edit/delete flows, soft-delete, status gating, auth consistency | Independent |
-| [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) | Absorb per-plugin db/auth boilerplate into `every-plugin/db` + `/auth` facades (ticket #89 spike) | DECIDED — prototype at [prototypes/db-auth-absorption/](./prototypes/db-auth-absorption/), build plans 017–019 in [advisor-plans/](../../advisor-plans/) |
+| [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) | Per-plugin database boilerplate absorption — `everything-dev/db` runtime exports (`createDatabaseDriver`/`databaseLayer`/`runMigrations`), namespace-per-engine isolation, tiered migration timing (ticket #89) | DECIDED (amended 2026-09-15) — prototype at [prototypes/db-auth-absorption/](./prototypes/db-auth-absorption/), build plan 017 in [advisor-plans/](../../advisor-plans/) |
 
 ## prototypes — validated architecture
 
@@ -67,7 +67,7 @@ is verifiable on-chain via FastKV.
 |---|---|---|
 | [beta-v2/](./prototypes/beta-v2/) | Web plugin grafting — `composeApp()` grafts MF remote route trees into host mount points | [ui.md](./beta-v2/ui.md) |
 | [beta-v2-override/](./prototypes/beta-v2-override/) | Tenant UI override composition — host composes base + tenant override remotes | [tenants.md](./beta-v2/tenants.md), [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) |
-| [db-auth-absorption/](./prototypes/db-auth-absorption/) | every-plugin/db + /auth facades — plugin-id plumbing, slug semantics, schema isolation, migration idempotence, R-channel narrowing | [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) |
+| [db-auth-absorption/](./prototypes/db-auth-absorption/) | Database absorption — plugin-id plumbing, slug semantics, schema isolation, migration idempotence, R-channel narrowing | [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) |
 
 ## wayfinder — decision map for beta-v2
 

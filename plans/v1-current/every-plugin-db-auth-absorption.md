@@ -1,7 +1,9 @@
-# every-plugin/db + every-plugin/auth: absorbing per-plugin boilerplate
+# Per-plugin database boilerplate absorption (`everything-dev/db`)
 
 > Ticket: [#89](https://github.com/NEARBuilders/citynode.app/issues/89) (design spike)
-> Status: DECIDED — prototype at [plans/prototypes/db-auth-absorption/](../prototypes/db-auth-absorption/), build plans 017–019 in [advisor-plans/](../../advisor-plans/)
+> Status: DECIDED — **amended 2026-09-15** after the orpc-v2 / effect-native-plugins review (original decision favored an `every-plugin/db` facade; the amendment moves the home to `everything-dev/db` and drops the `every-plugin/auth` facade)
+> Prototype: [plans/prototypes/db-auth-absorption/](../prototypes/db-auth-absorption/) (slug / namespace / R-channel proofs stand; the `databaseLayer` factory supersedes its vendored layer shape)
+> Build plan: [advisor-plans/017-db-layer-in-everything-dev.md](../../advisor-plans/017-db-layer-in-everything-dev.md) (depends on 008; rides the effect-native-plugins Phase 4 window)
 > Origin: post-migration improvement survey (2026-09-15), finding DIR-01 / A6
 
 ## Problem
@@ -15,233 +17,206 @@ A minimal DB-backed plugin carries ~250 lines of framework plumbing copied from
   (dead code — they are never `api`), and three different plugin-id→slug normalizers exist
   (`_template`'s private `normalizeSlug`, `everything-dev/db`'s `pluginMigrationSlug`,
   `every-plugin`'s `getNormalizedRemoteName`).
-- A 44-line `lib/context.ts` local copy in 4 workspaces (api already re-exports from
-  `every-plugin`).
-- A ~150–266-line `lib/auth.ts` per workspace (converged in api/proposals/votes; stale in
-  `_template`/apps).
-- The scoped-layer incantation (`Layer.buildWithScope(layer, yield* Effect.scope())`)
-  hand-copied at 7 call sites (advisor-plan 001).
-- `PluginIdTag` leaking into every plugin author's `initialize` signature and unit tests,
-  even though the framework injects it at
-  `packages/every-plugin/src/runtime/services/plugin-loader.service.ts:284`.
+- Per-plugin `db/index.ts` driver files (73–130 lines each: pglite/pg selection,
+  `search_path` wiring, pool lifecycle).
+- Per-plugin `db/migrate.ts` runners (~380–450 lines, byte-drifted) — the proposals/votes
+  copies (and `_template`'s `db/migrator.ts`) share an aborted-transaction bug: duplicate
+  DDL "tolerance" does a bare `continue` inside a transaction without rolling back to a
+  savepoint, so the journal insert and every later statement fail with 25P02 exactly in
+  the partial-overlap case being "handled".
+- Three journal conventions: api/auth/proposals/votes use `drizzle.__drizzle_migrations`;
+  `_template` uses an in-schema `drizzle_migrations` table.
+- `PluginIdTag` leaking into every plugin author's `initialize` signature.
 
-The framework already owns every ingredient: it injects `PluginIdTag`, it owns migration
-tooling (`everything-dev/db`), and it demonstrates the facade subpath pattern
-(`every-plugin/effect`, `/orpc`, `/zod`).
+The requirements this must serve (product constraints):
+
+- **Many plugins, one shared database, schema-isolated** (`plugin_<slug>` schemas).
+- **Engine variety**: postgres (prod/Neon), PGlite embedded (dev = test = sandbox, per
+  ticket 11 — one dialect everywhere), SQLite as a future engine, and plugins with no
+  database at all.
+- **api runs in the public schema; auth runs on a dedicated database.**
+- **Migrations must be reliable and easy** — transactional, hash-tracked, idempotent.
+
+## Why the amendment (what changed and why)
+
+The original decision moved runtime db pieces into a new `every-plugin/db` facade
+subpath. Three findings flipped it:
+
+1. **effect-native-plugins Phase 5 deletes the `every-plugin/*` re-export barrels** —
+   plugins will import `effect`/`@orpc/*`/`zod` directly. every-plugin's surface is
+   shrinking to the plugin factory + runtime; growing it with a db subpath runs against
+   that direction.
+2. **`everything-dev/db` is already the runtime-imported home** — 4 of 5 workspaces'
+   `db/layer.ts` import `getMigrationStorage`/`pluginMigrationSlug` from it today. The
+   "coupling" the original decision was fixing already exists and is fine: the helpers
+   are pure functions, bundled per-remote, drivers still externalized.
+3. **Alchemy is the downstream destination** (wayfinder decisions 13/16): migrations move
+   to **deploy time** for remote engines (`Drizzle.Schema` regenerates SQL on deploy,
+   `Neon.Branch({ migrations })` applies transactionally with hash tracking and adopts
+   existing `__drizzle_migrations` history verbatim). The deploy package is
+   `everything-dev` — investing in a runtime-package facade would be throwaway motion.
 
 ## Goal
 
-A fresh DB-backed plugin is **contract + service + index** (+ `schema.ts` and
-`migrations/`). Everything else — driver selection, connection pooling, schema isolation,
-migration running, auth middleware, Effect bridging — comes from two new facades:
+A fresh DB-backed plugin carries **one ~10-line plugin-owned `db/layer.ts`** plus its
+drizzle `schema.ts` and `migrations/` directory. Everything else — engine selection,
+namespace isolation, pool lifecycle, migration running — comes from `everything-dev/db`.
+No `every-plugin/db`, no `every-plugin/auth` (plan 007's middleware convergence is the
+resting point for auth).
 
-- `every-plugin/db` — `DatabaseLive`, `DatabaseTag`, driver creation, slug/schema helpers,
-  and the migration runner.
-- `every-plugin/auth` — the converged `createAuthMiddleware` machinery, generic over the
-  per-workspace generated auth context types.
+## Decisions
 
-## Decisions (spike questions settled)
+### D1 — Canonical slug semantics (unchanged from the original spike)
 
-### D1 — Canonical slug semantics
+`everything-dev/db`'s `pluginMigrationSlug` is canonical. It is already consumed by 4 of
+5 db-layer copies, the CLI (`db-doctor`, `db-studio`), the host's DB bindings resolution,
+and `drizzle.config.ts` identity. `_template`'s private `normalizeSlug` is the drift and
+is deleted. Schema names are **unconditional** `plugin_<slug>` for every workspace on the
+shared API database (including `api` itself → `plugin_api`; the proposals/votes `api`
+special case is dead code — no data migration needed). The plugin id is the `bos.config.json`
+key, arriving via `PluginInitializeInput.pluginId` (effect-native-plugins Phase 1.2 adds
+it) — the same id the host uses for secret injection, so schema, secret name, and journal
+all derive from one source.
 
-`everything-dev/db`'s `pluginMigrationSlug` (backed by its `normalizeSlug`) is canonical.
-It is already consumed by 4 of 5 db-layer copies, the CLI (`db-doctor`, `db-studio`), the
-host's DB bindings resolution, and `drizzle.config.ts` identity. `_template`'s private
-`normalizeSlug` is the drift and is deleted.
+### D2 — Drivers stay externalized (unchanged)
 
-Schema-name rules going forward:
+`pg` and `@electric-sql/pglite` stay out of the Module Federation singleton share set and
+out of static `everything-dev/db` imports — `createDatabaseDriver` selects engines via
+dynamic `import()`; plugins keep declaring the drivers they use; the rspack
+`externals: ["pg", "@electric-sql/pglite"]` convention is unchanged. `drizzle-orm`
+appears in `everything-dev/db` only as `import type`. The MF singleton set is unchanged.
 
-- Every workspace on the **shared API database** (api_db) uses an unconditional
-  `plugin_<slug>` schema — including `api` itself (`plugin_api`). The
-  `pluginId === "api" ? undefined : …` special case in proposals/votes is dead code (those
-  plugins are never id `api`); deleting it changes nothing at runtime, so **no data
-  migration is required** — schemas and journal tables already live at
-  `plugin_<slug>`/`drizzle.__drizzle_migrations`.
-- A workspace on a **dedicated database** (auth on auth_db) may opt out of schema
-  isolation (`DatabaseLive(url, { schema: false })`) and runs in `public`, as the auth
-  plugin does today.
+### D3 — Home: `everything-dev/db` (amended)
 
-### D2 — Where the drivers live
-
-`pg` and `@electric-sql/pglite` stay **out** of the Module Federation singleton share set
-and out of static `every-plugin` imports. `every-plugin/db` selects drivers via dynamic
-`import()` exactly like today's per-plugin `db/index.ts`; plugins keep declaring the
-drivers in their own `package.json`, and the rspack `externals: ["pg",
-"@electric-sql/pglite"]` convention is unchanged.
-
-Rationale: adding the drivers (or `drizzle-orm`) to the shared set would grow the
-singleton trust surface (see AGENTS.md "Shared Singleton Trust Model") and change every
-remote's bundle. Keeping them externalized means the absorbed facade costs the shared
-package only a few hundred lines of orchestration code. Consequence for the facade:
-`drizzle-orm` may only appear as `import type` — runtime values (e.g. the `pg`/
-`drizzle-orm/node-postgres` constructors) arrive via dynamic import and generics.
-
-This also decides the leftover from advisor-plan 010: the shared-dep list is unchanged by
-this design.
-
-### D3 — Where the migration tooling lives
-
-The runtime-needed pieces — `normalizeSlug`, `pluginMigrationSlug`,
-`getMigrationStorage`, and the migration runner that advisor-plan 008 consolidates —
-**move into `every-plugin/db`**. `everything-dev/db` re-exports them for one release
-cycle so existing child repos' `db/layer.ts` copies and `drizzle.config.ts` files keep
-compiling until `bos sync` delivers the thin re-export shims, then drops the re-exports
-and keeps only CLI-side tooling (`workspaceIdentityFromModuleUrl`, drizzle-kit helpers,
-host-side bindings).
-
-Rationale: runtime plugin code should import runtime primitives from the runtime package
-(`every-plugin` is already the MF-shared import every plugin makes); `everything-dev` is
-the CLI/scaffolding package. Today's `api/src/db/layer.ts` importing `everything-dev/db`
-at runtime only works because everything-dev happens to be resolvable on the host — that
-coupling goes away.
-
-### D4 — What `bos sync` owns afterward
-
-The per-plugin derived-files list shrinks. After migration:
-
-- `plugins/<key>/src/db/layer.ts`, `db/index.ts`, `db/migrate.ts` → deleted (or, for one
-  sync cycle, a 1-line re-export from `every-plugin/db` so sync's three-way merge has a
-  clean baseline).
-- `plugins/<key>/src/lib/context.ts` → deleted (re-export from `every-plugin` already
-  exists as the target shape; advisor-plan 002 is subsumed).
-- `plugins/<key>/src/lib/auth.ts` → thin typed re-export from `every-plugin/auth` (the
-  generic parameters and generated-type imports stay per-workspace).
-- `FRAMEWORK_OWNED_SYNC_FILES` and the per-plugin derived list in
-  `packages/everything-dev/src/cli/sync.ts` shrink accordingly; files that no longer
-  exist upstream are treated as removed (existing sync behavior for deleted template
-  files).
-
-A fresh plugin's sync-owned surface becomes: `rspack.config.js`, `drizzle.config.ts`,
-`tsconfig*.json`, `tests/types.d.ts`, `src/global.d.ts`, and the thin `lib/auth.ts`
-re-export — the `db/` directory and `lib/context.ts` disappear from the child entirely.
-
-## API surface
-
-### `every-plugin/db`
+`everything-dev/db` gains exactly four runtime exports:
 
 ```ts
-import { Context, Effect, Layer } from "every-plugin/effect";
 import type { PgDatabase, PgQueryResultHKT, PgSchema } from "drizzle-orm/pg-core";
 
-export class DatabaseError extends Data.TaggedError("DatabaseError")<{ cause: unknown }> {}
-
-export const DatabaseService = Context.Service<DatabaseService, PgDatabase<PgQueryResultHKT, any>>()(
-  "every-plugin/Database",
-);
-
-export interface DatabaseLiveOptions<TSchema extends PgSchema | undefined> {
-  pluginId: string;                                    // from PluginInitializeInput
-  schema?: TSchema;
-  schemaIsolation?: boolean;                           // false → public (auth-style dedicated DB)
-  migrations?: Array<{ sql: string; journal: string }>; // virtual-module or disk-loaded
-}
-
-export function DatabaseLive<TSchema extends PgSchema | undefined = undefined>(
-  url: string,
-  options: DatabaseLiveOptions<TSchema>,
-): Layer.Layer<DatabaseService, DatabaseError, Scope.Scope>;
-
 export function pluginSchemaName(pluginId: string): string;   // `plugin_${pluginMigrationSlug(pluginId)}`
-export { pluginMigrationSlug, getMigrationStorage } from "./slug";  // moved from everything-dev/db
-export function createDatabaseDriver(url: string, schemaName?: string): Promise<Driver>;  // dynamic pg/pglite
+
+export interface DriverOptions { namespace?: string }         // undefined → public schema
+export function createDatabaseDriver<TSchema>(
+  url: string,
+  options?: DriverOptions & { schema: TSchema },
+): Promise<{ db: PgDatabase<PgQueryResultHKT, TSchema>; close(): Promise<void> }>;
+
+export function databaseLayer<TSchema>(
+  tag: Context.Service<any, PgDatabase<PgQueryResultHKT, TSchema>>,
+  url: string,
+  options: {
+    pluginId: string;
+    schema: TSchema;
+    migrations?: () => Promise<Migration[]>;
+    namespace?: boolean;                                      // false → public/dedicated (api, auth)
+  },
+): Layer.Layer<typeof tag, DatabaseError, never>;
+
 export function runMigrations(driver: Driver, migrations: Migration[], opts?): Promise<MigrationReport>;
 ```
 
-Design notes validated by the prototype:
+- **Engine by URL scheme**: `postgres://` → `pg.Pool`; `pglite:`/`:memory:` → PGlite
+  (dir or memory); `sqlite:` later. The driver interface is shaped so a SQLite engine is
+  an addition, not a redesign.
+- **`databaseLayer` is the plugin author's whole surface** — acquireRelease the driver,
+  apply migrations, return the typed db on the plugin-owned tag. The tag stays
+  plugin-owned (`"template/Database"`, typed to the plugin's drizzle schema) so
+  `yield* DatabaseTag` is fully typed and no two plugins can collide on one shared tag
+  id.
+- **No `PluginIdTag` anywhere in plugin code**: the layer takes `pluginId` as a value
+  (from `config.pluginId`), so `initialize`'s R channel is `Scope.Scope` only. Effect 4
+  removed `FiberRef`, so ambient injection was rejected.
 
-- **`PluginIdTag` disappears from plugin-author code.** Effect 4 removed `FiberRef`, so
-  ambient injection is off the table; instead the plugin loader adds `pluginId: string`
-  to `PluginInitializeInput` (it already passes `variables`/`secrets`), and
-  `DatabaseLive(url, { pluginId, … })` closes over it. The public `initialize` type
-  narrows to `Effect<TDeps, Error, Scope.Scope>`. `Effect.provideService(PluginIdTag, …)`
-  stays in the loader through the migration window for plugins still yielding
-  `PluginIdTag`; the accepted input type keeps the `| PluginIdTag` union until plan 019
-  drops it.
-- **One tag id, per-plugin instances.** `DatabaseService` uses a single
-  `"every-plugin/Database"` id. Two plugins never share an Effect scope (the loader
-  builds each plugin's services in its own scope; cross-plugin composition goes through
-  `pluginsClient`, not merged contexts), so one shared tag identity is safe and is
-  precisely what makes the facade absorbable.
-- **`buildScoped`** (advisor-plan 001) lands as `every-plugin` root exports
-  (`buildScopedContext`, `buildScoped`); `DatabaseLive` composes with it, and plan 001's
-  `PluginEnv` alias is superseded by `Scope.Scope`.
+### D4 — `bos sync` exits db ownership (amended)
 
-### `every-plugin/auth`
+`db/*` and `lib/context.ts` **leave `FRAMEWORK_OWNED_SYNC_FILES` and the per-plugin
+derived list entirely** — no re-export shim cycle. Children keep whatever they have and
+are never framework-updated on those paths again; sync's existing upstream-deleted
+semantics handle the one-time removal for pristine children, and locally-modified files
+are kept (conflict path). A fresh plugin's sync-owned surface is `rspack.config.js`,
+`drizzle.config.ts`, `tsconfig*.json`, `tests/types.d.ts`, `src/global.d.ts`, and the
+thin `lib/auth.ts` (plan 007).
 
-```ts
-import type { z } from "every-plugin/zod";
+### D5 — Isolation is "namespace", one concept per engine (new)
 
-export interface AuthContextShape {
-  userId?: string;
-  user?: unknown;
-  apiKey?: unknown;
-  organization?: unknown;
-  session?: unknown;
-}
+The same `namespace` option expresses every topology the platform needs:
 
-export function createAuthMiddleware<TAuthContext extends AuthContextShape = AuthContextShape>(
-  builder: any,
-  options?: { orgMetaSchema?: z.ZodType },
-): {
-  requireAuth: …; requireAuthOrApiKey: …; requireRole: …;
-  requireAdmin: …; requireOrganization: …; requireOrgRole: …; requireApiKey: …;
-};
-```
+| Topology | Engine | Namespace behavior |
+|---|---|---|
+| Many plugins, one shared DB | postgres / PGlite | `CREATE SCHEMA plugin_<slug>` + `search_path` |
+| api on the shared DB | postgres | none — public schema |
+| auth | postgres (dedicated DB) | none — `public` on its own database |
+| Plugin with no DB | — | no `databaseLayer` at all |
+| Future: embedded per-plugin store | sqlite | per-plugin file (`.data/<slug>.db`) — schemas don't exist in SQLite |
 
-The converged 266-line `api/src/lib/auth.ts` machinery moves in, generic over the
-workspace's context type. The per-workspace `lib/auth.ts` shrinks to ~10 lines:
+PGlite is the embedded engine now (ticket 11: one Postgres dialect everywhere — dev =
+test = sandbox = PGlite, prod = Postgres/Neon). The SQLite driver is a later addition
+with its own namespace expression; the abstraction is ready for it.
 
-```ts
-import { createAuthMiddleware } from "every-plugin/auth";
-import type { AuthPluginContext } from "./auth-types.gen";
+### D6 — Journal + migration timing: tiered (new)
 
-export const { requireAuth, requireOrganization, … } = createAuthMiddleware<AuthPluginContext>;
-```
+- **Journal**: every workspace standardizes on `drizzle.__drizzle_migrations` (api's
+  existing convention). `_template`'s in-schema `drizzle_migrations` history is adopted
+  once (copy hashes, freeze the old table). This is deliberately the journal alchemy
+  recognizes and adopts verbatim later, so today's choice **is** the migration path to
+  deploy-time.
+- **Timing**: boot-time apply is **permanent** for embedded engines (PGlite sandboxes and
+  dev/test boot fresh databases nothing else migrates); deploy-time apply via
+  `Drizzle.Schema` → `Neon.Branch({ migrations })` is the path for remote engines once
+  alchemy lands (decision 17 gates it on this migration). Both tiers consume the same
+  `drizzle-kit generate` migrations-directory contract — the runtime runner (008's
+  consolidated, savepoint-fixed implementation) and the deploy graph are two consumers of
+  one format, not two systems.
+- **Reliability floor** (all in the one runner): per-migration transaction with the
+  journal insert, SAVEPOINT-based duplicate tolerance (008's api fix — the
+  proposals/votes/`_template` bare-`continue` 25P02 bug), retryable-SQLSTATE backoff,
+  hash-tracked idempotence.
 
-`auth-types.gen.ts` stays per-workspace (it is generated from the deployed auth plugin
-manifest by `bos types gen` — the facade cannot own it).
+## Future seams (recorded, not built now)
+
+- `drizzle-orm@0.45.2` has no Effect export; `@effect/sql` is Effect-3-pinned — neither
+  is usable under Effect 4.0.0-rc.112 today. When `@effect/sql` v4 (or alchemy's
+  `Drizzle.Postgres` runtime client, which needs it) catches up, the **plugin-owned
+  `DatabaseTag` is the swap seam**: `databaseLayer` internals change, no plugin or
+  service code does.
+- Alchemy adoption (decisions 13/16/17): `bos deploy` generates the alchemy program from
+  `[infra]`; remote engines migrate at deploy; the runner stays for embedded tiers.
 
 ## Workspace migration plan
 
-Order (each step independently shippable; advisor-plans 017–019):
+Single build plan ([advisor-plans/017](../../advisor-plans/017-db-layer-in-everything-dev.md)),
+executed in the effect-native-plugins Phase 4 window (both rewrite the same files):
 
-1. **017 — facades land.** `every-plugin/db` + `every-plugin/auth` subpath exports, the
-   `pluginId: string` addition to `PluginInitializeInput` in
-   `plugin-loader.service.ts`, `buildScoped` in the root export, and
-   `everything-dev/db` re-exports. `_template` rebuilt on the facades — the
-   template's two migration pipelines (virtual-module bundled vs disk-loaded) are
-   reconciled by adopting `_template`'s virtual-module pipeline (`virtual:drizzle-migrations.sql`
-   via the rspack `DrizzleORMMigrations()` plugin) as the default; disk-loaded
-   `migrations/` remains supported via `DatabaseLive` options for the existing
-   workspaces.
-2. **018 — workspaces migrate.** api, proposals, votes (delete the dead `api`
-   special-case, adopt the shared runner — which also delivers advisor-plan 008's
-   SAVEPOINT fix for the proposals/votes 25P02 bug), auth (schema-less mode), apps
-   (lib only). Each workspace's `db/` and `lib/context.ts` shrink to re-exports or
-   vanish; behavior is identical (same slugs, same journal tables, same URLs).
-3. **019 — sync + scaffold cutover.** `FRAMEWORK_OWNED_SYNC_FILES` / per-plugin derived
-   list shrink, `bos sync` delivers the shrinkage to children, `everything-dev/db` drops
-   the re-exports, and `bos init`'s plugin scaffold emits the 3-file plugin.
+1. 008's consolidated runner lands in `everything-dev/db` (as planned).
+2. `everything-dev/db` gains `createDatabaseDriver` + `databaseLayer` + the namespace
+   model; `_template`'s `db/{index,layer,migrator}.ts` collapse into the ~10-line layer +
+   schema + migrations (virtual-module pipeline stays as the runtime carrier).
+3. Workspaces adopt: api (public namespace), auth (dedicated DB, no namespace),
+   proposals/votes (delete the dead `api` special case — no data migration; their runner
+   copies and the 25P02 bug disappear with them), apps (lib only, plan 007).
+4. Sync ownership exits db files (D4); journal standardization with one-time history
+   adoption for `_template`.
 
 ## Risks
 
-- **MF sharing of a bigger `every-plugin`.** The db/auth subpaths add code to the shared
-  package. Mitigated by D2 (drivers/drizzle stay external/dynamic); the prototype
-  confirms no static `drizzle-orm`/`pg` imports sneak into the facade.
-- **Tag identity coupling.** All plugins now share one `DatabaseService` tag id. Safe
-  under per-plugin scopes (loader semantics), but any future "merge plugin contexts into
-  one scope" feature must switch to per-plugin tag ids — noted as a STOP condition in
-  plan 018.
-- **Sync churn.** Children see `db/layer.ts` etc. disappear upstream on their next
-  `bos sync`. The one-cycle thin-re-export shim (D4) gives sync a clean three-way
-  baseline instead of a mass deletion.
+- **Bundling**: `everything-dev/db` must keep drivers dynamic-imported and drizzle
+  type-only (D2) — verified in plan 017's checks.
+- **Journal adoption**: the one-time `_template` history copy must be idempotent and
+  fail-closed (STOP condition in 017).
+- **Sync deletion**: locally-modified db files must be kept, never deleted (STOP
+  condition in 017).
 
 ## Relationship to advisor plans
 
-- Supersedes 001's `PluginEnv` alias; `buildScoped` itself still lands via 017.
-- Subsumes 002 (context dedupe) and 007 (auth consolidation) — both become no-ops once
-  017/018 land; if 002/007 execute first, 018 simply deletes their output.
-- 008's consolidated migration runner lands directly inside `every-plugin/db` (017)
-  instead of `everything-dev/db`.
-- 010 (shared-deps unification) is unaffected — the singleton set is unchanged (D2).
-- 014 is orthogonal.
+- 017 (slim, rewritten): lands the helpers and migrates workspaces; depends on 008;
+  rides effect-native Phase 4.
+- 008: stands as written — its consolidated runner is the foundation 017 consumes; it
+  also fixes the 25P02 bug class.
+- 001's `buildScoped` still lands, but the db story no longer needs it
+  (effect-native `initialize` returns a `Layer`, composed with `Layer.provide`); its
+  `PluginEnv` alias is dead.
+- 002/007: unchanged (007 is the auth resting point).
+- 010: unaffected — the singleton set is unchanged (D2).
+- effect-native-plugins: Phase 1.2 gains the `pluginId` input; Phase 4.1's target shape
+  already composes `DatabaseLive` via `Layer.provide` — this design is what that
+  `DatabaseLive` becomes.
