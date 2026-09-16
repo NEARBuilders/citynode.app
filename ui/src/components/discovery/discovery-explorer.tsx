@@ -63,6 +63,9 @@ export function DiscoveryExplorer({
     if (search.node) measurement.track("open", search.node);
   }, [search.node, measurement.track]);
   const origin = useRef<HTMLElement | null>(null);
+  const lastNode = useRef<string | undefined>(undefined);
+  if (search.node) lastNode.current = search.node;
+  const nodeId = search.node ?? lastNode.current;
   const list = useQuery({
     queryKey: ["discovery", search.query, search.region, search.active, search.upcoming],
     queryFn: () =>
@@ -80,10 +83,10 @@ export function DiscoveryExplorer({
     staleTime: 30_000,
   });
   const detail = useQuery({
-    queryKey: ["discovery-node", search.node],
-    queryFn: () => api.getDiscoveryNode({ nodeId: search.node! }),
-    enabled: !!search.node,
-    refetchInterval: 30_000,
+    queryKey: ["discovery-node", nodeId],
+    queryFn: () => api.getDiscoveryNode({ nodeId: nodeId! }),
+    enabled: !!nodeId,
+    refetchInterval: search.node ? 30_000 : false,
   });
   const selected = detail.data;
   const select = (node: string) => {
@@ -265,9 +268,12 @@ export function DiscoveryExplorer({
           className="w-full overflow-y-auto sm:max-w-lg"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            if (origin.current?.isConnected) origin.current.focus();
-            else
-              document.querySelector<HTMLButtonElement>(`[data-node-id="${search.node}"]`)?.focus();
+            const restore = origin.current;
+            const id = lastNode.current;
+            queueMicrotask(() => {
+              if (restore?.isConnected) restore.focus();
+              else document.querySelector<HTMLButtonElement>(`[data-node-id="${id}"]`)?.focus();
+            });
           }}
         >
           <SheetHeader className="px-6 pb-4 pt-8 pr-16">
@@ -279,14 +285,16 @@ export function DiscoveryExplorer({
               {selected?.location || "Location coming soon"}
             </SheetDescription>
           </SheetHeader>
-          {detail.isPending ? (
+          {search.node && detail.isPending && !selected ? (
             <p className="px-6 text-sm text-muted-foreground">Loading…</p>
           ) : detail.isError ? (
             <p role="alert" className="px-6">
               Couldn’t load this community.
             </p>
           ) : !selected ? (
-            <p className="px-6">This community isn’t available.</p>
+            search.node ? (
+              <p className="px-6">This community isn’t available.</p>
+            ) : null
           ) : (
             <div className="flex flex-col gap-8 px-6 pb-8">
               <div className="flex flex-wrap gap-2">
