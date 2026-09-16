@@ -1,5 +1,4 @@
-import { Cause } from "every-plugin/effect";
-
+import { Cause } from "effect";
 export function extractErrorDetails(error: unknown): {
   message: string;
   stack?: string;

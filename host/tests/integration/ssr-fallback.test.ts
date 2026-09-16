@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { Cause, Effect, Exit } from "every-plugin/effect";
+import { Cause, Effect, Exit } from "effect";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAvailablePort } from "../helpers/ports";
 

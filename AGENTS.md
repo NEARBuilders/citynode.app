@@ -469,11 +469,11 @@ Each plugin is self-contained with its own:
 
 The UI accesses plugin routes via namespaced clients: `apiClient.registry.listRegistryApps()`, etc.
 
-**Scoped resources**: For plugins using long-lived scoped resources (database pools, repository layers, caches, publishers), build them as `Layer`s inside `initialize` and resolve with `yield* Layer.buildWithScope(layer, yield* Effect.scope)` followed by `Context.get(services, tag)`. This binds resources to the plugin's lifecycle scope. Do NOT use `Effect.provide(Tag, Layer.effect(...))` for persistent dependencies inside plugin `initialize` — it creates a transient scope that releases the resource immediately. Compose dependent layers with `Layer.mergeAll(...).pipe(Layer.provide(dep))` before building. Services use `Context.Service<Self, Shape>()("id")` class tags (Effect 4 removed `Context.Tag`).
+**Scoped resources**: `initialize` returns an Effect `Layer` — the runtime builds it against the plugin's lifecycle scope, so scoped resources (database pools, repository layers, caches, publishers) release when the plugin shuts down. Compose dependent layers with `Layer.mergeAll(...).pipe(Layer.provide(dep))` and return the result (do not build/extract them in plugin code). Handlers access services via the injected oRPC context: `yield* Tag` in `.effect()` generator handlers, or `Context.get(context["effect/context"], Tag)` in plain async and streaming (async-generator) handlers. Services use `Context.Service<Self, Shape>()("id")` class tags (Effect 4 removed `Context.Tag`). `shutdown` is gone — teardown lives in Layer finalizers. To expose services to the host (outside oRPC), set `servicesTag` on the plugin definition.
 
 ### Plugin Client (pluginsClient)
 
-The API plugin receives typed client factories for all other plugins via `createPlugin.withPlugins<PluginsClient>()`, enabling in-process composition without HTTP roundtrips.
+The API plugin receives typed entries for all other plugins via `createPlugin.withPlugins<PluginsClient>()` — each entry carries `{ client, router }` (a client factory plus the raw implemented router for cross-plugin merging), enabling in-process composition without HTTP roundtrips.
 
 **Two-phase loading**: The host loads non-API plugins first (Phase 1), creates a `pluginsClient` map, then loads the API with that map injected (Phase 2). The host is generic — no plugin-specific code.
 

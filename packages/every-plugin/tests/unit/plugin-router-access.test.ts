@@ -59,7 +59,7 @@ describe("Plugin Router Access Methods", () => {
       if (url.pathname.startsWith("/rpc")) {
         const result = await rpcHandler.handle(req, res, {
           prefix: "/rpc",
-          context: plugin!.initialized.context,
+          context: { "effect/context": plugin!.initialized.effectContext },
         });
         if (result.matched) return;
       }
@@ -67,7 +67,7 @@ describe("Plugin Router Access Methods", () => {
       if (url.pathname.startsWith("/api")) {
         const result = await openApiHandler.handle(req, res, {
           prefix: "/api",
-          context: plugin!.initialized.context,
+          context: { "effect/context": plugin!.initialized.effectContext },
         });
         if (result.matched) return;
       }

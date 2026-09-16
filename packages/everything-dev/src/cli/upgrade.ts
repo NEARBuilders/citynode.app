@@ -1106,7 +1106,7 @@ function ensureEffectImports(source: string): string {
   if (!names.includes("Context")) names.push("Context");
   if (!names.includes("Layer")) names.push("Layer");
   names.sort((a, b) => a.localeCompare(b));
-  return source.replace(m[0], `import { ${names.join(", ")} } from "every-plugin/effect"`);
+  return source.replace(m[0], `import { ${names.join(", ")} } from "effect"`);
 }
 
 export async function rewriteLegacyPluginScopedLayerPatterns(

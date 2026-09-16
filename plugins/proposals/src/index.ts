@@ -1,7 +1,8 @@
+import { MemoryPublisher } from "@orpc/publisher/memory";
+import { ORPCError } from "@orpc/server";
+import { Context, Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
-import { Cause, Context, Effect, Exit, Layer } from "every-plugin/effect";
-import { MemoryPublisher, ORPCError } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 import { contract, type ProposalEventSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import type { AuthContext } from "./lib/auth";
@@ -20,17 +21,15 @@ type ProposalContext = AuthContext & {
 
 const ProposalContextSchema = z.custom<ProposalContext>();
 
-async function runEffect<A>(effect: Effect.Effect<A, ORPCError<string, unknown>>) {
-  const exit = await Effect.runPromiseExit(effect);
-  if (Exit.isFailure(exit)) {
-    const squashed = Cause.squash(exit.cause);
-    if (squashed instanceof ORPCError) throw squashed;
-    throw new ORPCError("INTERNAL_SERVER_ERROR", {
-      message: squashed instanceof Error ? squashed.message : String(squashed),
-    });
-  }
-  return exit.value;
-}
+class ProposalPublisher extends Context.Service<
+  ProposalPublisher,
+  MemoryPublisher<ProposalEvents>
+>()("proposals/Publisher") {}
+
+class ProposalPluginConfig extends Context.Service<
+  ProposalPluginConfig,
+  { privatePluginIds: Set<string> }
+>()("proposals/PluginConfig") {}
 
 export default createPlugin({
   variables: z.object({
@@ -45,39 +44,38 @@ export default createPlugin({
 
   contract,
 
-  initialize: (config, _plugins) =>
-    Effect.gen(function* () {
+  initialize: (config) =>
+    Effect.sync(() => {
       const Database = DatabaseLive(config.secrets.PROPOSALS_DATABASE_URL);
-      const services = yield* Layer.buildWithScope(
-        ProposalServiceLive.pipe(Layer.provide(Database)),
-        yield* Effect.scope,
-      );
-      const proposal = Context.get(services, ProposalService);
       const publisher = new MemoryPublisher<ProposalEvents>({
         resume: { enabled: true, seconds: 120 },
       });
 
       console.log("[Proposals] Services Initialized");
-      return {
-        proposal,
-        publisher,
-        privatePluginIds: new Set(config.variables.privatePluginIds),
-      };
+      return Layer.mergeAll(
+        ProposalServiceLive.pipe(Layer.provide(Database)),
+        Layer.succeed(ProposalPublisher, publisher),
+        Layer.succeed(ProposalPluginConfig, {
+          privatePluginIds: new Set(config.variables.privatePluginIds),
+        }),
+      );
     }),
 
-  shutdown: () => Effect.log("[Proposals] Shutdown"),
-
-  createRouter: (services, builder) => {
+  createRouter: (builder) => {
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
-        throw new ORPCError("UNAUTHORIZED", { message: "Authentication required" });
+        throw new ORPCError("UNAUTHORIZED", {
+          message: "Authentication required",
+        });
       }
       return next({ context });
     });
 
     const requireAdmin = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
-        throw new ORPCError("UNAUTHORIZED", { message: "Authentication required" });
+        throw new ORPCError("UNAUTHORIZED", {
+          message: "Authentication required",
+        });
       }
       if (context.user.role !== "admin") {
         throw new ORPCError("FORBIDDEN", { message: "Admin access required" });
@@ -98,188 +96,198 @@ export default createPlugin({
     const viewerId = (context: ProposalContext) =>
       context.near?.primaryAccountId ?? context.userId ?? context.apiKey?.id;
 
-    const proposalScope = (context: ProposalContext) => ({
-      privatePluginIds: Array.from(services.privatePluginIds),
+    const proposalScope = (privatePluginIds: Set<string>, context: ProposalContext) => ({
+      privatePluginIds: Array.from(privatePluginIds),
       viewerId: viewerId(context),
       isAdmin: context.user?.role === "admin",
     });
 
-    const canReadProposal = async (
-      context: ProposalContext,
-      pluginId: string,
-      entityId: string,
-    ) => {
-      if (!services.privatePluginIds.has(pluginId) || context.user?.role === "admin") return true;
-      const scoped = await runEffect(
-        services.proposal.getProposals({
+    const canReadProposal = (context: ProposalContext, pluginId: string, entityId: string) =>
+      Effect.gen(function* () {
+        const { privatePluginIds } = yield* ProposalPluginConfig;
+        if (!privatePluginIds.has(pluginId) || context.user?.role === "admin") return true;
+        const proposal = yield* ProposalService;
+        const scoped = yield* proposal.getProposals({
           pluginId,
           entityId,
           limit: 1,
-          ...proposalScope(context),
-        }),
-      );
-      return scoped.data.length > 0;
-    };
-
-    const publishProposalEvent = async (action: string, proposal: any) => {
-      await services.publisher.publish("proposal", {
-        action,
-        pluginId: proposal.pluginId,
-        entityId: proposal.entityId,
-        reviewStatus: proposal.reviewStatus,
-        applyStatus: proposal.applyStatus,
-        removeStatus: proposal.removeStatus,
-        submissionCount: proposal.submissionCount,
-        timestamp: new Date().toISOString(),
+          ...proposalScope(privatePluginIds, context),
+        });
+        return scoped.data.length > 0;
       });
-    };
+
+    const publishProposalEvent = (action: string, proposal: any) =>
+      Effect.gen(function* () {
+        const publisher = yield* ProposalPublisher;
+        yield* Effect.promise(() =>
+          publisher.publish("proposal", {
+            action,
+            pluginId: proposal.pluginId,
+            entityId: proposal.entityId,
+            reviewStatus: proposal.reviewStatus,
+            applyStatus: proposal.applyStatus,
+            removeStatus: proposal.removeStatus,
+            submissionCount: proposal.submissionCount,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      });
 
     return {
-      propose: builder.propose.use(requireAuthOrApiKey).handler(async ({ input, context }) => {
-        if (services.privatePluginIds.has(input.pluginId) && !context.allowPrivateSubmission) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "Use the plugin's dedicated proposal endpoint",
-          });
+      propose: builder.propose.use(requireAuthOrApiKey).effect(function* ({ input, context }) {
+        const { privatePluginIds } = yield* ProposalPluginConfig;
+        if (privatePluginIds.has(input.pluginId) && !context.allowPrivateSubmission) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message: "Use the plugin's dedicated proposal endpoint",
+            }),
+          );
         }
         const actorId =
           context.near?.primaryAccountId ?? context.userId ?? context.apiKey?.id ?? "unknown";
-        const result = await runEffect(
-          services.proposal.propose({
-            ...input,
-            actorId,
-            actor: context.user ?? undefined,
-            resubmissionPolicy: context.resubmissionPolicy,
-          }),
-        );
-        await publishProposalEvent("proposed", result);
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.propose({
+          ...input,
+          actorId,
+          actor: context.user ?? undefined,
+          resubmissionPolicy: context.resubmissionPolicy,
+        });
+        yield* publishProposalEvent("proposed", result);
         return { data: result };
       }),
 
-      approve: builder.approve.use(requireAdmin).handler(async ({ input, context }) => {
-        const result = await runEffect(
-          services.proposal.approve({
-            ...input,
-            actorId: context.userId!,
-            actor: context.user ?? undefined,
-          }),
-        );
-        await publishProposalEvent("approved", result);
+      approve: builder.approve.use(requireAdmin).effect(function* ({ input, context }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.approve({
+          ...input,
+          actorId: context.userId!,
+          actor: context.user ?? undefined,
+        });
+        yield* publishProposalEvent("approved", result);
         return { data: result };
       }),
 
-      reject: builder.reject.use(requireAdmin).handler(async ({ input, context }) => {
-        const result = await runEffect(
-          services.proposal.reject({
-            ...input,
-            actorId: context.userId!,
-            actor: context.user ?? undefined,
-          }),
-        );
-        await publishProposalEvent("rejected", result);
+      reject: builder.reject.use(requireAdmin).effect(function* ({ input, context }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.reject({
+          ...input,
+          actorId: context.userId!,
+          actor: context.user ?? undefined,
+        });
+        yield* publishProposalEvent("rejected", result);
         return { data: result };
       }),
 
-      reopen: builder.reopen.use(requireAdmin).handler(async ({ input, context }) => {
-        const result = await runEffect(
-          services.proposal.reopen({
-            ...input,
-            actorId: context.userId!,
-            actor: context.user ?? undefined,
-          }),
-        );
-        await publishProposalEvent("reopened", result);
+      reopen: builder.reopen.use(requireAdmin).effect(function* ({ input, context }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.reopen({
+          ...input,
+          actorId: context.userId!,
+          actor: context.user ?? undefined,
+        });
+        yield* publishProposalEvent("reopened", result);
         return { data: result };
       }),
 
-      remove: builder.remove.use(requireAdmin).handler(async ({ input, context }) => {
-        const result = await runEffect(
-          services.proposal.remove({
-            ...input,
-            actorId: context.userId!,
-            actor: context.user ?? undefined,
-          }),
-        );
-        await publishProposalEvent("removed", result);
+      remove: builder.remove.use(requireAdmin).effect(function* ({ input, context }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.remove({
+          ...input,
+          actorId: context.userId!,
+          actor: context.user ?? undefined,
+        });
+        yield* publishProposalEvent("removed", result);
         return { data: result };
       }),
 
-      markApplied: builder.markApplied.use(requireAdmin).handler(async ({ input }) => {
-        const result = await runEffect(services.proposal.markApplied(input));
-        await publishProposalEvent("applied", result);
+      markApplied: builder.markApplied.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.markApplied(input);
+        yield* publishProposalEvent("applied", result);
         return { data: result };
       }),
 
-      markApplyFailed: builder.markApplyFailed.use(requireAdmin).handler(async ({ input }) => {
-        const result = await runEffect(services.proposal.markApplyFailed(input));
-        await publishProposalEvent("apply_failed", result);
+      markApplyFailed: builder.markApplyFailed.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.markApplyFailed(input);
+        yield* publishProposalEvent("apply_failed", result);
         return { data: result };
       }),
 
-      markRemoved: builder.markRemoved.use(requireAdmin).handler(async ({ input }) => {
-        const result = await runEffect(services.proposal.markRemoved(input));
-        await publishProposalEvent("removed", result);
+      markRemoved: builder.markRemoved.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.markRemoved(input);
+        yield* publishProposalEvent("removed", result);
         return { data: result };
       }),
 
-      markRemoveFailed: builder.markRemoveFailed.use(requireAdmin).handler(async ({ input }) => {
-        const result = await runEffect(services.proposal.markRemoveFailed(input));
-        await publishProposalEvent("remove_failed", result);
+      markRemoveFailed: builder.markRemoveFailed.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        const result = yield* proposal.markRemoveFailed(input);
+        yield* publishProposalEvent("remove_failed", result);
         return { data: result };
       }),
 
-      getProposals: builder.getProposals.handler(async ({ input, context }) => {
-        return await runEffect(
-          services.proposal.getProposals({ ...input, ...proposalScope(context) }),
-        );
+      getProposals: builder.getProposals.effect(function* ({ input, context }) {
+        const { privatePluginIds } = yield* ProposalPluginConfig;
+        const proposal = yield* ProposalService;
+        return yield* proposal.getProposals({
+          ...input,
+          ...proposalScope(privatePluginIds, context),
+        });
       }),
 
-      getProposalCount: builder.getProposalCount.handler(async ({ input, context }) => {
-        if (!(await canReadProposal(context, input.pluginId, input.entityId))) {
+      getProposalCount: builder.getProposalCount.effect(function* ({ input, context }) {
+        if (!(yield* canReadProposal(context, input.pluginId, input.entityId))) {
           return { ...input, totalCount: 0 };
         }
-        return await runEffect(services.proposal.getProposalCount(input));
+        const proposal = yield* ProposalService;
+        return yield* proposal.getProposalCount(input);
       }),
 
-      getAuditLog: builder.getAuditLog.handler(async ({ input, context }) => {
-        if (!(await canReadProposal(context, input.pluginId, input.entityId))) {
+      getAuditLog: builder.getAuditLog.effect(function* ({ input, context }) {
+        if (!(yield* canReadProposal(context, input.pluginId, input.entityId))) {
           return {
             data: [],
             meta: { total: 0, hasMore: false, nextCursor: null },
           };
         }
-        return await runEffect(services.proposal.getAuditLog(input));
+        const proposal = yield* ProposalService;
+        return yield* proposal.getAuditLog(input);
       }),
 
-      getSubmissions: builder.getSubmissions.use(requireAdmin).handler(async ({ input }) => {
-        return await runEffect(services.proposal.getSubmissions(input));
+      getSubmissions: builder.getSubmissions.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        return yield* proposal.getSubmissions(input);
       }),
 
-      getMySubmission: builder.getMySubmission
-        .use(requireAuth)
-        .handler(async ({ input, context }) => {
-          const nearAccounts = [
-            context.near?.primaryAccountId,
-            ...(context.near?.linkedAccounts ?? []).map(({ accountId }) => accountId),
-          ];
-          const submittedBy = Array.from(
-            new Set(
-              [
-                context.userId,
-                ...nearAccounts,
-                ...nearAccounts.map((accountId) => accountId?.toLowerCase()),
-              ].filter((value): value is string => Boolean(value)),
-            ),
-          );
-          return await runEffect(
-            services.proposal.getMySubmission({
-              ...input,
-              submittedBy,
-            }),
-          );
-        }),
+      getMySubmission: builder.getMySubmission.use(requireAuth).effect(function* ({
+        input,
+        context,
+      }) {
+        const nearAccounts = [
+          context.near?.primaryAccountId,
+          ...(context.near?.linkedAccounts ?? []).map(({ accountId }) => accountId),
+        ];
+        const submittedBy = Array.from(
+          new Set(
+            [
+              context.userId,
+              ...nearAccounts,
+              ...nearAccounts.map((accountId) => accountId?.toLowerCase()),
+            ].filter((value): value is string => Boolean(value)),
+          ),
+        );
+        const proposal = yield* ProposalService;
+        return yield* proposal.getMySubmission({
+          ...input,
+          submittedBy,
+        });
+      }),
 
-      getReviewHistory: builder.getReviewHistory.use(requireAdmin).handler(async ({ input }) => {
-        return await runEffect(services.proposal.getReviewHistory(input));
+      getReviewHistory: builder.getReviewHistory.use(requireAdmin).effect(function* ({ input }) {
+        const proposal = yield* ProposalService;
+        return yield* proposal.getReviewHistory(input);
       }),
 
       subscribe: builder.subscribe.handler(async function* ({
@@ -288,11 +296,23 @@ export default createPlugin({
         signal,
         lastEventId,
       }) {
-        const iterator = services.publisher.subscribe("proposal", { signal, lastEventId });
+        const publisher = Context.get(context["effect/context"], ProposalPublisher);
+        const iterator = publisher.subscribe("proposal", {
+          signal,
+          lastEventId,
+        });
         for await (const event of iterator) {
           if (input.pluginId && event.pluginId !== input.pluginId) continue;
           if (input.entityId && event.entityId !== input.entityId) continue;
-          if (!(await canReadProposal(context, event.pluginId, event.entityId))) continue;
+          if (
+            !(await Effect.runPromise(
+              canReadProposal(context, event.pluginId, event.entityId).pipe(
+                Effect.provide(context["effect/context"]),
+              ),
+            ))
+          ) {
+            continue;
+          }
           yield event;
         }
       }),

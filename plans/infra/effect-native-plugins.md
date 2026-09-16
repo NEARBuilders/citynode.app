@@ -1,5 +1,10 @@
 # Effect-Native Plugins — Simpler Routers, Handlers, and Merging
 
+> **Status: IMPLEMENTED** on the `orpc-v2` branch. All phases landed; the
+> full test matrix is green (the only expected failure is the host
+> `runtime-remote` smoke test, which loads old deployed remotes and stays
+> red until the atomic `bos publish --deploy`).
+
 Follow-up to [orpc-v2-effect-migration.md](./orpc-v2-effect-migration.md). The
 `orpc-v2` branch landed the infrastructure half of that migration (oRPC
 2.0.0-beta.35 + Effect 4.0.0-rc.112 via catalog, `errorStatusMap`,

@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
+import { Context } from "effect";
 import { API_KEY_CONFIG_IDS } from "../config-schemas";
 import * as schema from "../db/schema";
-import type { PluginServices } from "../service-types";
+import { AuthServicesTag } from "../service-types";
 import { createHeaders, getActiveOrganizationId, tryJsonParse } from "../utils";
 
-export function createSessionHandlers(services: PluginServices, builder: any) {
+export function createSessionHandlers(builder: any) {
   return {
     health: builder.health.handler(async () => ({
       status: "ok" as const,
@@ -12,6 +13,7 @@ export function createSessionHandlers(services: PluginServices, builder: any) {
     })),
 
     getSession: builder.getSession.handler(async ({ context }: { context: any }) => {
+      const services = Context.get(context["effect/context"], AuthServicesTag);
       const headers = createHeaders(context.reqHeaders);
       const session = await services.auth.api.getSession({ headers });
       const s = session?.session ?? null;
@@ -41,6 +43,7 @@ export function createSessionHandlers(services: PluginServices, builder: any) {
     }),
 
     getContext: builder.getContext.handler(async ({ context }: { context: any }) => {
+      const services = Context.get(context["effect/context"], AuthServicesTag);
       const headers = createHeaders(context.reqHeaders);
       const apiKeyHeaderNames = services.apiKeyHeaders;
 
@@ -64,7 +67,11 @@ export function createSessionHandlers(services: PluginServices, builder: any) {
       let user: typeof schema.user.$inferSelect | null = null;
       let authMethod: "session" | "apiKey" | "anonymous" | "none" = "none";
       let principal:
-        | { type: "user"; userId: string; user: NonNullable<typeof schema.user.$inferSelect> }
+        | {
+            type: "user";
+            userId: string;
+            user: NonNullable<typeof schema.user.$inferSelect>;
+          }
         | { type: "organization"; organizationId: string }
         | null = null;
       let apiKeyInfo: {
@@ -137,7 +144,10 @@ export function createSessionHandlers(services: PluginServices, builder: any) {
               };
             }
           } else if (key.configId === "org-keys") {
-            principal = { type: "organization", organizationId: key.referenceId };
+            principal = {
+              type: "organization",
+              organizationId: key.referenceId,
+            };
             resolvedOrganizationId = key.referenceId;
           }
 
@@ -225,7 +235,12 @@ export function createSessionHandlers(services: PluginServices, builder: any) {
         hasOrganization: false,
       };
 
-      const organizations: Array<{ id: string; role: string; name?: string; slug?: string }> = [];
+      const organizations: Array<{
+        id: string;
+        role: string;
+        name?: string;
+        slug?: string;
+      }> = [];
 
       if (principal?.type === "organization" && resolvedOrganizationId) {
         const org = await services.db.query.organization.findFirst({

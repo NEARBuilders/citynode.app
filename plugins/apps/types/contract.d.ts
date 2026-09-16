@@ -1,4 +1,5 @@
-import { z } from "every-plugin/zod";
+import "@orpc/openapi/extensions/route";
+import { z } from "zod";
 export declare const contract: {
     listRegistryApps: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         q: z.ZodOptional<z.ZodString>;

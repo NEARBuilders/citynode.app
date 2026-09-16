@@ -58,7 +58,11 @@ describe("Request Context Integration", () => {
 
         const result = await rpcHandler.handle(req, res, {
           prefix: "/rpc",
-          context: requestContext, // Request context from host
+          // Request context from host
+          context: {
+            ...requestContext,
+            "effect/context": plugin.initialized.effectContext,
+          },
         });
         if (result.matched) return;
       }

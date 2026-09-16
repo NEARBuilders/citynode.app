@@ -1,15 +1,16 @@
+import { oc } from "@orpc/contract";
+import { call } from "@orpc/server";
+import { Context, Effect, Layer } from "effect";
 import { createPlugin, createPluginRuntime } from "every-plugin";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 const testContract = oc.router({
   ping: oc.route({ method: "GET", path: "/ping" }).output(z.object({ ok: z.boolean() })),
 });
 
 describe("Scope lifecycle", () => {
-  it("Layer-built resources persist after plugin initialization", async () => {
+  it("Layer returned from initialize persists after plugin initialization", async () => {
     let released = false;
 
     class TestTag extends Context.Service<TestTag, { value: string }>()("TestTag") {}
@@ -32,13 +33,12 @@ describe("Scope lifecycle", () => {
       variables: z.object({}),
       secrets: z.object({}),
       contract: testContract,
-      initialize: () =>
-        Effect.gen(function* () {
-          const ctx = yield* Layer.buildWithScope(TestLive, yield* Effect.scope);
-          return { svc: Context.get(ctx, TestTag) };
+      initialize: () => Effect.succeed(TestLive),
+      createRouter: (builder) => ({
+        ping: builder.ping.effect(function* () {
+          const svc = yield* TestTag;
+          return { ok: svc.value === "live" };
         }),
-      createRouter: (_deps, builder) => ({
-        ping: builder.ping.handler(async () => ({ ok: true })),
       }),
     });
 
@@ -54,6 +54,9 @@ describe("Scope lifecycle", () => {
 
     expect(result).toBeDefined();
     expect(released).toBe(false);
+
+    const client = result.createClient();
+    expect(await client.ping()).toEqual({ ok: true });
 
     await runtime.shutdown();
 
@@ -76,9 +79,9 @@ describe("Scope lifecycle", () => {
                 released = true;
               }),
           );
-          return { ready: true };
+          return Layer.empty as never;
         }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true })),
       }),
     });
@@ -118,9 +121,9 @@ describe("Scope lifecycle", () => {
                   releases.push(id);
                 }),
             );
-            return { id };
+            return Layer.empty as never;
           }),
-        createRouter: (_deps, builder) => ({
+        createRouter: (builder) => ({
           ping: builder.ping.handler(async () => ({ ok: true })),
         }),
       });
@@ -162,13 +165,9 @@ describe("Scope lifecycle", () => {
                 shutdownLog.push("released");
               }),
           );
-          return { ready: true };
+          return Layer.empty as never;
         }),
-      shutdown: () =>
-        Effect.sync(() => {
-          shutdownLog.push("shutdown");
-        }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true })),
       }),
     });
@@ -186,10 +185,9 @@ describe("Scope lifecycle", () => {
     await runtime.shutdown();
 
     expect(shutdownLog).toContain("released");
-    expect(shutdownLog.indexOf("shutdown")).toBeLessThanOrEqual(shutdownLog.indexOf("released"));
   });
 
-  it("closes an evicted plugin scope when its shutdown hook dies", async () => {
+  it("closes an evicted plugin scope", async () => {
     let released = false;
 
     const failPlugin = createPlugin({
@@ -197,13 +195,15 @@ describe("Scope lifecycle", () => {
       secrets: z.object({}),
       contract: testContract,
       initialize: () =>
-        Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
-          Effect.sync(() => {
-            released = true;
-          }),
-        ),
-      shutdown: () => Effect.die(new Error("intentional shutdown defect")),
-      createRouter: (_deps, builder) => ({
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+            Effect.sync(() => {
+              released = true;
+            }),
+          );
+          return Layer.empty as never;
+        }),
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true as const })),
       }),
     });
@@ -221,7 +221,7 @@ describe("Scope lifecycle", () => {
     await runtime.shutdown();
   });
 
-  it("closes registered plugin scopes when runtime cleanup shutdown dies", async () => {
+  it("closes registered plugin scopes on runtime cleanup", async () => {
     let released = false;
 
     const failPlugin = createPlugin({
@@ -229,13 +229,15 @@ describe("Scope lifecycle", () => {
       secrets: z.object({}),
       contract: testContract,
       initialize: () =>
-        Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
-          Effect.sync(() => {
-            released = true;
-          }),
-        ),
-      shutdown: () => Effect.die(new Error("intentional cleanup defect")),
-      createRouter: (_deps, builder) => ({
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(Effect.succeed({ ready: true }), () =>
+            Effect.sync(() => {
+              released = true;
+            }),
+          );
+          return Layer.empty as never;
+        }),
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true as const })),
       }),
     });
@@ -269,7 +271,7 @@ describe("Scope lifecycle", () => {
           );
           return yield* Effect.fail(new Error("intentional init failure"));
         }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true as const })),
       }),
     });
@@ -305,7 +307,7 @@ describe("Scope lifecycle", () => {
           );
           return yield* Effect.die(new Error("intentional defect"));
         }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true as const })),
       }),
     });
@@ -338,7 +340,7 @@ describe("Scope lifecycle", () => {
           );
           return yield* Effect.interrupt;
         }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true as const })),
       }),
     });
@@ -368,9 +370,9 @@ describe("Scope lifecycle", () => {
           if (callCount < 3) {
             return yield* Effect.fail(new Error(`transient failure #${callCount}`));
           }
-          return { ready: true };
+          return Layer.empty as never;
         }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true })),
       }),
     });
@@ -426,8 +428,8 @@ describe("Scope lifecycle", () => {
             return await initialization;
           },
           catch: (error) => (error instanceof Error ? error : new Error(String(error))),
-        }),
-      createRouter: (_deps, builder) => ({
+        }).pipe(Effect.map(() => Layer.empty as never)),
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true as const })),
       }),
     });
@@ -458,8 +460,7 @@ describe("Scope lifecycle", () => {
       variables: z.object({}),
       secrets: z.object({}),
       contract: testContract,
-      initialize: () => Effect.succeed({ ready: true }),
-      createRouter: (_deps, builder) => {
+      createRouter: (builder) => {
         routerCallCount++;
         return {
           ping: builder.ping.handler(async () => ({ ok: true })),
@@ -509,9 +510,9 @@ describe("Scope lifecycle", () => {
       initialize: () =>
         Effect.sync(() => {
           initCount++;
-          return { ready: true };
+          return Layer.empty as never;
         }),
-      createRouter: (_deps, builder) => ({
+      createRouter: (builder) => ({
         ping: builder.ping.handler(async () => ({ ok: true })),
       }),
     });
@@ -560,7 +561,7 @@ describe("Scope lifecycle", () => {
               released = true;
             }),
           );
-          return { ready: true };
+          return Layer.empty as never;
         }),
       createRouter: () => {
         throw new Error("intentional router failure");
@@ -575,6 +576,116 @@ describe("Scope lifecycle", () => {
     await runtime.usePlugin("router-failure", { variables: {}, secrets: {} }).catch(() => {});
 
     expect(released).toBe(true);
+
+    await runtime.shutdown();
+  });
+
+  it("provides the built Layer's services to .effect() handlers", async () => {
+    class Counter extends Context.Service<Counter, { increment: Effect.Effect<number> }>()(
+      "effect-services/Counter",
+    ) {
+      static Live = Layer.effect(
+        Counter,
+        Effect.gen(function* () {
+          let n = 0;
+          return {
+            increment: Effect.sync(() => ++n),
+          };
+        }),
+      );
+    }
+
+    const svcContract = oc.router({
+      next: oc.route({ method: "GET", path: "/next" }).output(z.number()),
+    });
+
+    const svcPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: svcContract,
+      initialize: () => Effect.succeed(Counter.Live),
+      createRouter: (builder) => ({
+        next: builder.next.effect(function* () {
+          const counter = yield* Counter;
+          return yield* counter.increment;
+        }),
+      }),
+    });
+
+    const runtime = createPluginRuntime({
+      registry: { "effect-services": { module: svcPlugin } },
+      secrets: {},
+    });
+
+    const result = await runtime.usePlugin("effect-services", {
+      variables: {},
+      secrets: {},
+    });
+
+    const client = result.createClient();
+    expect(await client.next()).toBe(1);
+    expect(await client.next()).toBe(2);
+
+    // raw router call with injected effect context
+    expect(
+      await call(result.router.next, undefined, {
+        context: { "effect/context": result.initialized.effectContext },
+      }),
+    ).toBe(3);
+
+    await runtime.shutdown();
+  });
+
+  it("passes sibling plugin entries to createRouter for merging", async () => {
+    const innerContract = oc.router({
+      hello: oc.route({ method: "GET", path: "/inner/hello" }).output(z.string()),
+    });
+    const innerPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: innerContract,
+      createRouter: (builder) => ({
+        hello: builder.hello.handler(async () => "inner-hello"),
+      }),
+    });
+
+    const outerContract = oc.router({
+      ping: oc.route({ method: "GET", path: "/outer/ping" }).output(z.string()),
+    });
+    let receivedPlugins: unknown = null;
+    const outerPlugin = createPlugin({
+      variables: z.object({}),
+      secrets: z.object({}),
+      contract: outerContract,
+      createRouter: (builder, plugins) => {
+        receivedPlugins = plugins;
+        return {
+          ping: builder.ping.handler(async () => "outer-ping"),
+          inner: (plugins as any).inner.router,
+        };
+      },
+    });
+
+    const runtime = createPluginRuntime({
+      registry: {
+        inner: { module: innerPlugin },
+        outer: { module: outerPlugin },
+      },
+      secrets: {},
+    });
+
+    const inner = await runtime.usePlugin("inner", { variables: {}, secrets: {} });
+    const plugins = {
+      inner: { client: inner.createClient, router: inner.router },
+    };
+
+    const outer = await runtime.usePlugin("outer", { variables: {}, secrets: {} }, plugins);
+
+    expect(receivedPlugins).toBe(plugins);
+
+    const client = outer.createClient();
+    expect(await client.ping()).toBe("outer-ping");
+    expect(await (client as any).inner.hello()).toBe("inner-hello");
 
     await runtime.shutdown();
   });

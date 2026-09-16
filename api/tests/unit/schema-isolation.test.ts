@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 import { getMigrationStorage } from "everything-dev/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDatabaseDriver, type Database } from "@/db/index";

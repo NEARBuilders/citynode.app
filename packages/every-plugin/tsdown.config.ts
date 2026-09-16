@@ -5,11 +5,7 @@ export default defineConfig({
   entry: [
     "src/index.ts",
     "src/types.ts",
-    "src/effect.ts",
-    "src/zod.ts",
-    "src/orpc.ts",
     "src/errors.ts",
-    "src/effect-bridge.ts",
     "src/runtime/index.ts",
     "src/testing/index.ts",
     "src/runtime/mf-config.ts",

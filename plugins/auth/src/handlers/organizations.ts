@@ -1,7 +1,8 @@
+import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
-import { ORPCError } from "every-plugin/orpc";
+import { Context } from "effect";
 import * as schema from "../db/schema";
-import type { PluginServices } from "../service-types";
+import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi, tryJsonParse } from "../utils";
 
 function toOrganizationInfo(organization: {
@@ -23,15 +24,12 @@ function toOrganizationInfo(organization: {
   };
 }
 
-export function createOrganizationHandlers(
-  services: PluginServices,
-  builder: any,
-  requireAuth: any,
-) {
+export function createOrganizationHandlers(builder: any, requireAuth: any) {
   return {
     listOrganizations: builder.listOrganizations
       .use(requireAuth)
       .handler(async ({ context }: { context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.listOrganizations({
             headers: createHeaders(context.reqHeaders),
@@ -46,6 +44,7 @@ export function createOrganizationHandlers(
     getFullOrganization: builder.getFullOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         try {
           const result = await services.auth.api.getFullOrganization({
             headers: createHeaders(context.reqHeaders),
@@ -94,8 +93,11 @@ export function createOrganizationHandlers(
     getOrganizationForAdmin: builder.getOrganizationForAdmin
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         if (context.user.role !== "admin") {
-          throw new ORPCError("FORBIDDEN", { message: "Admin access required" });
+          throw new ORPCError("FORBIDDEN", {
+            message: "Admin access required",
+          });
         }
         const organization = await services.db.query.organization.findFirst({
           where: eq(schema.organization.id, input.organizationId),
@@ -107,6 +109,7 @@ export function createOrganizationHandlers(
     createOrganization: builder.createOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.createOrganization({
             headers: createHeaders(context.reqHeaders),
@@ -128,6 +131,7 @@ export function createOrganizationHandlers(
     setActiveOrganization: builder.setActiveOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.setActiveOrganization({
             headers: createHeaders(context.reqHeaders),
@@ -140,6 +144,7 @@ export function createOrganizationHandlers(
     updateOrganization: builder.updateOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.updateOrganization({
             headers: createHeaders(context.reqHeaders),
@@ -155,7 +160,9 @@ export function createOrganizationHandlers(
           }),
         );
         if (!result) {
-          throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+          throw new ORPCError("NOT_FOUND", {
+            message: "Organization not found",
+          });
         }
         return toOrganizationInfo(result);
       }),
@@ -163,6 +170,7 @@ export function createOrganizationHandlers(
     leaveOrganization: builder.leaveOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.leaveOrganization({
             headers: createHeaders(context.reqHeaders),
@@ -175,6 +183,7 @@ export function createOrganizationHandlers(
     deleteOrganization: builder.deleteOrganization
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.deleteOrganization({
             headers: createHeaders(context.reqHeaders),
@@ -184,20 +193,24 @@ export function createOrganizationHandlers(
         return { success: true };
       }),
 
-    checkSlug: builder.checkSlug.handler(async ({ input }: { input: any }) => {
-      try {
-        const result = await services.auth.api.checkOrganizationSlug({
-          body: { slug: input.slug },
-        });
-        return { status: result.status };
-      } catch {
-        return { status: false };
-      }
-    }),
+    checkSlug: builder.checkSlug.handler(
+      async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
+        try {
+          const result = await services.auth.api.checkOrganizationSlug({
+            body: { slug: input.slug },
+          });
+          return { status: result.status };
+        } catch {
+          return { status: false };
+        }
+      },
+    ),
 
     hasPermission: builder.hasPermission
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.hasPermission({
             headers: createHeaders(context.reqHeaders),
@@ -213,11 +226,15 @@ export function createOrganizationHandlers(
     linkDao: builder.linkDao
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const headers = createHeaders(context.reqHeaders);
         const org = await services.db.query.organization.findFirst({
           where: eq(schema.organization.id, input.organizationId),
         });
-        if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+        if (!org)
+          throw new ORPCError("NOT_FOUND", {
+            message: "Organization not found",
+          });
 
         const existingMetadata = tryJsonParse<Record<string, unknown>>(org.metadata) ?? {};
         existingMetadata.daoAccountId = input.daoAccountId;
@@ -238,11 +255,15 @@ export function createOrganizationHandlers(
     unlinkDao: builder.unlinkDao
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const headers = createHeaders(context.reqHeaders);
         const org = await services.db.query.organization.findFirst({
           where: eq(schema.organization.id, input.organizationId),
         });
-        if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+        if (!org)
+          throw new ORPCError("NOT_FOUND", {
+            message: "Organization not found",
+          });
 
         const existingMetadata = tryJsonParse<Record<string, unknown>>(org.metadata) ?? {};
         delete existingMetadata.daoAccountId;
@@ -263,13 +284,17 @@ export function createOrganizationHandlers(
     getDao: builder.getDao
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.getFullOrganization({
             headers: createHeaders(context.reqHeaders),
             query: { organizationId: input.organizationId },
           }),
         );
-        if (!result) throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+        if (!result)
+          throw new ORPCError("NOT_FOUND", {
+            message: "Organization not found",
+          });
         const metadata =
           (typeof result.metadata === "string"
             ? tryJsonParse<Record<string, unknown>>(result.metadata)

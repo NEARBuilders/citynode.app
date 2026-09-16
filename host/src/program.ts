@@ -1,13 +1,5 @@
 import { serve } from "@hono/node-server";
-import {
-  Cause,
-  Effect,
-  Exit,
-  Fiber,
-  FiberHandle,
-  Layer,
-  ManagedRuntime,
-} from "every-plugin/effect";
+import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime } from "effect";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { type Context, Hono } from "hono";
 import type { AuthVariables } from "./lib/auth";

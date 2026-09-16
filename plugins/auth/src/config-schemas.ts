@@ -1,5 +1,4 @@
-import { z } from "every-plugin/zod";
-
+import { z } from "zod";
 export const API_KEY_CONFIG_IDS = ["user-keys", "org-keys"] as const;
 
 export const subAccountNetworkSchema = z.object({

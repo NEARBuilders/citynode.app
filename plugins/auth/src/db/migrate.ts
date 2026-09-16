@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Migration } from "virtual:drizzle-migrations.sql";
 import { sql } from "drizzle-orm";
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 import {
   extractExpectedTables,
   getMigrationStorage,

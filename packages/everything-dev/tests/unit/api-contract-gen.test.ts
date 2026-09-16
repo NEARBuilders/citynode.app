@@ -267,7 +267,7 @@ describe("writeGeneratedFiles — apiDependsOn filtering", () => {
     expect(existsSync(authClientPath)).toBe(true);
     const authClient = readFileSync(authClientPath, "utf-8");
     expect(authClient).toContain("pluginAContract");
-    expect(authClient).toContain("pluginA: ClientFactory<pluginAContract>");
+    expect(authClient).toContain("pluginA: PluginClientEntry<pluginAContract>");
   });
 
   it("generates an empty PluginsClient for a local auth plugin with no dependsOn", async () => {

@@ -1,4 +1,4 @@
-import { ConfigProvider, Effect, Redacted } from "every-plugin/effect";
+import { ConfigProvider, Effect, Redacted } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readCorsOrigins } from "../../src/services/config";
 import { readDbSecret, secretsFromEnv } from "../../src/services/plugins";

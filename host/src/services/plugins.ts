@@ -1,7 +1,7 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
+import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
-import { Config, Context, Data, Effect, Layer, Option, Redacted } from "every-plugin/effect";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -73,7 +73,8 @@ function dbUrlSummary(url: string | undefined): string {
 }
 
 export interface InitializedPluginResult {
-  context: unknown;
+  effectContext: unknown;
+  plugin?: { servicesTag?: unknown; id?: string };
   [key: string]: unknown;
 }
 
@@ -84,6 +85,32 @@ export interface HostPluginEntry {
   router: unknown;
   metadata: { remoteUrl: string; version?: string };
   initialized?: InitializedPluginResult;
+}
+
+/**
+ * Sibling plugin entry passed to dependent plugins' initialize/createRouter.
+ * Mirrors `PluginServicesEntry` from every-plugin: `client` creates an
+ * in-process typed client, `router` is the raw router for merging.
+ */
+export interface PluginsClientEntry {
+  client: (context?: unknown) => unknown;
+  router: unknown;
+}
+
+export function failedPluginsClientEntry(message: string): PluginsClientEntry {
+  return {
+    client: () => {
+      throw new Error(message);
+    },
+    router: new Proxy(
+      {},
+      {
+        get() {
+          throw new Error(message);
+        },
+      },
+    ),
+  };
 }
 
 export interface PluginStatus {
@@ -519,7 +546,7 @@ export const initializePlugins = Effect.gen(function* () {
       yield* Effect.logInfo(`[Plugins] Reusing singleton ${key} from ${cached.key}`);
       loadedPlugins[key] = cached;
       loadedPluginKeys.push(key);
-      pluginsClient[key] = cached.createClient;
+      pluginsClient[key] = { client: cached.createClient, router: cached.router };
 
       if (node.kind === "auth") {
         authPlugin = cached;
@@ -557,9 +584,7 @@ export const initializePlugins = Effect.gen(function* () {
           yield* logBootstrapError(err);
           errors.push(err.message);
           if (node.kind === "plugin") {
-            pluginsClient[key] = () => {
-              throw new Error(err.message);
-            };
+            pluginsClient[key] = failedPluginsClientEntry(err.message);
           }
           return null;
         }),
@@ -570,7 +595,7 @@ export const initializePlugins = Effect.gen(function* () {
       singletonCache.set(sKey, result);
       loadedPlugins[key] = result;
       loadedPluginKeys.push(key);
-      pluginsClient[key] = result.createClient;
+      pluginsClient[key] = { client: result.createClient, router: result.router };
 
       if (node.kind === "auth") {
         authPlugin = result;

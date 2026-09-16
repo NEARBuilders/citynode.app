@@ -1,6 +1,6 @@
 import { Context, Effect, Exit, Layer, Ref, Scope } from "effect";
 import type { AnyPlugin, InitializedPlugin } from "../../types";
-import { type PluginRuntimeError, toPluginRuntimeError } from "../errors";
+import type { PluginRuntimeError } from "../errors";
 
 export interface PluginLifecycleServiceShape {
   register: <T extends AnyPlugin>(plugin: InitializedPlugin<T>) => Effect.Effect<void>;
@@ -40,13 +40,11 @@ export const PluginLifecycleServiceDefault = Layer.effect(
             return newSet;
           });
 
-          yield* plugin.plugin
-            .shutdown()
-            .pipe(
-              Effect.mapError((error) =>
-                toPluginRuntimeError(error, plugin.plugin.id, undefined, "shutdown-plugin", false),
-              ),
-            );
+          yield* Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(`Failed to close scope for plugin ${plugin.plugin.id}`, cause),
+            ),
+          );
         }),
 
       cleanup: () =>
@@ -61,19 +59,9 @@ export const PluginLifecycleServiceDefault = Layer.effect(
           yield* Effect.forEach(
             plugins,
             (plugin) =>
-              plugin.plugin.shutdown().pipe(
+              Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
                 Effect.catchCause((cause) =>
                   Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
-                ),
-                Effect.ensuring(
-                  Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
-                    Effect.catchCause((cause) =>
-                      Effect.logWarning(
-                        `Failed to close scope for plugin ${plugin.plugin.id}`,
-                        cause,
-                      ),
-                    ),
-                  ),
                 ),
               ),
             { concurrency: "unbounded" },

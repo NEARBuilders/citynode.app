@@ -77,6 +77,27 @@ export const pluginSharedDependencies = {
     version: getInstalledPackageVersion("@orpc/server", pkg.peerDependencies["@orpc/server"]),
     ...DEFAULT_SHARE_CONFIG,
   },
+  "@orpc/openapi": {
+    version: getInstalledPackageVersion(
+      "@orpc/openapi",
+      (pkg.peerDependencies as Record<string, string>)["@orpc/openapi"] ?? "latest",
+    ),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "@orpc/experimental-effect": {
+    version: getInstalledPackageVersion(
+      "@orpc/experimental-effect",
+      (pkg.dependencies as Record<string, string>)["@orpc/experimental-effect"] ?? "latest",
+    ),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "@orpc/publisher": {
+    version: getInstalledPackageVersion(
+      "@orpc/publisher",
+      (pkg.dependencies as Record<string, string>)["@orpc/publisher"] ?? "latest",
+    ),
+    ...DEFAULT_SHARE_CONFIG,
+  },
 } satisfies SharedDependencies;
 
 export type PluginSharedDependencyName = keyof typeof pluginSharedDependencies;

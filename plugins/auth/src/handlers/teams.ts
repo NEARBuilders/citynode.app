@@ -1,11 +1,13 @@
-import type { PluginServices } from "../service-types";
+import { Context } from "effect";
+import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi } from "../utils";
 
-export function createTeamHandlers(services: PluginServices, builder: any, requireAuth: any) {
+export function createTeamHandlers(builder: any, requireAuth: any) {
   return {
     createTeam: builder.createTeam
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.createTeam({
             headers: createHeaders(context.reqHeaders),
@@ -33,6 +35,7 @@ export function createTeamHandlers(services: PluginServices, builder: any, requi
     updateTeam: builder.updateTeam
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.updateTeam({
             headers: createHeaders(context.reqHeaders),
@@ -65,6 +68,7 @@ export function createTeamHandlers(services: PluginServices, builder: any, requi
     deleteTeam: builder.deleteTeam
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.removeTeam({
             headers: createHeaders(context.reqHeaders),
@@ -80,6 +84,7 @@ export function createTeamHandlers(services: PluginServices, builder: any, requi
     listTeams: builder.listTeams
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.listOrganizationTeams({
             headers: createHeaders(context.reqHeaders),
@@ -100,6 +105,7 @@ export function createTeamHandlers(services: PluginServices, builder: any, requi
     listTeamMembers: builder.listTeamMembers
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.listTeamMembers({
             headers: createHeaders(context.reqHeaders),
@@ -119,6 +125,7 @@ export function createTeamHandlers(services: PluginServices, builder: any, requi
     addTeamMember: builder.addTeamMember
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.addTeamMember({
             headers: createHeaders(context.reqHeaders),
@@ -141,6 +148,7 @@ export function createTeamHandlers(services: PluginServices, builder: any, requi
     removeTeamMember: builder.removeTeamMember
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.removeTeamMember({
             headers: createHeaders(context.reqHeaders),

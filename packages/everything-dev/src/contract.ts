@@ -1,3 +1,4 @@
+import "@orpc/openapi/extensions/route";
 import * as z from "zod";
 import { oc } from "./sdk";
 import { BosConfigInputSchema, BosConfigSchema, SourceModeSchema } from "./types";

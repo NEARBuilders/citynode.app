@@ -1,4 +1,5 @@
-import { z } from "every-plugin/zod";
+import "@orpc/openapi/extensions/route";
+import { z } from "zod";
 export declare const ItemSchema: z.ZodObject<{
     id: z.ZodString;
     title: z.ZodString;
@@ -64,23 +65,18 @@ export declare const contract: {
         userId: z.ZodString;
     }, z.core.$strip>, {
         UNAUTHORIZED: {
-            status: number;
             message: string;
         };
         FORBIDDEN: {
-            status: number;
             message: string;
         };
         NOT_FOUND: {
-            status: number;
             message: string;
         };
         CONFLICT: {
-            status: number;
             message: string;
         };
         BAD_REQUEST: {
-            status: number;
             message: string;
         };
     }>;
@@ -135,7 +131,6 @@ export declare const contract: {
         action: z.ZodString;
     }, z.core.$strip>, {
         CONFLICT: {
-            status: number;
             message: string;
         };
     }>;
@@ -209,23 +204,18 @@ export declare const contract: {
         ok: z.ZodLiteral<true>;
     }, z.core.$strip>, {
         UNAUTHORIZED: {
-            status: number;
             message: string;
         };
         FORBIDDEN: {
-            status: number;
             message: string;
         };
         NOT_FOUND: {
-            status: number;
             message: string;
         };
         CONFLICT: {
-            status: number;
             message: string;
         };
         BAD_REQUEST: {
-            status: number;
             message: string;
         };
     }>;

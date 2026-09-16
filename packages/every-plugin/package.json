@@ -45,33 +45,6 @@
       "import": "./dist/runtime/services/normalize.mjs",
       "require": "./dist/runtime/services/normalize.cjs"
     },
-    "./effect": {
-      "development": {
-        "types": "./src/effect.ts",
-        "import": "./src/effect.ts"
-      },
-      "types": "./dist/effect.d.mts",
-      "import": "./dist/effect.mjs",
-      "require": "./dist/effect.cjs"
-    },
-    "./zod": {
-      "development": {
-        "types": "./src/zod.ts",
-        "import": "./src/zod.ts"
-      },
-      "types": "./dist/zod.d.mts",
-      "import": "./dist/zod.mjs",
-      "require": "./dist/zod.cjs"
-    },
-    "./orpc": {
-      "development": {
-        "types": "./src/orpc.ts",
-        "import": "./src/orpc.ts"
-      },
-      "types": "./dist/orpc.d.mts",
-      "import": "./dist/orpc.mjs",
-      "require": "./dist/orpc.cjs"
-    },
     "./errors": {
       "development": {
         "types": "./src/errors.ts",

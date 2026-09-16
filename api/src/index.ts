@@ -1,17 +1,30 @@
+import type { ContractedRouter } from "@orpc/server";
+import { ORPCError } from "@orpc/server";
+import { Context, Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
+import { z } from "zod";
 import { contract } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
+import type { NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
+import type { TenantsService } from "./services/tenants";
 import { TenantsLive, TenantsTag } from "./services/tenants";
+import type { ValidatorsService } from "./services/validators";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
+
+class ApiServices extends Context.Service<
+  ApiServices,
+  {
+    tenants: TenantsService;
+    nodes: NodesService;
+    validators: ValidatorsService;
+  }
+>()("api/ApiServices") {}
 
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
@@ -53,7 +66,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, plugins) =>
+  initialize: (config) =>
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
       const services = yield* Layer.buildWithScope(
@@ -61,66 +74,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
         yield* Effect.scope,
       );
 
-      const tenantsService = Context.get(services, TenantsTag);
-      const nodesService = Context.get(services, NodesTag);
-      const validatorsService = Context.get(services, ValidatorsTag);
-
-      const templateFactory = (plugins as Record<string, unknown>).template as
-        | (() => {
-            createThing: (input: { thingId: string; payload: unknown }) => Promise<{
-              thingId: string;
-              type: string;
-              payload: unknown;
-              createdAt: string;
-              updatedAt: string;
-              action: string;
-            }>;
-            getThing: (input: { thingId: string }) => Promise<{
-              thingId: string;
-              type: string;
-              payload: unknown;
-              createdAt: string;
-              updatedAt: string;
-            }>;
-            listThings: (input: { type?: string; limit: number; cursor?: string }) => Promise<{
-              data: Array<{
-                thingId: string;
-                type: string;
-                payload: unknown;
-                createdAt: string;
-                updatedAt: string;
-              }>;
-              meta: { total: number; hasMore: boolean; nextCursor: string | null };
-            }>;
-            deleteThing: (input: { thingId: string }) => Promise<{ success: true }>;
-          })
-        | undefined;
-      let templateClient: ReturnType<NonNullable<typeof templateFactory>> | undefined;
-      if (templateFactory) {
-        try {
-          templateClient = templateFactory();
-        } catch (cause) {
-          yield* Effect.logWarning(
-            `[API] Template plugin client unavailable — template-backed routes will return clean errors: ${cause instanceof Error ? cause.message : String(cause)}`,
-          );
-        }
-      }
-
       console.log("[API] Services Initialized");
 
-      return {
-        tenants: tenantsService,
-        nodes: nodesService,
-        validators: validatorsService,
-        templateClient,
-        platformAccount: config.variables.platformAccount,
-      };
+      return Layer.succeed(ApiServices, {
+        tenants: Context.get(services, TenantsTag),
+        nodes: Context.get(services, NodesTag),
+        validators: Context.get(services, ValidatorsTag),
+      });
     }),
 
-  shutdown: () => Effect.log("[API] Shutdown"),
-
-  createRouter: (services, builder) => {
-    const { templateClient } = services;
+  createRouter: (builder, plugins) => {
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware(builder);
 
@@ -132,6 +95,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         near?: { primaryAccountId: string | null };
       },
     ) => {
+      const services = Context.get((context as any)["effect/context"], ApiServices);
       const tenant = await services.tenants.resolveTenantById(input.tenantId);
       if (!tenant) {
         throw new ORPCError("NOT_FOUND", {
@@ -166,6 +130,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         organization?: { activeOrganizationId: string | null };
       },
     ) => {
+      const services = Context.get((context as any)["effect/context"], ApiServices);
       const node = await services.nodes.getById(nodeId);
       if (!node) {
         throw new ORPCError("NOT_FOUND", {
@@ -192,17 +157,20 @@ export default createPlugin.withPlugins<PluginsClient>()({
       return node;
     };
 
-    return {
+    const router = {
       ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),
       })),
 
       listTenants: builder.listTenants.use(requireAuth).handler(async ({ context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         if (context.user.role === "admin") return services.tenants.listAllTenants();
         const orgId = context.organization?.activeOrganizationId;
         if (!orgId) {
-          throw new ORPCError("FORBIDDEN", { message: "Active organization required" });
+          throw new ORPCError("FORBIDDEN", {
+            message: "Active organization required",
+          });
         }
         return services.tenants.listTenantsByOrgIds([orgId]);
       }),
@@ -212,6 +180,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAdmin)
         .use(requireOrganization)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           validateAccountId(input.accountId);
           const result = await verifyDaoMembership({
             daoAccountId: input.accountId,
@@ -242,6 +211,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("owner"))
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const tenant = await authorizedTenant(input, context);
           if (input.accountId !== undefined) validateAccountId(input.accountId);
           return await services.tenants.updateTenant(tenant.id, {
@@ -258,6 +228,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("owner"))
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           await authorizedTenant(input, context);
           const result = await services.tenants.softDeleteTenant(input.tenantId);
           if (!result) {
@@ -273,6 +244,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           await authorizedTenant(input, context);
           const result = await services.tenants.suspendTenant(input.tenantId);
           if (!result) {
@@ -288,6 +260,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           await authorizedTenant(input, context);
           const result = await services.tenants.reactivateTenant(input.tenantId);
           if (!result) {
@@ -299,33 +272,45 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return result;
         }),
 
-      resolveTenant: builder.resolveTenant.handler(async ({ input }) => {
+      resolveTenant: builder.resolveTenant.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const tenant = await services.tenants.resolveTenantByAccountId(input.accountId);
         return tenant ?? null;
       }),
 
-      resolveTenantByOrgId: builder.resolveTenantByOrgId.handler(async ({ input, errors }) => {
-        const tenant = await services.tenants.resolveTenantByOrgId(input.orgId);
-        if (!tenant) {
-          throw errors.NOT_FOUND({
-            message: "Tenant not found",
-            data: { resource: "tenant", resourceId: input.orgId },
-          });
-        }
-        return tenant;
-      }),
-
-      listTenantBindings: builder.listTenantBindings.handler(async () =>
-        services.tenants.listBindings(),
+      resolveTenantByOrgId: builder.resolveTenantByOrgId.handler(
+        async ({ input, errors, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          const tenant = await services.tenants.resolveTenantByOrgId(input.orgId);
+          if (!tenant) {
+            throw errors.NOT_FOUND({
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: input.orgId },
+            });
+          }
+          return tenant;
+        },
       ),
 
-      listTenantApps: builder.listTenantApps.handler(async () => services.tenants.listTenantApps()),
+      listTenantBindings: builder.listTenantBindings.handler(async ({ context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.tenants.listBindings();
+      }),
+
+      listTenantApps: builder.listTenantApps.handler(async ({ context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.tenants.listTenantApps();
+      }),
 
       listTenantBindingsForTenant: builder.listTenantBindingsForTenant
         .use(requireAuth)
-        .handler(async ({ input }) => services.tenants.listBindingsForTenant(input.tenantId)),
+        .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          return services.tenants.listBindingsForTenant(input.tenantId);
+        }),
 
       createBinding: builder.createBinding.use(requireAuth).handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         await authorizedTenant(input, context);
         validateHostname(input.hostname);
         return await services.tenants.createBinding({
@@ -338,11 +323,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
       verifyCustomDomain: builder.verifyCustomDomain
         .use(requireAuth)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           await authorizedTenant(input, context);
           return await services.tenants.verifyCustomDomain(input.tenantId, input.bindingId);
         }),
 
       deleteBinding: builder.deleteBinding.use(requireAuth).handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         await authorizedTenant(input, context);
         await services.tenants.deleteBinding(input.tenantId, input.bindingId);
         return { success: true as const };
@@ -352,74 +339,87 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           await authorizedTenant(input, context);
           return await services.tenants.setPrimaryBinding(input.tenantId, input.bindingId);
         }),
 
-      resolveBindingByHostname: builder.resolveBindingByHostname.handler(async ({ input }) => {
-        const binding = await services.tenants.resolveBindingByHostname(input.hostname);
-        return binding ?? null;
-      }),
+      resolveBindingByHostname: builder.resolveBindingByHostname.handler(
+        async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          const binding = await services.tenants.resolveBindingByHostname(input.hostname);
+          return binding ?? null;
+        },
+      ),
 
-      bindingPreflight: builder.bindingPreflight.use(requireAuth).handler(async ({ input }) => {
-        const format = HOSTNAME_REGEX.test(input.hostname.toLowerCase())
-          ? ("valid" as const)
-          : ("invalid" as const);
-        const existing =
-          format === "valid"
-            ? await services.tenants.resolveBindingByHostname(input.hostname.toLowerCase())
-            : null;
-        return {
-          hostname: { available: format === "valid" && !existing, format },
-        };
-      }),
+      bindingPreflight: builder.bindingPreflight
+        .use(requireAuth)
+        .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          const format = HOSTNAME_REGEX.test(input.hostname.toLowerCase())
+            ? ("valid" as const)
+            : ("invalid" as const);
+          const existing =
+            format === "valid"
+              ? await services.tenants.resolveBindingByHostname(input.hostname.toLowerCase())
+              : null;
+          return {
+            hostname: { available: format === "valid" && !existing, format },
+          };
+        }),
 
-      applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).handler(async ({ input }) => {
-        validateAccountId(input.accountId);
-        validateAccountId(input.submitterAccountId);
-        if (input.poolAccountId) validateAccountId(input.poolAccountId);
-        validateHostname(input.hostname);
-        const result = await verifyDaoMembership({
-          daoAccountId: input.accountId,
-          memberAccountId: input.submitterAccountId,
-        });
-        if (!result.isMember) {
-          throw new ORPCError("FORBIDDEN", {
-            message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
-            data: {
-              daoAccountId: input.accountId,
-              submitterAccountId: input.submitterAccountId,
-            },
+      applyNodeProposal: builder.applyNodeProposal
+        .use(requireAdmin)
+        .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          validateAccountId(input.accountId);
+          validateAccountId(input.submitterAccountId);
+          if (input.poolAccountId) validateAccountId(input.poolAccountId);
+          validateHostname(input.hostname);
+          const result = await verifyDaoMembership({
+            daoAccountId: input.accountId,
+            memberAccountId: input.submitterAccountId,
           });
-        }
-        return services.tenants.applyNodeProposal({
-          kind: input.kind,
-          name: input.name,
-          slug: input.slug,
-          parentId: input.parentId,
-          orgId: input.orgId,
-          accountId: input.accountId,
-          hostname: input.hostname.toLowerCase(),
-          ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
-        });
-      }),
+          if (!result.isMember) {
+            throw new ORPCError("FORBIDDEN", {
+              message: `${input.submitterAccountId} is not a member of ${input.accountId} — add it under the DAO's members at https://trezu.app/${input.accountId}/members`,
+              data: {
+                daoAccountId: input.accountId,
+                submitterAccountId: input.submitterAccountId,
+              },
+            });
+          }
+          return services.tenants.applyNodeProposal({
+            kind: input.kind,
+            name: input.name,
+            slug: input.slug,
+            parentId: input.parentId,
+            orgId: input.orgId,
+            accountId: input.accountId,
+            hostname: input.hostname.toLowerCase(),
+            ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
+          });
+        }),
 
-      listNodes: builder.listNodes.handler(async ({ input }) =>
-        services.nodes.list({
+      listNodes: builder.listNodes.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.nodes.list({
           ...(input.kind !== undefined && { kind: input.kind }),
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
-        }),
-      ),
+        });
+      }),
 
-      listNodeSummaries: builder.listNodeSummaries.handler(async ({ input }) =>
-        services.nodes.listSummaries({
+      listNodeSummaries: builder.listNodeSummaries.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.nodes.listSummaries({
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
-        }),
-      ),
+        });
+      }),
 
-      getNode: builder.getNode.handler(async ({ input }) => {
+      getNode: builder.getNode.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const node = await services.nodes.getById(input.nodeId);
         return node ?? null;
       }),
@@ -428,6 +428,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrganization)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const tenant = await services.tenants.resolveTenantById(input.tenantId);
           if (!tenant) {
             throw new ORPCError("NOT_FOUND", {
@@ -451,6 +452,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }),
 
       updateNode: builder.updateNode.use(requireAuth).handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const node = await services.nodes.getById(input.nodeId);
         if (!node) {
           throw new ORPCError("NOT_FOUND", {
@@ -487,6 +489,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("admin"))
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const node = await services.nodes.getById(input.nodeId);
           if (!node) {
             throw new ORPCError("NOT_FOUND", {
@@ -516,13 +519,18 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return { success: true as const };
         }),
 
-      listRootNodes: builder.listRootNodes.handler(async () => services.nodes.listRootNodes()),
+      listRootNodes: builder.listRootNodes.handler(async ({ context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.nodes.listRootNodes();
+      }),
 
-      listChildren: builder.listChildren.handler(async ({ input }) =>
-        services.nodes.listChildren(input.nodeId),
-      ),
+      listChildren: builder.listChildren.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.nodes.listChildren(input.nodeId);
+      }),
 
-      getSubtree: builder.getSubtree.handler(async ({ input }) => {
+      getSubtree: builder.getSubtree.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const subtree = await services.nodes.subtreeWithValidators(input.nodeId);
         if (subtree.length === 0) {
           throw new ORPCError("NOT_FOUND", {
@@ -533,7 +541,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return subtree;
       }),
 
-      getNodeSummary: builder.getNodeSummary.handler(async ({ input }) => {
+      getNodeSummary: builder.getNodeSummary.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const node = await services.nodes.getById(input.nodeId);
         if (!node) {
           throw new ORPCError("NOT_FOUND", {
@@ -566,11 +575,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
           subtreeValidatorCount: subtreeValidators.length,
           subtreeValidatorCountsByRole,
           stakingValidators,
-          children: children.map(({ id, kind, slug, name }) => ({ id, kind, slug, name })),
+          children: children.map(({ id, kind, slug, name }) => ({
+            id,
+            kind,
+            slug,
+            name,
+          })),
         };
       }),
 
-      resolveNodeBySlug: builder.resolveNodeBySlug.handler(async ({ input }) => {
+      resolveNodeBySlug: builder.resolveNodeBySlug.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const node = await services.nodes.resolveBySlug(
           input.slug,
           input.parentId === undefined ? undefined : input.parentId,
@@ -578,36 +593,44 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return node ?? null;
       }),
 
-      listValidators: builder.listValidators.handler(async ({ input }) =>
-        services.validators.list({
+      listValidators: builder.listValidators.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.validators.list({
           ...(input.nodeId !== undefined && { nodeId: input.nodeId }),
           ...(input.role !== undefined && { role: input.role }),
-        }),
-      ),
+        });
+      }),
 
-      listValidatorsByNode: builder.listValidatorsByNode.handler(async ({ input }) =>
-        services.validators.listByNode(input.nodeId),
-      ),
+      listValidatorsByNode: builder.listValidatorsByNode.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        return services.validators.listByNode(input.nodeId);
+      }),
 
-      getValidator: builder.getValidator.handler(async ({ input }) => {
+      getValidator: builder.getValidator.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
         const validator = await services.validators.getById(input.validatorId);
         return validator ?? null;
       }),
 
       resolveValidatorByAccountId: builder.resolveValidatorByAccountId.handler(
-        async ({ input }) => {
+        async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const validator = await services.validators.resolveByAccountId(input.accountId);
           return validator ?? null;
         },
       ),
 
-      resolveStakingValidators: builder.resolveStakingValidators.handler(async ({ input }) =>
-        services.validators.resolveForStaking(input.nodeId),
+      resolveStakingValidators: builder.resolveStakingValidators.handler(
+        async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          return services.validators.resolveForStaking(input.nodeId);
+        },
       ),
 
       createValidator: builder.createValidator
         .use(requireAuth)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           await authorizedNodeForValidators(input.nodeId, context);
           return services.validators.create({
             nodeId: input.nodeId,
@@ -623,6 +646,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       updateValidator: builder.updateValidator
         .use(requireAuth)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const validator = await services.validators.getById(input.validatorId);
           if (!validator) {
             throw new ORPCError("NOT_FOUND", {
@@ -632,11 +656,15 @@ export default createPlugin.withPlugins<PluginsClient>()({
           }
           await authorizedNodeForValidators(validator.nodeId, context);
           return services.validators.update(input.validatorId, {
-            ...(input.accountId !== undefined && { accountId: input.accountId }),
+            ...(input.accountId !== undefined && {
+              accountId: input.accountId,
+            }),
             ...(input.network !== undefined && { network: input.network }),
             ...(input.protocol !== undefined && { protocol: input.protocol }),
             ...(input.role !== undefined && { role: input.role }),
-            ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
+            ...(input.isDefault !== undefined && {
+              isDefault: input.isDefault,
+            }),
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
         }),
@@ -644,6 +672,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       deleteValidator: builder.deleteValidator
         .use(requireAuth)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const validator = await services.validators.getById(input.validatorId);
           if (!validator) {
             throw new ORPCError("NOT_FOUND", {
@@ -659,6 +688,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       setDefaultValidator: builder.setDefaultValidator
         .use(requireAuth)
         .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
           const target = await services.validators.getById(input.validatorId);
           if (!target) {
             throw new ORPCError("NOT_FOUND", {
@@ -670,58 +700,37 @@ export default createPlugin.withPlugins<PluginsClient>()({
           return await services.validators.setDefault(target.nodeId, input.validatorId);
         }),
 
-      createThing: builder.createThing.use(requireAuth).handler(async ({ input }) => {
-        if (!templateClient) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "The template plugin is not included in this deployment",
-          });
-        }
-        return await templateClient.createThing({ thingId: input.thingId, payload: input.payload });
-      }),
-
-      getThing: builder.getThing.handler(async ({ input }) => {
-        if (!templateClient) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "The template plugin is not included in this deployment",
-          });
-        }
-        return await templateClient.getThing({ thingId: input.thingId });
-      }),
-
-      listThings: builder.listThings.handler(async ({ input }) => {
-        if (!templateClient) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "The template plugin is not included in this deployment",
-          });
-        }
-        return await templateClient.listThings(input);
-      }),
-
-      deleteThing: builder.deleteThing.use(requireAuth).handler(async ({ input }) => {
-        if (!templateClient) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "The template plugin is not included in this deployment",
-          });
-        }
-        return await templateClient.deleteThing({ thingId: input.thingId });
-      }),
-
       testError: builder.testError.handler(async ({ input }) => {
         switch (input.kind) {
           case "unauthorized":
-            throw new ORPCError("UNAUTHORIZED", { message: "test unauthorized error" });
+            throw new ORPCError("UNAUTHORIZED", {
+              message: "test unauthorized error",
+            });
           case "forbidden":
-            throw new ORPCError("FORBIDDEN", { message: "test forbidden error" });
+            throw new ORPCError("FORBIDDEN", {
+              message: "test forbidden error",
+            });
           case "not_found":
-            throw new ORPCError("NOT_FOUND", { message: "test not found error" });
+            throw new ORPCError("NOT_FOUND", {
+              message: "test not found error",
+            });
           case "conflict":
             throw new ORPCError("CONFLICT", { message: "test conflict error" });
           case "bad_request":
-            throw new ORPCError("BAD_REQUEST", { message: "test bad request error" });
+            throw new ORPCError("BAD_REQUEST", {
+              message: "test bad request error",
+            });
           default:
             throw new Error("test internal server error");
         }
       }),
     };
+
+    const templateRouter = (plugins as Record<string, { router?: unknown }>).template?.router;
+    if (templateRouter) {
+      (router as Record<string, unknown>).things = templateRouter;
+    }
+
+    return router as ContractedRouter<typeof contract, any>;
   },
 });

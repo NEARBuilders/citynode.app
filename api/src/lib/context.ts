@@ -1,16 +1,13 @@
 /**
- * Effect context bridge — converts Effect errors to ORPCError for handler use.
+ * Request context schema — the auth context the host injects per request.
  *
  * BE CAREFUL MODIFYING THIS FILE — changes will be overwritten by `bos sync` / `bos upgrade`.
  * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
  */
 
-import { flattenError, runEffect } from "every-plugin";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 import type { AuthContext } from "./auth";
 
 export const ContextSchema = z.custom<AuthContext>();
 
 export type Context = AuthContext;
-
-export { flattenError, runEffect };

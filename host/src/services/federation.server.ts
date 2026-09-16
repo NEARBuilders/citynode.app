@@ -1,5 +1,5 @@
 import { createInstance } from "@module-federation/enhanced/runtime";
-import { Effect, Schedule } from "every-plugin/effect";
+import { Effect, Schedule } from "effect";
 import { verifySriForUrl } from "everything-dev/integrity";
 import type { RouterModule } from "../types";
 import type { RuntimeConfig } from "./config";

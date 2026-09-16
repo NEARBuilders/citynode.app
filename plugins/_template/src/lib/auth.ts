@@ -5,7 +5,7 @@
  * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
  */
 
-import { ORPCError } from "every-plugin/orpc";
+import { ORPCError } from "@orpc/server";
 import type { AuthPluginContext } from "./auth-types.gen";
 
 export type AuthContext = AuthPluginContext;

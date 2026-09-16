@@ -1,4 +1,4 @@
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { TemplateService } from "@/service";
 
@@ -25,7 +25,7 @@ describe("TemplateService", () => {
 
   describe("search", () => {
     it("should return search results as async generator", async () => {
-      const generator = await Effect.runPromise(service.search("test-query", 3));
+      const generator = service.search("test-query", 3);
 
       const results = [];
       for await (const result of generator) {
@@ -46,7 +46,7 @@ describe("TemplateService", () => {
     });
 
     it("should respect limit parameter", async () => {
-      const generator = await Effect.runPromise(service.search("limited", 2));
+      const generator = service.search("limited", 2);
 
       const results = [];
       for await (const result of generator) {

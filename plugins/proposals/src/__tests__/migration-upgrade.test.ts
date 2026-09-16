@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { sql } from "drizzle-orm";
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 import { getMigrationStorage } from "everything-dev/db";
 import { describe, expect, it } from "vitest";
 import { createDatabaseDriver } from "../db/index";

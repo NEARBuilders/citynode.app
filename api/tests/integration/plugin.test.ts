@@ -529,7 +529,7 @@ describe("API Plugin Integration Tests", () => {
         "test bad request error",
       );
       await expect(client.testError({ kind: "internal" as never })).rejects.toThrow(
-        "Internal server error",
+        "Internal Server Error",
       );
     });
   });

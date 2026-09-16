@@ -1,5 +1,4 @@
-import { ORPCError } from "every-plugin/orpc";
-
+import { ORPCError } from "@orpc/server";
 export function toError(e: unknown): Error {
   if (typeof e === "object" && e !== null && "message" in e) {
     return new Error(String(e.message));

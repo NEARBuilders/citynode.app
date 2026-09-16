@@ -1,4 +1,4 @@
-import { ORPCError } from "every-plugin/orpc";
+import { ORPCError } from "@orpc/server";
 import { Near } from "near-kit";
 
 export type NearNetworkId = "mainnet" | "testnet";

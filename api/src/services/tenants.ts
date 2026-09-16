@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
+import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, not, notLike, or } from "drizzle-orm";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
+import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,

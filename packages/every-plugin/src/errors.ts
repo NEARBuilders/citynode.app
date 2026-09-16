@@ -1,5 +1,5 @@
 import { COMMON_ERROR_STATUS_MAP } from "@orpc/server";
-import { z } from "./zod";
+import { z } from "zod";
 
 /**
  * Error pattern constants for categorizing infrastructure errors

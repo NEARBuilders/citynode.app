@@ -1,4 +1,4 @@
-import { Effect, Layer } from "every-plugin/effect";
+import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { beforeAll, describe, expect, it } from "vitest";
 import { SecurityMiddleware } from "../../src/middleware/security";

@@ -1,5 +1,5 @@
+import { Context, Effect, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
-import { Context, Effect, Layer } from "every-plugin/effect";
 import type { TemplateDatabase } from "./index";
 import { migrate } from "./migrator";
 

@@ -52,16 +52,9 @@ export const PluginServiceDefault = Layer.effect(
       initializePlugin: loader.initializePlugin,
       registerPlugin: (plugin: InitializedPlugin<AnyPlugin>) => lifecycle.register(plugin),
       shutdownPlugin: (plugin: InitializedPlugin<AnyPlugin>) =>
-        plugin.plugin.shutdown().pipe(
+        Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(`Failed to shutdown plugin ${plugin.plugin.id}`, cause),
-          ),
-          Effect.ensuring(
-            Scope.close(plugin.scope, Exit.succeed(undefined)).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning(`Failed to close scope for plugin ${plugin.plugin.id}`, cause),
-              ),
-            ),
           ),
           Effect.ensuring(lifecycle.unregister(plugin)),
         ),

@@ -1,5 +1,5 @@
 import { getConnInfo } from "@hono/node-server/conninfo";
-import { Context, Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "effect";
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { NONCE, secureHeaders } from "hono/secure-headers";

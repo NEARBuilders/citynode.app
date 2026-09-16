@@ -1,26 +1,23 @@
-import { eventIterator, oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import "@orpc/openapi/extensions/route";
+import { eventIterator, oc } from "@orpc/contract";
+import { z } from "zod";
 
-// Define specific errors thrown by this plugin
+// Define specific errors thrown by this plugin.
+// HTTP statuses are resolved centrally via PLUGIN_ERROR_STATUS_MAP.
 const Errors = {
   UNAUTHORIZED: {
-    status: 401,
     message: "User ID required",
   },
   FORBIDDEN: {
-    status: 403,
     message: "Operation not permitted",
   },
   NOT_FOUND: {
-    status: 404,
     message: "Failed to fetch item: Item not found",
   },
   CONFLICT: {
-    status: 409,
     message: "A thing with this ID already exists",
   },
   BAD_REQUEST: {
-    status: 400,
     message: "Bad request",
   },
 };

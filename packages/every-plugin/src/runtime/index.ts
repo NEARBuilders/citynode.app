@@ -1,3 +1,6 @@
+import "@orpc/experimental-effect/extensions/effect";
+import "@orpc/openapi/extensions/route";
+
 import { createRouterClient } from "@orpc/server";
 import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
 import type {
@@ -175,7 +178,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     let router = this.routerCache.get(cacheKey);
     if (!router) {
       try {
-        router = initialized.plugin.createRouter(initialized.context) as PluginRouterType<R[K]>;
+        router = initialized.plugin.createRouter(plugins ?? {}) as PluginRouterType<R[K]>;
         this.routerCache.set(cacheKey, router);
       } catch (error) {
         await this.evictPlugin(pluginId, config, plugins);
@@ -183,8 +186,16 @@ export class PluginRuntime<R = RegisteredPlugins> {
       }
     }
 
-    // Create client factory that accepts request context
-    const createClient = (context?: any) => createRouterClient(router, { context: context ?? {} });
+    // Create client factory that accepts request context. The plugin's
+    // Effect context is injected so `.effect()` handlers resolve services
+    // on in-process (server-side / SSR) calls.
+    const createClient = (context?: any) =>
+      createRouterClient(router, {
+        context: {
+          ...(context ?? {}),
+          "effect/context": initialized.effectContext,
+        },
+      });
 
     return {
       createClient: createClient as any,

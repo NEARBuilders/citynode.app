@@ -1,6 +1,7 @@
+import "@orpc/openapi/extensions/route";
 import type { InferContractRouterInputs, InferContractRouterOutputs } from "@orpc/contract";
-import { oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { oc } from "@orpc/contract";
+import { z } from "zod";
 
 const Errors = {
   UNAUTHORIZED: {

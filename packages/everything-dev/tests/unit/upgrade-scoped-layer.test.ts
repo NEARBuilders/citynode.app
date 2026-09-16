@@ -55,7 +55,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
       "yield* Layer.buildWithScope(DatabaseLive(config.secrets.API_DATABASE_URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, DatabaseTag)))",
     );
     expect(result).not.toContain("Effect.provide(DatabaseTag");
-    expect(result).toContain('import { Context, Effect, Layer } from "every-plugin/effect";');
+    expect(result).toContain('import { Context, Effect, Layer } from "effect";');
   });
 
   it("rewrites yield* Effect.provide(Tag, Layer) two-arg form in plugins/*/src/index.ts", async () => {
@@ -86,7 +86,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
     expect(result).toContain(
       "yield* Layer.buildWithScope(WidgetsLive(config.secrets.URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, WidgetsTag)))",
     );
-    expect(result).toContain('import { Context, Effect, Layer } from "every-plugin/effect";');
+    expect(result).toContain('import { Context, Effect, Layer } from "effect";');
   });
 
   it("rewrites .pipe(Effect.provide(Layer)) form in api/src/index.ts to Layer.buildWithScope", async () => {
@@ -122,7 +122,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
       "const db = yield* Layer.buildWithScope(DatabaseLive(config.secrets.API_DATABASE_URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, DatabaseTag)));",
     );
     expect(result).not.toContain(".pipe(Effect.provide(");
-    expect(result).toContain('import { Context, Effect, Layer } from "every-plugin/effect";');
+    expect(result).toContain('import { Context, Effect, Layer } from "effect";');
     expect(result).toContain("    }),");
     expect(result).toContain("shutdown: () => Effect.log('[API] Shutdown'),");
   });
@@ -156,7 +156,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
       "const widgets = yield* Layer.buildWithScope(WidgetsLive(config.secrets.URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, WidgetsTag)));",
     );
     expect(result).not.toContain(".pipe(Effect.provide(");
-    expect(result).toContain('import { Context, Effect, Layer } from "every-plugin/effect";');
+    expect(result).toContain('import { Context, Effect, Layer } from "effect";');
   });
 
   it("rewrites multiline .pipe(\\n  Effect.provide(Layer),\\n) form", async () => {
@@ -190,14 +190,14 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
       "const db = yield* Layer.buildWithScope(DatabaseLive(config.secrets.API_DATABASE_URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, DatabaseTag)));",
     );
     expect(result).not.toContain("Effect.provide(");
-    expect(result).toContain('import { Context, Effect, Layer } from "every-plugin/effect";');
+    expect(result).toContain('import { Context, Effect, Layer } from "effect";');
   });
 
   it("skips .pipe(Effect.provide(...)) when the layer name does not match a Tag convention", async () => {
     const dir = makeProjectDir();
     const original = [
       'import { Effect } from "every-plugin/effect";',
-      'import { Layer } from "every-plugin/effect";',
+      'import { Layer } from "effect";',
       "",
       "export default createPlugin({",
       "  initialize: (config, plugins) =>",
@@ -254,7 +254,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
   it("leaves already-migrated files untouched", async () => {
     const dir = makeProjectDir();
     const original = [
-      'import { Context, Effect, Layer } from "every-plugin/effect";',
+      'import { Context, Effect, Layer } from "effect";',
       'import { DatabaseLive, DatabaseTag } from "./db/layer";',
       "",
       "export default createPlugin({",
@@ -305,7 +305,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
       "const db = yield* Layer.buildWithScope(DatabaseLive(config.secrets.API_DATABASE_URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, DatabaseTag)));",
     );
     expect(result).not.toContain(".pipe(Effect.provide(");
-    expect(result).toContain('import { Context, Effect, Layer } from "every-plugin/effect";');
+    expect(result).toContain('import { Context, Effect, Layer } from "effect";');
     expect(result).toContain("initialize: (config, plugins, tools) =>");
   });
 

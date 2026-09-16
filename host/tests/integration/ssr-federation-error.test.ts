@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from "every-plugin/effect";
+import { Cause, Effect, Exit } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeConfig } from "../../src/services/config";
 

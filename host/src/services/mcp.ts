@@ -35,9 +35,10 @@ export async function mountMcpRoute(
     apiRouter: unknown;
     apiHandler: OpenAPIHandler<any>;
     config: RuntimeConfig;
+    effectContext?: unknown;
   },
 ) {
-  const { apiRouter, apiHandler, config } = options;
+  const { apiRouter, apiHandler, config, effectContext } = options;
 
   const generator = new OpenAPIGenerator({
     converters: [new ZodToJsonSchemaConverter()],
@@ -173,7 +174,7 @@ export async function mountMcpRoute(
           try {
             const result = await apiHandler.handle(req, {
               prefix: "/api",
-              context: store.context,
+              context: { ...store.context, "effect/context": effectContext },
             });
 
             if (!result.response) {

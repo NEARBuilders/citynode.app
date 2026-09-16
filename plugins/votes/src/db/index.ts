@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { Data } from "every-plugin/effect";
+import { Data } from "effect";
 import type { PoolConfig } from "pg";
 import * as schema from "./schema";
 

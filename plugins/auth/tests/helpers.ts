@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { Effect } from "every-plugin/effect";
+import { Context, Effect } from "effect";
 import { type AuthConfig, createAuthInstance } from "../src/auth-instance";
 import { createDatabaseDriver } from "../src/db";
 import { loadMigrations, migrate } from "../src/db/migrate";
@@ -12,7 +12,7 @@ import { createOrganizationHandlers } from "../src/handlers/organizations";
 import { createSessionHandlers } from "../src/handlers/session";
 import { createTeamHandlers } from "../src/handlers/teams";
 import { createRequireAuth } from "../src/middleware";
-import type { PluginServices } from "../src/service-types";
+import { AuthServicesTag, type PluginServices } from "../src/service-types";
 
 const TEST_DB_URL = "pglite::memory:";
 
@@ -162,7 +162,12 @@ export async function addTestMember(
 
 export async function createTestApiKey(
   services: PluginServices,
-  options: { userId: string; configId?: string; name?: string; organizationId?: string },
+  options: {
+    userId: string;
+    configId?: string;
+    name?: string;
+    organizationId?: string;
+  },
 ): Promise<{ key: string; id: string }> {
   const configId = options.configId ?? (options.organizationId ? "org-keys" : "user-keys");
   const result = (await services.auth.api.createApiKey({
@@ -208,7 +213,10 @@ function createMockBuilder(): MockBuilder {
             context: opts.context,
             next: (ctx) => ctx,
           });
-          return handler({ ...opts, context: result.context });
+          return handler({
+            ...opts,
+            context: { ...opts.context, ...result.context },
+          });
         },
     }),
     handler: <R>(fn: HandlerFn<R>) => fn,
@@ -227,15 +235,32 @@ function createMockBuilder(): MockBuilder {
 
 export function createTestHandlers(services: PluginServices) {
   const builder = createMockBuilder();
-  const requireAuth = createRequireAuth(builder, services);
+  const requireAuth = createRequireAuth(builder);
+  const effectContext = Context.make(AuthServicesTag, services);
+
+  const withEffectContext =
+    <R>(fn: HandlerFn<R>): HandlerFn<R> =>
+    (opts) =>
+      fn({
+        ...opts,
+        context: { "effect/context": effectContext, ...opts.context },
+      }) as R;
+
+  const wrap = <T extends Record<string, unknown>>(router: T) =>
+    Object.fromEntries(
+      Object.entries(router).map(([key, fn]) => [
+        key,
+        typeof fn === "function" ? withEffectContext(fn as HandlerFn) : fn,
+      ]),
+    ) as T;
 
   return {
-    session: createSessionHandlers(services, builder),
-    organizations: createOrganizationHandlers(services, builder, requireAuth),
-    members: createMemberHandlers(services, builder, requireAuth),
-    invitations: createInvitationHandlers(services, builder, requireAuth),
-    apiKeys: createApiKeyHandlers(services, builder, requireAuth),
-    teams: createTeamHandlers(services, builder, requireAuth),
-    near: createNearHandlers(services, builder, requireAuth),
+    session: wrap(createSessionHandlers(builder)),
+    organizations: wrap(createOrganizationHandlers(builder, requireAuth)),
+    members: wrap(createMemberHandlers(builder, requireAuth)),
+    invitations: wrap(createInvitationHandlers(builder, requireAuth)),
+    apiKeys: wrap(createApiKeyHandlers(builder, requireAuth)),
+    teams: wrap(createTeamHandlers(builder, requireAuth)),
+    near: wrap(createNearHandlers(builder, requireAuth)),
   };
 }

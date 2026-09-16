@@ -270,44 +270,51 @@ export const PluginLoaderServiceDefault = Layer.effect(
           );
 
           // Create a long-lived scope for this plugin instance. Initialize
-          // composes Layers against this scope (yield* Effect.scope), so
-          // scoped resources release on plugin shutdown.
+          // returns a Layer which is built against this scope, so scoped
+          // resources (DB pools, caches) release on plugin shutdown.
           const scope = yield* Scope.make();
 
-          // Initialize plugin within the scope.
-          // If initialize fails, close the scope immediately so scoped
-          // resources (DB pools, caches) are released — otherwise every
-          // failed initialization leaks until the process exits.
-          const context = yield* plugin
-            .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
-            .pipe(
+          // Build the plugin's Layer within the scope.
+          // On failure, close the scope immediately so scoped resources
+          // (DB pools, caches) are released — otherwise every failed
+          // initialization leaks until the process exits.
+          const effectContext = yield* Effect.gen(function* () {
+            const layer = yield* plugin
+              .initialize({ variables: _variables, secrets: hydratedConfig.secrets }, plugins ?? {})
+              .pipe(
+                Effect.provideService(PluginIdTag, plugin.id),
+                Effect.provideService(Scope.Scope, scope),
+              );
+
+            return yield* Layer.buildWithScope(layer as Layer.Layer<any, Error>, scope).pipe(
               Effect.provideService(PluginIdTag, plugin.id),
-              Effect.provideService(Scope.Scope, scope),
-              Effect.onExit((exit) =>
-                Exit.isSuccess(exit)
-                  ? Effect.void
-                  : Scope.close(scope, exit).pipe(
-                      Effect.catchCause((closeCause) =>
-                        Effect.logWarning(
-                          `Failed to close scope for plugin ${plugin.id} after initialize error`,
-                          closeCause,
-                        ),
+            );
+          }).pipe(
+            Effect.onExit((exit) =>
+              Exit.isSuccess(exit)
+                ? Effect.void
+                : Scope.close(scope, exit).pipe(
+                    Effect.catchCause((closeCause) =>
+                      Effect.logWarning(
+                        `Failed to close scope for plugin ${plugin.id} after initialize error`,
+                        closeCause,
                       ),
                     ),
-              ),
-              Effect.tapError((error) =>
-                Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin: ${error}`),
-              ),
-              Effect.mapError((error) =>
-                toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
-              ),
-            );
+                  ),
+            ),
+            Effect.tapError((error) =>
+              Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin: ${error}`),
+            ),
+            Effect.mapError((error) =>
+              toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
+            ),
+          );
 
           return {
             plugin,
             metadata: pluginInstance.metadata,
             config: { variables: _variables, secrets: hydratedConfig.secrets },
-            context,
+            effectContext,
             scope,
           } satisfies InitializedPlugin<T>;
         }),

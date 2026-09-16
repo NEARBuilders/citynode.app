@@ -249,9 +249,12 @@
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
+        "@orpc/publisher": "catalog:",
         "@orpc/server": "catalog:",
         "drizzle-orm": "catalog:",
+        "effect": "catalog:",
         "pg": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "^0.85.1",
@@ -279,7 +282,9 @@
       "dependencies": {
         "@orpc/contract": "catalog:",
         "@orpc/server": "catalog:",
+        "effect": "catalog:",
         "near-kit": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "^0.85.1",
@@ -307,11 +312,15 @@
         "@better-auth/api-key": "catalog:",
         "@better-auth/passkey": "catalog:",
         "@electric-sql/pglite": "catalog:",
+        "@orpc/contract": "catalog:",
+        "@orpc/server": "catalog:",
         "better-auth": "catalog:",
         "better-near-auth": "catalog:",
         "drizzle-orm": "catalog:",
+        "effect": "catalog:",
         "every-plugin": "catalog:",
         "pg": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "^0.85.1",
@@ -343,9 +352,12 @@
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
+        "@orpc/publisher": "catalog:",
         "@orpc/server": "catalog:",
         "drizzle-orm": "catalog:",
+        "effect": "catalog:",
         "pg": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "^0.85.1",
@@ -373,9 +385,12 @@
       "dependencies": {
         "@electric-sql/pglite": "catalog:",
         "@orpc/contract": "catalog:",
+        "@orpc/publisher": "catalog:",
         "@orpc/server": "catalog:",
         "drizzle-orm": "catalog:",
+        "effect": "catalog:",
         "pg": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "^0.85.1",

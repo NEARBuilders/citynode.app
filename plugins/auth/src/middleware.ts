@@ -1,11 +1,13 @@
-import { ORPCError } from "every-plugin/orpc";
-import type { PluginServices } from "./service-types";
+import { ORPCError } from "@orpc/server";
+import { Context } from "effect";
+import { AuthServicesTag } from "./service-types";
 import { createHeaders } from "./utils";
 
-export function createRequireAuth(builder: any, services: PluginServices) {
+export function createRequireAuth(builder: any) {
   return builder.middleware(async ({ context, next }: { context: any; next: any }) => {
     let user = context.user?.id ? context.user : null;
     if (!user) {
+      const services = Context.get(context["effect/context"], AuthServicesTag);
       const headers = createHeaders(context.reqHeaders);
       const session = await services.auth.api.getSession({ headers });
       user = session?.user ?? null;
