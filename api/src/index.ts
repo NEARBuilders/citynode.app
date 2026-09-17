@@ -10,6 +10,8 @@ import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
+import type { DiscoveryService } from "./services/discovery";
+import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import type { NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import type { TenantsService } from "./services/tenants";
@@ -23,6 +25,7 @@ class ApiServices extends Context.Service<
     tenants: TenantsService;
     nodes: NodesService;
     validators: ValidatorsService;
+    discovery: DiscoveryService;
   }
 >()("api/ApiServices") {}
 
@@ -59,6 +62,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
   }),
 
   secrets: z.object({
+    LUMA_CALENDAR_API_KEYS: z.string().default(""),
     API_DATABASE_URL: z.string().default("pglite:.bos/api/:memory:"),
   }),
 
@@ -70,7 +74,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
       const services = yield* Layer.buildWithScope(
-        Layer.mergeAll(TenantsLive, NodesLive, ValidatorsLive).pipe(Layer.provide(database)),
+        Layer.mergeAll(
+          TenantsLive,
+          NodesLive,
+          ValidatorsLive,
+          DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
+        ).pipe(Layer.provide(database)),
         yield* Effect.scope,
       );
 
@@ -80,6 +89,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         tenants: Context.get(services, TenantsTag),
         nodes: Context.get(services, NodesTag),
         validators: Context.get(services, ValidatorsTag),
+        discovery: Context.get(services, DiscoveryTag),
       });
     }),
 
@@ -158,6 +168,76 @@ export default createPlugin.withPlugins<PluginsClient>()({
     };
 
     const router = {
+      trackDiscovery: builder.trackDiscovery.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.track(input, context),
+      ),
+      getDiscoveryMetrics: builder.getDiscoveryMetrics.handler(async ({ context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.metrics(context),
+      ),
+      getDiscoveryStudio: builder.getDiscoveryStudio.handler(async ({ context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.studio(context),
+      ),
+      setDiscoveryCurator: builder.setDiscoveryCurator.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.setCurator(input, context),
+      ),
+      featureDiscoveryNode: builder.featureDiscoveryNode.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.feature(input, context),
+      ),
+      reportDiscoveryContent: builder.reportDiscoveryContent.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.report(input),
+      ),
+      moderateDiscoveryReport: builder.moderateDiscoveryReport.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.moderate(input, context),
+      ),
+      getDiscoveryHistory: builder.getDiscoveryHistory.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.history(
+          input.nodeId,
+          context,
+        ),
+      ),
+      listDiscoveryLumaCalendars: builder.listDiscoveryLumaCalendars.handler(
+        async ({ input, context }) =>
+          Context.get(context["effect/context"], ApiServices).discovery.lumaCalendars(
+            input.nodeId,
+            context,
+          ),
+      ),
+      disconnectDiscoveryLuma: builder.disconnectDiscoveryLuma.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.disconnectLuma(
+          input.nodeId,
+          context,
+        ),
+      ),
+      importDiscoveryLuma: builder.importDiscoveryLuma.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.importLuma(input, context),
+      ),
+      saveDiscoveryActivity: builder.saveDiscoveryActivity.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.saveActivity(input, context),
+      ),
+      listDiscoveryActivities: builder.listDiscoveryActivities.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.activities(
+          input.nodeId,
+          context,
+        ),
+      ),
+      getDiscoveryActivity: builder.getDiscoveryActivity.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.activity(input.id),
+      ),
+      listDiscovery: builder.listDiscovery.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.list(input),
+      ),
+      getDiscoveryNode: builder.getDiscoveryNode.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.get(input.nodeId),
+      ),
+      getDiscoveryProfile: builder.getDiscoveryProfile.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.profile(
+          input.nodeId,
+          context,
+        ),
+      ),
+      saveDiscoveryProfile: builder.saveDiscoveryProfile.handler(async ({ input, context }) =>
+        Context.get(context["effect/context"], ApiServices).discovery.saveProfile(input, context),
+      ),
       ping: builder.ping.handler(async () => ({
         status: "ok",
         timestamp: new Date().toISOString(),

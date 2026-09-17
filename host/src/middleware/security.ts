@@ -154,7 +154,8 @@ export class SecurityMiddleware extends Context.Service<
             imgSrc: [
               "'self'",
               "data:",
-              ...(isDev ? ["http:"] : ["https:"]),
+              "https:",
+              ...(isDev ? ["http:"] : []),
               ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
             ],
             connectSrc: [

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
+import { CalendarDays, ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { buildTenantUrl } from "@/lib/tenant-url";
@@ -170,6 +170,12 @@ function NodeDashboardLayout() {
         </div>
 
         <nav className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }}>
+              <CalendarDays />
+              Events & community profile
+            </Link>
+          </Button>
           <Link
             to="/dashboard/node"
             search={{ nodeId: selectedNode.id }}

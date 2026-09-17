@@ -147,3 +147,7 @@ export function daoContext(
 ): Record<string, unknown> {
   return orgContext(userId, activeOrganizationId, organizationRole, "admin", primaryAccountId);
 }
+
+export function getTestRpcUrl() {
+  return baseUrl;
+}

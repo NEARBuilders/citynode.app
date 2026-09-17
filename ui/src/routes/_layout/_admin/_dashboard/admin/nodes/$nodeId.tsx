@@ -13,6 +13,7 @@ import {
   SectionHeader,
   Skeleton,
 } from "@/components";
+import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { NodeBindings } from "./-node-bindings";
@@ -166,6 +167,7 @@ function AdminNodeDetail() {
         </Card>
       </section>
 
+      <ProfileEditor nodeId={node.id} />
       <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
 
       <NodeBindings

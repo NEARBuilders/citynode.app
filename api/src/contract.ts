@@ -2,6 +2,7 @@ import "@orpc/openapi/extensions/route";
 import { oc } from "@orpc/contract";
 import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
 import { z } from "zod";
+import { discoveryContract } from "./discovery-contract";
 
 const ErrorTestKindSchema = z.enum([
   "unauthorized",
@@ -198,6 +199,7 @@ export const NodeListSummarySchema = z.object({
 });
 
 export const contract = oc.router({
+  ...discoveryContract,
   ping: oc.route({ method: "GET", path: "/ping" }).output(
     z.object({
       status: z.literal("ok"),

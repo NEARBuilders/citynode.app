@@ -36,7 +36,8 @@
         "platformAccount": "v1.citynode.near"
       },
       "secrets": [
-        "API_DATABASE_URL"
+        "API_DATABASE_URL",
+        "LUMA_CALENDAR_API_KEYS"
       ],
       "integrity": "sha384-wfnNaT2NUgnrVOFjjhxZxL58aO9IbQJS9Lp+wVUcYtZC9k5nIAzolZAcbvUQKL83"
     },

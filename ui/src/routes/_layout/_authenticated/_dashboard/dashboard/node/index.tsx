@@ -1,7 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
-import { getActiveRuntime } from "@/app";
-import { Badge, Card, NodeValidatorTable, SectionHeader } from "@/components";
+import { getActiveRuntime, useApiClient } from "@/app";
+import {
+  Badge,
+  Button,
+  Card,
+  NodeValidatorTable,
+  SectionHeader,
+  TeamStakeCard,
+} from "@/components";
+import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/node/")({
@@ -9,20 +18,47 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboa
 });
 
 function NodeOverview() {
-  const { runtimeConfig, selectedNode, summary, stakingSourceNode } = Route.useRouteContext();
+  const { runtimeConfig, selectedNode, summary, stakingSourceNode, tenant, auth } =
+    Route.useRouteContext();
+  const apiClient = useApiClient();
+  const orgId = tenant?.orgId ?? auth.activeOrganizationId;
+  const daoQuery = useQuery({
+    queryKey: ["org-dao", orgId],
+    enabled: !!orgId && !!selectedNode && !!summary,
+    staleTime: 60_000,
+    queryFn: () =>
+      apiClient.auth.getDao({ organizationId: orgId ?? "" }).catch(() => ({
+        daoAccountId: null,
+        daoNetwork: null,
+      })),
+  });
   if (!selectedNode || !summary) return null;
 
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
   const stakingIsInherited = summary.stakingValidators.sourceNodeId !== selectedNode.id;
+  const teamStake = resolveTeamStakeTarget({
+    daoAccountId: daoQuery.data?.daoAccountId,
+    tenantAccountId: tenant?.accountId,
+    tenantOwnerKind: tenant?.ownerKind,
+    validators: summary.stakingValidators.validators,
+  });
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Direct children" value={summary.childrenCount} />
-        <StatCard label="Subtree nodes" value={summary.subtreeNodeCount} />
-        <StatCard label="Validators" value={summary.validators.length} />
-        <StatCard label="Subtree validators" value={summary.subtreeValidatorCount} />
-      </section>
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-border-strong bg-card p-5">
+        <div>
+          <h2 className="font-semibold">What’s happening in your community?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add an event, share an update, or change how your community appears on Explore.
+          </p>
+        </div>
+        <Button asChild>
+          <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }}>
+            Manage events & profile
+          </Link>
+        </Button>
+      </div>
+      <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
 
       <section className="space-y-3">
         <SectionHeader title="Validators" />
@@ -97,16 +133,5 @@ function NodeOverview() {
         </Card>
       </section>
     </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card className="space-y-1 p-4">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-2xl font-semibold text-foreground">{value}</div>
-    </Card>
   );
 }

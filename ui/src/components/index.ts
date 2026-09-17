@@ -10,7 +10,6 @@ export { EmptyState } from "./empty-state";
 export { AppHeader } from "./layout/app-header";
 export { AppShell } from "./layout/app-shell";
 export { AppSidebar } from "./layout/app-sidebar";
-export { BetaBanner } from "./layout/beta-banner";
 export { Chip } from "./layout/chip";
 export {
   filterSidebarByRole,
@@ -28,7 +27,6 @@ export { PublicHeader } from "./layout/public-header";
 export { PublicShell, PublicShellFooter } from "./layout/public-shell";
 export { SectionHeader } from "./layout/section-header";
 export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
-export { SidebarUserNav } from "./layout/sidebar-user-nav";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
 export { Logo } from "./logo";
@@ -39,6 +37,7 @@ export { RootError } from "./root-error";
 export { RootNotFound } from "./root-not-found";
 export { RouterError } from "./router-error";
 export { StakePoolCard } from "./stake-pool-card";
+export { TeamStakeCard } from "./team-stake-card";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
 export {
