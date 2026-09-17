@@ -1,9 +1,163 @@
 {
-  "id": "c6ff7663-1a0a-4e54-b0f9-931d7a434bd3",
+  "id": "a84923c5-b13c-4805-ab38-146688ba4e1e",
   "prevId": "fc530fff-89b5-4777-9368-c258d965de88",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.discovery_activities": {
+      "name": "discovery_activities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_node_id": {
+          "name": "owner_node_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "canonical_url": {
+          "name": "canonical_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "discovery_manual_url": {
+          "name": "discovery_manual_url",
+          "columns": [
+            {
+              "expression": "canonical_url",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"discovery_activities\".\"data\"->'luma' IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "discovery_luma_node_url": {
+          "name": "discovery_luma_node_url",
+          "columns": [
+            {
+              "expression": "owner_node_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "canonical_url",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"discovery_activities\".\"data\"->'luma' IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "discovery_activities_owner_node_id_nodes_id_fk": {
+          "name": "discovery_activities_owner_node_id_nodes_id_fk",
+          "tableFrom": "discovery_activities",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "owner_node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discovery_curators": {
+      "name": "discovery_curators",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discovery_features": {
+      "name": "discovery_features",
+      "schema": "",
+      "columns": {
+        "node_id": {
+          "name": "node_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "discovery_features_node_id_nodes_id_fk": {
+          "name": "discovery_features_node_id_nodes_id_fk",
+          "tableFrom": "discovery_features",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.discovery_history": {
       "name": "discovery_history",
       "schema": "",
@@ -53,8 +207,170 @@
           "name": "discovery_history_node_id_nodes_id_fk",
           "tableFrom": "discovery_history",
           "tableTo": "nodes",
-          "columnsFrom": ["node_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discovery_luma_connections": {
+      "name": "discovery_luma_connections",
+      "schema": "",
+      "columns": {
+        "node_id": {
+          "name": "node_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "calendar_id": {
+          "name": "calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "calendar_name": {
+          "name": "calendar_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "discovery_luma_connections_node_id_nodes_id_fk": {
+          "name": "discovery_luma_connections_node_id_nodes_id_fk",
+          "tableFrom": "discovery_luma_connections",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discovery_measurements": {
+      "name": "discovery_measurements",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "visit_id": {
+          "name": "visit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "campaign": {
+          "name": "campaign",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "discovery_measurement_visit": {
+          "name": "discovery_measurement_visit",
+          "columns": [
+            {
+              "expression": "visit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "discovery_measurement_time": {
+          "name": "discovery_measurement_time",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "discovery_measurements_node_id_nodes_id_fk": {
+          "name": "discovery_measurements_node_id_nodes_id_fk",
+          "tableFrom": "discovery_measurements",
+          "tableTo": "nodes",
+          "columnsFrom": [
+            "node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -88,12 +404,103 @@
           "name": "discovery_profiles_node_id_nodes_id_fk",
           "tableFrom": "discovery_profiles",
           "tableTo": "nodes",
-          "columnsFrom": ["node_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discovery_reports": {
+      "name": "discovery_reports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "resolved": {
+          "name": "resolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "token": {
+          "name": "token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "discovery_report_token_target": {
+          "name": "discovery_report_token_target",
+          "columns": [
+            {
+              "expression": "token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -202,8 +609,12 @@
           "name": "domain_bindings_tenant_id_tenants_id_fk",
           "tableFrom": "domain_bindings",
           "tableTo": "tenants",
-          "columnsFrom": ["tenant_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -213,7 +624,9 @@
         "domain_bindings_hostname_unique": {
           "name": "domain_bindings_hostname_unique",
           "nullsNotDistinct": false,
-          "columns": ["hostname"]
+          "columns": [
+            "hostname"
+          ]
         }
       },
       "policies": {},
@@ -359,8 +772,12 @@
           "name": "nodes_parent_id_nodes_id_fk",
           "tableFrom": "nodes",
           "tableTo": "nodes",
-          "columnsFrom": ["parent_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -368,8 +785,12 @@
           "name": "nodes_tenant_id_tenants_id_fk",
           "tableFrom": "nodes",
           "tableTo": "tenants",
-          "columnsFrom": ["tenant_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -473,7 +894,9 @@
         "tenants_account_id_unique": {
           "name": "tenants_account_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["account_id"]
+          "columns": [
+            "account_id"
+          ]
         }
       },
       "policies": {},
@@ -592,8 +1015,12 @@
           "name": "validators_node_id_nodes_id_fk",
           "tableFrom": "validators",
           "tableTo": "nodes",
-          "columnsFrom": ["node_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "node_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -609,17 +1036,29 @@
     "public.node_kind": {
       "name": "node_kind",
       "schema": "public",
-      "values": ["country", "state", "city"]
+      "values": [
+        "country",
+        "state",
+        "city"
+      ]
     },
     "public.tenant_status": {
       "name": "tenant_status",
       "schema": "public",
-      "values": ["active", "pending", "suspended", "pending_deletion"]
+      "values": [
+        "active",
+        "pending",
+        "suspended",
+        "pending_deletion"
+      ]
     },
     "public.validator_role": {
       "name": "validator_role",
       "schema": "public",
-      "values": ["official", "community"]
+      "values": [
+        "official",
+        "community"
+      ]
     }
   },
   "schemas": {},

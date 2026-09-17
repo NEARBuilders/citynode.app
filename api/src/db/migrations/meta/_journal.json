@@ -19,43 +19,8 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1789514956155,
-      "tag": "0002_faulty_sumo",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1789515460045,
-      "tag": "0003_sleepy_master_mold",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1789515782654,
-      "tag": "0004_tranquil_kulan_gath",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1789516114043,
-      "tag": "0005_dusty_gravity",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1789553360980,
-      "tag": "0006_fluffy_invisible_woman",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1789553526042,
-      "tag": "0007_regular_baron_strucker",
+      "when": 1789658656670,
+      "tag": "0002_living_odin",
       "breakpoints": true
     }
   ]

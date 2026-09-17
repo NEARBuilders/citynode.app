@@ -110,7 +110,6 @@ export const domainBindings = pgTable(
   }),
 );
 
-// Public Explore profile for a node: bio, location, socials. One row per node.
 export const discoveryProfiles = pgTable("discovery_profiles", {
   nodeId: uuid("node_id")
     .primaryKey()
@@ -118,7 +117,6 @@ export const discoveryProfiles = pgTable("discovery_profiles", {
   data: jsonb("data").$type<import("../discovery-contract").DiscoveryProfile>().notNull(),
 });
 
-// Audit log of moderation/curation actions taken against discovery content (feature, report, resolve, etc.).
 export const discoveryHistory = pgTable("discovery_history", {
   id: uuid("id").defaultRandom().primaryKey(),
   nodeId: uuid("node_id")
@@ -130,9 +128,6 @@ export const discoveryHistory = pgTable("discovery_history", {
   recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Events/posts shown on a node's Explore page — either created manually or imported from a Luma calendar.
-// The two partial unique indexes dedupe manual activities by URL and Luma activities by (node, URL), since
-// the same Luma event URL can legitimately be imported into more than one node's calendar.
 export const discoveryActivities = pgTable(
   "discovery_activities",
   {
@@ -153,11 +148,9 @@ export const discoveryActivities = pgTable(
   }),
 );
 
-// Allowlist of user IDs granted discovery curation privileges (feature nodes, resolve reports).
 export const discoveryCurators = pgTable("discovery_curators", {
   userId: text("user_id").primaryKey(),
 });
-// Nodes currently pinned on Explore, with a curator-set label and expiry after which the feature lapses.
 export const discoveryFeatures = pgTable("discovery_features", {
   nodeId: uuid("node_id")
     .primaryKey()
@@ -165,7 +158,6 @@ export const discoveryFeatures = pgTable("discovery_features", {
   label: text("label").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
-// User-submitted report flagging a profile or activity for curator review.
 export const discoveryReports = pgTable(
   "discovery_reports",
   {
@@ -181,7 +173,6 @@ export const discoveryReports = pgTable(
   (t) => ({ tokenTarget: uniqueIndex("discovery_report_token_target").on(t.token, t.targetId) }),
 );
 
-// Engagement events (visit, click, etc.) recorded per campaign for measuring Explore/discovery funnels.
 export const discoveryMeasurements = pgTable(
   "discovery_measurements",
   {
@@ -198,7 +189,6 @@ export const discoveryMeasurements = pgTable(
   }),
 );
 
-// Per-node sync state for an imported Luma calendar: which calendar, last successful sync, next retry, last error.
 export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
   nodeId: uuid("node_id")
     .primaryKey()

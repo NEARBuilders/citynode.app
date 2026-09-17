@@ -1,3 +1,0 @@
-ALTER TABLE "discovery_activities" DROP CONSTRAINT "discovery_activities_canonical_url_unique";--> statement-breakpoint
-CREATE UNIQUE INDEX "discovery_manual_url" ON "discovery_activities" USING btree ("canonical_url") WHERE "discovery_activities"."data"->'luma' IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "discovery_luma_node_url" ON "discovery_activities" USING btree ("owner_node_id","canonical_url") WHERE "discovery_activities"."data"->'luma' IS NOT NULL;
