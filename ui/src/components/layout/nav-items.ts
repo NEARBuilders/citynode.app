@@ -22,7 +22,7 @@ export interface SidebarItem {
 
 export const NAV_ITEMS: SidebarItem[] = [
   { icon: Compass, label: "explore", to: "/explore", roleRequired: "anon" },
-  { icon: Sparkles, label: "highlights", to: "/discovery-studio", roleRequired: "member" },
+  { icon: Sparkles, label: "discover", to: "/discover", roleRequired: "member" },
   {
     icon: Home,
     label: "dashboard",

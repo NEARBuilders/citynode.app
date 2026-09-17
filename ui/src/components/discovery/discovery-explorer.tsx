@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowUpRight,
@@ -76,6 +76,9 @@ export function DiscoveryExplorer({
         upcoming: search.upcoming,
       }),
     refetchInterval: 30_000,
+    // Keeps the list and map mounted while a new search loads, instead of
+    // swapping in the pending state and rebuilding the map on each keystroke.
+    placeholderData: keepPreviousData,
   });
   const regions = useQuery({
     queryKey: ["discovery", undefined, undefined, undefined, undefined],

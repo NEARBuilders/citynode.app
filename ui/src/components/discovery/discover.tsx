@@ -24,13 +24,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscoveryAction } from "./discovery-action";
 import { DiscoveryMetrics } from "./discovery-measurement";
 
-export function DiscoveryStudio() {
+export function Discover() {
   const api = useApiClient();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const studio = useQuery({
-    queryKey: ["discovery-studio"],
+    queryKey: ["discover"],
     queryFn: () => api.getDiscoveryStudio(),
     retry: false,
   });

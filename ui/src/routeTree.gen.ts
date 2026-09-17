@@ -25,7 +25,7 @@ import { Route as LayoutPublicSkillRouteImport } from './routes/_layout/_public/
 import { Route as LayoutAdminDashboardAdminRouteImport } from './routes/_layout/_admin/_dashboard/admin'
 import { Route as LayoutAuthenticatedDashboardApplyRouteImport } from './routes/_layout/_authenticated/_dashboard/apply'
 import { Route as LayoutAuthenticatedDashboardDashboardRouteImport } from './routes/_layout/_authenticated/_dashboard/dashboard'
-import { Route as LayoutAuthenticatedDashboardDiscoveryStudioRouteImport } from './routes/_layout/_authenticated/_dashboard/discovery-studio'
+import { Route as LayoutAuthenticatedDashboardDiscoverRouteImport } from './routes/_layout/_authenticated/_dashboard/discover'
 import { Route as LayoutAuthenticatedDashboardPrototypeStakingPocRouteImport } from './routes/_layout/_authenticated/_dashboard/prototype-staking-poc'
 import { Route as LayoutAuthenticatedDashboardSettingsRouteImport } from './routes/_layout/_authenticated/_dashboard/settings'
 import { Route as LayoutAuthenticatedDashboardStakeRouteImport } from './routes/_layout/_authenticated/_dashboard/stake'
@@ -139,10 +139,10 @@ const LayoutAuthenticatedDashboardDashboardRoute =
     path: '/dashboard',
     getParentRoute: () => LayoutAuthenticatedDashboardRoute,
   } as any)
-const LayoutAuthenticatedDashboardDiscoveryStudioRoute =
-  LayoutAuthenticatedDashboardDiscoveryStudioRouteImport.update({
-    id: '/discovery-studio',
-    path: '/discovery-studio',
+const LayoutAuthenticatedDashboardDiscoverRoute =
+  LayoutAuthenticatedDashboardDiscoverRouteImport.update({
+    id: '/discover',
+    path: '/discover',
     getParentRoute: () => LayoutAuthenticatedDashboardRoute,
   } as any)
 const LayoutAuthenticatedDashboardPrototypeStakingPocRoute =
@@ -365,7 +365,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof LayoutAdminDashboardAdminRouteWithChildren
   '/apply': typeof LayoutAuthenticatedDashboardApplyRoute
   '/dashboard': typeof LayoutAuthenticatedDashboardDashboardRouteWithChildren
-  '/discovery-studio': typeof LayoutAuthenticatedDashboardDiscoveryStudioRoute
+  '/discover': typeof LayoutAuthenticatedDashboardDiscoverRoute
   '/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   '/settings': typeof LayoutAuthenticatedDashboardSettingsRouteWithChildren
   '/stake': typeof LayoutAuthenticatedDashboardStakeRoute
@@ -409,7 +409,7 @@ export interface FileRoutesByTo {
   '/explore': typeof LayoutPublicExploreRoute
   '/skill': typeof LayoutPublicSkillRoute
   '/apply': typeof LayoutAuthenticatedDashboardApplyRoute
-  '/discovery-studio': typeof LayoutAuthenticatedDashboardDiscoveryStudioRoute
+  '/discover': typeof LayoutAuthenticatedDashboardDiscoverRoute
   '/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   '/stake': typeof LayoutAuthenticatedDashboardStakeRoute
   '/activity/$activityId': typeof LayoutPublicActivityActivityIdRoute
@@ -461,7 +461,7 @@ export interface FileRoutesById {
   '/_layout/_admin/_dashboard/admin': typeof LayoutAdminDashboardAdminRouteWithChildren
   '/_layout/_authenticated/_dashboard/apply': typeof LayoutAuthenticatedDashboardApplyRoute
   '/_layout/_authenticated/_dashboard/dashboard': typeof LayoutAuthenticatedDashboardDashboardRouteWithChildren
-  '/_layout/_authenticated/_dashboard/discovery-studio': typeof LayoutAuthenticatedDashboardDiscoveryStudioRoute
+  '/_layout/_authenticated/_dashboard/discover': typeof LayoutAuthenticatedDashboardDiscoverRoute
   '/_layout/_authenticated/_dashboard/prototype-staking-poc': typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   '/_layout/_authenticated/_dashboard/settings': typeof LayoutAuthenticatedDashboardSettingsRouteWithChildren
   '/_layout/_authenticated/_dashboard/stake': typeof LayoutAuthenticatedDashboardStakeRoute
@@ -510,7 +510,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/apply'
     | '/dashboard'
-    | '/discovery-studio'
+    | '/discover'
     | '/prototype-staking-poc'
     | '/settings'
     | '/stake'
@@ -554,7 +554,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/skill'
     | '/apply'
-    | '/discovery-studio'
+    | '/discover'
     | '/prototype-staking-poc'
     | '/stake'
     | '/activity/$activityId'
@@ -605,7 +605,7 @@ export interface FileRouteTypes {
     | '/_layout/_admin/_dashboard/admin'
     | '/_layout/_authenticated/_dashboard/apply'
     | '/_layout/_authenticated/_dashboard/dashboard'
-    | '/_layout/_authenticated/_dashboard/discovery-studio'
+    | '/_layout/_authenticated/_dashboard/discover'
     | '/_layout/_authenticated/_dashboard/prototype-staking-poc'
     | '/_layout/_authenticated/_dashboard/settings'
     | '/_layout/_authenticated/_dashboard/stake'
@@ -761,11 +761,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAuthenticatedDashboardDashboardRouteImport
       parentRoute: typeof LayoutAuthenticatedDashboardRoute
     }
-    '/_layout/_authenticated/_dashboard/discovery-studio': {
-      id: '/_layout/_authenticated/_dashboard/discovery-studio'
-      path: '/discovery-studio'
-      fullPath: '/discovery-studio'
-      preLoaderRoute: typeof LayoutAuthenticatedDashboardDiscoveryStudioRouteImport
+    '/_layout/_authenticated/_dashboard/discover': {
+      id: '/_layout/_authenticated/_dashboard/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof LayoutAuthenticatedDashboardDiscoverRouteImport
       parentRoute: typeof LayoutAuthenticatedDashboardRoute
     }
     '/_layout/_authenticated/_dashboard/prototype-staking-poc': {
@@ -1169,7 +1169,7 @@ const LayoutAuthenticatedDashboardSettingsRouteWithChildren =
 interface LayoutAuthenticatedDashboardRouteChildren {
   LayoutAuthenticatedDashboardApplyRoute: typeof LayoutAuthenticatedDashboardApplyRoute
   LayoutAuthenticatedDashboardDashboardRoute: typeof LayoutAuthenticatedDashboardDashboardRouteWithChildren
-  LayoutAuthenticatedDashboardDiscoveryStudioRoute: typeof LayoutAuthenticatedDashboardDiscoveryStudioRoute
+  LayoutAuthenticatedDashboardDiscoverRoute: typeof LayoutAuthenticatedDashboardDiscoverRoute
   LayoutAuthenticatedDashboardPrototypeStakingPocRoute: typeof LayoutAuthenticatedDashboardPrototypeStakingPocRoute
   LayoutAuthenticatedDashboardSettingsRoute: typeof LayoutAuthenticatedDashboardSettingsRouteWithChildren
   LayoutAuthenticatedDashboardStakeRoute: typeof LayoutAuthenticatedDashboardStakeRoute
@@ -1191,8 +1191,8 @@ const LayoutAuthenticatedDashboardRouteChildren: LayoutAuthenticatedDashboardRou
       LayoutAuthenticatedDashboardApplyRoute,
     LayoutAuthenticatedDashboardDashboardRoute:
       LayoutAuthenticatedDashboardDashboardRouteWithChildren,
-    LayoutAuthenticatedDashboardDiscoveryStudioRoute:
-      LayoutAuthenticatedDashboardDiscoveryStudioRoute,
+    LayoutAuthenticatedDashboardDiscoverRoute:
+      LayoutAuthenticatedDashboardDiscoverRoute,
     LayoutAuthenticatedDashboardPrototypeStakingPocRoute:
       LayoutAuthenticatedDashboardPrototypeStakingPocRoute,
     LayoutAuthenticatedDashboardSettingsRoute:

@@ -17,11 +17,14 @@ export function GeographicMap({
   const select = useRef(onSelect);
   const selected = useRef(selectedId);
   const redraw = useRef<() => void>(undefined);
+  const apply = useRef<(nodes: Node[]) => void>(undefined);
   const mapRef = useRef<{ panTo: (latlng: [number, number]) => void } | null>(null);
   const nodesRef = useRef(nodes);
   select.current = onSelect;
   selected.current = selectedId;
   nodesRef.current = nodes;
+  // The map is created once and then fed new nodes; rebuilding it on every
+  // refetch made it flash and lose the viewport while typing in search.
   useEffect(() => {
     let dispose: (() => void) | undefined;
     let cancelled = false;
@@ -44,16 +47,8 @@ export function GeographicMap({
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(map);
         tiles.on("tileerror", () => setFailed(true));
-        const points = nodes.flatMap((node) =>
-          node.latitude !== null && node.longitude !== null
-            ? [{ node, point: L.latLng(node.latitude, node.longitude) }]
-            : [],
-        );
-        if (points.length)
-          map.fitBounds(L.latLngBounds(points.map((p) => p.point)), {
-            padding: [35, 35],
-            maxZoom: 8,
-          });
+        let points: { node: Node; point: ReturnType<typeof L.latLng> }[] = [];
+        let fitted = "";
         const markers = L.layerGroup().addTo(map);
         const draw = () => {
           markers.clearLayers();
@@ -112,10 +107,33 @@ export function GeographicMap({
             });
           }
         };
+        const update = (next: Node[]) => {
+          points = next.flatMap((node) =>
+            node.latitude !== null && node.longitude !== null
+              ? [{ node, point: L.latLng(node.latitude, node.longitude) }]
+              : [],
+          );
+          // Only move the viewport when the result set itself changed, so a
+          // background refetch of the same communities leaves it alone.
+          const key = points
+            .map((entry) => entry.node.nodeId)
+            .sort()
+            .join(",");
+          if (key !== fitted) {
+            fitted = key;
+            if (points.length)
+              map.fitBounds(L.latLngBounds(points.map((p) => p.point)), {
+                padding: [35, 35],
+                maxZoom: 8,
+              });
+            const focused = points.find((entry) => entry.node.nodeId === selected.current);
+            if (focused) map.panTo(focused.point);
+          }
+          draw();
+        };
         redraw.current = draw;
-        draw();
-        const focused = points.find((entry) => entry.node.nodeId === selected.current);
-        if (focused) map.panTo(focused.point);
+        apply.current = update;
+        update(nodesRef.current);
         map.on("zoomend", draw);
         const observer = new ResizeObserver(() => map.invalidateSize());
         observer.observe(container.current);
@@ -124,6 +142,7 @@ export function GeographicMap({
           map.remove();
           mapRef.current = null;
           redraw.current = undefined;
+          apply.current = undefined;
         };
       })
       .catch(() => setFailed(true));
@@ -131,6 +150,9 @@ export function GeographicMap({
       cancelled = true;
       dispose?.();
     };
+  }, []);
+  useEffect(() => {
+    apply.current?.(nodes);
   }, [nodes]);
   useEffect(() => {
     redraw.current?.();
