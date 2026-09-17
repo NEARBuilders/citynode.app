@@ -1,6 +1,5 @@
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { BetaBanner } from "@/components/layout/beta-banner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export const Route = createFileRoute("/_layout")({
@@ -30,8 +29,6 @@ function Layout() {
           paddingRight: "env(safe-area-inset-right, 0px)",
         }}
       >
-        <BetaBanner />
-
         {showBar && (
           <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">
             <div className="h-full bg-foreground animate-progress-bar" style={{ width: "100%" }} />

@@ -1,8 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { getActiveRuntime, useApiClient } from "@/app";
-import { Badge, Card, NodeValidatorTable, SectionHeader, TeamStakeCard } from "@/components";
+import {
+  Badge,
+  Button,
+  Card,
+  NodeValidatorTable,
+  SectionHeader,
+  TeamStakeCard,
+} from "@/components";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
 import { buildTenantUrl } from "@/lib/tenant-url";
 
@@ -38,14 +45,20 @@ function NodeOverview() {
 
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-border-strong bg-card p-5">
+        <div>
+          <h2 className="font-semibold">What’s happening in your community?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add an event, share an update, or change how your community appears on Explore.
+          </p>
+        </div>
+        <Button asChild>
+          <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }}>
+            Manage events & profile
+          </Link>
+        </Button>
+      </div>
       <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Direct children" value={summary.childrenCount} />
-        <StatCard label="Subtree nodes" value={summary.subtreeNodeCount} />
-        <StatCard label="Validators" value={summary.validators.length} />
-        <StatCard label="Subtree validators" value={summary.subtreeValidatorCount} />
-      </section>
 
       <section className="space-y-3">
         <SectionHeader title="Validators" />
@@ -120,16 +133,5 @@ function NodeOverview() {
         </Card>
       </section>
     </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card className="space-y-1 p-4">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-2xl font-semibold text-foreground">{value}</div>
-    </Card>
   );
 }

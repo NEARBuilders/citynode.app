@@ -154,7 +154,8 @@ export class SecurityMiddleware extends Context.Tag("host/SecurityMiddleware")<
             imgSrc: [
               "'self'",
               "data:",
-              ...(isDev ? ["http:"] : ["https:"]),
+              "https:",
+              ...(isDev ? ["http:"] : []),
               ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
             ],
             connectSrc: [

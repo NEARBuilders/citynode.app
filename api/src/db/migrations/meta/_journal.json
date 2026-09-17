@@ -15,6 +15,13 @@
       "when": 1788302790970,
       "tag": "0001_late_joystick",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789658656670,
+      "tag": "0002_living_odin",
+      "breakpoints": true
     }
   ]
 }

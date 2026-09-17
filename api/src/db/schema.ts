@@ -109,3 +109,93 @@ export const domainBindings = pgTable(
       .where(sql`is_primary = true`),
   }),
 );
+
+export const discoveryProfiles = pgTable("discovery_profiles", {
+  nodeId: uuid("node_id")
+    .primaryKey()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<import("../discovery-contract").DiscoveryProfile>().notNull(),
+});
+
+export const discoveryHistory = pgTable("discovery_history", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  nodeId: uuid("node_id")
+    .notNull()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  targetId: text("target_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  action: text("action").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const discoveryActivities = pgTable(
+  "discovery_activities",
+  {
+    id: uuid("id").primaryKey(),
+    ownerNodeId: uuid("owner_node_id")
+      .notNull()
+      .references(() => nodes.id, { onDelete: "cascade" }),
+    canonicalUrl: text("canonical_url").notNull(),
+    data: jsonb("data").$type<import("../discovery-contract").DiscoveryActivity>().notNull(),
+  },
+  (table) => ({
+    manualUrl: uniqueIndex("discovery_manual_url")
+      .on(table.canonicalUrl)
+      .where(sql`${table.data}->'luma' IS NULL`),
+    lumaNodeUrl: uniqueIndex("discovery_luma_node_url")
+      .on(table.ownerNodeId, table.canonicalUrl)
+      .where(sql`${table.data}->'luma' IS NOT NULL`),
+  }),
+);
+
+export const discoveryCurators = pgTable("discovery_curators", {
+  userId: text("user_id").primaryKey(),
+});
+export const discoveryFeatures = pgTable("discovery_features", {
+  nodeId: uuid("node_id")
+    .primaryKey()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+export const discoveryReports = pgTable(
+  "discovery_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    targetId: uuid("target_id").notNull(),
+    kind: text("kind").$type<"profile" | "activity">().notNull(),
+    reason: text("reason").notNull(),
+    note: text("note").default("").notNull(),
+    resolved: boolean("resolved").default(false).notNull(),
+    token: uuid("token").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ tokenTarget: uniqueIndex("discovery_report_token_target").on(t.token, t.targetId) }),
+);
+
+export const discoveryMeasurements = pgTable(
+  "discovery_measurements",
+  {
+    key: text("key").primaryKey(),
+    visitId: uuid("visit_id").notNull(),
+    nodeId: uuid("node_id").references(() => nodes.id, { onDelete: "cascade" }),
+    campaign: text("campaign").notNull(),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    visitIdx: index("discovery_measurement_visit").on(t.visitId),
+    timeIdx: index("discovery_measurement_time").on(t.createdAt),
+  }),
+);
+
+export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
+  nodeId: uuid("node_id")
+    .primaryKey()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  calendarId: text("calendar_id").notNull(),
+  calendarName: text("calendar_name").notNull(),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
+  error: text("error"),
+});

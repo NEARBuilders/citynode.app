@@ -10,7 +10,6 @@ export { EmptyState } from "./empty-state";
 export { AppHeader } from "./layout/app-header";
 export { AppShell } from "./layout/app-shell";
 export { AppSidebar } from "./layout/app-sidebar";
-export { BetaBanner } from "./layout/beta-banner";
 export { Chip } from "./layout/chip";
 export {
   filterSidebarByRole,
