@@ -10,6 +10,7 @@ import {
   nodes as nodesTable,
   type tenantStatus,
   tenants as tenantsTable,
+  validators as validatorsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
 
@@ -89,6 +90,7 @@ export interface ApplyNodeProposalInput {
   orgId: string;
   accountId: string;
   hostname: string;
+  poolAccountId?: string;
 }
 
 export interface TenantsService {
@@ -594,11 +596,23 @@ export const TenantsLive = Layer.effect(
                 name: input.name,
                 parentId: input.parentId,
                 tenantId: tenant.id,
-                metadata: {},
+                metadata: input.poolAccountId ? { poolAccountId: input.poolAccountId } : {},
               })
               .returning({ id: nodesTable.id });
             if (!node) {
               throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Node creation failed" });
+            }
+
+            if (input.poolAccountId) {
+              await tx.insert(validatorsTable).values({
+                nodeId: node.id,
+                accountId: input.poolAccountId,
+                network: "mainnet",
+                protocol: "near",
+                role: "official",
+                isDefault: true,
+                metadata: {},
+              });
             }
 
             const [binding] = await tx

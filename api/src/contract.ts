@@ -389,7 +389,12 @@ export const contract = oc.router({
 
   applyNodeProposal: oc
     .route({ method: "POST", path: "/nodes/proposals/apply" })
-    .input(NodeProposalPayloadSchema.extend({ hostname: z.string().min(1) }))
+    .input(
+      NodeProposalPayloadSchema.extend({
+        hostname: z.string().min(1),
+        poolAccountId: z.string().min(1).optional(),
+      }),
+    )
     .output(z.object({ nodeId: z.string() }))
     .errors({
       UNAUTHORIZED,

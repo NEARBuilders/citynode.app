@@ -435,6 +435,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       applyNodeProposal: builder.applyNodeProposal.use(requireAdmin).handler(async ({ input }) => {
         validateAccountId(input.accountId);
         validateAccountId(input.submitterAccountId);
+        if (input.poolAccountId) validateAccountId(input.poolAccountId);
         validateHostname(input.hostname);
         const result = await verifyDaoMembership({
           daoAccountId: input.accountId,
@@ -457,6 +458,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           orgId: input.orgId,
           accountId: input.accountId,
           hostname: input.hostname.toLowerCase(),
+          ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
         });
       }),
 

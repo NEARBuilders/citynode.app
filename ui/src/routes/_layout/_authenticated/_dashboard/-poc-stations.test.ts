@@ -8,45 +8,52 @@ import {
   pendingProposalCount,
   runnableRun,
   type StationInputs,
+  teamTreasuryRequirementYocto,
 } from "./-poc-stations";
 
 const ENDOWMENT = "endowment.sputnik-dao.near";
 const TEAM = "team.sputnik-dao.near";
+const TEAM_LOCKUP = "team-lockup.venear.dao";
 const LOCKUP = "endowment.lockup.venear.dao";
 
 const inputs: StationInputs = {
   slug: "thing",
   pool: "thing.pool.near",
-  endowmentAccount: ENDOWMENT,
   teamAccount: TEAM,
+  endowmentAccount: ENDOWMENT,
+  teamLockup: TEAM_LOCKUP,
   endowmentLockup: LOCKUP,
-  lockYocto: 10n ** 24n,
-  stakeYocto: 10n ** 24n,
+  sponsorYocto: 3n * 10n ** 24n,
+  sponsorStakeYocto: 3n * 10n ** 24n,
   delegateBps: 10_000,
   govProposalId: 3,
 };
 
 const noFacts: ChainFacts = {
-  tenantDeployed: false,
   applicationProposed: false,
-  configPublished: false,
   applicationApplied: false,
-  endowmentRegistered: false,
-  lockupDeployed: false,
-  lockupFunded: false,
-  nearLocked: false,
-  poolSelected: false,
-  stakedFromLockup: false,
+  tenantDeployed: false,
+  poolAssigned: false,
+  treasuryFunded: false,
+  configPublished: false,
   teamStaked: false,
   teamRegistered: false,
+  lockupDeployed: false,
+  nearLocked: false,
+  endowmentRegistered: false,
+  endowmentLockupDeployed: false,
+  endowmentFunded: false,
+  endowmentLocked: false,
+  endowmentPoolSelected: false,
+  endowmentStaked: false,
   delegated: false,
   voteCast: false,
-  unstaked: false,
-  withdrawn: false,
-  poolReleased: false,
-  delegationsCleared: false,
   teamUnstaked: false,
   teamWithdrawn: false,
+  endowmentUnstaked: false,
+  endowmentWithdrawn: false,
+  endowmentPoolReleased: false,
+  delegationsCleared: false,
   treasuriesShared: false,
 };
 
@@ -87,20 +94,20 @@ function proposal(
 }
 
 describe("buildStations", () => {
-  it("orders twelve stations across four phases", () => {
+  it("orders twelve stations across five phases", () => {
     const stations = buildStations(inputs);
     expect(stations.map((s) => s.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(stations.map((s) => s.phase)).toEqual([
       "stand-up",
       "stand-up",
       "stand-up",
-      "fund",
-      "fund",
-      "fund",
+      "bootstrap",
+      "bootstrap",
+      "bootstrap",
+      "sponsor",
+      "sponsor",
+      "sponsor",
       "vote",
-      "vote",
-      "vote",
-      "refresh",
       "refresh",
       "refresh",
     ]);
@@ -111,82 +118,84 @@ describe("buildStations", () => {
     expect(byId).toEqual({
       apply: "session",
       approve: "session",
+      fund: "session",
       publish: "team",
-      endow: "endowment",
-      stake: "endowment",
-      "stake-team": "team",
-      "register-team": "team",
-      delegate: "endowment",
+      stake: "team",
+      "setup-hos": "team",
+      "sponsor-lock": "endowment",
+      "sponsor-stake": "endowment",
+      "sponsor-delegate": "endowment",
       vote: "team",
-      unstake: "endowment",
-      undelegate: "endowment",
-      "unstake-team": "team",
+      unstake: "team",
+      "sponsor-unwind": "endowment",
     });
   });
 
-  it("stakes the team's own NEAR directly into the pool", () => {
-    const stakeTeam = buildStations(inputs).find((s) => s.id === "stake-team");
-    expect(stakeTeam?.steps[0]?.plan).toEqual({
+  it("stakes a fixed 1 NEAR from the team treasury into the pool", () => {
+    const stake = buildStations(inputs).find((s) => s.id === "stake");
+    expect(stake?.steps[0]?.plan).toEqual({
       kind: "call",
       receiverId: "thing.pool.near",
       methodName: "deposit_and_stake",
       args: {},
       gas: "200 Tgas",
-      attachedDeposit: (10n ** 24n).toString(),
+      attachedDeposit: MIN_TEAM_STAKE_YOCTO.toString(),
+    });
+    expect(stake?.steps[0]?.costYocto).toBe(MIN_TEAM_STAKE_YOCTO.toString());
+  });
+
+  it("locks all liquid NEAR on the team lockup for veNEAR", () => {
+    const setup = buildStations(inputs).find((s) => s.id === "setup-hos");
+    expect(setup?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null))).toEqual([
+      "storage_deposit",
+      "deploy_lockup",
+      "lock_near",
+    ]);
+    const lock = setup?.steps.find((s) => s.id === "lock")?.plan;
+    expect(lock).toMatchObject({
+      receiverId: TEAM_LOCKUP,
+      args: {},
+      attachedDeposit: "1",
+    });
+    expect(setup?.steps.find((s) => s.id === "deploy-lockup")?.costYocto).toBe(
+      (2n * 10n ** 24n).toString(),
+    );
+  });
+
+  it("funds and locks the sponsor's NEAR on the endowment lockup", () => {
+    const sponsorLock = buildStations(inputs).find((s) => s.id === "sponsor-lock");
+    expect(sponsorLock?.steps.find((s) => s.id === "fund-lockup")?.plan).toEqual({
+      kind: "transfer",
+      receiverId: LOCKUP,
+      amountYocto: (3n * 10n ** 24n).toString(),
+    });
+    expect(sponsorLock?.steps.find((s) => s.id === "lock-endowment")?.plan).toMatchObject({
+      kind: "call",
+      receiverId: LOCKUP,
+      methodName: "lock_near",
+      args: {},
     });
   });
 
-  it("stakes a fixed 1 NEAR even with a lower or unset amount", () => {
-    const low = buildStations({ ...inputs, stakeYocto: 10n ** 23n });
-    expect(low.find((s) => s.id === "stake-team")?.steps[0]?.plan).toMatchObject({
-      attachedDeposit: (10n ** 24n).toString(),
-    });
-    const unset = buildStations({ ...inputs, stakeYocto: null });
-    expect(unset.find((s) => s.id === "stake-team")?.steps[0]?.plan).toMatchObject({
-      attachedDeposit: (10n ** 24n).toString(),
-    });
-  });
-
-  it("stakes exactly 1 NEAR for the team while the endowment stakes what it wants", () => {
-    const stations = buildStations({ ...inputs, stakeYocto: 3n * 10n ** 24n });
-    expect(stations.find((s) => s.id === "stake-team")?.steps[0]?.plan).toMatchObject({
-      attachedDeposit: (10n ** 24n).toString(),
-    });
+  it("stakes the pool from the endowment lockup", () => {
+    const sponsorStake = buildStations(inputs).find((s) => s.id === "sponsor-stake");
     expect(
-      stations.find((s) => s.id === "stake")?.steps.find((s) => s.id === "stake")?.plan,
-    ).toMatchObject({
+      sponsorStake?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null)),
+    ).toEqual(["select_staking_pool", "deposit_and_stake"]);
+    expect(sponsorStake?.steps.every((s) => s.plan?.receiverId === LOCKUP)).toBe(true);
+    expect(sponsorStake?.steps.find((s) => s.id === "select-pool")?.plan).toMatchObject({
+      kind: "call",
+      args: { staking_pool_account_id: "thing.pool.near" },
+    });
+    expect(sponsorStake?.steps.find((s) => s.id === "stake-endowment")?.plan).toMatchObject({
+      kind: "call",
       args: { amount: (3n * 10n ** 24n).toString() },
     });
   });
 
-  it("unwinds the team's direct stake back to its treasury", () => {
-    const unstakeTeam = buildStations(inputs).find((s) => s.id === "unstake-team");
-    expect(
-      unstakeTeam?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null)),
-    ).toEqual(["unstake_all", "withdraw"]);
-    expect(unstakeTeam?.steps.every((s) => s.plan?.receiverId === "thing.pool.near")).toBe(true);
-  });
-
-  it("unwinds the stake and delegation so the cycle can refresh", () => {
-    const byId = Object.fromEntries(buildStations(inputs).map((s) => [s.id, s]));
-    const unstake = byId.unstake;
-    expect(unstake?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null))).toEqual(
-      ["unstake_all", "withdraw_all_from_staking_pool", "unselect_staking_pool"],
-    );
-    expect(unstake?.steps.every((s) => s.plan?.receiverId === LOCKUP)).toBe(true);
-    const undelegate = byId.undelegate;
-    expect(undelegate?.steps[0]?.plan).toMatchObject({
-      kind: "call",
-      receiverId: "venear.dao",
-      methodName: "set_delegations",
-      args: { entries: [] },
-    });
-  });
-
   it("targets the delegation at the team wallet, not the session wallet", () => {
-    const delegate = buildStations(inputs).find((s) => s.id === "delegate");
-    const plan = delegate?.steps[0]?.plan;
-    expect(plan).toMatchObject({
+    const delegate = buildStations(inputs).find((s) => s.id === "sponsor-delegate");
+    expect(delegate?.steps[0]?.plan).toMatchObject({
       kind: "call",
       receiverId: "venear.dao",
       methodName: "set_delegations",
@@ -194,18 +203,27 @@ describe("buildStations", () => {
     });
   });
 
-  it("funds the lockup with the lock plus stake amount", () => {
-    const endow = buildStations(inputs).find((s) => s.id === "endow");
-    expect(endow?.steps.find((s) => s.id === "fund-lockup")?.plan).toEqual({
-      kind: "transfer",
-      receiverId: LOCKUP,
-      amountYocto: (2n * 10n ** 24n).toString(),
-    });
+  it("unwinds the team's direct stake back to its treasury", () => {
+    const unstake = buildStations(inputs).find((s) => s.id === "unstake");
+    expect(unstake?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null))).toEqual(
+      ["unstake_all", "withdraw"],
+    );
+    expect(unstake?.steps.every((s) => s.plan?.receiverId === "thing.pool.near")).toBe(true);
   });
 
-  it("falls back to the team wallet when no endowment account is set", () => {
-    const stations = buildStations({ ...inputs, endowmentAccount: "" });
-    expect(stations.find((s) => s.id === "endow")?.signer).toBe("team");
+  it("unwinds the sponsor's lockup stake and delegations", () => {
+    const unwind = buildStations(inputs).find((s) => s.id === "sponsor-unwind");
+    expect(unwind?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null))).toEqual([
+      "unstake_all",
+      "withdraw_all_from_staking_pool",
+      "unselect_staking_pool",
+      "set_delegations",
+    ]);
+    expect(unwind?.steps.find((s) => s.id === "unselect-pool")?.plan?.receiverId).toBe(LOCKUP);
+    expect(unwind?.steps.find((s) => s.id === "clear-delegations")?.plan).toMatchObject({
+      kind: "call",
+      args: { entries: [] },
+    });
   });
 });
 
@@ -220,36 +238,128 @@ describe("meetsTeamStakeMinimum", () => {
   });
 });
 
+describe("teamTreasuryRequirementYocto", () => {
+  it("sums the deposits of the team's remaining stations", () => {
+    expect(teamTreasuryRequirementYocto(noFacts)).toBe(3_101_250_000_000_000_000_000_000n);
+  });
+
+  it("drops each requirement once its fact holds", () => {
+    const staked = teamTreasuryRequirementYocto({ ...noFacts, teamStaked: true });
+    expect(staked).toBe(3_101_250_000_000_000_000_000_000n - 10n ** 24n);
+    const registered = teamTreasuryRequirementYocto({
+      ...noFacts,
+      teamStaked: true,
+      teamRegistered: true,
+    });
+    expect(registered).toBe(2_001_250_000_000_000_000_000_000n);
+    const deployed = teamTreasuryRequirementYocto({
+      ...noFacts,
+      teamStaked: true,
+      teamRegistered: true,
+      lockupDeployed: true,
+    });
+    expect(deployed).toBe(1_250_000_000_000_000_000_000n);
+    expect(
+      teamTreasuryRequirementYocto({
+        ...noFacts,
+        teamStaked: true,
+        teamRegistered: true,
+        lockupDeployed: true,
+        voteCast: true,
+      }),
+    ).toBe(0n);
+  });
+});
+
 describe("deriveStations", () => {
-  it("blocks downstream stations except the team's independent ones", () => {
+  it("blocks only on declared requirements — no implicit upstream walk", () => {
     const states = derive();
-    expect(states[0].status).toBe("ready");
-    expect(states[1].status).toBe("blocked");
-    expect(states[1].blockedReason).toBe("waiting on an earlier station");
     const byId = Object.fromEntries(states.map((s) => [s.def.id, s.status]));
     expect(byId).toEqual({
       apply: "ready",
       approve: "blocked",
+      fund: "blocked",
       publish: "blocked",
-      endow: "blocked",
       stake: "blocked",
-      "stake-team": "ready",
-      "register-team": "ready",
-      delegate: "blocked",
+      "setup-hos": "blocked",
+      "sponsor-lock": "blocked",
+      "sponsor-stake": "blocked",
+      "sponsor-delegate": "blocked",
       vote: "blocked",
       unstake: "blocked",
-      undelegate: "blocked",
-      "unstake-team": "blocked",
+      "sponsor-unwind": "blocked",
     });
+    expect(states.find((s) => s.def.id === "approve")?.blockedReason).toBe(
+      "submit the application first",
+    );
+    expect(states.find((s) => s.def.id === "stake")?.blockedReason).toBe("assign the pool first");
   });
 
-  it("advances to the next station once upstream facts are satisfied", () => {
+  it("makes the bootstrap stations independently runnable once funded", () => {
     const states = derive({
-      facts: { ...noFacts, applicationProposed: true },
+      facts: {
+        ...noFacts,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
+      },
+      connectedDao: TEAM,
     });
-    expect(states[0].status).toBe("done");
-    expect(states[1].status).toBe("ready");
-    expect(states[2].status).toBe("blocked");
+    for (const id of ["publish", "stake", "setup-hos"] as const) {
+      const station = states.find((s) => s.def.id === id);
+      expect(station?.status).toBe("ready");
+      expect(station?.canRun).toBe(true);
+    }
+    expect(states.find((s) => s.def.id === "vote")?.status).toBe("blocked");
+    expect(states.find((s) => s.def.id === "unstake")?.status).toBe("blocked");
+  });
+
+  it("never lets the endowment track block the team's vote", () => {
+    const states = derive({
+      facts: {
+        ...noFacts,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
+        teamRegistered: true,
+        lockupDeployed: true,
+        nearLocked: true,
+      },
+      blockers: {
+        "sponsor-lock": "set the endowment treasury",
+        "sponsor-stake": "set the endowment treasury",
+        "sponsor-delegate": "set the endowment treasury",
+        "sponsor-unwind": "set the endowment treasury",
+      },
+      connectedDao: TEAM,
+    });
+    expect(states.find((s) => s.def.id === "vote")?.status).toBe("ready");
+    expect(states.find((s) => s.def.id === "vote")?.canRun).toBe(true);
+    expect(states.find((s) => s.def.id === "sponsor-lock")?.status).toBe("blocked");
+    expect(states.find((s) => s.def.id === "sponsor-delegate")?.status).toBe("blocked");
+  });
+
+  it("skips the sponsor stations when both treasuries are one account", () => {
+    const facts = { ...noFacts, treasuriesShared: true };
+    const states = derive({ facts });
+    for (const id of [
+      "sponsor-lock",
+      "sponsor-stake",
+      "sponsor-delegate",
+      "sponsor-unwind",
+    ] as const) {
+      expect(states.find((s) => s.def.id === id)?.status).toBe("skipped");
+    }
+    expect(states.find((s) => s.def.id === "sponsor-delegate")?.skipReason).toBe(
+      "the endowment cannot delegate to itself",
+    );
+    expect(states.find((s) => s.def.id === "sponsor-lock")?.skipReason).toBe(
+      "team and endowment are one account — the sponsor phase is folded into the team stations",
+    );
+    expect(states.find((s) => s.def.id === "setup-hos")?.skipReason).toBeNull();
+    expect(isSharedTreasurySkip("vote", facts)).toBe(false);
   });
 
   it("reports a station as staged when a pending DAO proposal matches its plan", () => {
@@ -258,9 +368,9 @@ describe("deriveStations", () => {
       proposalsBySigner: { team: [proposal(7, "registry.near", "__fastdata_kv")] },
       connectedDao: TEAM,
     });
-    const publish = states[2];
-    expect(publish.status).toBe("staged");
-    expect(publish.steps.find((s) => s.id === "publish")?.pendingProposal?.id).toBe(7);
+    const publish = states.find((s) => s.def.id === "publish");
+    expect(publish?.status).toBe("staged");
+    expect(publish?.steps.find((s) => s.id === "publish")?.pendingProposal?.id).toBe(7);
     expect(pendingProposalCount(states)).toBe(1);
   });
 
@@ -270,7 +380,7 @@ describe("deriveStations", () => {
       proposalsBySigner: { team: [proposal(7, "registry.near", "__fastdata_kv", "Approved")] },
       connectedDao: TEAM,
     });
-    expect(states[2].status).toBe("ready");
+    expect(states.find((s) => s.def.id === "publish")?.status).toBe("ready");
   });
 
   it("does not attribute one treasury's proposals to another", () => {
@@ -279,158 +389,52 @@ describe("deriveStations", () => {
       proposalsBySigner: { endowment: [proposal(7, "registry.near", "__fastdata_kv")] },
       connectedDao: TEAM,
     });
-    expect(states[2].status).toBe("ready");
+    expect(states.find((s) => s.def.id === "publish")?.status).toBe("ready");
   });
 
-  it("skips the delegate stations when both treasuries are one account", () => {
-    const facts = { ...noFacts, treasuriesShared: true, applicationProposed: true };
-    const states = derive({ facts });
-    const registerTeam = states.find((s) => s.def.id === "register-team");
-    const delegate = states.find((s) => s.def.id === "delegate");
-    expect(registerTeam?.status).toBe("skipped");
-    expect(delegate?.status).toBe("skipped");
-    expect(registerTeam?.skipReason).toBe(
-      "team and endowment are one account — the shared wallet registers in Lock the sponsor's NEAR",
-    );
-    expect(delegate?.skipReason).toBe("the endowment cannot delegate to itself");
-    expect(states.find((s) => s.def.id === "stake-team")?.skipReason).toBeNull();
-    expect(isSharedTreasurySkip("vote", facts)).toBe(false);
-  });
-
-  it("treats skipped stations as satisfied for downstream ordering", () => {
-    const states = derive({
-      facts: {
-        ...noFacts,
-        treasuriesShared: true,
-        applicationProposed: true,
-        configPublished: true,
-        applicationApplied: true,
-        tenantDeployed: true,
-        endowmentRegistered: true,
-        lockupDeployed: true,
-        lockupFunded: true,
-        nearLocked: true,
-        poolSelected: true,
-        stakedFromLockup: true,
-        teamStaked: true,
-      },
-    });
-    expect(states.find((s) => s.def.id === "vote")?.status).toBe("ready");
-  });
-
-  it("keeps a station awaiting votes while its proposal is open, even if the fact is satisfied", () => {
-    const states = derive({
-      facts: {
-        ...noFacts,
-        ...deployDone,
-        endowmentRegistered: true,
-        lockupDeployed: true,
-        lockupFunded: true,
-        nearLocked: true,
-        poolSelected: true,
-        stakedFromLockup: true,
-      },
-      proposalsBySigner: {
-        endowment: [
-          proposal(5, LOCKUP, "select_staking_pool"),
-          proposal(6, LOCKUP, "deposit_and_stake"),
-        ],
-      },
-      connectedDao: ENDOWMENT,
-    });
-    const stake = states.find((s) => s.def.id === "stake");
-    expect(stake?.steps.find((s) => s.id === "select-pool")?.status).toBe("staged");
-    expect(stake?.steps.find((s) => s.id === "stake")?.status).toBe("staged");
-    expect(stake?.status).toBe("staged");
-    expect(stake?.canRun).toBe(false);
-    expect(stake?.runBlockReason).toBe("awaiting votes");
-  });
-
-  it("surfaces input blockers ahead of ordering blockers", () => {
+  it("surfaces input blockers ahead of requirements", () => {
     const states = derive({ blockers: { apply: "select an organization first" } });
     expect(states[0].status).toBe("blocked");
     expect(states[0].blockedReason).toBe("select an organization first");
   });
 
-  it("keeps the fund phase runnable while publish awaits votes", () => {
-    const states = derive({
-      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
-      proposalsBySigner: { team: [proposal(5, "registry.near", "__fastdata_kv")] },
-      connectedDao: TEAM,
-    });
-    expect(states.find((s) => s.def.id === "publish")?.status).toBe("staged");
-    expect(states.find((s) => s.def.id === "endow")?.status).toBe("ready");
-    expect(states.find((s) => s.def.id === "stake")?.blockedBy).toBe("upstream");
-  });
-
-  it("does not gate the fund phase on a publish that has not been run yet", () => {
-    const states = derive({
-      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
-      connectedDao: TEAM,
-    });
-    expect(states.find((s) => s.def.id === "publish")?.status).toBe("ready");
-    expect(states.find((s) => s.def.id === "endow")?.status).toBe("ready");
-  });
-
-  it("runs the team's stake and registration before the endowment track completes", () => {
-    const states = derive({
-      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
-      connectedDao: TEAM,
-    });
-    const stakeTeam = states.find((s) => s.def.id === "stake-team");
-    const registerTeam = states.find((s) => s.def.id === "register-team");
-    expect(stakeTeam?.status).toBe("ready");
-    expect(stakeTeam?.canRun).toBe(true);
-    expect(registerTeam?.status).toBe("ready");
-    expect(registerTeam?.canRun).toBe(true);
-    const delegate = states.find((s) => s.def.id === "delegate");
-    expect(delegate?.blockedBy).toBe("input");
-    expect(delegate?.blockedReason).toBe(
-      "the team must register in veNEAR before it can receive the delegation",
-    );
-  });
-
   it("gates delegation on the team's veNEAR registration", () => {
-    const fundDone = {
+    const ready = {
       ...noFacts,
-      ...deployDone,
-      endowmentRegistered: true,
-      lockupDeployed: true,
-      lockupFunded: true,
-      nearLocked: true,
-      poolSelected: true,
-      stakedFromLockup: true,
+      applicationProposed: true,
+      tenantDeployed: true,
+      endowmentFunded: true,
+      endowmentLocked: true,
     };
-    const blocked = derive({
-      facts: fundDone,
-      connectedDao: ENDOWMENT,
-    });
-    const delegate = blocked.find((s) => s.def.id === "delegate");
+    const blocked = derive({ facts: ready, connectedDao: ENDOWMENT });
+    const delegate = blocked.find((s) => s.def.id === "sponsor-delegate");
     expect(delegate?.status).toBe("blocked");
     expect(delegate?.blockedBy).toBe("input");
     expect(delegate?.blockedReason).toBe(
       "the team must register in veNEAR before it can receive the delegation",
     );
     expect(delegate?.canRun).toBe(false);
-    expect(runnableRun(blocked).map((s) => s.def.id)).toEqual([]);
-    const ready = derive({
-      facts: { ...fundDone, teamRegistered: true },
+    expect(runnableRun(blocked).map((s) => s.def.id)).toEqual(["fund"]);
+    const unblocked = derive({
+      facts: { ...ready, teamRegistered: true },
       connectedDao: ENDOWMENT,
     });
-    const unblocked = ready.find((s) => s.def.id === "delegate");
-    expect(unblocked?.status).toBe("ready");
-    expect(unblocked?.canRun).toBe(true);
+    const delegateReady = unblocked.find((s) => s.def.id === "sponsor-delegate");
+    expect(delegateReady?.status).toBe("ready");
+    expect(delegateReady?.canRun).toBe(true);
+    expect(runnableRun(unblocked).map((s) => s.def.id)).toEqual(["fund"]);
   });
 
-  it("marks a station failed and stops the run there", () => {
+  it("marks a station failed and reports the failure", () => {
     const states = derive({
       facts: { ...noFacts, applicationProposed: true },
       failedStations: { publish: "insufficient balance" },
       connectedDao: TEAM,
     });
-    expect(states[2].status).toBe("failed");
-    expect(states[2].blockedReason).toBe("insufficient balance");
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["approve"]);
+    const publish = states.find((s) => s.def.id === "publish");
+    expect(publish?.status).toBe("failed");
+    expect(publish?.blockedReason).toBe("insufficient balance");
+    expect(publish?.canRun).toBe(true);
   });
 
   it("tracks whether the required signer is the connected treasury", () => {
@@ -439,83 +443,66 @@ describe("deriveStations", () => {
       connectedDao: ENDOWMENT,
     });
     expect(states.find((s) => s.def.id === "publish")?.signerConnected).toBe(false);
-    expect(states.find((s) => s.def.id === "endow")?.signerConnected).toBe(true);
+    expect(states.find((s) => s.def.id === "sponsor-lock")?.signerConnected).toBe(true);
     expect(states.find((s) => s.def.id === "apply")?.signerConnected).toBe(true);
   });
 });
 
-const deployDone = {
-  applicationProposed: true,
-  configPublished: true,
-  applicationApplied: true,
-  tenantDeployed: true,
-};
-
 describe("runnableRun", () => {
-  it("stops at the first station the connected wallet cannot sign", () => {
+  it("runs the session stations while no treasury is connected", () => {
     const states = derive({ facts: { ...noFacts } });
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["apply", "approve"]);
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["apply"]);
+  });
+
+  it("collects every runnable station of the connected signer, skipping blocked ones in between", () => {
+    const states = derive({
+      facts: {
+        ...noFacts,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
+      },
+      blockers: { stake: "enter the staking pool" },
+      connectedDao: TEAM,
+    });
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["publish", "setup-hos"]);
   });
 
   it("never crosses a signer boundary", () => {
     const states = derive({
-      facts: { ...noFacts, ...deployDone },
-      connectedDao: ENDOWMENT,
-    });
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["endow", "stake"]);
-  });
-
-  it("runs the session stations before stopping at an unconnected treasury", () => {
-    const states = derive({
-      facts: { ...noFacts, applicationProposed: true },
-      connectedDao: ENDOWMENT,
-    });
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["approve"]);
-  });
-
-  it("walks through stations blocked only by upstream ordering", () => {
-    const states = derive({
-      facts: { ...noFacts, ...deployDone },
-      connectedDao: ENDOWMENT,
-    });
-    expect(states.find((s) => s.def.id === "stake")?.blockedBy).toBe("upstream");
-    expect(runnableRun(states).map((s) => s.def.id)).toContain("stake");
-  });
-
-  it("stops dead at a station blocked by a bad input", () => {
-    const states = derive({
-      facts: { ...noFacts, ...deployDone },
-      blockers: { stake: "enter a stake amount" },
-      connectedDao: ENDOWMENT,
-    });
-    expect(states.find((s) => s.def.id === "stake")?.blockedBy).toBe("input");
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["endow"]);
-  });
-
-  it("walks past already-satisfied stations", () => {
-    const states = derive({
       facts: {
         ...noFacts,
-        ...deployDone,
-        endowmentRegistered: true,
-        lockupDeployed: true,
-        lockupFunded: true,
-        nearLocked: true,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
+        endowmentFunded: true,
+        endowmentLocked: true,
+        endowmentStaked: true,
+        teamRegistered: true,
       },
       connectedDao: ENDOWMENT,
     });
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["stake"]);
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual([
+      "sponsor-lock",
+      "sponsor-stake",
+      "sponsor-delegate",
+      "sponsor-unwind",
+    ]);
   });
 
   it("skips fully staged stations with nothing left to sign", () => {
     const states = derive({
       facts: {
         ...noFacts,
-        ...deployDone,
-        endowmentRegistered: true,
-        lockupDeployed: true,
-        lockupFunded: true,
-        nearLocked: true,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
+        endowmentFunded: true,
+        endowmentLocked: true,
+        endowmentStaked: true,
         teamRegistered: true,
       },
       proposalsBySigner: {
@@ -527,9 +514,9 @@ describe("runnableRun", () => {
       },
       connectedDao: ENDOWMENT,
     });
-    expect(states.find((s) => s.def.id === "stake")?.status).toBe("staged");
-    expect(states.find((s) => s.def.id === "delegate")?.status).toBe("staged");
-    expect(runnableRun(states).map((s) => s.def.id)).toEqual([]);
+    expect(states.find((s) => s.def.id === "sponsor-stake")?.status).toBe("staged");
+    expect(states.find((s) => s.def.id === "sponsor-delegate")?.status).toBe("staged");
+    expect(runnableRun(states).map((s) => s.def.id)).toEqual(["sponsor-lock"]);
   });
 });
 
@@ -538,24 +525,25 @@ describe("run gating", () => {
     const states = derive({
       facts: {
         ...noFacts,
-        ...deployDone,
-        endowmentRegistered: true,
-        lockupDeployed: true,
-        lockupFunded: true,
-        nearLocked: true,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
       },
-      connectedDao: ENDOWMENT,
+      connectedDao: TEAM,
     });
     const stake = states.find((s) => s.def.id === "stake");
     expect(stake?.canRun).toBe(true);
     expect(stake?.runBlockReason).toBeNull();
   });
 
-  it("disables upstream-blocked stations with a reason", () => {
+  it("disables requirement-blocked stations with the requirement as the reason", () => {
     const states = derive({ facts: { ...noFacts, applicationProposed: true } });
-    const stake = states.find((s) => s.def.id === "stake");
-    expect(stake?.canRun).toBe(false);
-    expect(stake?.runBlockReason).toBe("waiting on an earlier station");
+    const setupHos = states.find((s) => s.def.id === "setup-hos");
+    expect(setupHos?.canRun).toBe(false);
+    expect(setupHos?.runBlockReason).toBe(
+      "fund the team treasury first — House of Stake setup needs 2.1 NEAR",
+    );
   });
 
   it("disables input-blocked stations with the blocker as the reason", () => {
@@ -571,29 +559,37 @@ describe("run gating", () => {
 
   it("reports awaiting votes when only staged steps remain", () => {
     const states = derive({
-      facts: { ...noFacts, ...deployDone, endowmentRegistered: true, lockupDeployed: true },
+      facts: {
+        ...noFacts,
+        applicationProposed: true,
+        tenantDeployed: true,
+        poolAssigned: true,
+        treasuryFunded: true,
+        teamRegistered: true,
+      },
       proposalsBySigner: {
-        endowment: [
-          proposal(1, LOCKUP, "select_staking_pool"),
-          proposal(2, LOCKUP, "deposit_and_stake"),
-          proposal(3, "venear.dao", "set_delegations"),
+        team: [
+          proposal(1, "venear.dao", "storage_deposit"),
+          proposal(2, "venear.dao", "deploy_lockup"),
+          proposal(3, TEAM_LOCKUP, "lock_near"),
         ],
       },
-      connectedDao: ENDOWMENT,
+      connectedDao: TEAM,
     });
-    const stake = states.find((s) => s.def.id === "stake");
-    expect(stake?.canRun).toBe(false);
-    expect(stake?.runBlockReason).toBe("awaiting votes");
+    const setupHos = states.find((s) => s.def.id === "setup-hos");
+    expect(setupHos?.status).toBe("staged");
+    expect(setupHos?.canRun).toBe(false);
+    expect(setupHos?.runBlockReason).toBe("awaiting votes");
   });
 
   it("keeps failed stations retryable when the signer is connected", () => {
     const states = derive({
-      facts: { ...noFacts, ...deployDone },
-      failedStations: { endow: "lockup deployment reverted" },
-      connectedDao: ENDOWMENT,
+      facts: { ...noFacts, applicationProposed: true, tenantDeployed: true },
+      failedStations: { "setup-hos": "lockup deployment reverted" },
+      connectedDao: TEAM,
     });
-    const endow = states.find((s) => s.def.id === "endow");
-    expect(endow?.status).toBe("failed");
-    expect(endow?.canRun).toBe(true);
+    const setupHos = states.find((s) => s.def.id === "setup-hos");
+    expect(setupHos?.status).toBe("failed");
+    expect(setupHos?.canRun).toBe(true);
   });
 });
