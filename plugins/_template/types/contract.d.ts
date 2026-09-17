@@ -133,6 +133,9 @@ export declare const contract: {
         CONFLICT: {
             message: string;
         };
+        UNAUTHORIZED: {
+            message: string;
+        };
     }>;
     getThing: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         thingId: z.ZodString;
@@ -188,6 +191,9 @@ export declare const contract: {
     }, z.core.$strip>, {
         NOT_FOUND: {
             status: number;
+            message: string;
+        };
+        UNAUTHORIZED: {
             message: string;
         };
     }>;

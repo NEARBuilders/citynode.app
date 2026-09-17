@@ -197,7 +197,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         return { ok: true };
       }),
 
-      createThing: builder.createThing.effect(function* ({ input }) {
+      createThing: builder.createThing.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
         const things = yield* ThingsService;
         const thing = yield* things.createThing(input.thingId, input.payload);
         const publisher = yield* TemplatePublisher;
@@ -242,7 +243,8 @@ export default createPlugin.withPlugins<PluginsClient>()({
         }
       }),
 
-      deleteThing: builder.deleteThing.effect(function* ({ input }) {
+      deleteThing: builder.deleteThing.effect(function* ({ input, context, errors }) {
+        if (!context.userId) return yield* Effect.fail(errors.UNAUTHORIZED());
         const things = yield* ThingsService;
         const thing = yield* things.getThing(input.thingId);
         const result = yield* things.deleteThing(input.thingId);

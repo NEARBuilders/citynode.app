@@ -208,7 +208,7 @@ export const contract = oc.router({
       }),
     )
     .output(CreatedThingSchema)
-    .errors({ CONFLICT: Errors.CONFLICT }),
+    .errors({ CONFLICT: Errors.CONFLICT, UNAUTHORIZED: Errors.UNAUTHORIZED }),
 
   getThing: oc
     .route({
@@ -280,7 +280,10 @@ export const contract = oc.router({
       }),
     )
     .output(z.object({ success: z.literal(true) }))
-    .errors({ NOT_FOUND: { status: 404, message: "Thing not found" } }),
+    .errors({
+      NOT_FOUND: { status: 404, message: "Thing not found" },
+      UNAUTHORIZED: Errors.UNAUTHORIZED,
+    }),
 
   testError: oc
     .route({
