@@ -9,8 +9,12 @@ export type { RouterModule };
 
 const ROUTER_MODULE_CACHE_TTL_MS = 5 * 60_000;
 const SSR_INTEGRITY_CACHE_TTL_MS = 5 * 60_000;
+const PLUGIN_TREE_CACHE_TTL_MS = 5 * 60_000;
+const NEGATIVE_CACHE_TTL_MS = 10_000;
 const MAX_ROUTER_MODULE_CACHE_SIZE = 128;
 const MAX_SSR_INTEGRITY_CACHE_SIZE = 256;
+const MAX_PLUGIN_TREE_CACHE_SIZE = 256;
+const MAX_MF_INSTANCES = 128;
 
 interface CachedPromise<T> {
   expiresAt: number;
@@ -19,9 +23,60 @@ interface CachedPromise<T> {
 
 const routerModuleCache = new Map<string, CachedPromise<RouterModule>>();
 const verifiedSsrEntryCache = new Map<string, CachedPromise<void>>();
+const pluginTreeCache = new Map<string, CachedPromise<unknown>>();
 
-const PLUGIN_TREE_CACHE_TTL_MS = 5 * 60_000;
-const MAX_PLUGIN_TREE_CACHE_SIZE = 256;
+type ModuleFederationInstance = ReturnType<typeof createInstance>;
+
+/**
+ * One MF instance per (remote :: entry :: integrity). Same name → same
+ * instance, so retries and repeated loads never mint new ones into the
+ * runtime's global instance registry — that registry is append-only inside
+ * @module-federation and was the unbounded host memory growth: every failing
+ * request used to stack up to six instances that nothing could evict.
+ */
+const instanceRegistry = new Map<string, ModuleFederationInstance>();
+
+function releaseInstanceRemotes(instance: ModuleFederationInstance | undefined) {
+  if (!instance) return;
+  try {
+    const handler = (
+      instance as unknown as {
+        remoteHandler?: { removeRemote?: (remote: unknown) => void };
+      }
+    ).remoteHandler;
+    for (const remote of [...instance.options.remotes]) {
+      handler?.removeRemote?.(remote);
+    }
+  } catch {
+    // best-effort: the instance was already evicted from the registry, so the
+    // worst case is a shallow pin in the runtime's global list.
+  }
+}
+
+function getOrCreateInstance(
+  name: string,
+  remote: { name: string; entry: string },
+): ModuleFederationInstance {
+  const existing = instanceRegistry.get(name);
+  if (existing) {
+    instanceRegistry.delete(name);
+    instanceRegistry.set(name, existing);
+    return existing;
+  }
+  const instance = createInstance({
+    name,
+    remotes: [{ name: remote.name, entry: remote.entry, alias: remote.name }],
+  });
+  instanceRegistry.set(name, instance);
+  while (instanceRegistry.size > MAX_MF_INSTANCES) {
+    const oldestName = instanceRegistry.keys().next().value;
+    if (!oldestName) break;
+    const evicted = instanceRegistry.get(oldestName);
+    instanceRegistry.delete(oldestName);
+    releaseInstanceRemotes(evicted);
+  }
+  return instance;
+}
 
 function pruneExpiredCacheEntries<T>(cache: Map<string, CachedPromise<T>>, now: number) {
   for (const [key, entry] of cache.entries()) {
@@ -43,6 +98,10 @@ export function resetFederationInstance() {
   routerModuleCache.clear();
   verifiedSsrEntryCache.clear();
   pluginTreeCache.clear();
+  for (const instance of instanceRegistry.values()) {
+    releaseInstanceRemotes(instance);
+  }
+  instanceRegistry.clear();
 }
 
 function shouldCacheRouterModule(config: RuntimeConfig) {
@@ -102,6 +161,72 @@ function getSsrEntryUrl(config: RuntimeConfig) {
 
 const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => Effect.succeed(500));
 
+interface RemoteModuleLoad<T> {
+  cacheKey: string;
+  remoteName: string;
+  remoteUrl?: string;
+  entryUrl: string;
+  expose: string;
+  cache: Map<string, CachedPromise<T>>;
+  ttlMs: number;
+  maxSize: number;
+  /** bypass the instance registry — uncached loads must always hit the wire (local dev hot reload) */
+  freshInstance: boolean;
+}
+
+/**
+ * Load one expose from a remote's server entry: TTL-capped, retry-bounded,
+ * negative-cached on failure, served by a reused MF instance. Failures keep
+ * the failing promise cached for NEGATIVE_CACHE_TTL_MS so a downed remote is
+ * probed once per window, not once per request.
+ */
+function loadRemoteExpose<T>(params: RemoteModuleLoad<T>): Promise<T> {
+  const { cacheKey, remoteName, expose, cache, ttlMs, maxSize, freshInstance, entryUrl } = params;
+  const now = Date.now();
+  pruneExpiredCacheEntries(cache, now);
+
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const mf = freshInstance
+    ? createInstance({
+        name: `host-uncached-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        remotes: [{ name: remoteName, entry: entryUrl, alias: remoteName }],
+      })
+    : getOrCreateInstance(`host-${Buffer.from(cacheKey).toString("base64url")}`, {
+        name: remoteName,
+        entry: entryUrl,
+      });
+
+  const value = Effect.runPromise(
+    Effect.tryPromise({
+      try: () => mf.loadRemote<any>(expose, { from: "build" }),
+      catch: (e) => e as Error,
+    }).pipe(
+      Effect.flatMap((result) =>
+        result
+          ? Effect.succeed(result.default as T)
+          : Effect.fail(new Error(`Module not found: ${expose}`)),
+      ),
+      Effect.retry(retrySchedule),
+    ),
+  );
+
+  cache.set(cacheKey, { value, expiresAt: now + ttlMs });
+  enforceCacheLimit(cache, maxSize);
+
+  value.catch(() => {
+    const current = cache.get(cacheKey);
+    if (current?.value === value) {
+      cache.set(cacheKey, { value, expiresAt: Date.now() + NEGATIVE_CACHE_TTL_MS });
+    }
+  });
+
+  return value;
+}
+
 /**
  * Load an arbitrary expose from a remote's server entry — used for plugin ui
  * `./tree` route-tree exports during SSR composition. Same SRI + TTL + retry
@@ -112,8 +237,6 @@ export interface PluginUiSsrEntry {
   ssrUrl?: string;
   ssrIntegrity?: string;
 }
-
-const pluginTreeCache = new Map<string, CachedPromise<unknown>>();
 
 export const loadPluginUiTree = (plugin: PluginUiSsrEntry) =>
   Effect.gen(function* () {
@@ -139,46 +262,19 @@ export const loadPluginUiTree = (plugin: PluginUiSsrEntry) =>
     }
 
     const cacheKey = `${plugin.name}::${entryUrl}::${plugin.ssrIntegrity ?? "no-integrity"}`;
-    const now = Date.now();
-    pruneExpiredCacheEntries(pluginTreeCache, now);
-    let cached = pluginTreeCache.get(cacheKey);
-    if (!cached || cached.expiresAt <= now) {
-      cached = {
-        value: Effect.runPromise(
-          Effect.retry(
-            Effect.gen(function* () {
-              const mf = createInstance({
-                name: `host-${Buffer.from(cacheKey).toString("base64url")}`,
-                remotes: [{ name: plugin.name, entry: entryUrl, alias: plugin.name }],
-              });
-              return yield* Effect.tryPromise({
-                try: async () => {
-                  const result = await mf.loadRemote<any>(`${plugin.name}/tree`, { from: "build" });
-                  if (!result) throw new Error(`Module not found: ${plugin.name}/tree`);
-                  return result.default as unknown;
-                },
-                catch: (e) =>
-                  new FederationError({
-                    remoteName: plugin.name,
-                    remoteUrl: plugin.ssrUrl,
-                    cause: e,
-                  }),
-              });
-            }),
-            retrySchedule,
-          ),
-        ).catch((error) => {
-          pluginTreeCache.delete(cacheKey);
-          throw error;
-        }),
-        expiresAt: now + PLUGIN_TREE_CACHE_TTL_MS,
-      };
-      pluginTreeCache.set(cacheKey, cached);
-      enforceCacheLimit(pluginTreeCache, MAX_PLUGIN_TREE_CACHE_SIZE);
-    }
-
     const tree = yield* Effect.tryPromise({
-      try: () => cached!.value,
+      try: () =>
+        loadRemoteExpose<unknown>({
+          cacheKey,
+          remoteName: plugin.name,
+          remoteUrl: plugin.ssrUrl,
+          entryUrl,
+          expose: `${plugin.name}/tree`,
+          cache: pluginTreeCache,
+          ttlMs: PLUGIN_TREE_CACHE_TTL_MS,
+          maxSize: MAX_PLUGIN_TREE_CACHE_SIZE,
+          freshInstance: false,
+        }),
       catch: (e) =>
         new FederationError({
           remoteName: plugin.name,
@@ -212,66 +308,20 @@ export const loadRouterModule = (config: RuntimeConfig) =>
     }
 
     const cacheKey = `${config.ui.name}::${ssrEntryUrl}::${config.ui.ssrIntegrity ?? "no-integrity"}`;
-    const now = Date.now();
-    if (useCache) {
-      pruneExpiredCacheEntries(routerModuleCache, now);
-    }
-    let cached = useCache ? routerModuleCache.get(cacheKey) : undefined;
-
-    if (!cached || cached.expiresAt <= now) {
-      const value = Effect.runPromise(
-        Effect.retry(
-          Effect.gen(function* () {
-            const mf = createInstance({
-              name: `host-${Buffer.from(cacheKey).toString("base64url")}`,
-              remotes: [
-                {
-                  name: config.ui.name,
-                  entry: ssrEntryUrl,
-                  alias: config.ui.name,
-                },
-              ],
-            });
-
-            return yield* Effect.tryPromise({
-              try: async () => {
-                const result = await mf.loadRemote<any>(`${config.ui.name}/Router`, {
-                  from: "build",
-                });
-
-                if (!result) {
-                  throw new Error(`Module not found: ${config.ui.name}/Router`);
-                }
-
-                return result.default as RouterModule;
-              },
-              catch: (e) =>
-                new FederationError({
-                  remoteName: config.ui.name,
-                  remoteUrl: config.ui.ssrUrl,
-                  cause: e,
-                }),
-            });
-          }),
-          retrySchedule,
-        ),
-      ).catch((error) => {
-        if (useCache) {
-          routerModuleCache.delete(cacheKey);
-        }
-        throw error;
-      });
-      if (useCache) {
-        cached = { value, expiresAt: now + ROUTER_MODULE_CACHE_TTL_MS };
-        routerModuleCache.set(cacheKey, cached);
-        enforceCacheLimit(routerModuleCache, MAX_ROUTER_MODULE_CACHE_SIZE);
-      } else {
-        cached = { value, expiresAt: now };
-      }
-    }
 
     const loadedModule = yield* Effect.tryPromise({
-      try: () => cached.value,
+      try: () =>
+        loadRemoteExpose<RouterModule>({
+          cacheKey,
+          remoteName: config.ui.name,
+          remoteUrl: config.ui.ssrUrl,
+          entryUrl: ssrEntryUrl,
+          expose: `${config.ui.name}/Router`,
+          cache: useCache ? routerModuleCache : new Map(),
+          ttlMs: ROUTER_MODULE_CACHE_TTL_MS,
+          maxSize: MAX_ROUTER_MODULE_CACHE_SIZE,
+          freshInstance: !useCache,
+        }),
       catch: (e) =>
         new FederationError({
           remoteName: config.ui.name,

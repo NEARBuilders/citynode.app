@@ -13,7 +13,8 @@ import { Effect } from "effect";
 import {
   ComposeCache,
   composeApp,
-  computeComposeDigest,
+  computeConfigComposeDigest,
+  hasComposableUi,
   type NavManifest,
 } from "everything-dev/ui/compose";
 import type { RuntimeConfig } from "./config";
@@ -33,7 +34,7 @@ export interface ComposedUi {
 /** The client compose switch: a plugin ui remote must exist and the server
  * must also run composition so server + client trees stay identical. */
 export function hasComposablePluginUi(config: RuntimeConfig): boolean {
-  return pluginsWithUi(config).length > 0 && process.env.BOS_UI_COMPOSE === "1";
+  return hasComposableUi(config) && process.env.BOS_UI_COMPOSE === "1";
 }
 
 export function pluginsWithUi(config: RuntimeConfig): Array<{
@@ -48,22 +49,8 @@ export function pluginsWithUi(config: RuntimeConfig): Array<{
     }));
 }
 
-import { MOUNT_REGISTRY_VERSION } from "everything-dev/ui/compose";
-
 export function uiComposeDigest(config: RuntimeConfig): string {
-  const remotes = [
-    {
-      id: "core",
-      ui: { url: config.ui.url, integrity: config.ui.integrity },
-      compose: pluginsWithUi(config).length > 0,
-    },
-    ...Object.entries(config.plugins ?? {}).map(([id, p]) => ({
-      id,
-      ui: p.ui ? { url: p.ui.url, integrity: p.ui.integrity } : undefined,
-      compose: Boolean(p.ui?.ssrUrl),
-    })),
-  ];
-  return computeComposeDigest(remotes, MOUNT_REGISTRY_VERSION);
+  return computeConfigComposeDigest(config);
 }
 
 const composeCache = new ComposeCache<ComposedUi>(COMPOSE_CACHE_TTL_MS, COMPOSE_CACHE_MAX_ENTRIES);

@@ -64,18 +64,16 @@ async function composeClientPluginTrees(
   if (!runtimeConfig.ui?.compose) return undefined;
   const remotes = configuredUiPluginIds(runtimeConfig).flatMap((id) => {
     const ui = pluginUi(id, runtimeConfig.plugins);
-    return ui ? [{ id, name: ui.name, url: ui.url, integrity: ui.integrity }] : [];
+    return ui?.ssrUrl ? [{ id, name: ui.name, url: ui.url, integrity: ui.integrity }] : [];
   });
   if (remotes.length === 0) return undefined;
 
   try {
-    const [
-      { registerRemotes, loadRemote },
-      { composeApp, computeComposeDigest, MOUNT_REGISTRY_VERSION },
-    ] = await Promise.all([
-      import("@module-federation/runtime"),
-      import("everything-dev/ui/compose"),
-    ]);
+    const [{ registerRemotes, loadRemote }, { composeApp, computeConfigComposeDigest }] =
+      await Promise.all([
+        import("@module-federation/runtime"),
+        import("everything-dev/ui/compose"),
+      ]);
     registerRemotes(
       remotes.map((remote) => ({
         name: remote.name,
@@ -105,25 +103,9 @@ async function composeClientPluginTrees(
     // Assert tree identity: the client's fingerprint over the remotes it can
     // see must match the digest the server computed for the tree that was
     // SSR'd. On mismatch the composed server HTML cannot hydrate safely, so
-    // fall back to the core-only tree.
-    const clientDigest = computeComposeDigest(
-      [
-        {
-          id: "core",
-          ui: {
-            url: runtimeConfig.ui?.url,
-            integrity: runtimeConfig.ui?.integrity,
-          },
-          compose: true,
-        },
-        ...remotes.map((remote) => ({
-          id: remote.id,
-          ui: { url: remote.url, integrity: remote.integrity },
-          compose: true,
-        })),
-      ],
-      MOUNT_REGISTRY_VERSION,
-    );
+    // fall back to the core-only tree. Both sides read the same shared
+    // fingerprint implementation — this can only fire on a stale/degraded page.
+    const clientDigest = computeConfigComposeDigest(runtimeConfig);
     const expectedDigest = runtimeConfig.ui?.composeDigest;
     if (expectedDigest && expectedDigest !== clientDigest) {
       console.warn(

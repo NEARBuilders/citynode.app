@@ -1,5 +1,10 @@
+import { ClientRuntimeConfigSchema } from "everything-dev";
 import { describe, expect, it } from "vitest";
-import type { RuntimeConfig } from "../../src/services/config";
+import {
+  buildRuntimeClientConfig,
+  type RuntimeConfig,
+  resolveActiveRuntime,
+} from "../../src/services/config";
 import { pluginsWithUi, uiComposeDigest } from "../../src/services/ui-compose";
 
 function createBaseRuntimeConfig(): RuntimeConfig {
@@ -128,5 +133,68 @@ describe("uiComposeDigest", () => {
     const bumped = createBaseRuntimeConfig();
     bumped.ui.integrity = "sha384-rotated";
     expect(uiComposeDigest(bumped)).not.toBe(uiComposeDigest(base));
+  });
+
+  it("changes when a plugin ssr target is re-deployed without touching the client bundle", () => {
+    const config = createBaseRuntimeConfig();
+    config.plugins = {
+      auth: {
+        name: "auth",
+        url: "https://cdn.example.com/auth",
+        entry: "https://cdn.example.com/auth/mf-manifest.json",
+        source: "remote",
+        ui: {
+          name: "auth-ui",
+          url: "https://cdn.example.com/auth-ui",
+          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
+          source: "remote",
+          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
+          ssrIntegrity: "sha384-ssr-a",
+        } as never,
+      } as never,
+    };
+    const base = uiComposeDigest(config);
+
+    const bumped = structuredClone(config);
+    (bumped.plugins!.auth.ui as { ssrIntegrity: string }).ssrIntegrity = "sha384-ssr-b";
+    expect(uiComposeDigest(bumped)).not.toBe(base);
+  });
+
+  it("digests identically over the client config the browser receives", () => {
+    const config = createBaseRuntimeConfig();
+    config.plugins = {
+      headless: {
+        name: "headless",
+        url: "https://cdn.example.com/headless",
+        entry: "https://cdn.example.com/headless/mf-manifest.json",
+        source: "remote",
+      } as never,
+      auth: {
+        name: "auth",
+        url: "https://cdn.example.com/auth",
+        entry: "https://cdn.example.com/auth/mf-manifest.json",
+        source: "remote",
+        ui: {
+          name: "auth-ui",
+          url: "https://cdn.example.com/auth-ui",
+          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
+          source: "remote",
+          integrity: "sha384-auth-ui",
+          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
+          ssrIntegrity: "sha384-a",
+        } as never,
+      } as never,
+    };
+    const clientConfig = buildRuntimeClientConfig(
+      config,
+      new Request("https://linktree.com/"),
+      resolveActiveRuntime(config, new Request("https://linktree.com/")),
+      false,
+    );
+
+    const { computeConfigComposeDigest } =
+      require("everything-dev/ui/compose") as typeof import("everything-dev/ui/compose");
+    const clientDigest = computeConfigComposeDigest(ClientRuntimeConfigSchema.parse(clientConfig));
+    expect(uiComposeDigest(config)).toBe(clientDigest);
   });
 });

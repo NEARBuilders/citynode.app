@@ -1,3 +1,5 @@
+import { MOUNT_REGISTRY_VERSION } from "./digest-version";
+
 /**
  * Universal (browser-safe) stable hash for compose digests. FNV-1a 32-bit,
  * folded twice with a varying prime offset, hex-encoded. Determinism is the
@@ -27,7 +29,12 @@ export function stableHash(input: string): string {
 export interface UiRemoteFingerprint {
   /** stable key for the remote (plugin id, or "core" for the shell) */
   id: string;
-  ui?: { url?: string; integrity?: string };
+  ui?: {
+    url?: string;
+    integrity?: string;
+    ssrUrl?: string;
+    ssrIntegrity?: string;
+  };
   /** composition enabled for this remote — visible on both client and server */
   compose?: boolean;
 }
@@ -45,9 +52,66 @@ export function computeComposeDigest(
   const versioned = [...remotes]
     .map((remote) => ({
       id: remote.id,
-      ui: remote.ui ? { url: remote.ui.url ?? null, integrity: remote.ui.integrity ?? null } : null,
+      ui: remote.ui
+        ? {
+            url: remote.ui.url ?? null,
+            integrity: remote.ui.integrity ?? null,
+            ssrUrl: remote.ui.ssrUrl ?? null,
+            ssrIntegrity: remote.ui.ssrIntegrity ?? null,
+          }
+        : null,
       compose: remote.compose === true,
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   return stableHash([`registry:v${registryVersion}`, JSON.stringify(versioned)].join("\n"));
+}
+
+export interface ComposeFingerprintConfig {
+  ui?: { url?: string; integrity?: string };
+  plugins?: Record<
+    string,
+    | { ui?: { url?: string; integrity?: string; ssrUrl?: string; ssrIntegrity?: string } }
+    | undefined
+  >;
+}
+
+/**
+ * The single source of truth for "does this runtime compose plugin ui trees":
+ * a plugin composes iff it has a server-side SSR entry the host can graft.
+ * Server and client read this from the same module — the compose flag, the
+ * composed set, and the digest can no longer drift between them.
+ */
+export function hasComposableUi(config: ComposeFingerprintConfig): boolean {
+  return Object.values(config.plugins ?? {}).some((p) => Boolean(p?.ui?.ssrUrl));
+}
+
+/**
+ * Digest over the full runtime config shape: the core ui remote plus every
+ * plugin ui remote's url, integrity, ssrUrl and ssrIntegrity. Every input the
+ * host loads by is also an input here, so a plugin redeploying only its SSR
+ * bundle invalidates the cached composed tree.
+ */
+export function computeConfigComposeDigest(config: ComposeFingerprintConfig): string {
+  return computeComposeDigest(
+    [
+      {
+        id: "core",
+        ui: { url: config.ui?.url, integrity: config.ui?.integrity },
+        compose: hasComposableUi(config),
+      },
+      ...Object.entries(config.plugins ?? {}).map(([id, p]) => ({
+        id,
+        ui: p?.ui
+          ? {
+              url: p.ui.url,
+              integrity: p.ui.integrity,
+              ssrUrl: p.ui.ssrUrl,
+              ssrIntegrity: p.ui.ssrIntegrity,
+            }
+          : undefined,
+        compose: Boolean(p?.ui?.ssrUrl),
+      })),
+    ],
+    MOUNT_REGISTRY_VERSION,
+  );
 }
