@@ -209,6 +209,9 @@ describe("buildStations", () => {
       ["unstake_all", "withdraw"],
     );
     expect(unstake?.steps.every((s) => s.plan?.receiverId === "thing.pool.near")).toBe(true);
+    expect(
+      unstake?.steps.every((s) => (s.plan?.kind === "call" ? !s.plan.attachedDeposit : true)),
+    ).toBe(true);
   });
 
   it("unwinds the sponsor's lockup stake and delegations", () => {

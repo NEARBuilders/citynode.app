@@ -11,8 +11,8 @@ const target = {
   protocol: "near",
 };
 const clients: QueryClient[] = [];
-const unstakeMocks = vi.hoisted(() => ({
-  proposeTeamUnstake: vi.fn(),
+const poolActionMocks = vi.hoisted(() => ({
+  proposeTeamPoolAction: vi.fn(),
 }));
 
 vi.mock("@/lib/use-near-account", () => ({
@@ -35,13 +35,13 @@ vi.mock("@/lib/team-unstake", async () => {
   const actual = await vi.importActual<typeof import("@/lib/team-unstake")>("@/lib/team-unstake");
   return {
     ...actual,
-    proposeTeamUnstake: unstakeMocks.proposeTeamUnstake,
+    proposeTeamPoolAction: poolActionMocks.proposeTeamPoolAction,
   };
 });
 
 afterEach(() => {
   cleanup();
-  unstakeMocks.proposeTeamUnstake.mockReset();
+  poolActionMocks.proposeTeamPoolAction.mockReset();
   for (const client of clients.splice(0)) client.clear();
   vi.unstubAllGlobals();
 });
@@ -108,27 +108,72 @@ describe("TeamStakeCard", () => {
     );
   });
 
-  it("proposes an unstake of some team stake to the confidential treasury", async () => {
+  it("proposes an unstake of some team stake without an attached deposit", async () => {
     stubPool({
       account_id: "india.sputnik-dao.near",
       staked_balance: "2500000000000000000000000",
       unstaked_balance: "0",
       can_withdraw: true,
     });
-    unstakeMocks.proposeTeamUnstake.mockResolvedValue(undefined);
+    poolActionMocks.proposeTeamPoolAction.mockResolvedValue(undefined);
     renderCard();
     const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
     await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(false));
+    expect(unstake.textContent).toBe("propose unstake");
     fireEvent.click(unstake);
     const amount = await screen.findByTestId("dashboard-node.team-stake-unstake-amount");
     fireEvent.change(amount, { target: { value: "1" } });
     fireEvent.click(screen.getByTestId("dashboard-node.team-stake-unstake-confirm"));
     await waitFor(() =>
-      expect(unstakeMocks.proposeTeamUnstake).toHaveBeenCalledWith(
+      expect(poolActionMocks.proposeTeamPoolAction).toHaveBeenCalledWith(
         expect.objectContaining({
           teamAccountId: "india.sputnik-dao.near",
           poolAccountId: "india.poolv1.near",
+          method: "unstake",
           amountYocto: 1_000_000_000_000_000_000_000_000n,
+        }),
+      ),
+    );
+  });
+
+  it("disables the action while unstaked NEAR is locked in the epoch window", async () => {
+    stubPool({
+      account_id: "india.sputnik-dao.near",
+      staked_balance: "0",
+      unstaked_balance: "1500000000000000000000000",
+      can_withdraw: false,
+    });
+    renderCard();
+    const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(true));
+    expect(
+      await screen.findByTestId("dashboard-node.team-stake-pending-release"),
+    ).toBeTruthy();
+    expect(screen.getByTestId("dashboard-node.team-stake-amount").textContent).toBe("1.5 NEAR");
+  });
+
+  it("proposes a withdraw once the epoch window has passed", async () => {
+    stubPool({
+      account_id: "india.sputnik-dao.near",
+      staked_balance: "0",
+      unstaked_balance: "1500000000000000000000000",
+      can_withdraw: true,
+    });
+    poolActionMocks.proposeTeamPoolAction.mockResolvedValue(undefined);
+    renderCard();
+    const withdraw = await screen.findByTestId("dashboard-node.team-stake-unstake");
+    await waitFor(() => expect((withdraw as HTMLButtonElement).disabled).toBe(false));
+    expect(withdraw.textContent).toBe("propose withdraw");
+    fireEvent.click(withdraw);
+    await screen.findByTestId("dashboard-node.team-stake-unstake-confirm");
+    fireEvent.click(screen.getByTestId("dashboard-node.team-stake-unstake-confirm"));
+    await waitFor(() =>
+      expect(poolActionMocks.proposeTeamPoolAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          teamAccountId: "india.sputnik-dao.near",
+          poolAccountId: "india.poolv1.near",
+          method: "withdraw",
+          amountYocto: 1_500_000_000_000_000_000_000_000n,
         }),
       ),
     );

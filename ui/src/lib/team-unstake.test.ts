@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   parseUnstakeAmount,
-  proposeTeamUnstake,
-  teamUnstakeCall,
+  proposeTeamPoolAction,
+  teamPoolCall,
   yoctoToNearInput,
 } from "./team-unstake";
 
@@ -17,15 +17,23 @@ vi.mock("@/lib/dao-connect", () => ({
 
 import { signAsDaoTransaction, verifyDaoAccount } from "@/lib/dao-connect";
 
-describe("team unstake proposal", () => {
-  it("builds a partial pool unstake signed by the team treasury", () => {
-    expect(teamUnstakeCall("city-node-4.pool.near", staked)).toEqual({
+describe("team pool action proposal", () => {
+  it("builds pool unstake and withdraw calls without an attached deposit", () => {
+    expect(teamPoolCall("city-node-4.pool.near", "unstake", staked)).toEqual({
       receiverId: "city-node-4.pool.near",
       methodName: "unstake",
       args: { amount: "2500000000000000000000000" },
       gas: "125 Tgas",
-      attachedDeposit: "1",
     });
+    expect(teamPoolCall("city-node-4.pool.near", "withdraw", staked)).toEqual({
+      receiverId: "city-node-4.pool.near",
+      methodName: "withdraw",
+      args: { amount: "2500000000000000000000000" },
+      gas: "125 Tgas",
+    });
+    expect("attachedDeposit" in teamPoolCall("city-node-4.pool.near", "unstake", staked)).toBe(
+      false,
+    );
     expect(yoctoToNearInput(staked)).toBe("2.5");
     expect(parseUnstakeAmount("2.5", staked)).toBe(staked);
     expect(parseUnstakeAmount("3", staked)).toBeNull();
@@ -40,11 +48,12 @@ describe("team unstake proposal", () => {
       connect: vi.fn().mockResolvedValue("india.sputnik-dao.near"),
       disconnect: vi.fn().mockResolvedValue(undefined),
     };
-    await proposeTeamUnstake({
+    await proposeTeamPoolAction({
       teamAccountId: "india.sputnik-dao.near",
       poolAccountId: "city-node-4.pool.near",
+      method: "unstake",
       amountYocto: 1_000_000_000_000_000_000_000_000n,
-      stakedBalance: staked,
+      maxAmountYocto: staked,
       authAccountId: "itexpert120-contra.near",
       connection,
     });
@@ -54,7 +63,32 @@ describe("team unstake proposal", () => {
     });
     expect(signAsDaoTransaction).toHaveBeenCalledWith(
       "india.sputnik-dao.near",
-      teamUnstakeCall("city-node-4.pool.near", 1_000_000_000_000_000_000_000_000n),
+      teamPoolCall("city-node-4.pool.near", "unstake", 1_000_000_000_000_000_000_000_000n),
+    );
+  });
+
+  it("proposes the withdraw call against the unstaked balance", async () => {
+    vi.mocked(verifyDaoAccount).mockResolvedValue(true);
+    vi.mocked(signAsDaoTransaction).mockResolvedValue({} as never);
+    const unstaked = 1_500_000_000_000_000_000_000_000n;
+    const connection = {
+      daoAccountId: "india.sputnik-dao.near",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    await proposeTeamPoolAction({
+      teamAccountId: "india.sputnik-dao.near",
+      poolAccountId: "city-node-4.pool.near",
+      method: "withdraw",
+      amountYocto: unstaked,
+      maxAmountYocto: unstaked,
+      authAccountId: null,
+      connection,
+    });
+    expect(connection.connect).not.toHaveBeenCalled();
+    expect(signAsDaoTransaction).toHaveBeenCalledWith(
+      "india.sputnik-dao.near",
+      teamPoolCall("city-node-4.pool.near", "withdraw", unstaked),
     );
   });
 });

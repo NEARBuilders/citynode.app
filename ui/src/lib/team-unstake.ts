@@ -8,13 +8,23 @@ import { parseNearAmount } from "@/lib/near-amount";
 
 const YOCTO_PER_NEAR = 10n ** 24n;
 
-export function teamUnstakeCall(poolAccountId: string, amountYocto: bigint) {
+export interface PoolCall {
+  receiverId: string;
+  methodName: "unstake" | "withdraw";
+  args: Record<string, unknown>;
+  gas: string;
+}
+
+export function teamPoolCall(
+  poolAccountId: string,
+  methodName: "unstake" | "withdraw",
+  amountYocto?: bigint,
+): PoolCall {
   return {
     receiverId: poolAccountId,
-    methodName: "unstake",
-    args: { amount: amountYocto.toString() },
+    methodName,
+    args: amountYocto === undefined ? {} : { amount: amountYocto.toString() },
     gas: "125 Tgas",
-    attachedDeposit: "1",
   };
 }
 
@@ -24,22 +34,25 @@ export function yoctoToNearInput(yocto: bigint) {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
-export function parseUnstakeAmount(amount: string, staked: bigint) {
+export function parseUnstakeAmount(amount: string, max: bigint) {
   const yocto = parseNearAmount(amount);
-  if (!yocto || yocto > staked) return null;
+  if (!yocto || yocto > max) return null;
   return yocto;
 }
 
-export async function proposeTeamUnstake(input: {
+export async function proposeTeamPoolAction(input: {
   teamAccountId: string;
   poolAccountId: string;
-  amountYocto: bigint;
-  stakedBalance: bigint;
+  method: "unstake" | "withdraw";
+  amountYocto?: bigint;
+  maxAmountYocto: bigint;
   authAccountId: string | null;
   connection: Pick<UseDaoConnectionResult, "daoAccountId" | "connect" | "disconnect">;
 }) {
-  if (input.amountYocto <= 0n || input.amountYocto > input.stakedBalance) {
-    throw new Error("Enter an amount within the available team stake.");
+  if (input.amountYocto !== undefined) {
+    if (input.amountYocto <= 0n || input.amountYocto > input.maxAmountYocto) {
+      throw new Error(`Enter an amount within the available team ${input.method} balance.`);
+    }
   }
   try {
     let dao = input.connection.daoAccountId;
@@ -51,12 +64,12 @@ export async function proposeTeamUnstake(input: {
     }
     if (dao !== input.teamAccountId) {
       throw new Error(
-        `Trezu connected ${dao}, but this unstake must be signed by ${input.teamAccountId}`,
+        `Trezu connected ${dao}, but this ${input.method} must be signed by ${input.teamAccountId}`,
       );
     }
     await signAsDaoTransaction(
       input.teamAccountId,
-      teamUnstakeCall(input.poolAccountId, input.amountYocto),
+      teamPoolCall(input.poolAccountId, input.method, input.amountYocto),
     );
   } catch (error) {
     throw new Error(describeDaoError(error, input.teamAccountId));
