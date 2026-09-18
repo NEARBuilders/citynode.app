@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildPocFormValues, loadPocFormDraft, POC_FORM_DEFAULTS, usePocForm } from "./-poc-form";
+import {
+  buildPocFormValues,
+  loadPocFormDraft,
+  POC_FORM_DEFAULTS,
+  pocFormStorageKey,
+  usePocForm,
+} from "./-poc-form";
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
-const KEY_A = `poc-form:${ORG_A}`;
-const KEY_B = `poc-form:${ORG_B}`;
+const KEY_A = pocFormStorageKey(ORG_A);
+const KEY_B = pocFormStorageKey(ORG_B);
 
 beforeEach(() => {
   localStorage.clear();

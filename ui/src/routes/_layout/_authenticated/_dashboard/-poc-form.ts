@@ -16,7 +16,6 @@ export interface PocFormValues {
   endowmentLinked: boolean;
   endowment: string;
   sponsorAmount: string;
-  delegatePct: string;
   voteOption: VoteOption;
   govProposalId: string;
   lens: LensId;
@@ -27,14 +26,17 @@ export const POC_FORM_DEFAULTS: PocFormValues = {
   pool: "",
   endowmentLinked: false,
   endowment: "",
-  sponsorAmount: "3",
-  delegatePct: "100",
+  sponsorAmount: "300000",
   voteOption: "For",
   govProposalId: "",
   lens: "you",
 };
 
-const STORAGE_PREFIX = "poc-form:";
+const STORAGE_PREFIX = "poc-form-v2:";
+
+export function pocFormStorageKey(orgId: string): string {
+  return STORAGE_PREFIX + orgId;
+}
 
 export function loadPocFormDraft(orgId: string | null): Partial<PocFormValues> | null {
   if (!orgId) return null;
@@ -82,7 +84,7 @@ export function usePocForm(orgId: string | null, initialValues: PocFormValues) {
     }
     if (!orgId) return;
     try {
-      localStorage.setItem(STORAGE_PREFIX + orgId, JSON.stringify(values));
+      localStorage.setItem(pocFormStorageKey(orgId), JSON.stringify(values));
     } catch {}
   }, [orgId, values]);
 

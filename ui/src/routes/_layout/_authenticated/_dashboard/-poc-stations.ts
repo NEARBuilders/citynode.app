@@ -31,6 +31,8 @@ import {
 export type SignerKind = "session" | "team" | "endowment";
 export type LensId = "you" | "team" | "endowment";
 export type PhaseId = "stand-up" | "bootstrap" | "sponsor" | "vote" | "refresh";
+/** The sponsor hands its whole voting power to the team. */
+export const DELEGATE_BPS = 10_000;
 export type StationId =
   | "apply"
   | "approve"
@@ -79,7 +81,7 @@ export const PHASES: readonly PhaseDef[] = [
     id: "sponsor",
     title: "Sponsor Endowment",
     blurb:
-      "the endowment locks its NEAR, stakes the node's pool from its lockup, and hands its voting power to the team — optional, never blocks anything",
+      "the endowment's treasury receives proposals: release its old pool, stake the node's pool from its lockup, and hand its voting power to the team — optional, never blocks anything",
   },
   {
     id: "vote",
@@ -126,7 +128,6 @@ export interface StationInputs {
   sponsorYocto: bigint | null;
   /** How much of the sponsor's NEAR goes into the pool from the lockup. */
   sponsorStakeYocto: bigint | null;
-  delegateBps: number | null;
   govProposalId: number | null;
 }
 
@@ -145,7 +146,6 @@ export function buildStations(inputs: StationInputs): StationDef[] {
     endowmentLockup,
     sponsorYocto,
     sponsorStakeYocto,
-    delegateBps,
     govProposalId,
   } = inputs;
 
@@ -353,12 +353,24 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Stake the pool from the lockup",
       signer: "endowment",
       purpose:
-        "Points the endowment's lockup at the node's pool and stakes into it. NEAR stays veNEAR-earning while it secures the team's validator — this stake is the sponsor's real capital.",
+        "Points the endowment's lockup at the node's pool and stakes into it. Releasing the pool the lockup already points at comes first — the contract refuses to select while one is set. NEAR stays veNEAR-earning while it secures the team's validator — this stake is the sponsor's real capital.",
       requires: {
         poolAssigned: "assign the pool first",
         endowmentFunded: "transfer the sponsor NEAR into the lockup first",
       },
       steps: [
+        {
+          id: "unselect-old-pool",
+          label: "release the currently selected pool",
+          plan: {
+            kind: "call",
+            receiverId: endowmentLockup,
+            methodName: "unselect_staking_pool",
+            args: {},
+            gas: "25 Tgas",
+            attachedDeposit: ONE_YOCTO,
+          },
+        },
         {
           id: "select-pool",
           label: "select the pool on the lockup",
@@ -394,7 +406,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Delegate the voting power",
       signer: "endowment",
       purpose:
-        "The endowment delegates its veNEAR to the team wallet, replacing its whole delegation set. The team's votes are what the sponsor's stake buys.",
+        "The endowment delegates its veNEAR to the team wallet, replacing its whole delegation set — the previous delegate is dropped in the same call. The team's votes are what the sponsor's stake buys.",
       requires: {
         teamRegistered: "the team must register in veNEAR before it can receive the delegation",
       },
@@ -407,10 +419,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             kind: "call",
             receiverId: VENEAR_ACCOUNT,
             methodName: "set_delegations",
-            args:
-              delegateBps && teamAccount
-                ? { entries: [{ account_id: teamAccount, bps: delegateBps }] }
-                : {},
+            args: teamAccount ? { entries: [{ account_id: teamAccount, bps: DELEGATE_BPS }] } : {},
             gas: "100 Tgas",
             attachedDeposit: DELEGATE_DEPOSIT,
           },
@@ -585,6 +594,7 @@ const STEP_FACT: Record<string, keyof ChainFacts> = {
   "deploy-lockup-endowment": "endowmentLockupDeployed",
   "fund-lockup": "endowmentFunded",
   "lock-endowment": "endowmentLocked",
+  "unselect-old-pool": "endowmentPoolSelected",
   "select-pool": "endowmentPoolSelected",
   "stake-endowment": "endowmentStaked",
   "set-delegations": "delegated",
@@ -664,6 +674,12 @@ export interface DeriveOptions {
   proposalsBySigner: Partial<Record<SignerKind, SputnikProposal[]>>;
   accounts: { session: string | null; endowment: string; team: string };
   connectedDao: string | null;
+  /**
+   * Signers whose steps can be staged as proposals by the session wallet
+   * instead of the signer's own wallet connection — the run gate treats the
+   * signer as connected when the session holds that right.
+   */
+  sessionProposerSigners?: readonly SignerKind[];
   /** Per-station reasons the station cannot run yet, e.g. missing inputs. */
   blockers?: Partial<Record<StationId, string>>;
   runningStation?: StationId | null;
@@ -677,8 +693,11 @@ export function deriveStations(options: DeriveOptions): StationState[] {
 
   return stations.map((def) => {
     const signerAccountId = signerAccount(def.signer, accounts);
+    const viaSessionProposal =
+      !!signerAccountId && (options.sessionProposerSigners ?? []).includes(def.signer);
     const signerConnected =
-      def.signer === "session" ? true : !!signerAccountId && signerAccountId === connectedDao;
+      viaSessionProposal ||
+      (def.signer === "session" ? true : !!signerAccountId && signerAccountId === connectedDao);
     const pending = proposalsBySigner[def.signer] ?? [];
 
     const steps: StepState[] = def.steps.map((step) => {
