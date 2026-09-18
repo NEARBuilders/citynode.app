@@ -131,7 +131,7 @@ export const contract = oc.router({
   ping: oc
     .route({
       method: "GET",
-      path: "/ping",
+      path: "/things/ping",
       summary: "Health check",
       description: "Simple ping endpoint to verify the plugin is responding correctly.",
       tags: ["Health"],
@@ -288,7 +288,7 @@ export const contract = oc.router({
   testError: oc
     .route({
       method: "GET",
-      path: "/errors",
+      path: "/things/errors",
       summary: "Trigger a specific error kind",
       description:
         "Regression-test helper that throws the requested error kind so the host error surface can be validated.",
