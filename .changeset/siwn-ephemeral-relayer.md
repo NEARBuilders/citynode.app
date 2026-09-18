@@ -1,4 +1,6 @@
 ---
+"better-near-auth": patch
+"everything-dev": patch
 ---
 
 Confirm the SIWN auth relayer is in `RelayerEphemeralConfig` ("Ephemeral with settings") mode: a rich-object `relayer` block in `bos.config.json → app.auth.variables.siwn` with `whitelistedContracts`, `maxGasPerTransaction`, and `maxDepositPerTransaction` and no `accountId` / `privateKey`. better-near-auth 1.9.0's `initRelayer` resolves this to an auto-generated ED25519 keypair on first startup, encrypted with `BETTER_AUTH_SECRET` (HKDF-SHA256 → AES-256-GCM) and persisted in the `relayerKey` table.

@@ -1,19 +1,16 @@
 export {
-  EFFECT_CRITICAL_SHARED_DEPS,
-  type EffectCriticalSharedDepName,
-  getInstalledSharedDepVersion,
   getMajorMinorVersion,
   getPluginSharedDependencies,
   getPluginSharedDependenciesVersionRange,
   isEffectCriticalSharedDep,
   type SharedDependencies,
   type SharedDependencyConfig,
-  strictShareConfigFor,
 } from "../shared-deps";
 export { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
 export {
+  type AdditionalExport,
   EmitPluginManifest,
-  EveryPluginDevServer,
-  type EveryPluginOptions,
+  EveryPluginBuild,
+  type EveryPluginBuildOptions,
   type PluginManifestEmitterOptions,
 } from "./plugin";

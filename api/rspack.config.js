@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import DrizzleORMMigrations from "@proj-airi/unplugin-drizzle-orm-migrations/rspack";
 import {
   EmitPluginManifest,
-  EveryPluginDevServer,
+  EveryPluginBuild,
   FixMfDataUriPlugin,
 } from "every-plugin/build/rspack";
 import { computeSriHashForUrl, reportDeployResult } from "everything-dev/integrity";
@@ -42,7 +42,7 @@ const baseConfig = {
   devtool: shouldDeploy ? false : "source-map",
   plugins: [
     new EmitPluginManifest(),
-    new EveryPluginDevServer({ dts: false }),
+    new EveryPluginBuild({ dts: false }),
     new FixMfDataUriPlugin(),
     DrizzleORMMigrations(),
   ],

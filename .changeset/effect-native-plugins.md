@@ -1,3 +1,4 @@
+---
 "every-plugin": major
 "everything-dev": major
 ---

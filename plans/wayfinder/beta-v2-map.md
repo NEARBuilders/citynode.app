@@ -600,6 +600,13 @@ baked into decision 9 and every beta-v2 plan doc.
     the deploy service (built Effect-native from day one), then grafting into
     the real codebase, then the OTA runtime and sandboxes.
 
+## State as of 2026-09
+
+- oRPC v2 + Effect 4 migration **executed** — merged in citynode.app#97, deployed to production (everything-dev#248 epic).
+- MF shared-dep version identity guardrails **executed** — citynode.app#106; the runtime bundle identity, the `bos mf check` CLI, the load-path guard, and the deploy-gate all enforce a consistent release train.
+- Root-Dockerfile tracking for container tiers — Railway builds from the committed root `Dockerfile`, so the same container translates to any provider (Fly Machines / Hetzner / …) going forward.
+- Gasless publish (`decision 12`) and `bos login` are being scoped as their own sprint — see `.scratch/gasless-auth/` here in this fork.
+
 ## Not yet specified
 
 - Native plugin composition model (React Navigation equivalent of grafting) — depends on #1 route grafting research settling the web pattern first

@@ -19,6 +19,6 @@
   },
   "scripts": {
     "build": "rspack build && tsc",
-    "dev": "rspack serve"
+    "dev": "every-plugin-serve"
   }
 }

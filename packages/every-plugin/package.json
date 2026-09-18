@@ -75,11 +75,23 @@
       "import": "./dist/build/rspack/index.mjs",
       "require": "./dist/build/rspack/index.cjs"
     },
+    "./dev-serve": {
+      "development": {
+        "types": "./src/dev/serve.ts",
+        "import": "./src/dev/serve.ts"
+      },
+      "types": "./dist/serve.d.mts",
+      "import": "./dist/serve.mjs"
+    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "every-plugin-serve": "./bin/every-plugin-serve.mjs"
   },
   "files": [
     "dist",
     "src",
+    "bin",
     "skills",
     "!skills/_artifacts"
   ],
@@ -116,7 +128,6 @@
     "@types/node": "^25.1.0",
     "@vitest/ui": "4.1.5",
     "bun-types": "^1.3.7",
-    "sirv": "^3.0.2",
     "tsdown": "^0.22.0",
     "vite-tsconfig-paths": "^6.0.5",
     "vitest": "^4.1.8"
@@ -125,6 +136,7 @@
     "@module-federation/enhanced": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
+    "@module-federation/runtime-tools": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/experimental-effect": "catalog:",

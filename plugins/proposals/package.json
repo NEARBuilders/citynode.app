@@ -29,6 +29,7 @@
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
     "@module-federation/node": "catalog:",
+    "@module-federation/runtime-tools": "catalog:",
     "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
     "@rspack/cli": "catalog:",
     "@rspack/core": "catalog:",
@@ -46,7 +47,7 @@
     "build": "bun run build:types && rspack build",
     "build:types": "tsc -p tsconfig.contract.json",
     "deploy": "bun run build:types && DEPLOY=true rspack build",
-    "dev": "bun run build:types && rspack serve",
+    "dev": "bun run build:types && every-plugin-serve",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

@@ -3,7 +3,7 @@
 "ui": patch
 "host": patch
 "api": patch
-"apps": patch
+"@everything-dev/apps-plugin": patch
 ---
 
 Fix Zephyr auth link being invisible during deploy, clean up build result classification.

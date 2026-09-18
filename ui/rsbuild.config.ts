@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { pluginModuleFederation } from "@module-federation/rsbuild-plugin";
-import { defineConfig } from "@rsbuild/core";
+import { defineConfig, rspack } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "every-plugin/build/rspack";
@@ -167,8 +167,7 @@ function createClientConfig() {
     },
     tools: {
       rspack: (config) => {
-        const { CssExtractRspackPlugin } = require("@rspack/core");
-        const cssPlugin = config.plugins?.find((p) => p instanceof CssExtractRspackPlugin) as
+        const cssPlugin = config.plugins?.find((p) => p instanceof rspack.CssExtractRspackPlugin) as
           | { options?: Record<string, string> }
           | undefined;
         if (cssPlugin) {
