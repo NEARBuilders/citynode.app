@@ -19,8 +19,8 @@ import { describeDaoError, useDaoAutoRestore, useDaoConnection } from "@/lib/dao
 import {
   formatNearBalance,
   invalidateStakePoolQueries,
-  stakePoolAccountQueryOptions,
   type StakePoolAccountView,
+  stakePoolAccountQueryOptions,
   type TeamStakeTarget,
 } from "@/lib/queries/stake-pool";
 import { parseUnstakeAmount, proposeTeamPoolAction, yoctoToNearInput } from "@/lib/team-unstake";
@@ -124,7 +124,9 @@ export function TeamStakeCard({
             </div>
             <p className="text-sm text-muted-foreground">
               <span className="font-mono text-foreground">{target.teamAccountId}</span>
-              {method === "withdraw" || phase === "pending-release" ? " unstaked from " : " staked in "}
+              {method === "withdraw" || phase === "pending-release"
+                ? " unstaked from "
+                : " staked in "}
               <span className="font-mono text-foreground">{target.poolAccountId}</span>
             </p>
             {phase === "pending-release" && (
