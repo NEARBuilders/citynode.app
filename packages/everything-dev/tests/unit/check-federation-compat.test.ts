@@ -144,6 +144,151 @@ describe("checkFederationCompat", () => {
     expect(api?.reason).toMatch(/effect.*remote=3\.10\.0/) ?? api?.reason;
   });
 
+  it("flags exact-version skew on a critical dep even when the semver range is satisfied", async () => {
+    const hostRcManifest = {
+      metaData: { pluginVersion: "2.8.2" },
+      shared: [
+        { name: "zod", version: "4.4.3", requiredVersion: "^4.4.3", singleton: true },
+        {
+          name: "effect",
+          version: "4.0.0-rc.112",
+          requiredVersion: "^4.0.0-rc.112",
+          singleton: true,
+        },
+        {
+          name: "@orpc/server",
+          version: "1.14.3",
+          requiredVersion: "^1.14.3",
+          singleton: true,
+        },
+      ],
+    };
+    const rcSkew = {
+      metaData: { pluginVersion: "2.8.2" },
+      shared: [
+        { name: "zod", version: "4.4.3", requiredVersion: "^4.4.3", singleton: true },
+        {
+          name: "effect",
+          version: "4.0.0-rc.120",
+          requiredVersion: "^4.0.0-rc.112",
+          singleton: true,
+        },
+        {
+          name: "@orpc/server",
+          version: "1.14.3",
+          requiredVersion: "^1.14.3",
+          singleton: true,
+        },
+      ],
+    };
+    mockManifests([
+      [/host\.example/, hostRcManifest],
+      [/api\.example/, manifest("2.8.2")],
+      [/auth\.example/, rcSkew],
+      [
+        /apps\.example/,
+        {
+          metaData: { pluginVersion: "2.8.2" },
+          shared: hostRcManifest.shared,
+        },
+      ],
+    ]);
+
+    const report = await checkFederationCompat(bosConfig(), { timeoutMs: 5_000 });
+
+    expect(report.ok).toBe(false);
+    const auth = report.remotes.find((r) => r.role === "auth");
+    expect(auth?.ok).toBe(false);
+    expect(auth?.reason).toMatch(/effect[\s\S]*exact-version skew/i);
+  });
+
+  it("passes when critical shared versions match exactly", async () => {
+    const shared = [
+      {
+        name: "effect",
+        version: "4.0.0-rc.112",
+        requiredVersion: "4.0.0-rc.112",
+        singleton: true,
+      },
+      {
+        name: "@orpc/server",
+        version: "1.14.3",
+        requiredVersion: "1.14.3",
+        singleton: true,
+      },
+    ];
+    mockManifests([
+      [/host\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+      [/api\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+      [/auth\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+      [/apps\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+    ]);
+
+    const report = await checkFederationCompat(bosConfig(), { timeoutMs: 5_000 });
+
+    expect(report.ok).toBe(true);
+    expect(report.remotes.every((r) => r.ok)).toBe(true);
+  });
+
+  it("passes when a caret constraint matches the exact prerelease", async () => {
+    const shared = [
+      {
+        name: "effect",
+        version: "4.0.0-rc.112",
+        requiredVersion: "^4.0.0-rc.112",
+        singleton: true,
+      },
+      {
+        name: "@orpc/server",
+        version: "1.14.3",
+        requiredVersion: "^1.14.3",
+        singleton: true,
+      },
+    ];
+    mockManifests([
+      [/host\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+      [/api\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+      [/auth\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+      [/apps\.example/, { metaData: { pluginVersion: "2.8.2" }, shared }],
+    ]);
+
+    const report = await checkFederationCompat(bosConfig(), { timeoutMs: 5_000 });
+
+    expect(report.ok).toBe(true);
+  });
+
+  it("fails when a critical dep's remote version is below the caret prerelease", async () => {
+    const hostShared = [
+      {
+        name: "effect",
+        version: "4.0.0-rc.112",
+        requiredVersion: "^4.0.0-rc.112",
+        singleton: true,
+      },
+    ];
+    const staleShared = [
+      {
+        name: "effect",
+        version: "4.0.0-rc.110",
+        requiredVersion: "^4.0.0-rc.110",
+        singleton: true,
+      },
+    ];
+    mockManifests([
+      [/host\.example/, { metaData: { pluginVersion: "2.8.2" }, shared: hostShared }],
+      [/api\.example/, { metaData: { pluginVersion: "2.8.2" }, shared: hostShared }],
+      [/auth\.example/, { metaData: { pluginVersion: "2.8.2" }, shared: staleShared }],
+      [/apps\.example/, { metaData: { pluginVersion: "2.8.2" }, shared: hostShared }],
+    ]);
+
+    const report = await checkFederationCompat(bosConfig(), { timeoutMs: 5_000 });
+
+    expect(report.ok).toBe(false);
+    const auth = report.remotes.find((r) => r.role === "auth");
+    expect(auth?.ok).toBe(false);
+    expect(auth?.reason).toMatch(/effect/);
+  });
+
   it("treats unreachable remote as failure and reports reason", async () => {
     mockManifests([
       [/host\.example/, HOST_MANIFEST],

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
+import { isEffectCriticalSharedDep } from "every-plugin/build/rspack";
 import { computeSriHash, type IntegrityRegistry } from "./integrity";
 import type { BosConfig, BosPluginRef } from "./types";
 
@@ -180,13 +181,35 @@ function parseSemver(v: unknown): { major: number; minor: number; patch: number 
 }
 
 function satisfiesConstraint(version: string, constraint: string): boolean {
-  const m = /^\s*\^\s*(\d+)\.(\d+)\.(\d+)/.exec(constraint);
+  const trimmed = constraint.trim();
+  if (!trimmed) return true;
+  if (!["^", "~", ">", "<", "=", "x"].some((c) => trimmed.startsWith(c))) {
+    return version === trimmed;
+  }
+  const m = /^\s*\^\s*(\d+)\.(\d+)\.(\d+)/.exec(trimmed);
   if (!m) return true;
   const v = parseSemver(version);
   if (!v) return false;
   if (v.major !== +m[1]!) return false;
-  if (v.minor < +m[2]!) return false;
-  if (v.minor === +m[2]! && v.patch < +m[3]!) return false;
+  if (v.minor < +m[2]! || (v.minor === +m[2]! && v.patch < +m[3]!)) return false;
+  const constraintPrerelease = trimmed.match(/-([0-9A-Za-z.-]+)/);
+  const versionPrerelease = /-([0-9A-Za-z.-]+)\s*$/.exec(version);
+  if (constraintPrerelease) {
+    if (!versionPrerelease) return false;
+    const cPre = constraintPrerelease[1]!.split(".");
+    const vPre = versionPrerelease[1]!.split(".");
+    for (let i = 0; i < Math.max(cPre.length, vPre.length); i += 1) {
+      const c = cPre[i] ?? "0";
+      const p = vPre[i] ?? "0";
+      if (c === p) continue;
+      const cNum = /^\d+$/.test(c) ? +c : null;
+      const pNum = /^\d+$/.test(p) ? +p : null;
+      if (cNum !== null && pNum !== null) return cNum < pNum;
+      return cNum === null ? c.localeCompare(p) < 0 : false;
+    }
+    return true;
+  }
+  if (versionPrerelease) return false;
   return true;
 }
 
@@ -301,6 +324,26 @@ export async function checkFederationCompat(
           mismatchedShared.push(
             `${hostDep.name}: remote=${remDep.version ?? "?"} hostReq=${hostDep.requiredVersion}`,
           );
+        }
+        if (isEffectCriticalSharedDep(hostDep.name)) {
+          const hostVersion = hostDep.version ?? "";
+          const remoteVersion = remDep.version ?? "";
+          if (remoteVersion && remoteVersion !== hostVersion) {
+            mismatchedShared.push(
+              `${hostDep.name}: exact-version skew — remote=${remoteVersion} host=${hostVersion} — bundle was built against a different prerelease build; redeploy host and plugin together`,
+            );
+          }
+          const remoteRequired =
+            typeof remDep.requiredVersion === "string" ? remDep.requiredVersion.trim() : "";
+          if (
+            remoteRequired.length > 0 &&
+            remoteRequired[0] !== "^" &&
+            !satisfiesConstraint(hostVersion, remoteRequired)
+          ) {
+            mismatchedShared.push(
+              `${hostDep.name}: train skew — host=${hostVersion} vs remote requiredVersion=${remoteRequired}`,
+            );
+          }
         }
       }
 
