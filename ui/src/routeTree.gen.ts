@@ -14,6 +14,7 @@ import { Route as LayoutAdminRouteImport } from './routes/_layout/_admin'
 import { Route as LayoutAnonRouteImport } from './routes/_layout/_anon'
 import { Route as LayoutAuthenticatedRouteImport } from './routes/_layout/_authenticated'
 import { Route as LayoutPublicRouteImport } from './routes/_layout/_public'
+import { Route as LayoutCliRouteImport } from './routes/_layout/cli'
 import { Route as LayoutAdminDashboardRouteImport } from './routes/_layout/_admin/_dashboard'
 import { Route as LayoutAnonLoginRouteImport } from './routes/_layout/_anon/login'
 import { Route as LayoutAuthenticatedDashboardRouteImport } from './routes/_layout/_authenticated/_dashboard'
@@ -80,6 +81,11 @@ const LayoutAuthenticatedRoute = LayoutAuthenticatedRouteImport.update({
 } as any)
 const LayoutPublicRoute = LayoutPublicRouteImport.update({
   id: '/_public',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCliRoute = LayoutCliRouteImport.update({
+  id: '/cli',
+  path: '/cli',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAdminDashboardRoute = LayoutAdminDashboardRouteImport.update({
@@ -357,6 +363,7 @@ const LayoutAuthenticatedDashboardDashboardNodeProposalsIndexRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutPublicIndexRoute
+  '/cli': typeof LayoutCliRoute
   '/login': typeof LayoutAnonLoginRoute
   '/$accountId': typeof LayoutPublicAccountIdRouteWithChildren
   '/about': typeof LayoutPublicAboutRoute
@@ -404,6 +411,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof LayoutPublicIndexRoute
+  '/cli': typeof LayoutCliRoute
   '/login': typeof LayoutAnonLoginRoute
   '/about': typeof LayoutPublicAboutRoute
   '/explore': typeof LayoutPublicExploreRoute
@@ -450,6 +458,7 @@ export interface FileRoutesById {
   '/_layout/_anon': typeof LayoutAnonRouteWithChildren
   '/_layout/_authenticated': typeof LayoutAuthenticatedRouteWithChildren
   '/_layout/_public': typeof LayoutPublicRouteWithChildren
+  '/_layout/cli': typeof LayoutCliRoute
   '/_layout/_admin/_dashboard': typeof LayoutAdminDashboardRouteWithChildren
   '/_layout/_anon/login': typeof LayoutAnonLoginRoute
   '/_layout/_authenticated/_dashboard': typeof LayoutAuthenticatedDashboardRouteWithChildren
@@ -502,6 +511,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cli'
     | '/login'
     | '/$accountId'
     | '/about'
@@ -549,6 +559,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cli'
     | '/login'
     | '/about'
     | '/explore'
@@ -594,6 +605,7 @@ export interface FileRouteTypes {
     | '/_layout/_anon'
     | '/_layout/_authenticated'
     | '/_layout/_public'
+    | '/_layout/cli'
     | '/_layout/_admin/_dashboard'
     | '/_layout/_anon/login'
     | '/_layout/_authenticated/_dashboard'
@@ -682,6 +694,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof LayoutPublicRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/cli': {
+      id: '/_layout/cli'
+      path: '/cli'
+      fullPath: '/cli'
+      preLoaderRoute: typeof LayoutCliRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/_admin/_dashboard': {
@@ -1280,6 +1299,7 @@ interface LayoutRouteChildren {
   LayoutAnonRoute: typeof LayoutAnonRouteWithChildren
   LayoutAuthenticatedRoute: typeof LayoutAuthenticatedRouteWithChildren
   LayoutPublicRoute: typeof LayoutPublicRouteWithChildren
+  LayoutCliRoute: typeof LayoutCliRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -1287,6 +1307,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAnonRoute: LayoutAnonRouteWithChildren,
   LayoutAuthenticatedRoute: LayoutAuthenticatedRouteWithChildren,
   LayoutPublicRoute: LayoutPublicRouteWithChildren,
+  LayoutCliRoute: LayoutCliRoute,
 }
 
 const LayoutRouteWithChildren =

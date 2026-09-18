@@ -27,6 +27,7 @@ export interface FunctionCallAccessKeyConfig {
   allowance: string;
   functionNames: string[];
   network?: "mainnet" | "testnet";
+  keyPair?: NearKeyPair;
 }
 
 const NEAR_CLI_VERSION = "0.23.5";
@@ -259,7 +260,7 @@ export async function deleteAccessKeys(
 export async function addFunctionCallAccessKey(
   config: FunctionCallAccessKeyConfig,
 ): Promise<NearKeyPair> {
-  const keyPair = generateNearKeyPair();
+  const keyPair = config.keyPair ?? generateNearKeyPair();
   const args = [
     "account",
     "add-key",
