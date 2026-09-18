@@ -1,52 +1,7 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import DrizzleORMMigrations from "@proj-airi/unplugin-drizzle-orm-migrations/rspack";
-import {
-  EmitPluginManifest,
-  EveryPluginBuild,
-  FixMfDataUriPlugin,
-} from "every-plugin/build/rspack";
-import { computeSriHashForUrl, findPluginKey, reportDeployResult } from "everything-dev/integrity";
-import { withZephyr } from "zephyr-rspack-plugin";
+import { createPluginBaseConfig } from "every-plugin/build/rspack";
+import { withPluginDeploy } from "everything-dev/integrity";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const baseConfig = createPluginBaseConfig();
+const bosConfigPath = new URL("../../bos.config.json", import.meta.url).pathname;
 
-const shouldDeploy = process.env.DEPLOY === "true";
-const bosConfigPath = path.resolve(__dirname, "../../bos.config.json");
-
-const baseConfig = {
-  externals: ["pg", "@electric-sql/pglite"],
-  devtool: shouldDeploy ? false : "source-map",
-  plugins: [
-    new EmitPluginManifest(),
-    new EveryPluginBuild({ dts: false }),
-    new FixMfDataUriPlugin(),
-    DrizzleORMMigrations(),
-  ],
-  infrastructureLogging: {
-    level: "error",
-  },
-  stats: "errors-warnings",
-};
-
-export default shouldDeploy
-  ? withZephyr({
-      hooks: {
-        onDeployComplete: async (info) => {
-          console.log("🚀 Plugin Deployed:", info.url);
-          const integrity = await computeSriHashForUrl(info.url);
-          const found = findPluginKey(bosConfigPath, __dirname);
-          if (found) {
-            reportDeployResult({
-              url: info.url,
-              integrity,
-              bosConfigPath,
-              urlField: `${found.slot}.${found.key}.production`,
-              integrityField: `${found.slot}.${found.key}.integrity`,
-            });
-          }
-        },
-      },
-    })(baseConfig)
-  : baseConfig;
+export default withPluginDeploy(baseConfig, { bosConfigPath, deployLabel: "Plugin Deployed" });
