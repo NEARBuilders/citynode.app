@@ -28,8 +28,8 @@ export interface UiRemoteFingerprint {
   /** stable key for the remote (plugin id, or "core" for the shell) */
   id: string;
   ui?: { url?: string; integrity?: string };
-  ssrUrl?: string;
-  ssrIntegrity?: string;
+  /** composition enabled for this remote — visible on both client and server */
+  compose?: boolean;
 }
 
 /**
@@ -46,8 +46,7 @@ export function computeComposeDigest(
     .map((remote) => ({
       id: remote.id,
       ui: remote.ui ? { url: remote.ui.url ?? null, integrity: remote.ui.integrity ?? null } : null,
-      ssr: remote.ssrUrl ?? null,
-      ssrIntegrity: remote.ssrIntegrity ?? null,
+      compose: remote.compose === true,
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   return stableHash([`registry:v${registryVersion}`, JSON.stringify(versioned)].join("\n"));

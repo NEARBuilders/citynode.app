@@ -68,7 +68,9 @@ export function buildNavManifest(
 function compareNavItems(a: NavItem, b: NavItem): number {
   const groupOrder = (a.group ?? "").localeCompare(b.group ?? "");
   if (groupOrder !== 0) return groupOrder;
-  if (a.order ?? b.order) return (a.order ?? 0) - (b.order ?? 0);
+  if (a.order !== undefined || b.order !== undefined) {
+    return (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
+  }
   const labelOrder = a.label.localeCompare(b.label);
   if (labelOrder !== 0) return labelOrder;
   return a.id.localeCompare(b.id);

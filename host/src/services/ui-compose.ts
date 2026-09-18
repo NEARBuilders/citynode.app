@@ -30,6 +30,12 @@ export interface ComposedUi {
   warnings: string[];
 }
 
+/** The client compose switch: a plugin ui remote must exist and the server
+ * must also run composition so server + client trees stay identical. */
+export function hasComposablePluginUi(config: RuntimeConfig): boolean {
+  return pluginsWithUi(config).length > 0 && process.env.BOS_UI_COMPOSE === "1";
+}
+
 export function pluginsWithUi(config: RuntimeConfig): Array<{
   id: string;
   entry: PluginUiSsrEntry;
@@ -42,22 +48,19 @@ export function pluginsWithUi(config: RuntimeConfig): Array<{
     }));
 }
 
-/** Bump when the compose registry semantics change (invalidates all caches). */
-export const MOUNT_REGISTRY_VERSION = "2026-09-18.1";
+import { MOUNT_REGISTRY_VERSION } from "everything-dev/ui/compose";
 
 export function uiComposeDigest(config: RuntimeConfig): string {
   const remotes = [
     {
       id: "core",
       ui: { url: config.ui.url, integrity: config.ui.integrity },
-      ssrUrl: config.ui.ssrUrl,
-      ssrIntegrity: config.ui.ssrIntegrity,
+      compose: pluginsWithUi(config).length > 0,
     },
     ...Object.entries(config.plugins ?? {}).map(([id, p]) => ({
       id,
       ui: p.ui ? { url: p.ui.url, integrity: p.ui.integrity } : undefined,
-      ssrUrl: p.ui?.ssrUrl,
-      ssrIntegrity: p.ui?.ssrIntegrity,
+      compose: Boolean(p.ui?.ssrUrl),
     })),
   ];
   return computeComposeDigest(remotes, MOUNT_REGISTRY_VERSION);
@@ -101,8 +104,6 @@ export const composePluginTrees = (inputs: {
       return { composed, warnings: [] } satisfies ComposedPluginTrees;
     }
 
-    // Same digest → same remote entry set → the federation module cache hands
-    // back identical instances → the cached composed tree remains valid.
     const cached = composeCache.get(digest);
     if (cached && cached.routeTree === coreTree) {
       return { composed: cached, warnings: [] } satisfies ComposedPluginTrees;

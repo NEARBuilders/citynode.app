@@ -11,7 +11,7 @@ import {
 import { loadRouterModule } from "../services/federation.server";
 import { createPluginsClient, type PluginResult } from "../services/plugins";
 import { getTenantRuntimeErrorResponse, resolveRequestRuntime } from "../services/tenant-runtime";
-import { type ComposedUi, composePluginTrees, pluginsWithUi } from "../services/ui-compose";
+import { type ComposedUi, composePluginTrees, hasComposablePluginUi } from "../services/ui-compose";
 import type { RouterModule } from "../types";
 import { logger } from "../utils/logger";
 import { renderClientShell } from "./html";
@@ -27,8 +27,8 @@ export function isUiCompositionEnabled(): boolean {
   return process.env.BOS_UI_COMPOSE === "1";
 }
 
-export function hasComposablePluginUi(config: RuntimeConfig): boolean {
-  return pluginsWithUi(config).length > 0;
+export function isUiCompositionReady(config: RuntimeConfig): boolean {
+  return isUiCompositionEnabled() && hasComposablePluginUi(config);
 }
 
 export function createSsrFallbackHandler(
@@ -79,8 +79,7 @@ export function createSsrFallbackHandler(
     if (
       ssrRouterModule &&
       effectiveConfig.ui.ssrUrl &&
-      isUiCompositionEnabled() &&
-      hasComposablePluginUi(effectiveConfig) &&
+      isUiCompositionReady(effectiveConfig) &&
       ssrRouterModule.routeTree
     ) {
       try {

@@ -29,54 +29,26 @@ declare global {
   }
 }
 
-/** Browser-safe MF shared shape — negotiated against the "default" scope
- * the core remote's remoteEntry already joined. */
-const composeSharedDeps = {
-  react: {
-    shareConfig: {
-      requiredVersion: false,
-      singleton: true,
-      strictVersion: false,
-      eager: false,
-    },
-  },
-  "react-dom": {
-    shareConfig: {
-      requiredVersion: false,
-      singleton: true,
-      strictVersion: false,
-      eager: false,
-    },
-  },
-  "@tanstack/react-router": {
-    shareConfig: {
-      requiredVersion: false,
-      singleton: true,
-      strictVersion: false,
-      eager: false,
-    },
-  },
-  "@tanstack/react-query": {
-    shareConfig: {
-      requiredVersion: false,
-      singleton: true,
-      strictVersion: false,
-      eager: false,
-    },
-  },
-} as const satisfies Record<string, unknown>;
+function configuredUiPluginIds(runtimeConfig: ReturnType<typeof getRuntimeConfig>): string[] {
+  return Object.entries(runtimeConfig.plugins ?? {}).map(([id]) => id);
+}
 
-function configuredUiRemotes(runtimeConfig: ReturnType<typeof getRuntimeConfig>): Array<{
-  id: string;
-  name: string;
-  url: string;
-}> {
-  return Object.entries(runtimeConfig.plugins ?? {}).flatMap(([id, plugin]) => {
-    const ui = (plugin as { ui?: { url?: string; name?: string; integrity?: string } } | undefined)
-      ?.ui;
-    if (!ui?.url) return [];
-    return [{ id, name: ui.name ?? `${id}-ui`, url: ui.url }];
-  });
+function pluginUi(
+  pluginId: string,
+  runtimeConfig: ReturnType<typeof getRuntimeConfig>["plugins"],
+): { url: string; integrity?: string; name: string; ssrUrl?: string } | undefined {
+  const ui = (
+    runtimeConfig?.[pluginId] as
+      | { ui?: { url?: string; name?: string; integrity?: string; ssrUrl?: string } }
+      | undefined
+  )?.ui;
+  if (!ui?.url) return undefined;
+  return {
+    url: ui.url,
+    integrity: ui.integrity,
+    name: ui.name ?? `${pluginId}-ui`,
+    ssrUrl: ui.ssrUrl,
+  };
 }
 
 /**
@@ -90,41 +62,81 @@ async function composeClientPluginTrees(
   coreTree: unknown,
 ): Promise<{ routeTree: unknown; nav: NavManifestLike } | undefined> {
   if (!runtimeConfig.ui?.compose) return undefined;
-  const remotes = configuredUiRemotes(runtimeConfig);
+  const remotes = configuredUiPluginIds(runtimeConfig).flatMap((id) => {
+    const ui = pluginUi(id, runtimeConfig.plugins);
+    return ui ? [{ id, name: ui.name, url: ui.url, integrity: ui.integrity }] : [];
+  });
   if (remotes.length === 0) return undefined;
 
   try {
-    const [{ createInstance }, { composeApp }] = await Promise.all([
+    const [
+      { registerRemotes, loadRemote },
+      { composeApp, computeComposeDigest, MOUNT_REGISTRY_VERSION },
+    ] = await Promise.all([
       import("@module-federation/runtime"),
       import("everything-dev/ui/compose"),
     ]);
-    const mf = createInstance({
-      name: "hydrate-compose",
-      remotes: remotes.map((remote) => ({
+    registerRemotes(
+      remotes.map((remote) => ({
         name: remote.name,
         alias: remote.name,
         entry: `${remote.url.replace(/\/$/, "")}/remoteEntry.js`,
       })),
-      shared: composeSharedDeps,
-    });
+    );
 
     const loaded = await Promise.allSettled(
-      remotes.map((remote) => mf.loadRemote(`${remote.name}/tree`, { from: "build" })),
+      remotes.map(async (remote) => {
+        const mod = (await loadRemote(`${remote.name}/tree`, { from: "build" })) as {
+          default?: unknown;
+        };
+        return { name: remote.name, tree: mod.default };
+      }),
     );
-    const trees = loaded.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-    if (trees.length === 0) return undefined;
-    const failed = remotes.length - trees.length;
-    if (failed > 0) {
-      console.warn(`[Hydrate] ${failed} plugin ui tree(s) failed to load; core-only fallback`);
+    const modules = loaded.flatMap((result) =>
+      result.status === "fulfilled" && result.value.tree ? [result.value] : [],
+    );
+    if (modules.length === 0) return undefined;
+    if (modules.length < remotes.length) {
+      console.warn(
+        `[Hydrate] ${remotes.length - modules.length} plugin ui tree(s) failed to load; core-only fallback`,
+      );
+    }
+
+    // Assert tree identity: the client's fingerprint over the remotes it can
+    // see must match the digest the server computed for the tree that was
+    // SSR'd. On mismatch the composed server HTML cannot hydrate safely, so
+    // fall back to the core-only tree.
+    const clientDigest = computeComposeDigest(
+      [
+        {
+          id: "core",
+          ui: {
+            url: runtimeConfig.ui?.url,
+            integrity: runtimeConfig.ui?.integrity,
+          },
+          compose: true,
+        },
+        ...remotes.map((remote) => ({
+          id: remote.id,
+          ui: { url: remote.url, integrity: remote.integrity },
+          compose: true,
+        })),
+      ],
+      MOUNT_REGISTRY_VERSION,
+    );
+    const expectedDigest = runtimeConfig.ui?.composeDigest;
+    if (expectedDigest && expectedDigest !== clientDigest) {
+      console.warn(
+        `[Hydrate] Compose digest mismatch (client ${clientDigest} vs server ${expectedDigest}); core-only fallback`,
+      );
+      return undefined;
     }
 
     const result = composeApp(
       coreTree as never,
-      remotes.map((remote, index) => ({
-        name: remote.name,
-        tree: (trees[index] as { default?: unknown })?.default as never,
-      })),
+      modules.map((mod) => ({ name: mod.name, tree: mod.tree as never })),
     );
+
     console.log("[Hydrate] Composed plugin trees:", {
       mounts: result.mountCounts,
       warnings: result.warnings,

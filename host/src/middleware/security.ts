@@ -116,9 +116,6 @@ export class SecurityMiddleware extends Context.Service<
           if (p.url) return [new URL(p.url).origin];
           return [];
         }),
-        // plugin ui remotes (grafted route trees) need their origins in every
-        // source list that accepts scripts — CSP strict mode covers chunks via
-        // strict-dynamic, loose mode needs explicit allowlisting.
         ...Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) =>
           p.ui?.url ? [new URL(p.ui.url).origin] : [],
         ),
