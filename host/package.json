@@ -19,6 +19,7 @@
     "@hono/node-server": "^2.0.1",
     "@modelcontextprotocol/server": "catalog:",
     "@module-federation/enhanced": "catalog:",
+    "@module-federation/runtime-tools": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
     "@orpc/contract": "catalog:",

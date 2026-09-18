@@ -33,9 +33,11 @@
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
     "@module-federation/node": "catalog:",
+    "@module-federation/runtime-tools": "catalog:",
     "@proj-airi/unplugin-drizzle-orm-migrations": "^0.1.4",
     "@rspack/cli": "catalog:",
     "@rspack/core": "catalog:",
+    "@rspack/dev-server": "catalog:",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "dotenv": "^17.2.3",
