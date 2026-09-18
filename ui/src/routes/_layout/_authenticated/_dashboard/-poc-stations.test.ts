@@ -25,7 +25,6 @@ const inputs: StationInputs = {
   endowmentLockup: LOCKUP,
   sponsorYocto: 3n * 10n ** 24n,
   sponsorStakeYocto: 3n * 10n ** 24n,
-  delegateBps: 10_000,
   govProposalId: 3,
 };
 
@@ -177,12 +176,17 @@ describe("buildStations", () => {
     });
   });
 
-  it("stakes the pool from the endowment lockup", () => {
+  it("releases the old pool, then stakes the pool from the endowment lockup", () => {
     const sponsorStake = buildStations(inputs).find((s) => s.id === "sponsor-stake");
     expect(
       sponsorStake?.steps.map((s) => (s.plan?.kind === "call" ? s.plan.methodName : null)),
-    ).toEqual(["select_staking_pool", "deposit_and_stake"]);
+    ).toEqual(["unselect_staking_pool", "select_staking_pool", "deposit_and_stake"]);
     expect(sponsorStake?.steps.every((s) => s.plan?.receiverId === LOCKUP)).toBe(true);
+    expect(sponsorStake?.steps.find((s) => s.id === "unselect-old-pool")?.plan).toMatchObject({
+      kind: "call",
+      methodName: "unselect_staking_pool",
+      attachedDeposit: "1",
+    });
     expect(sponsorStake?.steps.find((s) => s.id === "select-pool")?.plan).toMatchObject({
       kind: "call",
       args: { staking_pool_account_id: "thing.pool.near" },
@@ -448,6 +452,47 @@ describe("deriveStations", () => {
     expect(states.find((s) => s.def.id === "publish")?.signerConnected).toBe(false);
     expect(states.find((s) => s.def.id === "sponsor-lock")?.signerConnected).toBe(true);
     expect(states.find((s) => s.def.id === "apply")?.signerConnected).toBe(true);
+  });
+
+  it("treats session-proposable signers as connected without a treasury connection", () => {
+    const facts = {
+      ...noFacts,
+      applicationProposed: true,
+      applicationApplied: true,
+      tenantDeployed: true,
+      poolAssigned: true,
+      treasuryFunded: true,
+      configPublished: true,
+      teamStaked: true,
+      teamRegistered: true,
+      lockupDeployed: true,
+      nearLocked: true,
+      voteCast: true,
+      teamUnstaked: true,
+      teamWithdrawn: true,
+      endowmentFunded: true,
+    };
+    const without = derive({
+      facts,
+      connectedDao: TEAM,
+      sessionProposerSigners: [],
+    });
+    expect(without.find((s) => s.def.id === "sponsor-stake")?.signerConnected).toBe(false);
+    expect(without.find((s) => s.def.id === "sponsor-stake")?.canRun).toBe(false);
+    const withRight = derive({
+      facts,
+      connectedDao: TEAM,
+      sessionProposerSigners: ["endowment"],
+    });
+    const sponsorStake = withRight.find((s) => s.def.id === "sponsor-stake");
+    expect(sponsorStake?.signerConnected).toBe(true);
+    expect(sponsorStake?.status).toBe("ready");
+    expect(sponsorStake?.canRun).toBe(true);
+    expect(runnableRun(withRight).map((s) => s.def.id)).toEqual([
+      "sponsor-lock",
+      "sponsor-stake",
+      "sponsor-delegate",
+    ]);
   });
 });
 

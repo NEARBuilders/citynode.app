@@ -110,10 +110,31 @@ function permits(permissions: string[] | undefined, action: string): boolean {
   );
 }
 
+function accountInRoles(roles: SputnikRole[], accountId: string): boolean {
+  return roles.some((role) => {
+    if (role.kind === "Everyone") return true;
+    return roleMembers(role).includes(accountId);
+  });
+}
+
 /** Roles that can approve a FunctionCall/Transfer proposal. */
 export function approverRoles(policy: SputnikPolicy | null | undefined): SputnikRole[] {
   if (!policy?.roles) return [];
   return policy.roles.filter((role) => permits(role.permissions, "VoteApprove"));
+}
+
+/** Roles that can add a FunctionCall ("call") proposal. */
+export function proposerRoles(policy: SputnikPolicy | null | undefined): SputnikRole[] {
+  if (!policy?.roles) return [];
+  return policy.roles.filter((role) => permits(role.permissions, "AddProposal"));
+}
+
+export function canAccountPropose(
+  policy: SputnikPolicy | null | undefined,
+  accountId: string | null,
+): boolean {
+  if (!accountId) return false;
+  return accountInRoles(proposerRoles(policy), accountId);
 }
 
 export function canAccountApprove(
@@ -121,10 +142,7 @@ export function canAccountApprove(
   accountId: string | null,
 ): boolean {
   if (!accountId) return false;
-  return approverRoles(policy).some((role) => {
-    if (role.kind === "Everyone") return true;
-    return roleMembers(role).includes(accountId);
-  });
+  return accountInRoles(approverRoles(policy), accountId);
 }
 
 export interface ApprovalThreshold {

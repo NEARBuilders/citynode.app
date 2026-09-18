@@ -66,6 +66,7 @@ import {
   accountExplorerUrl,
   approvalThreshold,
   approveProposalPlan,
+  canAccountPropose,
   type DaoPlan,
   describePlan,
   fetchAccountBalance,
@@ -88,6 +89,7 @@ import {
   type PoolAccountView,
   parseNearAmount,
   poolFeePercent,
+  proposeAsSession,
   remainingToFund,
   remainingToStake,
   type SputnikProposal,
@@ -271,11 +273,6 @@ function NodeLifecyclePocPage() {
 
   const sponsorYocto = useMemo(() => parseNearAmount(values.sponsorAmount), [values.sponsorAmount]);
   const sponsorStakeYocto = sponsorYocto;
-  const delegateBpsValue = useMemo(() => {
-    const value = Number(values.delegatePct);
-    if (!values.delegatePct || Number.isNaN(value) || value < 1 || value > 100) return null;
-    return Math.floor(value) * 100;
-  }, [values.delegatePct]);
 
   const { data: teamVe } = useQuery(poc(["venear", team], () => fetchVenearAccount(team), !!team));
   const { data: endowmentVe } = useQuery(
@@ -499,7 +496,6 @@ function NodeLifecyclePocPage() {
   else if (!pool) blockers["sponsor-stake"] = "enter the staking pool";
   else if (!sponsorYocto) blockers["sponsor-stake"] = "enter the sponsor amount";
   if (!endowment) blockers["sponsor-delegate"] = "set the endowment treasury";
-  else if (!delegateBpsValue) blockers["sponsor-delegate"] = "delegate between 1 and 100 percent";
   if (!team) blockers.vote = "connect your team DAO with Trezu";
   else if (!govProposal) blockers.vote = "no active House of Stake proposal";
   if (!team) blockers.unstake = "connect your team DAO with Trezu";
@@ -523,21 +519,13 @@ function NodeLifecyclePocPage() {
         endowmentLockup,
         sponsorYocto,
         sponsorStakeYocto,
-        delegateBps: delegateBpsValue,
         govProposalId: govProposal?.id ?? null,
       }),
-    [
-      slug,
-      pool,
-      team,
-      endowment,
-      teamLockup,
-      endowmentLockup,
-      sponsorYocto,
-      delegateBpsValue,
-      govProposal?.id,
-    ],
+    [slug, pool, team, endowment, teamLockup, endowmentLockup, sponsorYocto, govProposal?.id],
   );
+
+  /** The session wallet connects to the endowment through policy membership. */
+  const sessionCanProposeEndowment = canAccountPropose(endowmentPolicy, sessionAccount);
 
   const stations = deriveStations({
     stations: stationDefs,
@@ -545,6 +533,7 @@ function NodeLifecyclePocPage() {
     proposalsBySigner: { endowment: endowmentProposals, team: teamProposals },
     accounts: { session: sessionAccount, endowment, team },
     connectedDao: connection.daoAccountId,
+    sessionProposerSigners: sessionCanProposeEndowment ? (["endowment"] as const) : [],
     blockers,
     runningStation,
     failedStations: failures,
@@ -603,13 +592,20 @@ function NodeLifecyclePocPage() {
           .catch(() => null)
       : Promise.resolve(null);
 
+  /**
+   * True when an endowment step stages as a proposal from the session wallet
+   * instead of being signed by a connected endowment wallet.
+   */
+  const viaSessionProposal = (signer: SignerKind) =>
+    signer === "endowment" && connection.daoAccountId !== endowment && sessionCanProposeEndowment;
+
   /** Executes one station's remaining steps in order, as its declared signer. */
   const runStation = async (station: StationState) => {
     const { def } = station;
     setRunningStation(def.id);
     setFailures((prev) => ({ ...prev, [def.id]: undefined }));
     try {
-      await requireConnected(def.signer);
+      if (!viaSessionProposal(def.signer)) await requireConnected(def.signer);
       for (const step of station.steps) {
         if (step.status !== "pending") continue;
         try {
@@ -725,6 +721,24 @@ function NodeLifecyclePocPage() {
         if (state?.stakingPool && state.stakingPool === String(plan.args.staking_pool_account_id)) {
           log("pool already selected — skipping");
           return null;
+        }
+        return plan;
+      }
+      case "unselect-old-pool": {
+        if (!endowmentLockup) {
+          throw new Error("resolving the endowment lockup — run again in a moment");
+        }
+        const state = await fetchLockupState(endowmentLockup).catch(() => null);
+        if (!state?.stakingPool) {
+          log("no pool selected — skipping");
+          return null;
+        }
+        if (state.stakingPool === pool) {
+          log("the lockup already points at the node's pool — skipping");
+          return null;
+        }
+        if (isPositive(state.knownDeposited)) {
+          throw new Error("unstake first — the pool still holds a deposit");
         }
         return plan;
       }
@@ -1022,6 +1036,17 @@ function NodeLifecyclePocPage() {
     if (!signerId) throw new Error("Signer account not set");
     const plan = await precheckPlan(station, step);
     if (!plan) return;
+    if (viaSessionProposal(station.def.signer)) {
+      const description = `* Title: ${step.label} <br>* Summary: staged from the node lifecycle — ${describePlan(plan)}`;
+      const result = await proposeAsSession(auth.near, endowment, plan, description);
+      log(`staged a proposal on ${endowment} — ${describePlan(plan)}`, txHash(result));
+      return;
+    }
+    if (station.def.signer === "endowment") {
+      throw new Error(
+        "connect the endowment in Trezu, or hold AddProposal rights on its policy, to stage this step",
+      );
+    }
     const result = await signPlanAsDao(signerId, plan);
     log(`${describePlan(plan)} as ${signerId}`, txHash(result));
   };
@@ -1234,15 +1259,21 @@ function NodeLifecyclePocPage() {
                     icon={Layers}
                     label="endowment"
                     account={endowment || null}
-                    caption="the sponsor — locks NEAR, stakes the pool from its lockup, delegates its voting power"
-                    connected={connection.daoAccountId === endowment && !!endowment}
+                    caption="the sponsor — you connect as a member (Requestor); your wallet stages the proposals, approvers vote on trezu.app"
+                    connected={
+                      !!endowment &&
+                      (sessionCanProposeEndowment || connection.daoAccountId === endowment)
+                    }
                     popover={{
                       title: "Endowment (sponsor)",
-                      body: "A separate treasury that puts up the capital: locks its NEAR in a veNEAR lockup, stakes it into the node's pool from that lockup, and delegates all of its voting power to the team. Optional — it never blocks the team's track.",
+                      body: "A separate treasury that puts up the capital: its NEAR is locked in a veNEAR lockup, staked into the node's pool from that lockup, and all of its voting power is delegated to the team. You connect to it through policy membership — a wallet holding AddProposal rights stages each step as a proposal — or by connecting the treasury itself in Trezu. Its approvers pass the proposals by vote. Optional — it never blocks the team's track.",
                       links: [
-                        { label: "deploy one on trezu.app/create", href: TREZU_CREATE_URL },
                         ...(endowment
                           ? [
+                              {
+                                label: "view proposals on trezu",
+                                href: `https://trezu.app/${endowment}`,
+                              },
                               {
                                 label: `${endowment} on nearblocks`,
                                 href: nearblocksAccount(endowment),
@@ -1347,7 +1378,7 @@ function NodeLifecyclePocPage() {
                         onClick={() => connectEndowmentMutation.mutate()}
                         testId="poc-connect-endowment"
                       >
-                        connect endowment
+                        connect endowment via Trezu
                       </PocConnectField>
                     ) : (
                       <PocFormField form={form} name="endowment" label="Endowment treasury" />
@@ -1379,12 +1410,6 @@ function NodeLifecyclePocPage() {
                     form={form}
                     name="sponsorAmount"
                     label="Sponsor NEAR"
-                    type="number"
-                  />
-                  <PocFormField
-                    form={form}
-                    name="delegatePct"
-                    label="Delegate to team (%)"
                     type="number"
                   />
                 </div>
@@ -2026,7 +2051,7 @@ function PocField({
   );
 }
 
-type PocFormFieldName = "name" | "pool" | "endowment" | "sponsorAmount" | "delegatePct";
+type PocFormFieldName = "name" | "pool" | "endowment" | "sponsorAmount";
 
 function PocFormField({
   form,
