@@ -4,6 +4,7 @@ import { admin, organization, testUtils } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as authSchema from "../../../plugins/auth/src/db/schema.ts";
+import { migrateTestDatabase } from "./migrate-test-db.mjs";
 
 /**
  * Test-only Better Auth instance for regression fixtures.
@@ -18,6 +19,11 @@ import * as authSchema from "../../../plugins/auth/src/db/schema.ts";
 export async function createAuthTestInstance({ authDatabaseUrl, secret }) {
   if (!authDatabaseUrl) throw new Error("AUTH_DATABASE_URL is not configured");
   if (!secret) throw new Error("BETTER_AUTH_SECRET is not configured");
+
+  await migrateTestDatabase({
+    migrationsDir: "plugins/auth/src/db/migrations",
+    databaseUrl: authDatabaseUrl,
+  });
 
   const pool = new Pool({ connectionString: authDatabaseUrl, max: 1 });
   const db = drizzle(pool, { schema: authSchema });

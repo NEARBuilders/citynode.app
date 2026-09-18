@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
 import sirv from "sirv";
+import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 
@@ -116,11 +117,16 @@ export async function startPluginDevServer(
 
   let watcher: ReturnType<typeof spawn> | null = null;
   if (options.watch !== false) {
-    watcher = spawn("rspack", ["build", "--watch"], {
-      cwd,
-      stdio: "inherit",
-      env: process.env,
-    });
+    const generatedConfig = ensureGeneratedRspackConfig(cwd);
+    watcher = spawn(
+      "rspack",
+      generatedConfig ? ["build", "--watch", "--config", generatedConfig] : ["build", "--watch"],
+      {
+        cwd,
+        stdio: "inherit",
+        env: process.env,
+      },
+    );
     watcher.on("error", (error) => {
       console.error(`❌ Failed to spawn rspack build --watch: ${error.message}`);
     });
