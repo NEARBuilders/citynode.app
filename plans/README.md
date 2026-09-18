@@ -44,8 +44,8 @@ is verifiable on-chain via FastKV.
 | Document | Covers | Status |
 |---|---|---|
 | [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning | Phases 1–3 DONE, Phase 4 PARTIAL |
-| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | In progress on `orpc-v2` branch — infrastructure half landed; handler-idiom half continues in [effect-native-plugins.md](./infra/effect-native-plugins.md) |
-| [effect-native-plugins.md](./infra/effect-native-plugins.md) | Effect-native plugins — `.effect()` handlers, Layer-returning `initialize`, nested router merging, `every-plugin` barrel removal | **IMPLEMENTED** on the `orpc-v2` branch — all suites green; awaits atomic deploy (`bos publish --deploy`) |
+| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | **DONE** — merged to `main` (citynode.app#97 + #106), verified live in production including the MF shared-dep guardrails |
+| [effect-native-plugins.md](./infra/effect-native-plugins.md) | Effect-native plugins — `.effect()` handlers, Layer-returning `initialize`, nested router merging, `every-plugin` barrel removal | **DONE** — merged with citynode.app#97; deployed to production |
 
 ## offline — offline support
 

@@ -397,7 +397,7 @@ bun run dev    # hot reload, all services local
    # builds workspaces → deploys to Zephyr CDN → publishes bos.config.json to FastKV at bos://<your-account>/citynode.app
    ```
 
-6. **Deploy to Railway** — use the one-click template (button in `README.md`) or `railway up` with the committed `railway.toml` (which references the generic `ghcr.io/nearbuilders/everything-dev:latest` image). Set these environment variables on your Railway service:
+6. **Deploy to Railway** — use the one-click template (button in `README.md`) or `railway up` with the committed `railway.toml`. The image is built from the committed root `Dockerfile`, so the same container works unchanged on Railway today and on any other provider (Fly Machines, Hetzner, …) later — the provider surface is declared in code as Infrastructure-as-Effects via [alchemy](https://github.com/alchemy-run/alchemy), which makes providers swappable and self-hostable for sovereign tenants. Set these environment variables on your Railway service:
    | Variable | Value |
    |----------|-------|
    | `BOS_ACCOUNT` | `<your-account>.near` |
