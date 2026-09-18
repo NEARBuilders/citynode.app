@@ -524,7 +524,7 @@ function NodeLifecyclePocPage() {
     [slug, pool, team, endowment, teamLockup, endowmentLockup, sponsorYocto, govProposal?.id],
   );
 
-  /** The session wallet can stage treasury actions on the endowment without its own connection. */
+  /** The session wallet connects to the endowment through policy membership. */
   const sessionCanProposeEndowment = canAccountPropose(endowmentPolicy, sessionAccount);
 
   const stations = deriveStations({
@@ -1259,11 +1259,14 @@ function NodeLifecyclePocPage() {
                     icon={Layers}
                     label="endowment"
                     account={endowment || null}
-                    caption="the sponsor — its treasury receives the proposals; approvers vote on trezu.app"
-                    connected={connection.daoAccountId === endowment && !!endowment}
+                    caption="the sponsor — you connect as a member (Requestor); your wallet stages the proposals, approvers vote on trezu.app"
+                    connected={
+                      !!endowment &&
+                      (sessionCanProposeEndowment || connection.daoAccountId === endowment)
+                    }
                     popover={{
                       title: "Endowment (sponsor)",
-                      body: "A separate treasury that puts up the capital: its NEAR is locked in a veNEAR lockup, staked into the node's pool from that lockup, and all of its voting power is delegated to the team. Each step is staged as a proposal on this DAO — whoever holds AddProposal rights submits them, its approvers pass them by vote. Optional — it never blocks the team's track.",
+                      body: "A separate treasury that puts up the capital: its NEAR is locked in a veNEAR lockup, staked into the node's pool from that lockup, and all of its voting power is delegated to the team. You connect to it through policy membership — a wallet holding AddProposal rights stages each step as a proposal — or by connecting the treasury itself in Trezu. Its approvers pass the proposals by vote. Optional — it never blocks the team's track.",
                       links: [
                         ...(endowment
                           ? [
@@ -1375,7 +1378,7 @@ function NodeLifecyclePocPage() {
                         onClick={() => connectEndowmentMutation.mutate()}
                         testId="poc-connect-endowment"
                       >
-                        connect endowment
+                        connect endowment via Trezu
                       </PocConnectField>
                     ) : (
                       <PocFormField form={form} name="endowment" label="Endowment treasury" />

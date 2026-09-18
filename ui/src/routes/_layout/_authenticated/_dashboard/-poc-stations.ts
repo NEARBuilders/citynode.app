@@ -81,7 +81,7 @@ export const PHASES: readonly PhaseDef[] = [
     id: "sponsor",
     title: "Sponsor Endowment",
     blurb:
-      "the endowment's treasury receives proposals: release its old pool, stake the node's pool from its lockup, and hand its voting power to the team — optional, never blocks anything",
+      "connected by membership, the endowment's treasury receives proposals: release its old pool, stake the node's pool from its lockup, and hand its voting power to the team — optional, never blocks anything",
   },
   {
     id: "vote",
@@ -292,7 +292,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Lock the sponsor's NEAR",
       signer: "endowment",
       purpose:
-        "The endowment registers in veNEAR, deploys its lockup, transfers its capital in, and locks it all. Locked NEAR mints the sponsor's veNEAR voting power.",
+        "The endowment registers in veNEAR, deploys its lockup, transfers its capital in, and locks it all. Locked NEAR mints the sponsor's veNEAR voting power. Each step is staged as a proposal on the endowment's treasury, signed by a member wallet.",
       requires: { tenantDeployed: "approve the application first" },
       steps: [
         {
@@ -353,7 +353,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Stake the pool from the lockup",
       signer: "endowment",
       purpose:
-        "Points the endowment's lockup at the node's pool and stakes into it. Releasing the pool the lockup already points at comes first — the contract refuses to select while one is set. NEAR stays veNEAR-earning while it secures the team's validator — this stake is the sponsor's real capital.",
+        "Points the endowment's lockup at the node's pool and stakes into it. Releasing the pool the lockup already points at comes first — the contract refuses to select while one is set. NEAR stays veNEAR-earning while it secures the team's validator — this stake is the sponsor's real capital. Each step is staged as a proposal on the endowment's treasury, signed by a member wallet.",
       requires: {
         poolAssigned: "assign the pool first",
         endowmentFunded: "transfer the sponsor NEAR into the lockup first",
@@ -406,7 +406,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Delegate the voting power",
       signer: "endowment",
       purpose:
-        "The endowment delegates its veNEAR to the team wallet, replacing its whole delegation set — the previous delegate is dropped in the same call. The team's votes are what the sponsor's stake buys.",
+        "The endowment delegates its veNEAR to the team wallet, replacing its whole delegation set — the previous delegate is dropped in the same call. The team's votes are what the sponsor's stake buys. Staged as a proposal on the endowment's treasury, signed by a member wallet.",
       requires: {
         teamRegistered: "the team must register in veNEAR before it can receive the delegation",
       },
@@ -483,7 +483,7 @@ export function buildStations(inputs: StationInputs): StationDef[] {
       title: "Unwind the sponsor",
       signer: "endowment",
       purpose:
-        "Takes the endowment back out: unstakes from the pool, withdraws to the lockup, releases the pool, and clears its delegations so the voting power returns to itself.",
+        "Takes the endowment back out: unstakes from the pool, withdraws to the lockup, releases the pool, and clears its delegations so the voting power returns to itself. Each step is staged as a proposal on the endowment's treasury, signed by a member wallet.",
       requires: { endowmentStaked: "nothing staked from the lockup yet" },
       steps: [
         {
