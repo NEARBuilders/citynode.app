@@ -88,9 +88,11 @@ export function TeamStakeCard({
               {loading ? (
                 <Skeleton aria-label="Loading available rewards" className="h-8 w-40" />
               ) : accountView ? (
-                accountView.stakedBalance > 0n
-                  ? formatNearBalance(accountView.stakedBalance)
-                  : formatNearBalance(accountView.unstakedBalance)
+                accountView.stakedBalance > 0n ? (
+                  formatNearBalance(accountView.stakedBalance)
+                ) : (
+                  formatNearBalance(accountView.unstakedBalance)
+                )
               ) : (
                 "—"
               )}
@@ -101,7 +103,10 @@ export function TeamStakeCard({
               <span className="font-mono text-foreground">{target.poolAccountId}</span>
             </p>
             {phase === "pending-release" && (
-              <p className="text-sm text-muted-foreground" data-testid="dashboard-node.team-stake-pending-release">
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="dashboard-node.team-stake-pending-release"
+              >
                 Unstaked NEAR is locked for the ~2-day epoch window and can be withdrawn once
                 released.
               </p>
@@ -130,8 +135,8 @@ export function TeamStakeCard({
                     amountYocto,
                     maxAmountYocto:
                       method === "unstake"
-                        ? accountView?.stakedBalance ?? 0n
-                        : accountView?.unstakedBalance ?? 0n,
+                        ? (accountView?.stakedBalance ?? 0n)
+                        : (accountView?.unstakedBalance ?? 0n),
                     authAccountId,
                     connection,
                   });
@@ -208,7 +213,9 @@ function PoolActionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{method === "withdraw" ? "Propose withdraw" : "Propose unstake"}</DialogTitle>
+          <DialogTitle>
+            {method === "withdraw" ? "Propose withdraw" : "Propose unstake"}
+          </DialogTitle>
           <DialogDescription>
             {method === "withdraw" ? (
               <>

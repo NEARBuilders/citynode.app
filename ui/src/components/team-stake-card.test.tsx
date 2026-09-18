@@ -146,9 +146,7 @@ describe("TeamStakeCard", () => {
     renderCard();
     const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
     await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(true));
-    expect(
-      await screen.findByTestId("dashboard-node.team-stake-pending-release"),
-    ).toBeTruthy();
+    expect(await screen.findByTestId("dashboard-node.team-stake-pending-release")).toBeTruthy();
     expect(screen.getByTestId("dashboard-node.team-stake-amount").textContent).toBe("1.5 NEAR");
   });
 
