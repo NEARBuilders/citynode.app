@@ -197,6 +197,7 @@ export async function setupApiRoutes(
           error: "Service Unavailable",
           message: "The API is currently unavailable.",
           ...(plugins.status.error ? { detail: plugins.status.error } : {}),
+          ...(plugins.status.errorDetails ? { detailFull: plugins.status.errorDetails } : {}),
           ...(plugins.status.loadedPlugins.length > 0
             ? { loadedPlugins: plugins.status.loadedPlugins }
             : {}),

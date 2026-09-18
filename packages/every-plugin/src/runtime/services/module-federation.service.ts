@@ -5,6 +5,17 @@ import type { AnyPlugin } from "../../types";
 import { ModuleFederationError } from "../errors";
 import { type CoreSharedDepName, MF_CORE_SHARED_DEPS } from "../mf-config";
 import { getNormalizedRemoteName } from "./normalize";
+import {
+  compareSharedIdentity,
+  describeSharedIdentityMismatch,
+  fetchRemoteIdentityManifest,
+} from "./shared-identity";
+
+function expectedSharedIdentity(): Map<string, string> {
+  return new Map(
+    Object.entries(MF_CORE_SHARED_DEPS).map(([name, config]) => [name, config.version]),
+  );
+}
 
 type RemoteModule = (new () => AnyPlugin) | { default: new () => AnyPlugin };
 
@@ -97,6 +108,37 @@ export const ModuleFederationServiceDefault = Layer.effect(
   ModuleFederationService,
   Effect.gen(function* () {
     const mf = yield* Effect.flatten(createModuleFederationInstance);
+    const expectedIdentity = expectedSharedIdentity();
+
+    const buildSharedIdentityError = async (
+      pluginId: string,
+      url: string,
+    ): Promise<ModuleFederationError | null> => {
+      let manifest: Awaited<ReturnType<typeof fetchRemoteIdentityManifest>> | null = null;
+      try {
+        manifest = await fetchRemoteIdentityManifest(url);
+      } catch (error) {
+        console.warn(
+          `[SharedIdentity] Could not fetch mf-manifest.json for plugin "${pluginId}" at ${url} (${error instanceof Error ? error.message : String(error)}); proceeding without identity verification`,
+        );
+        return null;
+      }
+      if (!manifest) return null;
+      const mismatches = compareSharedIdentity(manifest.shared, expectedIdentity);
+      if (mismatches.length === 0) return null;
+      const warnOnly = process.env.BOS_MF_IDENTITY === "warn";
+      if (warnOnly) {
+        console.warn(
+          `${describeSharedIdentityMismatch(pluginId, mismatches, "this runtime")} (BOS_MF_IDENTITY=warn: loading anyway)`,
+        );
+        return null;
+      }
+      return new ModuleFederationError({
+        pluginId,
+        remoteUrl: url,
+        cause: new Error(describeSharedIdentityMismatch(pluginId, mismatches, "this runtime")),
+      });
+    };
 
     return {
       registerRemote: (pluginId: string, url: string) =>
@@ -134,6 +176,19 @@ export const ModuleFederationServiceDefault = Layer.effect(
         Effect.gen(function* () {
           const remoteName = getNormalizedRemoteName(pluginId);
           yield* Effect.logDebug(`[MF] Loading remote ${remoteName}`);
+
+          const identityError = yield* Effect.promise(() =>
+            buildSharedIdentityError(pluginId, url),
+          );
+          if (identityError) {
+            yield* Effect.logError(
+              identityError.cause instanceof Error
+                ? identityError.cause.message
+                : String(identityError.cause ?? "shared identity mismatch"),
+            );
+            return yield* Effect.fail(identityError);
+          }
+
           const modulePath = `${remoteName}/plugin`;
 
           const pluginConstructor = yield* Effect.tryPromise({

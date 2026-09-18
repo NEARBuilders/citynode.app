@@ -33,12 +33,36 @@ const DEFAULT_SHARE_CONFIG: Omit<SharedDependencyConfig, "version"> = {
   shareScope: "default",
 };
 
+export const EFFECT_CRITICAL_SHARED_DEPS = [
+  "every-plugin",
+  "effect",
+  "@orpc/contract",
+  "@orpc/client",
+  "@orpc/server",
+  "@orpc/experimental-effect",
+] as const;
+
+export type EffectCriticalSharedDepName = (typeof EFFECT_CRITICAL_SHARED_DEPS)[number];
+
+export function isEffectCriticalSharedDep(name: string): boolean {
+  return (EFFECT_CRITICAL_SHARED_DEPS as readonly string[]).includes(name);
+}
+
+export function strictShareConfigFor(
+  name: string,
+  version: string,
+): Omit<SharedDependencyConfig, "version"> {
+  return isEffectCriticalSharedDep(name)
+    ? { ...DEFAULT_SHARE_CONFIG, requiredVersion: version, strictVersion: true }
+    : DEFAULT_SHARE_CONFIG;
+}
+
 function extractExactVersion(input: string): string {
   const match = input.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
   return match ? match[0] : input.replace(/^[\^~>=<\s]+/, "");
 }
 
-function getInstalledPackageVersion(packageName: string, fallbackVersion: string): string {
+export function getInstalledSharedDepVersion(packageName: string, fallbackVersion: string): string {
   try {
     let currentDir = dirname(require.resolve(packageName));
     for (let i = 0; i < 5; i += 1) {
@@ -55,52 +79,64 @@ function getInstalledPackageVersion(packageName: string, fallbackVersion: string
   }
 }
 
-export const pluginSharedDependencies = {
-  "every-plugin": { version: pkg.version, ...DEFAULT_SHARE_CONFIG },
-  effect: {
-    version: getInstalledPackageVersion("effect", pkg.peerDependencies.effect),
-    ...DEFAULT_SHARE_CONFIG,
-  },
-  zod: {
-    version: getInstalledPackageVersion("zod", pkg.peerDependencies.zod),
-    ...DEFAULT_SHARE_CONFIG,
-  },
+function getInstalledPackageVersion(packageName: string, fallbackVersion: string): string {
+  return getInstalledSharedDepVersion(packageName, fallbackVersion);
+}
+
+type PluginSharedSources = Record<
+  | "every-plugin"
+  | "effect"
+  | "zod"
+  | "@orpc/contract"
+  | "@orpc/client"
+  | "@orpc/server"
+  | "@orpc/openapi"
+  | "@orpc/experimental-effect"
+  | "@orpc/publisher",
+  { version: string }
+>;
+
+const sharedDepSources = {
+  "every-plugin": { version: pkg.version },
+  effect: { version: getInstalledPackageVersion("effect", pkg.peerDependencies.effect) },
+  zod: { version: getInstalledPackageVersion("zod", pkg.peerDependencies.zod) },
   "@orpc/contract": {
     version: getInstalledPackageVersion("@orpc/contract", pkg.peerDependencies["@orpc/contract"]),
-    ...DEFAULT_SHARE_CONFIG,
   },
   "@orpc/client": {
     version: getInstalledPackageVersion("@orpc/client", pkg.peerDependencies["@orpc/client"]),
-    ...DEFAULT_SHARE_CONFIG,
   },
   "@orpc/server": {
     version: getInstalledPackageVersion("@orpc/server", pkg.peerDependencies["@orpc/server"]),
-    ...DEFAULT_SHARE_CONFIG,
   },
   "@orpc/openapi": {
     version: getInstalledPackageVersion(
       "@orpc/openapi",
       (pkg.peerDependencies as Record<string, string>)["@orpc/openapi"] ?? "latest",
     ),
-    ...DEFAULT_SHARE_CONFIG,
   },
   "@orpc/experimental-effect": {
     version: getInstalledPackageVersion(
       "@orpc/experimental-effect",
       (pkg.dependencies as Record<string, string>)["@orpc/experimental-effect"] ?? "latest",
     ),
-    ...DEFAULT_SHARE_CONFIG,
   },
   "@orpc/publisher": {
     version: getInstalledPackageVersion(
       "@orpc/publisher",
       (pkg.dependencies as Record<string, string>)["@orpc/publisher"] ?? "latest",
     ),
-    ...DEFAULT_SHARE_CONFIG,
   },
-} satisfies SharedDependencies;
+} satisfies PluginSharedSources;
 
-export type PluginSharedDependencyName = keyof typeof pluginSharedDependencies;
+export const pluginSharedDependencies: SharedDependencies = Object.fromEntries(
+  Object.entries(sharedDepSources).map(([name, source]) => [
+    name,
+    { version: source.version, ...strictShareConfigFor(name, source.version) },
+  ]),
+) as SharedDependencies;
+
+export type PluginSharedDependencyName = keyof typeof sharedDepSources;
 
 export function getPluginSharedDependencies(): SharedDependencies {
   return pluginSharedDependencies;
