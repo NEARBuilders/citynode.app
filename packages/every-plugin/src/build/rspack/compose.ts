@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
 import { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
 import {
@@ -27,9 +29,22 @@ export class EveryPluginComposedBuild implements RspackPluginInstance {
 export interface PluginBaseConfigOptions {
   drizzle?: boolean;
   externals?: string[];
+  /** Concrete rspack fields to merge over the defaults (devtool, infrastructureLogging, ...). */
+  rspack?: Partial<PluginBaseConfig>;
 }
 
 const pluginRequire = createRequire(import.meta.url);
+
+export function findBosConfigPath(from: string = process.cwd()): string | null {
+  let current = path.resolve(from);
+  while (true) {
+    const candidate = path.join(current, "bos.config.json");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
 
 function loadDrizzleMigrationsPlugin(): ((...args: unknown[]) => unknown) | null {
   try {
@@ -64,12 +79,11 @@ export function createPluginBaseConfig(options: PluginBaseConfigOptions = {}): P
   }
 
   return {
-    externals: options.externals ?? ["pg", "@electric-sql/pglite"],
-    devtool: shouldDeploy ? false : "source-map",
+    ...options.rspack,
+    externals: options.externals ?? options.rspack?.externals ?? ["pg", "@electric-sql/pglite"],
+    devtool: options.rspack?.devtool ?? (shouldDeploy ? false : "source-map"),
     plugins,
-    infrastructureLogging: {
-      level: "error",
-    },
-    stats: "errors-warnings",
+    infrastructureLogging: options.rspack?.infrastructureLogging ?? { level: "error" },
+    stats: options.rspack?.stats ?? "errors-warnings",
   };
 }

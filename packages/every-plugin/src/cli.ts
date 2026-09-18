@@ -34,29 +34,74 @@ export async function emitContractTypes(): Promise<void> {
   await run("tsc", ["-p", "tsconfig.contract.json"]);
 }
 
+/** Walks up from the workspace to find bos.config.json (deploy integrity reporting target). */
+function findBosConfigPathSync(): string | null {
+  let current = process.cwd();
+  for (;;) {
+    const candidate = path.join(current, "bos.config.json");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function pluginDisplayName(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"));
+    return pkg.name ?? "Plugin";
+  } catch {
+    return "Plugin";
+  }
+}
+
+function generatedRspackConfig(
+  deployLabel: string,
+  hasOverrides: boolean,
+  bosConfigPath: string | null,
+): string {
+  return `import { createPluginBaseConfig } from "every-plugin/build/rspack";
+import { withPluginDeploy } from "everything-dev/integrity";
+${hasOverrides ? `import buildOverrides from "../build.config.ts";\n` : ""}
+const config = createPluginBaseConfig(${hasOverrides ? "buildOverrides" : "{}"});
+const bosConfigPath = ${JSON.stringify(bosConfigPath)};
+export default bosConfigPath
+  ? withPluginDeploy(config, { bosConfigPath, deployLabel: ${JSON.stringify(deployLabel)} })
+  : config;
+`;
+}
+
 async function runRspack(deploy: boolean): Promise<void> {
-  const configPath = path.resolve(process.cwd(), "rspack.config.js");
-  if (fs.existsSync(configPath)) {
+  if (fs.existsSync(path.resolve(process.cwd(), "rspack.config.js"))) {
     await run("rspack", ["build"], deploy ? { DEPLOY: "true" } : {});
     return;
   }
 
+  const bosConfigPath = findBosConfigPathSync();
+  if (deploy && !bosConfigPath) {
+    throw new Error(
+      "[every-plugin] deploy needs bos.config.json (walking up from the workspace) for integrity reporting — pass a bosConfigPath from the pipeline or add rspack.config.js.",
+    );
+  }
+
+  const overridesPath = path.resolve(process.cwd(), "build.config.ts");
+  const hasOverrides = fs.existsSync(overridesPath);
   const generatedDir = path.join(process.cwd(), ".every-plugin");
   const generatedConfig = path.join(generatedDir, "rspack.config.generated.mjs");
   fs.mkdirSync(generatedDir, { recursive: true });
   fs.writeFileSync(
     generatedConfig,
-    `import { createPluginBaseConfig } from "every-plugin/build/rspack";\n\nexport default createPluginBaseConfig();\n`,
+    generatedRspackConfig(pluginDisplayName(), hasOverrides, bosConfigPath ?? "."),
   );
 
-  if (deploy) {
-    throw new Error(
-      "[every-plugin] `every-plugin deploy` requires rspack.config.js — deploy wraps the Zephyr CDN + integrity reporting via withPluginDeploy (from everything-dev/integrity).",
-    );
-  }
-
-  console.log("[every-plugin] rspack.config.js not found — using every-plugin build composition.");
-  await run("rspack", ["build", "--config", ".every-plugin/rspack.config.generated.mjs"]);
+  console.log(
+    "[every-plugin] rspack.config.js not found — using the every-plugin build composition.",
+  );
+  await run(
+    "rspack",
+    ["build", "--config", ".every-plugin/rspack.config.generated.mjs"],
+    deploy ? { DEPLOY: "true" } : {},
+  );
 }
 
 export function runCliCommand(raw: string): Promise<void> {
