@@ -452,7 +452,6 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             methodName: "unstake_all",
             args: {},
             gas: "125 Tgas",
-            attachedDeposit: ONE_YOCTO,
           },
         },
         {
@@ -464,7 +463,6 @@ export function buildStations(inputs: StationInputs): StationDef[] {
             methodName: "withdraw",
             args: {},
             gas: "125 Tgas",
-            attachedDeposit: ONE_YOCTO,
           },
         },
       ],
