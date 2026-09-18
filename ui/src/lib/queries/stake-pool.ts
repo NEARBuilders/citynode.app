@@ -89,6 +89,13 @@ export function stakePoolStatsQueryOptions(options: PoolOptions) {
 
 export type TeamStakeTarget = NonNullable<ReturnType<typeof resolveTeamStakeTarget>>;
 
+export interface StakePoolAccountView {
+  accountId: string;
+  stakedBalance: bigint;
+  unstakedBalance: bigint;
+  canWithdraw: boolean;
+}
+
 export function stakePoolAccountQueryOptions(options: {
   poolAccountId: string;
   stakerAccountId: string;
@@ -116,12 +123,13 @@ export function stakePoolAccountQueryOptions(options: {
           can_withdraw: z.boolean(),
         })
         .parse(raw);
-      return {
+      const view: StakePoolAccountView = {
         accountId: account.account_id,
         stakedBalance: account.staked_balance,
         unstakedBalance: account.unstaked_balance,
         canWithdraw: account.can_withdraw,
       };
+      return view;
     },
   });
 }

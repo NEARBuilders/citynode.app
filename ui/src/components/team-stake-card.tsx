@@ -20,12 +20,36 @@ import {
   formatNearBalance,
   invalidateStakePoolQueries,
   stakePoolAccountQueryOptions,
+  type StakePoolAccountView,
   type TeamStakeTarget,
 } from "@/lib/queries/stake-pool";
 import { parseUnstakeAmount, proposeTeamPoolAction, yoctoToNearInput } from "@/lib/team-unstake";
 import { useNearAccount } from "@/lib/use-near-account";
 
 type PoolPhase = "unstake" | "pending-release" | "withdraw";
+type PoolMethod = "unstake" | "withdraw";
+
+const PHASE_METHOD: Record<PoolPhase, PoolMethod> = {
+  unstake: "unstake",
+  "pending-release": "unstake",
+  withdraw: "withdraw",
+};
+
+const BUTTON_LABEL: Record<PoolMethod, string> = {
+  unstake: "propose unstake",
+  withdraw: "propose withdraw",
+};
+
+const DIALOG_TITLE: Record<PoolMethod, string> = {
+  unstake: "Propose unstake",
+  withdraw: "Propose withdraw",
+};
+
+function maxBalanceOf(method: PoolMethod, accountView: StakePoolAccountView | undefined) {
+  return method === "unstake"
+    ? (accountView?.stakedBalance ?? 0n)
+    : (accountView?.unstakedBalance ?? 0n);
+}
 
 export function TeamStakeCard({
   target,
@@ -58,6 +82,7 @@ export function TeamStakeCard({
         : accountView.unstakedBalance > 0n
           ? "pending-release"
           : null;
+  const method: PoolMethod | null = phase ? PHASE_METHOD[phase] : null;
   const actionReady = !!target && !!phase && phase !== "pending-release";
 
   return (
@@ -73,7 +98,7 @@ export function TeamStakeCard({
               disabled={!actionReady}
               onClick={() => setDialogOpen(true)}
             >
-              {phase === "withdraw" ? "propose withdraw" : "propose unstake"}
+              {method ? BUTTON_LABEL[method] : "propose unstake"}
             </Button>
           ) : null
         }
@@ -88,10 +113,10 @@ export function TeamStakeCard({
               {loading ? (
                 <Skeleton aria-label="Loading available rewards" className="h-8 w-40" />
               ) : accountView ? (
-                accountView.stakedBalance > 0n ? (
-                  formatNearBalance(accountView.stakedBalance)
-                ) : (
-                  formatNearBalance(accountView.unstakedBalance)
+                formatNearBalance(
+                  method === "withdraw" || phase === "pending-release"
+                    ? accountView.unstakedBalance
+                    : accountView.stakedBalance,
                 )
               ) : (
                 "—"
@@ -99,7 +124,7 @@ export function TeamStakeCard({
             </div>
             <p className="text-sm text-muted-foreground">
               <span className="font-mono text-foreground">{target.teamAccountId}</span>
-              {" staked in "}
+              {method === "withdraw" || phase === "pending-release" ? " unstaked from " : " staked in "}
               <span className="font-mono text-foreground">{target.poolAccountId}</span>
             </p>
             {phase === "pending-release" && (
@@ -111,9 +136,9 @@ export function TeamStakeCard({
                 released.
               </p>
             )}
-            {accountView?.canWithdraw === false && accountView.unstakedBalance > 0n && (
+            {phase === "unstake" && accountView && accountView.unstakedBalance > 0n && (
               <p className="text-sm text-muted-foreground">
-                Pending release:{" "}
+                {accountView.canWithdraw ? "Ready to withdraw: " : "Pending release: "}
                 <span className="font-mono text-foreground">
                   {formatNearBalance(accountView.unstakedBalance)}
                 </span>
@@ -124,25 +149,22 @@ export function TeamStakeCard({
               onOpenChange={setDialogOpen}
               target={target}
               accountView={accountView ?? null}
-              phase={phase}
+              method={method}
               pending={connection.status === "connecting"}
-              onPropose={async (method, amountYocto) => {
+              onPropose={async (selected, amountYocto) => {
                 try {
                   await proposeTeamPoolAction({
                     teamAccountId: target.teamAccountId,
                     poolAccountId: target.poolAccountId,
-                    method,
+                    method: selected,
                     amountYocto,
-                    maxAmountYocto:
-                      method === "unstake"
-                        ? (accountView?.stakedBalance ?? 0n)
-                        : (accountView?.unstakedBalance ?? 0n),
+                    maxAmountYocto: maxBalanceOf(selected, accountView),
                     authAccountId,
                     connection,
                   });
-                  toast.success(method === "unstake" ? "Unstake proposed" : "Withdraw proposed", {
+                  toast.success(selected === "unstake" ? "Unstake proposed" : "Withdraw proposed", {
                     description:
-                      method === "unstake"
+                      selected === "unstake"
                         ? `Ready to withdraw to ${target.teamAccountId} after the ~2-day epoch window.`
                         : `Returns the NEAR to ${target.teamAccountId}.`,
                   });
@@ -175,28 +197,20 @@ function PoolActionDialog({
   onOpenChange,
   target,
   accountView,
-  phase,
+  method,
   pending,
   onPropose,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: TeamStakeTarget;
-  accountView: {
-    stakedBalance: bigint;
-    unstakedBalance: bigint;
-    canWithdraw: boolean;
-  } | null;
-  phase: PoolPhase | null;
+  accountView: StakePoolAccountView | null;
+  method: PoolMethod | null;
   pending: boolean;
-  onPropose: (method: "unstake" | "withdraw", amountYocto: bigint) => Promise<void>;
+  onPropose: (method: PoolMethod, amountYocto: bigint) => Promise<void>;
 }) {
-  const method = phase === "withdraw" ? "withdraw" : "unstake";
-  const max = accountView
-    ? method === "unstake"
-      ? accountView.stakedBalance
-      : accountView.unstakedBalance
-    : 0n;
+  const action: PoolMethod = method ?? "unstake";
+  const max = maxBalanceOf(action, accountView ?? undefined);
   const [amount, setAmount] = useState("");
   const parsed = parseUnstakeAmount(amount, max);
   useEffect(() => {
@@ -204,8 +218,8 @@ function PoolActionDialog({
   }, [open, max]);
   const propose = useMutation({
     mutationFn: async () => {
-      if (!parsed) throw new Error(`Enter an amount within the available team ${method} balance.`);
-      await onPropose(method, parsed);
+      if (!parsed) throw new Error(`Enter an amount within the available team ${action} balance.`);
+      await onPropose(action, parsed);
     },
   });
 
@@ -213,23 +227,21 @@ function PoolActionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {method === "withdraw" ? "Propose withdraw" : "Propose unstake"}
-          </DialogTitle>
+          <DialogTitle>{DIALOG_TITLE[action]}</DialogTitle>
           <DialogDescription>
-            {method === "withdraw" ? (
+            Stages a Trezu treasury proposal to {action} this amount from{" "}
+            <span className="font-mono">{target.poolAccountId}</span>
+            {action === "withdraw" ? (
               <>
-                Stages a Trezu treasury proposal to withdraw this amount from{" "}
-                <span className="font-mono">{target.poolAccountId}</span> back to the confidential
-                treasury <span className="font-mono">{target.teamAccountId}</span>.
+                {" "}
+                back to the confidential treasury{" "}
+                <span className="font-mono">{target.teamAccountId}</span>.
               </>
             ) : (
               <>
-                Stages a Trezu treasury proposal to unstake this amount from{" "}
-                <span className="font-mono">{target.poolAccountId}</span>. Staking rewards
-                automatically compound into the staked balance — there is no separate claim step.
-                After the ~2-day epoch window the unstaked NEAR can be withdrawn to{" "}
-                <span className="font-mono">{target.teamAccountId}</span>.
+                . Staking rewards automatically compound into the staked balance — there is no
+                separate claim step. After the ~2-day epoch window the unstaked NEAR can be
+                withdrawn to <span className="font-mono">{target.teamAccountId}</span>.
               </>
             )}
           </DialogDescription>
@@ -269,11 +281,7 @@ function PoolActionDialog({
             disabled={!parsed || pending || propose.isPending}
             onClick={() => propose.mutate()}
           >
-            {pending || propose.isPending
-              ? "proposing…"
-              : method === "withdraw"
-                ? "propose withdraw"
-                : "propose unstake"}
+            {pending || propose.isPending ? "proposing…" : BUTTON_LABEL[action]}
           </Button>
         </DialogFooter>
       </DialogContent>

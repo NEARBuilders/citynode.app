@@ -11,19 +11,19 @@ const YOCTO_PER_NEAR = 10n ** 24n;
 export interface PoolCall {
   receiverId: string;
   methodName: "unstake" | "withdraw";
-  args: Record<string, unknown>;
+  args: { amount: string };
   gas: string;
 }
 
 export function teamPoolCall(
   poolAccountId: string,
   methodName: "unstake" | "withdraw",
-  amountYocto?: bigint,
+  amountYocto: bigint,
 ): PoolCall {
   return {
     receiverId: poolAccountId,
     methodName,
-    args: amountYocto === undefined ? {} : { amount: amountYocto.toString() },
+    args: { amount: amountYocto.toString() },
     gas: "125 Tgas",
   };
 }
@@ -44,15 +44,13 @@ export async function proposeTeamPoolAction(input: {
   teamAccountId: string;
   poolAccountId: string;
   method: "unstake" | "withdraw";
-  amountYocto?: bigint;
+  amountYocto: bigint;
   maxAmountYocto: bigint;
   authAccountId: string | null;
   connection: Pick<UseDaoConnectionResult, "daoAccountId" | "connect" | "disconnect">;
 }) {
-  if (input.amountYocto !== undefined) {
-    if (input.amountYocto <= 0n || input.amountYocto > input.maxAmountYocto) {
-      throw new Error(`Enter an amount within the available team ${input.method} balance.`);
-    }
+  if (input.amountYocto <= 0n || input.amountYocto > input.maxAmountYocto) {
+    throw new Error(`Enter an amount within the available team ${input.method} balance.`);
   }
   try {
     let dao = input.connection.daoAccountId;
