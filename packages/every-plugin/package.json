@@ -45,51 +45,6 @@
       "import": "./dist/runtime/services/normalize.mjs",
       "require": "./dist/runtime/services/normalize.cjs"
     },
-    "./effect": {
-      "development": {
-        "types": "./src/effect.ts",
-        "import": "./src/effect.ts"
-      },
-      "types": "./dist/effect.d.mts",
-      "import": "./dist/effect.mjs",
-      "require": "./dist/effect.cjs"
-    },
-    "./zod": {
-      "development": {
-        "types": "./src/zod.ts",
-        "import": "./src/zod.ts"
-      },
-      "types": "./dist/zod.d.mts",
-      "import": "./dist/zod.mjs",
-      "require": "./dist/zod.cjs"
-    },
-    "./zod/v4/core": {
-      "development": {
-        "types": "./src/zod-core.ts",
-        "import": "./src/zod-core.ts"
-      },
-      "types": "./dist/zod-core.d.mts",
-      "import": "./dist/zod-core.mjs",
-      "require": "./dist/zod-core.cjs"
-    },
-    "./orpc": {
-      "development": {
-        "types": "./src/orpc.ts",
-        "import": "./src/orpc.ts"
-      },
-      "types": "./dist/orpc.d.mts",
-      "import": "./dist/orpc.mjs",
-      "require": "./dist/orpc.cjs"
-    },
-    "./orpc/openapi": {
-      "development": {
-        "types": "./src/orpc-openapi.ts",
-        "import": "./src/orpc-openapi.ts"
-      },
-      "types": "./dist/orpc-openapi.d.mts",
-      "import": "./dist/orpc-openapi.mjs",
-      "require": "./dist/orpc-openapi.cjs"
-    },
     "./errors": {
       "development": {
         "types": "./src/errors.ts",
@@ -152,9 +107,9 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
-    "@effect/vitest": "^0.29.0",
-    "@orpc/client": "^1.13.4",
-    "@orpc/openapi": "^1.13.4",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@orpc/client": "2.0.0-beta.35",
+    "@orpc/openapi": "2.0.0-beta.35",
     "@rspack/cli": "catalog:",
     "@tanstack/intent": "catalog:",
     "@types/bun": "^1.3.7",
@@ -171,8 +126,9 @@
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
     "@orpc/contract": "catalog:",
-    "@orpc/experimental-publisher": "catalog:",
     "@orpc/server": "catalog:",
+    "@orpc/experimental-effect": "catalog:",
+    "@orpc/publisher": "catalog:",
     "@orpc/tanstack-query": "catalog:"
   },
   "keywords": [

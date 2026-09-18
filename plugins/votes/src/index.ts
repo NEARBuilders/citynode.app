@@ -1,7 +1,7 @@
+import { ORPCError } from "@orpc/server";
+import { Context, Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
-import { Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 import { contract } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { ContextSchema } from "./lib/context";
@@ -18,16 +18,12 @@ export default createPlugin({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
-    Effect.gen(function* () {
-      const Database = DatabaseLive(config.secrets.VOTES_DATABASE_URL);
-      const Votes = VoteServiceLive.pipe(Layer.provide(Database));
-      const voteService = yield* tools.buildService(VoteService, Votes);
+  initialize: (config) =>
+    Effect.succeed(
+      VoteServiceLive.pipe(Layer.provide(DatabaseLive(config.secrets.VOTES_DATABASE_URL))),
+    ),
 
-      return { voteService };
-    }),
-
-  createRouter: (services, builder) => {
+  createRouter: (builder) => {
     const requireAuth = builder.middleware(async ({ context, next }) => {
       if (!context.user || !context.userId) {
         throw new ORPCError("UNAUTHORIZED", { message: "Authentication required" });
@@ -37,28 +33,36 @@ export default createPlugin({
 
     return {
       upvote: builder.upvote.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.voteService.upvote(input.entityId, context.userId!);
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.upvote(input.entityId, context.userId!);
       }),
       downvote: builder.downvote.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.voteService.downvote(input.entityId, context.userId!);
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.downvote(input.entityId, context.userId!);
       }),
-      getUpvoteCount: builder.getUpvoteCount.handler(async ({ input }) => {
-        return await services.voteService.getUpvoteCount(input.entityId);
+      getUpvoteCount: builder.getUpvoteCount.handler(async ({ input, context }) => {
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.getUpvoteCount(input.entityId);
       }),
       getUserVote: builder.getUserVote.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.voteService.getUserVote(input.entityId, context.userId!);
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.getUserVote(input.entityId, context.userId!);
       }),
       getUserVotes: builder.getUserVotes.use(requireAuth).handler(async ({ input, context }) => {
-        return await services.voteService.getUserVotes(input.entityIds, context.userId!);
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.getUserVotes(input.entityIds, context.userId!);
       }),
-      getUpvoteCounts: builder.getUpvoteCounts.handler(async ({ input }) => {
-        return await services.voteService.getUpvoteCounts(input.entityIds);
+      getUpvoteCounts: builder.getUpvoteCounts.handler(async ({ input, context }) => {
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.getUpvoteCounts(input.entityIds);
       }),
-      getUpvoteFeed: builder.getUpvoteFeed.handler(async ({ input }) => {
-        return await services.voteService.getUpvoteFeed(input.limit, input.cursor);
+      getUpvoteFeed: builder.getUpvoteFeed.handler(async ({ input, context }) => {
+        const voteService = Context.get(context["effect/context"], VoteService);
+        return await voteService.getUpvoteFeed(input.limit, input.cursor);
       }),
-      subscribe: builder.subscribe.handler(async function* ({ signal, lastEventId }) {
-        const iterator = services.voteService.publisher.subscribe("vote", { signal, lastEventId });
+      subscribe: builder.subscribe.handler(async function* ({ context, signal, lastEventId }) {
+        const voteService = Context.get(context["effect/context"], VoteService);
+        const iterator = voteService.publisher.subscribe("vote", { signal, lastEventId });
         for await (const event of iterator) {
           yield event;
         }

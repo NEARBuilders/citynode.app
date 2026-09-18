@@ -1,5 +1,5 @@
 import { createInstance } from "@module-federation/enhanced/runtime";
-import { Effect, Schedule } from "every-plugin/effect";
+import { Effect, Schedule } from "effect";
 import { verifySriForUrl } from "everything-dev/integrity";
 import type { RouterModule } from "../types";
 import type { RuntimeConfig } from "./config";
@@ -96,7 +96,7 @@ function getSsrEntryUrl(config: RuntimeConfig) {
   return entryUrl;
 }
 
-const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => 500);
+const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => Effect.succeed(500));
 
 export const loadRouterModule = (config: RuntimeConfig) =>
   Effect.gen(function* () {

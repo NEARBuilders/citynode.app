@@ -1,5 +1,5 @@
 import { getConnInfo } from "@hono/node-server/conninfo";
-import { Context, Effect, Layer } from "every-plugin/effect";
+import { Context, Effect, Layer } from "effect";
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { NONCE, secureHeaders } from "hono/secure-headers";
@@ -20,7 +20,7 @@ export function getCspStrict(isDev: boolean): boolean {
   return process.env.CSP_STRICT === "false" ? false : !isDev;
 }
 
-export class SecurityMiddleware extends Context.Tag("host/SecurityMiddleware")<
+export class SecurityMiddleware extends Context.Service<
   SecurityMiddleware,
   {
     cors: MiddlewareHandler;
@@ -28,7 +28,7 @@ export class SecurityMiddleware extends Context.Tag("host/SecurityMiddleware")<
     rateLimit: MiddlewareHandler;
     csp: MiddlewareHandler;
   }
->() {
+>()("host/SecurityMiddleware") {
   static Live = Layer.effect(
     SecurityMiddleware,
     Effect.gen(function* () {

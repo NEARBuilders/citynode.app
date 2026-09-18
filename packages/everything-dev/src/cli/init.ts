@@ -919,7 +919,7 @@ export async function personalizeConfig(
       mkdirSync(dirname(pluginsClientGenPath), { recursive: true });
       writeFileSync(
         pluginsClientGenPath,
-        `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";\ntype ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;\nexport type PluginsClient = Record<string, never>;\n`,
+        `import type { RouterContractClient, RouterContract } from "@orpc/contract";\ntype ClientFactory<C extends RouterContract> = (context?: Record<string, unknown>) => RouterContractClient<C>;\nexport type PluginsClient = Record<string, never>;\n`,
       );
     }
   }

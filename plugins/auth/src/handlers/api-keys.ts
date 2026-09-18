@@ -1,13 +1,15 @@
-import { ORPCError } from "every-plugin/orpc";
+import { ORPCError } from "@orpc/server";
+import { Context } from "effect";
 import { API_KEY_CONFIG_IDS } from "../config-schemas";
-import type { PluginServices } from "../service-types";
+import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi } from "../utils";
 
-export function createApiKeyHandlers(services: PluginServices, builder: any, requireAuth: any) {
+export function createApiKeyHandlers(builder: any, requireAuth: any) {
   return {
     listApiKeys: builder.listApiKeys
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const queryParams = ["organizationId", "limit", "offset", "sortBy", "sortDirection"];
         const query: Record<string, string | number> = {};
         for (const key of queryParams) {
@@ -28,6 +30,7 @@ export function createApiKeyHandlers(services: PluginServices, builder: any, req
     createApiKey: builder.createApiKey
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const configId = input.configId ?? (input.organizationId ? "org-keys" : "user-keys");
         const result = await safeAuthApi(() =>
           services.auth.api.createApiKey({
@@ -52,6 +55,7 @@ export function createApiKeyHandlers(services: PluginServices, builder: any, req
     updateApiKey: builder.updateApiKey
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const configId = input.configId ?? (input.organizationId ? "org-keys" : "user-keys");
         const result = await safeAuthApi(() =>
           services.auth.api.updateApiKey({
@@ -76,6 +80,7 @@ export function createApiKeyHandlers(services: PluginServices, builder: any, req
     deleteApiKey: builder.deleteApiKey
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const configId = input.configId ?? (input.organizationId ? "org-keys" : "user-keys");
         try {
           await safeAuthApi(() =>
@@ -107,6 +112,7 @@ export function createApiKeyHandlers(services: PluginServices, builder: any, req
 
     verifyApiKey: builder.verifyApiKey.handler(
       async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         if (input.configId) {
           const result = await safeAuthApi(() =>
             services.auth.api.verifyApiKey({
@@ -135,7 +141,11 @@ export function createApiKeyHandlers(services: PluginServices, builder: any, req
           const result = await safeAuthApi(() =>
             services.auth.api.verifyApiKey({
               headers: createHeaders(context.reqHeaders),
-              body: { key: input.key, configId, permissions: input.permissions },
+              body: {
+                key: input.key,
+                configId,
+                permissions: input.permissions,
+              },
             }),
           );
           if (result.valid) {

@@ -1,6 +1,6 @@
+import { ORPCError } from "@orpc/server";
 import { and, count, desc, eq, ilike, inArray, lte, notInArray, or } from "drizzle-orm";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
+import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import { proposalAuditLog, proposalSubmissions, proposals } from "../db/schema";
 
@@ -127,7 +127,7 @@ async function appendAudit(
   });
 }
 
-export class ProposalService extends Context.Tag("proposals/ProposalService")<
+export class ProposalService extends Context.Service<
   ProposalService,
   {
     propose: (input: {
@@ -232,7 +232,7 @@ export class ProposalService extends Context.Tag("proposals/ProposalService")<
       cursor?: string;
     }) => Effect.Effect<any, ORPCError<string, unknown>>;
   }
->() {}
+>()("proposals/ProposalService") {}
 
 export const ProposalServiceLive = Layer.effect(
   ProposalService,

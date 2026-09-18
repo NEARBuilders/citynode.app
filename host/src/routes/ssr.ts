@@ -1,4 +1,4 @@
-import { Effect } from "every-plugin/effect";
+import { Effect } from "effect";
 import type { Context } from "hono";
 import type { AuthVariables } from "../lib/auth";
 import { buildPluginContext } from "../services/auth";
@@ -51,11 +51,10 @@ export function createSsrFallbackHandler(
     let moduleLoadError: Error | null = null;
 
     if (effectiveConfig.ui.ssrUrl) {
-      const result = await Effect.runPromise(loadRouterModule(effectiveConfig).pipe(Effect.either));
-      if (result._tag === "Right") {
-        ssrRouterModule = result.right;
-      } else {
-        moduleLoadError = result.left;
+      try {
+        ssrRouterModule = await Effect.runPromise(loadRouterModule(effectiveConfig));
+      } catch (error) {
+        moduleLoadError = error instanceof Error ? error : new Error(String(error));
         logger.error("[SSR] Failed to load Router module:", moduleLoadError);
       }
     }

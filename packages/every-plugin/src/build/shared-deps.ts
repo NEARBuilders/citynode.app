@@ -77,6 +77,27 @@ export const pluginSharedDependencies = {
     version: getInstalledPackageVersion("@orpc/server", pkg.peerDependencies["@orpc/server"]),
     ...DEFAULT_SHARE_CONFIG,
   },
+  "@orpc/openapi": {
+    version: getInstalledPackageVersion(
+      "@orpc/openapi",
+      (pkg.peerDependencies as Record<string, string>)["@orpc/openapi"] ?? "latest",
+    ),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "@orpc/experimental-effect": {
+    version: getInstalledPackageVersion(
+      "@orpc/experimental-effect",
+      (pkg.dependencies as Record<string, string>)["@orpc/experimental-effect"] ?? "latest",
+    ),
+    ...DEFAULT_SHARE_CONFIG,
+  },
+  "@orpc/publisher": {
+    version: getInstalledPackageVersion(
+      "@orpc/publisher",
+      (pkg.dependencies as Record<string, string>)["@orpc/publisher"] ?? "latest",
+    ),
+    ...DEFAULT_SHARE_CONFIG,
+  },
 } satisfies SharedDependencies;
 
 export type PluginSharedDependencyName = keyof typeof pluginSharedDependencies;
@@ -96,7 +117,9 @@ export function getPluginSharedDependenciesVersionRange(): Record<string, string
 
 export function getMajorMinorVersion(version: string): string {
   const clean = version.replace(/^[\^~>=<]+/, "");
-  const match = clean.match(/^(\d+)\.(\d+)/);
+  const match = clean.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
   if (!match) return "^0.0.0";
-  return `^${match[1]}.${match[2]}.0`;
+  const [, major, minor, patch, prerelease] = match;
+  if (prerelease) return `^${major}.${minor}.${patch}-${prerelease}`;
+  return `^${major}.${minor}.0`;
 }

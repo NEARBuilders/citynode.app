@@ -1,11 +1,13 @@
-import type { PluginServices } from "../service-types";
+import { Context } from "effect";
+import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi } from "../utils";
 
-export function createInvitationHandlers(services: PluginServices, builder: any, requireAuth: any) {
+export function createInvitationHandlers(builder: any, requireAuth: any) {
   return {
     inviteMember: builder.inviteMember
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.createInvitation({
             headers: createHeaders(context.reqHeaders),
@@ -31,6 +33,7 @@ export function createInvitationHandlers(services: PluginServices, builder: any,
 
     getInvitation: builder.getInvitation.handler(
       async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         try {
           const invitation = await services.auth.api.getInvitation({
             headers: createHeaders(context.reqHeaders ?? {}),
@@ -61,6 +64,7 @@ export function createInvitationHandlers(services: PluginServices, builder: any,
     listInvitations: builder.listInvitations
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.listInvitations({
             headers: createHeaders(context.reqHeaders),
@@ -83,6 +87,7 @@ export function createInvitationHandlers(services: PluginServices, builder: any,
     listUserInvitations: builder.listUserInvitations
       .use(requireAuth)
       .handler(async ({ context }: { context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.listUserInvitations({
             headers: createHeaders(context.reqHeaders),
@@ -102,6 +107,7 @@ export function createInvitationHandlers(services: PluginServices, builder: any,
     cancelInvitation: builder.cancelInvitation
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.cancelInvitation({
             headers: createHeaders(context.reqHeaders),
@@ -114,6 +120,7 @@ export function createInvitationHandlers(services: PluginServices, builder: any,
     acceptInvitation: builder.acceptInvitation
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.acceptInvitation({
             headers: createHeaders(context.reqHeaders),
@@ -126,6 +133,7 @@ export function createInvitationHandlers(services: PluginServices, builder: any,
     rejectInvitation: builder.rejectInvitation
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.rejectInvitation({
             headers: createHeaders(context.reqHeaders),

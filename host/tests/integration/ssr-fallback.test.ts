@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { Effect } from "every-plugin/effect";
+import { Cause, Effect, Exit } from "effect";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAvailablePort } from "../helpers/ports";
 
@@ -305,7 +305,7 @@ describe("SSR fallback paths", () => {
   });
 
   describe("FederationError message propagation bug", () => {
-    it("FederationError.message is empty when passed through Effect.either", async () => {
+    it("FederationError.message is empty when passed through runPromiseExit", async () => {
       const federationError = new FederationError({
         remoteName: "ui",
         remoteUrl: `${assetServer.baseUrl}/ui-ssr`,
@@ -316,11 +316,11 @@ describe("SSR fallback paths", () => {
       expect(federationError.remoteName).toBe("ui");
       expect(federationError.cause).toBeDefined();
 
-      const result = await Effect.runPromise(Effect.fail(federationError).pipe(Effect.either));
+      const result = await Effect.runPromiseExit(Effect.fail(federationError));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const leftError = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const leftError = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(leftError._tag).toBe("FederationError");
 
       expect(leftError.message.length).toBeGreaterThan(0);

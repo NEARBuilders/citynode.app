@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/contract";
+import { ORPCError } from "@orpc/server";
 import { createPluginRuntime } from "every-plugin/runtime";
 import { describe, expect, it } from "vitest";
 import { PluginRuntimeError } from "../../src/runtime/errors";
@@ -117,7 +117,6 @@ describe("Error Handling Integration Tests", () => {
       } catch (error: any) {
         expect(error).toBeInstanceOf(ORPCError);
         expect(error.code).toBe("UNAUTHORIZED");
-        expect(error.status).toBe(401);
         expect(error.data).toBeDefined();
         expect(error.data.apiKeyProvided).toBe(true);
         expect(error.data.authType).toBe("apiKey");
@@ -142,7 +141,6 @@ describe("Error Handling Integration Tests", () => {
       } catch (error: any) {
         expect(error).toBeInstanceOf(ORPCError);
         expect(error.code).toBe("RATE_LIMITED");
-        expect(error.status).toBe(429);
         expect(error.data).toBeDefined();
         expect(error.data.retryAfter).toBe(60);
         expect(error.data.remainingRequests).toBe(0);
@@ -168,7 +166,6 @@ describe("Error Handling Integration Tests", () => {
       } catch (error: any) {
         expect(error).toBeInstanceOf(ORPCError);
         expect(error.code).toBe("SERVICE_UNAVAILABLE");
-        expect(error.status).toBe(503);
         expect(error.data).toBeDefined();
         expect(error.data.retryAfter).toBe(30);
         expect(error.data.maintenanceWindow).toBe(false);
@@ -193,7 +190,6 @@ describe("Error Handling Integration Tests", () => {
       } catch (error: any) {
         expect(error).toBeInstanceOf(ORPCError);
         expect(error.code).toBe("FORBIDDEN");
-        expect(error.status).toBe(403);
         expect(error.data).toBeDefined();
         expect(error.data.requiredPermissions).toEqual(["read:data"]);
         expect(error.data.action).toBe("test");

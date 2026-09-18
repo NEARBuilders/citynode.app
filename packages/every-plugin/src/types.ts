@@ -4,8 +4,8 @@ import type {
   InferSchemaInput,
   InferSchemaOutput,
 } from "@orpc/contract";
-import type { Router, RouterClient } from "@orpc/server";
-import type { Scope } from "effect";
+import type { ContractedRouter, RouterClient } from "@orpc/server";
+import type { Context, Scope } from "effect";
 import type { Plugin } from "./plugin";
 
 /**
@@ -26,7 +26,7 @@ export interface RegisteredPlugins {}
 /**
  * Base type for any plugin instance.
  */
-export type AnyPlugin = Plugin<AnyContractRouter, AnySchema, AnySchema, AnySchema | undefined, any>;
+export type AnyPlugin = Plugin<AnyContractRouter, AnySchema, AnySchema, AnySchema | undefined>;
 
 /**
  * Loaded plugin constructor with binding information
@@ -100,12 +100,22 @@ export type PluginContext<T> = T extends {
  * Extract router type from plugin binding
  * Uses 'any' for context to support nested router compositions
  */
-export type PluginRouterType<T> = Router<PluginContract<T>, any>;
+export type PluginRouterType<T> = ContractedRouter<PluginContract<T>, any>;
 
 /**
  * Extract client type from plugin binding
  */
 export type PluginClientType<T> = RouterClient<PluginRouterType<T>>;
+
+/**
+ * Sibling plugin entry passed to `initialize` and `createRouter`.
+ * `client` creates a typed in-process client for the plugin's router;
+ * `router` is the raw implemented router for cross-plugin merging.
+ */
+export type PluginServicesEntry<T = any> = {
+  client: (context?: PluginContextInput<T>) => PluginClientType<T>;
+  router: PluginRouterType<T>;
+};
 
 /**
  * Extract plugin type from registered plugins by key
@@ -121,7 +131,7 @@ export type RegisteredPlugin<K extends keyof R, R = RegisteredPlugins> = R[K] ex
       secrets: infer S extends AnySchema;
       context: infer TRequestContext extends AnySchema | undefined;
     }
-    ? Plugin<C, V, S, TRequestContext, any>
+    ? Plugin<C, V, S, TRequestContext>
     : never
   : never;
 
@@ -143,14 +153,6 @@ export type PluginConfigInput<T> = {
   variables: InferSchemaInput<PluginVariables<T>>;
   secrets: InferSchemaInput<PluginSecrets<T>>;
 };
-
-/**
- * Extract deps context type from plugin instance (used for initialization)
- */
-export type ContextOf<T extends AnyPlugin> =
-  T extends Plugin<AnyContractRouter, AnySchema, AnySchema, AnySchema | undefined, infer TDeps>
-    ? TDeps
-    : never;
 
 /**
  * Plugin metadata for remote loading
@@ -205,8 +207,13 @@ export interface InitializedPlugin<T extends AnyPlugin = AnyPlugin> {
     variables: InferSchemaOutput<T["configSchema"]["variables"]>;
     secrets: InferSchemaOutput<T["configSchema"]["secrets"]>;
   };
-  readonly context: ContextOf<T>;
-  readonly scope: Scope.CloseableScope;
+  /**
+   * Built Effect context from the plugin's initialize Layer. Provided to
+   * handlers as `effect/context` — `.effect()` handlers `yield* Tag`,
+   * plain handlers use `Context.get(context["effect/context"], Tag)`.
+   */
+  readonly effectContext: Context.Context<any>;
+  readonly scope: Scope.Closeable;
 }
 
 /**

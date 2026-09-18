@@ -1,6 +1,6 @@
+import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, not, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
+import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   nodes as nodesTable,
@@ -62,10 +62,9 @@ export interface ValidatorsService {
   resolveByAccountId(accountId: string): Promise<ValidatorRecord | null>;
 }
 
-export class ValidatorsTag extends Context.Tag("api/Validators")<
-  ValidatorsService,
-  ValidatorsService
->() {}
+export class ValidatorsTag extends Context.Service<ValidatorsService, ValidatorsService>()(
+  "api/Validators",
+) {}
 
 type ValidatorRow = typeof validatorsTable.$inferSelect;
 

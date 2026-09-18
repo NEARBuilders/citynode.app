@@ -1,5 +1,5 @@
-import { ORPCError } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { ORPCError } from "@orpc/server";
+import { z } from "zod";
 import { activitySchema, webUrl } from "../discovery-contract";
 
 const calendarSchema = z.object({

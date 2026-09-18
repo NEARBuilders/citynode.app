@@ -1,11 +1,13 @@
-import type { PluginServices } from "../service-types";
+import { Context } from "effect";
+import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi } from "../utils";
 
-export function createMemberHandlers(services: PluginServices, builder: any, requireAuth: any) {
+export function createMemberHandlers(builder: any, requireAuth: any) {
   return {
     getActiveMember: builder.getActiveMember
       .use(requireAuth)
       .handler(async ({ context, input }: { context: any; input: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const headers = createHeaders(context.reqHeaders);
         const member = await safeAuthApi(() =>
           services.auth.api.getActiveMember({
@@ -28,6 +30,7 @@ export function createMemberHandlers(services: PluginServices, builder: any, req
     getActiveMemberRole: builder.getActiveMemberRole
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.getActiveMemberRole({
             headers: createHeaders(context.reqHeaders),
@@ -41,6 +44,7 @@ export function createMemberHandlers(services: PluginServices, builder: any, req
     listMembers: builder.listMembers
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.listMembers({
             headers: createHeaders(context.reqHeaders),
@@ -74,6 +78,7 @@ export function createMemberHandlers(services: PluginServices, builder: any, req
     addMember: builder.addMember
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.addMember({
             headers: createHeaders(context.reqHeaders),
@@ -97,6 +102,7 @@ export function createMemberHandlers(services: PluginServices, builder: any, req
     removeMember: builder.removeMember
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         await safeAuthApi(() =>
           services.auth.api.removeMember({
             headers: createHeaders(context.reqHeaders),
@@ -112,6 +118,7 @@ export function createMemberHandlers(services: PluginServices, builder: any, req
     updateMemberRole: builder.updateMemberRole
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
         const result = await safeAuthApi(() =>
           services.auth.api.updateMemberRole({
             headers: createHeaders(context.reqHeaders),

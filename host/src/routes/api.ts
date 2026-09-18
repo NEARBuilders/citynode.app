@@ -1,10 +1,12 @@
+import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
+import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
+import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { BatchHandlerPlugin } from "@orpc/server/plugins";
-import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import { formatORPCError } from "every-plugin/errors";
-import { onError } from "every-plugin/orpc";
+import { ZodToJsonSchemaConverter } from "@orpc/zod";
+import { Context as EffectContext } from "effect";
+import { formatORPCError, PLUGIN_ERROR_STATUS_MAP } from "every-plugin/errors";
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
@@ -29,13 +31,14 @@ import {
 type HonoEnv = { Variables: AuthVariables };
 
 function registerPublicRpcRouter(
-  publicRpcRouters: Map<string, RPCHandler<any>>,
+  publicRpcRouters: Map<string, { handler: RPCHandler<any>; effectContext: unknown }>,
   prefix: string,
   router: unknown,
+  effectContext: unknown,
 ) {
-  publicRpcRouters.set(
-    prefix,
-    new RPCHandler(router as any, {
+  publicRpcRouters.set(prefix, {
+    handler: new RPCHandler(router as any, {
+      errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
       plugins: [new BatchHandlerPlugin()],
       interceptors: [
         onError((error: unknown) => {
@@ -45,13 +48,17 @@ function registerPublicRpcRouter(
         }),
       ],
     }),
-  );
+    effectContext,
+  });
 }
 
-function getPublicRpcRoute(publicRpcRouters: Map<string, RPCHandler<any>>, pathname: string) {
-  for (const [prefix, handler] of publicRpcRouters.entries()) {
+function getPublicRpcRoute(
+  publicRpcRouters: Map<string, { handler: RPCHandler<any>; effectContext: unknown }>,
+  pathname: string,
+) {
+  for (const [prefix, entry] of publicRpcRouters.entries()) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
-      return { prefix, handler };
+      return { prefix, handler: entry.handler, effectContext: entry.effectContext };
     }
   }
 
@@ -62,8 +69,12 @@ async function handleOrpc(
   c: Context<HonoEnv>,
   handler: RPCHandler<any> | OpenAPIHandler<any>,
   prefix: `/${string}`,
+  effectContext: unknown,
 ) {
-  const context = buildPluginContext(c);
+  const context = {
+    ...buildPluginContext(c),
+    "effect/context": effectContext,
+  };
 
   const result = await handler.handle(c.req.raw, { prefix, context });
   if (!result.response) {
@@ -98,14 +109,38 @@ export async function setupApiRoutes(
 
   const isProxyMode = process.argv.includes("--proxy");
 
-  const publicRpcRouters = new Map<string, RPCHandler<any>>();
+  const publicRpcRouters = new Map<string, { handler: RPCHandler<any>; effectContext: unknown }>();
+
+  const allEntries = [plugins.auth, plugins.api, ...Object.values(plugins.plugins)].filter(
+    (entry): entry is NonNullable<typeof entry> => Boolean(entry),
+  );
+  let mergedEffectContext: unknown = EffectContext.empty();
+  for (const entry of allEntries) {
+    const entryEffectContext = entry.initialized?.effectContext;
+    if (entryEffectContext) {
+      mergedEffectContext = EffectContext.merge(
+        mergedEffectContext as never,
+        entryEffectContext as never,
+      );
+    }
+  }
 
   if (plugins.auth?.router) {
-    registerPublicRpcRouter(publicRpcRouters, "/api/rpc/auth", plugins.auth.router);
+    registerPublicRpcRouter(
+      publicRpcRouters,
+      "/api/rpc/auth",
+      plugins.auth.router,
+      plugins.auth.initialized?.effectContext,
+    );
   }
 
   for (const [pluginKey, plugin] of Object.entries(plugins.plugins)) {
-    registerPublicRpcRouter(publicRpcRouters, `/api/rpc/${pluginKey}`, plugin.router);
+    registerPublicRpcRouter(
+      publicRpcRouters,
+      `/api/rpc/${pluginKey}`,
+      plugin.router,
+      plugin.initialized?.effectContext,
+    );
   }
 
   if (isProxyMode) {
@@ -177,6 +212,7 @@ export async function setupApiRoutes(
   }
 
   const rpcHandler = new RPCHandler(apiRouter as any, {
+    errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
     plugins: [new BatchHandlerPlugin()],
     interceptors: [
       onError((error: unknown) => {
@@ -187,17 +223,23 @@ export async function setupApiRoutes(
     ],
   });
 
+  const openApiGenerator = new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] });
+
   const apiHandler = new OpenAPIHandler(apiRouter as any, {
+    errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
     plugins: [
-      new OpenAPIReferencePlugin({
-        schemaConverters: [new ZodToJsonSchemaConverter()],
-        specGenerateOptions: {
-          info: {
-            title: `${config.title ?? config.account} API`,
-            version: "1.0.0",
-          },
-          servers: [{ url: "/api" }, { url: `${config.host?.url ?? ""}/api` }],
-        },
+      new OpenAPIReferenceHandlerPlugin({
+        spec: () =>
+          openApiGenerator.generate(apiRouter as any, {
+            version: "3.1.1",
+            base: {
+              info: {
+                title: `${config.title ?? config.account} API`,
+                version: "1.0.0",
+              },
+              servers: [{ url: "/api" }, { url: `${config.host?.url ?? ""}/api` }],
+            },
+          }),
       }),
     ],
     interceptors: [
@@ -210,22 +252,31 @@ export async function setupApiRoutes(
   });
 
   try {
-    await mountMcpRoute(app, { apiRouter, apiHandler, config });
+    await mountMcpRoute(app, { apiRouter, apiHandler, config, effectContext: mergedEffectContext });
   } catch (error) {
     logger.warn(
       `[MCP] Failed to mount /api/mcp: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 
-  app.all("/api/rpc", (c: Context<HonoEnv>) => handleOrpc(c, rpcHandler, "/api/rpc"));
+  app.all("/api/rpc", (c: Context<HonoEnv>) =>
+    handleOrpc(c, rpcHandler, "/api/rpc", mergedEffectContext),
+  );
   app.all("/api/rpc/*", (c: Context<HonoEnv>) => {
     const publicRoute = getPublicRpcRoute(publicRpcRouters, c.req.path);
     if (publicRoute) {
-      return handleOrpc(c, publicRoute.handler, publicRoute.prefix as `/${string}`);
+      return handleOrpc(
+        c,
+        publicRoute.handler,
+        publicRoute.prefix as `/${string}`,
+        publicRoute.effectContext,
+      );
     }
 
-    return handleOrpc(c, rpcHandler, "/api/rpc");
+    return handleOrpc(c, rpcHandler, "/api/rpc", mergedEffectContext);
   });
-  app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api"));
-  app.all("/api/*", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api"));
+  app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api", mergedEffectContext));
+  app.all("/api/*", (c: Context<HonoEnv>) =>
+    handleOrpc(c, apiHandler, "/api", mergedEffectContext),
+  );
 }

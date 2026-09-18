@@ -41,3 +41,21 @@ Questions to resolve:
 7. **Lifecycle hooks** — Effect.ts `Scope` management. When a plugin is loaded, its Layer is built into a `Scope`. When the plugin is unloaded (or the host shuts down), the scope is released. Does every-plugin's runtime support this today?
 
 Key question: what's the minimal change to `createPlugin` to be "Effect.ts idiomatic" without a full rewrite? The `.effect()` handler syntax is the most visible change, but the real power is in Layer composition and scoped resources.
+
+## Resolution
+
+**RESOLVED (direction) — unblocked and sequenced first on the `v2` branch.**
+
+The blocking premise — "the `.effect()` wrapper is proposed but doesn't exist yet in oRPC" (question 3) — is stale. `@orpc/experimental-effect` shipped with oRPC v2 public beta (v2.0.0-beta.28, Aug 2026):
+
+- `handlerGen(function* ...)` — Effect-generator handlers
+- `.effect()` — builder extension via `import '@orpc/experimental-effect/extensions/effect'` (matches the migration plan's pre-load approach: import in the every-plugin bootstrap, zero contract syntax changes)
+- `WithEffectContext` + `effect/context` — services provided through oRPC context (the migration plan's `initialize`-returns-`Layer` model)
+- `catchORPCError` / `catchORPCErrorCode(s)` — `ORPCError` yielded as `Effect.fail` maps to typed error responses (answers question 6)
+- Installs against `effect@beta` — the Effect 4 channel
+
+Consequences:
+
+1. **Effect 4 migration rides along** — the repo pins Effect 3.21; `@orpc/experimental-effect` wants the Effect 4 beta channel. Moving to Effect 4 also unblocks alchemy 2.x as a direct dependency (it peers on effect ≥4), dissolving the PR #58 `.bos/alchemy` sandbox.
+2. **Sequencing** (map decision 17): this migration is the opening phase of the `v2` branch, ahead of the deploy service (which is then built Effect-native from day one). The 8-phase execution order in `../infra/orpc-v2-effect-migration.md` governs; its atomic-deploy constraint (V1 client can't talk to V2 server) is absorbed inside the branch.
+3. **Remaining verification at implementation time** — questions 1, 2, 4, 5, 7 (scoped resources across MF remotes, plugin-to-plugin `Tag` deps, `initialize` return type, secrets injection, `Scope` lifecycle) are answered by the migration plan but confirmed empirically during Phase 1 of the migration, not pre-specified here.

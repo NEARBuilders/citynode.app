@@ -1,6 +1,6 @@
+import { ORPCError } from "@orpc/server";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
+import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   type nodeKind as nodeKindEnum,
@@ -86,7 +86,7 @@ export interface NodesService {
   subtreeWithValidators(nodeId: string): Promise<SubtreeNode[]>;
 }
 
-export class NodesTag extends Context.Tag("api/Nodes")<NodesService, NodesService>() {}
+export class NodesTag extends Context.Service<NodesService, NodesService>()("api/Nodes") {}
 
 type NodeRow = typeof nodesTable.$inferSelect;
 

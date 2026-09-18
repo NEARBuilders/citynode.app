@@ -12,8 +12,7 @@
     "outDir": "types",
     "paths": {
       "every-plugin": ["../packages/every-plugin/src/index.ts"],
-      "every-plugin/*": ["../packages/every-plugin/src/*"],
-      "every-plugin/zod/v4/core": ["../packages/every-plugin/src/zod-core.ts"]
+      "every-plugin/*": ["../packages/every-plugin/src/*"]
     }
   },
   "include": ["src/contract.ts"]

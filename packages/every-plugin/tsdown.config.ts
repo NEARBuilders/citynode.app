@@ -5,11 +5,6 @@ export default defineConfig({
   entry: [
     "src/index.ts",
     "src/types.ts",
-    "src/effect.ts",
-    "src/zod.ts",
-    "src/zod-core.ts",
-    "src/orpc.ts",
-    "src/orpc-openapi.ts",
     "src/errors.ts",
     "src/runtime/index.ts",
     "src/testing/index.ts",

@@ -1,5 +1,4 @@
-import { ORPCError } from "every-plugin/orpc";
-
+import { ORPCError } from "@orpc/server";
 export function toOrpcError(error: unknown): ORPCError<string, unknown> {
   return error instanceof ORPCError
     ? error

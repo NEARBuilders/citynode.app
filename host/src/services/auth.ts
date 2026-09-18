@@ -1,11 +1,14 @@
+import { Context as EffectContext } from "effect";
 import type { Context, Hono, Next } from "hono";
 import type { AuthClient, AuthPluginContext, AuthServices, HonoEnv } from "../lib/auth";
 import type { PluginResult } from "./plugins";
 
 function getAuthServices(plugins: PluginResult): AuthServices | null {
   const entry = plugins.auth;
-  if (!entry?.initialized?.context) return null;
-  return entry.initialized.context as AuthServices;
+  const effectContext = entry?.initialized?.effectContext;
+  const servicesTag = entry?.initialized?.plugin?.servicesTag;
+  if (!effectContext || !servicesTag) return null;
+  return EffectContext.get(effectContext as never, servicesTag as never) as AuthServices;
 }
 
 export function registerAuthHandler(app: Hono<HonoEnv>, plugins: PluginResult) {

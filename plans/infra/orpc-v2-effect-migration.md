@@ -1,5 +1,12 @@
 # oRPC V1 → V2 + Effect Integration Migration
 
+> **Status:** the infrastructure half (versions, `errorStatusMap`, Layer-based
+> scoped `initialize`, v2 middleware, RPCLink split) has landed on the
+> `orpc-v2` branch. The handler-idiom half — `.effect()` handlers,
+> Layer-returning `initialize`, router merging (§1.7), barrel removal — is
+> specified and tracked in
+> [effect-native-plugins.md](./effect-native-plugins.md).
+
 ## Problem
 
 The codebase runs oRPC v1.14.x. Every plugin, the host, the UI client, and the

@@ -32,7 +32,7 @@ export class PortAllocationError extends Data.TaggedError("PortAllocationError")
   cause?: unknown;
 }> {}
 
-export class PortAllocator extends Context.Tag("PortAllocator")<
+export class PortAllocator extends Context.Service<
   PortAllocator,
   {
     pickAvailable: (
@@ -40,7 +40,7 @@ export class PortAllocator extends Context.Tag("PortAllocator")<
       budget?: PortBudget,
     ) => Effect.Effect<number, PortAllocationError>;
   }
->() {}
+>()("PortAllocator") {}
 
 export function detectLocalPackages(
   bosConfig?: BosConfig,
@@ -114,7 +114,7 @@ export async function buildRuntimeConfig(
 }
 
 function probePortBindable(port: number): Effect.Effect<boolean> {
-  return Effect.async<boolean>((resume) => {
+  return Effect.callback<boolean>((resume) => {
     const server = createServer();
 
     server.once("listening", () => {

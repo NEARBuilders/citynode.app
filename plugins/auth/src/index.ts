@@ -1,6 +1,6 @@
+import { Context, Effect, Layer } from "effect";
 import { createPlugin } from "every-plugin";
-import { Effect } from "every-plugin/effect";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 
 export type { AuthServices } from "./auth-export";
 
@@ -18,6 +18,7 @@ import { createSessionHandlers } from "./handlers/session";
 import { createTeamHandlers } from "./handlers/teams";
 import type { PluginsClient } from "./lib/plugins-client.gen";
 import { createRequireAuth } from "./middleware";
+import { AuthServicesTag } from "./service-types";
 import { toError } from "./utils";
 
 export default createPlugin.withPlugins<PluginsClient>()({
@@ -31,12 +32,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   contract,
 
-  initialize: (config, _plugins, tools) =>
+  servicesTag: AuthServicesTag,
+
+  initialize: (config) =>
     Effect.gen(function* () {
-      const db = yield* tools.buildService(
-        DatabaseTag,
+      const db = yield* Layer.buildWithScope(
         DatabaseLive(config.secrets.AUTH_DATABASE_URL),
-      );
+        yield* Effect.scope,
+      ).pipe(Effect.map((context) => Context.get(context, DatabaseTag)));
 
       const { authConfig, apiKeyHeaders } = normalizeAuthConfig(config.variables, config.secrets);
 
@@ -46,30 +49,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       console.log("[Auth] Better Auth instance created");
 
-      return {
+      return Layer.succeed(AuthServicesTag, {
         auth,
         db,
         handler: (req: Request) => auth.handler(req),
         apiKeyHeaders,
-      };
+      });
     }).pipe(Effect.mapError((e) => toError(e))),
 
-  shutdown: () =>
-    Effect.sync(() => {
-      console.log("[Auth] Shutdown");
-    }),
-
-  createRouter: (services, builder) => {
-    const requireAuth = createRequireAuth(builder, services);
+  createRouter: (builder) => {
+    const requireAuth = createRequireAuth(builder);
 
     return {
-      ...createSessionHandlers(services, builder),
-      ...createOrganizationHandlers(services, builder, requireAuth),
-      ...createMemberHandlers(services, builder, requireAuth),
-      ...createInvitationHandlers(services, builder, requireAuth),
-      ...createApiKeyHandlers(services, builder, requireAuth),
-      ...createTeamHandlers(services, builder, requireAuth),
-      ...createNearHandlers(services, builder, requireAuth),
+      ...createSessionHandlers(builder),
+      ...createOrganizationHandlers(builder, requireAuth),
+      ...createMemberHandlers(builder, requireAuth),
+      ...createInvitationHandlers(builder, requireAuth),
+      ...createApiKeyHandlers(builder, requireAuth),
+      ...createTeamHandlers(builder, requireAuth),
+      ...createNearHandlers(builder, requireAuth),
     };
   },
 });

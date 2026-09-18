@@ -1,13 +1,14 @@
 import { createInstance, getInstance } from "@module-federation/enhanced/runtime";
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
+import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
-import { Config, ConfigProvider, Context, Data, Effect, Layer, Secret } from "every-plugin/effect";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
 import type { RuntimeConfig, SharedConfig } from "everything-dev/types";
 import type { RuntimePlugin } from "../types";
 import { logger } from "../utils/logger";
+import { maskDbUrl } from "../utils/mask-db-url";
 import { toProtocolUrl } from "../utils/normalize";
 import { ConfigService, readCorsOrigins } from "./config";
 import { PluginError } from "./errors";
@@ -67,12 +68,13 @@ function dbUrlSummary(url: string | undefined): string {
     const u = new URL(url);
     return `${u.hostname}:${u.port || 5432}/${u.pathname.split("/").filter(Boolean).pop() || "?"}`;
   } catch {
-    return url.replace(/:[^:@]+@/, ":****@");
+    return maskDbUrl(url);
   }
 }
 
 export interface InitializedPluginResult {
-  context: unknown;
+  effectContext: unknown;
+  plugin?: { servicesTag?: unknown; id?: string };
   [key: string]: unknown;
 }
 
@@ -83,6 +85,32 @@ export interface HostPluginEntry {
   router: unknown;
   metadata: { remoteUrl: string; version?: string };
   initialized?: InitializedPluginResult;
+}
+
+/**
+ * Sibling plugin entry passed to dependent plugins' initialize/createRouter.
+ * Mirrors `PluginServicesEntry` from every-plugin: `client` creates an
+ * in-process typed client, `router` is the raw router for merging.
+ */
+export interface PluginsClientEntry {
+  client: (context?: unknown) => unknown;
+  router: unknown;
+}
+
+export function failedPluginsClientEntry(message: string): PluginsClientEntry {
+  return {
+    client: () => {
+      throw new Error(message);
+    },
+    router: new Proxy(
+      {},
+      {
+        get() {
+          throw new Error(message);
+        },
+      },
+    ),
+  };
 }
 
 export interface PluginStatus {
@@ -102,13 +130,25 @@ export interface PluginResult {
   status: PluginStatus;
 }
 
-function secretsFromEnv(keys: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const k of keys) {
-    const v = process.env[k];
-    if (typeof v === "string" && v.length > 0) out[k] = v;
-  }
-  return out;
+export function secretsFromEnv(
+  keys: string[],
+): Effect.Effect<Record<string, Redacted.Redacted<string>>, Config.ConfigError> {
+  return Effect.gen(function* () {
+    const out: Record<string, Redacted.Redacted<string>> = {};
+    for (const key of keys) {
+      const value = yield* Config.redacted(key).pipe(Config.option);
+      if (Option.isSome(value) && Redacted.value(value.value).length > 0) {
+        out[key] = value.value;
+      }
+    }
+    return out;
+  });
+}
+
+export function readDbSecret(
+  key: string,
+): Effect.Effect<Redacted.Redacted<string>, Config.ConfigError> {
+  return Config.redacted(key).pipe(Config.withDefault(Redacted.make("unset")));
 }
 
 function formatError(error: unknown): string {
@@ -274,14 +314,11 @@ interface RuntimePluginEntry {
   config: RuntimeConfig["api"] | RuntimePlugin;
 }
 
-function collectSecrets(config: { secrets?: string[] }): Record<string, string> {
-  return secretsFromEnv(config.secrets ?? []);
-}
-
-function readDbSecret(key: string): Effect.Effect<Secret.Secret> {
-  return Config.secret(key).pipe(
-    Effect.catchAll(() => Effect.succeed(Secret.fromString("unset"))),
-    Effect.withConfigProvider(ConfigProvider.fromEnv()),
+function unredactSecrets(
+  secrets: Record<string, Redacted.Redacted<string>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(secrets).map(([key, value]) => [key, Redacted.value(value)]),
   );
 }
 
@@ -339,7 +376,7 @@ function loadPluginEntryEffect(
   integrityRegistry: IntegrityRegistry,
   pluginsClient?: Record<string, unknown>,
   baseVariables?: Record<string, unknown>,
-): Effect.Effect<HostPluginEntry, PluginBootstrapError> {
+): Effect.Effect<HostPluginEntry, PluginBootstrapError | Config.ConfigError> {
   return Effect.gen(function* () {
     if (entry.config.integrity) {
       integrityRegistry.registerEntry(entry.config.url, entry.config.integrity);
@@ -355,22 +392,23 @@ function loadPluginEntryEffect(
         : "API_DATABASE_URL"
       : pluginDbSecretKey;
     const dbSecret = secretKey ? yield* readDbSecret(secretKey) : null;
-    const rawDbUrl = dbSecret ? Secret.value(dbSecret) : null;
 
     const variables: Record<string, unknown> = { ...baseVariables, ...entry.config.variables };
-    const args: [unknown, unknown?] = [{ variables, secrets: collectSecrets(entry.config) }];
+    const secrets = unredactSecrets(yield* secretsFromEnv(entry.config.secrets ?? []));
+    const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
     const result = yield* Effect.tryPromise({
       try: (): Promise<Omit<HostPluginEntry, "key" | "name">> =>
         runtime.usePlugin(entry.runtimeId, ...args),
       catch: (error) => {
-        if (rawDbUrl !== null && secretKey) {
-          const maskedUrl = rawDbUrl === "unset" ? "unset" : rawDbUrl.replace(/:[^:@]+@/, ":****@");
+        if (dbSecret !== null && secretKey) {
+          const url = Redacted.value(dbSecret);
+          const maskedUrl = url === "unset" ? "unset" : maskDbUrl(url);
           return new PluginBootstrapError({
             pluginKey: entry.key,
             pluginUrl: entry.config.url,
-            stage: rawDbUrl === "unset" ? "init" : "db-migration",
+            stage: url === "unset" ? "init" : "db-migration",
             dbSecret: secretKey,
             dbUrlMasked: maskedUrl,
             execution: "local-host-process",
@@ -508,7 +546,7 @@ export const initializePlugins = Effect.gen(function* () {
       yield* Effect.logInfo(`[Plugins] Reusing singleton ${key} from ${cached.key}`);
       loadedPlugins[key] = cached;
       loadedPluginKeys.push(key);
-      pluginsClient[key] = cached.createClient;
+      pluginsClient[key] = { client: cached.createClient, router: cached.router };
 
       if (node.kind === "auth") {
         authPlugin = cached;
@@ -546,9 +584,7 @@ export const initializePlugins = Effect.gen(function* () {
           yield* logBootstrapError(err);
           errors.push(err.message);
           if (node.kind === "plugin") {
-            pluginsClient[key] = () => {
-              throw new Error(err.message);
-            };
+            pluginsClient[key] = failedPluginsClientEntry(err.message);
           }
           return null;
         }),
@@ -559,7 +595,7 @@ export const initializePlugins = Effect.gen(function* () {
       singletonCache.set(sKey, result);
       loadedPlugins[key] = result;
       loadedPluginKeys.push(key);
-      pluginsClient[key] = result.createClient;
+      pluginsClient[key] = { client: result.createClient, router: result.router };
 
       if (node.kind === "auth") {
         authPlugin = result;
@@ -604,7 +640,7 @@ export const initializePlugins = Effect.gen(function* () {
     },
   } satisfies PluginResult;
 }).pipe(
-  Effect.catchAll((error) =>
+  Effect.catch((error) =>
     Effect.gen(function* () {
       const pluginName = error instanceof PluginError ? error.pluginName : null;
       const pluginUrl = error instanceof PluginError ? error.pluginUrl : null;
@@ -622,11 +658,10 @@ export const initializePlugins = Effect.gen(function* () {
   ),
 );
 
-export class PluginsService extends Context.Tag("host/PluginsService")<
-  PluginsService,
-  PluginResult
->() {
-  static Live = Layer.scoped(
+export class PluginsService extends Context.Service<PluginsService, PluginResult>()(
+  "host/PluginsService",
+) {
+  static Live = Layer.effect(
     PluginsService,
     Effect.gen(function* () {
       const plugins = yield* initializePlugins;

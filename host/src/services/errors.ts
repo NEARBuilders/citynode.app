@@ -1,5 +1,4 @@
-import { Data } from "every-plugin/effect";
-
+import { Data } from "effect";
 export class FederationError extends Data.TaggedError("FederationError")<{
   readonly remoteName: string;
   readonly remoteUrl?: string;

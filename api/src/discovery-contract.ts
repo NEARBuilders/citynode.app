@@ -1,6 +1,6 @@
+import { oc } from "@orpc/contract";
 import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
-import { oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 
 export const webUrl = z
   .url()

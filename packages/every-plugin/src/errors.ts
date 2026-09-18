@@ -1,4 +1,5 @@
-import { z } from "./zod";
+import { COMMON_ERROR_STATUS_MAP } from "@orpc/server";
+import { z } from "zod";
 
 /**
  * Error pattern constants for categorizing infrastructure errors
@@ -127,6 +128,21 @@ export const PluginErrors = {
  * @deprecated Use individual imports or PluginErrors instead
  */
 export const CommonPluginErrors = PluginErrors;
+
+/**
+ * Error-code -> HTTP-status map for handlers.
+ *
+ * oRPC v2 resolves statuses at the handler boundary via `errorStatusMap`
+ * (default `COMMON_ERROR_STATUS_MAP`, where TIMEOUT is 408). Providing a
+ * map REPLACES the default entirely, so the standard codes must be spread
+ * back in. These custom entries preserve the v1 wire behavior:
+ * TIMEOUT -> 504, CONNECTION_ERROR -> 502.
+ */
+export const PLUGIN_ERROR_STATUS_MAP: Record<string, number> = {
+  ...COMMON_ERROR_STATUS_MAP,
+  TIMEOUT: 504,
+  CONNECTION_ERROR: 502,
+} as const;
 
 export {
   extractFromFiberFailure,

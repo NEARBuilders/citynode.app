@@ -44,10 +44,9 @@ export interface InfraMaterializerShape {
   ) => Effect.Effect<void, InfraError>;
 }
 
-export class InfraMaterializer extends Context.Tag("InfraMaterializer")<
-  InfraMaterializer,
-  InfraMaterializerShape
->() {}
+export class InfraMaterializer extends Context.Service<InfraMaterializer, InfraMaterializerShape>()(
+  "InfraMaterializer",
+) {}
 
 function ensureDir(filePath: string): void {
   mkdirSync(dirname(filePath), { recursive: true });

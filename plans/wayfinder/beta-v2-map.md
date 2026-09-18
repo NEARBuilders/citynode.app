@@ -511,12 +511,101 @@ deferred — the pipeline hardening is a separate concern from resolution.
 - `App()`/`Plugin()`/`WebPlugin()` constructors — `bos.config.json` stays the authoring
   surface for now (`app.ts` deferred)
 
+## Decisions 11–17 — v2 platform services (deploy, sandboxes, upstream)
+
+Decisions from the v2 platform-services pass (deploy/CDN replacement, service
+provider, OTA runtime, sandboxes, upstream strategy). They extend decisions
+1–10 without reopening them; decision 11 supersedes the Zephyr assumption
+baked into decision 9 and every beta-v2 plan doc.
+
+11. **Bundle storage: the everything.dev deploy service replaces Zephyr** —
+    a platform plugin (contract/service/index, Drizzle `plugin_deploy` schema)
+    on the official deployment. R2/S3 storage via aws4fetch with scoped S3
+    tokens, content-hashed paths, explicit MIME map, immutable cache-control.
+    Auth = SIWN session or `edk_...` API key (so every deploy route is also an
+    MCP tool — agents deploy headlessly). Eligibility = organization membership
+    (in-process `pluginsClient` check against the auth plugin; subscriber checks
+    slot into the same seam later). Namespaced per account:
+    `uploads.<domain>/u/<account>/<workspace>/<bundle-hash>/` for members,
+    `cdn.<domain>` for official CI deploys through the same service — only the
+    service ever holds CDN credentials. Day-one hardening: streaming uploads,
+    per-account quota, file-count cap, MIME allowlist, concurrency limit,
+    `X-Robots-Tag: noindex`. A provider seam keeps IPFS viable later: once
+    `--watch` hosts cache bundles on local disk at hot-swap time, gateway
+    flakiness becomes a one-time cold-fetch cost, not per-request latency.
+    Supersedes decision 9's "Zephyr CDN is the content delivery layer" and the
+    rejected shared-bucket model from PR #58 (which recreated Zephyr's
+    gatekeeping with Cloudflare credentials).
+
+12. **Publish auth: gasless wallet delegate action** — `bos publish` builds a
+    FastKV `set_values` delegate action, the user approves in their wallet, and
+    the existing ephemeral relayer (NEP-366 pattern) submits it. No keys on
+    disk, no `bos key generate` + near-cli for humans. Requires adding the
+    FastKV registry contract to the relayer whitelist and sizing gas/deposit
+    for ~10KB writes. Function-call keys stay first-class for CI and headless
+    agents (the "AI agent signs with its own NEAR key" loop). One transaction
+    writes both the config and `deploys/<id>/manifest.json` (on-chain ledger
+    mirror of the deploy service's deployment records).
+
+13. **The service provider is one alchemy program** — everything.dev as
+    "ultimate server provider" means the provider itself (buckets, sandbox
+    machines, DNS) is declared as a single alchemy (Infrastructure-as-Effects)
+    program: self-hostable, portable across Cloudflare/Fly/Hetzner, typed
+    end-to-end. This is how the Railway/Cloudflare/Zephyr dependency is
+    reduced — not by eliminating cloud vendors but by making the provider
+    declarative and swappable. Sovereign tenants run the same program on their
+    own accounts. Also the fix for the PR #58 alchemy-sandbox pain: the oRPC
+    v2 migration lands on Effect 4 (see decision 17 / ticket 07), removing the
+    peer-conflict that forced the sandbox.
+
+14. **OTA runtime: `bos start --watch`** — the static container never restarts
+    for code changes. It polls the FastKV read URL for its account's config
+    (~5s), and on change: validates the trust chain (signed on-chain config +
+    per-remote SRI), re-imports MF remotes at new URLs (Node's ESM cache is
+    URL-keyed — fresh URLs load fresh modules), destroys old plugin scopes,
+    re-initializes, and rolls back to the last-good config on any failure. One
+    generic image for every tier (shared host, city node host, sandbox),
+    parameterized only by `BOS_ACCOUNT`/`BOS_GATEWAY`. The hard parts (in-flight
+    requests, DB pool handoff, ESM disposal) are tracked in ticket 10 and need
+    a prototype before implementation.
+
+15. **Sandboxes: per-account containers from the same image** — a sandbox is
+    the same static image with `--watch`, serving `<near-id>` subdomains.
+    Workshop tier starts as a pre-spawned pool (manually deployed machines +
+    wildcard DNS — no orchestrator code) so the demo loop ships before any
+    spawn dashboard. A full orchestrator (dashboard + spawn API, alchemy Fly
+    Machines / Cloudflare Containers) is a later phase. Sandbox memory floor is
+    the app process itself (~300–500MB); the embedded DB adds tens of MB
+    (ticket 11); sleep-on-idle makes idle sandboxes ~free. Wildcard TLS:
+    DNS-only (grey cloud) CNAME + `_acme-challenge` to the machine host's
+    auto-issued Let's Encrypt wildcard — free, any depth, no ACM. Cloudflare's
+    free Universal SSL covers first-level subdomains only; second-level
+    (`<user>.<city>.<domain>`) requires ACM or grey-cloud bypass.
+
+16. **Tenant databases via alchemy** — completes `toml-infra-alchemy.md`
+    Phase 4: `Drizzle.Schema` as an alchemy resource, migrations applied at
+    deploy (never runtime), Neon as the provisioning backend. Tiered sandbox
+    engines per ticket 11 (PGlite embedded / Neon remote). Sovereign tenants
+    provision their own databases with their own alchemy program.
+
+17. **Upstream strategy: this fork is the base** — NEARBuilders/citynode.app
+    `main` is ahead of NEARBuilders/everything-dev with platform changes worth
+    keeping. v2 platform work lands on a `v2` integration branch cut from this
+    fork's `main`; PRs from the branch go up to everything-dev; upstream
+    changes merge in; citynode `main` consumes the branch. Opening move on the
+    branch: the oRPC v2 + Effect 4 migration (ticket 07) — it is load-bearing
+    for every beta-v2 doc, unlocks alchemy as a direct dependency, and its
+    atomic-deploy constraint (V1 clients can't talk to V2 servers) is cheapest
+    to absorb inside a branch that also ships the new publish pipeline. Then
+    the deploy service (built Effect-native from day one), then grafting into
+    the real codebase, then the OTA runtime and sandboxes.
+
 ## Not yet specified
 
 - Native plugin composition model (React Navigation equivalent of grafting) — depends on #1 route grafting research settling the web pattern first
 - Tenant sandboxing verification — depends on #4 SSR per-request composition and #5 tenant data isolation
-- Hot-swap mechanism (Phase 9) — depends on #3 app.ts evaluation model
-- Alchemy DB integration details — depends on Phase 4 execution, not a decision to pre-spec
+- Hot-swap mechanism (Phase 9) — direction locked (decision 14: `bos start --watch`, poll FastKV, SRI-validate, swap, rollback); the lifecycle design is tracked in `tickets/10-hot-swap-lifecycle.md` and needs a prototype
+- Alchemy DB integration details — direction locked (decision 16 + `tickets/11-sandbox-db.md`); execution completes `toml-infra-alchemy.md` Phase 4
 - `composeApp()` implementation details and caching strategy — depends on #4 SSR per-request model
 - **Offline shell + data sync** (Layer 1: SW asset caching, Layer 2: IndexedDB mutation queue + replay) — depends on the host's MF loading pattern and shell HTML rendering settling first (Phase 2). The SW is a standalone `host/src/sw.ts` compiled as a second rsbuild entry, served at `/sw.js`. Layer 1 caches `remoteEntry.js`, plugin UI entries, and static files via structural URL patterns — no knowledge of plugin internals. Layer 2 adds a generic request queue for offline mutations, consumed by UI hooks via `postMessage`. Both tracked in `../offline/shell-sw-caching.md` and `../offline/data-sync-queue.md`. Open questions: SSR-rendered pages offline (shell fallback vs full content); `BackgroundSync` API vs periodic poll for queue replay; SW cache size/budget.
 

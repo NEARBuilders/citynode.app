@@ -1,7 +1,7 @@
+import "@orpc/openapi/extensions/route";
+import { eventIterator, oc } from "@orpc/contract";
 import { CommonPluginErrors } from "every-plugin";
-import { eventIterator, oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
-
+import { z } from "zod";
 // Define schemas for your data types
 export const testItemSchema = z.object({
   externalId: z.string().describe("Unique identifier for the test item"),

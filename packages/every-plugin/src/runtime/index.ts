@@ -1,3 +1,6 @@
+import "@orpc/experimental-effect/extensions/effect";
+import "@orpc/openapi/extensions/route";
+
 import { createRouterClient } from "@orpc/server";
 import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
 import type {
@@ -17,7 +20,7 @@ import type {
   UsePluginResult,
 } from "../types";
 import { PluginRuntimeError } from "./errors";
-import { PluginService } from "./services/plugin.service";
+import { PluginService, PluginServiceLive } from "./services/plugin.service";
 
 const MAX_CACHE_KEY_DEPTH = 32;
 
@@ -124,7 +127,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     const exit = await this.runtime.runPromiseExit(effect);
 
     if (Exit.isFailure(exit)) {
-      const error = Cause.failureOption(exit.cause);
+      const error = Cause.findErrorOption(exit.cause);
       if (Option.isSome(error)) {
         throw error.value;
       }
@@ -143,7 +146,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
 
     let cachedPlugin = this.pluginCache.get(cacheKey);
     if (!cachedPlugin) {
-      const operation = Effect.gen(this, function* () {
+      const operation = Effect.gen({ self: this }, function* () {
         const pluginService = yield* PluginService;
         const validatedId = yield* this.validatePluginId(pluginId);
 
@@ -154,7 +157,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
         yield* pluginService.registerPlugin(initialized);
 
         return initialized;
-      }).pipe(Effect.annotateLogs({ plugin: pluginId }), Effect.provide(this.runtime));
+      }).pipe(Effect.annotateLogs({ plugin: pluginId }));
 
       cachedPlugin = this.runPromise(operation);
       this.pluginCache.set(cacheKey, cachedPlugin);
@@ -175,7 +178,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     let router = this.routerCache.get(cacheKey);
     if (!router) {
       try {
-        router = initialized.plugin.createRouter(initialized.context) as PluginRouterType<R[K]>;
+        router = initialized.plugin.createRouter(plugins ?? {}) as PluginRouterType<R[K]>;
         this.routerCache.set(cacheKey, router);
       } catch (error) {
         await this.evictPlugin(pluginId, config, plugins);
@@ -183,8 +186,16 @@ export class PluginRuntime<R = RegisteredPlugins> {
       }
     }
 
-    // Create client factory that accepts request context
-    const createClient = (context?: any) => createRouterClient(router, { context: context ?? {} });
+    // Create client factory that accepts request context. The plugin's
+    // Effect context is injected so `.effect()` handlers resolve services
+    // on in-process (server-side / SSR) calls.
+    const createClient = (context?: any) =>
+      createRouterClient(router, {
+        context: {
+          ...(context ?? {}),
+          "effect/context": initialized.effectContext,
+        },
+      });
 
     return {
       createClient: createClient as any,
@@ -250,7 +261,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
   ): Promise<void> {
     const cacheKey = this.generateCacheKey(pluginId, { ...config, __plugins: plugins ?? {} });
 
-    const effect = Effect.gen(this, function* () {
+    const effect = Effect.gen({ self: this }, function* () {
       const pluginService = yield* PluginService;
       const cachedPlugin = this.pluginCache.get(cacheKey);
 
@@ -261,22 +272,20 @@ export class PluginRuntime<R = RegisteredPlugins> {
         const pluginResult = yield* Effect.tryPromise({
           try: () => cachedPlugin,
           catch: (error) => error,
-        }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+        }).pipe(Effect.catch(() => Effect.succeed(null)));
 
         if (pluginResult) {
           yield* pluginService
             .shutdownPlugin(pluginResult)
             .pipe(
-              Effect.catchAll((error) =>
+              Effect.catch((error) =>
                 Effect.logWarning(`Failed to shutdown evicted plugin ${pluginId}`, error),
               ),
             );
         }
       }
     }).pipe(
-      Effect.catchAll((error) =>
-        Effect.logWarning(`Plugin eviction failed for ${pluginId}`, error),
-      ),
+      Effect.catch((error) => Effect.logWarning(`Plugin eviction failed for ${pluginId}`, error)),
     );
 
     return this.runPromise(effect);
@@ -358,7 +367,7 @@ export function createPluginRuntime<TRegistry extends Record<string, PluginRegis
   const normalizedRegistry = normalizeRegistry(config.registry);
   const pluginMap = extractPluginMap(config.registry);
 
-  const layer = PluginService.Live(normalizedRegistry, secrets, pluginMap);
+  const layer = PluginServiceLive(normalizedRegistry, secrets, pluginMap);
   const runtime = ManagedRuntime.make(layer);
 
   return new PluginRuntime(runtime, normalizedRegistry) as PluginRuntime<

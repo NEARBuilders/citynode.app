@@ -1,6 +1,7 @@
+import "@orpc/openapi/extensions/route";
+import { oc } from "@orpc/contract";
 import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "every-plugin/errors";
-import { oc } from "every-plugin/orpc";
-import { z } from "every-plugin/zod";
+import { z } from "zod";
 import { discoveryContract } from "./discovery-contract";
 
 const ErrorTestKindSchema = z.enum([
@@ -39,7 +40,11 @@ export const NodeProposalPayloadSchema = z
       });
     }
     if (value.kind !== "country" && !value.parentId) {
-      context.addIssue({ code: "custom", path: ["parentId"], message: "Parent is required" });
+      context.addIssue({
+        code: "custom",
+        path: ["parentId"],
+        message: "Parent is required",
+      });
     }
   });
 
@@ -193,27 +198,6 @@ export const NodeListSummarySchema = z.object({
   validatorCount: z.number().int().nonnegative(),
 });
 
-const ThingSchema = z.object({
-  thingId: z.string().describe("Unique identifier for the thing"),
-  type: z.string().describe("Plugin-derived thing type"),
-  payload: z.unknown().describe("Plugin-owned thing payload"),
-  createdAt: z.string().datetime().describe("ISO 8601 timestamp when the thing was created"),
-  updatedAt: z.string().datetime().describe("ISO 8601 timestamp when the thing was last updated"),
-});
-
-const CreatedThingSchema = ThingSchema.extend({
-  action: z.string().describe("Action emitted for the creation"),
-});
-
-const ListThingsSchema = z.object({
-  data: z.array(ThingSchema).describe("List of things matching the query"),
-  meta: z.object({
-    total: z.number().describe("Total number of matching things"),
-    hasMore: z.boolean().describe("Whether another page of results exists"),
-    nextCursor: z.string().nullable().describe("Opaque cursor for the next page, or null if done"),
-  }),
-});
-
 export const contract = oc.router({
   ...discoveryContract,
   ping: oc.route({ method: "GET", path: "/ping" }).output(
@@ -245,7 +229,10 @@ export const contract = oc.router({
       UNAUTHORIZED,
       FORBIDDEN,
       BAD_REQUEST,
-      CONFLICT: { status: 409, message: "Tenant with this accountId already exists" },
+      CONFLICT: {
+        status: 409,
+        message: "Tenant with this accountId already exists",
+      },
     }),
 
   updateTenant: oc
@@ -342,19 +329,28 @@ export const contract = oc.router({
     }),
 
   verifyCustomDomain: oc
-    .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/verify" })
+    .route({
+      method: "POST",
+      path: "/tenants/{tenantId}/bindings/{bindingId}/verify",
+    })
     .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
     .output(TenantBindingRecordSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
 
   deleteBinding: oc
-    .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/delete" })
+    .route({
+      method: "POST",
+      path: "/tenants/{tenantId}/bindings/{bindingId}/delete",
+    })
     .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
     .output(z.object({ success: z.literal(true) }))
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   setPrimaryBinding: oc
-    .route({ method: "POST", path: "/tenants/{tenantId}/bindings/{bindingId}/primary" })
+    .route({
+      method: "POST",
+      path: "/tenants/{tenantId}/bindings/{bindingId}/primary",
+    })
     .input(z.object({ tenantId: z.string(), bindingId: z.string() }))
     .output(TenantBindingRecordSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
@@ -401,7 +397,10 @@ export const contract = oc.router({
       FORBIDDEN,
       BAD_REQUEST,
       NOT_FOUND,
-      CONFLICT: { status: 409, message: "Node proposal resources already exist" },
+      CONFLICT: {
+        status: 409,
+        message: "Node proposal resources already exist",
+      },
     }),
 
   listNodes: oc
@@ -607,77 +606,6 @@ export const contract = oc.router({
     .input(z.object({ validatorId: z.string() }))
     .output(ValidatorSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
-
-  createThing: oc
-    .route({
-      method: "POST",
-      path: "/things",
-      summary: "Create a thing",
-      description: "Creates a DB-backed thing via the template plugin.",
-      tags: ["Things"],
-    })
-    .input(
-      z.object({
-        thingId: z.string().min(1, "Thing ID is required"),
-        payload: z.unknown(),
-      }),
-    )
-    .output(CreatedThingSchema)
-    .errors({
-      UNAUTHORIZED,
-      CONFLICT: { status: 409, message: "A thing with this ID already exists" },
-    }),
-
-  getThing: oc
-    .route({
-      method: "GET",
-      path: "/things/{thingId}",
-      summary: "Get a thing",
-      description: "Returns a DB-backed thing by ID via the template plugin.",
-      tags: ["Things"],
-    })
-    .input(
-      z.object({
-        thingId: z.string().min(1, "Thing ID is required"),
-      }),
-    )
-    .output(ThingSchema)
-    .errors({ NOT_FOUND }),
-
-  listThings: oc
-    .route({
-      method: "GET",
-      path: "/things",
-      summary: "List things",
-      description:
-        "Lists things from the template plugin with optional type filtering and cursor pagination.",
-      tags: ["Things"],
-    })
-    .input(
-      z.object({
-        type: z.string().optional().describe("Filter by thing type"),
-        limit: z
-          .number()
-          .min(1)
-          .max(100)
-          .default(10)
-          .describe("Maximum number of results to return"),
-        cursor: z.string().optional().describe("Opaque cursor for the next page"),
-      }),
-    )
-    .output(ListThingsSchema),
-
-  deleteThing: oc
-    .route({
-      method: "DELETE",
-      path: "/things/{thingId}",
-      summary: "Delete a thing",
-      description: "Removes a DB-backed thing via the template plugin.",
-      tags: ["Things"],
-    })
-    .input(z.object({ thingId: z.string().min(1, "Thing ID is required") }))
-    .output(z.object({ success: z.literal(true) }))
-    .errors({ UNAUTHORIZED, NOT_FOUND }),
 
   testError: oc
     .route({

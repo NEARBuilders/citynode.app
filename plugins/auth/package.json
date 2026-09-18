@@ -24,7 +24,11 @@
     "drizzle-orm": "catalog:",
     "every-plugin": "catalog:",
     "pg": "catalog:",
-    "@electric-sql/pglite": "catalog:"
+    "@electric-sql/pglite": "catalog:",
+    "@orpc/contract": "catalog:",
+    "@orpc/server": "catalog:",
+    "effect": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",

@@ -1,3 +1,4 @@
+import { Context as EffectContext } from "effect";
 import { type Context, Hono } from "hono";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { AuthVariables } from "../../src/lib/auth";
@@ -5,6 +6,10 @@ import { proxyRequest } from "../../src/middleware/static-proxy";
 import { setupApiRoutes } from "../../src/routes/api";
 import { registerAuthHandler } from "../../src/services/auth";
 import type { PluginResult } from "../../src/services/plugins";
+
+const authServicesTag = EffectContext.Service<{
+  handler: (req: Request) => Promise<Response>;
+}>("test/AuthServices");
 
 type HonoEnv = { Variables: AuthVariables };
 
@@ -244,7 +249,10 @@ describe("API Proxy", () => {
         return response;
       });
 
-      const rpcBody = JSON.stringify({ method: "getValue", params: { key: "test" } });
+      const rpcBody = JSON.stringify({
+        method: "getValue",
+        params: { key: "test" },
+      });
       fetchMock.mockResolvedValueOnce(createMockResponse('{"result":"value"}'));
 
       await app.fetch(
@@ -290,11 +298,12 @@ describe("API Proxy", () => {
           router: {},
           metadata: { remoteUrl: "local" },
           initialized: {
-            context: {
+            effectContext: EffectContext.make(authServicesTag, {
               handler: authHandler,
               auth: { api: { getSession: vi.fn() } },
               db: {} as any,
-            },
+            } as any),
+            plugin: { servicesTag: authServicesTag },
           },
         } as any,
         api: null,
@@ -332,7 +341,10 @@ describe("API Proxy", () => {
       const bosConfig = {
         account: "test.near",
         app: {
-          host: { development: "http://localhost:3000", production: "https://prod.example.com" },
+          host: {
+            development: "http://localhost:3000",
+            production: "https://prod.example.com",
+          },
           ui: {
             name: "ui",
             development: "http://localhost:3003",

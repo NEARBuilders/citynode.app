@@ -1,4 +1,4 @@
-import { Effect } from "every-plugin/effect";
+import { Cause, Effect, Exit } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeConfig } from "../../src/services/config";
 
@@ -62,13 +62,11 @@ describe("loadRouterModule failure paths", () => {
     it("raises FederationError with Module not found message", async () => {
       loadRemoteMock.mockResolvedValue(null);
 
-      const result = await Effect.runPromise(
-        loadRouterModule(createRemoteConfig()).pipe(Effect.either),
-      );
+      const result = await Effect.runPromiseExit(loadRouterModule(createRemoteConfig()));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const error = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error._tag).toBe("FederationError");
       expect(error.remoteName).toBe("ui");
       expect(String(error.cause)).toContain("Module not found: ui/Router");
@@ -81,13 +79,11 @@ describe("loadRouterModule failure paths", () => {
       mfError.name = "FederationError";
       loadRemoteMock.mockRejectedValue(mfError);
 
-      const result = await Effect.runPromise(
-        loadRouterModule(createRemoteConfig()).pipe(Effect.either),
-      );
+      const result = await Effect.runPromiseExit(loadRouterModule(createRemoteConfig()));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const error = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error._tag).toBe("FederationError");
       expect(error.remoteName).toBe("ui");
       expect(error.cause).toBeDefined();
@@ -100,13 +96,11 @@ describe("loadRouterModule failure paths", () => {
       const integrityError = new Error("SRI hash mismatch: expected sha384-abc, got sha384-xyz");
       verifySriForUrlMock.mockRejectedValue(integrityError);
 
-      const result = await Effect.runPromise(
-        loadRouterModule(createRemoteConfig()).pipe(Effect.either),
-      );
+      const result = await Effect.runPromiseExit(loadRouterModule(createRemoteConfig()));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const error = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error._tag).toBe("FederationError");
       expect(error.remoteUrl).toBe("https://cdn.example.com/ui-ssr");
     });
@@ -116,9 +110,9 @@ describe("loadRouterModule failure paths", () => {
     it("raises error when ssrUrl is not configured", async () => {
       const config = createRemoteConfig({ ssrUrl: undefined });
 
-      const result = await Effect.runPromise(loadRouterModule(config).pipe(Effect.either));
+      const result = await Effect.runPromiseExit(loadRouterModule(config));
 
-      expect(result._tag).toBe("Left");
+      expect(Exit.isFailure(result)).toBe(true);
     });
   });
 
@@ -144,13 +138,11 @@ describe("loadRouterModule failure paths", () => {
     it("raises FederationError after all retries fail", async () => {
       loadRemoteMock.mockRejectedValue(new Error("Persistent failure"));
 
-      const result = await Effect.runPromise(
-        loadRouterModule(createRemoteConfig()).pipe(Effect.either),
-      );
+      const result = await Effect.runPromiseExit(loadRouterModule(createRemoteConfig()));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const error = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error._tag).toBe("FederationError");
       expect(createInstanceMock).toHaveBeenCalledTimes(6);
     });
@@ -162,12 +154,12 @@ describe("loadRouterModule failure paths", () => {
 
       loadRemoteMock.mockRejectedValue(new Error("Load failed"));
 
-      const result = await Effect.runPromise(loadRouterModule(config).pipe(Effect.either));
-      expect(result._tag).toBe("Left");
+      const result = await Effect.runPromiseExit(loadRouterModule(config));
+      expect(Exit.isFailure(result)).toBe(true);
 
       loadRemoteMock.mockRejectedValue(new Error("Still failing"));
-      const secondResult = await Effect.runPromise(loadRouterModule(config).pipe(Effect.either));
-      expect(secondResult._tag).toBe("Left");
+      const secondResult = await Effect.runPromiseExit(loadRouterModule(config));
+      expect(Exit.isFailure(secondResult)).toBe(true);
 
       expect(createInstanceMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
@@ -177,8 +169,8 @@ describe("loadRouterModule failure paths", () => {
 
       loadRemoteMock.mockRejectedValue(new Error("Load failed"));
 
-      const firstResult = await Effect.runPromise(loadRouterModule(config).pipe(Effect.either));
-      expect(firstResult._tag).toBe("Left");
+      const firstResult = await Effect.runPromiseExit(loadRouterModule(config));
+      expect(Exit.isFailure(firstResult)).toBe(true);
 
       const routerModule = {
         default: { renderToStream: vi.fn(), getRouteHead: vi.fn(), createRouter: vi.fn() },
@@ -194,13 +186,11 @@ describe("loadRouterModule failure paths", () => {
     it("includes remoteName and remoteUrl in the error", async () => {
       loadRemoteMock.mockResolvedValue(null);
 
-      const result = await Effect.runPromise(
-        loadRouterModule(createRemoteConfig()).pipe(Effect.either),
-      );
+      const result = await Effect.runPromiseExit(loadRouterModule(createRemoteConfig()));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const error = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error).toHaveProperty("remoteName", "ui");
       expect(error).toHaveProperty("remoteUrl", "https://cdn.example.com/ui-ssr");
     });
@@ -214,15 +204,14 @@ describe("loadRouterModule failure paths", () => {
       ].join("\n");
       loadRemoteMock.mockRejectedValue(mfError);
 
-      const result = await Effect.runPromise(
-        loadRouterModule(createRemoteConfig()).pipe(Effect.either),
-      );
+      const result = await Effect.runPromiseExit(loadRouterModule(createRemoteConfig()));
 
-      expect(result._tag).toBe("Left");
-      if (result._tag !== "Left") throw new Error("Expected Left");
-      const error = result.left as InstanceType<typeof FederationError>;
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isSuccess(result)) throw new Error("Expected Left");
+      const error = Cause.squash(result.cause) as InstanceType<typeof FederationError>;
       expect(error.cause).toBeDefined();
-      const causeStr = String(error.cause);
+      const rawCause = error.cause instanceof FederationError ? error.cause.cause : error.cause;
+      const causeStr = String((rawCause as Error)?.stack ?? rawCause);
       expect(causeStr).toContain("remoteEntry.js");
     });
   });

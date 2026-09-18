@@ -1,4 +1,4 @@
-import { Config, ConfigProvider, Context, Effect } from "every-plugin/effect";
+import { Config, Context, type Effect } from "effect";
 import type {
   ClientRuntimeConfig,
   RuntimeConfig,
@@ -10,16 +10,19 @@ import { normalizeUrl } from "../utils/normalize";
 
 export type { ClientRuntimeConfig, RuntimeConfig, SharedConfig, SourceMode };
 
-export class ConfigService extends Context.Tag("host/ConfigService")<
-  ConfigService,
-  RuntimeConfig
->() {}
+export class ConfigService extends Context.Service<ConfigService, RuntimeConfig>()(
+  "host/ConfigService",
+) {}
 
-export function readCorsOrigins(): Effect.Effect<string[]> {
-  return Config.array(Config.string(), "CORS_ORIGIN").pipe(
-    Effect.map((arr) => arr.filter((s) => s.length > 0)),
-    Effect.catchAll(() => Effect.succeed([] as string[])),
-    Effect.withConfigProvider(ConfigProvider.fromEnv()),
+export function readCorsOrigins(): Effect.Effect<string[], Config.ConfigError> {
+  return Config.string("CORS_ORIGIN").pipe(
+    Config.withDefault(""),
+    Config.map((value) =>
+      value
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
   );
 }
 

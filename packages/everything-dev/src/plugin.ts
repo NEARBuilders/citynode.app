@@ -5,7 +5,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
-import { Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import {
   buildBetterNearAuthQuietly,
@@ -147,7 +147,10 @@ async function timePhase<T>(
   name: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  pluginEvents.emit("progress", { phase: name, status: "running" } satisfies ProgressEvent);
+  pluginEvents.emit("progress", {
+    phase: name,
+    status: "running",
+  } satisfies ProgressEvent);
   const startedAt = Date.now();
   try {
     const result = await fn();
@@ -177,6 +180,8 @@ type BosDeps = {
   databaseBindings: DatabaseBindingsService;
   drizzleKit: DrizzleKitService;
 };
+
+class BosDepsTag extends Context.Service<BosDepsTag, BosDeps>()("bos/BosDeps") {}
 
 type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
 
@@ -331,10 +336,12 @@ export default createPlugin({
   }),
   secrets: z.object({}),
   contract: bosContract,
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
       const base = yield* Effect.promise(async () => {
-        const configResult = await loadResolvedConfig({ path: config.variables.configPath });
+        const configResult = await loadResolvedConfig({
+          path: config.variables.configPath,
+        });
         return {
           bosConfig: configResult?.config ?? null,
           runtimeConfig: configResult?.runtime ?? null,
@@ -342,32 +349,31 @@ export default createPlugin({
         };
       });
 
-      const databaseBindings = yield* tools.buildService(
-        DatabaseBindings,
-        makeDatabaseBindings({
-          projectDir: base.configDir,
-          loadRuntimeConfig: async () =>
-            (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
-          loadEnv: () => loadProjectEnv(base.configDir),
-        }),
-      );
-      const drizzleKit = yield* tools.buildService(
-        DrizzleKit,
-        makeDrizzleKitLive({
-          projectDir: base.configDir,
-          onLog: (message) => p.log.info(message),
-        }),
+      const services = yield* Layer.buildWithScope(
+        Layer.mergeAll(
+          makeDatabaseBindings({
+            projectDir: base.configDir,
+            loadRuntimeConfig: async () =>
+              (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
+            loadEnv: () => loadProjectEnv(base.configDir),
+          }),
+          makeDrizzleKitLive({
+            projectDir: base.configDir,
+            onLog: (message) => p.log.info(message),
+          }),
+        ),
+        yield* Effect.scope,
       );
 
-      return {
+      return Layer.succeed(BosDepsTag, {
         ...base,
-        databaseBindings,
-        drizzleKit,
-      } satisfies BosDeps;
+        databaseBindings: Context.get(services, DatabaseBindings),
+        drizzleKit: Context.get(services, DrizzleKit),
+      } satisfies BosDeps);
     }),
-  shutdown: () => Effect.void,
-  createRouter: (deps, builder) => ({
-    config: builder.config.handler(async ({ input }) => {
+  createRouter: (builder) => ({
+    config: builder.config.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (input.full) {
         return buildConfigResult(deps.bosConfig, true);
       }
@@ -376,7 +382,8 @@ export default createPlugin({
       return buildConfigResult(localConfig?.config ?? null, false);
     }),
 
-    registryUse: builder.registryUse.handler(async ({ input }) => {
+    registryUse: builder.registryUse.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       const configPath = join(deps.configDir, "bos.config.json");
       const normalizedFrom = input.from.startsWith("bos://") ? input.from : `bos://${input.from}`;
 
@@ -416,7 +423,8 @@ export default createPlugin({
       }
     }),
 
-    pluginAdd: builder.pluginAdd.handler(async ({ input }) => {
+    pluginAdd: builder.pluginAdd.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -474,7 +482,8 @@ export default createPlugin({
       };
     }),
 
-    pluginRemove: builder.pluginRemove.handler(async ({ input }) => {
+    pluginRemove: builder.pluginRemove.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -507,7 +516,8 @@ export default createPlugin({
       };
     }),
 
-    pluginList: builder.pluginList.handler(async () => {
+    pluginList: builder.pluginList.handler(async ({ context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       const plugins: PluginListResult["plugins"] = listPluginAttachments(deps.bosConfig);
       return {
         status: "listed" as const,
@@ -515,7 +525,8 @@ export default createPlugin({
       };
     }),
 
-    pluginPublish: builder.pluginPublish.handler(async ({ input }) => {
+    pluginPublish: builder.pluginPublish.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -652,7 +663,8 @@ export default createPlugin({
       };
     }),
 
-    dev: builder.dev.handler(async ({ input }) => {
+    dev: builder.dev.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       const devTimings: PhaseTiming[] = [];
 
       ensureEnvFile(deps.configDir);
@@ -829,11 +841,15 @@ export default createPlugin({
       };
     }),
 
-    start: builder.start.handler(async ({ input }) => {
+    start: builder.start.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       ensureEnvFile(deps.configDir);
       loadProjectEnv(deps.configDir);
 
-      pluginEvents.emit("progress", { phase: "config", status: "running" } satisfies ProgressEvent);
+      pluginEvents.emit("progress", {
+        phase: "config",
+        status: "running",
+      } satisfies ProgressEvent);
 
       const bosEnv = input.env ?? (process.env.BOS_ENV === "staging" ? "staging" : "production");
       const account = input.account ?? process.env.BOS_ACCOUNT;
@@ -851,14 +867,20 @@ export default createPlugin({
             return {
               status: "error" as const,
               url: "",
-              error: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${buildRegistryConfigUrl(account, domain, input.registry)}`,
+              error: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${buildRegistryConfigUrl(
+                account,
+                domain,
+                input.registry,
+              )}`,
             };
           }
         } catch (error) {
           return {
             status: "error" as const,
             url: "",
-            error: `Failed to fetch config for bos://${account}/${domain}: ${error instanceof Error ? error.message : "Unknown error"}\nExpected URL: ${buildRegistryConfigUrl(account, domain, input.registry)}`,
+            error: `Failed to fetch config for bos://${account}/${domain}: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }\nExpected URL: ${buildRegistryConfigUrl(account, domain, input.registry)}`,
           };
         }
       } else {
@@ -1030,10 +1052,17 @@ export default createPlugin({
         noLogs: true,
       };
 
-      pendingSession = { orchestrator, services, runtimeConfig: plan.runtimeConfig };
+      pendingSession = {
+        orchestrator,
+        services,
+        runtimeConfig: plan.runtimeConfig,
+      };
       pendingStartSummary = summary;
 
-      pluginEvents.emit("progress", { phase: "config", status: "done" } satisfies ProgressEvent);
+      pluginEvents.emit("progress", {
+        phase: "config",
+        status: "done",
+      } satisfies ProgressEvent);
 
       return {
         status: "running" as const,
@@ -1041,7 +1070,8 @@ export default createPlugin({
       };
     }),
 
-    build: builder.build.handler(async ({ input }) => {
+    build: builder.build.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1102,7 +1132,8 @@ export default createPlugin({
       };
     }),
 
-    publish: builder.publish.handler(async ({ input }) => {
+    publish: builder.publish.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1144,7 +1175,8 @@ export default createPlugin({
       };
     }),
 
-    deploy: builder.deploy.handler(async ({ input }) => {
+    deploy: builder.deploy.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1278,7 +1310,8 @@ export default createPlugin({
       };
     }),
 
-    keyPublish: builder.keyPublish.handler(async ({ input }) => {
+    keyPublish: builder.keyPublish.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
@@ -1331,11 +1364,15 @@ export default createPlugin({
             try {
               await deleteAccessKeys(account, oldKeys, network);
               console.log(
-                `  ${colors.green("✓")} Removed ${oldKeys.length} old key${oldKeys.length > 1 ? "s" : ""}`,
+                `  ${colors.green("✓")} Removed ${oldKeys.length} old key${
+                  oldKeys.length > 1 ? "s" : ""
+                }`,
               );
             } catch {
               console.log(
-                `  ${colors.yellow("⚠")} Failed to remove old key${oldKeys.length > 1 ? "s" : ""} (new key still active)`,
+                `  ${colors.yellow("⚠")} Failed to remove old key${
+                  oldKeys.length > 1 ? "s" : ""
+                } (new key still active)`,
               );
             }
           } else {
@@ -1404,7 +1441,9 @@ export default createPlugin({
           }
         } catch (e) {
           console.warn(
-            `[init] Failed to fetch parent config from ${extendsAccount}/${extendsGateway}: ${e instanceof Error ? e.message : e}`,
+            `[init] Failed to fetch parent config from ${extendsAccount}/${extendsGateway}: ${
+              e instanceof Error ? e.message : e
+            }`,
           );
         }
 
@@ -1893,10 +1932,18 @@ export default createPlugin({
 
         const runtime = refreshed.runtime;
         type AppTarget = { source?: string; localPath?: string };
-        const workspaceEntries: Array<{ key: string; label: string; dir: string }> = [];
+        const workspaceEntries: Array<{
+          key: string;
+          label: string;
+          dir: string;
+        }> = [];
         const skipped: Array<{ key: string; label: string }> = [];
 
-        const appTargets: Array<{ key: string; label: string; target: AppTarget | undefined }> = [
+        const appTargets: Array<{
+          key: string;
+          label: string;
+          target: AppTarget | undefined;
+        }> = [
           { key: "host", label: "host", target: runtime.host },
           { key: "ui", label: "ui", target: runtime.ui },
           { key: "api", label: "api", target: runtime.api },
@@ -1945,7 +1992,11 @@ export default createPlugin({
             : skipped.filter((entry) => selected.includes(entry.key));
 
         const checked: string[] = [];
-        const results: Array<{ workspace: string; passed: boolean; error?: string }> = [];
+        const results: Array<{
+          workspace: string;
+          passed: boolean;
+          error?: string;
+        }> = [];
 
         for (const entry of targets) {
           const packageJsonPath = join(entry.dir, "package.json");
@@ -2019,7 +2070,9 @@ export default createPlugin({
         };
       }
 
-      const report = await checkFederationCompat(bosConfig, { timeoutMs: input.timeoutMs });
+      const report = await checkFederationCompat(bosConfig, {
+        timeoutMs: input.timeoutMs,
+      });
       return {
         status: report.ok ? ("ok" as const) : ("fail" as const),
         hostVersion: report.hostVersion,
@@ -2029,7 +2082,8 @@ export default createPlugin({
       };
     }),
 
-    dbStudio: builder.dbStudio.handler(async ({ input }) => {
+    dbStudio: builder.dbStudio.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       const configPath = findConfigPath();
       if (!configPath) {
         return {
@@ -2065,7 +2119,8 @@ export default createPlugin({
       }
     }),
 
-    dbDoctor: builder.dbDoctor.handler(async ({ input }) => {
+    dbDoctor: builder.dbDoctor.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       try {
         const configPath = findConfigPath();
         if (!configPath) {
@@ -2110,7 +2165,8 @@ export default createPlugin({
       }
     }),
 
-    dbRepair: builder.dbRepair.handler(async ({ input }) => {
+    dbRepair: builder.dbRepair.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       try {
         const configPath = findConfigPath();
         if (!configPath) {
@@ -2205,7 +2261,10 @@ export default createPlugin({
           } catch (err) {
             const code = (err as NodeJS.ErrnoException).code;
             if (code === "ESRCH") {
-              skipped.push({ pid: entry.pid, reason: "process already exited" });
+              skipped.push({
+                pid: entry.pid,
+                reason: "process already exited",
+              });
               unregisterPid(entry.pid);
             } else {
               skipped.push({
@@ -2242,7 +2301,8 @@ export default createPlugin({
       }
     }),
 
-    infraExport: builder.infraExport.handler(async ({ input }) => {
+    infraExport: builder.infraExport.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
       const configDir = input.configDir ?? deps.configDir;
       const ci = deps.runtimeConfig ? buildCiInfraPlan(deps.runtimeConfig, { configDir }) : null;
       if (!ci) {

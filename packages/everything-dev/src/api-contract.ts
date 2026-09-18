@@ -266,9 +266,10 @@ function writePluginClientGen(opts: {
     lines.push(`import type { ContractType as ${source.importName} } from "${importPath}";`);
   }
 
-  lines.push('import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";');
+  lines.push('import type { RouterContractClient, RouterContract } from "@orpc/contract";');
+  lines.push('import type { ContractedRouter } from "@orpc/server";');
   lines.push(
-    "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+    "type PluginClientEntry<C extends RouterContract> = {\n  client: (context?: Record<string, unknown>) => RouterContractClient<C>;\n  router: ContractedRouter<C, any>;\n};",
   );
   lines.push("");
 
@@ -280,7 +281,7 @@ function writePluginClientGen(opts: {
       const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
         ? source.key
         : JSON.stringify(source.key);
-      lines.push(`  ${key}: ClientFactory<${source.importName}>;`);
+      lines.push(`  ${key}: PluginClientEntry<${source.importName}>;`);
     }
     lines.push("};");
   }
@@ -369,10 +370,11 @@ export function writeGeneratedFiles(opts: {
     }
 
     pluginsClientLines.push(
-      'import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";',
+      'import type { RouterContractClient, RouterContract } from "@orpc/contract";',
     );
+    pluginsClientLines.push('import type { ContractedRouter } from "@orpc/server";');
     pluginsClientLines.push(
-      "type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;",
+      "type PluginClientEntry<C extends RouterContract> = {\n  client: (context?: Record<string, unknown>) => RouterContractClient<C>;\n  router: ContractedRouter<C, any>;\n};",
     );
     pluginsClientLines.push("");
 
@@ -384,11 +386,11 @@ export function writeGeneratedFiles(opts: {
         const key = /^[$A-Z_][0-9A-Z_$]*$/i.test(source.key)
           ? source.key
           : JSON.stringify(source.key);
-        pluginsClientLines.push(`  ${key}: ClientFactory<${source.importName}>;`);
+        pluginsClientLines.push(`  ${key}: PluginClientEntry<${source.importName}>;`);
       }
       for (const key of unresolvedDepKeys) {
         const keyStr = /^[$A-Z_][0-9A-Z_$]*$/i.test(key) ? key : JSON.stringify(key);
-        pluginsClientLines.push(`  ${keyStr}?: ClientFactory<AnyContractRouter>;`);
+        pluginsClientLines.push(`  ${keyStr}?: PluginClientEntry<RouterContract>;`);
       }
       pluginsClientLines.push("};");
     }

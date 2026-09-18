@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { Effect, Layer } from "every-plugin/effect";
+import { Effect, Layer } from "effect";
 import { expect, it } from "vitest";
 import { DatabaseTag } from "../db/layer";
 import * as schema from "../db/schema";

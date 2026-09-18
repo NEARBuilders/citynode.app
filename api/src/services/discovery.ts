@@ -1,6 +1,6 @@
+import { ORPCError } from "@orpc/server";
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
-import { Context, Effect, Layer } from "every-plugin/effect";
-import { ORPCError } from "every-plugin/orpc";
+import { Context, Effect, Layer } from "effect";
 import type { Database } from "../db";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -772,12 +772,12 @@ function createDiscovery(db: Database, lumaKeys: string) {
     },
   };
 }
-export class DiscoveryTag extends Context.Tag("api/Discovery")<
-  DiscoveryTag,
-  ReturnType<typeof createDiscovery>
->() {}
+export type DiscoveryService = ReturnType<typeof createDiscovery>;
+export class DiscoveryTag extends Context.Service<DiscoveryService, DiscoveryService>()(
+  "api/Discovery",
+) {}
 export const DiscoveryLive = (lumaKeys = "") =>
-  Layer.scoped(
+  Layer.effect(
     DiscoveryTag,
     Effect.gen(function* () {
       const service = createDiscovery(yield* DatabaseTag, lumaKeys);

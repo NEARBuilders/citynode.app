@@ -1,3 +1,4 @@
+import { PLUGIN_ERROR_STATUS_MAP } from "../../errors";
 import type { PluginInfo } from "./utils";
 
 const corsHeaders = {
@@ -80,6 +81,7 @@ export function setupPluginMiddleware(
 ) {
   const rpcPrefix = normalizePrefix(devConfig?.prefix);
   const handlers: { rpc: any; api: any } = { rpc: null, api: null };
+  const effectContextHolder: { context: unknown | null } = { context: null };
   let cleanup: (() => Promise<void>) | null = null;
 
   const performCleanup = async () => {
@@ -96,9 +98,10 @@ export function setupPluginMiddleware(
       const { createPluginRuntime } = await import("every-plugin");
       const { RPCHandler } = await import("@orpc/server/fetch");
       const { OpenAPIHandler } = await import("@orpc/openapi/fetch");
-      const { OpenAPIReferencePlugin } = await import("@orpc/openapi/plugins");
-      const { ZodToJsonSchemaConverter } = await import("@orpc/zod/zod4");
-      const { onError } = await import("every-plugin/orpc");
+      const { OpenAPIGenerator } = await import("@orpc/openapi");
+      const { OpenAPIReferenceHandlerPlugin } = await import("@orpc/openapi/plugins");
+      const { ZodToJsonSchemaConverter } = await import("@orpc/zod");
+      const { onError } = await import("@orpc/server");
       const { formatORPCError } = await import("every-plugin/errors");
 
       const pluginId = devConfig?.pluginId || pluginInfo.normalizedName;
@@ -124,9 +127,13 @@ export function setupPluginMiddleware(
       const defaultConfig = { variables: {}, secrets: {} };
 
       const pluginsMap: Record<string, unknown> = {};
+      const siblingEffectContexts: unknown[] = [];
       for (const depId of Object.keys(siblings)) {
         const dep = await loadPluginWithRetry(runtime, depId);
-        pluginsMap[depId] = dep.createClient;
+        pluginsMap[depId] = { client: dep.createClient, router: dep.router };
+        if (dep.initialized?.effectContext) {
+          siblingEffectContexts.push(dep.initialized.effectContext);
+        }
         console.log(`│  ✅ Loaded dependency plugin: ${depId}`);
       }
 
@@ -136,9 +143,15 @@ export function setupPluginMiddleware(
         Object.keys(pluginsMap).length > 0 ? pluginsMap : undefined,
       );
 
+      const { Context } = await import("effect");
+      effectContextHolder.context = [loaded.initialized?.effectContext, ...siblingEffectContexts]
+        .filter(Boolean)
+        .reduce((acc: any, ctx: any) => Context.merge(acc, ctx), Context.empty());
+
       cleanup = async () => {
         handlers.rpc = null;
         handlers.api = null;
+        effectContextHolder.context = null;
         if (devServer.app.locals.handlers) {
           devServer.app.locals.handlers = null;
         }
@@ -146,6 +159,7 @@ export function setupPluginMiddleware(
       };
 
       handlers.rpc = new RPCHandler(loaded.router, {
+        errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
         interceptors: [
           onError((error: any) => {
             const formatted = formatORPCError(error);
@@ -154,10 +168,13 @@ export function setupPluginMiddleware(
         ],
       });
 
+      const generator = new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] });
+
       handlers.api = new OpenAPIHandler(loaded.router, {
+        errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
         plugins: [
-          new OpenAPIReferencePlugin({
-            schemaConverters: [new ZodToJsonSchemaConverter()],
+          new OpenAPIReferenceHandlerPlugin({
+            spec: () => generator.generate(loaded.router, { version: "3.1.1" }),
           }),
         ],
         interceptors: [
@@ -233,6 +250,7 @@ export function setupPluginMiddleware(
     let cachedRawBody: string | null = null;
     return {
       reqHeaders: webRequest.headers,
+      "effect/context": effectContextHolder.context,
       getRawBody: async (): Promise<string> => {
         if (cachedRawBody !== null) return cachedRawBody;
         if (!rawClone) {

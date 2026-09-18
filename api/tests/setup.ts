@@ -33,8 +33,9 @@ export async function getPluginClient(
   plugins?: Record<string, () => unknown>,
 ) {
   if (!server) {
-    const { router } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
+    const { router, initialized } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
     const rpcHandler = new RPCHandler(router);
+    const effectContext = initialized.effectContext;
 
     server = createServer(async (req, res) => {
       const url = new URL(req.url!, baseUrl);
@@ -50,7 +51,7 @@ export async function getPluginClient(
 
         const result = await rpcHandler.handle(req, res, {
           prefix: "/rpc",
-          context: requestContext,
+          context: { ...requestContext, "effect/context": effectContext },
         });
         if (result.matched) return;
       }
@@ -76,7 +77,8 @@ export async function getPluginClient(
   }
 
   const link = new RPCLink({
-    url: `${baseUrl}/rpc`,
+    origin: baseUrl,
+    url: "/rpc",
     fetch: globalThis.fetch,
     headers: context
       ? {
