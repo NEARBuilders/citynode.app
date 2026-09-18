@@ -105,6 +105,7 @@ function createClientConfig() {
       exposes: {
         "./Router": "./src/router.tsx",
         "./Hydrate": "./src/hydrate.tsx",
+        "./tree": "./src/tree.ts",
         "./components": "./src/components/index.ts",
         "./providers": "./src/providers/index.tsx",
         "./hooks": "./src/hooks/index.ts",
@@ -290,7 +291,7 @@ function createServerConfig() {
             dts: false,
             runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
             library: { type: "commonjs-module" },
-            exposes: { "./Router": "./src/router.server.tsx" },
+            exposes: { "./Router": "./src/router.server.tsx", "./tree": "./src/tree.ts" },
             shared: uiSharedDeps,
           }),
         ],

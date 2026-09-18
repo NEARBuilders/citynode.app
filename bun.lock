@@ -221,9 +221,13 @@
         "tar": "^7.4.3",
       },
       "devDependencies": {
+        "@module-federation/rsbuild-plugin": "catalog:",
+        "@rsbuild/core": "catalog:",
+        "@rsbuild/plugin-react": "catalog:",
         "@tanstack/intent": "catalog:",
         "@tanstack/react-query": "catalog:",
         "@tanstack/react-router": "catalog:",
+        "@tanstack/router-plugin": "catalog:",
         "@types/gradient-string": "^1.1.6",
         "@types/node": "^22.10.2",
         "@types/react": "catalog:",
@@ -234,6 +238,7 @@
         "typescript": "^5.7.2",
         "vite-tsconfig-paths": "^5.1.4",
         "vitest": "^4.0.18",
+        "zephyr-rsbuild-plugin": "catalog:",
       },
       "peerDependencies": {
         "@tanstack/react-query": ">=5.0.0",

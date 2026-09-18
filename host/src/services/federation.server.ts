@@ -20,6 +20,9 @@ interface CachedPromise<T> {
 const routerModuleCache = new Map<string, CachedPromise<RouterModule>>();
 const verifiedSsrEntryCache = new Map<string, CachedPromise<void>>();
 
+const PLUGIN_TREE_CACHE_TTL_MS = 5 * 60_000;
+const MAX_PLUGIN_TREE_CACHE_SIZE = 256;
+
 function pruneExpiredCacheEntries<T>(cache: Map<string, CachedPromise<T>>, now: number) {
   for (const [key, entry] of cache.entries()) {
     if (entry.expiresAt <= now) {
@@ -39,6 +42,7 @@ function enforceCacheLimit<T>(cache: Map<string, CachedPromise<T>>, maxSize: num
 export function resetFederationInstance() {
   routerModuleCache.clear();
   verifiedSsrEntryCache.clear();
+  pluginTreeCache.clear();
 }
 
 function shouldCacheRouterModule(config: RuntimeConfig) {
@@ -97,6 +101,98 @@ function getSsrEntryUrl(config: RuntimeConfig) {
 }
 
 const retrySchedule = Schedule.addDelay(Schedule.recurs(5), () => Effect.succeed(500));
+
+/**
+ * Load an arbitrary expose from a remote's server entry — used for plugin ui
+ * `./tree` route-tree exports during SSR composition. Same SRI + TTL + retry
+ * machinery as loadRouterModule, keyed per remote.
+ */
+export interface PluginUiSsrEntry {
+  name: string;
+  ssrUrl?: string;
+  ssrIntegrity?: string;
+}
+
+const pluginTreeCache = new Map<string, CachedPromise<unknown>>();
+
+export const loadPluginUiTree = (plugin: PluginUiSsrEntry) =>
+  Effect.gen(function* () {
+    if (!plugin.ssrUrl) {
+      throw new FederationError({
+        remoteName: plugin.name,
+        cause: new Error(
+          `Plugin "${plugin.name}" has a ui surface but no SSR entry URL (plugins.<id>.ui.ssr)`,
+        ),
+      });
+    }
+    const entryUrl = `${plugin.ssrUrl.replace(/\/$/, "")}/remoteEntry.server.js`;
+    if (plugin.ssrIntegrity) {
+      yield* Effect.tryPromise({
+        try: () => verifySsrEntryIntegrity(entryUrl, plugin.ssrIntegrity!),
+        catch: (e) =>
+          new FederationError({
+            remoteName: plugin.name,
+            remoteUrl: plugin.ssrUrl,
+            cause: e instanceof Error ? e : new Error(String(e)),
+          }),
+      });
+    }
+
+    const cacheKey = `${plugin.name}::${entryUrl}::${plugin.ssrIntegrity ?? "no-integrity"}`;
+    const now = Date.now();
+    pruneExpiredCacheEntries(pluginTreeCache, now);
+    let cached = pluginTreeCache.get(cacheKey);
+    if (!cached || cached.expiresAt <= now) {
+      cached = {
+        value: Effect.runPromise(
+          Effect.retry(
+            Effect.gen(function* () {
+              const mf = createInstance({
+                name: `host-${Buffer.from(cacheKey).toString("base64url")}`,
+                remotes: [{ name: plugin.name, entry: entryUrl, alias: plugin.name }],
+              });
+              return yield* Effect.tryPromise({
+                try: async () => {
+                  const result = await mf.loadRemote<any>(`${plugin.name}/tree`, { from: "build" });
+                  if (!result) throw new Error(`Module not found: ${plugin.name}/tree`);
+                  return result.default as unknown;
+                },
+                catch: (e) =>
+                  new FederationError({
+                    remoteName: plugin.name,
+                    remoteUrl: plugin.ssrUrl,
+                    cause: e,
+                  }),
+              });
+            }),
+            retrySchedule,
+          ),
+        ).catch((error) => {
+          pluginTreeCache.delete(cacheKey);
+          throw error;
+        }),
+        expiresAt: now + PLUGIN_TREE_CACHE_TTL_MS,
+      };
+      pluginTreeCache.set(cacheKey, cached);
+      enforceCacheLimit(pluginTreeCache, MAX_PLUGIN_TREE_CACHE_SIZE);
+    }
+
+    const tree = yield* Effect.tryPromise({
+      try: () => cached!.value,
+      catch: (e) =>
+        new FederationError({
+          remoteName: plugin.name,
+          remoteUrl: plugin.ssrUrl,
+          cause: e,
+        }),
+    });
+    return tree;
+  }).pipe(
+    Effect.timeout("30 seconds"),
+    Effect.tapError((error: Error) =>
+      Effect.logError(`[SSR] Plugin tree ${plugin.name} failed: ${error.message}`),
+    ),
+  );
 
 export const loadRouterModule = (config: RuntimeConfig) =>
   Effect.gen(function* () {

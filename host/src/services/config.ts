@@ -8,6 +8,14 @@ import type {
 import type { RuntimePlugin } from "../types";
 import { normalizeUrl } from "../utils/normalize";
 
+/** The client compose switch: a plugin ui remote must exist and the server
+ * must also run composition (server + client trees stay identical). */
+function hasComposablePluginUi(config: RuntimeConfig): boolean {
+  const hasPluginUi = Object.values(config.plugins ?? {}).some((p) => Boolean(p.ui?.ssrUrl));
+  if (!hasPluginUi) return false;
+  return process.env.BOS_UI_COMPOSE === "1";
+}
+
 export type { ClientRuntimeConfig, RuntimeConfig, SharedConfig, SourceMode };
 
 export class ConfigService extends Context.Service<ConfigService, RuntimeConfig>()(
@@ -78,6 +86,7 @@ export function buildRuntimeClientConfig(
       url: uiConfig.url,
       entry: uiConfig.entry,
       integrity: uiConfig.integrity,
+      compose: hasComposablePluginUi(config),
     },
     api: config.api
       ? {

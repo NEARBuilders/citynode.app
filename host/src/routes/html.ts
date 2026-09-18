@@ -18,6 +18,22 @@ export function renderClientShell(
   const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
   const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
 
+  const pluginUiScripts = (
+    runtimeConfig.ui?.compose
+      ? Object.values(runtimeConfig.plugins ?? {}).flatMap((plugin) => {
+          const ui = plugin?.ui;
+          if (!ui?.url) return [];
+          const pluginVersion = ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : "";
+          const pluginSri = ui.integrity
+            ? ` integrity="${ui.integrity}" crossorigin="anonymous"`
+            : "";
+          return [
+            `<script${nonceAttr} src="${ui.url.replace(/\/$/, "")}/remoteEntry.js${pluginVersion}"${pluginSri}></script>`,
+          ];
+        })
+      : []
+  ).join("\n          ");
+
   const baseStyles = `
     ${getBaseStyles()}
     .shell { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
@@ -58,6 +74,7 @@ export function renderClientShell(
           <style>${baseStyles}</style>
           ${themeScript}
           <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
+          ${pluginUiScripts}
           <script${nonceAttr}>${hydrateScript}</script>
         </head>
         <body>${shellBody}</body>
