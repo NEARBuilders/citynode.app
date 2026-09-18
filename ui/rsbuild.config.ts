@@ -167,9 +167,9 @@ function createClientConfig() {
     },
     tools: {
       rspack: (config) => {
-        const cssPlugin = config.plugins?.find(
-          (p) => p instanceof rspack.CssExtractRspackPlugin,
-        ) as { options?: Record<string, string> } | undefined;
+        const cssPlugin = config.plugins?.find((p) => p instanceof rspack.CssExtractRspackPlugin) as
+          | { options?: Record<string, string> }
+          | undefined;
         if (cssPlugin) {
           cssPlugin.options ??= {};
           cssPlugin.options.chunkFilename = "static/css/async/[name].[contenthash].css";

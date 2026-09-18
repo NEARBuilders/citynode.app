@@ -13,13 +13,12 @@
   "devDependencies": {
     "@rspack/cli": "latest",
     "@rspack/core": "latest",
-    "@rspack/dev-server": "latest",
     "@types/node": "^20.0.0",
     "typescript": "^5.6.0",
     "every-plugin": "workspace:*"
   },
   "scripts": {
     "build": "rspack build && tsc",
-    "dev": "rspack serve"
+    "dev": "every-plugin-serve"
   }
 }

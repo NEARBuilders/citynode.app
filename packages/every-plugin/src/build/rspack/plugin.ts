@@ -3,14 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
-import { setupPluginMiddleware } from "./dev-server-middleware";
 import { buildSharedDependencies } from "./module-federation";
-import { getPluginInfo, loadDevConfig } from "./utils";
+import { getPluginInfo } from "./utils";
 
-export interface EveryPluginOptions {
-  devConfigPath?: string;
-  port?: number;
-  pluginId?: string;
+export interface EveryPluginBuildOptions {
   dts?: boolean;
 }
 
@@ -143,23 +139,15 @@ export class EmitPluginManifest implements RspackPluginInstance {
   }
 }
 
-export class EveryPluginDevServer implements RspackPluginInstance {
-  name = "EveryPluginDevServer";
+export class EveryPluginBuild implements RspackPluginInstance {
+  name = "EveryPluginBuild";
 
-  constructor(private options: EveryPluginOptions = {}) {}
+  constructor(private options: EveryPluginBuildOptions = {}) {}
 
   apply(compiler: Compiler) {
     const pluginInfo = getPluginInfo(compiler.options.context || process.cwd());
-    const devConfig = loadDevConfig(this.options.devConfigPath || "./plugin.dev.ts");
-    const port = Number(process.env.PORT) || this.options.port || devConfig?.port || 3999;
 
     this.configureDefaults(compiler, pluginInfo);
-
-    if (!compiler.options.devServer) {
-      compiler.options.devServer = {};
-    }
-
-    this.configureDevServer(compiler, pluginInfo, devConfig, port);
 
     new ModuleFederationPlugin({
       name: pluginInfo.normalizedName,
@@ -271,37 +259,5 @@ export class EveryPluginDevServer implements RspackPluginInstance {
         exclude: /node_modules/,
       });
     }
-  }
-
-  private configureDevServer(compiler: Compiler, pluginInfo: any, devConfig: any, port: number) {
-    if (!compiler.options.devServer) {
-      return;
-    }
-
-    const context = compiler.options.context || process.cwd();
-    const originalSetup = compiler.options.devServer.setupMiddlewares;
-
-    compiler.options.devServer.port = port;
-    compiler.options.devServer.static = path.join(context, "dist");
-    compiler.options.devServer.hot = true;
-    compiler.options.devServer.devMiddleware = { writeToDisk: true };
-    compiler.options.devServer.headers = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-      "Access-Control-Allow-Headers": "X-Requested-With, content-type, Authorization",
-    };
-
-    compiler.options.devServer.client = {
-      logging: "warn",
-      overlay: {
-        warnings: false,
-        errors: true,
-      },
-    };
-
-    compiler.options.devServer.setupMiddlewares = (middlewares, devServer) => {
-      setupPluginMiddleware(devServer, pluginInfo, devConfig, port);
-      return originalSetup ? originalSetup(middlewares, devServer) : middlewares;
-    };
   }
 }
