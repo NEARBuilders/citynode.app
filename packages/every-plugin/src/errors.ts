@@ -145,9 +145,9 @@ export const PLUGIN_ERROR_STATUS_MAP: Record<string, number> = {
 } as const;
 
 export {
+  classifyPluginFailure,
   extractFromFiberFailure,
   formatORPCError,
-  isRetryableORPCCode,
   ModuleFederationError,
   PluginRuntimeError,
   toPluginRuntimeError,

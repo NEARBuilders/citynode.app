@@ -1,11 +1,14 @@
+import { Effect } from "effect";
 import { ClientRuntimeConfigSchema } from "everything-dev";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRuntimeClientConfig,
   type RuntimeConfig,
   resolveActiveRuntime,
 } from "../../src/services/config";
 import { pluginsWithUi, uiComposeDigest } from "../../src/services/ui-compose";
+
+const { composePluginTrees, resetUiComposeCache } = await import("../../src/services/ui-compose");
 
 function createBaseRuntimeConfig(): RuntimeConfig {
   return {
@@ -196,5 +199,130 @@ describe("uiComposeDigest", () => {
       require("everything-dev/ui/compose") as typeof import("everything-dev/ui/compose");
     const clientDigest = computeConfigComposeDigest(ClientRuntimeConfigSchema.parse(clientConfig));
     expect(uiComposeDigest(config)).toBe(clientDigest);
+  });
+});
+
+describe("composePluginTrees", () => {
+  const composeMocks = vi.hoisted(() => ({
+    composeApp: vi.fn(),
+    loadPluginUiTree: vi.fn(),
+  }));
+
+  vi.mock("everything-dev/ui/compose", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("everything-dev/ui/compose")>();
+    return { ...actual, composeApp: composeMocks.composeApp };
+  });
+
+  vi.mock("../../src/services/federation.server", () => ({
+    loadPluginUiTree: (...args: unknown[]) => composeMocks.loadPluginUiTree(...args),
+  }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetUiComposeCache();
+  });
+
+  function configWithPlugin(): RuntimeConfig {
+    const config = createBaseRuntimeConfig();
+    config.plugins = {
+      auth: {
+        name: "auth",
+        url: "https://cdn.example.com/auth",
+        entry: "https://cdn.example.com/auth/mf-manifest.json",
+        source: "remote",
+        ui: {
+          name: "auth-ui",
+          url: "https://cdn.example.com/auth-ui",
+          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
+          source: "remote",
+          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
+          ssrIntegrity: "sha384-a",
+        } as never,
+      } as never,
+    };
+    return config;
+  }
+
+  const coreTree = { id: "core-tree" } as never;
+  const grafted = { id: "grafted-tree" } as never;
+
+  it("serves the composed tree from the digest cache until the digest changes", async () => {
+    composeMocks.loadPluginUiTree.mockImplementation(() => Effect.succeed({ id: "plugin-tree" }));
+    composeMocks.composeApp.mockReturnValue({
+      routeTree: grafted,
+      mountCounts: { dashboard: 1 },
+      nav: { items: [] },
+      warnings: [],
+    });
+
+    const config = configWithPlugin();
+    const first = await Effect.runPromise(composePluginTrees({ coreTree, config }));
+    const second = await Effect.runPromise(
+      composePluginTrees({ coreTree: { id: "reloaded" } as never, config }),
+    );
+
+    expect(first.composed?.routeTree).toBe(grafted);
+    expect(composeMocks.loadPluginUiTree).toHaveBeenCalledTimes(1);
+    expect(composeMocks.composeApp).toHaveBeenCalledTimes(1);
+    expect(second.composed).toBe(first.composed);
+    expect(second.composed?.routeTree).toBe(grafted);
+  });
+
+  it("recomposes in local dev so hot-reloaded core trees are picked up", async () => {
+    composeMocks.loadPluginUiTree.mockImplementation(() => Effect.succeed({ id: "plugin-tree" }));
+    composeMocks.composeApp
+      .mockReturnValueOnce({
+        routeTree: grafted,
+        mountCounts: {},
+        nav: { items: [] },
+        warnings: [],
+      })
+      .mockReturnValueOnce({
+        routeTree: { id: "graft-2" } as never,
+        mountCounts: {},
+        nav: { items: [] },
+        warnings: [],
+      });
+
+    const localConfig = {
+      ...configWithPlugin(),
+      ui: { ...createBaseRuntimeConfig().ui, source: "local" },
+    } as RuntimeConfig;
+    const first = await Effect.runPromise(composePluginTrees({ coreTree, config: localConfig }));
+    const second = await Effect.runPromise(composePluginTrees({ coreTree, config: localConfig }));
+
+    expect(composeMocks.composeApp).toHaveBeenCalledTimes(2);
+    expect(second.composed?.routeTree).not.toBe(first.composed?.routeTree);
+  });
+
+  it("digest change invalidates the cached composition", async () => {
+    composeMocks.loadPluginUiTree.mockImplementation(() => Effect.succeed({ id: "plugin-tree" }));
+    composeMocks.composeApp
+      .mockReturnValueOnce({
+        routeTree: grafted,
+        mountCounts: {},
+        nav: { items: [] },
+        warnings: [],
+      })
+      .mockReturnValueOnce({
+        routeTree: { id: "graft-2" } as never,
+        mountCounts: {},
+        nav: { items: [] },
+        warnings: [],
+      });
+
+    const config = configWithPlugin();
+    await Effect.runPromise(composePluginTrees({ coreTree, config }));
+
+    const bumped = structuredClone(config);
+    (bumped.plugins!.auth.ui as { ssrIntegrity: string }).ssrIntegrity = "sha384-rebuilt";
+    const second = await Effect.runPromise(
+      composePluginTrees({ coreTree: { id: "new-core" } as never, config: bumped }),
+    );
+
+    expect(composeMocks.composeApp).toHaveBeenCalledTimes(2);
+    expect(second.composed?.digest).not.toBe(
+      (await Effect.runPromise(composePluginTrees({ coreTree, config }))).composed?.digest,
+    );
   });
 });

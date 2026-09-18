@@ -21,7 +21,7 @@ import type { RuntimeConfig } from "./config";
 import { loadPluginUiTree, type PluginUiSsrEntry } from "./federation.server";
 
 const COMPOSE_CACHE_TTL_MS = 2 * 60_000;
-const COMPOSE_CACHE_MAX_ENTRIES = 32;
+const COMPOSE_CACHE_MAX_ENTRIES = 256;
 
 export interface ComposedUi {
   routeTree: AnyRoute;
@@ -69,6 +69,13 @@ export interface ComposedPluginTrees {
  * Without plugin ui entries the core tree composes to itself and the nav
  * manifest stays empty — zero behavioral delta for monolith-only runtimes.
  * Tree load failures throw; callers fall back to the CSR shell.
+ *
+ * The digest covers every compose input (core + per-plugin urls,
+ * integrities and ssr fields), so a hit under an unchanged digest means the
+ * composed tree is semantically current — the previous routeTree-object
+ * identity check never fired for real compositions (a grafted tree is never
+ * the same object as the core tree), which recomposed per request. Local dev
+ * bypasses the cache so hot-reloaded core trees always recompose.
  */
 export const composePluginTrees = (inputs: {
   coreTree: AnyRoute;
@@ -92,7 +99,7 @@ export const composePluginTrees = (inputs: {
     }
 
     const cached = composeCache.get(digest);
-    if (cached && cached.routeTree === coreTree) {
+    if (cached && config.ui.source !== "local") {
       return { composed: cached, warnings: [] } satisfies ComposedPluginTrees;
     }
 
