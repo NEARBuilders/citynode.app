@@ -25,6 +25,12 @@ type PluginInitializeInput<V extends AnySchema, S extends AnySchema> = {
 
 export class PluginIdTag extends Context.Service<PluginIdTag, string>()("PluginId") {}
 
+/**
+ * The `initialize` effect's environment: the plugin lifecycle scope plus the
+ * framework-assigned plugin id.
+ */
+export type PluginEnv = Scope.Scope | PluginIdTag;
+
 type PluginDefinition<
   V extends AnySchema,
   S extends AnySchema,
@@ -54,7 +60,7 @@ type PluginDefinition<
   initialize?: (
     config: PluginInitializeInput<V, S>,
     plugins: P,
-  ) => Effect.Effect<Layer.Layer<any, any, any>, Error, Scope.Scope | PluginIdTag>;
+  ) => Effect.Effect<Layer.Layer<any, any, any>, Error, PluginEnv>;
   /**
    * Creates the strongly-typed oRPC router for this plugin.
    * Services come from the Effect context — access them with
@@ -104,7 +110,7 @@ export interface Plugin<
   initialize(
     config: PluginInitializeInput<TVariables, TSecrets>,
     plugins: Record<string, unknown>,
-  ): Effect.Effect<Layer.Layer<any, any, any>, unknown, Scope.Scope | PluginIdTag>;
+  ): Effect.Effect<Layer.Layer<any, any, any>, unknown, PluginEnv>;
 
   /**
    * Creates the strongly-typed oRPC router for this plugin.
@@ -153,7 +159,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
     initialize(
       pluginConfig: PluginInitializeInput<V, S>,
       plugins: Record<string, unknown> = {},
-    ): Effect.Effect<Layer.Layer<any, any, any>, unknown, Scope.Scope | PluginIdTag> {
+    ): Effect.Effect<Layer.Layer<any, any, any>, unknown, PluginEnv> {
       const init =
         config.initialize ??
         (() => Effect.succeed(Layer.empty as unknown as Layer.Layer<any, any, any>));
@@ -161,7 +167,7 @@ export const createPlugin: CreatePluginFn = function createPlugin<
       return init(pluginConfig, plugins as P) as Effect.Effect<
         Layer.Layer<any, any, any>,
         unknown,
-        Scope.Scope | PluginIdTag
+        PluginEnv
       >;
     }
 

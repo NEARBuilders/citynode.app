@@ -136,11 +136,6 @@ export type RegisteredPlugin<K extends keyof R, R = RegisteredPlugins> = R[K] ex
   : never;
 
 /**
- * Extract plugin constructor type from registry entry
- */
-export type PluginConstructor<K extends keyof R, R = RegisteredPlugins> = RegisteredPlugin<K, R>;
-
-/**
  * Extract context input type from plugin binding (for client creation)
  */
 export type PluginContextInput<T> =
@@ -167,11 +162,6 @@ export type PluginMetadata = {
  * Runtime registry configuration supporting both module and remote entries
  */
 export type PluginRegistry = Record<string, PluginRegistryEntry>;
-
-/**
- * Legacy metadata-only registry (for backwards compatibility)
- */
-export type PluginMetadataRegistry = Record<string, PluginMetadata>;
 
 /**
  * Configuration for secrets injection.
@@ -301,16 +291,6 @@ export interface PluginRuntimeConfig<
   R extends Record<string, PluginRegistryEntry> = Record<string, PluginRegistryEntry>,
 > {
   registry: R;
-  secrets?: SecretsConfig;
-  options?: RuntimeOptions;
-}
-
-/**
- * Legacy plugin runtime configuration (metadata-only registry)
- * @deprecated Use PluginRuntimeConfig with module/remote entries instead
- */
-export interface LegacyPluginRuntimeConfig {
-  registry: PluginMetadataRegistry;
   secrets?: SecretsConfig;
   options?: RuntimeOptions;
 }

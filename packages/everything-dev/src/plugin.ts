@@ -6,6 +6,7 @@ import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
 import { Context, Effect, Layer } from "effect";
+import { buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import { openInBrowser, startLoginServer } from "./auth-login";
@@ -439,7 +440,7 @@ export default createPlugin({
         };
       });
 
-      const services = yield* Layer.buildWithScope(
+      const services = yield* buildScopedContext(
         Layer.mergeAll(
           makeDatabaseBindings({
             projectDir: base.configDir,
@@ -452,7 +453,6 @@ export default createPlugin({
             onLog: (message) => p.log.info(message),
           }),
         ),
-        yield* Effect.scope,
       );
 
       return Layer.succeed(BosDepsTag, {

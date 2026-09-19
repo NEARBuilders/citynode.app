@@ -61,7 +61,7 @@ Key points:
 - Always import `oc` from `every-plugin/orpc`, `z` from `every-plugin/zod`, `Effect` from `every-plugin/effect`
 - Use `eventIterator(schema)` for streaming responses
 - Define error objects with `status` + `message` and pass via `.errors()`
-- Use `CommonPluginErrors` from `every-plugin/errors` for standard UNAUTHORIZED/FORBIDDEN/NOT_FOUND/BAD_REQUEST
+- Use `PluginErrors` from `every-plugin/errors` for standard UNAUTHORIZED/FORBIDDEN/NOT_FOUND/BAD_REQUEST
 
 ## Step 2: Create the Service
 
@@ -165,17 +165,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
 ## Long-Lived Scoped Resources
 
-For database pools, caches, publisher channels, or any resource that should live for the plugin's lifetime, use `tools.buildService(tag, layer)` inside `initialize`:
+For database pools, caches, publisher channels, or any resource that should live for the plugin's lifetime, use `buildScoped(tag, layer)` inside `initialize` (or `buildScopedContext(layer)` for multi-service layers):
 
 ```typescript
-import { createPlugin } from "every-plugin";
+import { buildScoped, createPlugin } from "every-plugin";
 import { Effect, Layer } from "every-plugin/effect";
 
 export default createPlugin({
   // ...
-  initialize: (config, _plugins, tools) =>
+  initialize: (config, _plugins) =>
     Effect.gen(function* () {
-      const repo = yield* tools.buildService(
+      const repo = yield* buildScoped(
         MyRepoTag,
         MyRepoLive.pipe(Layer.provide(DatabaseLive(config.secrets.MY_DATABASE_URL))),
       );
@@ -188,8 +188,18 @@ export default createPlugin({
 });
 ```
 
-`tools.buildService(tag, layer)` binds the layer's resources to the plugin's lifecycle scope.
+`buildScoped(tag, layer)` builds the layer with the plugin's lifecycle scope and resolves the service from the built context.
 Resources persist until the plugin shuts down and are automatically cleaned up during `runtime.shutdown()`.
+
+For layers that provide several services at once, use `buildScopedContext` and resolve each tag:
+
+```typescript
+const services = yield* buildScopedContext(
+  Layer.mergeAll(TenantsLive, NodesLive).pipe(Layer.provide(database)),
+);
+
+const tenants = Context.get(services, TenantsTag);
+```
 
 **Bad — creates a transient scope that closes immediately:**
 ```typescript
@@ -198,15 +208,14 @@ const svc = yield* Effect.provide(MyTag, MyLive.pipe(Layer.provide(DatabaseLive(
 
 **Good — resources persist for the plugin's lifetime:**
 ```typescript
-const svc = yield* tools.buildService(MyTag, MyLive.pipe(Layer.provide(DatabaseLive(url))))
+const svc = yield* buildScoped(MyTag, MyLive.pipe(Layer.provide(DatabaseLive(url))))
 ```
 
 Key rules:
-- Use `tools.buildService(...)` for any `Layer.scoped(...)` resource that should survive initialization
+- Use `buildScoped(...)` for any `Layer.scoped(...)` resource that should survive initialization
 - Plain class construction (new Service(...)) is still fine directly in `initialize`
-- `createRouter(deps)` receives whatever `initialize` returns — same mental model as before
+- Handlers access services via the injected oRPC context (`yield* Tag` in `.effect()` handlers), not from initialize's return value
 - Do not use `Effect.provide(Tag, Layer.scoped(...))` for persistent dependencies inside `initialize`
-- `tools` is provided by the framework and does not need to be imported
 
 ## Dev Server Config (plugin.dev.ts)
 
@@ -259,4 +268,4 @@ export default {
 - Forgetting `.errors(Errors)` on routes that can throw ORPCError — untyped errors
 - Using `Effect.runPromise` inside `Effect.gen` — use `yield*` instead for proper error channel
 - Putting business logic in `createRouter` — keep it in the service class, router is just glue
-- Using `Effect.provide(Tag, Layer.scoped(...))` inside `initialize` for long-lived resources — creates a transient scope that releases the resource immediately after initialization. Use `tools.buildService(Tag, Layer.scoped(...))` instead
+- Using `Effect.provide(Tag, Layer.scoped(...))` inside `initialize` for long-lived resources — creates a transient scope that releases the resource immediately after initialization. Use `buildScoped(Tag, Layer.scoped(...))` instead

@@ -1,4 +1,7 @@
 import type { AnyRoute } from "@tanstack/react-router";
+import type { MountId } from "./mount-registry";
+
+export type { MountId };
 
 /**
  * A plugin's ui surface — a single `tree` export of its generated route tree.
@@ -56,21 +59,3 @@ export interface NavDeclaration {
   /** set true to expose the route as a page but omit it from the sidebar */
   hidden?: boolean;
 }
-
-export type MountId = "public" | "anon" | "authenticated" | "dashboard" | "admin" | "organization";
-
-/**
- * Mount aliases accepted at the plugin boundary. Plugin authors write
- * `_<mount>` pathless layout roots; aliases map onto canonical ids so legacy
- * naming (like the prototype's `_auth`) still grafts deterministically.
- */
-export const MOUNT_ALIASES: Record<string, string> = {
-  auth: "authenticated",
-  authed: "authenticated",
-  authenticated: "authenticated",
-  public: "public",
-  anon: "anon",
-  admin: "admin",
-  dashboard: "dashboard",
-  organization: "organization",
-};

@@ -1,7 +1,7 @@
 import { oc } from "@orpc/contract";
 import { call } from "@orpc/server";
 import { Context, Effect, Layer } from "effect";
-import { createPlugin, createPluginRuntime } from "every-plugin";
+import { buildScoped, buildScopedContext, createPlugin, createPluginRuntime } from "every-plugin";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -688,5 +688,83 @@ describe("Scope lifecycle", () => {
     expect(await (client as any).inner.hello()).toBe("inner-hello");
 
     await runtime.shutdown();
+  });
+
+  it("buildScoped yields the service and releases resources when the surrounding scope closes", async () => {
+    let released = false;
+
+    class TrackedTag extends Context.Service<TrackedTag, { value: string }>()(
+      "scope-lifecycle/TrackedTag",
+    ) {}
+
+    const TrackedLive = Layer.effect(
+      TrackedTag,
+      Effect.acquireRelease(
+        Effect.sync(() => ({ value: "live" })),
+        () =>
+          Effect.sync(() => {
+            released = true;
+          }),
+      ),
+    );
+
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* buildScoped(TrackedTag, TrackedLive);
+          return service.value;
+        }),
+      ),
+    );
+
+    expect(result).toBe("live");
+    expect(released).toBe(true);
+  });
+
+  it("buildScoped keeps the layer's R requirements on the effect", async () => {
+    class NeedsConfig extends Context.Service<NeedsConfig, { url: string }>()(
+      "scope-lifecycle/NeedsConfig",
+    ) {}
+
+    class ConfigTag extends Context.Service<ConfigTag, { url: string }>()(
+      "scope-lifecycle/ConfigTag",
+    ) {}
+
+    const ConfigLive = Layer.succeed(ConfigTag, { url: "https://example.test" });
+    const NeedsConfigLive = Layer.effect(
+      NeedsConfig,
+      Effect.gen(function* () {
+        const config = yield* ConfigTag;
+        return { url: config.url };
+      }),
+    );
+
+    const result = await Effect.runPromise(
+      Effect.scoped(buildScoped(NeedsConfig, NeedsConfigLive.pipe(Layer.provide(ConfigLive)))),
+    );
+
+    expect(result.url).toBe("https://example.test");
+  });
+
+  it("buildScopedContext resolves two tags from one built context", async () => {
+    class ATag extends Context.Service<ATag, { a: number }>()("scope-lifecycle/ATag") {}
+    class BTag extends Context.Service<BTag, { b: number }>()("scope-lifecycle/BTag") {}
+
+    const { a, b } = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const services = yield* buildScopedContext(
+            Layer.mergeAll(Layer.succeed(ATag, { a: 1 }), Layer.succeed(BTag, { b: 2 })),
+          );
+          return {
+            a: Context.get(services, ATag).a,
+            b: Context.get(services, BTag).b,
+          };
+        }),
+      ),
+    );
+
+    expect(a).toBe(1);
+    expect(b).toBe(2);
   });
 });

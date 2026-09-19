@@ -309,7 +309,7 @@ export async function signAsDaoTransaction(
   });
   const builder = near
     .transaction(daoAccountId)
-    .functionCall(spec.receiverId, spec.methodName, spec.args as unknown as Record<string, never>, {
+    .functionCall(spec.receiverId, spec.methodName, spec.args, {
       ...(options.waitUntil ? { waitUntil: options.waitUntil } : {}),
       gas: parseGasInput(spec.gas),
       attachedDeposit: parseDepositInput(spec.attachedDeposit),
