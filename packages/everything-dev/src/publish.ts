@@ -186,7 +186,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
   let strategy: SigningStrategy;
   if (input.wallet) {
-    strategy = { strategy: "near-kit", privateKey: "", source: "provided" };
     console.log(
       `  Signing via ${colors.cyan("gasless NEP-366 delegate action (relayed by the platform relayer)")}`,
     );

@@ -52,12 +52,17 @@ type NearAccountsResult = {
   activeAccount: NearAccount | null;
 };
 
-function toLoopback(port: number, params: Record<string, string | null | undefined>): string {
-  const url = new URL(`http://127.0.0.1:${port}/callback`);
-  for (const [key, value] of Object.entries(params)) {
-    if (value) url.searchParams.set(key, value);
-  }
-  return url.toString();
+async function postToLoopback(
+  port: number,
+  payload: Record<string, string | number | null | undefined>,
+): Promise<void> {
+  const res = await fetch(`http://127.0.0.1:${port}/callback`, {
+    method: "POST",
+    mode: "cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`CLI handoff failed (${res.status})`);
 }
 
 function CliLoginPage() {
@@ -76,9 +81,11 @@ function CliLoginPage() {
   const { data: session, isPending: sessionPending } = useQuery(sessionQueryOptions(auth));
 
   const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [handoffComplete, setHandoffComplete] = useState(false);
 
   useEffect(() => {
     setHandoffError(null);
+    setHandoffComplete(false);
   }, [state, port]);
 
   const nearAccountsQuery = useQuery({
@@ -102,16 +109,15 @@ function CliLoginPage() {
       });
       if (error) throw new Error(error.message);
       if (!data?.key) throw new Error("API key creation returned no key");
-      return data;
-    },
-    onSuccess: (data) => {
-      window.location.href = toLoopback(port as number, {
+      await postToLoopback(port, {
+        state,
         key: data.key,
         keyId: data.id,
-        state,
         account: signedInAccountId,
       });
+      return true;
     },
+    onSuccess: () => setHandoffComplete(true),
     onError: (error: Error) => {
       const message = error.message || "Failed to create CLI credential";
       setHandoffError(message);
@@ -135,21 +141,35 @@ function CliLoginPage() {
           allowance: "1 NEAR",
         })
         .send();
-      return true;
-    },
-    onSuccess: () => {
-      window.location.href = toLoopback(port as number, {
+      await postToLoopback(port, {
         state,
         account: signedInAccountId,
-        added: "1",
+        added: 1,
       });
+      return true;
     },
+    onSuccess: () => setHandoffComplete(true),
     onError: (error: Error) => {
       const message = error.message || "Failed to add delegate key";
       setHandoffError(message);
       toast.error(message);
     },
   });
+
+  if (handoffComplete) {
+    return (
+      <Page>
+        <Card className="p-6 space-y-2">
+          <h1 className="text-lg font-semibold text-foreground" data-testid="cli.heading">
+            Connected — return to your terminal
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            The CLI received the credential. You can close this window.
+          </p>
+        </Card>
+      </Page>
+    );
+  }
 
   if (handoffError) {
     return (
