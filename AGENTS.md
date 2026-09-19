@@ -460,6 +460,20 @@ The `bos` CLI wraps near-cli-rs for account and key management — you normally 
 2. Implement in `api/src/index.ts` — the `createRouter` function
 3. Use in UI via `apiClient` from `useApiClient()` in `@/app`
 
+**Handler convention (required for new routes):** write handlers as Effect-native
+`.effect(function* ...)` generators (see `plugins/_template/src/index.ts`) and access
+services with `yield* Tag` — the tag must be exposed from the plugin's returned
+`initialize` layer. Auth checks fail via `Effect.fail(errors.UNAUTHORIZED(...))` /
+`errors.FORBIDDEN(...)` inside the generator (note: the shared `every-plugin/errors`
+shapes constrain the `data` payload — e.g. `UNAUTHORIZED` requires
+`{ apiKeyProvided: boolean }`, all-optional shapes still need explicit `data: {}`).
+`Context.get(context["effect/context"], Tag)` is reserved for streaming
+(async-generator) handlers. Do not introduce new plain `.handler(async)` routes with
+inline `Context.get` service access, and do not use the `createAuthMiddleware`
+middlewares via `.use()` for new routes — their `DecoratedMiddleware` typing does not
+currently compose with the `.use()` builder (see proposals plugin's local middleware
+for the workaround pattern).
+
 ### Plugin Architecture
 
 Business logic is organized into independent plugins loaded via Module Federation. A plugin entry in `bos.config.json` can be **remote-only** (no `development: local:…` key) — the host/API consume it via `pluginsClient` and HTTP, and types resolve from the deployed manifest (see "Generated types" below). Plugin source does not need to live in this repo.

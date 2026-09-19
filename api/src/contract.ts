@@ -255,7 +255,8 @@ export const contract = oc.router({
         path: z.string(),
       }),
     )
-    .output(z.instanceof(File)),
+    .output(z.instanceof(File))
+    .errors({ NOT_FOUND }),
   ping: oc.route({ method: "GET", path: "/ping" }).output(
     z.object({
       status: z.literal("ok"),

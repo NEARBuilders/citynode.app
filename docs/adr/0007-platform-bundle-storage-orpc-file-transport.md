@@ -18,7 +18,7 @@ Three options were considered:
 
 **Option 2 — everything through the oRPC contract.** The API plugin owns two contract routes:
 
-- `POST /storage/bundles` — `requireAuthOrApiKey`-family check (same session-for-API-key trust model as the relay path), path allowlist, traversal rejection, total-size ceiling, **SRI computed server-side over stored bytes**.
+- `POST /storage/bundles` — authenticated (session/API-key, the same trust family as the relay path), path allowlist, traversal rejection, total-size ceiling, **SRI computed server-side over stored bytes**.
 - `GET /bundles/{account}/{gateway}/{workspace}/{+path}` — public, returns a `File` (content-type carried by the file), `Cache-Control: public, max-age=31536000, immutable` via `ResponseHeadersHandlerPlugin`.
 
 The host grows three generic lines, no storage-specific code:
@@ -39,3 +39,5 @@ Verified against the installed oRPC beta.35 (not just current docs): the runtime
 - **R2 (or any object store) drops in behind `BundleStorage`** (`api/src/services/storage.ts`) without touching routes, host, or CLI. Platform-owned credentials only, never tenant-visible.
 - **Follow-up generalization**: plan 033 (`advisor-plans/033-derived-openapi-mounts.md`) — derive extra HTTP mounts from contract metadata so the `/bundles` mount stops being hardcoded.
 - **Trade-off accepted**: bundle assets appear in the OpenAPI/Scalar/MCP surfaces (read-only GETs, tagged `Storage`), and binary responses ride the oRPC serializer rather than a raw static handler — negligible at current scale.
+- **Handler convention**: storage route handlers are Effect-native `.effect()` generators accessing the service via `yield* StorageTag` (template pattern, `plugins/_template/src/index.ts`) — `StorageTag` is exposed from `initialize`'s returned layer alongside `ApiServices`. Inline auth inside the generator (`Effect.fail(errors.UNAUTHORIZED(...))` with the required `apiKeyProvided` data) follows the template; the shared `requireAuthOrApiKey` from `api/src/lib/auth.ts` is not used because its `DecoratedMiddleware` typing does not compose with the `.use()` builder (zero working call sites repo-wide — the proposals plugin carries a local copy for the same reason; consolidation is plan 007).
+- **Seam deviation from plan 029, recorded**: under the platform provider, workspace `scripts.deploy` (the `withPluginDeploy`/Zephyr hook) is skipped entirely and `bos publish` uploads each workspace's `dist/` artifacts itself, writing `production`/`integrity` via the batch `applyDeployResults` variant instead of the per-route `reportDeployResult`. The one-liner property of workspace deploy scripts holds vacuously (zephyr keeps the hook; platform bypasses it). Revisit if platform providers ever need per-workspace deploy hooks.

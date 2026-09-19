@@ -119,13 +119,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       console.log("[API] Services Initialized");
 
-      return Layer.succeed(ApiServices, {
-        tenants: Context.get(services, TenantsTag),
-        nodes: Context.get(services, NodesTag),
-        validators: Context.get(services, ValidatorsTag),
-        discovery: Context.get(services, DiscoveryTag),
-        storage: Context.get(services, StorageTag),
-      });
+      return Layer.mergeAll(
+        Layer.succeed(ApiServices, {
+          tenants: Context.get(services, TenantsTag),
+          nodes: Context.get(services, NodesTag),
+          validators: Context.get(services, ValidatorsTag),
+          discovery: Context.get(services, DiscoveryTag),
+          storage: Context.get(services, StorageTag),
+        }),
+        Layer.succeed(StorageTag, Context.get(services, StorageTag)),
+      );
     }),
 
   createRouter: (builder, plugins) => {
@@ -278,22 +281,24 @@ export default createPlugin.withPlugins<PluginsClient>()({
         timestamp: new Date().toISOString(),
       })),
 
-      uploadBundles: builder.uploadBundles.handler(async ({ input, context }) => {
+      uploadBundles: builder.uploadBundles.effect(function* ({ input, context, errors }) {
+        const apiKeyProvided = !context.user && !context.userId && !!context.apiKey;
         if (!context.user && !context.userId && !context.apiKey) {
-          throw new ORPCError("UNAUTHORIZED", {
-            message: "Authentication required",
-            data: { hint: "Sign in or provide an API key" },
-          });
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({
+              message: "Authentication required — sign in or provide an API key",
+              data: { apiKeyProvided, authType: "apiKey" as const },
+            }),
+          );
         }
-        const services = Context.get(context["effect/context"], ApiServices);
+        const storage = yield* StorageTag;
         if (context.near?.primaryAccountId && context.near.primaryAccountId !== input.account) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Uploads are pinned to the authenticated account",
-            data: {
-              authenticatedAccount: context.near.primaryAccountId,
-              requestedAccount: input.account,
-            },
-          });
+          return yield* Effect.fail(
+            errors.FORBIDDEN({
+              message: `Uploads are pinned to the authenticated account (${context.near.primaryAccountId}), not ${input.account}`,
+              data: {},
+            }),
+          );
         }
 
         const files = Object.entries(input.paths).map(([path, file]) => ({
@@ -302,20 +307,36 @@ export default createPlugin.withPlugins<PluginsClient>()({
           contentType: file.contentType ?? guessContentType(path),
         }));
         const prefix = `${input.account}/${input.gateway}/${input.workspace}`;
-        const objects = await services.storage.put(prefix, files);
+        const objects = yield* Effect.tryPromise({
+          try: () => storage.put(prefix, files),
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((error) =>
+            error instanceof ORPCError
+              ? Effect.fail(error)
+              : Effect.fail(
+                  new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: error instanceof Error ? error.message : "Storage failure",
+                  }),
+                ),
+          ),
+        );
         return { base: `bundles/${prefix}`, objects };
       }),
 
-      serveBundle: builder.serveBundle.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const object = await services.storage.get(
-          `bundles/${input.account}/${input.gateway}/${input.workspace}/${input.path}`,
-        );
+      serveBundle: builder.serveBundle.effect(function* ({ input, context, errors }) {
+        const storage = yield* StorageTag;
+        const object = yield* Effect.tryPromise({
+          try: () =>
+            storage.get(
+              `bundles/${input.account}/${input.gateway}/${input.workspace}/${input.path}`,
+            ),
+          catch: (cause) => cause,
+        });
         if (!object) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Bundle object not found",
-            data: { resource: "bundle", resourceId: input.path },
-          });
+          return yield* Effect.fail(
+            errors.NOT_FOUND({ message: "Bundle object not found", data: {} }),
+          );
         }
         const resHeaders = (context as { resHeaders?: Headers }).resHeaders;
         resHeaders?.set("cache-control", "public, max-age=31536000, immutable");
