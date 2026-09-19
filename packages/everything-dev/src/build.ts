@@ -337,7 +337,6 @@ export async function buildWorkspaceTargets(opts: {
   targets: string[];
   deploy: boolean;
   verbose?: boolean;
-  cdnUploadHandled?: boolean;
   cdnProviderOverride?: "zephyr" | "platform";
 }): Promise<{
   built: string[];
