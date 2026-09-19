@@ -171,6 +171,24 @@
       "import": "./dist/ui/router.mjs",
       "require": "./dist/ui/router.cjs"
     },
+    "./ui/api": {
+      "development": {
+        "types": "./src/ui/api.ts",
+        "import": "./src/ui/api.ts"
+      },
+      "types": "./dist/ui/api.d.mts",
+      "import": "./dist/ui/api.mjs",
+      "require": "./dist/ui/api.cjs"
+    },
+    "./ui/auth": {
+      "development": {
+        "types": "./src/ui/auth.ts",
+        "import": "./src/ui/auth.ts"
+      },
+      "types": "./dist/ui/auth.d.mts",
+      "import": "./dist/ui/auth.mjs",
+      "require": "./dist/ui/auth.cjs"
+    },
     "./ui/compose": {
       "development": {
         "types": "./src/ui/compose/index.ts",
@@ -248,23 +266,61 @@
     "tar": "^7.4.3"
   },
   "peerDependencies": {
+    "@better-auth/api-key": "catalog:",
+    "@better-auth/passkey": "catalog:",
+    "@orpc/client": "catalog:",
+    "@orpc/contract": "catalog:",
+    "@orpc/tanstack-query": "catalog:",
     "@tanstack/react-query": ">=5.0.0",
     "@tanstack/react-router": ">=1.0.0",
+    "better-auth": "catalog:",
+    "better-near-auth": "catalog:",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0",
+    "sonner": ">=2.0.0",
     "effect": "catalog:",
     "zod": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@better-auth/api-key": {
+      "optional": true
+    },
+    "@better-auth/passkey": {
+      "optional": true
+    },
+    "@orpc/client": {
+      "optional": true
+    },
+    "@orpc/contract": {
+      "optional": true
+    },
+    "@orpc/tanstack-query": {
+      "optional": true
+    },
     "@tanstack/react-query": {
       "optional": true
     },
     "@tanstack/react-router": {
       "optional": true
+    },
+    "sonner": {
+      "optional": true
+    },
+    "better-auth": {
+      "optional": true
+    },
+    "better-near-auth": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@better-auth/api-key": "catalog:",
+    "@better-auth/passkey": "catalog:",
     "@module-federation/rsbuild-plugin": "catalog:",
+    "@orpc/client": "catalog:",
+    "@orpc/contract": "catalog:",
+    "@orpc/openapi": "catalog:",
+    "@orpc/tanstack-query": "catalog:",
     "@rsbuild/core": "catalog:",
     "@rsbuild/plugin-react": "catalog:",
     "@tanstack/intent": "catalog:",
@@ -276,6 +332,8 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/tar": "^7.0.0",
+    "better-auth": "catalog:",
+    "better-near-auth": "catalog:",
     "react-devtools-core": "^7.0.1",
     "tsdown": "^0.22.0",
     "typescript": "^5.7.2",
