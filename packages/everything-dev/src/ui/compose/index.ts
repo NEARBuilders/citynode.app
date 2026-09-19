@@ -1,9 +1,11 @@
 export { ComposeCache } from "./cache";
 export type { ComposeResult } from "./compose";
 export { collectCoreMounts, composeApp } from "./compose";
+export type { UiPluginDefinition } from "./define";
+export { defineUiPlugin } from "./define";
 export { computeComposeDigest, computeConfigComposeDigest, hasComposableUi } from "./digest";
 export { MOUNT_REGISTRY_VERSION } from "./digest-version";
-export type { MountEntry } from "./mount-registry";
-export { MOUNT_REGISTRY } from "./mount-registry";
+export type { MountEntry, MountId } from "./mount-registry";
+export { MOUNT_ALIASES, MOUNT_REGISTRY, MOUNTS } from "./mount-registry";
 export { buildNavManifest, routeFullPath } from "./nav";
 export * from "./types";

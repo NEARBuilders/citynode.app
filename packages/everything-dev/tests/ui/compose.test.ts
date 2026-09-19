@@ -2,6 +2,9 @@ import type { AnyRoute } from "@tanstack/react-router";
 import { createRootRoute, createRoute } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
 import { collectCoreMounts, composeApp } from "../../src/ui/compose/compose";
+import { defineUiPlugin } from "../../src/ui/compose/define";
+import type { MountId } from "../../src/ui/compose/mount-registry";
+import { MOUNTS } from "../../src/ui/compose/mount-registry";
 import { routeFullPath } from "../../src/ui/compose/nav";
 
 const layoutRoute = (id: string, parent: () => AnyRoute): AnyRoute =>
@@ -224,5 +227,121 @@ describe("composeApp", () => {
     const grafted = (coreB.publicMount as unknown as { children?: AnyRoute[] }).children?.[0];
     expect(grafted?.options?.id).toBe("blog__public");
     expect(grafted).not.toBe(pluginTree);
+  });
+});
+
+describe("MOUNTS", () => {
+  it("exposes the canonical mount ids of the registry", () => {
+    expect(MOUNTS).toEqual([
+      "public",
+      "anon",
+      "authenticated",
+      "dashboard",
+      "admin",
+      "organization",
+    ]);
+  });
+});
+
+describe("defineUiPlugin", () => {
+  const buildPluginTree = (): { tree: AnyRoute; mount: AnyRoute } => {
+    const pluginRoot = createRootRoute({ component: () => null });
+    const pluginDashboard = layoutRoute("_dashboard", () => pluginRoot);
+    const billing = leafRoute("/billing", () => pluginDashboard);
+    (pluginDashboard as unknown as { children?: AnyRoute[] }).children = [billing];
+    (pluginRoot as unknown as { children?: AnyRoute[] }).children = [pluginDashboard];
+    return { tree: pluginRoot, mount: pluginDashboard };
+  };
+
+  it("produces a module composeApp grafts like a raw tree", () => {
+    const core = buildCoreTree();
+    const { tree } = buildPluginTree();
+
+    const mod = defineUiPlugin({ name: "settings", mounts: ["dashboard"], tree });
+    const result = composeApp(core.tree, [mod]);
+
+    expect(result.pluginMounts).toEqual({ settings: { dashboard: 1 } });
+    const grafted = (core.dashboardMount as unknown as { children?: AnyRoute[] }).children?.[0];
+    expect(grafted?.options?.id).toBe("settings__dashboard");
+    expect(grafted?.options?.getParentRoute?.()).toBe(core.dashboardMount);
+  });
+
+  it("accepts alias roots resolved to a declared mount (_auth → authenticated)", () => {
+    const core = buildCoreTree();
+    const pluginRoot = createRootRoute({ component: () => null });
+    const pluginAuth = layoutRoute("_auth", () => pluginRoot);
+    (pluginRoot as unknown as { children?: AnyRoute[] }).children = [pluginAuth];
+
+    const mod = defineUiPlugin({ name: "legacy", mounts: ["authenticated"], tree: pluginRoot });
+    const result = composeApp(core.tree, [mod]);
+
+    expect(result.pluginMounts).toEqual({ legacy: { authenticated: 1 } });
+  });
+
+  it("does not throw for root children that are not mount declarations", () => {
+    const pluginRoot = createRootRoute({ component: () => null });
+    const stray = leafRoute("/stray", () => pluginRoot);
+    (pluginRoot as unknown as { children?: AnyRoute[] }).children = [stray];
+
+    const core = buildCoreTree();
+    const mod = defineUiPlugin({ name: "widgets", mounts: ["dashboard"], tree: pluginRoot });
+    const result = composeApp(core.tree, [mod]);
+
+    expect(result.pluginMounts).toEqual({});
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("throws when a root declares a valid mount that is not in def.mounts", () => {
+    const pluginRoot = createRootRoute({ component: () => null });
+    const pluginPublic = layoutRoute("_public", () => pluginRoot);
+    (pluginRoot as unknown as { children?: AnyRoute[] }).children = [pluginPublic];
+
+    expect(() =>
+      defineUiPlugin({ name: "settings", mounts: ["dashboard"], tree: pluginRoot }),
+    ).toThrow(/_public/);
+  });
+
+  it("throws when a root declares an unknown mount (typo)", () => {
+    const pluginRoot = createRootRoute({ component: () => null });
+    const typo = layoutRoute("_dashbord", () => pluginRoot);
+    (pluginRoot as unknown as { children?: AnyRoute[] }).children = [typo];
+
+    expect(() =>
+      defineUiPlugin({ name: "settings", mounts: ["dashboard"], tree: pluginRoot }),
+    ).toThrow(/_dashbord.*dashboard|dashboard.*_dashbord/s);
+  });
+
+  it("rejects mount typos at compile time", () => {
+    const { tree } = buildPluginTree();
+
+    const bad = () =>
+      defineUiPlugin({
+        name: "settings",
+        // @ts-expect-error "dashbord" is not a MountId
+        mounts: ["dashbord"],
+        tree,
+      });
+    void bad;
+  });
+
+  it("rejects unknown mount names at runtime for untyped (JS) consumers", () => {
+    const { tree } = buildPluginTree();
+
+    expect(() =>
+      defineUiPlugin({
+        name: "settings",
+        mounts: ["dashbord"] as unknown as MountId[],
+        tree,
+      }),
+    ).toThrow(/dashbord/);
+  });
+
+  it("keeps the raw-tree fallback composing (no WeakMap entry)", () => {
+    const core = buildCoreTree();
+    const { tree } = buildPluginTree();
+
+    const result = composeApp(core.tree, [{ name: "settings", tree }]);
+
+    expect(result.pluginMounts).toEqual({ settings: { dashboard: 1 } });
   });
 });
