@@ -27,10 +27,17 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "noEmit": true,
     "allowImportingTsExtensions": true,
     "outDir": "./dist",
     "rootDir": "..",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": false
+      }
+    ]
   },
   "include": ["src/**/*", "../every-plugin/src/**/*"],
   "exclude": ["node_modules", "dist"]

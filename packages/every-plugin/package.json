@@ -107,7 +107,7 @@
   },
   "peerDependencies": {
     "@rspack/core": "catalog:",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "effect": "catalog:",
     "zod": "catalog:",
     "@orpc/contract": "catalog:",
@@ -118,7 +118,6 @@
     "@orpc/tanstack-query": "catalog:"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.85.1",
     "@effect/vitest": "4.0.0-rc.112",
     "@orpc/client": "2.0.0-beta.35",
     "@orpc/openapi": "2.0.0-beta.35",

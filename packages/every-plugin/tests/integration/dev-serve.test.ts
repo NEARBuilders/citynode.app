@@ -17,11 +17,8 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 60000) {
   throw new Error("Timed out waiting for condition");
 }
 
-const handle: { close: () => Promise<void> } | null = null;
-
 describe("every-plugin standalone dev server", () => {
   afterAll(async () => {
-    if (handle) await handle.close();
     if (child && child.exitCode === null) child.kill("SIGTERM");
   });
 

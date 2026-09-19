@@ -18,7 +18,8 @@
       "every-plugin/normalize": ["../../../src/runtime/services/normalize.ts"]
     },
     "emitDeclarationOnly": true,
-    "noEmit": false
+    "noEmit": false,
+    "rootDir": "."
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

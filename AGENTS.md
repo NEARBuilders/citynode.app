@@ -527,6 +527,16 @@ bun run --cwd host test    # NODE_ENV=production BOS_CONFIG_PATH=../bos.config.j
 ```
 Always use `bun run test` / `bun run --cwd host test` — never `bun test`, which invokes Bun's built-in runner and produces different (and misleading) results.
 
+## Effect DevTools
+
+The repo standardizes on the Effect v4 dev toolchain ([docs](https://effect.website/docs/v4/getting-started/devtools)):
+
+- **TypeScript 7 (native, Go port) + Effect LSP** — `typescript` is `^7` in the catalog. `@effect/tsgo` is a root devDependency; `bun install` runs `prepare: effect-tsgo patch --oxlint`, which patches the native `tsc` and Oxlint with Effect diagnostics. Every workspace tsconfig enables the language-service plugin with `diagnostics: false` (Oxlint reports Effect rules to avoid duplication; `tsc --noEmit` still surfaces them as regular TS diagnostics).
+- **Effect lint** — `bun lint` = Biome (format/style) + `bun run lint:effect` (`oxlint --type-aware`, Effect rules from `@effect/tsgo`'s recommended preset in `.oxlintrc.json`; CI runs the same script). "Effect parity" rules that demand rewriting imperative code (`node-builtin-import`, `async-function`, `global-console`, `process-env`, `global-date`, `global-fetch`, `new-promise`, `crypto-random-uuid`, `global-timers`, `global-random`) are intentionally off — this is a mixed Effect/non-Effect codebase. Note `node-builtin-import`, `async-function`, and `new-promise` have no `-in-effect` variants in the preset, so turning them off removes even in-Effect coverage for those. Rules that are **errors** must be fixed in code, not suppressed.
+- **CI** — because CI installs with `--ignore-scripts`, the `lint-and-typecheck` job runs `bun run prepare` explicitly before lint/typecheck.
+- **Editor** — install the Effect VS Code/Cursor extension (`effectful-tech.effect-vscode`, recommended in `.vscode/extensions.json`) for fiber inspection, span stack, and pause-on-defect. The language service requires the **workspace** TypeScript version, not the editor-bundled one.
+- When adding Effect code, follow the enforced conventions: `Context.Service<TagName, Shape>()` tags, `return yield* Effect.fail(...)` for definitive failure exits inside `Effect.gen`.
+
 ## Common Patterns
 
 ### Authentication Check

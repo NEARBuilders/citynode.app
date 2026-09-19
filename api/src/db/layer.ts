@@ -4,7 +4,7 @@ import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { createDatabaseDriver, type Database, DatabaseError } from "./index";
 import { detectDrift, loadMigrations, migrate } from "./migrate";
 
-export class DatabaseTag extends Context.Service<Database, Database>()("Database") {}
+export class DatabaseTag extends Context.Service<DatabaseTag, Database>()("Database") {}
 
 export const DatabaseLive = (url: string) =>
   Layer.effect(
@@ -56,7 +56,7 @@ export const DatabaseLive = (url: string) =>
           yield* Effect.logWarning(
             `[Database] Run \`bos db doctor ${storage.slug}\` to diagnose and \`bos db repair ${storage.slug}\` to fix.`,
           );
-          yield* Effect.fail(
+          return yield* Effect.fail(
             new DatabaseError({
               stage: "migration",
               migrationTag: "drift-safe-repair",
@@ -72,7 +72,7 @@ export const DatabaseLive = (url: string) =>
           yield* Effect.logWarning(
             `[Database] ⚠️ Partial migration drift detected: ${drift.missingTables.length}/${drift.expectedTables.length} expected table(s) missing.`,
           );
-          yield* Effect.fail(
+          return yield* Effect.fail(
             new DatabaseError({
               stage: "migration",
               migrationTag: "drift-manual",
