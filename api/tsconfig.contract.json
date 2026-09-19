@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -10,10 +9,7 @@
     "declarationMap": false,
     "emitDeclarationOnly": true,
     "outDir": "types",
-    "paths": {
-      "every-plugin": ["../packages/every-plugin/src/index.ts"],
-      "every-plugin/*": ["../packages/every-plugin/src/*"]
-    }
+    "rootDir": "./src"
   },
   "include": ["src/contract.ts"]
 }

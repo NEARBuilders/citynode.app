@@ -203,7 +203,7 @@ export const ensureNearCli = Effect.gen(function* () {
   console.log();
   console.log(`  To install manually: curl --proto '=https' --tlsv1.2 -LsSf ${INSTALLER_URL} | sh`);
   console.log();
-  yield* Effect.fail(new NearCliNotFoundError());
+  return yield* Effect.fail(new NearCliNotFoundError());
 });
 
 export async function listPublishKeys(config: {

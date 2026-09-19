@@ -61,7 +61,7 @@ function makeTestAllocator(options?: {
         let steps = 0;
         while (true) {
           if (port >= ceiling || steps > 1000) {
-            yield* Effect.fail(new PortAllocationError({ preferred, budget }));
+            return yield* Effect.fail(new PortAllocationError({ preferred, budget }));
           }
           if (!initiallyUsed.has(port) && !busyPorts.has(port)) {
             initiallyUsed.add(port);

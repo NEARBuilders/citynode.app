@@ -4,7 +4,7 @@ import { getMigrationStorage, pluginMigrationSlug } from "everything-dev/db";
 import { createDatabaseDriver, type Database, DatabaseError } from "./index";
 import { detectDrift, loadMigrations, migrate } from "./migrate";
 
-export class DatabaseTag extends Context.Service<Database, Database>()("Database") {}
+export class DatabaseTag extends Context.Service<DatabaseTag, Database>()("Database") {}
 
 export const DatabaseLive = (url: string) =>
   Layer.effect(

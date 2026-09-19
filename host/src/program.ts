@@ -157,7 +157,7 @@ export const createStartServer = (onReady?: () => void) =>
       }),
     );
 
-    yield* Effect.never;
+    return yield* Effect.never;
   });
 
 export interface ServerInput {

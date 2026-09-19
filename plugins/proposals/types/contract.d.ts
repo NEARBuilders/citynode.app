@@ -9,21 +9,21 @@ export declare const ProposalSchema: z.ZodObject<{
     schemaVersion: z.ZodString;
     createdBy: z.ZodString;
     reviewStatus: z.ZodEnum<{
-        pending: "pending";
         approved: "approved";
+        pending: "pending";
         rejected: "rejected";
         removed: "removed";
     }>;
     applyStatus: z.ZodEnum<{
-        not_started: "not_started";
-        applying: "applying";
         applied: "applied";
+        applying: "applying";
         failed: "failed";
+        not_started: "not_started";
     }>;
     removeStatus: z.ZodEnum<{
-        removed: "removed";
-        not_started: "not_started";
         failed: "failed";
+        not_started: "not_started";
+        removed: "removed";
         removing: "removing";
     }>;
     rejectionReason: z.ZodNullable<z.ZodString>;
@@ -77,21 +77,21 @@ export declare const ProposalReviewHistoryEntrySchema: z.ZodObject<{
         schemaVersion: z.ZodString;
         createdBy: z.ZodString;
         reviewStatus: z.ZodEnum<{
-            pending: "pending";
             approved: "approved";
+            pending: "pending";
             rejected: "rejected";
             removed: "removed";
         }>;
         applyStatus: z.ZodEnum<{
-            not_started: "not_started";
-            applying: "applying";
             applied: "applied";
+            applying: "applying";
             failed: "failed";
+            not_started: "not_started";
         }>;
         removeStatus: z.ZodEnum<{
-            removed: "removed";
-            not_started: "not_started";
             failed: "failed";
+            not_started: "not_started";
+            removed: "removed";
             removing: "removing";
         }>;
         rejectionReason: z.ZodNullable<z.ZodString>;
@@ -110,21 +110,21 @@ export declare const ProposalEventSchema: z.ZodObject<{
     pluginId: z.ZodString;
     entityId: z.ZodString;
     reviewStatus: z.ZodEnum<{
-        pending: "pending";
         approved: "approved";
+        pending: "pending";
         rejected: "rejected";
         removed: "removed";
     }>;
     applyStatus: z.ZodEnum<{
-        not_started: "not_started";
-        applying: "applying";
         applied: "applied";
+        applying: "applying";
         failed: "failed";
+        not_started: "not_started";
     }>;
     removeStatus: z.ZodEnum<{
-        removed: "removed";
-        not_started: "not_started";
         failed: "failed";
+        not_started: "not_started";
+        removed: "removed";
         removing: "removing";
     }>;
     submissionCount: z.ZodNumber;
@@ -148,21 +148,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -214,21 +214,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -295,21 +295,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -375,21 +375,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -455,21 +455,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -536,21 +536,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -617,21 +617,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -697,21 +697,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -778,21 +778,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -848,8 +848,8 @@ export declare const contract: {
         pluginId: z.ZodOptional<z.ZodString>;
         entityId: z.ZodOptional<z.ZodString>;
         reviewStatus: z.ZodOptional<z.ZodEnum<{
-            pending: "pending";
             approved: "approved";
+            pending: "pending";
             rejected: "rejected";
             removed: "removed";
         }>>;
@@ -867,21 +867,21 @@ export declare const contract: {
             schemaVersion: z.ZodString;
             createdBy: z.ZodString;
             reviewStatus: z.ZodEnum<{
-                pending: "pending";
                 approved: "approved";
+                pending: "pending";
                 rejected: "rejected";
                 removed: "removed";
             }>;
             applyStatus: z.ZodEnum<{
-                not_started: "not_started";
-                applying: "applying";
                 applied: "applied";
+                applying: "applying";
                 failed: "failed";
+                not_started: "not_started";
             }>;
             removeStatus: z.ZodEnum<{
-                removed: "removed";
-                not_started: "not_started";
                 failed: "failed";
+                not_started: "not_started";
+                removed: "removed";
                 removing: "removing";
             }>;
             rejectionReason: z.ZodNullable<z.ZodString>;
@@ -1017,21 +1017,21 @@ export declare const contract: {
                 schemaVersion: z.ZodString;
                 createdBy: z.ZodString;
                 reviewStatus: z.ZodEnum<{
-                    pending: "pending";
                     approved: "approved";
+                    pending: "pending";
                     rejected: "rejected";
                     removed: "removed";
                 }>;
                 applyStatus: z.ZodEnum<{
-                    not_started: "not_started";
-                    applying: "applying";
                     applied: "applied";
+                    applying: "applying";
                     failed: "failed";
+                    not_started: "not_started";
                 }>;
                 removeStatus: z.ZodEnum<{
-                    removed: "removed";
-                    not_started: "not_started";
                     failed: "failed";
+                    not_started: "not_started";
+                    removed: "removed";
                     removing: "removing";
                 }>;
                 rejectionReason: z.ZodNullable<z.ZodString>;
@@ -1078,18 +1078,18 @@ export declare const contract: {
         action: string;
         pluginId: string;
         entityId: string;
-        reviewStatus: "pending" | "approved" | "rejected" | "removed";
-        applyStatus: "not_started" | "applying" | "applied" | "failed";
-        removeStatus: "removed" | "not_started" | "failed" | "removing";
+        reviewStatus: "approved" | "pending" | "rejected" | "removed";
+        applyStatus: "applied" | "applying" | "failed" | "not_started";
+        removeStatus: "failed" | "not_started" | "removed" | "removing";
         submissionCount: number;
         timestamp: string;
     }, unknown, void>, import("@standard-server/shared").AsyncIteratorClass<{
         action: string;
         pluginId: string;
         entityId: string;
-        reviewStatus: "pending" | "approved" | "rejected" | "removed";
-        applyStatus: "not_started" | "applying" | "applied" | "failed";
-        removeStatus: "removed" | "not_started" | "failed" | "removing";
+        reviewStatus: "approved" | "pending" | "rejected" | "removed";
+        applyStatus: "applied" | "applying" | "failed" | "not_started";
+        removeStatus: "failed" | "not_started" | "removed" | "removing";
         submissionCount: number;
         timestamp: string;
     }, unknown, void>>, object>;

@@ -176,7 +176,7 @@ function pickAvailablePort(
 
     while (true) {
       if (port >= ceiling || steps > MAX_PORT_SCAN_STEPS) {
-        yield* fail();
+        return yield* fail();
       }
 
       const candidates: number[] = [];

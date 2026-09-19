@@ -1,8 +1,7 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "customConditions": ["development"],
     "paths": {
       "every-plugin": ["../every-plugin/src/index.ts"],
@@ -20,13 +19,11 @@
     },
     "lib": ["ES2022", "DOM"],
     "jsx": "react-jsx",
-    "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "noEmit": true,
     "allowImportingTsExtensions": true,
     "outDir": "./dist",
     "rootDir": "..",
