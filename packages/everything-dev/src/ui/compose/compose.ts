@@ -1,29 +1,8 @@
 import type { AnyRoute } from "@tanstack/react-router";
+import { declaredMountsOf } from "./define";
+import { deriveMountId, lastSegment, MOUNT_ALIASES, type MutableRoute } from "./mount-registry";
 import { buildNavManifest } from "./nav";
-import { type ComposedTree, MOUNT_ALIASES, type NavManifest, type UiPluginModule } from "./types";
-
-type MutableRoute = AnyRoute & {
-  options: { id?: string; getParentRoute?: () => AnyRoute };
-  children?: AnyRoute[];
-};
-
-function lastSegment(id: string): string {
-  return id.split("/").filter(Boolean).at(-1) ?? "";
-}
-
-/**
- * Derive the mount id from a plugin subtree root: any pathless layout root
- * whose id's last segment starts with `_` is a mount declaration (e.g.
- * `_public`, `_dashboard`, `_admin`). Unknown `_mount` segments are ignored
- * so plugins can carry internal pathless layouts without accidentally
- * grafting. Aliases (`_auth`) map onto canonical ids.
- */
-function deriveMountId(route: AnyRoute): string | undefined {
-  const id = (route as MutableRoute).options?.id ?? "";
-  const seg = lastSegment(id);
-  if (!seg.startsWith("_")) return undefined;
-  return MOUNT_ALIASES[seg.slice(1)];
-}
+import type { ComposedTree, NavManifest, UiPluginModule } from "./types";
 
 /**
  * Find core mount targets: core pathless layout routes whose id's last
@@ -92,9 +71,10 @@ export function composeApp(coreTree: AnyRoute, plugins: readonly UiPluginModule[
   const pluginMounts: Record<string, Record<string, number>> = {};
 
   for (const plugin of sortedPlugins) {
+    const mountsByChild = declaredMountsOf(plugin);
     const children = ((plugin.tree as MutableRoute)?.children ?? []) as MutableRoute[];
     for (const child of children) {
-      const mount = deriveMountId(child);
+      const mount = mountsByChild ? mountsByChild.get(child) : deriveMountId(child);
       if (!mount) continue;
       const coreMount = coreMounts.get(mount);
       if (!coreMount) continue;
