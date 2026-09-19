@@ -156,9 +156,7 @@ describe("scope lifecycle", () => {
       // ... variables, secrets, contract ...
       initialize: () =>
         Effect.succeed(
-          Layer.mergeAll(
-            TestLive,
-          ),
+          TestLive,
         ),
       createRouter: (builder) => ({
         // ... routes ...

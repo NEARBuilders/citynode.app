@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   connectDaoAccount,
   disconnectDaoAccount,
+  signAsDaoTransaction,
   useDaoAutoRestore,
   useDaoConnectionStore,
 } from "./dao-connect";
@@ -14,7 +15,32 @@ const harness = vi.hoisted(() => ({
   disconnect: vi.fn(),
   getConnectedWallet: vi.fn(),
   constructorOptions: {} as Record<string, unknown>,
+  functionCallArgs: null as unknown,
 }));
+
+vi.mock("near-kit", async () => {
+  const actual = await vi.importActual<typeof import("near-kit")>("near-kit");
+  return {
+    ...actual,
+    fromNearConnect: (connector: unknown) => ({ connector }),
+    Near: class {
+      transaction() {
+        return {
+          functionCall(
+            receiverId: string,
+            methodName: string,
+            args: unknown,
+          ) {
+            harness.functionCallArgs = { receiverId, methodName, args };
+            return {
+              send: async () => ({ status: "EXECUTED" }),
+            };
+          },
+        };
+      }
+    },
+  };
+});
 
 vi.mock("@hot-labs/near-connect", async () => {
   const actual =
@@ -185,5 +211,28 @@ describe("csp nonce propagation to the trezu wallet iframe", () => {
     await connectDaoAccountFresh({ authAccountId: "efiz.near" });
 
     expect(harness.constructorOptions.cspNonce).toBeUndefined();
+  });
+});
+
+describe("dao transaction args flow through unchanged", () => {
+  it("passes non-empty args to the NEAR transaction builder as-is", async () => {
+    harness.getConnectedWallet.mockResolvedValue({ accountId: "dao.sputnik.near" });
+
+    await connectDaoAccount({ authAccountId: "efiz.near" });
+
+    const spec = {
+      receiverId: "vote.near",
+      methodName: "vote",
+      args: { proposal_id: 7 },
+      gas: "10",
+    };
+
+    await signAsDaoTransaction("dao.sputnik.near", spec);
+
+    expect(harness.functionCallArgs).toEqual({
+      receiverId: "vote.near",
+      methodName: "vote",
+      args: { proposal_id: 7 },
+    });
   });
 });
