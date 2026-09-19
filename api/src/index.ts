@@ -1,7 +1,7 @@
 import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
 import { Context, Effect, Layer } from "effect";
-import { createPlugin } from "every-plugin";
+import { buildScopedContext, createPlugin } from "every-plugin";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { z } from "zod";
 import { contract } from "./contract";
@@ -73,14 +73,13 @@ export default createPlugin.withPlugins<PluginsClient>()({
   initialize: (config) =>
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
-      const services = yield* Layer.buildWithScope(
+      const services = yield* buildScopedContext(
         Layer.mergeAll(
           TenantsLive,
           NodesLive,
           ValidatorsLive,
           DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
         ).pipe(Layer.provide(database)),
-        yield* Effect.scope,
       );
 
       console.log("[API] Services Initialized");
