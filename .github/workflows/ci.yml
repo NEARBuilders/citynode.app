@@ -142,6 +142,11 @@ jobs:
       - name: Run typecheck
         run: bun typecheck
 
+      - name: Build template plugin (contract types + manifest pipeline)
+        run: |
+          bun run --cwd packages/everything-dev build
+          bun run --cwd plugins/_template build
+
   mf-compat:
     name: Federation manifest compat
     runs-on: ubuntu-latest

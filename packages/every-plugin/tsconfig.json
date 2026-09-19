@@ -3,12 +3,6 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "diagnostics": false
-      }
-    ],
     "paths": {
       "@/*": ["./src/*"],
       "every-plugin": ["./src/index.ts"],

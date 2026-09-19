@@ -8,3 +8,5 @@
 Adopt the Effect DevTools toolchain: native TypeScript 7 (`@effect/tsgo`) with the Effect language-service plugin, and Oxlint with type-aware Effect rules.
 
 TypeScript peer/dev ranges are narrowed to `^7.0.2` (no more `^5` support): `every-plugin`, `better-near-auth`, and `@everything-dev/auth-plugin` now require TypeScript 7, and `everything-dev` moves its devDependency to `^7.0.2`. Builds are unaffected (rspack/rsbuild transpile); typechecks and the editor language service run on the patched TS 7 native compiler.
+
+TS 7 compatibility fixes: contract declaration emit (`tsconfig.contract.json`) now sets an explicit `rootDir` and drops the removed `baseUrl` option (api also drops its source-`paths` to every-plugin, resolving it via package `exports` instead), the test-plugin fixture consumes the built `every-plugin` declarations, and a new root `tsconfig.base.json` consolidates shared compiler options across all workspace tsconfigs.

@@ -537,6 +537,15 @@ The repo standardizes on the Effect v4 dev toolchain ([docs](https://effect.webs
 - **Editor** — install the Effect VS Code/Cursor extension (`effectful-tech.effect-vscode`, recommended in `.vscode/extensions.json`) for fiber inspection, span stack, and pause-on-defect. The language service requires the **workspace** TypeScript version, not the editor-bundled one.
 - When adding Effect code, follow the enforced conventions: `Context.Service<TagName, Shape>()` tags, `return yield* Effect.fail(...)` for definitive failure exits inside `Effect.gen`.
 
+## TypeScript configuration (TS 7)
+
+All workspace tsconfigs extend the root `tsconfig.base.json` (strict flags, `module`/`target` ESNext, `moduleResolution: bundler`, and the single `@effect/language-service` plugin entry). Rules that keep the repo TS 7-compatible:
+
+- **`extends` does not merge arrays** — a child that declares its own `plugins` or `types` array replaces the base's entirely. Children must not redefine `plugins`; `types` is intentionally per-workspace (TS 7 no longer auto-includes `@types/*`, so every workspace that touches Node globals declares `"types": ["node"]` explicitly).
+- **`baseUrl` is removed in TS 7** — never use it; `paths` entries resolve relative to the tsconfig file.
+- **Emitting configs** (`outDir`/`emitDeclarationOnly`) must set an explicit `rootDir` — TS 7 no longer infers the common source directory — and an explicit `types`. Emitting configs must not use `paths` that point at sibling workspaces' **sources** (pulls files outside `rootDir`); resolve sibling packages through their `exports` map / built declarations instead. Source-mapped `paths` are only allowed in `noEmit` typecheck configs.
+- `plans/prototypes/*` pin their own TypeScript 5 and are exempt.
+
 ## Common Patterns
 
 ### Authentication Check

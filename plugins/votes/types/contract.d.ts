@@ -2,8 +2,8 @@ import "@orpc/openapi/extensions/route";
 import { z } from "zod";
 export declare const VoteEventSchema: z.ZodObject<{
     type: z.ZodEnum<{
-        upvote: "upvote";
         downvote: "downvote";
+        upvote: "upvote";
     }>;
     entityId: z.ZodString;
     userId: z.ZodString;
@@ -135,13 +135,13 @@ export declare const contract: {
         }, z.core.$strip>;
     }, z.core.$strip>, object>;
     subscribe: import("@orpc/contract").ProcedureContract<import("@orpc/contract").InitialInputSchema, import("@orpc/contract").Schema<AsyncIteratorObject<{
-        type: "upvote" | "downvote";
+        type: "downvote" | "upvote";
         entityId: string;
         userId: string;
         timestamp: string;
         totalCount: number;
     }, unknown, void>, import("@standard-server/shared").AsyncIteratorClass<{
-        type: "upvote" | "downvote";
+        type: "downvote" | "upvote";
         entityId: string;
         userId: string;
         timestamp: string;
