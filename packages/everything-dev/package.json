@@ -277,6 +277,7 @@
     "better-near-auth": "catalog:",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0",
+    "sonner": ">=2.0.0",
     "effect": "catalog:",
     "zod": "catalog:"
   },
@@ -300,6 +301,9 @@
       "optional": true
     },
     "@tanstack/react-router": {
+      "optional": true
+    },
+    "sonner": {
       "optional": true
     },
     "better-auth": {

@@ -45,7 +45,7 @@ The `./ui/*` export namespace means "client-side framework code", which is what 
 - Contract-value parameters → phantom type parameters (context 2, above).
 - Per-contract WeakMap singleton → per-endpoint memoization (above).
 - `createAuthClient<TAuth>` → non-generic (context 3, above). Plan 022's STOP condition ("genericizing breaks inference — report instead of loosening types") was resolved by removing the genericity entirely, which is strictly stronger than binding it at the wrapper.
-- `createServiceClients` takes an explicit `keys` list: with phantom types the key set is not runtime-visible, so callers enumerate the services they build; the return type maps every declared key to its client.
+- `createServiceClients` takes an explicit `keys` list: with phantom types the key set is not runtime-visible, so callers enumerate the services they build; the return type covers exactly the passed keys (`Pick` over the passed key set), not the full declared map.
 
 ## Consequences
 

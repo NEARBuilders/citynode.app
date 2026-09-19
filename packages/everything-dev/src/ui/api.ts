@@ -16,6 +16,8 @@ type ClientRouterContext = {
   pluginClients?: Record<string, unknown>;
 };
 
+export type { ClientRouterContext };
+
 function createRpcLink(config: ClientServiceConfig, url: `/${string}`, headers?: Headers) {
   return new RPCLink({
     origin: config.hostUrl,
@@ -33,12 +35,14 @@ function createRpcLink(config: ClientServiceConfig, url: `/${string}`, headers?:
             message.includes("network") ||
             message.includes("failed to fetch")
           ) {
-            void import("sonner").then(({ toast }) => {
-              toast.error("Unable to connect to API", {
-                id: "api-connection-error",
-                description: "The API is currently unavailable. Please try again later.",
-              });
-            });
+            void import("sonner")
+              .then(({ toast }) => {
+                toast.error("Unable to connect to API", {
+                  id: "api-connection-error",
+                  description: "The API is currently unavailable. Please try again later.",
+                });
+              })
+              .catch(() => {});
           }
         }
       }),
@@ -102,11 +106,14 @@ export function createPluginApiClient<T extends RouterContract = RouterContract>
   return memoizedClient<T>(config, `${config.rpcBase}/${pluginKey}` as `/${string}`, headers);
 }
 
-export function createServiceClients<C extends Record<string, RouterContract>>(
+export function createServiceClients<
+  C extends Record<string, RouterContract>,
+  K extends keyof C & string = keyof C & string,
+>(
   config: ClientServiceConfig,
-  keys: readonly (keyof C & string)[],
+  keys: readonly K[],
   headers?: Headers,
-): { [K in keyof C]: ContractRouterClient<C[K]> } {
+): Pick<{ [P in keyof C]: ContractRouterClient<C[P]> }, K> {
   const clients: Record<string, unknown> = {};
   for (const key of keys) {
     if (key === "api") {
@@ -115,7 +122,7 @@ export function createServiceClients<C extends Record<string, RouterContract>>(
       clients[key] = createPluginApiClient<C[typeof key]>(key, config, headers);
     }
   }
-  return clients as { [K in keyof C]: ContractRouterClient<C[K]> };
+  return clients as Pick<{ [P in keyof C]: ContractRouterClient<C[P]> }, K>;
 }
 
 function useClientContext(): ClientRouterContext {

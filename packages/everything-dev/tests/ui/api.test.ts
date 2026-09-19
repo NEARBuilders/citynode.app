@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ClientRouterContext } from "../../src/ui/api";
 import {
   createApiClient,
   createPluginApiClient,
@@ -8,7 +9,7 @@ import {
 } from "../../src/ui/api";
 
 const contextHolder = vi.hoisted(() => ({
-  context: {} as { apiClient?: unknown; pluginClients?: unknown },
+  context: {} as ClientRouterContext,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -33,9 +34,7 @@ function stubFetch() {
 async function drain(promise: Promise<unknown>) {
   try {
     await promise;
-  } catch {
-    // The URL assertion below is what matters; the response envelope shape may vary.
-  }
+  } catch {}
 }
 
 function pingClient(client: unknown) {
