@@ -605,7 +605,8 @@ baked into decision 9 and every beta-v2 plan doc.
 - oRPC v2 + Effect 4 migration **executed** — merged in citynode.app#97, deployed to production (everything-dev#248 epic).
 - MF shared-dep version identity guardrails **executed** — citynode.app#106; the runtime bundle identity, the `bos mf check` CLI, the load-path guard, and the deploy-gate all enforce a consistent release train.
 - Root-Dockerfile tracking for container tiers — Railway builds from the committed root `Dockerfile`, so the same container translates to any provider (Fly Machines / Hetzner / …) going forward.
-- Gasless publish (`decision 12`) and `bos login` are being scoped as their own sprint — see `.scratch/gasless-auth/` here in this fork.
+- Gasless-auth sprint **scoped** — tickets filed upstream on NEARBuilders/everything-dev (#288 `bos login`, #289 `bos publish --wallet` NEP-366, #290 docs, #291 custody preview via Outlayer), all sprouts of the v2 platform services spec (#274); local sprint files at `.scratch/gasless-auth/`.
+- Build-tooling absorption **phase 1 executed** — ADRs 0002-0004 (docs/adr/): rspack plugin stack composed into `every-plugin` (`EveryPluginComposedBuild` + `createPluginBaseConfig`), `every-plugin dev|types|build|deploy` CLI as the plugin package contract, serve bin reduced to a one-line source import. Per-workspace rspack configs, script chains and the dev-serve bin dispatch are gone: workspaces ship zero build config by default (CLI synthesizes the composed stack, opt-in `build.config.ts` overrides). `withPluginDeploy` (integrity) owns the Zephyr/SRI/report seam. Phase 2 (root `app.ts` absorbing `bos.config.json` + `railway.toml`, Effect pipeline) is drafted in ADR 0005 and tracked in `tickets/12-build-tooling-absorption.md`.
 
 ## Not yet specified
 

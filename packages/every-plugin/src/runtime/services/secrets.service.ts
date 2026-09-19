@@ -72,7 +72,6 @@ export const SecretsServiceDefault = Layer.effect(
               new PluginRuntimeError({
                 operation: "hydrate-secrets",
                 cause: error instanceof Error ? error : new Error(String(error)),
-                retryable: false,
               }),
             );
           }

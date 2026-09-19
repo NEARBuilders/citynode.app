@@ -116,6 +116,9 @@ export class SecurityMiddleware extends Context.Service<
           if (p.url) return [new URL(p.url).origin];
           return [];
         }),
+        ...Object.values(config.plugins ?? {}).flatMap((p: RuntimePlugin) =>
+          p.ui?.url ? [new URL(p.ui.url).origin] : [],
+        ),
       ];
 
       const uniqueOrigins = [...new Set(remoteOrigins)];

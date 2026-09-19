@@ -54,6 +54,7 @@
       "@module-federation/node": "^2.7.50",
       "@module-federation/rsbuild-plugin": "^2.9.0",
       "@module-federation/runtime-core": "^2.9.0",
+      "@module-federation/runtime": "^2.9.0",
       "@module-federation/runtime-tools": "^2.9.0",
       "@module-federation/sdk": "^2.9.0",
       "@module-federation/dts-plugin": "^2.9.0",

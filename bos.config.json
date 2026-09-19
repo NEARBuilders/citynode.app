@@ -78,16 +78,18 @@
           "relayer": {
             "mainnet": {
               "whitelistedContracts": [
-                "v1.citynode.near"
+                "v1.citynode.near",
+                "dev.everything.near"
               ],
-              "maxGasPerTransaction": "300000000000000",
+              "maxGasPerTransaction": "400000000000000",
               "maxDepositPerTransaction": "0"
             },
             "testnet": {
               "whitelistedContracts": [
-                "v1.citynode.testnet"
+                "v1.citynode.testnet",
+                "dev.allthethings.testnet"
               ],
-              "maxGasPerTransaction": "300000000000000",
+              "maxGasPerTransaction": "400000000000000",
               "maxDepositPerTransaction": "0"
             }
           }

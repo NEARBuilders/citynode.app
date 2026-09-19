@@ -6,7 +6,14 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard")({
 });
 
 function DashboardLayout() {
-  const { runtimeConfig, session } = Route.useRouteContext();
+  const { runtimeConfig, session, pluginNav } = Route.useRouteContext();
   const isAdmin = session?.user?.role === "admin";
-  return <AppShell runtimeConfig={runtimeConfig} session={session} isAdmin={isAdmin} />;
+  return (
+    <AppShell
+      runtimeConfig={runtimeConfig}
+      session={session}
+      isAdmin={isAdmin}
+      pluginNav={pluginNav}
+    />
+  );
 }

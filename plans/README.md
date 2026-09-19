@@ -36,7 +36,8 @@ is verifiable on-chain via FastKV.
 
 | Document | Covers | Status |
 |---|---|---|
-| [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) | UI-to-UI composition through `extends` — child UI inherits routes/components from parent UI via MF | Links to [beta-v2-override-prototype/](./prototypes/beta-v2-override/) |
+| [ui-route-grafting-migration.md](./extensions/ui-route-grafting-migration.md) | In-repo migration to grafting ui plugins — SSR corrections (session-forwarded, not exclusion), digest-cached composition, shell/nav mounts, `plugins.<id>.ui` schema extension, phases 1–3 | **DECIDED** — Phases 1–3 approved; supersedes route-level composition; see map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) |
+| [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) | UI-to-UI composition through `extends` — child UI inherits routes/components from parent UI via MF | **SUPERSEDED** — route-level composition rejected; see [ui-route-grafting-migration.md](./extensions/ui-route-grafting-migration.md) |
 | [client-runtime-plugins.md](./extensions/client-runtime-plugins.md) | Browser-executed plugins — `runtime: "client"` field, wasm-git + OPFS storage, BunInBrowser proxy | Independent |
 
 ## infra — infrastructure & migration

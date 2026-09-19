@@ -130,6 +130,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
           hydratePath: "./Hydrate",
           integrity: runtimeConfig?.ui?.integrity,
           cspNonce,
+          includePluginUiRemotes: true,
         }),
         {
           type: "application/ld+json",

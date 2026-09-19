@@ -465,7 +465,7 @@ Business logic is organized into independent plugins loaded via Module Federatio
 Each plugin is self-contained with its own:
 - `contract.ts` — oRPC route definitions and Zod schemas
 - `index.ts` — `createPlugin` with variables, secrets, context, router
-- rspack config for independent deployment
+- 3-line rspack config composed from `every-plugin` defaults (docs/adr/0002); builds/scripts run via the `every-plugin` CLI (docs/adr/0003)
 
 The UI accesses plugin routes via namespaced clients: `apiClient.registry.listRegistryApps()`, etc.
 

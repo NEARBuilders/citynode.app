@@ -1,22 +1,33 @@
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
-import type { Context } from "hono";
-import type { AuthVariables } from "../lib/auth";
 import type { ClientRuntimeConfig, RuntimeConfig } from "../services/config";
 
-type HonoEnv = { Variables: AuthVariables };
-
-export function renderClientShell(
-  ctx: Context<HonoEnv>,
+export function renderClientShellHtml(
   nonce: string | undefined,
   runtimeSourceConfig: RuntimeConfig,
   runtimeConfig: ClientRuntimeConfig,
   error?: Error | null,
-) {
+): string {
   const uiIntegrity = runtimeSourceConfig.ui.integrity;
   const assetsUrl = runtimeConfig.assetsUrl.replace(/\/$/, "");
   const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
   const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
   const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
+
+  const pluginUiScripts = (
+    runtimeConfig.ui?.compose
+      ? Object.values(runtimeConfig.plugins ?? {}).flatMap((plugin) => {
+          const ui = plugin?.ui;
+          if (!ui?.url) return [];
+          const pluginVersion = ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : "";
+          const pluginSri = ui.integrity
+            ? ` integrity="${ui.integrity}" crossorigin="anonymous"`
+            : "";
+          return [
+            `<script${nonceAttr} src="${ui.url.replace(/\/$/, "")}/remoteEntry.js${pluginVersion}"${pluginSri}></script>`,
+          ];
+        })
+      : []
+  ).join("\n          ");
 
   const baseStyles = `
     ${getBaseStyles()}
@@ -46,8 +57,7 @@ export function renderClientShell(
       ) as { children?: string }
     ).children ?? "";
 
-  return ctx.html(
-    `<!DOCTYPE html>
+  return `<!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="utf-8" />
@@ -58,10 +68,26 @@ export function renderClientShell(
           <style>${baseStyles}</style>
           ${themeScript}
           <script${nonceAttr} src="${assetsUrl}/remoteEntry.js${uiVersion}"${sriAttr}></script>
+          ${pluginUiScripts}
           <script${nonceAttr}>${hydrateScript}</script>
         </head>
         <body>${shellBody}</body>
-      </html>`,
-    200,
-  );
+      </html>`;
+}
+
+export function renderClientShell(
+  nonce: string | undefined,
+  runtimeSourceConfig: RuntimeConfig,
+  runtimeConfig: ClientRuntimeConfig,
+  error?: Error | null,
+  cspHeader?: string | null,
+): Response {
+  const headers = new Headers({ "content-type": "text/html; charset=UTF-8" });
+  if (cspHeader) {
+    headers.set("Content-Security-Policy", cspHeader);
+  }
+  return new Response(renderClientShellHtml(nonce, runtimeSourceConfig, runtimeConfig, error), {
+    status: 200,
+    headers,
+  });
 }

@@ -1138,6 +1138,16 @@ function buildRuntimePluginConfig(
             uiRuntime.source === "remote" && typeof uiConfig?.integrity === "string"
               ? uiConfig.integrity
               : undefined,
+          ssrUrl:
+            uiRuntime.source === "remote" && typeof uiConfig?.ssr === "string"
+              ? uiConfig.ssr
+              : uiRuntime.source === "local"
+                ? uiRuntime.url
+                : undefined,
+          ssrIntegrity:
+            uiRuntime.source === "remote" && typeof uiConfig?.ssrIntegrity === "string"
+              ? uiConfig.ssrIntegrity
+              : undefined,
         }
       : undefined,
     routes,

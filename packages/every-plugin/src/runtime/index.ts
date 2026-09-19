@@ -116,7 +116,6 @@ export class PluginRuntime<R = RegisteredPlugins> {
           pluginId: String(pluginId),
           operation: "validate-plugin-id",
           cause: new Error(`Plugin ID '${String(pluginId)}' not found in registry.`),
-          retryable: false,
         }),
       );
     }

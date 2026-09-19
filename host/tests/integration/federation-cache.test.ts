@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeConfig } from "../../src/services/config";
 
 const loadRemoteMock = vi.fn();
-const createInstanceMock = vi.fn(() => ({
+const createInstanceMock = vi.fn((..._args: unknown[]) => ({
   loadRemote: loadRemoteMock,
 }));
 const verifySriForUrlMock = vi.fn();
@@ -149,5 +149,39 @@ describe("loadRouterModule cache", () => {
     expect(second).toBe(routerTwo.default);
     expect(createInstanceMock).toHaveBeenCalledTimes(2);
     expect(verifySriForUrlMock).not.toHaveBeenCalled();
+  });
+
+  it("reuses the MF instance across cached reloads of the same remote", async () => {
+    const router = {
+      default: { renderToStream: vi.fn(), getRouteHead: vi.fn(), createRouter: vi.fn() },
+    };
+    loadRemoteMock.mockResolvedValue(router);
+
+    const config = createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" });
+    await Effect.runPromise(loadRouterModule(config));
+    await Effect.runPromise(loadRouterModule({ ...config }));
+    await Effect.runPromise(
+      loadRouterModule({ ...config, account: "other.near" } as unknown as RuntimeConfig),
+    );
+
+    expect(createInstanceMock).toHaveBeenCalledTimes(1);
+    const instanceOptions = createInstanceMock.mock.calls[0]?.[0] as { name: string } | undefined;
+    expect(instanceOptions?.name).toMatch(/^host-/);
+  });
+
+  it("keeps the failing promise cached so a downed remote is probed once per window", async () => {
+    loadRemoteMock.mockRejectedValue(new Error("remote down"));
+
+    const config = createRuntimeConfig({ ssrIntegrity: "sha384-ssr-a" });
+
+    await expect(Effect.runPromise(loadRouterModule(config))).rejects.toThrow();
+
+    const callsAfterFirstFailure = loadRemoteMock.mock.calls.length;
+    expect(callsAfterFirstFailure).toBeGreaterThan(0);
+
+    await expect(Effect.runPromise(loadRouterModule(config))).rejects.toThrow();
+
+    expect(loadRemoteMock.mock.calls.length).toBe(callsAfterFirstFailure);
+    expect(createInstanceMock).toHaveBeenCalledTimes(1);
   });
 });

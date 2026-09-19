@@ -2,8 +2,10 @@ import { spawn } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
 import sirv from "sirv";
+import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
+import { classifyPluginFailure } from "../runtime/errors";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +61,9 @@ const collectSiblingRemotes = (runtimeConfig: any, pluginId: string) => {
   return { siblings, dependsOn };
 };
 
+const RETRY_BASE_DELAY_MS = 500;
+const RETRY_MAX_DELAY_MS = 5_000;
+
 const loadPluginWithRetry = async (
   runtime: any,
   pluginId: string,
@@ -66,12 +71,24 @@ const loadPluginWithRetry = async (
 ): Promise<any> => {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
+  let lastSignature: string | undefined;
+  let delay = RETRY_BASE_DELAY_MS;
   while (Date.now() < deadline) {
     try {
       return await runtime.usePlugin(pluginId, { variables: {}, secrets: {} } as any);
     } catch (error) {
       lastError = error;
-      await sleep(500);
+      const classification = classifyPluginFailure(error);
+      const signature = `${classification.kind}::${classification.message}`;
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        console.error(
+          `[dev] plugin ${pluginId} ${classification.kind} failure: ${classification.message}` +
+            (classification.suggestion ? `\n[dev] → ${classification.suggestion}` : ""),
+        );
+      }
+      await sleep(Math.min(delay, RETRY_MAX_DELAY_MS));
+      delay = Math.min(delay * 2, RETRY_MAX_DELAY_MS);
     }
   }
   throw lastError;
@@ -116,11 +133,16 @@ export async function startPluginDevServer(
 
   let watcher: ReturnType<typeof spawn> | null = null;
   if (options.watch !== false) {
-    watcher = spawn("rspack", ["build", "--watch"], {
-      cwd,
-      stdio: "inherit",
-      env: process.env,
-    });
+    const generatedConfig = ensureGeneratedRspackConfig(cwd);
+    watcher = spawn(
+      "rspack",
+      generatedConfig ? ["build", "--watch", "--config", generatedConfig] : ["build", "--watch"],
+      {
+        cwd,
+        stdio: "inherit",
+        env: process.env,
+      },
+    );
     watcher.on("error", (error) => {
       console.error(`❌ Failed to spawn rspack build --watch: ${error.message}`);
     });

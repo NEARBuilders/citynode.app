@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { createPluginRuntime } from "every-plugin/runtime";
 import { describe, expect, it } from "vitest";
-import { PluginRuntimeError } from "../../src/runtime/errors";
+import { classifyPluginFailure, PluginRuntimeError } from "../../src/runtime/errors";
 import { TEST_REGISTRY } from "../registry";
 
 const SECRETS_CONFIG = {
@@ -26,7 +26,8 @@ describe("Error Handling Integration Tests", () => {
         expect(error).toBeInstanceOf(PluginRuntimeError);
         expect(error.pluginId).toBe("test-plugin");
         expect(error.operation).toBe("initialize-plugin");
-        expect(error.retryable).toBe(false);
+        expect(classifyPluginFailure(error).kind).toBe("unknown");
+        expect(classifyPluginFailure(error).retryable).toBe(false);
         expect(error.cause).toBeDefined();
         expect(error.cause.message).toContain("Invalid API key");
       }
@@ -48,7 +49,7 @@ describe("Error Handling Integration Tests", () => {
         expect(error).toBeInstanceOf(PluginRuntimeError);
         expect(error.pluginId).toBe("test-plugin");
         expect(error.operation).toBe("initialize-plugin");
-        expect(error.retryable).toBe(false);
+        expect(classifyPluginFailure(error).retryable).toBe(false);
         expect(error.cause).toBeDefined();
         expect(error.cause.message).toContain("Failed to connect");
       }
@@ -71,7 +72,7 @@ describe("Error Handling Integration Tests", () => {
         expect(error).toBeInstanceOf(PluginRuntimeError);
         expect(error.pluginId).toBe("test-plugin");
         expect(error.operation).toBe("validate-secrets");
-        expect(error.retryable).toBe(false);
+        expect(classifyPluginFailure(error).retryable).toBe(false);
       }
     }, 10000);
 
@@ -92,7 +93,7 @@ describe("Error Handling Integration Tests", () => {
         expect(error).toBeInstanceOf(PluginRuntimeError);
         expect(error.pluginId).toBe("non-existent-plugin");
         expect(error.operation).toBe("validate-plugin-id");
-        expect(error.retryable).toBe(false);
+        expect(classifyPluginFailure(error).retryable).toBe(false);
         expect(error.cause.message).toContain("not found in registry");
       }
     }, 10000);

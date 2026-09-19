@@ -83,6 +83,7 @@
   },
   "devDependencies": {
     "@module-federation/enhanced": "catalog:",
+    "@module-federation/runtime": "catalog:",
     "@module-federation/runtime-tools": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/rsbuild-plugin": "catalog:",

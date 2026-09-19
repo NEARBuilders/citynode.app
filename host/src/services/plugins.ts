@@ -2,6 +2,7 @@ import { createInstance, getInstance } from "@module-federation/enhanced/runtime
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
+import { classifyPluginFailure } from "every-plugin/errors";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -13,40 +14,6 @@ import { toProtocolUrl } from "../utils/normalize";
 import { ConfigService, readCorsOrigins } from "./config";
 import { PluginError } from "./errors";
 
-function unwrapErrorMessage(error: unknown): string {
-  if (!error) return "";
-  let current: unknown = error;
-  while (
-    current &&
-    typeof current === "object" &&
-    "cause" in current &&
-    (current as any).cause instanceof Error &&
-    typeof (current as any)._tag === "string" &&
-    !(current as any).message
-  ) {
-    current = (current as any).cause;
-  }
-  if (current instanceof Error) {
-    return current.message || current.name || "Error";
-  }
-  if (typeof current === "object" && current !== null) {
-    const tag = (current as { _tag?: unknown })._tag;
-    if (typeof tag === "string" && tag.length > 0) {
-      try {
-        return `[${tag}] ${JSON.stringify(current)}`;
-      } catch {
-        return tag;
-      }
-    }
-    try {
-      const json = JSON.stringify(current);
-      if (json && json !== "{}" && json !== "[]") return json;
-    } catch {}
-  }
-  const text = String(current ?? "");
-  return text.length > 0 ? text : "unknown error";
-}
-
 class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
   pluginKey: string;
   pluginUrl?: string;
@@ -57,8 +24,11 @@ class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
   cause: unknown;
 }> {
   get message() {
-    const raw = unwrapErrorMessage(this.cause);
-    return `Plugin ${this.pluginKey}${this.pluginUrl ? ` at ${this.pluginUrl}` : ""} failed: ${raw}`;
+    const classification = classifyPluginFailure(this.cause);
+    const detail = classification.suggestion
+      ? `${classification.message} (${classification.kind}) → ${classification.suggestion}`
+      : classification.message;
+    return `Plugin ${this.pluginKey}${this.pluginUrl ? ` at ${this.pluginUrl}` : ""} failed: ${detail}`;
   }
 }
 

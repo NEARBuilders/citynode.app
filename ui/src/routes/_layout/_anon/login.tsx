@@ -10,10 +10,17 @@ type SearchParams = {
   redirect?: string;
 };
 
+function sanitizeRedirect(url: unknown): string {
+  if (typeof url !== "string" || !url.startsWith("/") || url.startsWith("//")) {
+    return "/dashboard";
+  }
+  return url;
+}
+
 export const Route = createFileRoute("/_layout/_anon/login")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
-    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+    redirect: sanitizeRedirect(search.redirect),
   }),
   beforeLoad: ({ context, search }) => {
     const { queryClient, authClient } = context;
@@ -23,8 +30,7 @@ export const Route = createFileRoute("/_layout/_anon/login")({
       queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
 
     if (session?.user) {
-      const redirectTo = search.redirect?.startsWith("/") ? search.redirect : "/dashboard";
-      throw redirect({ to: redirectTo, search: {} });
+      throw redirect({ to: search.redirect });
     }
   },
   loader: ({ context }) => {
@@ -67,10 +73,9 @@ function LoginPage() {
   }, [auth.near]);
 
   const handleSuccess = async (message: string) => {
-    const redirectTo = redirect?.startsWith("/") ? redirect : "/dashboard";
     toast.success(message);
     queryClient.invalidateQueries({ queryKey: ["session"] });
-    navigate({ to: redirectTo, replace: true, search: {} });
+    navigate({ to: redirect, replace: true });
   };
 
   const handleNear = async () => {
@@ -88,8 +93,7 @@ function LoginPage() {
   };
 
   if (session?.user) {
-    const redirectTo = redirect?.startsWith("/") ? redirect : "/dashboard";
-    return <Navigate to={redirectTo} replace search={{}} />;
+    return <Navigate to={redirect} replace />;
   }
 
   return (

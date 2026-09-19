@@ -6,7 +6,17 @@ import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
 import { Context, Effect, Layer } from "effect";
+import { type KeyPair, parseKey } from "near-kit";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
+import { openInBrowser, startLoginServer } from "./auth-login";
+import {
+  deleteSessionHandle,
+  nearCredentialsPath,
+  readSessionHandle,
+  removePublishedKeyFile,
+  type SessionCredential,
+  writeSessionHandle,
+} from "./auth-session";
 import {
   buildBetterNearAuthQuietly,
   buildEveryPluginQuietly,
@@ -51,6 +61,7 @@ import {
   resumeWarnings,
   suppressWarnings,
 } from "./config";
+import type { LoginResult } from "./contract";
 import {
   type BosConfigResult,
   bosContract,
@@ -85,6 +96,7 @@ import {
   addFunctionCallAccessKey,
   deleteAccessKeys,
   ensureNearCli,
+  generateNearKeyPair,
   listPublishKeys,
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
@@ -327,6 +339,84 @@ async function fetchPublishedConfig(
       return null;
     }
     throw error;
+  }
+}
+
+function resolveLoginSiteUrl(
+  siteInput: string | undefined,
+  deps: { bosConfig: BosConfig | null; runtimeConfig: RuntimeConfig | null },
+  staging: boolean,
+): string {
+  if (siteInput) {
+    return siteInput.replace(/\/+$/, "");
+  }
+  if (staging) {
+    const stagingDomain = deps.bosConfig?.staging?.domain ?? deps.bosConfig?.domain;
+    return stagingDomain ? `https://${stagingDomain}` : (deps.runtimeConfig?.ui?.url ?? "");
+  }
+  const devUiUrl = deps.runtimeConfig?.ui?.url;
+  if (devUiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(devUiUrl)) {
+    return devUiUrl.replace(/\/+$/, "");
+  }
+  const domain = deps.bosConfig?.domain;
+  return domain ? `https://${domain}` : "";
+}
+
+async function exportPublishKey(
+  account: string,
+  registry: string | undefined,
+): Promise<NonNullable<LoginResult["publishKey"]>> {
+  if (!account) {
+    throw new Error("bos.config.json has no account to export a publish key for");
+  }
+
+  await Effect.runPromise(ensureNearCli);
+
+  const network = getNetworkIdForAccount(account);
+  const contract = getRegistryNamespaceForAccount(account, registry);
+  await listPublishKeys({ account, contract, network });
+
+  const keyPair = generateNearKeyPair();
+  await addFunctionCallAccessKey({
+    account,
+    contract,
+    allowance: "1NEAR",
+    functionNames: PUBLISH_FUNCTION_NAMES,
+    network,
+    keyPair,
+  });
+
+  const { FileKeyStore } = await import("near-kit/keys/file");
+  const keyStore = new FileKeyStore("~/.near-credentials", network);
+  await keyStore.add(account, parseNearPrivateKey(keyPair.privateKey));
+
+  return {
+    publicKey: keyPair.publicKey,
+    network,
+    contract,
+    exportedTo: nearCredentialsPath(network, account),
+  };
+}
+
+function parseNearPrivateKey(privateKey: string): KeyPair {
+  return parseKey(privateKey) as KeyPair;
+}
+
+async function revokeApiKey(credential: SessionCredential): Promise<boolean> {
+  if (!credential.apiKey || !credential.siteUrl) return false;
+  try {
+    const response = await fetch(`${credential.siteUrl}/api/auth/api-key/delete`, {
+      method: "POST",
+      headers: {
+        "x-api-key": credential.apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ keyId: credential.apiKeyId }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -1153,6 +1243,7 @@ export default createPlugin({
         packages: input.packages,
         network: input.network,
         privateKey: input.privateKey,
+        wallet: input.wallet,
         registry: input.registry,
       });
 
@@ -1400,6 +1491,135 @@ export default createPlugin({
           contract,
           allowance: input.allowance,
           functionNames: PUBLISH_FUNCTION_NAMES,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    login: builder.login.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
+      const staging = input.env === "staging";
+      const account = staging
+        ? (deps.bosConfig?.staging?.account ?? deps.bosConfig?.account ?? "")
+        : (deps.bosConfig?.account ?? "");
+
+      try {
+        const siteUrl = resolveLoginSiteUrl(input.site, deps, staging);
+        const login = await startLoginServer({ siteUrl });
+        const targetUrl = login.url({
+          account: account || undefined,
+          device: input.device,
+          expiresIn: input.expiresIn,
+        });
+
+        await openInBrowser(targetUrl).catch((error: unknown) => {
+          console.log(colors.yellow(`  ⚠ ${(error as Error).message}`));
+        });
+        console.log();
+        console.log(`  Waiting for browser handoff (${colors.dim(targetUrl)})…`);
+
+        const handoff = await login.waitForHandoff();
+        login.close();
+
+        if (handoff.error || !handoff.apiKey) {
+          return {
+            status: "error" as const,
+            siteUrl,
+            loginUrl: targetUrl,
+            error: handoff.error ?? "Login page did not return an API key",
+          };
+        }
+
+        const expiresAt = new Date(Date.now() + input.expiresIn * 1000).toISOString();
+        writeSessionHandle(deps.configDir, {
+          version: 1,
+          credential: {
+            kind: "session",
+            apiKey: handoff.apiKey,
+            apiKeyId: handoff.apiKeyId,
+            accountId: handoff.accountId,
+            label: input.device ?? siteUrl,
+            siteUrl,
+            createdAt: new Date().toISOString(),
+            expiresAt,
+          },
+          publishKey: null,
+          delegateKey: null,
+        });
+
+        let warning: string | null = null;
+        if (account && handoff.accountId && handoff.accountId !== account) {
+          warning = `Logged in as ${handoff.accountId}, but bos.config.json account is ${account}. Publishes will use the configured account.`;
+        }
+
+        let publishKey: LoginResult["publishKey"] = null;
+        if (input.key) {
+          try {
+            publishKey = await exportPublishKey(account, input.registry);
+          } catch (error) {
+            warning = `Session stored, but publish-key export failed: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`;
+          }
+        }
+
+        return {
+          status: "logged-in" as const,
+          siteUrl,
+          accountId: handoff.accountId,
+          expiresAt,
+          loginUrl: targetUrl,
+          publishKey,
+          warning,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          siteUrl: input.site ?? "",
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    logout: builder.logout.handler(async ({ input, context }) => {
+      const deps = Context.get(context["effect/context"], BosDepsTag);
+      const configDir = input.configDir ?? deps.configDir;
+
+      try {
+        const session = readSessionHandle(configDir);
+        let revokedApiKey = false;
+        let removedPublishKey = false;
+        let warning: string | null = null;
+
+        if (session?.credential) {
+          revokedApiKey = await revokeApiKey(session.credential).catch(() => false);
+          if (!revokedApiKey) {
+            warning =
+              "Could not revoke the API key remotely — revoke it manually under Settings → API keys.";
+          }
+        }
+
+        if (session?.publishKey) {
+          const account = session.credential?.accountId ?? deps.bosConfig?.account ?? "";
+          removePublishedKeyFile(session.publishKey.network, account, session.publishKey.publicKey);
+          removedPublishKey = true;
+          warning = warning
+            ? `${warning} Re-run ${colors.cyan("bos login --key")} to re-export a publish key.`
+            : "Removed the exported publish key. Re-run bos login --key to re-export one.";
+        }
+
+        deleteSessionHandle(configDir);
+        return {
+          status: "logged-out" as const,
+          revokedApiKey,
+          removedPublishKey,
+          warning,
+        };
+      } catch (error) {
+        return {
+          status: "error" as const,
+          revokedApiKey: false,
+          removedPublishKey: false,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }

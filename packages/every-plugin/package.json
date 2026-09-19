@@ -86,6 +86,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
+    "every-plugin": "./bin/every-plugin.mjs",
     "every-plugin-serve": "./bin/every-plugin-serve.mjs"
   },
   "files": [
@@ -107,6 +108,7 @@
   },
   "peerDependencies": {
     "@rspack/core": "catalog:",
+    "@proj-airi/unplugin-drizzle-orm-migrations": "*",
     "typescript": "^7.0.2",
     "effect": "catalog:",
     "zod": "catalog:",

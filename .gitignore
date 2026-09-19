@@ -304,6 +304,7 @@ fabric.properties
 .bos
 !.bos/sync-snapshot.json
 !.bos/infra-state.json
+.bos/session.json
 
 # AI tool config (local only, not committed)
 .opencode/
@@ -341,4 +342,6 @@ node_modules/.federation
 !plans/prototypes/**/*.gen.ts
 .bos/sync-backup/
 .scratch/
-docs/adr/**
+
+# every-plugin synthesized build config
+.every-plugin/

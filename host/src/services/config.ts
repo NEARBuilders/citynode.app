@@ -7,6 +7,7 @@ import type {
 } from "everything-dev/types";
 import type { RuntimePlugin } from "../types";
 import { normalizeUrl } from "../utils/normalize";
+import { hasComposablePluginUi, uiComposeDigest } from "./ui-compose";
 
 export type { ClientRuntimeConfig, RuntimeConfig, SharedConfig, SourceMode };
 
@@ -78,6 +79,8 @@ export function buildRuntimeClientConfig(
       url: uiConfig.url,
       entry: uiConfig.entry,
       integrity: uiConfig.integrity,
+      compose: hasComposablePluginUi(config),
+      composeDigest: hasComposablePluginUi(config) ? uiComposeDigest(config) : undefined,
     },
     api: config.api
       ? {
@@ -115,6 +118,8 @@ export function buildRuntimeClientConfig(
                     entry: plugin.ui.entry,
                     source: plugin.ui.source,
                     integrity: plugin.ui.integrity,
+                    ssrUrl: plugin.ui.ssrUrl,
+                    ssrIntegrity: plugin.ui.ssrIntegrity,
                   },
                 }
               : {}),

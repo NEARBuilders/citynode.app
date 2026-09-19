@@ -173,6 +173,7 @@ export const PublishOptionsSchema = z.object({
     ),
   network: z.enum(["mainnet", "testnet"]).optional(),
   privateKey: z.string().optional(),
+  wallet: z.boolean().default(false),
   env: z.enum(["production", "staging"]).default("production"),
   registry: z.string().optional(),
 });
@@ -256,6 +257,47 @@ export const KeyPublishResultSchema = z.object({
 });
 
 export const OverrideSectionSchema = z.enum(["ui", "api", "host", "plugins"]);
+
+const DEFAULT_LOGIN_EXPIRES_IN_SECONDS = 90 * 24 * 60 * 60;
+
+export const LoginOptionsSchema = z.object({
+  key: z.boolean().default(false),
+  site: z.string().optional(),
+  expiresIn: z.number().int().positive().default(DEFAULT_LOGIN_EXPIRES_IN_SECONDS),
+  device: z.string().optional(),
+  env: z.enum(["production", "staging"]).default("production"),
+  registry: z.string().optional(),
+});
+
+export const LoginResultSchema = z.object({
+  status: z.enum(["logged-in", "error"]),
+  siteUrl: z.string(),
+  accountId: z.string().nullish(),
+  expiresAt: z.string().nullish(),
+  loginUrl: z.string().nullish(),
+  publishKey: z
+    .object({
+      publicKey: z.string(),
+      network: z.enum(["mainnet", "testnet"]),
+      contract: z.string(),
+      exportedTo: z.string(),
+    })
+    .nullish(),
+  warning: z.string().nullish(),
+  error: z.string().optional(),
+});
+
+export const LogoutOptionsSchema = z.object({
+  configDir: z.string().optional(),
+});
+
+export const LogoutResultSchema = z.object({
+  status: z.enum(["logged-out", "error"]),
+  revokedApiKey: z.boolean(),
+  removedPublishKey: z.boolean(),
+  warning: z.string().nullish(),
+  error: z.string().optional(),
+});
 
 export const RuntimeOverrideTargetBaseSchema = z.enum(["ui", "api", "plugins"]);
 
@@ -575,6 +617,14 @@ export const bosContract = oc.router({
     .route({ method: "POST", path: "/key/publish" })
     .input(KeyPublishOptionsSchema)
     .output(KeyPublishResultSchema),
+  login: oc
+    .route({ method: "POST", path: "/login" })
+    .input(LoginOptionsSchema)
+    .output(LoginResultSchema),
+  logout: oc
+    .route({ method: "POST", path: "/logout" })
+    .input(LogoutOptionsSchema)
+    .output(LogoutResultSchema),
   init: oc
     .route({ method: "POST", path: "/init" })
     .input(InitOptionsSchema)
@@ -643,6 +693,10 @@ export type DeployOptions = z.infer<typeof DeployOptionsSchema>;
 export type DeployResult = z.infer<typeof DeployResultSchema>;
 export type KeyPublishOptions = z.infer<typeof KeyPublishOptionsSchema>;
 export type KeyPublishResult = z.infer<typeof KeyPublishResultSchema>;
+export type LoginOptions = z.infer<typeof LoginOptionsSchema>;
+export type LoginResult = z.infer<typeof LoginResultSchema>;
+export type LogoutOptions = z.infer<typeof LogoutOptionsSchema>;
+export type LogoutResult = z.infer<typeof LogoutResultSchema>;
 export type InitOptions = z.infer<typeof InitOptionsSchema>;
 export type InitResult = z.infer<typeof InitResultSchema>;
 export type OverrideSection = z.infer<typeof OverrideSectionSchema>;

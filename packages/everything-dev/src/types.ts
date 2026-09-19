@@ -79,6 +79,8 @@ export const PluginUiConfigSchema = z.object({
   development: z.string().optional(),
   production: z.string().optional(),
   integrity: z.string().optional(),
+  ssr: z.string().optional(),
+  ssrIntegrity: z.string().optional(),
 });
 export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
@@ -100,6 +102,8 @@ const PluginRuntimeUiSchema = z.object({
   localPath: z.string().optional(),
   port: z.number().optional(),
   integrity: z.string().optional(),
+  ssrUrl: z.string().optional(),
+  ssrIntegrity: z.string().optional(),
 });
 export type PluginRuntimeUi = z.infer<typeof PluginRuntimeUiSchema>;
 
@@ -223,6 +227,11 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     routes: z.array(z.string()).optional(),
     app: z.record(z.string(), BosConfigInputAppEntrySchema).optional(),
     plugins: z.record(z.string(), z.union([z.string(), BosConfigInputSchema])).optional(),
+    publish: z
+      .object({
+        auth: z.enum(["session", "key", "custody"]).optional(),
+      })
+      .optional(),
     ci: CiConfigSchema.optional(),
   }),
 );
@@ -252,6 +261,7 @@ export interface BosConfigInput {
   routes?: string[];
   app?: Record<string, BosConfigInputAppEntry>;
   plugins?: Record<string, string | BosConfigInput>;
+  publish?: PublishConfig;
   ci?: CiConfig;
 }
 
@@ -265,6 +275,14 @@ export const CiConfigSchema = z.object({
 });
 export type CiConfig = z.infer<typeof CiConfigSchema>;
 
+export const PublishAuthSchema = z.enum(["session", "key", "custody"]);
+export type PublishAuth = z.infer<typeof PublishAuthSchema>;
+
+export const PublishConfigSchema = z.object({
+  auth: PublishAuthSchema.optional(),
+});
+export type PublishConfig = z.infer<typeof PublishConfigSchema>;
+
 export const BosConfigSchema = z.object({
   account: z.string(),
   extends: ExtendsSchema.optional(),
@@ -274,6 +292,7 @@ export const BosConfigSchema = z.object({
   testnet: z.string().optional(),
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
+  publish: PublishConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
   plugins: z.record(z.string(), z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
@@ -347,6 +366,10 @@ export const ClientRuntimeConfigSchema = z.object({
       url: z.string(),
       entry: z.string(),
       integrity: z.string().optional(),
+      /** plugin ui grafting enabled (server sets it; client composes before hydrate) */
+      compose: z.boolean().optional(),
+      /** digest of the composed remote set — client must match it before hydrate */
+      composeDigest: z.string().optional(),
     })
     .optional(),
   api: z
@@ -383,6 +406,8 @@ export const ClientRuntimeConfigSchema = z.object({
             entry: z.string(),
             source: SourceModeSchema,
             integrity: z.string().optional(),
+            ssrUrl: z.string().optional(),
+            ssrIntegrity: z.string().optional(),
           })
           .optional(),
       }),

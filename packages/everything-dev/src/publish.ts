@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+import { readSessionHandle } from "./auth-session";
 import { buildWorkspaceTargets, selectWorkspaceTargets } from "./build";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
+import { ensureDelegateKey, submitRegistryWriteDelegated } from "./delegate-signer";
 import {
   buildRegistryConfigUrlForNetwork,
   fetchBosConfigFromFastKv,
@@ -18,7 +20,7 @@ import {
   submitRegistryWrite,
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
-import type { BosConfig, BosConfigInput, RuntimeConfig } from "./types";
+import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
 
@@ -102,6 +104,7 @@ interface PublishToFastKvInput {
   packages: string;
   network?: "mainnet" | "testnet";
   privateKey?: string;
+  wallet?: boolean;
   registry?: string;
 }
 
@@ -140,20 +143,63 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   let skipped: string[] | undefined;
   let deployResults: WorkspaceDeployResult[] | undefined;
 
+  const publishAuth: PublishConfig["auth"] = bosConfig.publish?.auth;
+  const governsWalletPublish = (publishAuth === "session" || input.wallet) && !input.privateKey;
+  if (governsWalletPublish) {
+    const session = readSessionHandle(configDir);
+    if (!session?.credential) {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          (input.wallet
+            ? "--wallet requires"
+            : 'bos.config.json sets publish.auth = "session", but') +
+          " no CLI session is stored in .bos/ for this project. Run bos login to create one.",
+      };
+    }
+    if (session.credential.accountId && session.credential.accountId !== account) {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          `The CLI session was created for ${session.credential.accountId}, but the configured ` +
+          `account is ${account}. Gasless wallet publish relays the FastKV write under the session's ` +
+          "NEAR account. Run bos login again under the matching account.",
+      };
+    }
+  }
+  if (publishAuth && !input.privateKey) {
+    if (publishAuth === "custody") {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          'bos.config.json sets publish.auth = "custody", but custody publish is not implemented yet (see NEARBuilders/everything-dev#291).',
+      };
+    }
+  }
+
   if (dryRun) {
     return { status: "dry-run", registryUrl, built, skipped };
   }
 
   let strategy: SigningStrategy;
-  try {
-    strategy = await resolveSigningStrategy({ privateKey: input.privateKey, account, network });
-    console.log(`  Signing via ${colors.cyan(describeSigningStrategy(strategy))}`);
-  } catch (error) {
-    return {
-      status: "error" as const,
-      registryUrl,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+  if (input.wallet) {
+    console.log(
+      `  Signing via ${colors.cyan("gasless NEP-366 delegate action (relayed by the platform relayer)")}`,
+    );
+  } else {
+    try {
+      strategy = await resolveSigningStrategy({ privateKey: input.privateKey, account, network });
+      console.log(`  Signing via ${colors.cyan(describeSigningStrategy(strategy))}`);
+    } catch (error) {
+      return {
+        status: "error" as const,
+        registryUrl,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   if (input.build) {
@@ -226,13 +272,29 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;
   const registryNamespace = getRegistryNamespaceForNetwork(network, input.registry);
+  const publishedAt = new Date().toISOString();
   const registryEntries: Record<string, string> = {
     [registryKey]: JSON.stringify(publishPayload),
   };
+  if (input.wallet) {
+    const manifestKey = `apps/${account}/${gateway}/manifests/${publishedAt.replace(/[:.]/g, "-")}.json`;
+    registryEntries[manifestKey] = JSON.stringify({
+      account,
+      gateway,
+      network,
+      publishedAt,
+      registryUrl,
+    });
+  }
 
   console.log();
   console.log("  Publishing to:");
   console.log(`    ${colors.cyan(registryUrl)}`);
+  if (input.wallet) {
+    console.log(
+      `    ${colors.dim(`+ per-deploy manifest written atomically in the same delegation`)}`,
+    );
+  }
 
   try {
     const alreadyPublished = await isConfigAlreadyPublished({
@@ -255,17 +317,46 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
     console.log(`  Submitting transaction on ${network}...`);
 
-    const result = await submitRegistryWrite(
-      {
+    let result: { success: boolean; txHash?: string };
+    if (input.wallet) {
+      const session = readSessionHandle(configDir);
+      const credential = session?.credential;
+      if (!credential || credential.accountId !== account) {
+        return {
+          status: "error",
+          registryUrl,
+          error: `--wallet requires a CLI session under ${account}. Run bos login first.`,
+        };
+      }
+      const record = await ensureDelegateKey({
+        configDir,
         account,
         contract: registryNamespace,
-        method: "__fastdata_kv",
-        args: registryEntries,
         network,
-        privateKey: input.privateKey,
-      },
-      strategy,
-    );
+        siteUrl: credential.siteUrl,
+      });
+      result = await submitRegistryWriteDelegated({
+        account,
+        contract: registryNamespace,
+        network,
+        args: registryEntries,
+        delegatePrivateKey: record.privateKey,
+        relayEndpoint: `${credential.siteUrl}/api/auth/near/relay`,
+        apiKey: credential.apiKey,
+      });
+    } else {
+      result = await submitRegistryWrite(
+        {
+          account,
+          contract: registryNamespace,
+          method: "__fastdata_kv",
+          args: registryEntries,
+          network,
+          privateKey: input.privateKey,
+        },
+        strategy,
+      );
+    }
 
     if (result.txHash) {
       console.log(`  Transaction submitted: ${colors.dim(result.txHash)}`);

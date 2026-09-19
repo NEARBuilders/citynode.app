@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchResponse } from "./http-client";
@@ -324,4 +325,47 @@ export function findPluginKey(
     }
   }
   return null;
+}
+
+export interface PluginDeployOptions {
+  bosConfigPath: string;
+  deployLabel?: string;
+  urlField?: string;
+  integrityField?: string;
+}
+
+export function withPluginDeploy(baseConfig: unknown, options: PluginDeployOptions): unknown {
+  if (process.env.DEPLOY !== "true") return baseConfig;
+
+  const { withZephyr } = createRequire(import.meta.url)("zephyr-rspack-plugin");
+
+  return withZephyr({
+    hooks: {
+      onDeployComplete: async (info: { url: string }) => {
+        console.log(`🚀 ${options.deployLabel ?? "Plugin"} Deployed:`, info.url);
+        const integrity = await computeSriHashForUrl(info.url);
+        if (options.urlField) {
+          reportDeployResult({
+            url: info.url,
+            integrity,
+            bosConfigPath: options.bosConfigPath,
+            urlField: options.urlField,
+            integrityField:
+              options.integrityField ?? options.urlField.replace(/\.production$/, ".integrity"),
+          });
+          return;
+        }
+        const found = findPluginKey(options.bosConfigPath, process.cwd());
+        if (found) {
+          reportDeployResult({
+            url: info.url,
+            integrity,
+            bosConfigPath: options.bosConfigPath,
+            urlField: `${found.slot}.${found.key}.production`,
+            integrityField: `${found.slot}.${found.key}.integrity`,
+          });
+        }
+      },
+    },
+  })(baseConfig);
 }

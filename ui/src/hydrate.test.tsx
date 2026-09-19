@@ -18,7 +18,10 @@ vi.mock("./app", () => ({
 }));
 vi.mock("./router", () => {
   bootstrap.routerLoads++;
-  return { createRouter: bootstrap.createRouter };
+  return {
+    createRouter: bootstrap.createRouter,
+    routeTree: { options: { id: "/__test__root__" } },
+  };
 });
 vi.mock("react-dom/client", () => ({
   createRoot: () => ({ render: bootstrap.render }),
