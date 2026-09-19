@@ -26,11 +26,7 @@ vi.mock("near-kit", async () => {
     Near: class {
       transaction() {
         return {
-          functionCall(
-            receiverId: string,
-            methodName: string,
-            args: unknown,
-          ) {
+          functionCall(receiverId: string, methodName: string, args: unknown) {
             harness.functionCallArgs = { receiverId, methodName, args };
             return {
               send: async () => ({ status: "EXECUTED" }),
