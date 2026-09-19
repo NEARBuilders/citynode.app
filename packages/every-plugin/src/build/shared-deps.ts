@@ -142,15 +142,6 @@ export function getPluginSharedDependencies(): SharedDependencies {
   return pluginSharedDependencies;
 }
 
-export function getPluginSharedDependenciesVersionRange(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(getPluginSharedDependencies()).map(([name, config]) => [
-      name,
-      getMajorMinorVersion(config.version),
-    ]),
-  );
-}
-
 export function getMajorMinorVersion(version: string): string {
   const clean = version.replace(/^[\^~>=<]+/, "");
   const match = clean.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
