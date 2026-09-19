@@ -107,6 +107,10 @@ export const cliCommandMeta = {
       verbose: { description: "Show full build output instead of clean summary" },
       env: { description: "Environment: production or staging" },
       network: { description: "NEAR network: mainnet or testnet" },
+      wallet: {
+        description:
+          "Publish gaslessly with a one-time wallet approval (NEP-366 delegate action relayed by the platform relayer)",
+      },
       registry: {
         description:
           "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
@@ -128,6 +132,24 @@ export const cliCommandMeta = {
           "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
       },
     },
+  },
+  login: {
+    commandPath: ["login"],
+    summary:
+      "Sign in with your NEAR account via the hosted site (wallet, passkey, or social login)",
+    interactive: true,
+    fields: {
+      key: { description: "Also mint and export a scoped publish key for headless/CI use" },
+      site: { description: "Override site URL hosting the CLI login page" },
+      device: { description: "Device label recorded on the credential (default: hostname)" },
+      expiresIn: { description: "Session lifetime in seconds (default: 90 days)" },
+      env: { description: "Environment: production (default) or staging" },
+    },
+  },
+  logout: {
+    commandPath: ["logout"],
+    summary: "Revoke the stored CLI session and delete the exported publish key",
+    interactive: false,
   },
   keyPublish: {
     commandPath: ["key", "generate"],

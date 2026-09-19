@@ -223,6 +223,11 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
     routes: z.array(z.string()).optional(),
     app: z.record(z.string(), BosConfigInputAppEntrySchema).optional(),
     plugins: z.record(z.string(), z.union([z.string(), BosConfigInputSchema])).optional(),
+    publish: z
+      .object({
+        auth: z.enum(["session", "key", "custody"]).optional(),
+      })
+      .optional(),
     ci: CiConfigSchema.optional(),
   }),
 );
@@ -252,6 +257,7 @@ export interface BosConfigInput {
   routes?: string[];
   app?: Record<string, BosConfigInputAppEntry>;
   plugins?: Record<string, string | BosConfigInput>;
+  publish?: PublishConfig;
   ci?: CiConfig;
 }
 
@@ -265,6 +271,14 @@ export const CiConfigSchema = z.object({
 });
 export type CiConfig = z.infer<typeof CiConfigSchema>;
 
+export const PublishAuthSchema = z.enum(["session", "key", "custody"]);
+export type PublishAuth = z.infer<typeof PublishAuthSchema>;
+
+export const PublishConfigSchema = z.object({
+  auth: PublishAuthSchema.optional(),
+});
+export type PublishConfig = z.infer<typeof PublishConfigSchema>;
+
 export const BosConfigSchema = z.object({
   account: z.string(),
   extends: ExtendsSchema.optional(),
@@ -274,6 +288,7 @@ export const BosConfigSchema = z.object({
   testnet: z.string().optional(),
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
+  publish: PublishConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
   plugins: z.record(z.string(), z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({

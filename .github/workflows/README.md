@@ -50,7 +50,7 @@ Host is never deployed from this repo — it's loaded from a remote URL at runti
 **Behavior:**
 - Detects whether the repository has a `Dockerfile`
 - Skips the build steps entirely when no Dockerfile exists
-- Pushes `latest`, branch, and SHA tags to `ghcr.io`
+- Pushes branch and SHA tags to `ghcr.io` — no mutable `latest` pin; container tiers track the committed root `Dockerfile`
 
 ### Release (`release.yml`)
 

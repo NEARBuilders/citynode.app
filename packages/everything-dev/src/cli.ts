@@ -957,6 +957,33 @@ async function main() {
       process.exit(1);
     }
 
+    if (descriptor.key === "login") {
+      console.log();
+      console.log(colors.green(`${icons.ok} Logged in to ${result.siteUrl}`));
+      if (result.accountId) console.log(`  ${colors.dim("Account:")} ${result.accountId}`);
+      if (result.expiresAt) console.log(`  ${colors.dim("Expires:")} ${result.expiresAt}`);
+      if (result.warning) console.log(`  ${colors.yellow("⚠")} ${result.warning}`);
+      if (result.publishKey) {
+        console.log(
+          `  ${colors.dim("Publish key:")} ${result.publishKey.publicKey} ${colors.dim(
+            `(${result.publishKey.network}, exported to ${result.publishKey.exportedTo})`,
+          )}`,
+        );
+      }
+      console.log();
+      return;
+    }
+
+    if (descriptor.key === "logout") {
+      console.log();
+      console.log(colors.green(`${icons.ok} Logged out`));
+      if (result.revokedApiKey) console.log(`  ${colors.dim("Revoked API key")}`);
+      if (result.removedPublishKey) console.log(`  ${colors.dim("Removed exported publish key")}`);
+      if (result.warning) console.log(`  ${colors.yellow("⚠")} ${result.warning}`);
+      console.log();
+      return;
+    }
+
     if (descriptor.key === "keyPublish") {
       process.stdout.write(`Generated publish key for ${result.account}\n`);
       process.stdout.write(`  Network: ${result.network}\n`);
