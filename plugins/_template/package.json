@@ -44,10 +44,9 @@
     "zephyr-rspack-plugin": "catalog:"
   },
   "scripts": {
-    "build": "bun run build:types && rspack build",
-    "build:types": "tsc -p tsconfig.contract.json",
-    "deploy": "bun run build:types && DEPLOY=true FORCE_COLOR=1 rspack build",
-    "dev": "bun run build:types && every-plugin-serve",
+    "build": "every-plugin build",
+    "deploy": "every-plugin deploy",
+    "dev": "every-plugin dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

@@ -33,7 +33,7 @@ export default defineConfig([
   },
   {
     ...shared,
-    entry: ["src/dev/serve.ts"],
+    entry: ["src/dev/serve.ts", "src/cli.ts"],
     format: ["esm"],
     banner: "#!/usr/bin/env bun",
   },
