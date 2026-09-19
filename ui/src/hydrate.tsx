@@ -9,10 +9,124 @@
 import { createApiClient, createAuthClient, getCspNonce, getRuntimeConfig } from "./app";
 import "./styles.css";
 
+interface NavManifestLike {
+  items: Array<{
+    id: string;
+    label: string;
+    icon?: string;
+    group?: string;
+    order?: number;
+    to: string;
+    plugin: string;
+    mount: string;
+  }>;
+}
+
 declare global {
   interface Window {
     __EVERYTHING_DEV_HYDRATE_PROMISE__?: Promise<void>;
     __EVERYTHING_DEV_SSR__?: boolean;
+  }
+}
+
+function configuredUiPluginIds(runtimeConfig: ReturnType<typeof getRuntimeConfig>): string[] {
+  return Object.entries(runtimeConfig.plugins ?? {}).map(([id]) => id);
+}
+
+function pluginUi(
+  pluginId: string,
+  runtimeConfig: ReturnType<typeof getRuntimeConfig>["plugins"],
+): { url: string; integrity?: string; name: string; ssrUrl?: string } | undefined {
+  const ui = (
+    runtimeConfig?.[pluginId] as
+      | { ui?: { url?: string; name?: string; integrity?: string; ssrUrl?: string } }
+      | undefined
+  )?.ui;
+  if (!ui?.url) return undefined;
+  return {
+    url: ui.url,
+    integrity: ui.integrity,
+    name: ui.name ?? `${pluginId}-ui`,
+    ssrUrl: ui.ssrUrl,
+  };
+}
+
+/**
+ * Graftable client composition: load every configured plugin ui `./tree`
+ * expose and graft onto the core tree before hydration. Only runs when the
+ * server set `ui.compose` (flag-parity with SSR composition); any load
+ * failure falls back to the core-only tree so hydration never regresses.
+ */
+async function composeClientPluginTrees(
+  runtimeConfig: ReturnType<typeof getRuntimeConfig>,
+  coreTree: unknown,
+): Promise<{ routeTree: unknown; nav: NavManifestLike } | undefined> {
+  if (!runtimeConfig.ui?.compose) return undefined;
+  const remotes = configuredUiPluginIds(runtimeConfig).flatMap((id) => {
+    const ui = pluginUi(id, runtimeConfig.plugins);
+    return ui?.ssrUrl ? [{ id, name: ui.name, url: ui.url, integrity: ui.integrity }] : [];
+  });
+  if (remotes.length === 0) return undefined;
+
+  try {
+    const [{ registerRemotes, loadRemote }, { composeApp, computeConfigComposeDigest }] =
+      await Promise.all([
+        import("@module-federation/runtime"),
+        import("everything-dev/ui/compose"),
+      ]);
+    registerRemotes(
+      remotes.map((remote) => ({
+        name: remote.name,
+        alias: remote.name,
+        entry: `${remote.url.replace(/\/$/, "")}/remoteEntry.js`,
+      })),
+    );
+
+    const loaded = await Promise.allSettled(
+      remotes.map(async (remote) => {
+        const mod = (await loadRemote(`${remote.name}/tree`, { from: "build" })) as {
+          default?: unknown;
+        };
+        return { name: remote.name, tree: mod.default };
+      }),
+    );
+    const modules = loaded.flatMap((result) =>
+      result.status === "fulfilled" && result.value.tree ? [result.value] : [],
+    );
+    if (modules.length === 0) return undefined;
+    if (modules.length < remotes.length) {
+      console.warn(
+        `[Hydrate] ${remotes.length - modules.length} plugin ui tree(s) failed to load; core-only fallback`,
+      );
+    }
+
+    // Assert tree identity: the client's fingerprint over the remotes it can
+    // see must match the digest the server computed for the tree that was
+    // SSR'd. On mismatch the composed server HTML cannot hydrate safely, so
+    // fall back to the core-only tree. Both sides read the same shared
+    // fingerprint implementation — this can only fire on a stale/degraded page.
+    const clientDigest = computeConfigComposeDigest(runtimeConfig);
+    const expectedDigest = runtimeConfig.ui?.composeDigest;
+    if (expectedDigest && expectedDigest !== clientDigest) {
+      console.warn(
+        `[Hydrate] Compose digest mismatch (client ${clientDigest} vs server ${expectedDigest}); core-only fallback`,
+      );
+      return undefined;
+    }
+
+    const result = composeApp(
+      coreTree as never,
+      modules.map((mod) => ({ name: mod.name, tree: mod.tree as never })),
+    );
+
+    console.log("[Hydrate] Composed plugin trees:", {
+      mounts: result.mountCounts,
+      warnings: result.warnings,
+    });
+    return { routeTree: result.routeTree, nav: result.nav };
+  } catch (error) {
+    console.error("[Hydrate] Client compose failed; core-only fallback:", error);
+    return undefined;
   }
 }
 
@@ -41,7 +155,7 @@ export async function hydrate() {
       throw new Error("Missing hostUrl or rpcBase in runtime config");
     }
 
-    const [{ QueryClient, QueryClientProvider }, { createRouter }] = await Promise.all([
+    const [{ QueryClient, QueryClientProvider }, { createRouter, routeTree }] = await Promise.all([
       import("@tanstack/react-query"),
       import("./router"),
     ]);
@@ -56,8 +170,12 @@ export async function hydrate() {
       },
     });
 
+    const composed = await composeClientPluginTrees(runtimeConfig, routeTree);
+
     const { router } = createRouter({
+      routeTree: composed?.routeTree,
       context: {
+        pluginNav: composed?.nav,
         queryClient: client,
         runtimeConfig,
         cspNonce,

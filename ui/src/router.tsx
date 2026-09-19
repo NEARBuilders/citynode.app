@@ -44,7 +44,7 @@ export function createRouter(opts: CreateRouterOptions) {
   const cspNonce = opts.context.cspNonce;
 
   const router = createTanStackRouter({
-    routeTree,
+    routeTree: (opts.routeTree ?? routeTree) as typeof routeTree,
     history,
     basepath: opts.basepath ?? opts.context.runtimeConfig?.runtime?.runtimeBasePath ?? "/",
     context: {

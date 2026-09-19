@@ -79,6 +79,8 @@ export const PluginUiConfigSchema = z.object({
   development: z.string().optional(),
   production: z.string().optional(),
   integrity: z.string().optional(),
+  ssr: z.string().optional(),
+  ssrIntegrity: z.string().optional(),
 });
 export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
@@ -100,6 +102,8 @@ const PluginRuntimeUiSchema = z.object({
   localPath: z.string().optional(),
   port: z.number().optional(),
   integrity: z.string().optional(),
+  ssrUrl: z.string().optional(),
+  ssrIntegrity: z.string().optional(),
 });
 export type PluginRuntimeUi = z.infer<typeof PluginRuntimeUiSchema>;
 
@@ -362,6 +366,10 @@ export const ClientRuntimeConfigSchema = z.object({
       url: z.string(),
       entry: z.string(),
       integrity: z.string().optional(),
+      /** plugin ui grafting enabled (server sets it; client composes before hydrate) */
+      compose: z.boolean().optional(),
+      /** digest of the composed remote set — client must match it before hydrate */
+      composeDigest: z.string().optional(),
     })
     .optional(),
   api: z
@@ -398,6 +406,8 @@ export const ClientRuntimeConfigSchema = z.object({
             entry: z.string(),
             source: SourceModeSchema,
             integrity: z.string().optional(),
+            ssrUrl: z.string().optional(),
+            ssrIntegrity: z.string().optional(),
           })
           .optional(),
       }),

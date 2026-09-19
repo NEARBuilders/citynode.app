@@ -2,6 +2,7 @@ import { expect, it } from "@effect/vitest";
 import { createRouterClient } from "@orpc/server";
 import { createPluginRuntime } from "every-plugin/runtime";
 import { describe } from "vitest";
+import { classifyPluginFailure } from "../../src/runtime/errors";
 import { TEST_REGISTRY } from "../registry";
 
 const TEST_CONFIG = {
@@ -92,7 +93,7 @@ describe("Plugin Lifecycle Integration Tests", () => {
       expect.fail("Should have thrown PluginRuntimeError");
     } catch (error: any) {
       expect(error.operation).toBe("validate-secrets");
-      expect(error.retryable).toBe(false);
+      expect(classifyPluginFailure(error).retryable).toBe(false);
       expect(error.pluginId).toBe("test-plugin");
     }
   }, 10000);

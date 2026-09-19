@@ -56,7 +56,6 @@ export const RegistryServiceDefault = Layer.effect(
                 pluginId,
                 operation: "validate-plugin-id",
                 cause: new Error(`Plugin ${pluginId} not found in registry`),
-                retryable: false,
               }),
             );
           }
@@ -139,7 +138,6 @@ export const PluginLoaderServiceDefault = Layer.effect(
                 pluginId,
                 operation: "load-plugin",
                 cause: new Error(`Plugin ${pluginId} has no module or remote URL configured`),
-                retryable: false,
               }),
             );
           }
@@ -151,7 +149,7 @@ export const PluginLoaderServiceDefault = Layer.effect(
               Effect.logError(`Plugin ${pluginId} failed during register-remote: ${error}`),
             ),
             Effect.mapError((error) =>
-              toPluginRuntimeError(error, pluginId, undefined, "register-remote", true),
+              toPluginRuntimeError(error, pluginId, undefined, "register-remote"),
             ),
           );
 
@@ -164,7 +162,7 @@ export const PluginLoaderServiceDefault = Layer.effect(
                 Effect.logError(`Plugin ${pluginId} failed during load-remote: ${error}`),
               ),
               Effect.mapError((error) =>
-                toPluginRuntimeError(error, pluginId, undefined, "load-remote", false),
+                toPluginRuntimeError(error, pluginId, undefined, "load-remote"),
               ),
             );
 
@@ -181,7 +179,7 @@ export const PluginLoaderServiceDefault = Layer.effect(
               Effect.logError(`Plugin ${pluginId} failed during instantiate-plugin: ${error}`),
             ),
             Effect.mapError((error) =>
-              toPluginRuntimeError(error, pluginId, undefined, "instantiate-plugin", false),
+              toPluginRuntimeError(error, pluginId, undefined, "instantiate-plugin"),
             ),
           );
 
@@ -219,7 +217,6 @@ export const PluginLoaderServiceDefault = Layer.effect(
                   pluginId: plugin.id,
                   operation: "validate-config",
                   cause: validationError.zodError,
-                  retryable: false,
                 }),
             ),
           );
@@ -239,7 +236,6 @@ export const PluginLoaderServiceDefault = Layer.effect(
                   pluginId: plugin.id,
                   operation: "validate-secrets",
                   cause: validationError.zodError,
-                  retryable: false,
                 }),
             ),
           );
@@ -264,7 +260,6 @@ export const PluginLoaderServiceDefault = Layer.effect(
                   pluginId: plugin.id,
                   operation: "validate-hydrated-config",
                   cause: validationError.zodError,
-                  retryable: false,
                 }),
             ),
           );
@@ -306,7 +301,7 @@ export const PluginLoaderServiceDefault = Layer.effect(
               Effect.logError(`Plugin ${plugin.id} failed during initialize-plugin: ${error}`),
             ),
             Effect.mapError((error) =>
-              toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin", false),
+              toPluginRuntimeError(error, plugin.id, undefined, "initialize-plugin"),
             ),
           );
 

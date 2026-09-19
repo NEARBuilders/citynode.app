@@ -171,6 +171,24 @@
       "import": "./dist/ui/router.mjs",
       "require": "./dist/ui/router.cjs"
     },
+    "./ui/compose": {
+      "development": {
+        "types": "./src/ui/compose/index.ts",
+        "import": "./src/ui/compose/index.ts"
+      },
+      "types": "./dist/ui/compose/index.d.mts",
+      "import": "./dist/ui/compose/index.mjs",
+      "require": "./dist/ui/compose/index.cjs"
+    },
+    "./ui/mf-build": {
+      "development": {
+        "types": "./src/ui/mf-build/index.ts",
+        "import": "./src/ui/mf-build/index.ts"
+      },
+      "types": "./dist/ui/mf-build/index.d.mts",
+      "import": "./dist/ui/mf-build/index.mjs",
+      "require": "./dist/ui/mf-build/index.cjs"
+    },
     "./package.json": "./package.json",
     "./db": {
       "development": {
@@ -246,9 +264,13 @@
     }
   },
   "devDependencies": {
+    "@module-federation/rsbuild-plugin": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "@rsbuild/plugin-react": "catalog:",
     "@tanstack/intent": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
     "@types/gradient-string": "^1.1.6",
     "@types/node": "^22.10.2",
     "@types/react": "catalog:",
@@ -258,6 +280,7 @@
     "tsdown": "^0.22.0",
     "typescript": "^5.7.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "zephyr-rsbuild-plugin": "catalog:"
   }
 }
