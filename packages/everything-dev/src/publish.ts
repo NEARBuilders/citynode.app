@@ -1,8 +1,13 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { readSessionHandle } from "./auth-session";
-import { buildWorkspaceTargets, selectWorkspaceTargets } from "./build";
+import {
+  buildWorkspaceTargets,
+  resolveCdnProvider,
+  resolveWorkspaceTarget,
+  selectWorkspaceTargets,
+} from "./build";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
@@ -13,6 +18,7 @@ import {
   getRegistryNamespaceForNetwork,
   type NetworkId,
 } from "./fastkv";
+import { applyDeployResults, type DeployResultEntry } from "./integrity";
 import {
   describeSigningStrategy,
   resolveSigningStrategy,
@@ -20,6 +26,7 @@ import {
   submitRegistryWrite,
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
+import { collectWorkspaceArtifacts, uploadBundlesToPlatform } from "./platform-deploy";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
@@ -106,6 +113,7 @@ interface PublishToFastKvInput {
   privateKey?: string;
   wallet?: boolean;
   registry?: string;
+  cdn?: "zephyr" | "platform";
 }
 
 interface PublishToFastKvResult {
@@ -180,6 +188,30 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     }
   }
 
+  const cdnProvider = resolveCdnProvider(bosConfig, input.cdn);
+  if (cdnProvider === "platform" && !input.privateKey) {
+    const session = readSessionHandle(configDir);
+    if (!session?.credential) {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          'Platform CDN is enabled (bos.config.json sets deploy.cdn = "platform", or --cdn platform), ' +
+          "but no CLI session is stored in .bos/ for this project. Run bos login to create one.",
+      };
+    }
+    if (session.credential.accountId && session.credential.accountId !== account) {
+      return {
+        status: "error",
+        registryUrl,
+        error:
+          `The CLI session was created for ${session.credential.accountId}, but the configured ` +
+          `account is ${account}. Platform bundle uploads are pinned to the session's NEAR account. ` +
+          "Run bos login again under the matching account.",
+      };
+    }
+  }
+
   if (dryRun) {
     return { status: "dry-run", registryUrl, built, skipped };
   }
@@ -215,6 +247,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       targets,
       deploy: true,
       verbose: input.verbose,
+      cdnProviderOverride: cdnProvider,
     });
     built = result.built;
     skipped = result.skipped;
@@ -268,7 +301,80 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
 
   const rawConfigPath = join(configDir, "bos.config.json");
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
-  const publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
+  let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
+
+  if (cdnProvider === "platform") {
+    const session = readSessionHandle(configDir);
+    const credential = session?.credential;
+    if (!credential) {
+      return {
+        status: "error",
+        registryUrl,
+        built,
+        skipped,
+        deployResults,
+        error: "Platform CDN is enabled but no CLI session is stored. Run bos login first.",
+      };
+    }
+
+    const uploadTargets = (built ?? []).filter((key) => targets.includes(key));
+    const platformEntries: DeployResultEntry[] = [];
+
+    console.log();
+    console.log("  Uploading bundles to platform storage...");
+    for (const key of uploadTargets) {
+      const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
+      if (!ws) continue;
+
+      const files = await collectWorkspaceArtifacts(ws.path);
+      if (files.length === 0) {
+        console.log(
+          `    ${colors.yellow("⚠")} ${padRight(key, 28)} no dist/ artifacts found — skipped`,
+        );
+        continue;
+      }
+
+      const uploaded = await uploadBundlesToPlatform({
+        siteUrl: credential.siteUrl,
+        apiKey: credential.apiKey,
+        account,
+        gateway,
+        workspace: key,
+        files,
+      });
+
+      const entryIntegrity = uploaded.objects.find((o) =>
+        o.key.endsWith("/remoteEntry.js"),
+      )?.integrity;
+      const urlField = ws.kind === "app" ? `app.${key}.production` : `plugins.${key}.production`;
+      platformEntries.push({
+        url: uploaded.baseUrl,
+        integrity: entryIntegrity,
+        urlField,
+        integrityField: `${ws.kind}.${key}.integrity`,
+      });
+      console.log(
+        `    ${colors.green(icons.ok)} ${padRight(key, 28)} ${uploaded.objects.length} object(s) → ${uploaded.baseUrl}`,
+      );
+    }
+
+    if (platformEntries.length > 0) {
+      const merged = applyDeployResults(rawConfig as Record<string, unknown>, platformEntries);
+      try {
+        writeFileSync(rawConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
+      } catch (error) {
+        return {
+          status: "error",
+          registryUrl,
+          built,
+          skipped,
+          deployResults,
+          error: `Failed to write bundle URLs to bos.config.json: ${error instanceof Error ? error.message : error}`,
+        };
+      }
+      publishPayload = (isStaging ? { ...merged, domain: gateway } : merged) as BosConfigInput;
+    }
+  }
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;
   const registryNamespace = getRegistryNamespaceForNetwork(network, input.registry);

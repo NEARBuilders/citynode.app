@@ -1,0 +1,135 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { fetchResponse } from "./http-client";
+
+export interface PlatformBundleFile {
+  path: string;
+  bytes: Buffer;
+  contentType: string;
+}
+
+export interface PlatformUploadResult {
+  base: string;
+  objects: { key: string; sha256: string; integrity: string }[];
+  baseUrl: string;
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".cjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".map": "application/json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain",
+  ".xml": "application/xml",
+};
+
+export function guessBundleContentType(path: string): string {
+  const dot = path.lastIndexOf(".");
+  if (dot <= 0) return "application/octet-stream";
+  return CONTENT_TYPES[path.slice(dot).toLowerCase()] ?? "application/octet-stream";
+}
+
+export async function collectWorkspaceArtifacts(
+  workspacePath: string,
+): Promise<PlatformBundleFile[]> {
+  const distPath = join(workspacePath, "dist");
+  const files: PlatformBundleFile[] = [];
+
+  async function walk(relative: string): Promise<void> {
+    const entries = await readdir(join(distPath, relative), { withFileTypes: true });
+    for (const entry of entries) {
+      const rel = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        await walk(rel);
+      } else {
+        const bytes = await readFile(join(distPath, rel));
+        files.push({ path: rel, bytes, contentType: guessBundleContentType(rel) });
+      }
+    }
+  }
+
+  try {
+    await stat(distPath);
+  } catch {
+    return files;
+  }
+
+  await walk("");
+  return files;
+}
+
+export async function uploadBundlesToPlatform(input: {
+  siteUrl: string;
+  apiKey: string;
+  account: string;
+  gateway: string;
+  workspace: string;
+  files: PlatformBundleFile[];
+}): Promise<PlatformUploadResult> {
+  if (input.files.length === 0) {
+    throw new Error(`No dist/ artifacts found to upload for workspace "${input.workspace}".`);
+  }
+
+  const paths: Record<string, { content: string; contentType: string }> = {};
+  for (const file of input.files) {
+    paths[file.path] = {
+      content: file.bytes.toString("base64"),
+      contentType: file.contentType,
+    };
+  }
+
+  const response = await fetchResponse(`${input.siteUrl}/api/storage/bundles`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": input.apiKey,
+    },
+    body: JSON.stringify({
+      account: input.account,
+      gateway: input.gateway,
+      workspace: input.workspace,
+      paths,
+    }),
+    timeout: "120 seconds",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const parsed = JSON.parse(detail) as { message?: string; data?: { hint?: string } };
+      if (parsed.message)
+        message = parsed.data?.hint ? `${parsed.message} (${parsed.data.hint})` : parsed.message;
+    } catch {
+      if (detail) message = detail.slice(0, 200);
+    }
+    throw new Error(`Platform bundle upload failed: ${message}`);
+  }
+
+  const payload = (await response.json()) as {
+    base: string;
+    objects: PlatformUploadResult["objects"];
+  };
+  const base = payload.base ?? `bundles/${input.account}/${input.gateway}/${input.workspace}`;
+  return {
+    base,
+    objects: payload.objects ?? [],
+    baseUrl: `${input.siteUrl.replace(/\/$/, "")}/${base}/`,
+  };
+}

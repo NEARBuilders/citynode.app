@@ -106,14 +106,17 @@ function isLocalTarget(key: string, bosConfig: BosConfig | null): boolean {
   return typeof dev === "string" && dev.startsWith("local:");
 }
 
-export function resolveCdnProvider(_bosConfig: BosConfig | null): "zephyr" | "cloudflare" {
-  return "zephyr";
+export function resolveCdnProvider(
+  bosConfig: BosConfig | null,
+  override?: "zephyr" | "platform",
+): "zephyr" | "platform" {
+  return override ?? bosConfig?.deploy?.cdn ?? "zephyr";
 }
 
 export function checkCdnProviderDeployable(bosConfig: BosConfig | null): string | null {
   const provider = resolveCdnProvider(bosConfig);
-  if (provider === "zephyr") return null;
-  return "Cloudflare deploy support is not implemented yet — fall back to the zephyr CDN for this release.";
+  if (provider === "zephyr" || provider === "platform") return null;
+  return `CDN provider "${provider}" is not supported — use "zephyr" or "platform".`;
 }
 
 interface BuildAttemptResult {
@@ -245,18 +248,19 @@ const ZEPHYR_BACKOFF_MS = [2000, 5000, 10000];
 async function buildOneWorkspace(
   ws: WorkspaceTarget,
   env: Record<string, string>,
-  opts: { deploy: boolean; verbose?: boolean; cdnProvider?: "zephyr" | "cloudflare" },
+  opts: { deploy: boolean; verbose?: boolean; cdnProvider?: "zephyr" | "platform" },
 ): Promise<InternalWorkspaceResult> {
   const pkgJson = await readJsonFile<{
     scripts?: Record<string, string>;
   }>(`${ws.path}/package.json`);
-  const shouldDeployScript = opts.deploy && pkgJson.scripts?.deploy;
+  const platformBuild = opts.cdnProvider === "platform";
+  const shouldDeployScript = opts.deploy && pkgJson.scripts?.deploy && !platformBuild;
   const buildConfig = shouldDeployScript
     ? { cmd: "bun", args: ["run", "deploy"] }
     : (buildCommands[ws.key] ?? { cmd: "bun", args: ["run", "build"] });
 
   const verbose = opts.verbose ?? false;
-  const expectDeployUrl = opts.deploy && (opts.cdnProvider ?? "zephyr") !== "cloudflare";
+  const expectDeployUrl = opts.deploy && !platformBuild;
   const startTime = Date.now();
   let attempt: BuildAttemptResult | undefined;
   let retried = false;
@@ -334,6 +338,7 @@ export async function buildWorkspaceTargets(opts: {
   deploy: boolean;
   verbose?: boolean;
   cdnUploadHandled?: boolean;
+  cdnProviderOverride?: "zephyr" | "platform";
 }): Promise<{
   built: string[];
   skipped: string[];
@@ -363,11 +368,11 @@ export async function buildWorkspaceTargets(opts: {
     return { built: [], skipped };
   }
 
-  const cdnProvider = resolveCdnProvider(opts.bosConfig);
+  const cdnProvider = resolveCdnProvider(opts.bosConfig, opts.cdnProviderOverride);
 
-  if (opts.deploy && cdnProvider === "cloudflare" && !opts.cdnUploadHandled) {
+  if (opts.deploy && cdnProvider === "platform") {
     console.log(
-      `  ${colors.yellow("⚠")} Cloudflare CDN uploads are orchestrated by \`bos publish --deploy\` — this build produced dist bundles without uploading them.`,
+      `  ${colors.cyan("→")} Platform CDN enabled — dist bundles will be uploaded by \`bos publish\` to the platform storage.`,
     );
   }
 
@@ -398,7 +403,7 @@ export async function buildWorkspaceTargets(opts: {
     NODE_ENV: opts.deploy ? "production" : "development",
     BOS_CDN_PROVIDER: cdnProvider,
   };
-  if (opts.deploy) {
+  if (opts.deploy && cdnProvider !== "platform") {
     env.DEPLOY = "true";
     env.FORCE_COLOR = "1";
   } else {

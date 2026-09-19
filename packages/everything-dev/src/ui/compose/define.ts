@@ -17,7 +17,9 @@ export interface UiPluginDefinition {
  */
 const declaredMounts = new WeakMap<UiPluginModule, ReadonlyMap<AnyRoute, MountId>>();
 
-export function declaredMountsOf(plugin: UiPluginModule): ReadonlyMap<AnyRoute, MountId> | undefined {
+export function declaredMountsOf(
+  plugin: UiPluginModule,
+): ReadonlyMap<AnyRoute, MountId> | undefined {
   return declaredMounts.get(plugin);
 }
 

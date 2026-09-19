@@ -14,6 +14,8 @@ import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import type { NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
+import type { BundleStorage } from "./services/storage";
+import { StorageLive, StorageTag } from "./services/storage";
 import type { TenantsService } from "./services/tenants";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
@@ -26,6 +28,7 @@ class ApiServices extends Context.Service<
     nodes: NodesService;
     validators: ValidatorsService;
     discovery: DiscoveryService;
+    storage: BundleStorage;
   }
 >()("api/ApiServices") {}
 
@@ -56,6 +59,37 @@ function validateHostname(hostname: string): void {
   }
 }
 
+const CONTENT_TYPES: Record<string, string> = {
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".cjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".map": "application/json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain",
+  ".xml": "application/xml",
+};
+
+function guessContentType(path: string): string {
+  const dot = path.lastIndexOf(".");
+  if (dot <= 0) return "application/octet-stream";
+  return CONTENT_TYPES[path.slice(dot).toLowerCase()] ?? "application/octet-stream";
+}
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
@@ -79,6 +113,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
           NodesLive,
           ValidatorsLive,
           DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
+          StorageLive,
         ).pipe(Layer.provide(database)),
       );
 
@@ -89,6 +124,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
         nodes: Context.get(services, NodesTag),
         validators: Context.get(services, ValidatorsTag),
         discovery: Context.get(services, DiscoveryTag),
+        storage: Context.get(services, StorageTag),
       });
     }),
 
@@ -241,6 +277,52 @@ export default createPlugin.withPlugins<PluginsClient>()({
         status: "ok",
         timestamp: new Date().toISOString(),
       })),
+
+      uploadBundles: builder.uploadBundles.handler(async ({ input, context }) => {
+        if (!context.user && !context.userId && !context.apiKey) {
+          throw new ORPCError("UNAUTHORIZED", {
+            message: "Authentication required",
+            data: { hint: "Sign in or provide an API key" },
+          });
+        }
+        const services = Context.get(context["effect/context"], ApiServices);
+        if (context.near?.primaryAccountId && context.near.primaryAccountId !== input.account) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "Uploads are pinned to the authenticated account",
+            data: {
+              authenticatedAccount: context.near.primaryAccountId,
+              requestedAccount: input.account,
+            },
+          });
+        }
+
+        const files = Object.entries(input.paths).map(([path, file]) => ({
+          path,
+          bytes: Buffer.from(file.content, "base64"),
+          contentType: file.contentType ?? guessContentType(path),
+        }));
+        const prefix = `${input.account}/${input.gateway}/${input.workspace}`;
+        const objects = await services.storage.put(prefix, files);
+        return { base: `bundles/${prefix}`, objects };
+      }),
+
+      serveBundle: builder.serveBundle.handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        const object = await services.storage.get(
+          `bundles/${input.account}/${input.gateway}/${input.workspace}/${input.path}`,
+        );
+        if (!object) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Bundle object not found",
+            data: { resource: "bundle", resourceId: input.path },
+          });
+        }
+        const resHeaders = (context as { resHeaders?: Headers }).resHeaders;
+        resHeaders?.set("cache-control", "public, max-age=31536000, immutable");
+        return new File([Uint8Array.from(object.bytes)], input.path.split("/").pop() ?? "object", {
+          type: object.contentType,
+        });
+      }),
 
       listTenants: builder.listTenants.use(requireAuth).handler(async ({ context }) => {
         const services = Context.get(context["effect/context"], ApiServices);

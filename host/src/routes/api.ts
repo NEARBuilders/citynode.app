@@ -3,7 +3,7 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferenceHandlerPlugin } from "@orpc/openapi/plugins";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
-import { BatchHandlerPlugin } from "@orpc/server/plugins";
+import { BatchHandlerPlugin, ResponseHeadersHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod";
 import { Context as EffectContext } from "effect";
 import { formatORPCError, PLUGIN_ERROR_STATUS_MAP } from "every-plugin/errors";
@@ -12,7 +12,11 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { timeout } from "hono/timeout";
 import type { AuthVariables } from "../lib/auth";
-import { API_TIMEOUT_MS, BODY_LIMIT_MAX } from "../middleware/security";
+import {
+  API_TIMEOUT_MS,
+  BODY_LIMIT_MAX,
+  BUNDLE_UPLOAD_BODY_LIMIT_MAX,
+} from "../middleware/security";
 import { proxyRequest } from "../middleware/static-proxy";
 import { buildPluginContext, type createSessionMiddleware } from "../services/auth";
 import type { RuntimeConfig } from "../services/config";
@@ -147,6 +151,8 @@ export async function setupApiRoutes(
     const proxyTarget = apiConfig.proxy!;
     logger.info(`[API] Proxy mode enabled → ${proxyTarget}`);
 
+    app.all("/bundles/*", (c: Context<HonoEnv>) => proxyRequest(c.req.raw, proxyTarget, true));
+
     app.all("/api/*", async (c: Context<HonoEnv>) => {
       if (c.req.path === HEALTH_PATH) {
         return c.json(getHealthStatus(plugins, loadingState));
@@ -170,6 +176,14 @@ export async function setupApiRoutes(
     const gcRan = c.req.query("gc") === "true" && tryGc();
     return c.json({ memory: getMemorySnapshot(), gc: gcRan });
   });
+
+  app.use(
+    "/api/storage/bundles",
+    bodyLimit({
+      maxSize: BUNDLE_UPLOAD_BODY_LIMIT_MAX,
+      onError: (c) => c.json({ error: "Request body too large" }, 413),
+    }),
+  );
 
   app.use(
     "/api/*",
@@ -229,6 +243,7 @@ export async function setupApiRoutes(
   const apiHandler = new OpenAPIHandler(apiRouter as any, {
     errorStatusMap: PLUGIN_ERROR_STATUS_MAP,
     plugins: [
+      new ResponseHeadersHandlerPlugin(),
       new OpenAPIReferenceHandlerPlugin({
         spec: () =>
           openApiGenerator.generate(apiRouter as any, {
@@ -277,6 +292,9 @@ export async function setupApiRoutes(
     return handleOrpc(c, rpcHandler, "/api/rpc", mergedEffectContext);
   });
   app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api", mergedEffectContext));
+  app.all("/bundles/*", (c: Context<HonoEnv>) =>
+    handleOrpc(c, apiHandler, "/", mergedEffectContext),
+  );
   app.all("/api/*", (c: Context<HonoEnv>) =>
     handleOrpc(c, apiHandler, "/api", mergedEffectContext),
   );

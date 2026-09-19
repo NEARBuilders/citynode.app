@@ -176,6 +176,7 @@ export const PublishOptionsSchema = z.object({
   wallet: z.boolean().default(false),
   env: z.enum(["production", "staging"]).default("production"),
   registry: z.string().optional(),
+  cdn: z.enum(["zephyr", "platform"]).optional(),
 });
 
 export const PublishResultSchema = z.object({
