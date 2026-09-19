@@ -8,7 +8,7 @@ export type { RouterContract };
 
 export interface ClientServiceConfig {
   hostUrl: string;
-  rpcBase: string;
+  rpcBase: `/${string}`;
 }
 
 type ClientRouterContext = {
@@ -95,7 +95,7 @@ export function createApiClient<T extends RouterContract = RouterContract>(
   config: ClientServiceConfig,
   headers?: Headers,
 ): ContractRouterClient<T> {
-  return memoizedClient<T>(config, config.rpcBase as `/${string}`, headers);
+  return memoizedClient<T>(config, config.rpcBase, headers);
 }
 
 export function createPluginApiClient<T extends RouterContract = RouterContract>(
@@ -103,7 +103,7 @@ export function createPluginApiClient<T extends RouterContract = RouterContract>
   config: ClientServiceConfig,
   headers?: Headers,
 ): ContractRouterClient<T> {
-  return memoizedClient<T>(config, `${config.rpcBase}/${pluginKey}` as `/${string}`, headers);
+  return memoizedClient<T>(config, `${config.rpcBase}/${pluginKey}`, headers);
 }
 
 export function createServiceClients<

@@ -356,7 +356,7 @@ export const ClientRuntimeConfigSchema = z.object({
   hostUrl: z.string().optional(),
   assetsUrl: z.string(),
   apiBase: z.string(),
-  rpcBase: z.string(),
+  rpcBase: z.templateLiteral([z.literal("/"), z.string()]),
   repository: z.string().optional(),
   authAvailable: z.boolean().optional(),
   runtime: ClientRuntimeInfoSchema.optional(),

@@ -923,8 +923,8 @@ async function rewriteLegacyUiImports(projectDir: string): Promise<string[]> {
 }
 
 const LEGACY_DIST_IMPORT_REWRITES = [
-  ['from "everything-dev/', 'from "everything-dev/'],
-  ["from 'everything-dev/", "from 'everything-dev/"],
+  ['from "everything-dev/dist/', 'from "everything-dev/'],
+  ["from 'everything-dev/dist/", "from 'everything-dev/"],
 ] as const;
 
 function escapeRegex(s: string): string {
@@ -1146,7 +1146,7 @@ export async function rewriteLegacyPluginScopedLayerPatterns(
   return migrated;
 }
 
-async function rewriteLegacyDistImports(projectDir: string): Promise<string[]> {
+export async function rewriteLegacyDistImports(projectDir: string): Promise<string[]> {
   const files = await glob("**/*.{ts,tsx,js,jsx,mjs,cjs}", {
     cwd: projectDir,
     nodir: true,

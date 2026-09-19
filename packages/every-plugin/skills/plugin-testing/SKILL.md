@@ -126,7 +126,7 @@ describe("API with mock registry", () => {
 
 ## Testing Scope Lifecycle
 
-When a plugin uses `tools.buildService(...)` inside `initialize`, verify that scoped resources persist after initialization and are released during shutdown:
+When a plugin uses `buildScoped(...)` inside `initialize`, verify that scoped resources persist after initialization and are released during shutdown:
 
 ```typescript
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -135,7 +135,18 @@ import { Context, Effect, Layer } from "every-plugin/effect";
 
 let released = false;
 
-class TestTag extends Context.Tag("TestTag")<TestTag, { value: string }>() {}
+class TestTag extends Context.Service<TestTag, { value: string }>()("TestTag") {}
+
+const TestLive = Layer.effect(
+  TestTag,
+  Effect.acquireRelease(
+    Effect.sync(() => ({ value: "live" })),
+    () =>
+      Effect.sync(() => {
+        released = true;
+      }),
+  ),
+);
 
 describe("scope lifecycle", () => {
   let runtime: ReturnType<typeof createPluginRuntime>;
@@ -143,12 +154,11 @@ describe("scope lifecycle", () => {
   beforeAll(async () => {
     const plugin = createPlugin({
       // ... variables, secrets, contract ...
-      initialize: (_config, _plugins, tools) =>
-        Effect.gen(function* () {
-          const svc = yield* tools.buildService(TestTag, TestLive);
-          return { svc };
-        }),
-      createRouter: (deps) => ({
+      initialize: () =>
+        Effect.succeed(
+          TestLive,
+        ),
+      createRouter: (builder) => ({
         // ... routes ...
       }),
     });

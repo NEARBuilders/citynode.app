@@ -1,7 +1,5 @@
 export {
-  getMajorMinorVersion,
   getPluginSharedDependencies,
-  getPluginSharedDependenciesVersionRange,
   isEffectCriticalSharedDep,
   type SharedDependencies,
   type SharedDependencyConfig,

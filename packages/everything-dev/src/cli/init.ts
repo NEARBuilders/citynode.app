@@ -1410,11 +1410,7 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
 
 \`BOS_GATEWAY\` is the **FastKV lookup key**, not the DNS domain your Railway instance serves on. By keeping the same gateway while using your own \`BOS_ACCOUNT\`, your config lives at a separate FastKV path that \`extends\` the base runtime — you inherit the full platform and override only what you change.
 
-**Subaccount creation** (for the tenant wizard) requires a named NEAR account with a full access key:
-1. Create a named account via near-cli-rs (implicit accounts cannot own subaccounts)
-2. Export the full access key: \`near account export-account <account> explicitly-provide-private-key network-config <net>\`
-3. Set \`NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET\` / \`NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET\` in \`.env\`
-4. Update \`bos.config.json\` auth variables: \`siwn.subAccount.parentAccount\`, \`siwn.recipients\`, and \`siwn.relayer.*.whitelistedContracts\` → your account`);
+**Tenant creation** (for the admin wizard) is DAO-owned: connect a sputnik-dao account via the Trezu wallet in the admin wizard; the wizard publishes the tenant runtime config under \`bos://<dao-account>/<gateway>\`. No server-side subaccount keys are needed.`);
 
   const archLines = [
     "This is an everything.dev child project. Depending on your overrides, it may include:",

@@ -60,15 +60,15 @@ export const DatabaseLive = (url: string) =>
    under rspack/Module Federation bundling (the no-arg fallback reads
    `npm_package_name`, which is unreliable in bundled remotes).
 
-Migrations run inside `DatabaseLive`'s scoped layer. The critical rule is to **build the DB-backed service via `tools.buildService`** so the scope (and the pool) lives for the plugin's lifetime. Do NOT call `DatabaseLive` directly in `initialize` and extract the driver — that creates a transient scope that releases the pool immediately:
+Migrations run inside `DatabaseLive`'s scoped layer. The critical rule is to **build the DB-backed service via `buildScoped`** so the scope (and the pool) lives for the plugin's lifetime. Do NOT call `DatabaseLive` directly in `initialize` and extract the driver — that creates a transient scope that releases the pool immediately:
 
 ```ts
-// CORRECT — tools.buildService binds the scope to the plugin lifecycle
-initialize: (config, _plugins, tools) =>
+// CORRECT — buildScoped binds the scope to the plugin lifecycle
+initialize: (config, _plugins) =>
   Effect.gen(function* () {
     const database = DatabaseLive(config.secrets.DATABASE_URL);
     const serviceLayer = MyServiceLive.pipe(Layer.provide(database));
-    const myService = yield* tools.buildService(MyServiceTag, serviceLayer);
+    const myService = yield* buildScoped(MyServiceTag, serviceLayer);
 
     return { myService };
   }),
