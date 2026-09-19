@@ -70,9 +70,10 @@ export interface ComposeResult extends Omit<ComposedTree, "nav"> {
  * layout root declaring a `_<mount>` id is a mount declaration and becomes a
  * graft unit. The subtree root id is auto-namespaced to `<plugin>__<mount>`
  * (pathless layouts — ids never touch URLs) and reparented onto the core
- * layout route declaring the same mount; descendants reference the same
- * subtree-root object, so the chain below stays intact — one shallow
- * mutation per subtree, no deep traversal.
+ * layout route declaring the same mount; the subtree root is shallow-copied
+ * (the cached plugin tree object is never mutated, so recomposition under a
+ * different mount mapping cannot inherit stale grafts) while descendants keep
+ * referencing the original subtree root — the chain below stays intact.
  *
  * Plugins graft in ascending-name order, so the client, the server, and
  * tenant hosts compose identical trees: stable first-wins collision winners
@@ -102,10 +103,13 @@ export function composeApp(coreTree: AnyRoute, plugins: readonly UiPluginModule[
       const rootOptions = (child as MutableRoute).options ?? {};
       const namespacedId = `${plugin.name}__${mount}`;
       if (rootOptions.id === namespacedId) continue;
-      (child as MutableRoute).options = {
-        ...rootOptions,
-        id: namespacedId,
-        getParentRoute: () => coreRoute,
+      const grafted: MutableRoute = {
+        ...(child as MutableRoute),
+        options: {
+          ...rootOptions,
+          id: namespacedId,
+          getParentRoute: () => coreRoute,
+        },
       };
 
       let list = subtreesByMount.get(mount);
@@ -113,12 +117,12 @@ export function composeApp(coreTree: AnyRoute, plugins: readonly UiPluginModule[
         list = [];
         subtreesByMount.set(mount, list);
       }
-      list.push(child as MutableRoute);
+      list.push(grafted);
 
       mountCounts[mount] = (mountCounts[mount] ?? 0) + 1;
       pluginMounts[plugin.name] ??= {};
       pluginMounts[plugin.name][mount] = (pluginMounts[plugin.name][mount] ?? 0) + 1;
-      grafts.push({ plugin: plugin.name, mount, subtree: child });
+      grafts.push({ plugin: plugin.name, mount, subtree: grafted });
     }
   }
 

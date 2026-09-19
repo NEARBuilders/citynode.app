@@ -1,16 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function findBosConfigPathSync(from: string = process.cwd()): string | null {
-  let current = path.resolve(from);
-  for (;;) {
-    const candidate = path.join(current, "bos.config.json");
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
-}
+import { findBosConfigPath } from "./compose";
+
+export { findBosConfigPath };
 
 function pluginDisplayName(cwd: string): string {
   try {
@@ -46,7 +39,7 @@ export default bosConfigPath
 export function ensureGeneratedRspackConfig(cwd: string = process.cwd()): string | null {
   if (fs.existsSync(path.join(cwd, "rspack.config.js"))) return null;
 
-  const bosConfigPath = findBosConfigPathSync(cwd);
+  const bosConfigPath = findBosConfigPath(cwd);
   const overridesPath = path.resolve(cwd, "build.config.ts");
   const hasOverrides = fs.existsSync(overridesPath);
   const generatedDir = path.join(cwd, ".every-plugin");
@@ -54,7 +47,7 @@ export function ensureGeneratedRspackConfig(cwd: string = process.cwd()): string
   fs.mkdirSync(generatedDir, { recursive: true });
   fs.writeFileSync(
     generatedConfig,
-    generatedRspackConfig(pluginDisplayName(cwd), hasOverrides, bosConfigPath ?? "."),
+    generatedRspackConfig(pluginDisplayName(cwd), hasOverrides, bosConfigPath),
   );
 
   console.log(

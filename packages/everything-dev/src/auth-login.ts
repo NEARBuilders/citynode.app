@@ -34,7 +34,13 @@ export function createLoginState(): string {
 
 export async function startLoginServer(opts: { siteUrl: string }): Promise<LoginServerHandle> {
   const state = createLoginState();
-  let captured: { resolve: (value: LoginHandoff) => void } | null = null;
+
+  let resolveHandoff!: (value: LoginHandoff) => void;
+  let rejectHandoff!: (reason?: Error) => void;
+  const handoff = new Promise<LoginHandoff>((resolve, reject) => {
+    resolveHandoff = resolve;
+    rejectHandoff = reject;
+  });
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "", "http://127.0.0.1");
@@ -44,26 +50,55 @@ export async function startLoginServer(opts: { siteUrl: string }): Promise<Login
       return;
     }
 
-    const stateParam = url.searchParams.get("state") ?? "";
-    const errorParam = url.searchParams.get("error");
-
-    if (stateParam !== state) {
-      res.statusCode = 400;
-      res.end("state mismatch — unknown login session");
+    if (req.method === "OPTIONS") {
+      res.statusCode = 204;
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.end();
       return;
     }
 
-    captured?.resolve({
-      apiKey: url.searchParams.get("key") ?? "",
-      apiKeyId: url.searchParams.get("keyId") ?? "",
-      accountId: url.searchParams.get("account") || null,
-      added: url.searchParams.get("added") === "1" || undefined,
-      error: errorParam ?? undefined,
-    });
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.setHeader("Allow", "POST, OPTIONS");
+      res.end("method not allowed — POST the handoff payload");
+      return;
+    }
 
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "text/html");
-    res.end(`<script>window.close();</script><p>Login captured — you can close this window.</p>`);
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        res.statusCode = 400;
+        res.end("invalid JSON body");
+        return;
+      }
+
+      if (payload.state !== state) {
+        res.statusCode = 400;
+        res.end("state mismatch — unknown login session");
+        return;
+      }
+
+      resolveHandoff({
+        apiKey: typeof payload.key === "string" ? payload.key : "",
+        apiKeyId: typeof payload.keyId === "string" ? payload.keyId : "",
+        accountId: typeof payload.account === "string" && payload.account ? payload.account : null,
+        added: payload.added === 1 || payload.added === true || undefined,
+        error: typeof payload.error === "string" ? payload.error : undefined,
+      });
+
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/html");
+      res.end(`<script>window.close();</script><p>Login captured — you can close this window.</p>`);
+    });
   });
 
   const port = await new Promise<number>((resolve, reject) => {
@@ -95,17 +130,15 @@ export async function startLoginServer(opts: { siteUrl: string }): Promise<Login
       }
       return `${opts.siteUrl}/cli?${params.toString()}`;
     },
-    waitForHandoff: (timeoutMs = 10 * 60_000) =>
-      new Promise<LoginHandoff>((resolve, reject) => {
-        captured = { resolve };
-        setTimeout(() => {
-          if (!captured) return;
-          captured = null;
-          reject(new Error("Login timed out — no browser handoff received"));
-        }, timeoutMs);
-      }),
+    waitForHandoff: (timeoutMs = 10 * 60_000) => {
+      const timeout = setTimeout(() => {
+        rejectHandoff(new Error("Login timed out — no browser handoff received"));
+      }, timeoutMs);
+      return handoff.finally(() => clearTimeout(timeout));
+    },
     close: () => {
       server.close();
+      rejectHandoff(new Error("Login server closed — no browser handoff received"));
     },
   };
 }

@@ -199,4 +199,30 @@ describe("composeApp", () => {
     expect(routeFullPath(billing)).toBe("/billing");
     expect(routeFullPath(paramPage)).toBe("/nodes/$nodeId/content");
   });
+
+  it("never mutates the cached plugin tree (graft is a copy, recomposable under a different mount)", () => {
+    const buildPluginTree = (): AnyRoute => {
+      const pluginRoot = createRootRoute({ component: () => null });
+      const pluginPublic = layoutRoute("_public", () => pluginRoot);
+      (pluginRoot as unknown as { children?: AnyRoute[] }).children = [pluginPublic];
+      return pluginRoot;
+    };
+
+    const pluginTree = buildPluginTree();
+    const pluginPublic = (pluginTree as unknown as { children?: AnyRoute[] })
+      .children?.[0] as unknown as { options?: { id?: string } };
+
+    const coreA = buildCoreTree();
+    composeApp(coreA.tree, [{ name: "blog", tree: pluginTree }]);
+    expect(pluginPublic.options?.id).toBe("_public");
+
+    const coreB = buildCoreTree();
+    const recomposed = composeApp(coreB.tree, [{ name: "blog", tree: pluginTree }]);
+    expect(recomposed.pluginMounts).toEqual({ blog: { public: 1 } });
+    expect(pluginPublic.options?.id).toBe("_public");
+
+    const grafted = (coreB.publicMount as unknown as { children?: AnyRoute[] }).children?.[0];
+    expect(grafted?.options?.id).toBe("blog__public");
+    expect(grafted).not.toBe(pluginTree);
+  });
 });
