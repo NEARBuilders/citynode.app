@@ -81,7 +81,7 @@ function getApiPluginManifestUrl(apiBaseUrl: string): string {
 
 export async function fetchApiPluginManifest(apiBaseUrl: string): Promise<ApiPluginManifest> {
   const url = getApiPluginManifestUrl(apiBaseUrl);
-  const manifest = await fetchJsonOrNull<ApiPluginManifest>(url, { retries: 0 });
+  const manifest = await fetchJsonOrNull<ApiPluginManifest>(url, { retries: 2 });
   if (!manifest) {
     throw new Error(`Failed to fetch API plugin manifest from ${url}`);
   }
