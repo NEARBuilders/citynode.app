@@ -114,6 +114,18 @@ propagate twice (savepoint fix, retry fix).
   (`sql` values ARE runtime imports from drizzle-orm — allowed, but check the
   everything-dev build's externals list stays: drivers external, no new static driver
   imports). The MF singleton share set is unchanged.
+  **Amended during execution**: tsdown's unbundle mode rewrites dynamic imports of
+  vendored deps into **relative paths** into `dist/node_modules/…`, which breaks two
+  consumers — rspack's `externals: ["pg", "@electric-sql/pglite"]` matches bare
+  requests only (so pglite's `pglite.wasm`/`pglite.data`/`initdb.wasm` binaries got
+  dragged into MF dev bundles → "Module not found" then "Module parse failed"), and
+  node's ESM resolution from `dist/db/*.mjs` prefers the vendored
+  `dist/node_modules/drizzle-orm` (nearest node_modules wins), whose copied layout
+  breaks ESM in the host process ("Cannot find package …/drizzle-orm/index.js").
+  Resolution: `deps.neverBundle` gains `pg`, `@electric-sql/pglite` and
+  `/^drizzle-orm(\/.*)?$/` so runtime imports stay bare — every workspace with a DB
+  already declares pglite + drizzle as its own deps, so dev/prod/`bos init` all
+  resolve without dist self-containment.
 
 ## Current state (excerpts verified 2026-09-20)
 
