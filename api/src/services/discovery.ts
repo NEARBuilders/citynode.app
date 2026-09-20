@@ -773,7 +773,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
   };
 }
 export type DiscoveryService = ReturnType<typeof createDiscovery>;
-export class DiscoveryTag extends Context.Service<DiscoveryService, DiscoveryService>()(
+export class DiscoveryTag extends Context.Service<DiscoveryTag, DiscoveryService>()(
   "api/Discovery",
 ) {}
 export const DiscoveryLive = (lumaKeys = "") =>

@@ -19,11 +19,7 @@ afterEach(() => {
   }
 });
 
-function freshLayer(): Layer.Layer<
-  NodesService | TenantsService | ValidatorsService,
-  unknown,
-  never
-> {
+function freshLayer(): Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknown, never> {
   const dir = mkdtempSync(join(tmpdir(), "api-validators-"));
   activeDir = dir;
   const database = DatabaseLive(`pglite:${dir}`);
@@ -32,7 +28,7 @@ function freshLayer(): Layer.Layer<
     TenantsLive.pipe(Layer.provide(database)),
     ValidatorsLive.pipe(Layer.provide(database)),
   ).pipe(Layer.provide(Layer.succeed(PluginIdTag, "api"))) as Layer.Layer<
-    NodesService | TenantsService | ValidatorsService,
+    NodesTag | TenantsTag | ValidatorsTag,
     unknown,
     never
   >;
@@ -45,7 +41,7 @@ interface TestServices {
 }
 
 async function runService<A>(
-  layer: Layer.Layer<NodesService | TenantsService | ValidatorsService, unknown, never>,
+  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknown, never>,
   fn: (svc: TestServices) => Promise<A>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
@@ -61,7 +57,7 @@ async function runService<A>(
 }
 
 async function squashServiceError<A>(
-  layer: Layer.Layer<NodesService | TenantsService | ValidatorsService, unknown, never>,
+  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknown, never>,
   fn: (svc: TestServices) => Promise<A>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {

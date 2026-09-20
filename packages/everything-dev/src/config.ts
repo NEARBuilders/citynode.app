@@ -1051,7 +1051,7 @@ async function resolveRuntimePlugins(
 async function resolveRemotePluginRuntimeName(baseUrl: string, fallback: string): Promise<string> {
   const manifest = await fetchJsonOrNull<{
     plugin?: { name?: unknown };
-  }>(`${baseUrl.replace(/\/$/, "")}/plugin.manifest.json`, { retries: 0 });
+  }>(`${baseUrl.replace(/\/$/, "")}/plugin.manifest.json`, { retries: 2 });
 
   return typeof manifest?.plugin?.name === "string" && manifest.plugin.name.length > 0
     ? manifest.plugin.name

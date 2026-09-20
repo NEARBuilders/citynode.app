@@ -62,7 +62,7 @@ export interface ValidatorsService {
   resolveByAccountId(accountId: string): Promise<ValidatorRecord | null>;
 }
 
-export class ValidatorsTag extends Context.Service<ValidatorsService, ValidatorsService>()(
+export class ValidatorsTag extends Context.Service<ValidatorsTag, ValidatorsService>()(
   "api/Validators",
 ) {}
 

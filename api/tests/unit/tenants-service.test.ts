@@ -33,7 +33,7 @@ function freshLayer() {
 const MISSING_ID = "00000000-0000-0000-0000-000000000000";
 
 async function runService<A>(
-  layer: Layer.Layer<TenantsService, unknown, never>,
+  layer: Layer.Layer<TenantsTag, unknown, never>,
   fn: (svc: TenantsService) => Promise<A>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
@@ -44,7 +44,7 @@ async function runService<A>(
 }
 
 async function squashServiceError<A>(
-  layer: Layer.Layer<TenantsService, unknown, never>,
+  layer: Layer.Layer<TenantsTag, unknown, never>,
   fn: (svc: TenantsService) => Promise<A>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {

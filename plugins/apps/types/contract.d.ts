@@ -26,8 +26,8 @@ export declare const contract: {
             root: z.ZodNullable<z.ZodString>;
             depth: z.ZodNumber;
             status: z.ZodEnum<{
-                ready: "ready";
                 invalid: "invalid";
+                ready: "ready";
             }>;
             metadata: z.ZodNullable<z.ZodObject<{
                 claimedBy: z.ZodNullable<z.ZodString>;
@@ -77,8 +77,8 @@ export declare const contract: {
             root: z.ZodNullable<z.ZodString>;
             depth: z.ZodNumber;
             status: z.ZodEnum<{
-                ready: "ready";
                 invalid: "invalid";
+                ready: "ready";
             }>;
             metadata: z.ZodNullable<z.ZodObject<{
                 claimedBy: z.ZodNullable<z.ZodString>;
@@ -125,8 +125,8 @@ export declare const contract: {
             root: z.ZodNullable<z.ZodString>;
             depth: z.ZodNumber;
             status: z.ZodEnum<{
-                ready: "ready";
                 invalid: "invalid";
+                ready: "ready";
             }>;
             metadata: z.ZodNullable<z.ZodObject<{
                 claimedBy: z.ZodNullable<z.ZodString>;
@@ -172,8 +172,8 @@ export declare const contract: {
             root: z.ZodNullable<z.ZodString>;
             depth: z.ZodNumber;
             status: z.ZodEnum<{
-                ready: "ready";
                 invalid: "invalid";
+                ready: "ready";
             }>;
             metadata: z.ZodNullable<z.ZodObject<{
                 claimedBy: z.ZodNullable<z.ZodString>;

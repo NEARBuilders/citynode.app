@@ -14,7 +14,7 @@
     }
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@better-auth/api-key": "catalog:",
@@ -31,7 +31,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.85.1",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-tools": "catalog:",
     "@orpc/contract": "catalog:",

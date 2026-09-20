@@ -336,7 +336,7 @@
     "better-near-auth": "catalog:",
     "react-devtools-core": "^7.0.1",
     "tsdown": "^0.22.0",
-    "typescript": "^5.7.2",
+    "typescript": "^7.0.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.18",
     "zephyr-rsbuild-plugin": "catalog:"

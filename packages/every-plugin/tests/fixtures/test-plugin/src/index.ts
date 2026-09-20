@@ -52,7 +52,7 @@ export const TestPlugin = createPlugin({
     Effect.gen(function* () {
       // Business logic validation - config structure is guaranteed by schema
       if (config.secrets.apiKey === "invalid-key") {
-        yield* Effect.fail(new Error("Invalid API key format"));
+        return yield* Effect.fail(new Error("Invalid API key format"));
       }
 
       // Initialize client
@@ -60,7 +60,7 @@ export const TestPlugin = createPlugin({
 
       // Test connection (can throw for testing)
       if (config.secrets.apiKey === "connection-fail") {
-        yield* Effect.fail(new Error("Failed to connect to service"));
+        return yield* Effect.fail(new Error("Failed to connect to service"));
       }
 
       yield* Effect.tryPromise({

@@ -86,7 +86,7 @@ export interface NodesService {
   subtreeWithValidators(nodeId: string): Promise<SubtreeNode[]>;
 }
 
-export class NodesTag extends Context.Service<NodesService, NodesService>()("api/Nodes") {}
+export class NodesTag extends Context.Service<NodesTag, NodesService>()("api/Nodes") {}
 
 type NodeRow = typeof nodesTable.$inferSelect;
 

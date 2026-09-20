@@ -57,7 +57,10 @@ describe.skipIf(process.env.CI !== "true")("bos init — full (install + typeche
     expect(existsSync(join(testDir, "node_modules"))).toBe(true);
 
     const typesGenResult = await runCommand("bun", ["run", "types:gen"], testDir);
-    expect(typesGenResult.code).toBe(0);
+    expect(
+      typesGenResult.code,
+      `types:gen exited ${typesGenResult.code}\n--- stdout ---\n${typesGenResult.stdout}\n--- stderr ---\n${typesGenResult.stderr}`,
+    ).toBe(0);
 
     writePermissiveTypeStubs(testDir);
 

@@ -199,12 +199,12 @@ export declare const contract: {
     }>;
     testError: import("@orpc/contract").ProcedureContract<z.ZodObject<{
         kind: z.ZodEnum<{
-            unauthorized: "unauthorized";
-            forbidden: "forbidden";
-            not_found: "not_found";
-            conflict: "conflict";
             bad_request: "bad_request";
+            conflict: "conflict";
+            forbidden: "forbidden";
             internal: "internal";
+            not_found: "not_found";
+            unauthorized: "unauthorized";
         }>;
     }, z.core.$strip>, z.ZodObject<{
         ok: z.ZodLiteral<true>;

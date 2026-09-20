@@ -124,7 +124,7 @@ export interface TenantsService {
   deleteTenantById(id: string): Promise<boolean>;
 }
 
-export class TenantsTag extends Context.Service<TenantsService, TenantsService>()("api/Tenants") {}
+export class TenantsTag extends Context.Service<TenantsTag, TenantsService>()("api/Tenants") {}
 
 type TenantRow = typeof tenantsTable.$inferSelect;
 type BindingRow = typeof domainBindingsTable.$inferSelect;

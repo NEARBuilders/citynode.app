@@ -141,7 +141,7 @@ export interface PluginManifest {
 
 export async function fetchRemotePluginManifest(cdnUrl: string): Promise<PluginManifest | null> {
   const baseUrl = cdnUrl.replace(/\/$/, "");
-  return fetchJsonOrNull<PluginManifest>(`${baseUrl}/plugin.manifest.json`, { retries: 0 });
+  return fetchJsonOrNull<PluginManifest>(`${baseUrl}/plugin.manifest.json`, { retries: 2 });
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
