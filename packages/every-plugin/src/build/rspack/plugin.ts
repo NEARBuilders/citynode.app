@@ -50,9 +50,7 @@ export class EmitPluginManifest implements RspackPluginInstance {
         }
 
         if (generationError) {
-          console.warn(
-            `[EmitPluginManifest] Skipping manifest generation — ${generationError}`,
-          );
+          console.warn(`[EmitPluginManifest] Skipping manifest generation — ${generationError}`);
           return;
         }
 

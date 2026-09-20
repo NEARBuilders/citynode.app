@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 import { createRequire } from "node:module";
+import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -20,13 +20,19 @@ export function contractTypesUpToDate(cwd: string): boolean {
 }
 
 export function resolveTscBinary(cwd: string): string {
-  try {
-    const req = createRequire(path.join(cwd, "package.json"));
-    const pkgJsonPath = req.resolve("typescript/package.json");
-    return path.join(path.dirname(pkgJsonPath), "bin", "tsc");
-  } catch {
-    return "tsc";
+  for (const from of [
+    path.join(cwd, "package.json"),
+    path.join(import.meta.dirname, "..", "..", "..", "package.json"),
+  ]) {
+    try {
+      const req = createRequire(path.resolve(from));
+      const pkgJsonPath = req.resolve("typescript/package.json");
+      return path.join(path.dirname(pkgJsonPath), "bin", "tsc");
+    } catch {
+      // try the next resolution root
+    }
   }
+  return "tsc";
 }
 
 /**

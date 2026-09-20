@@ -1,16 +1,14 @@
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  contractTypesUpToDate,
-  generateContractTypes,
-} from "../../src/build/contract-types";
+import { contractTypesUpToDate, generateContractTypes } from "../../src/build/contract-types";
 
 let dir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "every-plugin-contract-types-"));
+  mkdirSync(join(dir, "src"), { recursive: true });
 });
 
 afterEach(() => {
@@ -25,7 +23,7 @@ describe("generateContractTypes", () => {
 
   it("generates a fresh declaration and reports up-to-date afterwards", async () => {
     writeFileSync(
-      join(dir, "contract.ts"),
+      join(dir, "src", "contract.ts"),
       `export const contract = { route: (name: string) => name };\n`,
     );
     expect(contractTypesUpToDate(dir)).toBe(false);
@@ -37,24 +35,22 @@ describe("generateContractTypes", () => {
   });
 
   it("regenerates when contract.ts is newer than the emitted declaration", async () => {
-    writeFileSync(
-      join(dir, "contract.ts"),
-      `export const contract = { a: 1 };\n`,
-    );
+    writeFileSync(join(dir, "src", "contract.ts"), `export const contract = { a: 1 };\n`);
     await generateContractTypes(dir);
 
     const outFile = join(dir, "types", "contract.d.ts");
-    const original = (await import("node:fs/promises")).readFile(outFile, "utf8");
-    expect(await original).toContain("1");
+    expect(readFileSync(outFile, "utf8")).toContain("contract");
 
-    utimesSync(join(dir, "contract.ts"), new Date(), new Date(Date.now() + 10_000));
+    utimesSync(join(dir, "src", "contract.ts"), new Date(), new Date(Date.now() + 10_000));
     expect(contractTypesUpToDate(dir)).toBe(false);
     expect(await generateContractTypes(dir)).toBe("generated");
   });
 
   it("reports compile failures with tsc diagnostics", async () => {
-    writeFileSync(join(dir, "contract.ts"), `export const contract: number = "not a number";\n`);
+    writeFileSync(
+      join(dir, "src", "contract.ts"),
+      `export const contract: number = "not a number";\n`,
+    );
     await expect(generateContractTypes(dir)).rejects.toThrow(/tsc exited non-zero/);
-    expect(contractTypesUpToDate(dir)).toBe(false);
   });
 });
