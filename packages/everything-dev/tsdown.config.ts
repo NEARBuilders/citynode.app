@@ -61,6 +61,8 @@ export default defineConfig({
       "defu",
       "openapi-types",
       "pg",
+      "@electric-sql/pglite",
+      /^drizzle-orm(\/.*)?$/,
     ],
   },
   async onSuccess() {

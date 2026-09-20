@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProfileSettings } from "./profile";
+import { ProfileSettings } from "./-components/profile-settings";
 
 const harness = vi.hoisted(() => ({
   session: null as { user: { id: string; name: string; email: string } } | null,

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ORPCError } from "@orpc/server";
 import { Cause, Effect, Exit, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
+import type { DatabaseError } from "everything-dev/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive } from "@/db/layer";
 import { ThingsService } from "@/services/things";
@@ -29,18 +30,18 @@ function freshLayer() {
 type ThingsSvc = typeof ThingsService.Service;
 
 async function runService<A>(
-  layer: Layer.Layer<ThingsService, never, never>,
+  layer: Layer.Layer<ThingsService, DatabaseError, never>,
   fn: (svc: ThingsSvc) => Effect.Effect<A, unknown>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
     const svc = yield* ThingsService;
     return yield* fn(svc);
   });
-  return Effect.runPromise(Effect.provide(effect, layer));
+  return Effect.runPromise(Effect.provide(effect, layer) as Effect.Effect<A, never, never>);
 }
 
 async function squashServiceError<A>(
-  layer: Layer.Layer<ThingsService, never, never>,
+  layer: Layer.Layer<ThingsService, DatabaseError, never>,
   fn: (svc: ThingsSvc) => Effect.Effect<A, unknown>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {
