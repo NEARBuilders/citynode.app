@@ -1,9 +1,6 @@
 import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
+import { generateContractTypes } from "./build/contract-types";
 import { ensureGeneratedRspackConfig } from "./build/rspack/generated-config";
-
-const hasContractConfig = fs.existsSync(path.resolve(process.cwd(), "tsconfig.contract.json"));
 
 function run(
   cmd: string,
@@ -26,13 +23,12 @@ function run(
 }
 
 export async function emitContractTypes(): Promise<void> {
-  if (!hasContractConfig) {
-    console.log(
-      "[every-plugin] tsconfig.contract.json not found — skipping contract type emission.",
-    );
-    return;
+  const status = await generateContractTypes();
+  if (status === "skipped") {
+    console.log("[every-plugin] No src/contract.ts — nothing to emit.");
+  } else {
+    console.log(`[every-plugin] Contract types ${status}.`);
   }
-  await run("tsc", ["-p", "tsconfig.contract.json"]);
 }
 
 async function runRspack(deploy: boolean): Promise<void> {
@@ -48,18 +44,11 @@ export function runCliCommand(raw: string): Promise<void> {
     case "types":
       return emitContractTypes();
     case "build":
-      return (async () => {
-        await emitContractTypes();
-        await runRspack(false);
-      })();
+      return runRspack(false);
     case "deploy":
-      return (async () => {
-        await emitContractTypes();
-        await runRspack(true);
-      })();
+      return runRspack(true);
     case "dev":
       return (async () => {
-        await emitContractTypes();
         const { startPluginDevServer } = await import("./dev/serve");
         await startPluginDevServer();
         return new Promise<void>(() => {});

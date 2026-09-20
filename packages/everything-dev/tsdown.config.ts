@@ -31,7 +31,7 @@ export default defineConfig({
     "src/ui/mf-build/index.ts",
   ],
   format: ["cjs", "esm"],
-  dts: true,
+  dts: { tsconfig: "./tsconfig.dts.json" },
   clean: true,
   outDir: "dist",
   treeshake: true,
@@ -39,6 +39,7 @@ export default defineConfig({
   minify: false,
   unbundle: true,
   deps: {
+    onlyBundle: false,
     neverBundle: [
       "effect",
       "zod",

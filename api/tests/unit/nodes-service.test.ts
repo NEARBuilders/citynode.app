@@ -18,7 +18,7 @@ afterEach(() => {
   }
 });
 
-function freshLayer(): Layer.Layer<NodesService | TenantsService, unknown, never> {
+function freshLayer(): Layer.Layer<NodesTag | TenantsTag, unknown, never> {
   const dir = mkdtempSync(join(tmpdir(), "api-nodes-"));
   activeDir = dir;
   const database = DatabaseLive(`pglite:${dir}`);
@@ -26,7 +26,7 @@ function freshLayer(): Layer.Layer<NodesService | TenantsService, unknown, never
     NodesLive.pipe(Layer.provide(database)),
     TenantsLive.pipe(Layer.provide(database)),
   ).pipe(Layer.provide(Layer.succeed(PluginIdTag, "api"))) as Layer.Layer<
-    NodesService | TenantsService,
+    NodesTag | TenantsTag,
     unknown,
     never
   >;
@@ -40,7 +40,7 @@ interface TestServices {
 }
 
 async function runService<A>(
-  layer: Layer.Layer<NodesService | TenantsService, unknown, never>,
+  layer: Layer.Layer<NodesTag | TenantsTag, unknown, never>,
   fn: (svc: TestServices) => Promise<A>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
@@ -55,7 +55,7 @@ async function runService<A>(
 }
 
 async function squashServiceError<A>(
-  layer: Layer.Layer<NodesService | TenantsService, unknown, never>,
+  layer: Layer.Layer<NodesTag | TenantsTag, unknown, never>,
   fn: (svc: TestServices) => Promise<A>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {

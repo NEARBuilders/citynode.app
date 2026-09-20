@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
+import { CONTRACT_TYPES_FILE, generateContractTypes } from "../contract-types";
 import { buildSharedDependencies } from "./module-federation";
 import { getPluginInfo } from "./utils";
 
@@ -38,9 +39,22 @@ export class EmitPluginManifest implements RspackPluginInstance {
         const contractFileName = this.options.contractFileName ?? "contract.d.ts";
         const manifestFileName = this.options.manifestFileName ?? "plugin.manifest.json";
 
-        const sourceContractPath = path.join(context, "types", contractFileName);
+        let generationError: string | null = null;
+        try {
+          const status = await generateContractTypes(context);
+          if (status === "generated") {
+            console.log(`[EmitPluginManifest] Contract types regenerated (${context}).`);
+          }
+        } catch (error) {
+          generationError = error instanceof Error ? error.message : String(error);
+        }
 
-        let contractTypes: string;
+        if (generationError) {
+          console.warn(`[EmitPluginManifest] Skipping manifest generation — ${generationError}`);
+          return;
+        }
+
+        const sourceContractPath = path.join(context, CONTRACT_TYPES_FILE);
 
         const tryReadFile = async (filePath: string): Promise<string | null> => {
           if (!fs.existsSync(filePath)) {
@@ -57,21 +71,14 @@ export class EmitPluginManifest implements RspackPluginInstance {
           }
         };
 
-        contractTypes = (await tryReadFile(sourceContractPath)) ?? "";
+        const contractTypes = (await tryReadFile(sourceContractPath)) ?? "";
 
         if (!contractTypes) {
-          const packageDir = context.split("/").pop();
-          const nestedPath = path.join(context, "types", packageDir ?? "", "src", contractFileName);
-
-          contractTypes = (await tryReadFile(nestedPath)) ?? "";
-
-          if (!contractTypes) {
-            console.warn(
-              `[EmitPluginManifest] Contract file not found at ${sourceContractPath} or ${nestedPath}. ` +
-                `Skipping manifest generation.`,
-            );
-            return;
-          }
+          console.warn(
+            `[EmitPluginManifest] No contract types at ${sourceContractPath} ` +
+              `(no src/contract.ts in this workspace?). Skipping manifest generation.`,
+          );
+          return;
         }
 
         const contractSha256 = crypto.createHash("sha256").update(contractTypes).digest("hex");

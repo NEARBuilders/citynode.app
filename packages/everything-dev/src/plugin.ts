@@ -2150,6 +2150,10 @@ export default createPlugin({
           };
         }
 
+        await generateCodeArtifacts(projectDir, refreshed.config, {
+          runtimeConfig: refreshed.runtime,
+        });
+
         const runtime = refreshed.runtime;
         type AppTarget = { source?: string; localPath?: string };
         const workspaceEntries: Array<{
