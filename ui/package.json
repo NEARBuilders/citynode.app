@@ -82,6 +82,7 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "api": "workspace:*",
     "@module-federation/enhanced": "catalog:",
     "@module-federation/runtime": "catalog:",
     "@module-federation/runtime-tools": "catalog:",
