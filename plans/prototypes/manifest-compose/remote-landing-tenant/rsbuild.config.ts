@@ -12,12 +12,12 @@ export default defineConfig({
       plugins: [
         pluginReact(),
         pluginModuleFederation({
-          name: "landing",
+          name: "landingTenant",
           exposes: { "./routeConfig": "./src/routeConfig.gen.ts" },
           shared: {
-            react: { singleton: true, requiredVersion: false, eager: true },
-            "react-dom": { singleton: true, requiredVersion: false, eager: true },
-            "@tanstack/react-router": { singleton: true, requiredVersion: false, eager: true },
+            react: { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
+            "react-dom": { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
+            "@tanstack/react-router": { version: "1.170.32", requiredVersion: "1.170.32", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
           },
         }),
       ],
@@ -28,12 +28,12 @@ export default defineConfig({
         pluginReact(),
         pluginModuleFederation(
           {
-            name: "landing",
+            name: "landingTenant",
             exposes: { "./routeConfig": "./src/routeConfig.gen.ts" },
             shared: {
-              react: { singleton: true, requiredVersion: false },
-              "react-dom": { singleton: true, requiredVersion: false },
-              "@tanstack/react-router": { singleton: true, requiredVersion: false },
+              react: { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, import: false, shareScope: "default" },
+              "react-dom": { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, import: false, shareScope: "default" },
+              "@tanstack/react-router": { version: "1.170.32", requiredVersion: "1.170.32", singleton: true, strictVersion: true, eager: false, import: false, shareScope: "default" },
             },
             filename: "remoteEntry.server.js",
           },

@@ -2,7 +2,7 @@
   "name": "@manifest-compose/host",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "gen": "cd .. && bun generator/src/cli.ts --all",
     "verify": "bun src/verify.tsx",
