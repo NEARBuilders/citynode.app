@@ -81,6 +81,66 @@ async function useCookieHeader(page: Page, cookieHeader: string) {
 }
 
 test.describe("team workspace", () => {
+  test("team membership, rename and deletion refresh the mounted workspace", async ({ page }) => {
+    page.on("response", async (response) => {
+      if (response.url().includes("get-session")) {
+        const data = await response.json().catch(() => null);
+        console.log("SESSION TRACE", data?.session?.activeTeamId);
+      }
+      if (response.url().includes("set-active-team") || response.url().includes("deleteTeam")) {
+        console.log("TEAM TRACE", response.url(), response.status(), response.request().postData());
+      }
+    });
+    const pageErrors = collectErrors(page);
+    const ownerCookie = await signInAnonymously();
+    const session = await (await authFetch("/get-session", ownerCookie)).json();
+    const suffix = `${process.pid}-${Date.now()}`;
+    const org = await (
+      await authFetch("/organization/create", ownerCookie, {
+        name: `workspace-refresh-${suffix}`,
+        slug: `workspace-refresh-${suffix}`,
+      })
+    ).json();
+    const team = await (
+      await authFetch("/organization/create-team", ownerCookie, {
+        name: "Finance",
+        organizationId: org.id,
+        metadata: JSON.stringify({ areas: ["finance"] }),
+      })
+    ).json();
+    await authFetch("/organization/set-active", ownerCookie, { organizationId: org.id });
+    await useCookieHeader(page, ownerCookie);
+    await page.goto(`/orgs/${org.slug}`, { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await page.getByTestId("orgs-tab-teams").click();
+
+    const addMember = async () => {
+      await page.getByTestId(`teams-tab-add-member-${team.id}`).selectOption(session.user.id);
+      await page.getByTestId(`teams-tab-add-member-button-${team.id}`).click();
+      await expect(page.getByTestId("team-switcher")).toBeVisible();
+      await page.getByTestId("team-switcher").click();
+      await page.getByTestId(`team-switcher-item-${team.id}`).click();
+      await expect(page.getByTestId("workspace-active-team")).toBeVisible();
+    };
+    await addMember();
+    await page.getByTestId(`teams-tab-rename-${team.id}`).click();
+    await page.getByTestId(`teams-tab-rename-input-${team.id}`).fill("Treasury");
+    await page.getByTestId(`teams-tab-rename-save-${team.id}`).click();
+    await expect(page.getByTestId("workspace-active-team")).toContainText("Treasury");
+    await expect(page.getByTestId("team-switcher")).toContainText("Treasury");
+
+    await page.getByTestId(`teams-tab-remove-member-${team.id}-${session.user.id}`).click();
+    await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
+    await expect(page.getByTestId("team-switcher")).toHaveCount(0);
+    await addMember();
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByTestId(`teams-tab-delete-${team.id}`).click();
+    await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
+    await expect(page.getByTestId("team-switcher")).toHaveCount(0);
+    await expect(page.getByTestId(`teams-tab-team-${team.id}`)).toHaveCount(0);
+    expectNoHydrationFailure(pageErrors);
+  });
+
   test("switching teams filters navigation and guards restricted routes", async ({ page }) => {
     const pageErrors = collectErrors(page);
     const { memberCookie, teamName } = await seedTeamMember();

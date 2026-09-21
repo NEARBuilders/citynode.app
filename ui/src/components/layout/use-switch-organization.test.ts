@@ -69,7 +69,16 @@ describe("organization switching", () => {
 
     expect(harness.setActive).toHaveBeenCalledWith({ organizationId: "org-2" });
     expect(harness.setActiveTeam).toHaveBeenCalledWith({ teamId: null });
-    expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["team-workspace"] });
+    expect(harness.invalidateQueries).toHaveBeenNthCalledWith(
+      1,
+      { queryKey: ["organizations"], refetchType: "active" },
+      { throwOnError: true },
+    );
+    expect(harness.invalidateQueries).toHaveBeenNthCalledWith(
+      2,
+      { queryKey: ["team-workspace"], refetchType: "active" },
+      { throwOnError: true },
+    );
     expect(harness.getSession).toHaveBeenCalledWith({
       query: { disableCookieCache: true },
     });

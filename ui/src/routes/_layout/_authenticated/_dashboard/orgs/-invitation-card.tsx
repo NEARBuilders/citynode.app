@@ -5,6 +5,7 @@ export interface InvitationCardInvitation {
   id: string;
   email: string;
   nearAccountId?: string | null;
+  nearNetwork?: "mainnet" | "testnet" | null;
   role: string | null;
   status: string;
   expiresAt: string | Date;
@@ -26,6 +27,7 @@ export function InvitationCard({
   isResending?: boolean;
   isCancelling?: boolean;
 }) {
+  const needsReissue = !!invitation.nearAccountId && !invitation.nearNetwork;
   return (
     <Card className="hover:shadow-md">
       <CardContent className="p-5 space-y-3">
@@ -42,6 +44,16 @@ export function InvitationCard({
               </div>
             </div>
             <div className="text-xs text-muted-foreground font-mono">{invitation.role}</div>
+            {invitation.nearAccountId && (
+              <div
+                className="text-xs text-muted-foreground"
+                data-testid={`invitation-network-${invitation.id}`}
+              >
+                {needsReissue
+                  ? "Network unknown. Cancel and reissue this invitation with an explicit network."
+                  : invitation.nearNetwork}
+              </div>
+            )}
             {teamName && (
               <div
                 className="flex items-center gap-1.5 text-xs text-muted-foreground"
@@ -53,7 +65,7 @@ export function InvitationCard({
             )}
           </div>
           <div className="flex gap-1 shrink-0">
-            {onResend && (
+            {onResend && !needsReissue && (
               <Button onClick={onResend} disabled={isResending} variant="outline">
                 <RefreshCw className="h-3 w-3 mr-1" />
                 resend

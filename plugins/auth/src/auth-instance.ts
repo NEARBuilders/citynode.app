@@ -12,6 +12,7 @@ import {
   ownerAc,
 } from "better-auth/plugins/organization/access";
 import { type SIWNPluginOptions, siwn } from "better-near-auth";
+import { gt } from "drizzle-orm";
 
 const orgStatements = {
   ...defaultStatements,
@@ -38,7 +39,14 @@ const orgRoles = {
 import type { AuthConfig } from "./auth-config";
 import type { Database as AuthDatabase } from "./db";
 import * as schema from "./db/schema";
-import { isNearInvitation, nearInvitations } from "./near-invitations";
+import {
+  isNearInvitation,
+  isNearNetwork,
+  nearInvitationEmail,
+  nearInvitations,
+  normalizeNearAccountId,
+} from "./near-invitations";
+import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -242,6 +250,7 @@ export function createAuthInstance(
   const githubConfig = config.socialProviders?.github;
   const googleConfig = config.socialProviders?.google;
   const siwnOptions = buildSiwnOptions(config);
+  const membershipPolicy = createOrganizationMembershipPolicy(config.organizationMembershipLimit);
   const mainnetRecipient = isRecipientsConfig(siwnOptions)
     ? siwnOptions.recipients.mainnet
     : siwnOptions.recipient;
@@ -285,6 +294,7 @@ export function createAuthInstance(
       organization({
         ac: orgAc,
         roles: orgRoles,
+        membershipLimit: membershipPolicy.limit,
         teams: {
           enabled: true,
           defaultTeam: { enabled: false },
@@ -299,10 +309,56 @@ export function createAuthInstance(
           invitation: {
             additionalFields: {
               nearAccountId: { type: "string", required: false, input: true },
+              nearNetwork: { type: "string", required: false, input: true },
             },
           },
         },
         organizationHooks: {
+          beforeCreateInvitation: async ({ invitation }) => {
+            const accountId =
+              typeof invitation.nearAccountId === "string" ? invitation.nearAccountId : undefined;
+            const suppliedNetwork = invitation.nearNetwork;
+            if (accountId) {
+              const normalizedAccountId = normalizeNearAccountId(accountId);
+              if (!normalizedAccountId) {
+                throw new APIError("BAD_REQUEST", { message: "Invalid NEAR account id" });
+              }
+              if (!isNearNetwork(suppliedNetwork)) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "A wallet invitation requires a mainnet or testnet network",
+                });
+              }
+              const duplicate = await db.query.invitation.findFirst({
+                where: (stored, { and, eq }) =>
+                  and(
+                    eq(stored.organizationId, invitation.organizationId),
+                    eq(stored.status, "pending"),
+                    gt(stored.expiresAt, new Date()),
+                    eq(stored.nearAccountId, normalizedAccountId),
+                    eq(stored.nearNetwork, suppliedNetwork),
+                  ),
+              });
+              if (duplicate) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Wallet invitation already exists for this account and network",
+                });
+              }
+              return {
+                data: {
+                  ...invitation,
+                  email: nearInvitationEmail(normalizedAccountId, suppliedNetwork),
+                  nearAccountId: normalizedAccountId,
+                  nearNetwork: suppliedNetwork,
+                },
+              };
+            }
+            if (suppliedNetwork !== undefined) {
+              throw new APIError("BAD_REQUEST", {
+                message: "A NEAR network can only be supplied for wallet invitations",
+              });
+            }
+            return undefined;
+          },
           beforeAcceptInvitation: async ({ invitation }) => {
             if (isNearInvitation(invitation)) {
               throw new APIError("BAD_REQUEST", {
@@ -326,7 +382,7 @@ export function createAuthInstance(
           );
         },
       }),
-      nearInvitations(db),
+      nearInvitations(db, membershipPolicy),
       apiKey([
         {
           configId: "user-keys",

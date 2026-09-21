@@ -193,6 +193,7 @@ const invitationSchema = z.object({
   inviterId: z.string(),
   teamId: z.string().nullable(),
   nearAccountId: z.string().nullable(),
+  nearNetwork: z.enum(["mainnet", "testnet"]).nullable(),
 });
 
 const teamSchema = z.object({
@@ -521,6 +522,7 @@ export const contract = oc.router({
       z.object({
         email: z.string().optional(),
         nearAccountId: z.string().optional(),
+        nearNetwork: z.enum(["mainnet", "testnet"]).optional(),
         role: z.enum(["owner", "admin", "member"]),
         organizationId: z.string().optional(),
         teamId: z.string().optional(),
@@ -545,6 +547,7 @@ export const contract = oc.router({
           inviterId: z.string(),
           teamId: z.string().nullable(),
           nearAccountId: z.string().nullable(),
+          nearNetwork: z.enum(["mainnet", "testnet"]).nullable(),
           organizationName: z.string(),
           organizationSlug: z.string(),
           inviterEmail: z.string(),

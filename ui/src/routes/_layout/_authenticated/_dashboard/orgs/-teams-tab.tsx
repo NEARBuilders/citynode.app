@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Button, Card, Input, TabsContent } from "@/components";
 import { OrganizationEmptyState } from "./-empty-state";
 import type { MemberCardMember } from "./-member-card";
-import { TeamCard, type TeamCardTeam } from "./-team-card";
+import { TeamCard, type TeamCardTeam, type TeamMembershipStatus } from "./-team-card";
 
 export type TeamsTabTeam = TeamCardTeam;
+export type { TeamMembershipStatus };
 
 export function TeamsTab({
   canManage,
@@ -14,6 +15,7 @@ export function TeamsTab({
   onCreate,
   onDelete,
   onRemoveMember,
+  onRetryMembers,
   onRename,
   orgMembers,
   teams,
@@ -25,6 +27,7 @@ export function TeamsTab({
   onCreate: (name: string) => void;
   onDelete: (teamId: string) => void;
   onRemoveMember: (teamId: string, userId: string) => void;
+  onRetryMembers?: (teamId: string) => void;
   onRename: (teamId: string, name: string) => void;
   orgMembers: MemberCardMember[];
   teams: TeamsTabTeam[];
@@ -82,6 +85,7 @@ export function TeamsTab({
               onAreasChange={(areas) => onAreasChange(team.id, areas)}
               onDelete={() => onDelete(team.id)}
               onRemoveMember={(userId) => onRemoveMember(team.id, userId)}
+              onRetryMembers={onRetryMembers ? () => onRetryMembers(team.id) : undefined}
               onRename={(name) => onRename(team.id, name)}
               orgMembers={orgMembers}
               team={team}

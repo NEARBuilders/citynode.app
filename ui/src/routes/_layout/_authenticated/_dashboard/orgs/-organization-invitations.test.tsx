@@ -37,6 +37,7 @@ describe("organization invitation actions", () => {
     await act(async () => {
       await result.current.inviteMutation.mutateAsync({
         nearAccountId: "alice.near",
+        nearNetwork: "testnet",
         role: "member",
         teamId: "team-ops",
       });
@@ -45,10 +46,46 @@ describe("organization invitation actions", () => {
     expect(apiClient.auth.inviteMember).toHaveBeenCalledWith({
       organizationId: "org-1",
       nearAccountId: "alice.near",
+      nearNetwork: "testnet",
       role: "member",
       teamId: "team-ops",
     });
     expect(toast.success).toHaveBeenCalledWith("Invitation created for alice.near");
+  });
+
+  it("preserves the wallet network on resend and refuses ambiguous legacy invitations", async () => {
+    const inviteMember = vi.fn().mockResolvedValue({ id: "inv-1" });
+    const apiClient = { auth: { inviteMember } } as unknown as ApiClient;
+    const { result } = renderActions(apiClient);
+    const invitation = {
+      id: "inv-1",
+      email: "wallet@near-wallet.invalid",
+      nearAccountId: "alice.near",
+      nearNetwork: "testnet" as const,
+      role: "member",
+      status: "pending",
+      expiresAt: new Date(),
+    };
+    await act(async () => {
+      await result.current.resendInvitationMutation.mutateAsync(invitation);
+    });
+    expect(inviteMember).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      nearAccountId: "alice.near",
+      nearNetwork: "testnet",
+      role: "member",
+      resend: true,
+    });
+    inviteMember.mockClear();
+    await act(async () => {
+      await expect(
+        result.current.resendInvitationMutation.mutateAsync({
+          ...invitation,
+          nearNetwork: null,
+        }),
+      ).rejects.toThrow(/reissue/i);
+    });
+    expect(inviteMember).not.toHaveBeenCalled();
   });
 
   it("cancels through the wallet-aware auth contract", async () => {

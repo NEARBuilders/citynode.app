@@ -10,7 +10,11 @@ export interface TeamCardTeam {
   name: string;
   areas: string[];
   memberUserIds: string[];
+  memberStatus?: TeamMembershipStatus;
+  memberError?: string;
 }
+
+export type TeamMembershipStatus = "unloaded" | "loading" | "success" | "error";
 
 function memberLabel(member: MemberCardMember | undefined, userId: string) {
   return member?.user?.name || member?.user?.email || userId;
@@ -23,6 +27,7 @@ export function TeamCard({
   onAreasChange,
   onDelete,
   onRemoveMember,
+  onRetryMembers,
   onRename,
   orgMembers,
   team,
@@ -33,6 +38,7 @@ export function TeamCard({
   onAreasChange: (areas: string[]) => void;
   onDelete: () => void;
   onRemoveMember: (userId: string) => void;
+  onRetryMembers?: () => void;
   onRename: (name: string) => void;
   orgMembers: MemberCardMember[];
   team: TeamCardTeam;
@@ -41,7 +47,11 @@ export function TeamCard({
   const [draftName, setDraftName] = useState(team.name);
   const [selectedUserId, setSelectedUserId] = useState("");
   const membersByUserId = new Map(orgMembers.map((member) => [member.userId, member]));
-  const candidates = orgMembers.filter((member) => !team.memberUserIds.includes(member.userId));
+  const memberStatus = team.memberStatus ?? "success";
+  const membersLoaded = memberStatus === "success";
+  const candidates = membersLoaded
+    ? orgMembers.filter((member) => !team.memberUserIds.includes(member.userId))
+    : [];
 
   const toggleArea = (area: string, checked: boolean) => {
     const next = checked
@@ -86,9 +96,11 @@ export function TeamCard({
           ) : (
             <div className="min-w-0">
               <div className="font-semibold break-words">{team.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {team.memberUserIds.length} member{team.memberUserIds.length === 1 ? "" : "s"}
-              </div>
+              {memberStatus === "success" && (
+                <div className="text-xs text-muted-foreground">
+                  {team.memberUserIds.length} member{team.memberUserIds.length === 1 ? "" : "s"}
+                </div>
+              )}
             </div>
           )}
           {canManage && !isRenaming && (
@@ -148,14 +160,36 @@ export function TeamCard({
           <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Members
           </div>
-          {team.memberUserIds.length > 0 ? (
+          {memberStatus === "loading" ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Loading members...
+            </p>
+          ) : memberStatus === "error" ? (
+            <div className="space-y-2" role="alert">
+              <p className="text-sm text-destructive">
+                {team.memberError || "Unable to load team members."}
+              </p>
+              {onRetryMembers && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetryMembers}
+                  data-testid={`teams-tab-retry-members-${team.id}`}
+                >
+                  retry
+                </Button>
+              )}
+            </div>
+          ) : memberStatus === "unloaded" ? (
+            <p className="text-sm text-muted-foreground">Members are not loaded yet</p>
+          ) : team.memberUserIds.length > 0 ? (
             <ul className="space-y-1">
               {team.memberUserIds.map((userId) => (
                 <li key={userId} className="flex items-center justify-between gap-2 text-sm">
                   <span className="truncate">
                     {memberLabel(membersByUserId.get(userId), userId)}
                   </span>
-                  {canManage && (
+                  {canManage && membersLoaded && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -179,12 +213,16 @@ export function TeamCard({
                 aria-label={`Add member to ${team.name}`}
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                disabled={candidates.length === 0 || isMutating}
+                disabled={!membersLoaded || candidates.length === 0 || isMutating}
                 data-testid={`teams-tab-add-member-${team.id}`}
                 className="w-full px-3 py-2 text-sm bg-card text-foreground border-2 border-inset border-border-strong rounded-[8px] outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">
-                  {candidates.length === 0 ? "All organization members added" : "Select a member"}
+                  {!membersLoaded
+                    ? "Members unavailable"
+                    : candidates.length === 0
+                      ? "All organization members added"
+                      : "Select a member"}
                 </option>
                 {candidates.map((member) => (
                   <option key={member.userId} value={member.userId}>
@@ -194,7 +232,7 @@ export function TeamCard({
               </select>
               <Button
                 variant="outline"
-                disabled={!selectedUserId || isMutating}
+                disabled={!membersLoaded || !selectedUserId || isMutating}
                 onClick={() => {
                   onAddMember(selectedUserId);
                   setSelectedUserId("");

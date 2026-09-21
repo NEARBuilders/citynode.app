@@ -1,11 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Building2, Mail, Plus, RefreshCw, Users, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   type Organization,
   type SessionData,
-  sessionQueryKey,
   sessionQueryOptions,
   useApiClient,
   useAuthClient,
@@ -13,7 +12,7 @@ import {
 import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
-import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
+import { useInvitationActions } from "./-use-invitation-actions";
 
 type ApiClientType = import("@/app").ApiClient;
 type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvitations"]>>[number];
@@ -54,7 +53,6 @@ function OrganizationsList() {
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const { data: organizations, isLoading } = useQuery({
     queryKey: ["organizations"],
@@ -89,54 +87,23 @@ function OrganizationsList() {
 
   const pendingInvitations = userInvitations.filter((i) => i.status === "pending");
 
-  const acceptInvitationMutation = useMutation({
-    mutationFn: async (invitation: UserInvitationItem) => {
-      if (invitation.nearAccountId) {
-        await apiClient.auth.acceptNearInvitation({ invitationId: invitation.id });
-      } else {
-        await apiClient.auth.acceptInvitation({ invitationId: invitation.id });
-      }
-      const { data: session, error } = await auth.getSession({
-        query: { disableCookieCache: true },
-      });
-      if (error) throw new Error(error.message);
-      queryClient.setQueryData(sessionQueryKey, session ?? null);
-      return invitation;
-    },
-    onSuccess: async (invitation) => {
-      toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-        queryClient.invalidateQueries({ queryKey: sessionQueryKey }),
-        queryClient.invalidateQueries({ queryKey: ["user-invitations"] }),
-        queryClient.invalidateQueries({ queryKey: teamWorkspaceQueryKey }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: ["organizations"] });
-      if (invitation.organizationSlug) {
-        await router.navigate({
-          to: "/orgs/$slug",
-          params: { slug: invitation.organizationSlug },
-        });
-      }
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to accept invitation"),
-  });
-
-  const rejectInvitationMutation = useMutation({
-    mutationFn: async (invitationId: string) => {
-      const invitation = userInvitations.find((item) => item.id === invitationId);
-      if (invitation?.nearAccountId) {
-        await apiClient.auth.rejectNearInvitation({ invitationId });
-      } else {
-        await apiClient.auth.rejectInvitation({ invitationId });
-      }
-    },
-    onSuccess: async () => {
-      toast.success("Invitation declined");
-      await queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to decline invitation"),
-  });
+  const { acceptMutation: acceptInvitationMutation, rejectMutation: rejectInvitationMutation } =
+    useInvitationActions({
+      apiClient,
+      auth,
+      onAccepted: async (invitation) => {
+        toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
+        if (invitation.organizationSlug) {
+          await router.navigate({
+            to: "/orgs/$slug",
+            params: { slug: invitation.organizationSlug },
+          });
+        }
+      },
+      onRejected: () => {
+        toast.success("Invitation declined");
+      },
+    });
 
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
@@ -188,6 +155,11 @@ function OrganizationsList() {
                         <div className="text-sm text-muted-foreground break-all">
                           {invitation.nearAccountId ?? invitation.email}
                         </div>
+                        {invitation.nearAccountId && invitation.nearNetwork && (
+                          <div className="text-sm text-muted-foreground font-mono">
+                            network {invitation.nearNetwork}
+                          </div>
+                        )}
                         {invitation.teamId && (
                           <div className="text-sm text-muted-foreground font-mono">
                             team {invitation.teamId}
@@ -211,14 +183,14 @@ function OrganizationsList() {
                           : "accept"}
                       </Button>
                       <Button
-                        onClick={() => rejectInvitationMutation.mutate(invitation.id)}
+                        onClick={() => rejectInvitationMutation.mutate(invitation)}
                         disabled={
                           acceptInvitationMutation.isPending || rejectInvitationMutation.isPending
                         }
                         variant="outline"
                       >
                         {rejectInvitationMutation.isPending &&
-                        rejectInvitationMutation.variables === invitation.id
+                        rejectInvitationMutation.variables?.id === invitation.id
                           ? "declining..."
                           : "decline"}
                       </Button>

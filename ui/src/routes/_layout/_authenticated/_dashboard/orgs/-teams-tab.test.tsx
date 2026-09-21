@@ -124,4 +124,46 @@ describe("TeamsTab", () => {
     renderTab({ teams: [{ ...opsTeam, memberUserIds: [] }] });
     expect(screen.getByText("No members in this team")).toBeTruthy();
   });
+
+  it("keeps membership controls unresolved while a team membership query is loading", () => {
+    renderTab({ teams: [{ ...opsTeam, memberStatus: "loading", memberUserIds: [] }] });
+
+    const card = screen.getByTestId("teams-tab-team-team-ops");
+    expect(within(card).getByText("Loading members...")).toBeTruthy();
+    expect(within(card).queryByText("0 members")).toBeNull();
+    expect(
+      (screen.getByTestId("teams-tab-add-member-team-ops") as HTMLSelectElement).disabled,
+    ).toBe(true);
+    expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    expect(
+      (screen.getByTestId("teams-tab-area-team-ops-node-operations") as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("offers a retry for a failed membership query without hiding team management", () => {
+    const onRetryMembers = vi.fn();
+    renderTab({
+      onRetryMembers,
+      teams: [
+        {
+          ...opsTeam,
+          memberStatus: "error",
+          memberError: "membership unavailable",
+          memberUserIds: [],
+        },
+      ],
+    });
+
+    const card = screen.getByTestId("teams-tab-team-team-ops");
+    expect(within(card).getByText("membership unavailable")).toBeTruthy();
+    expect(within(card).getByTestId("teams-tab-retry-members-team-ops")).toBeTruthy();
+    expect(within(card).queryByText("No members in this team")).toBeNull();
+    fireEvent.click(within(card).getByTestId("teams-tab-retry-members-team-ops"));
+    expect(onRetryMembers).toHaveBeenCalledWith("team-ops");
+    expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
 });

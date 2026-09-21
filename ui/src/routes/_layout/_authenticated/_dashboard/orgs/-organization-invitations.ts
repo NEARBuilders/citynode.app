@@ -15,7 +15,9 @@ export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: st
         organizationId: orgId,
         role: values.role,
         ...(values.email ? { email: values.email } : {}),
-        ...(values.nearAccountId ? { nearAccountId: values.nearAccountId } : {}),
+        ...(values.nearAccountId
+          ? { nearAccountId: values.nearAccountId, nearNetwork: values.nearNetwork }
+          : {}),
         ...(values.teamId ? { teamId: values.teamId } : {}),
       });
     },
@@ -37,11 +39,17 @@ export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: st
   });
   const resendInvitationMutation = useMutation({
     mutationFn: async (invitation: InvitationCardInvitation) => {
+      if (invitation.nearAccountId && !invitation.nearNetwork) {
+        throw new Error("Cancel and reissue this wallet invitation with an explicit network.");
+      }
       return apiClient.auth.inviteMember({
         organizationId: orgId,
         role: (invitation.role ?? "member") as "admin" | "member" | "owner",
         ...(invitation.nearAccountId
-          ? { nearAccountId: invitation.nearAccountId }
+          ? {
+              nearAccountId: invitation.nearAccountId,
+              nearNetwork: invitation.nearNetwork ?? undefined,
+            }
           : { email: invitation.email }),
         ...(invitation.teamId ? { teamId: invitation.teamId } : {}),
         resend: true,

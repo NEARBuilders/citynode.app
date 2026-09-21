@@ -1,15 +1,25 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
 import * as schema from "./db/schema";
+import {
+  createOrganizationMembershipPolicy,
+  type OrganizationMembershipPolicy,
+} from "./organization-membership-policy";
 
 const NEAR_INVITATION_EMAIL_DOMAIN = "near-wallet.invalid";
 const IMPLICIT_ACCOUNT = /^[0-9a-f]{64}$/;
 const ETH_IMPLICIT_ACCOUNT = /^0x[0-9a-f]{40}$/;
 const NAMED_ACCOUNT = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+export const NEAR_NETWORKS = ["mainnet", "testnet"] as const;
+export type NearNetwork = (typeof NEAR_NETWORKS)[number];
+
+export function isNearNetwork(value: unknown): value is NearNetwork {
+  return value === "mainnet" || value === "testnet";
+}
 
 export function normalizeNearAccountId(value: string): string | null {
   const accountId = value.trim().toLowerCase();
@@ -18,8 +28,8 @@ export function normalizeNearAccountId(value: string): string | null {
   return NAMED_ACCOUNT.test(accountId) ? accountId : null;
 }
 
-export function nearInvitationEmail(accountId: string): string {
-  return `${accountId}@${NEAR_INVITATION_EMAIL_DOMAIN}`;
+export function nearInvitationEmail(accountId: string, network: NearNetwork): string {
+  return `${accountId}@${network}.${NEAR_INVITATION_EMAIL_DOMAIN}`;
 }
 
 export function isNearInvitation(invitation: unknown): boolean {
@@ -30,17 +40,25 @@ export function isNearInvitation(invitation: unknown): boolean {
   );
 }
 
-export async function listLinkedNearAccountIds(db: Database, userId: string): Promise<string[]> {
+export async function listLinkedNearAccounts(
+  db: Database,
+  userId: string,
+): Promise<Array<{ accountId: string; network: NearNetwork }>> {
   const rows = await db
-    .select({ accountId: schema.nearAccount.accountId })
+    .select({ accountId: schema.nearAccount.accountId, network: schema.nearAccount.network })
     .from(schema.nearAccount)
     .where(eq(schema.nearAccount.userId, userId));
-  return rows.map((row) => row.accountId);
+  return rows.filter((row): row is { accountId: string; network: NearNetwork } =>
+    isNearNetwork(row.network),
+  );
 }
 
 export async function listPendingNearInvitations(db: Database, userId: string) {
-  const accountIds = await listLinkedNearAccountIds(db, userId);
-  if (accountIds.length === 0) return [];
+  const linkedAccounts = await listLinkedNearAccounts(db, userId);
+  if (linkedAccounts.length === 0) return [];
+  const identityFilters = linkedAccounts.map(({ accountId, network }) =>
+    and(eq(schema.invitation.nearAccountId, accountId), eq(schema.invitation.nearNetwork, network)),
+  );
   return db
     .select({
       invitation: schema.invitation,
@@ -51,7 +69,7 @@ export async function listPendingNearInvitations(db: Database, userId: string) {
     .innerJoin(schema.organization, eq(schema.invitation.organizationId, schema.organization.id))
     .where(
       and(
-        inArray(schema.invitation.nearAccountId, accountIds),
+        or(...identityFilters),
         eq(schema.invitation.status, "pending"),
         gt(schema.invitation.expiresAt, new Date()),
       ),
@@ -65,16 +83,28 @@ async function findClaimableInvitation(db: Database, invitationId: string, userI
   if (!invitation?.nearAccountId) {
     throw new APIError("BAD_REQUEST", { message: "Wallet invitation not found" });
   }
+  if (!isNearNetwork(invitation.nearNetwork)) {
+    throw new APIError("BAD_REQUEST", {
+      message:
+        "This legacy wallet invitation has no network. Ask the organization to cancel and reissue it.",
+    });
+  }
   if (invitation.status !== "pending") {
     throw new APIError("BAD_REQUEST", { message: `Invitation is already ${invitation.status}` });
   }
   if (invitation.expiresAt < new Date()) {
     throw new APIError("BAD_REQUEST", { message: "Invitation has expired" });
   }
-  const linked = await listLinkedNearAccountIds(db, userId);
-  if (!linked.includes(invitation.nearAccountId)) {
+  const linked = await listLinkedNearAccounts(db, userId);
+  if (
+    !linked.some(
+      (account) =>
+        account.accountId === invitation.nearAccountId &&
+        account.network === invitation.nearNetwork,
+    )
+  ) {
     throw new APIError("FORBIDDEN", {
-      message: `This invitation is for ${invitation.nearAccountId}. Sign in with or link that NEAR account to accept it.`,
+      message: `This invitation is for ${invitation.nearAccountId} on ${invitation.nearNetwork}. Sign in with or link that NEAR account on the invited network to accept it.`,
     });
   }
   return invitation;
@@ -82,7 +112,10 @@ async function findClaimableInvitation(db: Database, invitationId: string, userI
 
 const invitationBody = z.object({ invitationId: z.string() });
 
-export function nearInvitations(db: Database) {
+export function nearInvitations(
+  db: Database,
+  membershipPolicy: OrganizationMembershipPolicy = createOrganizationMembershipPolicy(),
+) {
   return {
     id: "near-invitations",
     endpoints: {
@@ -95,6 +128,14 @@ export function nearInvitations(db: Database) {
           const teamIds = invitation.teamId ? invitation.teamId.split(",") : [];
 
           const member = await db.transaction(async (tx) => {
+            const [organization] = await tx
+              .select({ id: schema.organization.id })
+              .from(schema.organization)
+              .where(eq(schema.organization.id, invitation.organizationId))
+              .for("update");
+            if (!organization) {
+              throw new APIError("BAD_REQUEST", { message: "Organization not found" });
+            }
             const existing = await tx.query.member.findFirst({
               where: and(
                 eq(schema.member.userId, user.id),
@@ -106,6 +147,16 @@ export function nearInvitations(db: Database) {
                 message: "You are already a member of this organization",
               });
             }
+            const [{ memberCount } = { memberCount: 0 }] = await tx
+              .select({ memberCount: sql<number>`count(*)::int` })
+              .from(schema.member)
+              .where(eq(schema.member.organizationId, invitation.organizationId));
+            if (!membershipPolicy.hasCapacity(memberCount)) {
+              throw new APIError("FORBIDDEN", {
+                message: "Organization membership limit reached",
+              });
+            }
+            const now = new Date();
             const [accepted] = await tx
               .update(schema.invitation)
               .set({ status: "accepted" })
@@ -113,10 +164,14 @@ export function nearInvitations(db: Database) {
                 and(
                   eq(schema.invitation.id, invitation.id),
                   eq(schema.invitation.status, "pending"),
+                  gt(schema.invitation.expiresAt, now),
                 ),
               )
               .returning();
             if (!accepted) {
+              if (invitation.expiresAt <= now) {
+                throw new APIError("BAD_REQUEST", { message: "Invitation has expired" });
+              }
               throw new APIError("BAD_REQUEST", { message: "Invitation is no longer pending" });
             }
             for (const teamId of teamIds) {
@@ -168,10 +223,24 @@ export function nearInvitations(db: Database) {
             ctx.body.invitationId,
             ctx.context.session.user.id,
           );
-          await db
+          const now = new Date();
+          const [rejected] = await db
             .update(schema.invitation)
             .set({ status: "rejected" })
-            .where(eq(schema.invitation.id, invitation.id));
+            .where(
+              and(
+                eq(schema.invitation.id, invitation.id),
+                eq(schema.invitation.status, "pending"),
+                gt(schema.invitation.expiresAt, now),
+              ),
+            )
+            .returning();
+          if (!rejected) {
+            if (invitation.expiresAt <= now) {
+              throw new APIError("BAD_REQUEST", { message: "Invitation has expired" });
+            }
+            throw new APIError("BAD_REQUEST", { message: "Invitation is no longer pending" });
+          }
           return ctx.json({ invitation: { ...invitation, status: "rejected" } });
         },
       ),

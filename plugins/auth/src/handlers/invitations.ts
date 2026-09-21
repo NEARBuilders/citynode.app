@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { Context } from "effect";
 import * as schema from "../db/schema";
 import {
+  isNearNetwork,
   listPendingNearInvitations,
   nearInvitationEmail,
   normalizeNearAccountId,
@@ -10,20 +11,36 @@ import {
 import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi } from "../utils";
 
-function resolveInvitee(input: { email?: string; nearAccountId?: string }) {
+function resolveInvitee(input: { email?: string; nearAccountId?: string; nearNetwork?: string }) {
   if (!!input.email === !!input.nearAccountId) {
     throw new ORPCError("BAD_REQUEST", {
       message: "Provide either an email address or a NEAR account id",
     });
   }
-  if (input.email) return { email: input.email };
+  if (input.email) {
+    if (input.nearNetwork !== undefined) {
+      throw new ORPCError("BAD_REQUEST", {
+        message: "A NEAR network can only be supplied for wallet invitations",
+      });
+    }
+    return { email: input.email };
+  }
   const nearAccountId = normalizeNearAccountId(input.nearAccountId ?? "");
   if (!nearAccountId) {
     throw new ORPCError("BAD_REQUEST", {
       message: `"${input.nearAccountId}" is not a valid NEAR account id`,
     });
   }
-  return { email: nearInvitationEmail(nearAccountId), nearAccountId };
+  if (!isNearNetwork(input.nearNetwork)) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "A wallet invitation requires a mainnet or testnet network",
+    });
+  }
+  return {
+    email: nearInvitationEmail(nearAccountId, input.nearNetwork),
+    nearAccountId,
+    nearNetwork: input.nearNetwork,
+  };
 }
 
 function toInvitation(invitation: any) {
@@ -38,6 +55,7 @@ function toInvitation(invitation: any) {
     inviterId: invitation.inviterId,
     teamId: invitation.teamId ?? null,
     nearAccountId: invitation.nearAccountId ?? null,
+    nearNetwork: invitation.nearNetwork ?? null,
   };
 }
 

@@ -158,7 +158,8 @@ function OrganizationDetail() {
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
-  const teamsState = useOrganizationTeams(orgId);
+  const [activeTab, setActiveTab] = useState("members");
+  const teamsState = useOrganizationTeams(orgId, activeTab === "teams");
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -243,7 +244,7 @@ function OrganizationDetail() {
             onSlugChange={setEditSlug}
           />
         )}
-        <Tabs defaultValue="members" className="w-full min-w-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="members" className="shrink-0">
               <Users className="h-4 w-4 mr-1.5" />
@@ -291,6 +292,7 @@ function OrganizationDetail() {
             onRemoveMember={(teamId, userId) =>
               teamsState.removeTeamMember.mutate({ teamId, userId })
             }
+            onRetryMembers={teamsState.retryTeamMembers}
             onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
             orgMembers={members}
             teams={teamsState.teams}

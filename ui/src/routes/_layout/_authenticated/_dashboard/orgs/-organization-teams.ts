@@ -1,12 +1,28 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryKey,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
+import { useRef } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/app";
+import { useApiClient, useAuthClient } from "@/app";
+import {
+  createWorkspaceSynchronization,
+  reportWorkspaceRefreshError,
+} from "@/lib/workspace-synchronization";
 import { orgTeamMembersQueryKey, orgTeamsQueryKey } from "./-organization-query-keys";
-import type { TeamsTabTeam } from "./-teams-tab";
+import type { TeamMembershipStatus, TeamsTabTeam } from "./-teams-tab";
 
-export function useOrganizationTeams(orgId: string) {
+export function useOrganizationTeams(orgId: string, membershipsEnabled = false) {
   const apiClient = useApiClient();
+  const auth = useAuthClient();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const synchronization = createWorkspaceSynchronization({ auth, queryClient, router });
+  const lastRefreshKeys = useRef<readonly QueryKey[]>([]);
   const teamsQuery = useQuery({
     queryKey: orgTeamsQueryKey(orgId),
     queryFn: () => apiClient.auth.listTeams({ organizationId: orgId }),
@@ -17,6 +33,8 @@ export function useOrganizationTeams(orgId: string) {
     queries: teamList.map((team) => ({
       queryKey: orgTeamMembersQueryKey(team.id),
       queryFn: () => apiClient.auth.listTeamMembers({ teamId: team.id }),
+      enabled: membershipsEnabled,
+      staleTime: 30 * 1000,
     })),
   });
   const teams: TeamsTabTeam[] = teamList.map((team, index) => ({
@@ -24,19 +42,29 @@ export function useOrganizationTeams(orgId: string) {
     name: team.name,
     areas: team.areas,
     memberUserIds: (memberQueries[index]?.data ?? []).map((member) => member.userId),
+    memberStatus: resolveMembershipStatus(membershipsEnabled, memberQueries[index]),
+    memberError:
+      memberQueries[index]?.error instanceof Error ? memberQueries[index].error.message : undefined,
   }));
 
-  const invalidateTeams = () =>
-    queryClient.invalidateQueries({ queryKey: orgTeamsQueryKey(orgId) });
-  const invalidateMembers = (teamId: string) =>
-    queryClient.invalidateQueries({ queryKey: orgTeamMembersQueryKey(teamId) });
-  const onError = (fallback: string) => (error: Error) => toast.error(error.message || fallback);
+  const synchronizeAfterMutation = (queryKeys: readonly QueryKey[]) => {
+    lastRefreshKeys.current = queryKeys;
+    return synchronization.synchronize({ queryKeys });
+  };
+  const refreshWorkspace = () =>
+    synchronization.synchronize({ queryKeys: lastRefreshKeys.current });
+  const onError = (fallback: string) => (error: Error) => {
+    if (reportWorkspaceRefreshError(error, refreshWorkspace, onError(fallback))) {
+      return;
+    }
+    toast.error(error.message || fallback);
+  };
 
   const createTeam = useMutation({
     mutationFn: (name: string) => apiClient.auth.createTeam({ name, organizationId: orgId }),
     onSuccess: async (team) => {
+      await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
       toast.success(`Team "${team.name}" created`);
-      await invalidateTeams();
     },
     onError: onError("Failed to create team"),
   });
@@ -50,27 +78,41 @@ export function useOrganizationTeams(orgId: string) {
           ...(input.areas !== undefined ? { areas: input.areas } : {}),
         },
       }),
-    onSuccess: invalidateTeams,
+    onSuccess: () => synchronizeAfterMutation([orgTeamsQueryKey(orgId)]),
     onError: onError("Failed to update team"),
   });
   const deleteTeam = useMutation({
-    mutationFn: (teamId: string) => apiClient.auth.deleteTeam({ teamId, organizationId: orgId }),
+    mutationFn: async (teamId: string) => {
+      const { data, error } = await auth.getSession({ query: { disableCookieCache: true } });
+      if (error) throw new Error(error.message);
+      const wasActive = data?.session.activeTeamId === teamId;
+      if (wasActive) {
+        const { error: clearError } = await auth.organization.setActiveTeam({ teamId: null });
+        if (clearError) throw new Error(clearError.message);
+      }
+      try {
+        return await apiClient.auth.deleteTeam({ teamId, organizationId: orgId });
+      } catch (deleteError) {
+        if (wasActive) await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
+        throw deleteError;
+      }
+    },
     onSuccess: async () => {
+      await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
       toast.success("Team deleted");
-      await invalidateTeams();
     },
     onError: onError("Failed to delete team"),
   });
   const addTeamMember = useMutation({
     mutationFn: (input: { teamId: string; userId: string }) =>
       apiClient.auth.addTeamMember({ ...input, organizationId: orgId }),
-    onSuccess: (_, input) => invalidateMembers(input.teamId),
+    onSuccess: (_, input) => synchronizeAfterMutation([orgTeamMembersQueryKey(input.teamId)]),
     onError: onError("Failed to add team member"),
   });
   const removeTeamMember = useMutation({
     mutationFn: (input: { teamId: string; userId: string }) =>
       apiClient.auth.removeTeamMember({ ...input, organizationId: orgId }),
-    onSuccess: (_, input) => invalidateMembers(input.teamId),
+    onSuccess: (_, input) => synchronizeAfterMutation([orgTeamMembersQueryKey(input.teamId)]),
     onError: onError("Failed to remove team member"),
   });
 
@@ -87,5 +129,22 @@ export function useOrganizationTeams(orgId: string) {
     deleteTeam,
     addTeamMember,
     removeTeamMember,
+    membershipsEnabled,
+    refreshWorkspace,
+    retryTeamMembers: (teamId: string) =>
+      queryClient.refetchQueries(
+        { queryKey: orgTeamMembersQueryKey(teamId), type: "active" },
+        { throwOnError: true },
+      ),
   };
+}
+
+function resolveMembershipStatus(
+  membershipsEnabled: boolean,
+  query: { data: unknown; isError: boolean } | undefined,
+): TeamMembershipStatus {
+  if (!membershipsEnabled) return "unloaded";
+  if (query?.isError) return "error";
+  if (query?.data) return "success";
+  return "loading";
 }

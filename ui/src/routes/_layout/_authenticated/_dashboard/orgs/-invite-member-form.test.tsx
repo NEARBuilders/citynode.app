@@ -91,6 +91,35 @@ describe("InviteMemberForm team targeting", () => {
     await waitFor(() =>
       expect(onInvite).toHaveBeenCalledWith({
         nearAccountId: "operator.near",
+        nearNetwork: "mainnet",
+        role: "member",
+      }),
+    );
+  });
+
+  it("lets the inviter select testnet and omits the network for email invitations", async () => {
+    const { onInvite } = renderForm();
+    fireEvent.change(screen.getByTestId("invite-identifier-input"), {
+      target: { value: "operator.testnet" },
+    });
+    fireEvent.change(screen.getByLabelText("NEAR network"), { target: { value: "testnet" } });
+    expect(screen.getByTestId("invite-identifier-feedback").textContent).toContain("testnet");
+    fireEvent.click(screen.getByTestId("invite-submit-button"));
+    await waitFor(() =>
+      expect(onInvite).toHaveBeenCalledWith({
+        nearAccountId: "operator.testnet",
+        nearNetwork: "testnet",
+        role: "member",
+      }),
+    );
+    await waitFor(() => expect(screen.queryByLabelText("NEAR network")).toBeNull());
+    fireEvent.change(screen.getByTestId("invite-identifier-input"), {
+      target: { value: "operator@example.com" },
+    });
+    fireEvent.click(screen.getByTestId("invite-submit-button"));
+    await waitFor(() =>
+      expect(onInvite).toHaveBeenLastCalledWith({
+        email: "operator@example.com",
         role: "member",
       }),
     );
@@ -110,6 +139,35 @@ describe("InviteMemberForm team targeting", () => {
 });
 
 describe("InvitationCard team targeting", () => {
+  it("labels the wallet network and requires reissue for legacy invitations", () => {
+    const invitation = {
+      id: "wallet-invite",
+      email: "wallet@near-wallet.invalid",
+      nearAccountId: "alice.near",
+      nearNetwork: "testnet" as const,
+      role: "member",
+      status: "pending",
+      expiresAt: new Date(),
+    };
+    const onResend = vi.fn();
+    const onCancel = vi.fn();
+    const { rerender } = render(
+      <InvitationCard invitation={invitation} onResend={onResend} onCancel={onCancel} />,
+    );
+    expect(screen.getByTestId("invitation-network-wallet-invite").textContent).toContain("testnet");
+    rerender(
+      <InvitationCard
+        invitation={{ ...invitation, nearNetwork: null }}
+        onResend={onResend}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.getByText(/cancel and reissue/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /resend/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
   it("shows the targeted team when present", () => {
     render(
       <InvitationCard

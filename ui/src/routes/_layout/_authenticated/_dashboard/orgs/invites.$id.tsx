@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getAppName, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
+import { getAppName, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
-import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
+import { useInvitationActions } from "./-use-invitation-actions";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/invites/$id")({
   head: () => ({
@@ -26,7 +26,6 @@ function AcceptInvitation() {
   const router = useRouter();
   const auth = useAuthClient();
   const apiClient = useApiClient();
-  const queryClient = useQueryClient();
 
   const { data: invitation, isLoading } = useQuery({
     queryKey: ["invitation", id],
@@ -35,50 +34,24 @@ function AcceptInvitation() {
     retry: false,
   });
 
-  const acceptMutation = useMutation({
-    mutationFn: async () => {
-      if (invitation?.nearAccountId) {
-        await apiClient.auth.acceptNearInvitation({ invitationId: id });
-      } else {
-        await apiClient.auth.acceptInvitation({ invitationId: id });
-      }
-      const { data: session, error } = await auth.getSession({
-        query: { disableCookieCache: true },
-      });
-      if (error) throw new Error(error.message);
-      queryClient.setQueryData(sessionQueryKey, session ?? null);
-    },
-    onSuccess: async () => {
+  const { acceptMutation, rejectMutation } = useInvitationActions({
+    apiClient,
+    auth,
+    onAccepted: async (acceptedInvitation) => {
       toast.success("Invitation accepted");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-invitations"] }),
-        queryClient.invalidateQueries({ queryKey: teamWorkspaceQueryKey }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: ["organizations"] });
-      await router.navigate({
-        to: "/orgs/$slug",
-        params: { slug: invitation?.organizationSlug ?? "" },
-      });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to accept invitation"),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async () => {
-      if (invitation?.nearAccountId) {
-        await apiClient.auth.rejectNearInvitation({ invitationId: id });
+      if (acceptedInvitation.organizationSlug) {
+        await router.navigate({
+          to: "/orgs/$slug",
+          params: { slug: acceptedInvitation.organizationSlug },
+        });
       } else {
-        await apiClient.auth.rejectInvitation({ invitationId: id });
+        await router.navigate({ to: "/orgs" });
       }
     },
-    onSuccess: async () => {
+    onRejected: async () => {
       toast.success("Invitation declined");
-      await queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
       await router.navigate({ to: "/orgs" });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to decline invitation"),
   });
 
   if (isLoading) {
@@ -150,6 +123,12 @@ function AcceptInvitation() {
                   {invitation.nearAccountId ?? invitation.email}
                 </span>
               </div>
+              {invitation.nearAccountId && invitation.nearNetwork && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">network</span>
+                  <span className="text-right break-all">{invitation.nearNetwork}</span>
+                </div>
+              )}
               {invitation.teamId && (
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground">team</span>
@@ -167,11 +146,15 @@ function AcceptInvitation() {
             </div>
 
             <div className="flex gap-3 justify-center">
-              <Button onClick={() => acceptMutation.mutate()} disabled={isPending_} size="sm">
+              <Button
+                onClick={() => acceptMutation.mutate(invitation)}
+                disabled={isPending_}
+                size="sm"
+              >
                 {acceptMutation.isPending ? "accepting..." : "accept"}
               </Button>
               <Button
-                onClick={() => rejectMutation.mutate()}
+                onClick={() => rejectMutation.mutate(invitation)}
                 disabled={isPending_}
                 variant="outline"
                 size="sm"

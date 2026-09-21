@@ -174,12 +174,14 @@ export const invitation = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     teamId: text("team_id"),
     nearAccountId: text("near_account_id"),
+    nearNetwork: text("near_network"),
   },
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
     index("invitation_teamId_idx").on(table.teamId),
     index("invitation_nearAccountId_idx").on(table.nearAccountId),
+    index("invitation_nearNetwork_idx").on(table.nearNetwork),
   ],
 );
 

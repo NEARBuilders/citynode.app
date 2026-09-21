@@ -6,6 +6,7 @@ export type InviteRole = "admin" | "member";
 export interface InviteMemberValues {
   email?: string;
   nearAccountId?: string;
+  nearNetwork?: "mainnet" | "testnet";
   role: InviteRole;
   teamId?: string;
 }
@@ -48,6 +49,7 @@ export function InviteMemberForm({
   const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<InviteRole>("member");
   const [teamId, setTeamId] = useState("");
+  const [nearNetwork, setNearNetwork] = useState<"mainnet" | "testnet">("mainnet");
   const detectedIdentifier = detectInviteIdentifier(identifier);
 
   return (
@@ -64,7 +66,7 @@ export function InviteMemberForm({
             await onInvite({
               ...(detectedIdentifier.kind === "email"
                 ? { email: detectedIdentifier.value }
-                : { nearAccountId: detectedIdentifier.value }),
+                : { nearAccountId: detectedIdentifier.value, nearNetwork }),
               role,
               ...(teamId ? { teamId } : {}),
             });
@@ -107,6 +109,21 @@ export function InviteMemberForm({
             ))}
           </select>
         </div>
+        {detectedIdentifier?.kind === "near" && (
+          <select
+            aria-label="NEAR network"
+            data-testid="invite-network-select"
+            className={selectClassName}
+            value={nearNetwork}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === "mainnet" || value === "testnet") setNearNetwork(value);
+            }}
+          >
+            <option value="mainnet">Mainnet</option>
+            <option value="testnet">Testnet</option>
+          </select>
+        )}
         <div
           className="text-xs text-muted-foreground"
           aria-live="polite"
@@ -115,7 +132,7 @@ export function InviteMemberForm({
           {detectedIdentifier?.kind === "email"
             ? "Email invitation: a message will be sent to this address."
             : detectedIdentifier?.kind === "near"
-              ? `NEAR invitation: ${detectedIdentifier.value} will claim this invitation with its wallet.`
+              ? `NEAR invitation: ${detectedIdentifier.value} on ${nearNetwork} will claim this invitation with its wallet.`
               : identifier.trim()
                 ? "Enter a valid email address or NEAR account ID."
                 : "Invite by email or NEAR account ID."}
