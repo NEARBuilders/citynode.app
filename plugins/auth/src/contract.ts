@@ -48,12 +48,20 @@ const organizationInfoSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
+const teamContextSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  areas: z.array(z.string()),
+});
+
 const organizationContextSchema = z.object({
   activeOrganizationId: z.string().nullable(),
   organization: organizationInfoSchema.nullable(),
   member: organizationMemberSchema.nullable(),
   isPersonal: z.boolean(),
   hasOrganization: z.boolean(),
+  teams: z.array(teamContextSchema),
+  activeTeamId: z.string().nullable(),
 });
 
 const sessionUserSchema = z.object({
@@ -189,6 +197,7 @@ const teamSchema = z.object({
   id: z.string(),
   name: z.string(),
   organizationId: z.string(),
+  areas: z.array(z.string()),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -579,6 +588,7 @@ export const contract = oc.router({
       z.object({
         name: z.string(),
         organizationId: z.string().optional(),
+        areas: z.array(z.string()).optional(),
       }),
     )
     .output(teamSchema)
@@ -589,8 +599,10 @@ export const contract = oc.router({
     .input(
       z.object({
         teamId: z.string(),
+        organizationId: z.string().optional(),
         data: z.object({
           name: z.string().optional(),
+          areas: z.array(z.string()).optional(),
         }),
       }),
     )
@@ -615,6 +627,18 @@ export const contract = oc.router({
         organizationId: z.string().optional(),
       }),
     )
+    .output(z.array(teamSchema))
+    .errors(Errors),
+
+  setActiveTeam: oc
+    .route({ method: "POST", path: "/v1/auth/teams/set-active" })
+    .input(z.object({ teamId: z.string().nullable() }))
+    .output(teamSchema.nullable())
+    .errors(Errors),
+
+  listUserTeams: oc
+    .route({ method: "GET", path: "/v1/auth/teams/user" })
+    .input(z.object({ organizationId: z.string().optional() }).optional())
     .output(z.array(teamSchema))
     .errors(Errors),
 

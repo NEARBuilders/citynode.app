@@ -15,6 +15,13 @@
       "when": 1786026390221,
       "tag": "0002_third_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789998141585,
+      "tag": "0003_teams_workspaces",
+      "breakpoints": true
     }
   ]
 }

@@ -32,16 +32,28 @@ export function getActiveOrganizationId(session: unknown): string | null {
   return null;
 }
 
+export function getActiveTeamId(session: unknown): string | null {
+  if (session && typeof session === "object" && "activeTeamId" in session) {
+    return (session as { activeTeamId: string | null }).activeTeamId ?? null;
+  }
+  return null;
+}
+
 export function toORPCError(error: unknown) {
   if (error instanceof ORPCError) return error;
   if (error && typeof error === "object") {
     const apiError = error as {
-      status?: number;
+      status?: number | string;
       statusCode?: number;
       message?: string;
       code?: string;
     };
-    const status = apiError.status ?? apiError.statusCode;
+    const status =
+      typeof apiError.statusCode === "number"
+        ? apiError.statusCode
+        : typeof apiError.status === "number"
+          ? apiError.status
+          : undefined;
     if (status) {
       const statusMap: Record<number, string> = {
         400: "BAD_REQUEST",
@@ -67,4 +79,18 @@ export async function safeAuthApi<T>(fn: () => Promise<T>): Promise<T> {
   } catch (error) {
     throw toORPCError(error);
   }
+}
+
+export function parseTeamAreas(metadata: unknown): string[] {
+  const parsed =
+    typeof metadata === "string" ? tryJsonParse<{ areas?: unknown }>(metadata) : metadata;
+  if (!parsed || typeof parsed !== "object") return [];
+  const areas = (parsed as { areas?: unknown }).areas;
+  return Array.isArray(areas)
+    ? areas.filter((area): area is string => typeof area === "string")
+    : [];
+}
+
+export function serializeTeamAreas(areas: string[]): string {
+  return JSON.stringify({ areas: [...new Set(areas)] });
 }

@@ -285,6 +285,20 @@ export function createAuthInstance(
         roles: orgRoles,
         teams: {
           enabled: true,
+          defaultTeam: { enabled: false },
+          allowRemovingAllTeams: true,
+        },
+        schema: {
+          team: {
+            additionalFields: {
+              metadata: { type: "string", required: false, input: true },
+            },
+          },
+          invitation: {
+            additionalFields: {
+              nearAccountId: { type: "string", required: false, input: true },
+            },
+          },
         },
         async sendInvitationEmail(data) {
           const inviteLink = `${config.baseUrl}/accept-invitation/${data.id}`;

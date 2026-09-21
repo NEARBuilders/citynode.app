@@ -1,9 +1,58 @@
 import { Context } from "effect";
 import { AuthServicesTag } from "../service-types";
-import { createHeaders, safeAuthApi } from "../utils";
+import {
+  createHeaders,
+  getActiveOrganizationId,
+  parseTeamAreas,
+  safeAuthApi,
+  serializeTeamAreas,
+} from "../utils";
+
+function toDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  return value ? new Date(value as string) : new Date();
+}
+
+function toTeam(team: any) {
+  return {
+    id: team.id,
+    name: team.name,
+    organizationId: team.organizationId,
+    areas: parseTeamAreas(team.metadata),
+    createdAt: toDate(team.createdAt),
+    updatedAt: toDate(team.updatedAt),
+  };
+}
 
 export function createTeamHandlers(builder: any, requireAuth: any) {
   return {
+    setActiveTeam: builder.setActiveTeam
+      .use(requireAuth)
+      .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
+        const result = await safeAuthApi(() =>
+          services.auth.api.setActiveTeam({
+            headers: createHeaders(context.reqHeaders),
+            body: { teamId: input.teamId },
+          }),
+        );
+        return result ? toTeam(result) : null;
+      }),
+
+    listUserTeams: builder.listUserTeams
+      .use(requireAuth)
+      .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
+        const headers = createHeaders(context.reqHeaders);
+        const organizationId =
+          input?.organizationId ??
+          getActiveOrganizationId((await services.auth.api.getSession({ headers }))?.session);
+        const result = await safeAuthApi(() => services.auth.api.listUserTeams({ headers }));
+        return (result ?? [])
+          .filter((team: any) => !organizationId || team.organizationId === organizationId)
+          .map(toTeam);
+      }),
+
     createTeam: builder.createTeam
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
@@ -14,22 +63,11 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
             body: {
               name: input.name,
               organizationId: input.organizationId,
+              ...(input.areas ? { metadata: serializeTeamAreas(input.areas) } : {}),
             },
           }),
         );
-        return {
-          id: result.id,
-          name: result.name,
-          organizationId: result.organizationId,
-          createdAt:
-            result.createdAt instanceof Date ? result.createdAt : new Date(result.createdAt as any),
-          updatedAt:
-            result.updatedAt instanceof Date
-              ? result.updatedAt
-              : result.updatedAt
-                ? new Date(result.updatedAt as any)
-                : new Date(),
-        };
+        return toTeam(result);
       }),
 
     updateTeam: builder.updateTeam
@@ -42,7 +80,9 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
             body: {
               teamId: input.teamId,
               data: {
-                name: input.data.name,
+                ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+                ...(input.data.name !== undefined ? { name: input.data.name } : {}),
+                ...(input.data.areas ? { metadata: serializeTeamAreas(input.data.areas) } : {}),
               },
             },
           }),
@@ -50,19 +90,7 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
         if (!result) {
           throw new Error("Team not found");
         }
-        return {
-          id: result.id,
-          name: result.name,
-          organizationId: result.organizationId,
-          createdAt:
-            result.createdAt instanceof Date ? result.createdAt : new Date(result.createdAt as any),
-          updatedAt:
-            result.updatedAt instanceof Date
-              ? result.updatedAt
-              : result.updatedAt
-                ? new Date(result.updatedAt as any)
-                : new Date(),
-        };
+        return toTeam(result);
       }),
 
     deleteTeam: builder.deleteTeam
@@ -93,13 +121,7 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
             },
           }),
         );
-        return (result ?? []).map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          organizationId: t.organizationId,
-          createdAt: t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt),
-          updatedAt: t.updatedAt instanceof Date ? t.updatedAt : new Date(t.updatedAt),
-        }));
+        return (result ?? []).map(toTeam);
       }),
 
     listTeamMembers: builder.listTeamMembers
