@@ -194,3 +194,31 @@ describe("team area grants", () => {
     expect(listed).toEqual([expect.objectContaining({ id: team.id, areas: ["stake", "finance"] })]);
   });
 });
+
+describe("listTeamMembers", () => {
+  it("lets organization members who are not in the team view its members", async () => {
+    const { owner, member, org, team, handlers } = await orgWithTeamMember();
+    const colleague = await createTestUser(services.services);
+    await addTestMember(services.services, org.id, colleague.userId, "member");
+
+    for (const viewer of [owner, colleague]) {
+      const members = await handlers.teams.listTeamMembers({
+        input: { teamId: team.id },
+        context: { reqHeaders: viewer.reqHeaders },
+      });
+      expect(members.map((m: { userId: string }) => m.userId)).toEqual([member.userId]);
+    }
+  });
+
+  it("rejects users outside the team's organization", async () => {
+    const { team, handlers } = await orgWithTeamMember();
+    const stranger = await createTestUser(services.services);
+
+    await expect(
+      handlers.teams.listTeamMembers({
+        input: { teamId: team.id },
+        context: { reqHeaders: stranger.reqHeaders },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});

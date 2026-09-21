@@ -1,4 +1,7 @@
+import { ORPCError } from "@orpc/server";
+import { and, eq } from "drizzle-orm";
 import { Context } from "effect";
+import * as schema from "../db/schema";
 import { AuthServicesTag } from "../service-types";
 import {
   createHeaders,
@@ -128,19 +131,31 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const result = await safeAuthApi(() =>
-          services.auth.api.listTeamMembers({
-            headers: createHeaders(context.reqHeaders),
-            query: {
-              teamId: input.teamId,
-            },
-          }),
-        );
-        return (result ?? []).map((tm: any) => ({
+        const team = await services.db.query.team.findFirst({
+          where: eq(schema.team.id, input.teamId),
+        });
+        if (!team) {
+          throw new ORPCError("NOT_FOUND", { message: "Team not found" });
+        }
+        const membership = await services.db.query.member.findFirst({
+          where: and(
+            eq(schema.member.userId, context.userId),
+            eq(schema.member.organizationId, team.organizationId),
+          ),
+        });
+        if (!membership) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "You are not a member of this team's organization",
+          });
+        }
+        const rows = await services.db.query.teamMember.findMany({
+          where: eq(schema.teamMember.teamId, team.id),
+        });
+        return rows.map((tm) => ({
           id: tm.id,
           teamId: tm.teamId,
           userId: tm.userId,
-          createdAt: tm.createdAt instanceof Date ? tm.createdAt : new Date(tm.createdAt),
+          createdAt: toDate(tm.createdAt),
         }));
       }),
 

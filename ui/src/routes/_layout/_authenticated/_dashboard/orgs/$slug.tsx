@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Key, Layers, Mail, Users } from "lucide-react";
+import { Building2, Key, Layers, Mail, Users, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -41,6 +41,8 @@ import {
   orgMembersQueryKey,
 } from "./-organization-query-keys";
 import { useOrganizationSettings } from "./-organization-settings";
+import { useOrganizationTeams } from "./-organization-teams";
+import { TeamsTab } from "./-teams-tab";
 
 type AuthClientType = import("@/app").AuthClient;
 type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
@@ -162,6 +164,7 @@ function OrganizationDetail() {
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
+  const teamsState = useOrganizationTeams(orgId);
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -252,6 +255,10 @@ function OrganizationDetail() {
               <Users className="h-4 w-4 mr-1.5" />
               Members ({members.length})
             </TabsTrigger>
+            <TabsTrigger value="teams" className="shrink-0" data-testid="orgs-tab-teams">
+              <UsersRound className="h-4 w-4 mr-1.5" />
+              Teams ({teamsState.teams.length})
+            </TabsTrigger>
             <TabsTrigger value="invitations" className="shrink-0">
               <Mail className="h-4 w-4 mr-1.5" />
               Invitations ({pendingInvitationsCount})
@@ -275,6 +282,24 @@ function OrganizationDetail() {
             members={members}
             onRemove={(member) => removeMemberMutation.mutate(member)}
             sessionUserId={session?.user?.id}
+          />
+          <TeamsTab
+            canManage={canManageMembers}
+            isMutating={teamsState.isMutating}
+            onAddMember={(teamId, userId) => teamsState.addTeamMember.mutate({ teamId, userId })}
+            onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
+            onCreate={(name) => teamsState.createTeam.mutate(name)}
+            onDelete={(teamId) => {
+              const team = teamsState.teams.find((candidate) => candidate.id === teamId);
+              if (confirm(`Delete team "${team?.name ?? ""}"?`))
+                teamsState.deleteTeam.mutate(teamId);
+            }}
+            onRemoveMember={(teamId, userId) =>
+              teamsState.removeTeamMember.mutate({ teamId, userId })
+            }
+            onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
+            orgMembers={members}
+            teams={teamsState.teams}
           />
           <InvitationsTab
             canManageMembers={canManageMembers}
