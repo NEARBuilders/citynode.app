@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@/app";
+import type { AuthRequestContext } from "@/lib/auth";
 import {
   areaForPath,
   isPathAllowed,
@@ -20,10 +21,17 @@ function context(options: { orgRole?: string; userRole?: string; activeTeamId?: 
       teams: [finance, ops],
       activeTeamId: options.activeTeamId ?? null,
     },
-  };
+  } as AuthRequestContext;
 }
 
 describe("resolveTeamWorkspace", () => {
+  it("drops an active team that is no longer in the member's organization teams", () => {
+    const workspace = resolveTeamWorkspace(context({ activeTeamId: "removed-team" }));
+
+    expect(workspace.activeTeam).toBeNull();
+    expect(isPathAllowed(workspace, "/things")).toBe(true);
+  });
+
   it("restricts a member to the active team's areas", () => {
     const workspace = resolveTeamWorkspace(context({ activeTeamId: "team-fin" }));
 

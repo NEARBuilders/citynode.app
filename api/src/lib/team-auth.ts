@@ -1,28 +1,8 @@
 import type { DecoratedMiddleware } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
 import type { FeatureArea } from "../feature-areas";
+import { resolveTeamAccess, type WorkspaceTeam } from "../team-access-policy";
 import type { AuthContext } from "./auth";
-
-const BYPASS_ORG_ROLES = ["owner", "admin"];
-
-export interface TeamWorkspace {
-  id: string;
-  name: string;
-  areas: string[];
-}
-
-export function bypassesTeamRestrictions(context: AuthContext): boolean {
-  if (context.user?.role === "admin") return true;
-  const orgRole = context.organization?.member?.role;
-  return !!orgRole && BYPASS_ORG_ROLES.includes(orgRole);
-}
-
-export function resolveActiveTeam(context: AuthContext): TeamWorkspace | null {
-  const organization = context.organization;
-  const activeTeamId = organization?.activeTeamId;
-  if (!activeTeamId) return null;
-  return organization?.teams?.find((team) => team.id === activeTeamId) ?? null;
-}
 
 function requireAuthenticated(context: AuthContext) {
   if (!context.user || !context.userId) {
@@ -46,7 +26,7 @@ function requireOrganizationMember(context: AuthContext) {
 export function createTeamMiddleware(builder: any) {
   type TeamMiddleware = DecoratedMiddleware<
     AuthContext,
-    { activeTeam: TeamWorkspace | null },
+    { activeTeam: WorkspaceTeam | null },
     any,
     any,
     any
@@ -55,8 +35,8 @@ export function createTeamMiddleware(builder: any) {
   const requireTeam = builder.middleware(
     async ({ context, next }: { context: AuthContext; next: any }) => {
       requireOrganizationMember(context);
-      const activeTeam = resolveActiveTeam(context);
-      if (!activeTeam && !bypassesTeamRestrictions(context)) {
+      const { activeTeam, bypass } = resolveTeamAccess(context);
+      if (!activeTeam && !bypass) {
         throw new ORPCError("FORBIDDEN", {
           message: "Active team required. Switch to one of your teams in this organization.",
           data: { action: "switch-team" },
@@ -69,11 +49,11 @@ export function createTeamMiddleware(builder: any) {
   const requireTeamArea = <TAreas extends readonly FeatureArea[]>(...areas: TAreas) =>
     builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
       requireAuthenticated(context);
-      const activeTeam = resolveActiveTeam(context);
+      const { activeTeam, allowedAreas } = resolveTeamAccess(context);
       if (
         activeTeam &&
-        !bypassesTeamRestrictions(context) &&
-        !areas.some((area) => activeTeam.areas.includes(area))
+        allowedAreas !== null &&
+        !areas.some((area) => allowedAreas.includes(area))
       ) {
         throw new ORPCError("FORBIDDEN", {
           message: `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`,

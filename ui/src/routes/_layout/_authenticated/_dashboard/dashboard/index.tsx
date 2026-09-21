@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { type FeatureArea, isFeatureArea } from "api/feature-areas";
 import {
   getAccount,
   type Passkey,
@@ -8,6 +7,7 @@ import {
   sessionQueryOptions,
   useAuthClient,
 } from "@/app";
+import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { useNearAccount } from "@/lib/use-near-account";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 import { TenantSummary } from "./-tenant-summary";

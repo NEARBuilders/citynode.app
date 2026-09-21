@@ -1,29 +1,30 @@
 import { queryOptions } from "@tanstack/react-query";
-import { type FeatureArea, isFeatureArea } from "api/feature-areas";
 import type { ApiClient } from "@/app";
+import type { AuthRequestContext } from "@/lib/auth";
+import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 
-export interface WorkspaceTeam {
-  id: string;
-  name: string;
-  areas: string[];
-}
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+type OrganizationContext = NonNullable<AuthRequestContext["organization"]>;
+
+type GeneratedTeam = OrganizationContext extends { teams: ReadonlyArray<infer Team> }
+  ? Team
+  : never;
+
+type FallbackTeam = { id: string; name: string; areas: string[] };
+
+export type WorkspaceTeam =
+  IsAny<GeneratedTeam> extends true
+    ? FallbackTeam
+    : GeneratedTeam extends FallbackTeam
+      ? GeneratedTeam
+      : FallbackTeam;
 
 export interface TeamWorkspace {
   teams: WorkspaceTeam[];
   activeTeam: WorkspaceTeam | null;
   allowedAreas: FeatureArea[] | null;
 }
-
-interface TeamContextSource {
-  user?: { role?: string | null } | null;
-  organization?: {
-    member?: { role?: string | null } | null;
-    teams?: WorkspaceTeam[];
-    activeTeamId?: string | null;
-  } | null;
-}
-
-const BYPASS_ORG_ROLES = ["owner", "admin"];
 
 const ROUTE_AREAS: Array<{ prefix: string; area: FeatureArea }> = [
   { prefix: "/dashboard/node", area: "node-operations" },
@@ -35,13 +36,13 @@ const ROUTE_AREAS: Array<{ prefix: string; area: FeatureArea }> = [
 
 export const teamWorkspaceQueryKey = ["team-workspace"] as const;
 
-export function resolveTeamWorkspace(context: TeamContextSource | null | undefined): TeamWorkspace {
-  const teams = context?.organization?.teams ?? [];
-  const activeTeamId = context?.organization?.activeTeamId ?? null;
-  const activeTeam = teams.find((team) => team.id === activeTeamId) ?? null;
-  const orgRole = context?.organization?.member?.role ?? null;
-  const bypass =
-    context?.user?.role === "admin" || (!!orgRole && BYPASS_ORG_ROLES.includes(orgRole));
+export function resolveTeamWorkspace(
+  context: AuthRequestContext | null | undefined,
+): TeamWorkspace {
+  const teams: WorkspaceTeam[] = [...(context?.organization?.teams ?? [])];
+  const activeTeam = teams.find((team) => team.id === context?.organization?.activeTeamId) ?? null;
+  const orgRole = context?.organization?.member?.role;
+  const bypass = context?.user?.role === "admin" || orgRole === "owner" || orgRole === "admin";
   return {
     teams,
     activeTeam,

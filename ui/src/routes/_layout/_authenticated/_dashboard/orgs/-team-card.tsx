@@ -1,8 +1,8 @@
-import { FEATURE_AREA_LABELS, FEATURE_AREAS } from "api/feature-areas";
 import { Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, CardContent, Input } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FEATURE_AREA_LABELS, FEATURE_AREAS } from "@/lib/feature-areas";
 import type { MemberCardMember } from "./-member-card";
 
 export interface TeamCardTeam {

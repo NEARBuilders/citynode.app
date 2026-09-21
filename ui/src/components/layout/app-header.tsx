@@ -13,14 +13,18 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useIdentity } from "./use-identity";
+import { useTeamWorkspace } from "./use-team-workspace";
 import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
   runtimeConfig?: Partial<ClientRuntimeConfig>;
-  activeTeamName?: string;
 }
 
-export function AppHeader({ runtimeConfig, activeTeamName }: AppHeaderProps) {
+export function AppHeader({ runtimeConfig }: AppHeaderProps) {
+  const { user } = useIdentity();
+  const { data: workspace } = useTeamWorkspace(!!user);
+  const activeTeamName = workspace?.activeTeam?.name;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const runtime = getActiveRuntime(runtimeConfig);
   const account = getAccount(runtimeConfig);

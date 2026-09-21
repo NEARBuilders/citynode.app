@@ -1,4 +1,3 @@
-import type { FeatureArea } from "api/feature-areas";
 import {
   Boxes,
   Building2,
@@ -10,6 +9,7 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
+import type { FeatureArea } from "@/lib/feature-areas";
 
 export type SidebarRole = "anon" | "member" | "admin";
 

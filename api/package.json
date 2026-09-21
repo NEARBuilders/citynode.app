@@ -13,10 +13,6 @@
     "./contract": {
       "types": "./src/contract.ts",
       "default": "./src/contract.ts"
-    },
-    "./feature-areas": {
-      "types": "./src/feature-areas.ts",
-      "default": "./src/feature-areas.ts"
     }
   },
   "peerDependencies": {

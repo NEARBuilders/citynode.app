@@ -16,30 +16,25 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import type { WorkspaceTeam } from "@/lib/team-workspace";
 import type { SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
 import { useIdentity } from "./use-identity";
 import { useSwitchTeam } from "./use-switch-team";
+import { useTeamWorkspace } from "./use-team-workspace";
 
 interface AppSidebarProps {
   items: SidebarItem[];
   appName: string;
   pathname: string;
-  teams?: WorkspaceTeam[];
-  activeTeamId?: string | null;
 }
 
-export function AppSidebar({
-  items,
-  appName,
-  pathname,
-  teams = [],
-  activeTeamId = null,
-}: AppSidebarProps) {
-  const { organizations, activeOrgId } = useIdentity();
+export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
+  const { user, organizations, activeOrgId } = useIdentity();
+  const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
+  const teams = workspace?.teams ?? [];
+  const activeTeamId = workspace?.activeTeam?.id ?? null;
 
   return (
     <Sidebar collapsible="icon">

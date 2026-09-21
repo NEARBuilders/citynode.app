@@ -1,5 +1,5 @@
-import { FEATURE_AREA_LABELS, type FeatureArea } from "api/feature-areas";
 import { ShieldAlert } from "lucide-react";
+import { FEATURE_AREA_LABELS, type FeatureArea } from "@/lib/feature-areas";
 
 export function RestrictedAreaNotice({ area }: { area: FeatureArea }) {
   return (
