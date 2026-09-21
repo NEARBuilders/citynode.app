@@ -13,7 +13,7 @@ plans/
 ├── infra/            # infrastructure & migration plans
 ├── offline/          # offline support (SW caching + data sync queue)
 ├── v1-current/       # plans about the current v1 system
-├── prototypes/       # runnable prototype source code (2 prototypes)
+├── prototypes/         # runnable prototype source code (3 prototypes)
 └── wayfinder/        # decision map + open question tickets for beta-v2
 ```
 
@@ -69,6 +69,7 @@ is verifiable on-chain via FastKV.
 | [beta-v2/](./prototypes/beta-v2/) | Web plugin grafting — `composeApp()` grafts MF remote route trees into host mount points | [ui.md](./beta-v2/ui.md) |
 | [beta-v2-override/](./prototypes/beta-v2-override/) | Tenant UI override composition — host composes base + tenant override remotes | [tenants.md](./beta-v2/tenants.md), [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) |
 | [db-auth-absorption/](./prototypes/db-auth-absorption/) | Database absorption — plugin-id plumbing, slug semantics, schema isolation, migration idempotence, R-channel narrowing | [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) |
+| [manifest-compose/](./prototypes/manifest-compose/) | Manifest composition — route files → generated manifests → host-constructed route tree with host-attached gates; SSR streaming, per-route lazy over MF, tenant swap (supersedes grafting; ADR 0007/0008; build plan 033, rework plan 034) | [ADR 0007](../docs/adr/0007-runtime-composition-ssr.md), [ADR 0008](../docs/adr/0008-manifest-composition.md) |
 
 ## wayfinder — decision map for beta-v2
 
