@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Mail, Plus, RefreshCw, Users } from "lucide-react";
+import { Building2, Mail, Plus, RefreshCw, Users, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   type Organization,
   type SessionData,
+  sessionQueryKey,
   sessionQueryOptions,
   useApiClient,
   useAuthClient,
@@ -12,12 +13,10 @@ import {
 import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
+import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
 
-type AuthClientType = import("@/app").AuthClient;
-type UserInvitationsResponse = Awaited<
-  ReturnType<AuthClientType["organization"]["listUserInvitations"]>
->;
-type UserInvitationItem = NonNullable<UserInvitationsResponse["data"]>[number];
+type ApiClientType = import("@/app").ApiClient;
+type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvitations"]>>[number];
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/")({
   head: () => ({
@@ -40,9 +39,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/")
       queryKey: ["user-invitations"],
       queryFn: async (): Promise<UserInvitationItem[]> => {
         try {
-          const { data, error } = await context.authClient.organization.listUserInvitations();
-          if (error) throw new Error(error.message);
-          return (data ?? []) as UserInvitationItem[];
+          return await context.apiClient.auth.listUserInvitations();
         } catch {
           return [];
         }
@@ -72,9 +69,7 @@ function OrganizationsList() {
     queryKey: ["user-invitations"],
     queryFn: async (): Promise<UserInvitationItem[]> => {
       try {
-        const { data, error } = await auth.organization.listUserInvitations();
-        if (error) throw new Error(error.message);
-        return (data ?? []) as UserInvitationItem[];
+        return await apiClient.auth.listUserInvitations();
       } catch {
         return [];
       }
@@ -96,18 +91,25 @@ function OrganizationsList() {
 
   const acceptInvitationMutation = useMutation({
     mutationFn: async (invitation: UserInvitationItem) => {
-      const { error } = await auth.organization.acceptInvitation({
-        invitationId: invitation.id,
+      if (invitation.nearAccountId) {
+        await apiClient.auth.acceptNearInvitation({ invitationId: invitation.id });
+      } else {
+        await apiClient.auth.acceptInvitation({ invitationId: invitation.id });
+      }
+      const { data: session, error } = await auth.getSession({
+        query: { disableCookieCache: true },
       });
       if (error) throw new Error(error.message);
+      queryClient.setQueryData(sessionQueryKey, session ?? null);
       return invitation;
     },
     onSuccess: async (invitation) => {
       toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
+        queryClient.invalidateQueries({ queryKey: sessionQueryKey }),
         queryClient.invalidateQueries({ queryKey: ["user-invitations"] }),
+        queryClient.invalidateQueries({ queryKey: teamWorkspaceQueryKey }),
       ]);
       await queryClient.refetchQueries({ queryKey: ["organizations"] });
       if (invitation.organizationSlug) {
@@ -122,8 +124,12 @@ function OrganizationsList() {
 
   const rejectInvitationMutation = useMutation({
     mutationFn: async (invitationId: string) => {
-      const { error } = await auth.organization.rejectInvitation({ invitationId });
-      if (error) throw new Error(error.message);
+      const invitation = userInvitations.find((item) => item.id === invitationId);
+      if (invitation?.nearAccountId) {
+        await apiClient.auth.rejectNearInvitation({ invitationId });
+      } else {
+        await apiClient.auth.rejectInvitation({ invitationId });
+      }
     },
     onSuccess: async () => {
       toast.success("Invitation declined");
@@ -166,7 +172,11 @@ function OrganizationsList() {
                   <Card key={invitation.id} className="p-6 space-y-4 hover:shadow-md">
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-[10px] border border-border bg-muted flex items-center justify-center shrink-0">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
+                        {invitation.nearAccountId ? (
+                          <Wallet className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <Mail className="h-5 w-5 text-muted-foreground" />
+                        )}
                       </div>
                       <div className="space-y-1 min-w-0 flex-1">
                         <div className="text-base font-semibold text-foreground break-all">
@@ -175,6 +185,14 @@ function OrganizationsList() {
                         <div className="text-sm text-muted-foreground font-mono">
                           invited as {invitation.role ?? "member"}
                         </div>
+                        <div className="text-sm text-muted-foreground break-all">
+                          {invitation.nearAccountId ?? invitation.email}
+                        </div>
+                        {invitation.teamId && (
+                          <div className="text-sm text-muted-foreground font-mono">
+                            team {invitation.teamId}
+                          </div>
+                        )}
                         <div className="text-sm text-muted-foreground">
                           expires {new Date(invitation.expiresAt).toLocaleDateString()}
                         </div>

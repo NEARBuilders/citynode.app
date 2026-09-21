@@ -2,6 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { admin, anonymous, organization, phoneNumber } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
@@ -37,6 +38,7 @@ const orgRoles = {
 import type { AuthConfig } from "./auth-config";
 import type { Database as AuthDatabase } from "./db";
 import * as schema from "./db/schema";
+import { isNearInvitation, nearInvitations } from "./near-invitations";
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -300,7 +302,18 @@ export function createAuthInstance(
             },
           },
         },
+        organizationHooks: {
+          beforeAcceptInvitation: async ({ invitation }) => {
+            if (isNearInvitation(invitation)) {
+              throw new APIError("BAD_REQUEST", {
+                message:
+                  "Wallet invitations are accepted by signing in with the invited NEAR account",
+              });
+            }
+          },
+        },
         async sendInvitationEmail(data) {
+          if (isNearInvitation(data.invitation)) return;
           const inviteLink = `${config.baseUrl}/orgs/invites/${data.id}`;
           await sendEmail(
             {
@@ -313,6 +326,7 @@ export function createAuthInstance(
           );
         },
       }),
+      nearInvitations(db),
       apiKey([
         {
           configId: "user-keys",

@@ -9,6 +9,7 @@ import {
   type Organization,
   type SessionData,
   sessionQueryOptions,
+  useApiClient,
   useAuthClient,
 } from "@/app";
 import {
@@ -45,10 +46,10 @@ import { useOrganizationTeams } from "./-organization-teams";
 import { TeamsTab } from "./-teams-tab";
 
 type AuthClientType = import("@/app").AuthClient;
+type ApiClientType = import("@/app").ApiClient;
 type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
 type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
-type InvitationsResponse = Awaited<ReturnType<AuthClientType["organization"]["listInvitations"]>>;
-type InvitationItem = NonNullable<InvitationsResponse["data"]>[number];
+type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
 
 async function handleCopyApiKey(value: string, message = "API key copied") {
   try {
@@ -84,6 +85,7 @@ function OrganizationDetail() {
   const router = useRouter();
   const { slug: orgSlug } = Route.useParams();
   const auth = useAuthClient();
+  const apiClient = useApiClient();
   const { runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "";
   const baseAccount = getAccount(runtimeConfig);
@@ -116,11 +118,7 @@ function OrganizationDetail() {
     useQuery({
       queryKey: orgInvitationsQueryKey(orgId),
       queryFn: async (): Promise<InvitationItem[]> => {
-        const { data, error } = await auth.organization.listInvitations({
-          query: { organizationId: orgId },
-        });
-        if (error) throw new Error(error.message);
-        return (data ?? []) as InvitationItem[];
+        return apiClient.auth.listInvitations({ organizationId: orgId });
       },
       enabled: !!orgId,
     }).data ?? [];
@@ -153,7 +151,7 @@ function OrganizationDetail() {
       (org?.metadata as { isPersonal?: boolean } | null | undefined)?.isPersonal === true
     : false;
   const { cancelInvitationMutation, inviteMutation, resendInvitationMutation } =
-    useOrganizationInvitationActions(auth, orgId);
+    useOrganizationInvitationActions(apiClient, orgId);
   const { createApiKeyMutation, deleteApiKeyMutation } = useOrganizationApiKeyActions(
     auth,
     orgId,

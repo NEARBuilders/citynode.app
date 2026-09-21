@@ -78,6 +78,12 @@ describe("createHeaders", () => {
     expect(headers.get("x-api-key")).toBe("abc");
   });
 
+  it("preserves headers passed as a native Headers instance", () => {
+    const headers = createHeaders(new Headers({ cookie: "session=abc", origin: "https://app" }));
+    expect(headers.get("cookie")).toBe("session=abc");
+    expect(headers.get("origin")).toBe("https://app");
+  });
+
   it("returns empty Headers for undefined", () => {
     const headers = createHeaders();
     expect(headers).toBeInstanceOf(Headers);

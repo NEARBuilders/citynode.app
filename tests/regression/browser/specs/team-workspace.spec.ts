@@ -19,7 +19,8 @@ async function authFetch(path: string, cookie: string, body?: unknown) {
 async function signInAnonymously() {
   const response = await fetch(`${baseUrl}/api/auth/sign-in/anonymous`, {
     method: "POST",
-    headers: { origin: baseUrl },
+    headers: { "content-type": "application/json", origin: baseUrl },
+    body: JSON.stringify({}),
   });
   if (!response.ok) throw new Error(`anonymous sign-in failed: ${response.status}`);
   return response.headers

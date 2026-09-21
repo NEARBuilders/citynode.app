@@ -24,6 +24,7 @@ export function NearMethod({ nearAccountId }: { nearAccountId: string | null }) 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
     },
     onError: (err: Error) => toast.error(err.message),
   });

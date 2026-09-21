@@ -211,14 +211,14 @@ describe("organization management controls", () => {
 
   it("gates pending invitation actions to owners and admins", () => {
     const admin = renderInvitations({ canManageMembers: true, isPersonal: false });
-    expect(screen.getByPlaceholderText("email@example.com")).toBeTruthy();
+    expect(screen.getByPlaceholderText("email@example.com or alice.near")).toBeTruthy();
     expect(screen.getByRole("button", { name: "send invitation" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "resend" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "cancel" })).toBeTruthy();
     admin.unmount();
 
     renderInvitations({ canManageMembers: false, isPersonal: false });
-    expect(screen.queryByPlaceholderText("email@example.com")).toBeNull();
+    expect(screen.queryByPlaceholderText("email@example.com or alice.near")).toBeNull();
     expect(screen.queryByRole("button", { name: "send invitation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "resend" })).toBeNull();
     expect(screen.queryByRole("button", { name: "cancel" })).toBeNull();

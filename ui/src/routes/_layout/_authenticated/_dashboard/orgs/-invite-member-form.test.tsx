@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InvitationCard } from "./-invitation-card";
-import { InviteMemberForm } from "./-invite-member-form";
+import { detectInviteIdentifier, InviteMemberForm } from "./-invite-member-form";
 
 const teams = [
   { id: "team-fin", name: "Finance" },
@@ -18,6 +18,22 @@ function renderForm() {
 afterEach(cleanup);
 
 describe("InviteMemberForm team targeting", () => {
+  it("detects email, named NEAR, and implicit NEAR identifiers", () => {
+    expect(detectInviteIdentifier("hire@example.com")).toEqual({
+      kind: "email",
+      value: "hire@example.com",
+    });
+    expect(detectInviteIdentifier("Alice.NEAR")).toEqual({
+      kind: "near",
+      value: "alice.near",
+    });
+    expect(detectInviteIdentifier("f".repeat(64))).toEqual({
+      kind: "near",
+      value: "f".repeat(64),
+    });
+    expect(detectInviteIdentifier("not an identifier")).toBeNull();
+  });
+
   it("offers the organization's teams with no team selected by default", () => {
     renderForm();
     const picker = screen.getByTestId("invite-team-select") as HTMLSelectElement;
@@ -60,6 +76,24 @@ describe("InviteMemberForm team targeting", () => {
       }),
     );
     await waitFor(() => expect(input.value).toBe(""));
+  });
+
+  it("sends a wallet invitation and gives wallet-specific feedback", async () => {
+    const { onInvite } = renderForm();
+    const input = screen.getByTestId("invite-identifier-input") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "operator.near" } });
+    expect(screen.getByTestId("invite-identifier-feedback").textContent).toContain(
+      "NEAR invitation",
+    );
+    fireEvent.click(screen.getByTestId("invite-submit-button"));
+
+    await waitFor(() =>
+      expect(onInvite).toHaveBeenCalledWith({
+        nearAccountId: "operator.near",
+        role: "member",
+      }),
+    );
   });
 
   it("keeps the input when sending fails", async () => {

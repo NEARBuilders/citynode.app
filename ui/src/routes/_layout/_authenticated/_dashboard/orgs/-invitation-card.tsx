@@ -1,10 +1,11 @@
-import { Mail, RefreshCw, Trash2, UsersRound } from "lucide-react";
+import { Mail, RefreshCw, Trash2, UsersRound, Wallet } from "lucide-react";
 import { Button, Card, CardContent } from "@/components";
 
 export interface InvitationCardInvitation {
   id: string;
   email: string;
-  role: string;
+  nearAccountId?: string | null;
+  role: string | null;
   status: string;
   expiresAt: string | Date;
   teamId?: string | null;
@@ -31,8 +32,14 @@ export function InvitationCard({
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-              <div className="font-medium text-sm break-all">{invitation.email}</div>
+              {invitation.nearAccountId ? (
+                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <div className="font-medium text-sm break-all">
+                {invitation.nearAccountId ?? invitation.email}
+              </div>
             </div>
             <div className="text-xs text-muted-foreground font-mono">{invitation.role}</div>
             {teamName && (

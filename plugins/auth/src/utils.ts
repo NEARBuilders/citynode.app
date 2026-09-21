@@ -15,8 +15,10 @@ export function tryJsonParse<T>(value: string | null | undefined): T | undefined
   }
 }
 
-export function createHeaders(reqHeaders?: Record<string, string>): Headers {
-  return new Headers(Object.entries(reqHeaders ?? {}) as [string, string][]);
+type HeaderInput = ConstructorParameters<typeof Headers>[0];
+
+export function createHeaders(reqHeaders?: HeaderInput): Headers {
+  return new Headers(reqHeaders);
 }
 
 export const localDevTrustedOrigins = [

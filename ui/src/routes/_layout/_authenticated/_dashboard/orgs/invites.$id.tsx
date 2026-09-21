@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getAppName, useAuthClient } from "@/app";
+import { getAppName, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
 import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
 
@@ -13,16 +13,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/in
   loader: async ({ context, params }) => {
     await context.queryClient.ensureQueryData({
       queryKey: ["invitation", params.id],
-      queryFn: async () => {
-        const { data, error } = await context.authClient.organization.getInvitation({
-          query: { id: params.id },
-        });
-        if (error) {
-          if (error.status === 400 || error.status === 404) return null;
-          throw new Error(error.message || "Failed to load invitation");
-        }
-        return data;
-      },
+      queryFn: () => context.apiClient.auth.getInvitation({ id: params.id }),
       staleTime: 30 * 1000,
       retry: false,
     });
@@ -34,26 +25,28 @@ function AcceptInvitation() {
   const { id } = Route.useParams();
   const router = useRouter();
   const auth = useAuthClient();
+  const apiClient = useApiClient();
   const queryClient = useQueryClient();
 
   const { data: invitation, isLoading } = useQuery({
     queryKey: ["invitation", id],
-    queryFn: async () => {
-      const { data, error } = await auth.organization.getInvitation({ query: { id } });
-      if (error) {
-        if (error.status === 400 || error.status === 404) return null;
-        throw new Error(error.message || "Failed to load invitation");
-      }
-      return data;
-    },
+    queryFn: () => apiClient.auth.getInvitation({ id }),
     staleTime: 30 * 1000,
     retry: false,
   });
 
   const acceptMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await auth.organization.acceptInvitation({ invitationId: id });
+      if (invitation?.nearAccountId) {
+        await apiClient.auth.acceptNearInvitation({ invitationId: id });
+      } else {
+        await apiClient.auth.acceptInvitation({ invitationId: id });
+      }
+      const { data: session, error } = await auth.getSession({
+        query: { disableCookieCache: true },
+      });
       if (error) throw new Error(error.message);
+      queryClient.setQueryData(sessionQueryKey, session ?? null);
     },
     onSuccess: async () => {
       toast.success("Invitation accepted");
@@ -74,8 +67,11 @@ function AcceptInvitation() {
 
   const rejectMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await auth.organization.rejectInvitation({ invitationId: id });
-      if (error) throw new Error(error.message);
+      if (invitation?.nearAccountId) {
+        await apiClient.auth.rejectNearInvitation({ invitationId: id });
+      } else {
+        await apiClient.auth.rejectInvitation({ invitationId: id });
+      }
     },
     onSuccess: async () => {
       toast.success("Invitation declined");
@@ -146,6 +142,20 @@ function AcceptInvitation() {
                 <span className="text-muted-foreground">role</span>
                 <span>{invitation.role ?? "member"}</span>
               </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">
+                  {invitation.nearAccountId ? "NEAR account" : "email"}
+                </span>
+                <span className="text-right break-all">
+                  {invitation.nearAccountId ?? invitation.email}
+                </span>
+              </div>
+              {invitation.teamId && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">team</span>
+                  <span className="text-right break-all">{invitation.teamId}</span>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">expires</span>
                 <span>{new Date(invitation.expiresAt).toLocaleDateString()}</span>

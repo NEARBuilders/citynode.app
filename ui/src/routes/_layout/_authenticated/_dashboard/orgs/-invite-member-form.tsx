@@ -4,9 +4,33 @@ import { Button, Card, Input } from "@/components";
 export type InviteRole = "admin" | "member";
 
 export interface InviteMemberValues {
-  email: string;
+  email?: string;
+  nearAccountId?: string;
   role: InviteRole;
   teamId?: string;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const IMPLICIT_ACCOUNT_PATTERN = /^[0-9a-f]{64}$/i;
+const ETH_IMPLICIT_ACCOUNT_PATTERN = /^0x[0-9a-f]{40}$/i;
+const NAMED_ACCOUNT_PATTERN = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/i;
+
+export function detectInviteIdentifier(
+  value: string,
+): { kind: "email"; value: string } | { kind: "near"; value: string } | null {
+  const trimmed = value.trim();
+  if (EMAIL_PATTERN.test(trimmed)) return { kind: "email", value: trimmed };
+
+  const normalized = trimmed.toLowerCase();
+  if (
+    IMPLICIT_ACCOUNT_PATTERN.test(normalized) ||
+    ETH_IMPLICIT_ACCOUNT_PATTERN.test(normalized) ||
+    (normalized.length >= 2 && normalized.length <= 64 && NAMED_ACCOUNT_PATTERN.test(normalized))
+  ) {
+    return { kind: "near", value: normalized };
+  }
+
+  return null;
 }
 
 const selectClassName =
@@ -24,7 +48,7 @@ export function InviteMemberForm({
   const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<InviteRole>("member");
   const [teamId, setTeamId] = useState("");
-  const email = identifier.trim();
+  const detectedIdentifier = detectInviteIdentifier(identifier);
 
   return (
     <Card className="p-6 space-y-4 hover:shadow-md">
@@ -35,9 +59,15 @@ export function InviteMemberForm({
         className="space-y-4"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!email) return;
+          if (!detectedIdentifier) return;
           try {
-            await onInvite({ email, role, ...(teamId ? { teamId } : {}) });
+            await onInvite({
+              ...(detectedIdentifier.kind === "email"
+                ? { email: detectedIdentifier.value }
+                : { nearAccountId: detectedIdentifier.value }),
+              role,
+              ...(teamId ? { teamId } : {}),
+            });
             setIdentifier("");
             setTeamId("");
           } catch {}
@@ -45,11 +75,11 @@ export function InviteMemberForm({
       >
         <div className="grid gap-4 md:grid-cols-[1fr_160px_200px]">
           <Input
-            type="email"
+            type="text"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
-            placeholder="email@example.com"
-            aria-label="Email"
+            placeholder="email@example.com or alice.near"
+            aria-label="Email or NEAR account"
             data-testid="invite-identifier-input"
           />
           <select
@@ -77,9 +107,22 @@ export function InviteMemberForm({
             ))}
           </select>
         </div>
+        <div
+          className="text-xs text-muted-foreground"
+          aria-live="polite"
+          data-testid="invite-identifier-feedback"
+        >
+          {detectedIdentifier?.kind === "email"
+            ? "Email invitation: a message will be sent to this address."
+            : detectedIdentifier?.kind === "near"
+              ? `NEAR invitation: ${detectedIdentifier.value} will claim this invitation with its wallet.`
+              : identifier.trim()
+                ? "Enter a valid email address or NEAR account ID."
+                : "Invite by email or NEAR account ID."}
+        </div>
         <Button
           type="submit"
-          disabled={isPending || !email}
+          disabled={isPending || !detectedIdentifier}
           variant="outline"
           data-testid="invite-submit-button"
         >
