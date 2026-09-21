@@ -26,6 +26,10 @@ vi.mock("./use-identity", () => ({
   useIdentity: () => identity,
 }));
 
+vi.mock("./use-switch-team", () => ({
+  useSwitchTeam: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 vi.mock("./theme-toggle", () => ({
   ThemeToggle: () => <button type="button" aria-label="Switch theme" />,
 }));
@@ -103,6 +107,23 @@ describe("app shell chrome", () => {
       </SidebarProvider>,
     );
     expect(screen.getByTestId("account-menu")).toBeTruthy();
+  });
+
+  it("shows which team the user is operating as", () => {
+    render(
+      <SidebarProvider>
+        <AppHeader activeTeamName="Finance" />
+      </SidebarProvider>,
+    );
+    expect(screen.getByTestId("workspace-active-team").textContent).toContain("Finance");
+    cleanup();
+
+    render(
+      <SidebarProvider>
+        <AppHeader />
+      </SidebarProvider>,
+    );
+    expect(screen.queryByTestId("workspace-active-team")).toBeNull();
   });
 
   it("does not place the account menu in the sidebar footer", () => {
