@@ -16,13 +16,6 @@ interface Migration {
   sql: string[];
 }
 
-type Runner = (
-  db: unknown,
-  migrations: Migration[],
-  storage?: unknown,
-  schemaName?: string,
-) => Effect.Effect<number, unknown>;
-
 function migration(idx: number, tag: string, statements: string[]): Migration {
   return {
     idx,
