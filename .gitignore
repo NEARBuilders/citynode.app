@@ -333,6 +333,8 @@ node_modules/.federation
 !.changeset/**/*.md
 !docs/agents/**/*.md
 !docs/adr/**/*.md
+!plans/**/*.md
+!advisor-plans/**/*.md
 # Internal planning documents and domain glossaries stay local.
 /CONTEXT.md
 /CONTEXT-MAP.md
