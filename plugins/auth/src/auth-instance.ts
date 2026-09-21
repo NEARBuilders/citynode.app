@@ -301,7 +301,7 @@ export function createAuthInstance(
           },
         },
         async sendInvitationEmail(data) {
-          const inviteLink = `${config.baseUrl}/accept-invitation/${data.id}`;
+          const inviteLink = `${config.baseUrl}/orgs/invites/${data.id}`;
           await sendEmail(
             {
               to: data.email,

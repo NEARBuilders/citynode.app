@@ -142,8 +142,6 @@ function OrganizationDetail() {
   const pendingInvitationsCount = invitations.filter(
     (invitation) => invitation.status === "pending",
   ).length;
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
 
@@ -155,9 +153,7 @@ function OrganizationDetail() {
       (org?.metadata as { isPersonal?: boolean } | null | undefined)?.isPersonal === true
     : false;
   const { cancelInvitationMutation, inviteMutation, resendInvitationMutation } =
-    useOrganizationInvitationActions(auth, orgId, inviteEmail, inviteRole, () =>
-      setInviteEmail(""),
-    );
+    useOrganizationInvitationActions(auth, orgId);
   const { createApiKeyMutation, deleteApiKeyMutation } = useOrganizationApiKeyActions(
     auth,
     orgId,
@@ -303,18 +299,15 @@ function OrganizationDetail() {
           />
           <InvitationsTab
             canManageMembers={canManageMembers}
-            inviteEmail={inviteEmail}
             invitePending={inviteMutation.isPending}
-            inviteRole={inviteRole}
             invitations={invitations}
             isPersonal={isPersonal}
             isCancelling={cancelInvitationMutation.isPending}
             isResending={resendInvitationMutation.isPending}
             onCancel={(invitationId) => cancelInvitationMutation.mutate(invitationId)}
-            onEmailChange={setInviteEmail}
-            onInvite={() => inviteMutation.mutate()}
+            onInvite={(values) => inviteMutation.mutateAsync(values)}
             onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
-            onRoleChange={setInviteRole}
+            teams={teamsState.teams}
           />
           <ApiKeysTab
             apiKeys={apiKeys}

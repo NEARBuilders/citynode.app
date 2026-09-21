@@ -2,30 +2,25 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { AuthClient } from "@/app";
 import type { InvitationCardInvitation } from "./-invitation-card";
+import type { InviteMemberValues } from "./-invite-member-form";
 import { orgInvitationsQueryKey } from "./-organization-query-keys";
 
-export function useOrganizationInvitationActions(
-  auth: AuthClient,
-  orgId: string,
-  inviteEmail: string,
-  inviteRole: "admin" | "member",
-  onInvited: () => void,
-) {
+export function useOrganizationInvitationActions(auth: AuthClient, orgId: string) {
   const queryClient = useQueryClient();
   const invalidateInvitations = () =>
     queryClient.invalidateQueries({ queryKey: orgInvitationsQueryKey(orgId) });
   const inviteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: InviteMemberValues) => {
       const { error } = await auth.organization.inviteMember({
         organizationId: orgId,
-        email: inviteEmail,
-        role: inviteRole,
+        email: values.email,
+        role: values.role,
+        ...(values.teamId ? { teamId: values.teamId } : {}),
       });
       if (error) throw new Error(error.message);
     },
-    onSuccess: async () => {
-      toast.success(`Invitation sent to ${inviteEmail}`);
-      onInvited();
+    onSuccess: async (_, values) => {
+      toast.success(`Invitation sent to ${values.email}`);
       await invalidateInvitations();
     },
     onError: (error: Error) => toast.error(error.message || "Failed to send invitation"),
@@ -47,6 +42,7 @@ export function useOrganizationInvitationActions(
         organizationId: orgId,
         email: invitation.email,
         role: invitation.role as "admin" | "member" | "owner",
+        ...(invitation.teamId ? { teamId: invitation.teamId } : {}),
         resend: true,
       });
       if (error) throw new Error(error.message);

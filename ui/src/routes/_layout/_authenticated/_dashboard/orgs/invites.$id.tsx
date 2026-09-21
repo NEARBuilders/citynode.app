@@ -4,6 +4,7 @@ import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getAppName, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
+import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/orgs/invites/$id")({
   head: () => ({
@@ -60,6 +61,7 @@ function AcceptInvitation() {
         queryClient.invalidateQueries({ queryKey: ["organizations"] }),
         queryClient.invalidateQueries({ queryKey: ["session"] }),
         queryClient.invalidateQueries({ queryKey: ["user-invitations"] }),
+        queryClient.invalidateQueries({ queryKey: teamWorkspaceQueryKey }),
       ]);
       await queryClient.refetchQueries({ queryKey: ["organizations"] });
       await router.navigate({

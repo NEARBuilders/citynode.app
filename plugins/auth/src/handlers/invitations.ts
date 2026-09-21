@@ -2,6 +2,20 @@ import { Context } from "effect";
 import { AuthServicesTag } from "../service-types";
 import { createHeaders, safeAuthApi } from "../utils";
 
+function toInvitation(invitation: any) {
+  return {
+    id: invitation.id,
+    organizationId: invitation.organizationId,
+    email: invitation.email,
+    role: invitation.role,
+    status: invitation.status,
+    expiresAt:
+      invitation.expiresAt instanceof Date ? invitation.expiresAt : new Date(invitation.expiresAt),
+    inviterId: invitation.inviterId,
+    teamId: invitation.teamId ?? null,
+  };
+}
+
 export function createInvitationHandlers(builder: any, requireAuth: any) {
   return {
     inviteMember: builder.inviteMember
@@ -16,19 +30,11 @@ export function createInvitationHandlers(builder: any, requireAuth: any) {
               role: input.role,
               organizationId: input.organizationId,
               resend: input.resend,
+              ...(input.teamId ? { teamId: input.teamId } : {}),
             },
           }),
         );
-        return {
-          id: result.id,
-          organizationId: result.organizationId,
-          email: result.email,
-          role: result.role,
-          status: result.status,
-          expiresAt:
-            result.expiresAt instanceof Date ? result.expiresAt : new Date(result.expiresAt),
-          inviterId: result.inviterId,
-        };
+        return toInvitation(result);
       }),
 
     getInvitation: builder.getInvitation.handler(
@@ -73,15 +79,7 @@ export function createInvitationHandlers(builder: any, requireAuth: any) {
             },
           }),
         );
-        return (result ?? []).map((inv: any) => ({
-          id: inv.id,
-          organizationId: inv.organizationId,
-          email: inv.email,
-          role: inv.role,
-          status: inv.status,
-          expiresAt: inv.expiresAt instanceof Date ? inv.expiresAt : new Date(inv.expiresAt),
-          inviterId: inv.inviterId,
-        }));
+        return (result ?? []).map(toInvitation);
       }),
 
     listUserInvitations: builder.listUserInvitations
@@ -93,15 +91,7 @@ export function createInvitationHandlers(builder: any, requireAuth: any) {
             headers: createHeaders(context.reqHeaders),
           }),
         );
-        return (result ?? []).map((inv: any) => ({
-          id: inv.id,
-          organizationId: inv.organizationId,
-          email: inv.email,
-          role: inv.role,
-          status: inv.status,
-          expiresAt: inv.expiresAt instanceof Date ? inv.expiresAt : new Date(inv.expiresAt),
-          inviterId: inv.inviterId,
-        }));
+        return (result ?? []).map(toInvitation);
       }),
 
     cancelInvitation: builder.cancelInvitation

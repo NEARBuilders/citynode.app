@@ -1,4 +1,4 @@
-import { Mail, RefreshCw, Trash2 } from "lucide-react";
+import { Mail, RefreshCw, Trash2, UsersRound } from "lucide-react";
 import { Button, Card, CardContent } from "@/components";
 
 export interface InvitationCardInvitation {
@@ -7,6 +7,7 @@ export interface InvitationCardInvitation {
   role: string;
   status: string;
   expiresAt: string | Date;
+  teamId?: string | null;
 }
 
 export function InvitationCard({
@@ -15,8 +16,10 @@ export function InvitationCard({
   isResending,
   onCancel,
   onResend,
+  teamName,
 }: {
   invitation: InvitationCardInvitation;
+  teamName?: string;
   onResend?: () => void;
   onCancel?: () => void;
   isResending?: boolean;
@@ -32,6 +35,15 @@ export function InvitationCard({
               <div className="font-medium text-sm break-all">{invitation.email}</div>
             </div>
             <div className="text-xs text-muted-foreground font-mono">{invitation.role}</div>
+            {teamName && (
+              <div
+                className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                data-testid={`invitation-team-${invitation.id}`}
+              >
+                <UsersRound className="h-3 w-3" />
+                team {teamName}
+              </div>
+            )}
           </div>
           <div className="flex gap-1 shrink-0">
             {onResend && (

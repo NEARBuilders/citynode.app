@@ -191,6 +191,7 @@ const invitationSchema = z.object({
   status: z.string(),
   expiresAt: z.date(),
   inviterId: z.string(),
+  teamId: z.string().nullable(),
 });
 
 const teamSchema = z.object({
@@ -520,6 +521,7 @@ export const contract = oc.router({
         email: z.string(),
         role: z.enum(["owner", "admin", "member"]),
         organizationId: z.string().optional(),
+        teamId: z.string().optional(),
         resend: z.boolean().optional(),
       }),
     )

@@ -106,18 +106,15 @@ function renderInvitations({
     <Tabs defaultValue="invitations">
       <InvitationsTab
         canManageMembers={canManageMembers}
-        inviteEmail=""
         invitePending={false}
-        inviteRole="member"
         invitations={[invitation]}
         isPersonal={isPersonal}
         isCancelling={false}
         isResending={false}
         onCancel={vi.fn()}
-        onEmailChange={vi.fn()}
         onInvite={vi.fn()}
         onResend={vi.fn()}
-        onRoleChange={vi.fn()}
+        teams={[]}
       />
     </Tabs>,
   );
