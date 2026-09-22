@@ -74,7 +74,7 @@ export function createSessionMiddleware(plugins: PluginResult) {
 export function buildPluginContext(c: Context<HonoEnv>): AuthPluginContext {
   const authContext = c.get("authContext");
   return {
-    ...(authContext ?? {}),
+    ...authContext,
     reqHeaders: c.get("reqHeaders"),
     getRawBody: c.get("getRawBody"),
   };

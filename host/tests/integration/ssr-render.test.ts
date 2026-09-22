@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeConfig } from "../../src/services/config";
 import type { PluginResult } from "../../src/services/plugins";
@@ -15,9 +16,8 @@ const mocks = vi.hoisted(() => ({
       this.status = status;
     }
   },
-  loadRouterModule: vi.fn(),
-  composePluginTrees: vi.fn(),
-  hasComposablePluginUi: vi.fn(),
+  composeUi: vi.fn(),
+  isSsrAvailable: vi.fn(),
   renderClientShell: vi.fn(() => new Response("shell", { status: 200 })),
   createPluginsClient: vi.fn(() => ({})),
 }));
@@ -28,14 +28,14 @@ vi.mock("../../src/services/tenant-runtime", () => ({
   TenantRuntimeError: mocks.TenantRuntimeError,
 }));
 
-vi.mock("../../src/services/federation.server", () => ({
-  loadRouterModule: mocks.loadRouterModule,
-}));
-
-vi.mock("../../src/services/ui-compose", () => ({
-  composePluginTrees: mocks.composePluginTrees,
-  hasComposablePluginUi: mocks.hasComposablePluginUi,
-}));
+vi.mock("../../src/services/ui-compose", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/services/ui-compose")>();
+  return {
+    ...actual,
+    composeUi: mocks.composeUi,
+    isSsrAvailable: mocks.isSsrAvailable,
+  };
+});
 
 vi.mock("../../src/routes/html", () => ({
   renderClientShell: mocks.renderClientShell,
@@ -45,7 +45,7 @@ vi.mock("../../src/services/plugins", () => ({
   createPluginsClient: mocks.createPluginsClient,
 }));
 
-const { createSsrRender, isUiCompositionReady } = await import("../../src/services/ssr-render");
+const { createSsrRender, isSsrAvailable } = await import("../../src/services/ssr-render");
 
 function createConfig(): RuntimeConfig {
   return {
@@ -92,17 +92,38 @@ const renderContext = () => ({
   cspHeader: "default-src 'self'",
 });
 
+const composedVariant = () => ({
+  routerModule: {
+    renderToStream: vi.fn(() => ({
+      stream: "stream",
+      statusCode: 200,
+      headers: { "x-render": "1" },
+    })),
+  },
+  routeTree: { id: "composed-tree" },
+  digest: "digest-1",
+  nav: { items: [] },
+  clientPayload: {
+    digest: "digest-1",
+    remotes: [
+      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+    ],
+    manifests: [],
+  },
+});
+
 describe("createSsrRender", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.BOS_UI_COMPOSE;
     mocks.renderClientShell.mockImplementation(() => new Response("shell", { status: 200 }));
+    mocks.isSsrAvailable.mockReturnValue(true);
     mocks.resolveRequestRuntime.mockResolvedValue({
       config: createConfig(),
       tenantAccountId: null,
       gatewayId: "linktree.com",
       ssrAllowed: true,
     });
+    mocks.composeUi.mockImplementation(() => Effect.succeed(composedVariant()));
   });
 
   it("turns tenant runtime errors into status responses through the interface", async () => {
@@ -121,63 +142,57 @@ describe("createSsrRender", () => {
   });
 
   it("falls back to the client shell when the tenant stripped its own SSR", async () => {
-    const strippedConfig = createConfig();
-    (strippedConfig.ui as { ssrUrl?: string }).ssrUrl = undefined;
-    mocks.resolveRequestRuntime.mockResolvedValue({
-      config: strippedConfig,
-      tenantAccountId: "tenant.near",
-      gatewayId: "linktree.com",
-      ssrAllowed: false,
-    });
+    mocks.isSsrAvailable.mockReturnValue(false);
 
     const render = createSsrRender({ config: createConfig(), plugins });
     const response = await render(request(), renderContext());
 
-    expect(mocks.loadRouterModule).not.toHaveBeenCalled();
+    expect(mocks.composeUi).not.toHaveBeenCalled();
     expect(mocks.renderClientShell).toHaveBeenCalledTimes(1);
     expect(response.status).toBe(200);
   });
 
-  it("renders to a stream and applies the CSP header once", async () => {
-    const { Effect } = await import("effect");
-    const req = request();
-    const ssrModule = {
-      renderToStream: vi.fn(() => ({
-        stream: "stream",
-        statusCode: 200,
-        headers: { "x-render": "1" },
-      })),
-      routeTree: {},
-    };
-    mocks.loadRouterModule.mockReturnValue(Effect.succeed(ssrModule));
-    mocks.composePluginTrees.mockImplementation(() =>
-      Effect.succeed({
-        composed: { routeTree: {}, nav: { items: [] } },
-        warnings: [],
-      }),
-    );
+  it("renders the composed tree to a stream and applies the CSP header once", async () => {
+    const variant = composedVariant();
+    mocks.composeUi.mockImplementation(() => Effect.succeed(variant));
 
+    const req = request();
     const render = createSsrRender({ config: createConfig(), plugins });
     const response = await render(req, renderContext());
 
-    expect(mocks.loadRouterModule).toHaveBeenCalledWith(
+    expect(mocks.composeUi).toHaveBeenCalledWith(
       expect.objectContaining({ ui: expect.anything() }),
     );
-    expect(mocks.composePluginTrees).toHaveBeenCalledTimes(0);
     expect(response.headers.get("x-render")).toBe("1");
     expect(response.headers.get("Content-Security-Policy")).toBe("default-src 'self'");
-    expect(ssrModule.renderToStream).toHaveBeenCalledWith(
+    expect(variant.routerModule.renderToStream).toHaveBeenCalledWith(
       req,
       expect.objectContaining({
         session: { session: { userId: "u1" }, user: { id: "u1" } },
         cspNonce: "nonce-1",
+        routeTree: { id: "composed-tree" },
+        pluginNav: { items: [] },
       }),
     );
   });
 
-  it("falls back to the shell with the load error when the router module fails", async () => {
-    const { Effect } = await import("effect");
-    mocks.loadRouterModule.mockReturnValue(Effect.fail(new Error("remote down")));
+  it("fails LOUD with a 500 when composition fails — never a silent wrong-tree render", async () => {
+    mocks.composeUi.mockImplementation(() => Effect.fail(new Error("compose down")));
+
+    const render = createSsrRender({ config: createConfig(), plugins });
+    const response = await render(request(), renderContext());
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("SSR composition failed");
+    expect(mocks.renderClientShell).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the shell when streaming itself fails", async () => {
+    const variant = composedVariant();
+    variant.routerModule.renderToStream = vi.fn(() => {
+      throw new Error("stream blew up");
+    });
+    mocks.composeUi.mockImplementation(() => Effect.succeed(variant));
 
     const render = createSsrRender({ config: createConfig(), plugins });
     await render(request(), renderContext());
@@ -186,30 +201,40 @@ describe("createSsrRender", () => {
       "nonce-1",
       expect.anything(),
       expect.anything(),
-      expect.objectContaining({ message: "remote down" }),
+      expect.objectContaining({ message: "stream blew up" }),
       "default-src 'self'",
+      expect.any(String),
     );
   });
 });
 
-describe("isUiCompositionReady", () => {
-  it("requires both the env flag and a composable plugin set", () => {
-    mocks.hasComposablePluginUi.mockReturnValue(false);
-    expect(isUiCompositionReady(createConfig())).toBe(false);
+describe("isSsrAvailable", () => {
+  it("requires a production SSR entry, or a local core ui with --ssr requested", async () => {
+    const actual = await vi.importActual<typeof import("../../src/services/ui-compose")>(
+      "../../src/services/ui-compose",
+    );
+    const real = actual.isSsrAvailable;
+    const wasSsr = process.env.BOS_SSR;
+    try {
+      const remoteOnly = createConfig();
+      (remoteOnly.ui as { ssrUrl?: string }).ssrUrl = undefined;
+      expect(real(remoteOnly)).toBe(false);
 
-    mocks.hasComposablePluginUi.mockReturnValue(true);
-    const { BOS_UI_COMPOSE: composed, ...env } = process.env;
-    delete process.env.BOS_UI_COMPOSE;
-    expect(isUiCompositionReady(createConfig())).toBe(false);
+      const withSsr = createConfig();
+      expect(real(withSsr)).toBe(true);
 
-    process.env.BOS_UI_COMPOSE = "1";
-    expect(isUiCompositionReady(createConfig())).toBe(true);
+      const localCore = createConfig();
+      (localCore.ui as { ssrUrl?: string; source?: string }).ssrUrl = undefined;
+      (localCore.ui as { source?: string }).source = "local";
+      delete process.env.BOS_SSR;
+      expect(real(localCore)).toBe(false);
 
-    if (composed === undefined) {
-      delete process.env.BOS_UI_COMPOSE;
-    } else {
-      process.env.BOS_UI_COMPOSE = composed;
+      process.env.BOS_SSR = "1";
+      expect(real(localCore)).toBe(true);
+    } finally {
+      if (wasSsr === undefined) delete process.env.BOS_SSR;
+      else process.env.BOS_SSR = wasSsr;
     }
-    void env;
+    void isSsrAvailable;
   });
 });

@@ -3,6 +3,7 @@ import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
 import { classifyPluginFailure } from "every-plugin/errors";
+import { withRemoteEntryResilience } from "every-plugin/remote-entry";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -295,21 +296,40 @@ function unredactSecrets(
 function buildAuthBaseVariables(
   config: RuntimeConfig,
   corsOrigins: string[],
-): Record<string, unknown> {
-  const rawHostUrl =
-    config.env === "development"
-      ? (config.host?.url ?? `http://localhost:${config.host?.port ?? 3000}`)
-      : config.domain;
-  const hostUrl = toProtocolUrl(rawHostUrl, config.env);
-  const base: Record<string, unknown> = {
-    account: config.account,
-    domain: hostUrl,
-    hostUrl,
-  };
-  if (corsOrigins.length > 0) {
-    base.trustedOrigins = corsOrigins;
-  }
-  return base;
+): Effect.Effect<Record<string, unknown>> {
+  return Effect.gen(function* () {
+    const rawHostUrl =
+      config.env === "development"
+        ? (config.host?.url ?? `http://localhost:${config.host?.port ?? 3000}`)
+        : config.domain;
+    const hostUrl = toProtocolUrl(rawHostUrl, config.env);
+    const base: Record<string, unknown> = {
+      account: config.account,
+      domain: hostUrl,
+      hostUrl,
+    };
+    if (corsOrigins.length > 0) {
+      base.trustedOrigins = corsOrigins;
+    }
+
+    yield* Effect.logInfo(
+      `[Auth] Better Auth origin: ${hostUrl}${corsOrigins.length > 0 ? ` · trustedOrigins: ${corsOrigins.join(", ")}` : " · trustedOrigins: (none — only baseURL trusted)"}`,
+    );
+
+    if (hostUrl) {
+      const hostOrigin = new URL(hostUrl).origin;
+      if (
+        corsOrigins.length > 0 &&
+        !corsOrigins.some((origin) => new URL(origin).origin === hostOrigin)
+      ) {
+        yield* Effect.logWarning(
+          `[Auth] CORS_ORIGIN (${corsOrigins.join(", ")}) does not include the host origin ${hostOrigin}. Sign-in may fail after login redirects — fix CORS_ORIGIN in .env or let bos dev regenerate it.`,
+        );
+      }
+    }
+
+    return base;
+  });
 }
 
 function logBootstrapError(err: PluginBootstrapError): Effect.Effect<void> {
@@ -368,9 +388,14 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
+    const remoteUrl = `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
     const result = yield* Effect.tryPromise({
       try: (): Promise<Omit<HostPluginEntry, "key" | "name">> =>
-        runtime.usePlugin(entry.runtimeId, ...args),
+        withRemoteEntryResilience({
+          label: entry.key,
+          remoteUrl,
+          load: () => runtime.usePlugin(entry.runtimeId, ...args),
+        }),
       catch: (error) => {
         if (dbSecret !== null && secretKey) {
           const url = Redacted.value(dbSecret);
@@ -431,9 +456,17 @@ export const initializePlugins = Effect.gen(function* () {
     entryMap.set("api", { key: "api", runtimeId: config.api.name, config: config.api });
   }
   for (const [key, plugin] of Object.entries(config.plugins ?? {})) {
-    if (plugin.url) {
-      entryMap.set(key, { key, runtimeId: plugin.name, config: plugin });
+    if (!plugin.url) continue;
+    if (
+      key === "auth" &&
+      config.auth &&
+      (plugin === config.auth ||
+        (plugin.localPath && plugin.localPath === config.auth.localPath) ||
+        (!plugin.localPath && plugin.source === "remote" && plugin.url === config.auth.url))
+    ) {
+      continue;
     }
+    entryMap.set(key, { key, runtimeId: plugin.name, config: plugin });
   }
 
   const loadableEntries = [...dag.sorted].filter((k) => entryMap.has(k));
@@ -537,7 +570,7 @@ export const initializePlugins = Effect.gen(function* () {
 
     let baseVariables: Record<string, unknown> | undefined;
     if (node.kind === "auth") {
-      baseVariables = buildAuthBaseVariables(config, corsOrigins);
+      baseVariables = yield* buildAuthBaseVariables(config, corsOrigins);
     }
 
     yield* Effect.logInfo(`[Plugins] Loading ${key} (${entry.config.name})`);

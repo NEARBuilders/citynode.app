@@ -1,14 +1,65 @@
-import { Effect } from "effect";
-import { ClientRuntimeConfigSchema } from "everything-dev";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Effect, Exit } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRuntimeClientConfig,
   type RuntimeConfig,
   resolveActiveRuntime,
 } from "../../src/services/config";
-import { pluginsWithUi, uiComposeDigest } from "../../src/services/ui-compose";
 
-const { composePluginTrees, resetUiComposeCache } = await import("../../src/services/ui-compose");
+const federationMocks = vi.hoisted(() => ({
+  loadUiComposeModule: vi.fn(),
+  loadCoreUiRouteConfig: vi.fn(),
+  loadUiRouteConfig: vi.fn(),
+  loadRouterModule: vi.fn(),
+}));
+
+vi.mock("../../src/services/federation.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/services/federation.server")>();
+  return {
+    ...actual,
+    loadUiComposeModule: (...args: unknown[]) => federationMocks.loadUiComposeModule(...args),
+    loadCoreUiRouteConfig: (...args: unknown[]) => federationMocks.loadCoreUiRouteConfig(...args),
+    loadUiRouteConfig: (...args: unknown[]) => federationMocks.loadUiRouteConfig(...args),
+    loadRouterModule: (...args: unknown[]) => federationMocks.loadRouterModule(...args),
+  };
+});
+
+const { composeUi, resetUiComposeCache, resetRemoteManifestCache, uiSources } = await import(
+  "../../src/services/ui-compose"
+);
+
+const CORE_MANIFEST = {
+  name: "ui",
+  manifestVersion: 1,
+  routes: [
+    { id: "_public", isLayout: true, mount: "public", file: "_public.tsx" },
+    {
+      id: "_public/login-target",
+      path: "/welcome",
+      parentId: "_public",
+      file: "_public/welcome.tsx",
+    },
+    { id: "_authenticated", isLayout: true, mount: "authenticated", file: "_authenticated.tsx" },
+  ],
+};
+
+const AUTH_MANIFEST = {
+  name: "auth",
+  manifestVersion: 1,
+  routes: [
+    { id: "_public/login", path: "/login", file: "_public/login.tsx" },
+    {
+      id: "_authenticated/settings",
+      path: "/settings",
+      parentId: "_authenticated",
+      file: "_authenticated/settings.tsx",
+    },
+  ],
+};
+
+const ROUTER_MODULE = { createRouter: vi.fn(), renderToStream: vi.fn(), getRouteHead: vi.fn() };
+const CORE_ROUTE_CONFIG = { routeConfigLoaders: {}, rootMeta: { head: () => ({ meta: [] }) } };
+const AUTH_ROUTE_CONFIG = { routeConfigLoaders: {} };
 
 function createBaseRuntimeConfig(): RuntimeConfig {
   return {
@@ -36,293 +87,226 @@ function createBaseRuntimeConfig(): RuntimeConfig {
   } as RuntimeConfig;
 }
 
-describe("pluginsWithUi", () => {
-  it("returns only plugins that declare ui ssr targets", () => {
-    const config = createBaseRuntimeConfig();
-    config.plugins = {
-      headless: {
-        name: "headless",
-        url: "https://cdn.example.com/headless",
-        entry: "https://cdn.example.com/headless/mf-manifest.json",
+function configWithPlugin(): RuntimeConfig {
+  const config = createBaseRuntimeConfig();
+  config.plugins = {
+    auth: {
+      name: "auth",
+      url: "https://cdn.example.com/auth",
+      entry: "https://cdn.example.com/auth/mf-manifest.json",
+      source: "remote",
+      ui: {
+        name: "auth-ui",
+        url: "https://cdn.example.com/auth-ui",
+        entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
         source: "remote",
-      } as never,
-      auth: {
-        name: "auth",
-        url: "https://cdn.example.com/auth",
-        entry: "https://cdn.example.com/auth/mf-manifest.json",
-        source: "remote",
-        ui: {
-          name: "auth-ui",
-          url: "https://cdn.example.com/auth-ui",
-          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
-          source: "remote",
-          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-          ssrIntegrity: "sha384-auth-ui-ssr",
-        } as never,
-      } as never,
+        ssrUrl: "https://cdn.example.com/auth-ui-ssr",
+        ssrIntegrity: "sha384-a",
+      },
+    } as never,
+  };
+  return config;
+}
+
+const construct = vi.fn(
+  async (input: {
+    plugins: Array<{ key: string; mfName?: string }>;
+    resolve: (ref: { key: string }) => Promise<{ manifest: unknown }>;
+    rootOptions?: unknown;
+  }) => {
+    const resolved = [];
+    for (const ref of input.plugins) resolved.push(await input.resolve(ref));
+    const { digestOf } = await import("everything-dev/ui/manifest");
+    return {
+      rootRoute: { id: "composed-tree" },
+      routeTree: { id: "composed-tree" },
+      nav: { items: [] },
+      manifests: [],
+      digest: await digestOf({
+        plugins: input.plugins.map((p) => ({ key: p.key, mfName: p.mfName ?? p.key })),
+        manifests: resolved.map((r) => r.manifest),
+      }),
     };
+  },
+);
 
-    const result = pluginsWithUi(config);
-    expect(result.map((r) => r.id)).toEqual(["auth"]);
-    expect(result[0]?.entry).toEqual({
-      name: "auth-ui",
-      ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-      ssrIntegrity: "sha384-auth-ui-ssr",
-    });
-  });
+const realFetch = globalThis.fetch.bind(globalThis);
+const cdnAwareFetch = async (url: unknown) => {
+  const target = String(url);
+  if (target.startsWith("https://cdn.example.com/base-ui/")) {
+    return { ok: true, status: 200, json: async () => CORE_MANIFEST };
+  }
+  if (target.startsWith("https://cdn.example.com/auth-ui/")) {
+    return { ok: true, status: 200, json: async () => AUTH_MANIFEST };
+  }
+  if (target.startsWith("http://127.0.0.1:") || target.startsWith("http://localhost:")) {
+    return realFetch(url as Parameters<typeof realFetch>[0]);
+  }
+  return { ok: false, status: 404, json: async () => ({}) };
+};
 
-  it("is empty with no plugins", () => {
-    expect(pluginsWithUi(createBaseRuntimeConfig())).toEqual([]);
-  });
+const fetchMock = vi.fn(cdnAwareFetch);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetUiComposeCache();
+  fetchMock.mockImplementation(cdnAwareFetch);
+  vi.stubGlobal("fetch", fetchMock);
+  federationMocks.loadUiComposeModule.mockImplementation(() =>
+    Effect.succeed({ constructTree: construct }),
+  );
+  federationMocks.loadCoreUiRouteConfig.mockImplementation(() => Effect.succeed(CORE_ROUTE_CONFIG));
+  federationMocks.loadUiRouteConfig.mockImplementation(() => Effect.succeed(AUTH_ROUTE_CONFIG));
+  federationMocks.loadRouterModule.mockImplementation(() => Effect.succeed(ROUTER_MODULE));
 });
 
-describe("uiComposeDigest", () => {
-  it("is stable for identical configs", () => {
-    expect(uiComposeDigest(createBaseRuntimeConfig())).toBe(
-      uiComposeDigest(createBaseRuntimeConfig()),
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("uiSources", () => {
+  it("resolves core plus plugin ui sources, sorted by key, with mfNames from config", () => {
+    const sources = uiSources(configWithPlugin());
+    expect(sources.map((source) => source.key)).toEqual(["auth", "ui"]);
+    expect(sources.map((source) => source.mfName)).toEqual(["auth-ui", "ui"]);
+    expect(sources.find((source) => source.key === "auth")?.webEntry).toBe(
+      "https://cdn.example.com/auth-ui/remoteEntry.js",
+    );
+    expect(sources.find((source) => source.key === "ui")?.manifestUrl).toBe(
+      "https://cdn.example.com/base-ui/manifest.gen.json",
     );
   });
 
-  it("changes when any remote ui is added", () => {
-    const config = createBaseRuntimeConfig();
-    const before = uiComposeDigest(config);
+  it("is empty of plugins when none declare ui", () => {
+    expect(uiSources(createBaseRuntimeConfig()).map((source) => source.key)).toEqual(["ui"]);
+  });
+});
 
-    config.plugins = {
-      auth: {
-        name: "auth",
-        url: "https://cdn.example.com/auth",
-        entry: "https://cdn.example.com/auth/mf-manifest.json",
-        source: "remote",
-        ui: {
-          name: "auth-ui",
-          url: "https://cdn.example.com/auth-ui",
-          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
-          source: "remote",
-          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-          ssrIntegrity: "sha384-a",
-        } as never,
-      } as never,
+describe("composeUi", () => {
+  it("composes core + plugin manifests through the core engine, digest-cached", async () => {
+    const config = configWithPlugin();
+    const first = await Effect.runPromise(composeUi(config));
+    const second = await Effect.runPromise(composeUi(config));
+
+    expect(first.routeTree).toEqual({ id: "composed-tree" });
+    expect(first.routerModule).toBe(ROUTER_MODULE);
+    expect(second).toBe(first);
+    expect(construct).toHaveBeenCalledTimes(1);
+
+    const constructInput = construct.mock.calls[0]![0] as {
+      plugins: Array<{ key: string; mfName: string }>;
+      rootOptions: unknown;
     };
-    expect(uiComposeDigest(config)).not.toBe(before);
+    expect(constructInput.plugins).toEqual([
+      { key: "auth", mfName: "auth-ui" },
+      { key: "ui", mfName: "ui" },
+    ]);
+    expect(constructInput.rootOptions).toBe(CORE_ROUTE_CONFIG.rootMeta);
+
+    const resolvedAuth = await (
+      construct.mock.calls[0]![0] as { resolve: (ref: { key: string }) => Promise<unknown> }
+    ).resolve({ key: "auth" });
+    expect(resolvedAuth).toMatchObject({
+      key: "auth",
+      manifest: AUTH_MANIFEST,
+      routeConfig: AUTH_ROUTE_CONFIG,
+    });
   });
 
-  it("digest origin fields are client-visible (url + integrity + compose flag)", () => {
-    const config = createBaseRuntimeConfig();
-    config.plugins = {
-      auth: {
-        name: "auth",
-        url: "https://cdn.example.com/auth",
-        entry: "https://cdn.example.com/auth/mf-manifest.json",
-        source: "remote",
-        ui: {
-          name: "auth-ui",
-          url: "https://cdn.example.com/auth-ui",
-          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
-          source: "remote",
-          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-          ssrIntegrity: "sha384-a",
-        } as never,
-      } as never,
+  it("manifest content changes invalidate the cached variant", async () => {
+    const config = configWithPlugin();
+    const first = await Effect.runPromise(composeUi(config));
+
+    const changed = {
+      ...AUTH_MANIFEST,
+      routes: [...AUTH_MANIFEST.routes, { id: "_public/signup", path: "/signup" }],
     };
-    const base = uiComposeDigest(config);
+    fetchMock.mockImplementation(async (url: unknown) => {
+      const target = String(url);
+      if (target.startsWith("https://cdn.example.com/auth-ui/")) {
+        return { ok: true, status: 200, json: async () => changed };
+      }
+      return { ok: true, status: 200, json: async () => CORE_MANIFEST };
+    });
+
+    resetRemoteManifestCache();
+
+    const second = await Effect.runPromise(composeUi(config));
+    expect(second.digest).not.toBe(first.digest);
+    expect(second).not.toBe(first);
+    expect(construct).toHaveBeenCalledTimes(2);
+  });
+
+  it("deployment-only changes (integrity bumps) keep the hydration digest but recompose the variant", async () => {
+    const config = configWithPlugin();
+    const first = await Effect.runPromise(composeUi(config));
 
     const bumped = structuredClone(config);
-    (bumped.plugins!.auth.ui as { integrity: string }).integrity = "sha384-bumped";
-    expect(uiComposeDigest(bumped)).not.toBe(base);
+    (bumped.plugins!.auth!.ui as { ssrIntegrity: string }).ssrIntegrity = "sha384-rebuilt";
+    const second = await Effect.runPromise(composeUi(bumped));
+
+    expect(second.digest).toBe(first.digest);
+    expect(second).not.toBe(first);
+    expect(construct).toHaveBeenCalledTimes(2);
   });
 
-  it("changes when the core ui integrity changes", () => {
-    const base = createBaseRuntimeConfig();
-    const bumped = createBaseRuntimeConfig();
-    bumped.ui.integrity = "sha384-rotated";
-    expect(uiComposeDigest(bumped)).not.toBe(uiComposeDigest(base));
+  it("builds the client payload with plugin web entries and embedded manifests", async () => {
+    const variant = await Effect.runPromise(composeUi(configWithPlugin()));
+
+    expect(variant.clientPayload.digest).toBe(variant.digest);
+    expect(variant.clientPayload.remotes).toEqual([
+      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+    ]);
+    expect(variant.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
   });
 
-  it("changes when a plugin ssr target is re-deployed without touching the client bundle", () => {
-    const config = createBaseRuntimeConfig();
-    config.plugins = {
-      auth: {
-        name: "auth",
-        url: "https://cdn.example.com/auth",
-        entry: "https://cdn.example.com/auth/mf-manifest.json",
-        source: "remote",
-        ui: {
-          name: "auth-ui",
-          url: "https://cdn.example.com/auth-ui",
-          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
-          source: "remote",
-          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-          ssrIntegrity: "sha384-ssr-a",
-        } as never,
-      } as never,
+  it("local dev composes through the same MF loaders via the local dist container", async () => {
+    const config = {
+      ...configWithPlugin(),
+      ui: { ...createBaseRuntimeConfig().ui, source: "local", localPath: "../ui" },
+    } as RuntimeConfig;
+    config.plugins!.auth!.ui!.localPath = "../plugins/auth/ui";
+
+    const variant = await Effect.runPromise(composeUi(config));
+
+    expect(federationMocks.loadUiComposeModule).toHaveBeenCalledTimes(1);
+    expect(federationMocks.loadCoreUiRouteConfig).toHaveBeenCalledTimes(1);
+    expect(federationMocks.loadRouterModule).toHaveBeenCalledTimes(1);
+    expect(federationMocks.loadUiRouteConfig).toHaveBeenCalledTimes(1);
+
+    const composeEntry = federationMocks.loadUiComposeModule.mock.calls[0]![0] as {
+      ssrUrl?: string;
+      containerVersion?: string;
+      localPath?: string;
     };
-    const base = uiComposeDigest(config);
+    expect(composeEntry.ssrUrl).toContain("/ssr");
+    expect(composeEntry.containerVersion).toBeDefined();
+    expect(composeEntry.localPath).toContain("ui");
 
-    const bumped = structuredClone(config);
-    (bumped.plugins!.auth.ui as { ssrIntegrity: string }).ssrIntegrity = "sha384-ssr-b";
-    expect(uiComposeDigest(bumped)).not.toBe(base);
+    expect(variant.routerModule).toBe(ROUTER_MODULE);
+    expect(variant.clientPayload.remotes).toEqual([
+      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+    ]);
   });
 
-  it("digests identically over the client config the browser receives", () => {
-    const config = createBaseRuntimeConfig();
-    config.plugins = {
-      headless: {
-        name: "headless",
-        url: "https://cdn.example.com/headless",
-        entry: "https://cdn.example.com/headless/mf-manifest.json",
-        source: "remote",
-      } as never,
-      auth: {
-        name: "auth",
-        url: "https://cdn.example.com/auth",
-        entry: "https://cdn.example.com/auth/mf-manifest.json",
-        source: "remote",
-        ui: {
-          name: "auth-ui",
-          url: "https://cdn.example.com/auth-ui",
-          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
-          source: "remote",
-          integrity: "sha384-auth-ui",
-          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-          ssrIntegrity: "sha384-a",
-        } as never,
-      } as never,
-    };
+  it("fails loudly when a manifest cannot be fetched", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    const result = await Effect.runPromiseExit(composeUi(configWithPlugin()));
+    expect(Exit.isFailure(result)).toBe(true);
+    expect(construct).not.toHaveBeenCalled();
+  });
+
+  it("the client config embeds the compose payload verbatim", async () => {
+    const config = configWithPlugin();
+    const variant = await Effect.runPromise(composeUi(config));
+    const request = new Request("https://linktree.com/");
     const clientConfig = buildRuntimeClientConfig(
       config,
-      new Request("https://linktree.com/"),
-      resolveActiveRuntime(config, new Request("https://linktree.com/")),
+      request,
+      resolveActiveRuntime(config, request),
       false,
+      variant.clientPayload,
     );
-
-    const { computeConfigComposeDigest } =
-      require("everything-dev/ui/compose") as typeof import("everything-dev/ui/compose");
-    const clientDigest = computeConfigComposeDigest(ClientRuntimeConfigSchema.parse(clientConfig));
-    expect(uiComposeDigest(config)).toBe(clientDigest);
-  });
-});
-
-describe("composePluginTrees", () => {
-  const composeMocks = vi.hoisted(() => ({
-    composeApp: vi.fn(),
-    loadPluginUiTree: vi.fn(),
-  }));
-
-  vi.mock("everything-dev/ui/compose", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("everything-dev/ui/compose")>();
-    return { ...actual, composeApp: composeMocks.composeApp };
-  });
-
-  vi.mock("../../src/services/federation.server", () => ({
-    loadPluginUiTree: (...args: unknown[]) => composeMocks.loadPluginUiTree(...args),
-  }));
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetUiComposeCache();
-  });
-
-  function configWithPlugin(): RuntimeConfig {
-    const config = createBaseRuntimeConfig();
-    config.plugins = {
-      auth: {
-        name: "auth",
-        url: "https://cdn.example.com/auth",
-        entry: "https://cdn.example.com/auth/mf-manifest.json",
-        source: "remote",
-        ui: {
-          name: "auth-ui",
-          url: "https://cdn.example.com/auth-ui",
-          entry: "https://cdn.example.com/auth-ui/mf-manifest.json",
-          source: "remote",
-          ssrUrl: "https://cdn.example.com/auth-ui-ssr",
-          ssrIntegrity: "sha384-a",
-        } as never,
-      } as never,
-    };
-    return config;
-  }
-
-  const coreTree = { id: "core-tree" } as never;
-  const grafted = { id: "grafted-tree" } as never;
-
-  it("serves the composed tree from the digest cache until the digest changes", async () => {
-    composeMocks.loadPluginUiTree.mockImplementation(() => Effect.succeed({ id: "plugin-tree" }));
-    composeMocks.composeApp.mockReturnValue({
-      routeTree: grafted,
-      mountCounts: { dashboard: 1 },
-      nav: { items: [] },
-      warnings: [],
-    });
-
-    const config = configWithPlugin();
-    const first = await Effect.runPromise(composePluginTrees({ coreTree, config }));
-    const second = await Effect.runPromise(
-      composePluginTrees({ coreTree: { id: "reloaded" } as never, config }),
-    );
-
-    expect(first.composed?.routeTree).toBe(grafted);
-    expect(composeMocks.loadPluginUiTree).toHaveBeenCalledTimes(1);
-    expect(composeMocks.composeApp).toHaveBeenCalledTimes(1);
-    expect(second.composed).toBe(first.composed);
-    expect(second.composed?.routeTree).toBe(grafted);
-  });
-
-  it("recomposes in local dev so hot-reloaded core trees are picked up", async () => {
-    composeMocks.loadPluginUiTree.mockImplementation(() => Effect.succeed({ id: "plugin-tree" }));
-    composeMocks.composeApp
-      .mockReturnValueOnce({
-        routeTree: grafted,
-        mountCounts: {},
-        nav: { items: [] },
-        warnings: [],
-      })
-      .mockReturnValueOnce({
-        routeTree: { id: "graft-2" } as never,
-        mountCounts: {},
-        nav: { items: [] },
-        warnings: [],
-      });
-
-    const localConfig = {
-      ...configWithPlugin(),
-      ui: { ...createBaseRuntimeConfig().ui, source: "local" },
-    } as RuntimeConfig;
-    const first = await Effect.runPromise(composePluginTrees({ coreTree, config: localConfig }));
-    const second = await Effect.runPromise(composePluginTrees({ coreTree, config: localConfig }));
-
-    expect(composeMocks.composeApp).toHaveBeenCalledTimes(2);
-    expect(second.composed?.routeTree).not.toBe(first.composed?.routeTree);
-  });
-
-  it("digest change invalidates the cached composition", async () => {
-    composeMocks.loadPluginUiTree.mockImplementation(() => Effect.succeed({ id: "plugin-tree" }));
-    composeMocks.composeApp
-      .mockReturnValueOnce({
-        routeTree: grafted,
-        mountCounts: {},
-        nav: { items: [] },
-        warnings: [],
-      })
-      .mockReturnValueOnce({
-        routeTree: { id: "graft-2" } as never,
-        mountCounts: {},
-        nav: { items: [] },
-        warnings: [],
-      });
-
-    const config = configWithPlugin();
-    await Effect.runPromise(composePluginTrees({ coreTree, config }));
-
-    const bumped = structuredClone(config);
-    (bumped.plugins!.auth.ui as { ssrIntegrity: string }).ssrIntegrity = "sha384-rebuilt";
-    const second = await Effect.runPromise(
-      composePluginTrees({ coreTree: { id: "new-core" } as never, config: bumped }),
-    );
-
-    expect(composeMocks.composeApp).toHaveBeenCalledTimes(2);
-    expect(second.composed?.digest).not.toBe(
-      (await Effect.runPromise(composePluginTrees({ coreTree, config }))).composed?.digest,
-    );
+    expect(clientConfig.ui?.compose).toEqual(variant.clientPayload);
   });
 });

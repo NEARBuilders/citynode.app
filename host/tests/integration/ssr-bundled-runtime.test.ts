@@ -21,7 +21,7 @@ function createRuntimeConfig(urls: { baseUrl: string; uiAssetsUrl: string }) {
       url: urls.uiAssetsUrl,
       entry: `${urls.uiAssetsUrl}/mf-manifest.json`,
       source: "remote",
-      ssrUrl: urls.uiAssetsUrl,
+      ssrUrl: `${urls.uiAssetsUrl}/ssr`,
     },
     api: {
       name: "api",
@@ -60,6 +60,10 @@ describe("bundled host SSR runtime", () => {
     expect(html).toContain("everything.dev");
     expect(html).not.toContain("SSR unavailable, showing client app.");
     expect(html).not.toContain("<p>Loading...</p>");
+
+    expect(html).toContain("window.__RUNTIME_CONFIG__");
+    expect(html).toContain("remoteEntry.js");
+    expect(html).toContain("static/css/style.css");
 
     await runtime.stop();
   }, 120000);
