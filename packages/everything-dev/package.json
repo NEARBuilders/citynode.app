@@ -189,14 +189,23 @@
       "import": "./dist/ui/auth.mjs",
       "require": "./dist/ui/auth.cjs"
     },
-    "./ui/compose": {
+    "./ui/manifest": {
       "development": {
-        "types": "./src/ui/compose/index.ts",
-        "import": "./src/ui/compose/index.ts"
+        "types": "./src/ui/manifest/index.ts",
+        "import": "./src/ui/manifest/index.ts"
       },
-      "types": "./dist/ui/compose/index.d.mts",
-      "import": "./dist/ui/compose/index.mjs",
-      "require": "./dist/ui/compose/index.cjs"
+      "types": "./dist/ui/manifest/index.d.mts",
+      "import": "./dist/ui/manifest/index.mjs",
+      "require": "./dist/ui/manifest/index.cjs"
+    },
+    "./ui/manifest-generator": {
+      "development": {
+        "types": "./src/ui/manifest/generator.ts",
+        "import": "./src/ui/manifest/generator.ts"
+      },
+      "types": "./dist/ui/manifest/generator.d.mts",
+      "import": "./dist/ui/manifest/generator.mjs",
+      "require": "./dist/ui/manifest/generator.cjs"
     },
     "./ui/mf-build": {
       "development": {
@@ -326,6 +335,7 @@
     "@tanstack/intent": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@tanstack/router-generator": "catalog:",
     "@tanstack/router-plugin": "catalog:",
     "@types/gradient-string": "^1.1.6",
     "@types/node": "^22.10.2",

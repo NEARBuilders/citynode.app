@@ -10,18 +10,30 @@
  * `pluginUiDeployFields` / `CORE_UI_DEPLOY_FIELDS` name the bos.config.json
  * fields the Zephyr deploy hook writes back.
  *
- * A ui plugin's rsbuild.config.ts mirrors ui/rsbuild.config.ts with these
- * helpers: client target is an MF remote exposing `./tree` and (optionally)
- * `./components`; server target is a commonjs single-chunk build exposing
- * `./tree` with the `@module-federation/node` runtime plugin and
- * `autoCodeSplitting` off.
+ * A ui source's rsbuild.config.ts mirrors ui/rsbuild.config.ts with these
+ * helpers: the web target is an MF remote exposing `./routeConfig` (the
+ * generated import map); the node target is a commonjs container exposing
+ * `./routeConfig` with the `@module-federation/node` runtime plugin and
+ * `autoCodeSplitting` off. Shared deps are strict singletons; consumers
+ * (plugin remotes) additionally set `import: false` — no bundled fallback
+ * copy, the provider (core ui) provides through the share scope only.
  */
 
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { RsbuildPlugin } from "@rsbuild/core";
+import { PLUGIN_UI_SHARED_EXPOSES } from "../manifest/contract";
+import { type UiManifestGenPluginOptions, uiManifestGenPlugin } from "./manifest-plugin";
 
 const require = createRequire(import.meta.url);
+
+export {
+  createUiRsbuildConfig,
+  type UiRsbuildConfigOptions,
+} from "./rsbuild-config";
+export type { UiManifestGenPluginOptions };
+export { uiManifestGenPlugin };
 
 export interface UiDeployFields {
   urlField: string;
@@ -46,18 +58,41 @@ export const CORE_UI_DEPLOY_FIELDS: UiDeployFields = {
   ssrIntegrityField: "app.ui.ssrIntegrity",
 };
 
-/** Canonical exposes every graftable ui plugin ships. */
-export const PLUGIN_UI_SHARED_EXPOSES = {
-  tree: "./tree",
-  components: "./components",
-} as const;
+/** Canonical exposes every manifest-composed ui source ships. */
+export { PLUGIN_UI_SHARED_EXPOSES };
 
-export const UI_REMOTE_ENTRY_FILENAME = "remoteEntry.js";
-export const UI_REMOTE_SERVER_ENTRY_FILENAME = "remoteEntry.server.js";
-
-export function isUiServerBuild(): boolean {
-  return process.env.BUILD_TARGET === "server";
+/**
+ * Part of the plugin build contract, not per-plugin config: container chunks
+ * must resolve against the origin that served the remote entry. rsbuild's MF
+ * manifest stamps an absolute dev-server publicPath into metaData — rewrite
+ * it to `auto` after the node environment compiles so runtime resolution
+ * stays origin-relative.
+ */
+export function restoreManifestPublicPath(distRoot: string): RsbuildPlugin {
+  return {
+    name: "restore-manifest-public-path",
+    setup(api) {
+      api.onAfterEnvironmentCompile(({ environment, stats }) => {
+        if (!stats || stats.hasErrors() || environment.name !== "node") return;
+        const manifestPath = path.resolve(distRoot, "mf-manifest.json");
+        if (!fs.existsSync(manifestPath)) return;
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        if (manifest.metaData?.publicPath && manifest.metaData.publicPath !== "auto") {
+          manifest.metaData.publicPath = "auto";
+          fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+        }
+      });
+    },
+  };
 }
+
+export {
+  CORE_UI_PLUGIN_KEY,
+  MANIFEST_FILENAME,
+  ROUTE_CONFIG_FILENAME,
+  UI_REMOTE_ENTRY_FILENAME,
+  UI_REMOTE_SERVER_ENTRY_FILENAME,
+} from "../manifest/contract";
 
 const SHARE_MODULE_NAMES = [
   "react",
@@ -75,6 +110,8 @@ export interface UiSharedDepEntry {
   strictVersion: boolean;
   eager: false;
   shareScope: "default";
+  /** consumer role only: no bundled fallback copy — the provider provides */
+  import?: false;
 }
 
 function getInstalledVersion(pkgName: string, fallback?: string): string {
@@ -89,9 +126,16 @@ function getInstalledVersion(pkgName: string, fallback?: string): string {
       currentDir = path.dirname(currentDir);
     }
     throw new Error(`unresolved: ${pkgName}`);
-  } catch {
+  } catch (error) {
     const match = fallback?.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
-    return match?.[0] ?? "*";
+    const resolved = match?.[0];
+    if (!resolved) {
+      console.warn(
+        `[mf-build] Could not resolve an installed version for "${pkgName}" (${error instanceof Error ? error.message : error}); falling back to requiredVersion "*" — the strict singleton guard is disabled for this dependency`,
+      );
+      return "*";
+    }
+    return resolved;
   }
 }
 
@@ -99,12 +143,14 @@ function getInstalledVersion(pkgName: string, fallback?: string): string {
  * Catalog-enforced singleton shared list for ui remotes. `requiredVersion`
  * resolves from the installed package (not the declared range), so a shared
  * version mismatch fails at build time instead of loading a second React.
+ * `role: "consumer"` (plugin remotes) adds `import: false` — without it the
+ * container's own router copy wins and its context objects mismatch.
  */
 export function createUiSharedDeps(
   pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> },
-  options?: { strictVersion?: boolean },
+  options?: { strictVersion?: boolean; role?: "provider" | "consumer" },
 ): Record<string, UiSharedDepEntry> {
-  const fallbacks = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+  const fallbacks = { ...pkg.dependencies, ...pkg.devDependencies };
   const deps: Record<string, UiSharedDepEntry> = {};
   for (const name of SHARE_MODULE_NAMES) {
     const version = getInstalledVersion(name, fallbacks[name]);
@@ -115,6 +161,7 @@ export function createUiSharedDeps(
       strictVersion: options?.strictVersion !== false,
       eager: false,
       shareScope: "default",
+      ...(options?.role === "consumer" ? { import: false } : {}),
     };
   }
   return deps;

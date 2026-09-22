@@ -27,7 +27,8 @@ export default defineConfig({
     "src/ui/router.ts",
     "src/ui/api.ts",
     "src/ui/auth.ts",
-    "src/ui/compose/index.ts",
+    "src/ui/manifest/index.ts",
+    "src/ui/manifest/generator.ts",
     "src/ui/mf-build/index.ts",
   ],
   format: ["cjs", "esm"],
@@ -47,6 +48,7 @@ export default defineConfig({
       /^@orpc\/.*/,
       /^@standard-schema\/.*/,
       /^@effect\/.*/,
+      /^@rsbuild\/.*/,
       "ink",
       "react",
       "react-dom",
@@ -54,6 +56,7 @@ export default defineConfig({
       "chalk",
       "gradient-string",
       "every-plugin",
+      "zephyr-rsbuild-plugin",
       "tar",
       "glob",
       "@clack/prompts",
@@ -75,7 +78,7 @@ export default defineConfig({
         }
         await chmod(filepath, 0o755);
       } catch (err) {
-        console.warn(`[tsdown] Failed to set shebang/permissions on ${file}: ${err}`);
+        console.warn(`[tsdown] Failed to set shebang/permissions on ${file}: ${String(err)}`);
       }
     }
   },
