@@ -10,6 +10,7 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { uiDeployPlugins } from "everything-dev/ui/deploy";
 import { createUiRsbuildConfig, pluginUiDeployFields } from "everything-dev/ui/mf-build";
 import pkg from "./package.json";
 
@@ -28,4 +29,5 @@ export default createUiRsbuildConfig({
   webExposes: { "./routeConfig": "./src/routeConfig.gen.ts" },
   nodeEntry: "./src/routeConfig.gen.ts",
   nodeExposes: { "./routeConfig": "./src/routeConfig.gen.ts" },
+  deployPlugins: uiDeployPlugins,
 });

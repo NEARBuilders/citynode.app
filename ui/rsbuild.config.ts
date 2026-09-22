@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { uiDeployPlugins } from "everything-dev/ui/deploy";
 import {
   CORE_UI_DEPLOY_FIELDS,
   CORE_UI_PLUGIN_KEY,
@@ -63,4 +64,5 @@ export default createUiRsbuildConfig({
     "import.meta.env.APP_NAME": JSON.stringify(bosConfig.domain),
     "import.meta.env.APP_ACCOUNT": JSON.stringify(bosConfig.account),
   },
+  deployPlugins: uiDeployPlugins,
 });

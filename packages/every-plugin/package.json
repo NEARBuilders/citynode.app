@@ -84,6 +84,42 @@
       "import": "./dist/build/rspack/index.mjs",
       "require": "./dist/build/rspack/index.cjs"
     },
+    "./ui/manifest": {
+      "development": {
+        "types": "./src/ui/manifest/index.ts",
+        "import": "./src/ui/manifest/index.ts"
+      },
+      "types": {
+        "import": "./dist/ui/manifest/index.d.mts",
+        "require": "./dist/ui/manifest/index.d.cts"
+      },
+      "import": "./dist/ui/manifest/index.mjs",
+      "require": "./dist/ui/manifest/index.cjs"
+    },
+    "./ui/manifest-generator": {
+      "development": {
+        "types": "./src/ui/manifest/generator.ts",
+        "import": "./src/ui/manifest/generator.ts"
+      },
+      "types": {
+        "import": "./dist/ui/manifest/generator.d.mts",
+        "require": "./dist/ui/manifest/generator.d.cts"
+      },
+      "import": "./dist/ui/manifest/generator.mjs",
+      "require": "./dist/ui/manifest/generator.cjs"
+    },
+    "./ui/mf-build": {
+      "development": {
+        "types": "./src/ui/mf-build/index.ts",
+        "import": "./src/ui/mf-build/index.ts"
+      },
+      "types": {
+        "import": "./dist/ui/mf-build/index.d.mts",
+        "require": "./dist/ui/mf-build/index.d.cts"
+      },
+      "import": "./dist/ui/mf-build/index.mjs",
+      "require": "./dist/ui/mf-build/index.cjs"
+    },
     "./dev-serve": {
       "development": {
         "types": "./src/dev/serve.ts",
@@ -121,6 +157,13 @@
     "typescript": "^7.0.2",
     "effect": "catalog:",
     "zod": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "@rsbuild/plugin-react": "catalog:",
+    "@module-federation/rsbuild-plugin": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
+    "@tanstack/router-generator": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "react": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/client": "catalog:",

@@ -2,8 +2,8 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateUiManifest } from "every-plugin/ui/manifest-generator";
 import { describe, expect, it } from "vitest";
-import { generateUiManifest } from "../../src/ui/manifest/generator";
 
 const fixtureRoot = fileURLToPath(new URL("../fixtures/ui", import.meta.url));
 

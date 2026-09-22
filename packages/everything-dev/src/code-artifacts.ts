@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { CORE_UI_PLUGIN_KEY } from "every-plugin/ui/manifest";
+import { generateUiManifest } from "every-plugin/ui/manifest-generator";
 import { type ContractBridgeStatus, syncApiContractBridge } from "./api-contract";
 import { loadResolvedConfig, writeResolvedConfig } from "./config";
 import type { BosEnv } from "./merge";
 import type { BosConfig, RuntimeConfig } from "./types";
-import { CORE_UI_PLUGIN_KEY } from "./ui/manifest/contract";
-import { generateUiManifest } from "./ui/manifest/generator";
 
 interface GeneratedArtifacts {
   resolvedConfigPath?: string;

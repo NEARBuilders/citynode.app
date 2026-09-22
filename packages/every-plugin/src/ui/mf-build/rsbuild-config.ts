@@ -3,9 +3,7 @@ import { pluginModuleFederation } from "@module-federation/rsbuild-plugin";
 import { defineConfig, type EnvironmentConfig, type RsbuildConfig, rspack } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
-import { FixMfDataUriPlugin } from "every-plugin/build/rspack";
-import { withZephyr } from "zephyr-rsbuild-plugin";
-import { computeSriHashForUrl, reportDeployResult } from "../../integrity";
+import { FixMfDataUriPlugin } from "../../build/rspack";
 import {
   createUiSharedDeps,
   MANIFEST_FILENAME,
@@ -49,6 +47,17 @@ export interface UiRsbuildConfigOptions {
   nodeExposes: Record<string, string>;
   copy?: Array<{ from: string; to: string }>;
   define?: Record<string, string>;
+  /**
+   * Deploy hook factory — called once per environment when the platform CLI
+   * builds for deploy. Returns extra rsbuild plugins (the Zephyr deploy +
+   * SRI write-back wiring owned by the platform). Omit elsewhere.
+   */
+  deployPlugins?: (ctx: {
+    ssr: boolean;
+    deployFields: UiDeployFields;
+    bosConfigPath: string;
+    deployLabel: string;
+  }) => NonNullable<EnvironmentConfig["plugins"]>;
 }
 
 const sanitizeContainerName = (pkgName: string): string => pkgName.replace(/[^A-Za-z0-9_]/g, "_");
@@ -69,50 +78,17 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
     nodeExposes,
     copy = [],
     define,
+    deployPlugins,
   } = options;
   const workspaceRootAbsolute = path.resolve(workspaceRoot);
   const normalizedName = sanitizeContainerName(pkg.name);
-  const shouldDeploy = process.env.DEPLOY === "true";
   const bosConfigPath = path.resolve(configDir, "bos.config.json");
   const manifestGen = () =>
     uiManifestGenPlugin({ workspaceRoot: workspaceRootAbsolute, pluginName: manifestName });
   const uiSharedDeps = createUiSharedDeps(pkg, { role });
 
-  const zephyrDeploy = (ssr: boolean) =>
-    shouldDeploy
-      ? [
-          withZephyr({
-            ...(ssr ? { snapshotType: "csr" as const } : {}),
-            hooks: {
-              onDeployComplete: async (info: { url: string }) => {
-                console.log(`🚀 ${deployLabel} ${ssr ? "SSR" : "Client"} Deployed:`, info.url);
-                if (ssr) {
-                  const ssrEntryUrl = `${info.url.replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`;
-                  const integrity = await computeSriHashForUrl(ssrEntryUrl, {
-                    resolveEntryUrl: false,
-                  });
-                  reportDeployResult({
-                    url: info.url,
-                    integrity,
-                    bosConfigPath,
-                    urlField: deployFields.ssrUrlField ?? "",
-                    integrityField: deployFields.ssrIntegrityField ?? "",
-                  });
-                  return;
-                }
-                const integrity = await computeSriHashForUrl(info.url);
-                reportDeployResult({
-                  url: info.url,
-                  integrity,
-                  bosConfigPath,
-                  urlField: deployFields.urlField,
-                  integrityField: deployFields.integrityField,
-                });
-              },
-            },
-          }),
-        ]
-      : [];
+  const deployFor = (ssr: boolean): NonNullable<EnvironmentConfig["plugins"]> =>
+    deployPlugins?.({ ssr, deployFields, bosConfigPath, deployLabel }) ?? [];
 
   const webEnvironment: EnvironmentConfig = {
     plugins: [
@@ -128,7 +104,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
         },
         { environment: "web" },
       ),
-      ...zephyrDeploy(false),
+      ...deployFor(false),
     ],
     source: { entry: { index: webEntry }, ...(define ? { define } : {}) },
     resolve: { alias: { "@": "./src" } },
@@ -198,7 +174,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
         { target: "node", environment: "node" },
       ),
       restoreManifestPublicPath(path.resolve(workspaceRootAbsolute, "dist", "ssr")),
-      ...zephyrDeploy(true),
+      ...deployFor(true),
     ],
     source: { entry: { index: nodeEntry } },
     resolve: {

@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { AnyRoute, AnyRouteMatch, AnyRouter, RouterHistory } from "@tanstack/react-router";
+import type { NavManifest } from "every-plugin/ui/manifest";
 import type { ClientRuntimeConfig } from "../types";
-import type { NavManifest } from "./manifest/nav";
 
 export interface RouterContext<TSession = unknown> {
   queryClient: QueryClient;

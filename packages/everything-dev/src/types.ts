@@ -1,5 +1,5 @@
+import { ComposePayloadSchema } from "every-plugin/ui/manifest";
 import * as z from "zod";
-import { ComposePayloadSchema } from "./ui/manifest/manifest-schema";
 
 export type JsonPrimitive = string | number | boolean | null;
 export interface JsonObject {

@@ -216,6 +216,15 @@
       "import": "./dist/ui/mf-build/index.mjs",
       "require": "./dist/ui/mf-build/index.cjs"
     },
+    "./ui/deploy": {
+      "development": {
+        "types": "./src/ui/deploy.ts",
+        "import": "./src/ui/deploy.ts"
+      },
+      "types": "./dist/ui/deploy.d.mts",
+      "import": "./dist/ui/deploy.mjs",
+      "require": "./dist/ui/deploy.cjs"
+    },
     "./package.json": "./package.json",
     "./db": {
       "development": {
