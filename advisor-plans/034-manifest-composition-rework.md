@@ -2,7 +2,9 @@
 
 ## Status
 
-**PROTOTYPE PHASE COMPLETE (2026-09-21)** — plan 033 green end-to-end: 14/14 disk gates, bundled-server SSR + live self-probe for base and tenant, and **hydration e2e PASS for base (`1941d45a9c505475`) and tenant (`559ba09c779e4694` — the full-UI-swap gate)**, zero mismatch errors. The client architecture is decided and proven: ONE rspack MF web build with the identical shared recipe as the server (see 033 Results + ADR 0007 §9 + ADR 0008 §7 before starting). This rework (034) is TODO. Decisions: [ADR 0007](../../docs/adr/0007-runtime-composition-ssr.md) + [ADR 0008](../../docs/adr/0008-manifest-composition.md). Read both, plus 033's Results, before starting.
+**LANDED (2026-09-21, `feat/auth-ui-plugin`)** — the rework executed in five commits: recipe fixes (`7e3506b2`, `a834aa38`), manifest module (`0e37672c`), registry-v2 route moves (`6ae6aebe`), the swap (`a357d0de`). Graft machinery, `defineUiPlugin`, `./tree` exposes, the v1 registry + digest, and the entire dev-SSR machinery are deleted; the host builds the graph from manifests through the core's `./compose` engine; `--ssr` = source-manifest compose in the host process. Hand-runbook pending at commit time: full `bun run test`, regression dev + prod spot-run.
+
+Prototype phase was complete pre-rework (plan 033 green end-to-end: 14/14 disk gates, bundled-server SSR + hydration e2e for base `1941d45a9c505475` and tenant `559ba09c779e4694` — the full-UI-swap gate). Decisions: [ADR 0007](../docs/adr/0007-runtime-composition-ssr.md) + [ADR 0008](../docs/adr/0008-manifest-composition.md). Read both, plus 033's Results, for the contract record.
 
 ## Why this matters
 
