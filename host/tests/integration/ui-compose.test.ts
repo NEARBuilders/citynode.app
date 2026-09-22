@@ -1,4 +1,7 @@
 import { Effect, Exit } from "effect";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRuntimeClientConfig,
@@ -261,11 +264,30 @@ describe("composeUi", () => {
   });
 
   it("local dev composes through the same MF loaders via the local dist container", async () => {
+    const localRoot = await mkdtemp(path.join(tmpdir(), "ui-compose-local-"));
+    const fixture = async (name: string, manifestName: string) => {
+      const root = path.join(localRoot, name);
+      await mkdir(path.join(root, "src"), { recursive: true });
+      await mkdir(path.join(root, "dist", "ssr"), { recursive: true });
+      await writeFile(
+        path.join(root, "src", "manifest.gen.json"),
+        JSON.stringify({
+          name: manifestName,
+          manifestVersion: 1,
+          routes: [{ id: "_public", isLayout: true, mount: "public", file: "_public.tsx" }],
+        }),
+      );
+      await writeFile(path.join(root, "dist", "ssr", "remoteEntry.server.js"), "");
+      return root;
+    };
+    const coreFixture = await fixture("core-ui", "ui");
+    const authFixture = await fixture("auth-ui", "auth-ui");
+
     const config = {
       ...configWithPlugin(),
-      ui: { ...createBaseRuntimeConfig().ui, source: "local", localPath: "../ui" },
+      ui: { ...createBaseRuntimeConfig().ui, source: "local", localPath: coreFixture },
     } as RuntimeConfig;
-    config.plugins!.auth!.ui!.localPath = "../plugins/auth/ui";
+    config.plugins!.auth!.ui!.localPath = authFixture;
 
     const variant = await Effect.runPromise(composeUi(config));
 
@@ -287,6 +309,8 @@ describe("composeUi", () => {
     expect(variant.clientPayload.remotes).toEqual([
       { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
     ]);
+
+    await rm(localRoot, { recursive: true, force: true });
   });
 
   it("fails loudly when a manifest cannot be fetched", async () => {
