@@ -109,7 +109,7 @@ export function createAuthClient(options: CreateAuthClientOptions = {}) {
       anonymousClient(),
       phoneNumberClient(),
       passkeyClient(),
-      organizationClient(),
+      organizationClient({ teams: { enabled: true } }),
       apiKeyClient(),
     ],
   });

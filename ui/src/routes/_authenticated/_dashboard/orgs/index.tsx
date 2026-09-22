@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Mail, Plus, RefreshCw, Users } from "lucide-react";
+import { Building2, Mail, Plus, RefreshCw, Users, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   type Organization,
@@ -12,12 +12,10 @@ import {
 import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
+import { useInvitationActions } from "./-use-invitation-actions";
 
-type AuthClientType = import("@/app").AuthClient;
-type UserInvitationsResponse = Awaited<
-  ReturnType<AuthClientType["organization"]["listUserInvitations"]>
->;
-type UserInvitationItem = NonNullable<UserInvitationsResponse["data"]>[number];
+type ApiClientType = import("@/app").ApiClient;
+type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvitations"]>>[number];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
   head: () => ({
@@ -40,9 +38,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
       queryKey: ["user-invitations"],
       queryFn: async (): Promise<UserInvitationItem[]> => {
         try {
-          const { data, error } = await context.authClient.organization.listUserInvitations();
-          if (error) throw new Error(error.message);
-          return (data ?? []) as UserInvitationItem[];
+          return await context.apiClient.auth.listUserInvitations();
         } catch {
           return [];
         }
@@ -57,7 +53,6 @@ function OrganizationsList() {
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const { data: organizations, isLoading } = useQuery({
     queryKey: ["organizations"],
@@ -72,9 +67,7 @@ function OrganizationsList() {
     queryKey: ["user-invitations"],
     queryFn: async (): Promise<UserInvitationItem[]> => {
       try {
-        const { data, error } = await auth.organization.listUserInvitations();
-        if (error) throw new Error(error.message);
-        return (data ?? []) as UserInvitationItem[];
+        return await apiClient.auth.listUserInvitations();
       } catch {
         return [];
       }
@@ -94,43 +87,23 @@ function OrganizationsList() {
 
   const pendingInvitations = userInvitations.filter((i) => i.status === "pending");
 
-  const acceptInvitationMutation = useMutation({
-    mutationFn: async (invitation: UserInvitationItem) => {
-      const { error } = await auth.organization.acceptInvitation({
-        invitationId: invitation.id,
-      });
-      if (error) throw new Error(error.message);
-      return invitation;
-    },
-    onSuccess: async (invitation) => {
-      toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-invitations"] }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: ["organizations"] });
-      if (invitation.organizationSlug) {
-        await router.navigate({
-          to: "/orgs/$slug",
-          params: { slug: invitation.organizationSlug },
-        });
-      }
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to accept invitation"),
-  });
-
-  const rejectInvitationMutation = useMutation({
-    mutationFn: async (invitationId: string) => {
-      const { error } = await auth.organization.rejectInvitation({ invitationId });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
-      toast.success("Invitation declined");
-      await queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
-    },
-    onError: (error: Error) => toast.error(error.message || "Failed to decline invitation"),
-  });
+  const { acceptMutation: acceptInvitationMutation, rejectMutation: rejectInvitationMutation } =
+    useInvitationActions({
+      apiClient,
+      auth,
+      onAccepted: async (invitation) => {
+        toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
+        if (invitation.organizationSlug) {
+          await router.navigate({
+            to: "/orgs/$slug",
+            params: { slug: invitation.organizationSlug },
+          });
+        }
+      },
+      onRejected: () => {
+        toast.success("Invitation declined");
+      },
+    });
 
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
@@ -166,7 +139,11 @@ function OrganizationsList() {
                   <Card key={invitation.id} className="p-6 space-y-4 hover:shadow-md">
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-[10px] border border-border bg-muted flex items-center justify-center shrink-0">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
+                        {invitation.nearAccountId ? (
+                          <Wallet className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <Mail className="h-5 w-5 text-muted-foreground" />
+                        )}
                       </div>
                       <div className="space-y-1 min-w-0 flex-1">
                         <div className="text-base font-semibold text-foreground break-all">
@@ -175,6 +152,19 @@ function OrganizationsList() {
                         <div className="text-sm text-muted-foreground font-mono">
                           invited as {invitation.role ?? "member"}
                         </div>
+                        <div className="text-sm text-muted-foreground break-all">
+                          {invitation.nearAccountId ?? invitation.email}
+                        </div>
+                        {invitation.nearAccountId && invitation.nearNetwork && (
+                          <div className="text-sm text-muted-foreground font-mono">
+                            network {invitation.nearNetwork}
+                          </div>
+                        )}
+                        {invitation.teamId && (
+                          <div className="text-sm text-muted-foreground font-mono">
+                            team {invitation.teamId}
+                          </div>
+                        )}
                         <div className="text-sm text-muted-foreground">
                           expires {new Date(invitation.expiresAt).toLocaleDateString()}
                         </div>
@@ -193,14 +183,14 @@ function OrganizationsList() {
                           : "accept"}
                       </Button>
                       <Button
-                        onClick={() => rejectInvitationMutation.mutate(invitation.id)}
+                        onClick={() => rejectInvitationMutation.mutate(invitation)}
                         disabled={
                           acceptInvitationMutation.isPending || rejectInvitationMutation.isPending
                         }
                         variant="outline"
                       >
                         {rejectInvitationMutation.isPending &&
-                        rejectInvitationMutation.variables === invitation.id
+                        rejectInvitationMutation.variables?.id === invitation.id
                           ? "declining..."
                           : "decline"}
                       </Button>

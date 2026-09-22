@@ -214,5 +214,42 @@ describe("team handlers", () => {
       });
       expect(teamsAfter).toHaveLength(teamsBefore.length - 1);
     });
+
+    it("deletes a team the caller currently has active", async () => {
+      const user = await createTestUser(services.services);
+      const org = await createTestOrg(services.services, user.userId);
+      const handlers = createTestHandlers(services.services);
+
+      await handlers.organizations.setActiveOrganization({
+        input: { organizationId: org.id },
+        context: { reqHeaders: user.reqHeaders },
+      });
+
+      const team = await handlers.teams.createTeam({
+        input: { name: "Active Team", organizationId: org.id },
+        context: { reqHeaders: user.reqHeaders },
+      });
+      await handlers.teams.addTeamMember({
+        input: { teamId: team.id, userId: user.userId, organizationId: org.id },
+        context: { reqHeaders: user.reqHeaders },
+      });
+      await handlers.teams.setActiveTeam({
+        input: { teamId: team.id },
+        context: { reqHeaders: user.reqHeaders },
+      });
+
+      const result = await handlers.teams.deleteTeam({
+        input: { teamId: team.id, organizationId: org.id },
+        context: { reqHeaders: user.reqHeaders },
+      });
+
+      expect(result.success).toBe(true);
+
+      const context = await handlers.session.getContext({
+        context: { reqHeaders: user.reqHeaders },
+      });
+      expect(context.organization.teams).toEqual([]);
+      expect(context.organization.activeTeamId).toBeNull();
+    });
   });
 });

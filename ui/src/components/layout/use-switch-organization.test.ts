@@ -9,6 +9,7 @@ interface SwitchOptions {
 const harness = vi.hoisted(() => ({
   options: null as SwitchOptions | null,
   setActive: vi.fn(),
+  setActiveTeam: vi.fn(),
   getSession: vi.fn(),
   setQueryData: vi.fn(),
   invalidateQueries: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock("sonner", () => ({
 vi.mock("@/app", () => ({
   sessionQueryKey: ["session"],
   useAuthClient: () => ({
-    organization: { setActive: harness.setActive },
+    organization: { setActive: harness.setActive, setActiveTeam: harness.setActiveTeam },
     getSession: harness.getSession,
   }),
 }));
@@ -48,6 +49,7 @@ describe("organization switching", () => {
     vi.clearAllMocks();
     harness.options = null;
     harness.setActive.mockResolvedValue({ error: null });
+    harness.setActiveTeam.mockResolvedValue({ error: null });
     harness.invalidateQueries.mockResolvedValue(undefined);
     harness.invalidateRouter.mockResolvedValue(undefined);
   });
@@ -66,6 +68,17 @@ describe("organization switching", () => {
     await harness.options?.onSuccess();
 
     expect(harness.setActive).toHaveBeenCalledWith({ organizationId: "org-2" });
+    expect(harness.setActiveTeam).toHaveBeenCalledWith({ teamId: null });
+    expect(harness.invalidateQueries).toHaveBeenNthCalledWith(
+      1,
+      { queryKey: ["organizations"], refetchType: "active" },
+      { throwOnError: true },
+    );
+    expect(harness.invalidateQueries).toHaveBeenNthCalledWith(
+      2,
+      { queryKey: ["team-workspace"], refetchType: "active" },
+      { throwOnError: true },
+    );
     expect(harness.getSession).toHaveBeenCalledWith({
       query: { disableCookieCache: true },
     });

@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getAppName, useAuthClient } from "@/app";
+import { getAppName, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
+import { useInvitationActions } from "./-use-invitation-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$id")({
   head: () => ({
@@ -12,16 +13,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$i
   loader: async ({ context, params }) => {
     await context.queryClient.ensureQueryData({
       queryKey: ["invitation", params.id],
-      queryFn: async () => {
-        const { data, error } = await context.authClient.organization.getInvitation({
-          query: { id: params.id },
-        });
-        if (error) {
-          if (error.status === 400 || error.status === 404) return null;
-          throw new Error(error.message || "Failed to load invitation");
-        }
-        return data;
-      },
+      queryFn: () => context.apiClient.auth.getInvitation({ id: params.id }),
       staleTime: 30 * 1000,
       retry: false,
     });
@@ -33,54 +25,33 @@ function AcceptInvitation() {
   const { id } = Route.useParams();
   const router = useRouter();
   const auth = useAuthClient();
-  const queryClient = useQueryClient();
+  const apiClient = useApiClient();
 
   const { data: invitation, isLoading } = useQuery({
     queryKey: ["invitation", id],
-    queryFn: async () => {
-      const { data, error } = await auth.organization.getInvitation({ query: { id } });
-      if (error) {
-        if (error.status === 400 || error.status === 404) return null;
-        throw new Error(error.message || "Failed to load invitation");
-      }
-      return data;
-    },
+    queryFn: () => apiClient.auth.getInvitation({ id }),
     staleTime: 30 * 1000,
     retry: false,
   });
 
-  const acceptMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await auth.organization.acceptInvitation({ invitationId: id });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
+  const { acceptMutation, rejectMutation } = useInvitationActions({
+    apiClient,
+    auth,
+    onAccepted: async (acceptedInvitation) => {
       toast.success("Invitation accepted");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-        queryClient.invalidateQueries({ queryKey: ["session"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-invitations"] }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: ["organizations"] });
-      await router.navigate({
-        to: "/orgs/$slug",
-        params: { slug: invitation?.organizationSlug ?? "" },
-      });
+      if (acceptedInvitation.organizationSlug) {
+        await router.navigate({
+          to: "/orgs/$slug",
+          params: { slug: acceptedInvitation.organizationSlug },
+        });
+      } else {
+        await router.navigate({ to: "/orgs" });
+      }
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to accept invitation"),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await auth.organization.rejectInvitation({ invitationId: id });
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: async () => {
+    onRejected: async () => {
       toast.success("Invitation declined");
-      await queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
       await router.navigate({ to: "/orgs" });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to decline invitation"),
   });
 
   if (isLoading) {
@@ -145,6 +116,26 @@ function AcceptInvitation() {
                 <span>{invitation.role ?? "member"}</span>
               </div>
               <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">
+                  {invitation.nearAccountId ? "NEAR account" : "email"}
+                </span>
+                <span className="text-right break-all">
+                  {invitation.nearAccountId ?? invitation.email}
+                </span>
+              </div>
+              {invitation.nearAccountId && invitation.nearNetwork && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">network</span>
+                  <span className="text-right break-all">{invitation.nearNetwork}</span>
+                </div>
+              )}
+              {invitation.teamId && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">team</span>
+                  <span className="text-right break-all">{invitation.teamId}</span>
+                </div>
+              )}
+              <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">expires</span>
                 <span>{new Date(invitation.expiresAt).toLocaleDateString()}</span>
               </div>
@@ -155,11 +146,15 @@ function AcceptInvitation() {
             </div>
 
             <div className="flex gap-3 justify-center">
-              <Button onClick={() => acceptMutation.mutate()} disabled={isPending_} size="sm">
+              <Button
+                onClick={() => acceptMutation.mutate(invitation)}
+                disabled={isPending_}
+                size="sm"
+              >
                 {acceptMutation.isPending ? "accepting..." : "accept"}
               </Button>
               <Button
-                onClick={() => rejectMutation.mutate()}
+                onClick={() => rejectMutation.mutate(invitation)}
                 disabled={isPending_}
                 variant="outline"
                 size="sm"
