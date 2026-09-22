@@ -42,6 +42,67 @@ const route = (id: string, path: string, extra: Partial<RouteRecord> = {}): Rout
 });
 
 describe("constructTree", () => {
+  it("mount routes compose the registry gate BEFORE the declaration's beforeLoad", async () => {
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [
+        mountLayout("authenticated"),
+        route("_authenticated/index", "/", { parentId: "_authenticated" }),
+      ],
+      optionsById: {
+        _authenticated: {
+          component: () => null,
+          beforeLoad: () => ({ fromDeclaration: "yes" }),
+        },
+      },
+    };
+
+    const tree = await construct([core]);
+    const mount = (tree.rootRoute as unknown as { children: Array<Record<string, any>> })
+      .children[0]!;
+    const beforeLoad = mount.options.beforeLoad as (args: unknown) => Promise<unknown>;
+
+    const gateThrow = () => beforeLoad({ context: {}, location: { pathname: "/", searchStr: "" } });
+    expect(gateThrow).toThrow();
+
+    const returned = await beforeLoad({
+      context: { user: { id: "u1" } },
+      location: { pathname: "/", searchStr: "" },
+    });
+    expect(returned).toEqual({ fromDeclaration: "yes" });
+  });
+
+  it("layout routes pass loader/beforeLoad/head/staticData through to the constructed route", async () => {
+    const loader = () => Promise.resolve(null);
+    const beforeLoad = () => ({ auth: { isAuthenticated: true } });
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [
+        mountLayout("authenticated"),
+        { id: "_authenticated/_wizard", isLayout: true, parentId: "_authenticated" },
+        route("_authenticated/_wizard/step", "/step", { parentId: "_authenticated/_wizard" }),
+      ],
+      optionsById: {
+        "_authenticated/_wizard": {
+          component: () => null,
+          loader,
+          beforeLoad,
+          head: () => ({ meta: [{ title: "Wizard" }] }),
+          staticData: { nav: { label: "Wizard" } },
+        },
+      },
+    };
+
+    const tree = await construct([core]);
+    const mount = (tree.rootRoute as unknown as { children: Array<Record<string, any>> })
+      .children[0]!;
+    const wizard = mount.children[0]!;
+    expect(wizard.options.loader).toBe(loader);
+    expect(wizard.options.beforeLoad).toBe(beforeLoad);
+    expect(wizard.options.head).toBeTypeOf("function");
+    expect(wizard.options.staticData).toEqual({ nav: { label: "Wizard" } });
+  });
+
   it("rejects cross-plugin path collisions under the same mount parent", async () => {
     const core: TestPlugin = {
       key: "ui",
@@ -54,41 +115,6 @@ describe("constructTree", () => {
 
     await expect(construct([core, other])).rejects.toThrow(
       /path collision: "ui" route "_public\/login" declares "\/login" which is already claimed by "other:_public\/login-clone"/,
-    );
-  });
-
-  it("rejects layout routes declaring options that composition would drop", async () => {
-    const core: TestPlugin = {
-      key: "ui",
-      routes: [
-        mountLayout("public"),
-        { id: "_public/_wizard", isLayout: true, parentId: "_public" },
-        route("_public/_wizard/step", "/step", { parentId: "_public/_wizard" }),
-      ],
-      optionsById: {
-        "_public/_wizard": {
-          component: () => null,
-          loader: () => Promise.resolve(null),
-        },
-      },
-    };
-
-    await expect(construct([core])).rejects.toThrow(
-      /layout route "_public\/_wizard" in "ui".*declares layout-unsupported options \(loader\)/,
-    );
-  });
-
-  it("rejects mount declarations declaring options that composition would drop", async () => {
-    const core: TestPlugin = {
-      key: "ui",
-      routes: [mountLayout("public"), route("_public/index", "/", { parentId: "_public" })],
-      optionsById: {
-        _public: { component: () => null, head: () => ({ meta: [] }) },
-      },
-    };
-
-    await expect(construct([core])).rejects.toThrow(
-      /mount "public" .*declares layout-unsupported options \(head\)/,
     );
   });
 
