@@ -1,28 +1,28 @@
 /**
- * Tiny static server for built node-SSR remote bundles (prod-shape loading:
- * the host's MF runtime fetches remote entries over HTTP — never from disk;
- * ADR 0007 §4 / plan 034's loud-failure rule).
+ * Tiny static server for built remote bundles — serves each remote's dist
+ * ROOT (web remoteEntry.js at /, node SSR at /ssr/). 404s are logged with
+ * the resolved path so a missing file is visible in this terminal.
  *
- * usage: bun src/serve.ts <port> <dir> [<port> <dir>]...
+ * usage: bun src/serve.ts <port> <distRoot> [<port> <distRoot>]...
  */
+import path from "node:path";
+
 const args = process.argv.slice(2);
-const servers: Array<{ stop: Promise<void>; url: string }> = [];
 
 for (let i = 0; i < args.length; i += 2) {
   const port = Number(args[i]);
-  const root = args[i + 1]!;
-  const server = Bun.serve({
+  const rootDir = path.resolve(args[i + 1]!);
+  Bun.serve({
     port,
     async fetch(req) {
       const url = new URL(req.url);
-      const file = Bun.file(`${root}${url.pathname}`);
-      const stat = await file.exists();
-      if (!stat) return new Response("not found", { status: 404 });
-      return new Response(file);
+      const file = Bun.file(`${rootDir}${url.pathname}`);
+      if (await file.exists()) return new Response(file);
+      console.warn(`[serve] 404 ${url.pathname} (root: ${rootDir})`);
+      return new Response(`// not found: ${rootDir}${url.pathname}`, { status: 404 });
     },
   });
-  servers.push({ stop: server.stop, url: `http://localhost:${port}` });
-  console.log(`serving ${root} at http://localhost:${port}`);
+  console.log(`serving ${rootDir} at http://localhost:${port}`);
 }
 
 process.on("SIGTERM", () => process.exit(0));

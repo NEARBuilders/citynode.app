@@ -1,39 +1,38 @@
 /**
  * Minimal shape-of-028 descriptor slice (ADR 0005 / plan 028) — the
- * composition-resolver slice only, driving the prototype host. Deliberately
- * OUT: account/domain, FastKV extends chains, stage, resources/bindings,
- * auth/api fields — those belong to plan 028's full surface.
+ * composition-resolver slice only. Pure data: `App({...})` returns a typed
+ * object; the host consumes it. `extends` resolves child-wins over the base
+ * app's plugins (the publish-time-flattening model of wayfinder ticket 08).
  *
- * The descriptor is pure data: `App({...})` returns a typed object and the
- * host consumes it. `Plugin("bogus")` is a compile error via KnownPlugins
- * declaration merging (plan 028's pattern).
+ * Explicitly OUT (they belong to plan 028's full surface): account/domain,
+ * FastKV extends CHAINS (depth > 1), stage, resources/bindings, auth/api.
  */
+import { MOUNT_REGISTRY_VERSION } from "./mount-registry";
 
 export type RemoteSource =
   | { kind: "local"; /** path relative to the prototype root */ path: string }
-  | { kind: "remote"; mfName: string; /** base URL of the deployed remote */ url: string };
+  | { kind: "remote"; mfName: string; /** remoteEntry.server.js URL of the deployed SSR bundle */ url: string };
 
-export interface ResolvedRemote {
-  pluginName: string;
+export interface PluginRef {
+  key: string;
   source: RemoteSource;
-  /** Resolved when kind === "remote": entry URL of the server bundle. */
-  ssrEntryUrl?: string;
 }
 
-export interface AppDescriptor {
+export interface ResolvedApp {
   name: string;
-  plugins: Record<string, { pluginName: string; source: RemoteSource }>;
+  plugins: Record<string, PluginRef>;
 }
 
-/**
- * The host consumes a resolver function that turns a descriptor into
- * per-plugin manifest + route-config loaders. Dev resolves from disk
- * (pathToFileURL dynamic import); production resolves via loadRemote on the
- * shared MF instance. Identical construction code downstream (gate 7).
- */
-export interface CompositionResolver {
-  resolveManifest(pluginName: string): Promise<unknown>;
-  resolveRouteConfig(pluginName: string): Promise<unknown>;
+export interface AppInput {
+  name: string;
+  /** name of the base app whose plugins this app inherits (child-wins) */
+  extends?: string;
+  plugins: Record<string, PluginRefInput>;
+}
+
+export interface PluginRefInput {
+  name: string;
+  source: RemoteSource;
 }
 
 // In production (plan 028) `KnownPlugins` is declaration-merged from
@@ -45,21 +44,8 @@ export interface KnownPlugins {
   landing: "landing";
 }
 
-export function App(input: {
-  name: string;
-  extends?: string;
-  plugins: Record<string, PluginRefInput>;
-}): AppDescriptor {
-  const plugins: AppDescriptor["plugins"] = {};
-  for (const [key, ref] of Object.entries(input.plugins)) {
-    plugins[key] = { pluginName: ref.name, source: ref.source };
-  }
-  return { name: input.name, plugins };
-}
-
-export interface PluginRefInput {
-  name: string;
-  source: RemoteSource;
+export function App(input: AppInput): AppInput {
+  return input;
 }
 
 export function Plugin<K extends keyof KnownPlugins & string>(
@@ -67,9 +53,41 @@ export function Plugin<K extends keyof KnownPlugins & string>(
 ): { local: (path: string) => PluginRefInput; remote: (mfName: string, url: string) => PluginRefInput } {
   return {
     local: (path: string) => ({ name, source: { kind: "local", path } }),
-    remote: (mfName: string, url: string) => ({
-      name,
-      source: { kind: "remote", mfName, url },
-    }),
+    remote: (mfName: string, url: string) => ({ name, source: { kind: "remote", mfName, url } }),
   };
+}
+
+/**
+ * Flatten an app against the registry of apps: `extends` inherits the base's
+ * plugins, the child's entries win. Depth-1 only (chains are plan 028).
+ */
+export function resolveApp(input: AppInput, apps: Record<string, AppInput>): ResolvedApp {
+  const base = input.extends ? apps[input.extends] : undefined;
+  if (input.extends && !base) throw new Error(`extends target "${input.extends}" not found`);
+  const plugins: Record<string, PluginRef> = {};
+  for (const [key, ref] of Object.entries(base?.plugins ?? {})) {
+    plugins[key] = { key, ...ref };
+  }
+  for (const [key, ref] of Object.entries(input.plugins)) {
+    plugins[key] = { key, ...ref };
+  }
+  return { name: input.name, plugins };
+}
+
+export interface CompositionDigestInput {
+  appName: string;
+  plugins: Array<{ key: string; mfName: string; url: string }>;
+  manifests: Array<unknown>;
+}
+
+/** Composition digest — sha256 over everything that determines the tree. */
+export async function digestOf(input: CompositionDigestInput): Promise<string> {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({ ...input, mountRegistryVersion: MOUNT_REGISTRY_VERSION }),
+  );
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
 }

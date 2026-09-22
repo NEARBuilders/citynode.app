@@ -6,10 +6,10 @@
   "scripts": {
     "gen": "cd .. && bun generator/src/cli.ts --all",
     "verify": "bun src/verify.tsx",
-    "verify:mf": "bun src/verify-mf.tsx",
     "serve": "bun src/serve.ts",
     "start": "bun src/start.tsx --app=base --port=3000",
-    "start:tenant": "bun src/start.tsx --app=tenant --port=3000"
+    "start:tenant": "bun src/start.tsx --app=tenant --port=3000",
+    "build:client": "bunx rsbuild build -c rsbuild.client.config.ts"
   },
   "dependencies": {
     "@manifest-compose/shared": "workspace:*",

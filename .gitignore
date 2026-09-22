@@ -324,6 +324,7 @@ node_modules/.federation
 
 # Markdown files (local notes, AI agent instructions, etc.)
 # Already-tracked .md files (README, docs) stay tracked; changesets are kept.
+# plans/advisor-plans/docs trees are first-class (negated below).
 *.md
 !**/skills/**/*.md
 !AGENTS.md
@@ -335,6 +336,7 @@ node_modules/.federation
 !docs/adr/**/*.md
 !plans/**/*.md
 !advisor-plans/**/*.md
+
 # Internal planning documents and domain glossaries stay local.
 /CONTEXT.md
 /CONTEXT-MAP.md

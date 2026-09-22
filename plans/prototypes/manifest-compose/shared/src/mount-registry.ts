@@ -15,6 +15,10 @@
  *
  * No mount name nests inside another — the v1 gate-aware collision machinery
  * (resolveCoreMount) has nothing to resolve in this vocabulary.
+ *
+ * The platform vocabulary also reserves _org / _team (parameterized
+ * membership gates, ADR 0008 §3); the prototype exercises the three mounts
+ * below and leaves those unimplemented.
  */
 
 export interface MountDef {
@@ -24,39 +28,26 @@ export interface MountDef {
    * Gate id, executed host-side at construction. `null` = no gate.
    * Parameterized mounts own a URL segment and resolve their entity.
    */
-  gate: "none" | "session" | "admin" | "orgMember" | "teamMember";
-  /** Parameterized mounts own a URL segment; `path` is the owning path. */
-  parameterized?: { path: string; params: string[] };
+  gate: "none" | "session" | "admin";
 }
 
 export const MOUNT_REGISTRY = {
   public: { label: "public", gate: "none" },
   authenticated: { label: "authenticated", gate: "session" },
   admin: { label: "admin", gate: "admin" },
-  org: {
-    label: "org",
-    gate: "orgMember",
-    parameterized: { path: "organization/$orgSlug", params: ["orgSlug"] },
-  },
-  team: {
-    label: "team",
-    gate: "teamMember",
-    parameterized: { path: "team/$teamId", params: ["teamId"] },
-  },
 } satisfies Record<string, MountDef>;
 
 export type MountId = keyof typeof MOUNT_REGISTRY & string;
 export const MOUNTS = Object.keys(MOUNT_REGISTRY) as MountId[];
 
 /** Bump when the registry shape changes — invalidates all compose digests. */
-export const MOUNT_REGISTRY_VERSION = 2;
+export const MOUNT_REGISTRY_VERSION = 3;
 
 /** Migration aliases: legacy `_`-segment names → canonical mounts. */
 export const MOUNT_ALIASES: Record<string, MountId> = {
   auth: "authenticated",
   authed: "authenticated",
   dashboard: "authenticated",
-  organization: "org",
 };
 
 export function resolveMountSegment(segment: string): MountId | undefined {

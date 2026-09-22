@@ -23,7 +23,6 @@ import {
   getConfig,
 } from "@tanstack/router-generator";
 import {
-  ManifestSchema,
   PluginManifestSchema,
   MOUNT_REGISTRY_VERSION,
   resolveMountSegment,
@@ -194,5 +193,4 @@ if (import.meta.main) {
       `manifest-gen: ${t.pluginName} (${path.basename(t.remoteRoot)}) — ${manifest.routes.length} routes, mounts: ${[...new Set(manifest.routes.map((r) => r.mount).filter(Boolean))].join(", ") || "none"}`,
     );
   }
-  ManifestSchema.parse; // keep import for version alignment check
 }

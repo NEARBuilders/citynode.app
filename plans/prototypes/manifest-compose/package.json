@@ -12,9 +12,9 @@
   "scripts": {
     "gen": "bun generator/src/cli.ts --all",
     "verify": "bun run --cwd host verify",
-    "verify:mf": "bun run --cwd host verify:mf",
     "start": "bun run --cwd host start",
-    "start:tenant": "bun run --cwd host start:tenant"
+    "start:tenant": "bun run --cwd host start:tenant",
+    "build:client": "bun run --cwd host build:client"
   },
   "devDependencies": {
     "@manifest-compose/shared": "workspace:*",

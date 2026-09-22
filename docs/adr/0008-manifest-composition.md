@@ -37,12 +37,15 @@ Investigation (2026-09) found the framework itself converging on the same substr
 4. **Dev = prod path shape.** The host consumes the same manifests from source on disk in dev and over MF in production — identical construction code, differing only in resolution. Dev SSR needs no MF at all (ADR 0007 §4).
 5. **Nothing is kept as a fallback.** Plan 034 deletes the graft machinery (server *and* client compose), `defineUiPlugin`, `tree.ts`, `./tree` exposes, `resolveCoreMount`, and the `pluginPath` seam in the same change that lands manifests. Main stays green (core-only SSR) until the rework lands — no interim dual-path state exists. The prototype (plan 033) gates the rework.
 6. **Ecosystem affordances this unlocks** (the reason data-over-objects is the point, not a side effect): app route surfaces are auditable from published config + manifests without executing plugin code; the `plugins/apps` registry can render plugin route inventories pre-install; trust tiers can compose manifest-only (browse) vs manifest+content (execute); hot-swap (ticket 10) becomes a data swap with clean module-cache disposal; manifests are framework-neutral data for the native target.
+7. **Client build contract (proven in plan 033's hydration e2e).** The host's browser client is ONE rspack MF web build — the browser twin of the server recipe: identical exact-strict-singleton shared map, no build remotes (runtime `registerRemotes` from the compose payload), async-boundary entry, and the build's MF runtime owns the page's share scope. The client entry is a custom Start-style entry — payload → `loadRemote` route configs → `constructTree` → `hydrateRoot(RouterClient)` — the one divergence from TanStack Start's managed entries, which cannot express runtime composition (Start owns build-time route trees). Two payload identities stay distinct: *composition* (plugin key + manifest — digested, deliberately deployment-free so disk and prod paths digest identically) and *deployment* (mfName + entry — the `loadRemote` target); payload remotes carry `{ key, name, entry }`. Plugin WEB builds must set `publicPath: "auto"` so container chunks resolve from the remote's own origin, never the composing page's.
 
 ## Known couplings (accepted, versioned)
 
 - The manifest schema tracks TanStack's *public* route-option surface — a public-API coupling, far cheaper than grafting's private-internals coupling, and carried by the catalog's lockstep version pins.
 - Per-route lazy loads over MF under SSR streaming must be proven — gated by plan 033's prototype before the rework starts.
 - `routeTree.gen.ts` remains for plugin-local standalone DX only; production never consumes it.
+- `manifest.gen.json`'s `name` equals the descriptor's plugin key — the compose digest and the client's manifest lookup rely on this generator invariant.
+- Plugin web builds depend on `publicPath: "auto"` reaching rspack output via `tools.rspack` function-form mutation — `environments.*.output.publicPath` does not survive rsbuild 2.2.8's rsbuild→rspack conversion (verified empirically in plan 033); re-verify on rsbuild bumps.
 
 ## Consequences
 

@@ -1,22 +1,27 @@
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
 
 /**
- * The prototype host in its PRODUCTION shape — mirroring the proven PR #134
- * host build exactly: plain tools.rspack with target async-node (no rsbuild
- * environments), ModuleFederationPlugin with the node runtime plugin,
- * commonjs-module library, exact-strict shared maps, NO build remotes
- * (dynamic registration), and an async-boundary entry (entry.tsx → server).
+ * The host CLIENT build — the browser twin of the proven server recipe
+ * (rsbuild.config.ts): plain tools.rspack, ModuleFederationPlugin with the
+ * SAME exact-strict singleton shared map, NO build remotes (dynamic
+ * registration at runtime), and an async-boundary entry (entry-web.tsx →
+ * client) so non-eager shared scope init resolves before the app module runs.
+ *
+ * The build's own MF runtime owns the share scope — one React/router across
+ * host client and containers by the same negotiation already green on the
+ * server and in production everything.dev. No import map, no hand-built
+ * vendor artifacts: rspack compiles the whole graph (CJS interop included).
+ *
+ * Build:  bunx rsbuild build -c rsbuild.client.config.ts   (from host/)
+ * Output: dist-web/static/js/client.js (publicPath /__host/)
  */
 export default defineConfig({
   plugins: [pluginReact()],
   source: {
     entry: {
-      index: "./src/entry.tsx",
+      client: "./src/entry-web.tsx",
     },
   },
   dev: {
@@ -24,24 +29,21 @@ export default defineConfig({
   },
   tools: {
     rspack: {
-      target: "async-node",
+      target: "web",
       optimization: {
-        nodeEnv: false,
+        nodeEnv: "production",
       },
       output: {
         uniqueName: "host",
-        library: { type: "commonjs-module" },
+        publicPath: "/__host/",
       },
-      externals: [/^node:/, /^bun:/],
       infrastructureLogging: { level: "error" },
       stats: "errors-warnings",
       plugins: [
         new ModuleFederationPlugin({
           name: "host",
-          filename: "remoteEntry.server.js",
+          filename: "remoteEntry.js",
           dts: false,
-          runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
-          library: { type: "commonjs-module" },
           shared: {
             react: { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
             "react-dom": { version: "19.2.4", requiredVersion: "19.2.4", singleton: true, strictVersion: true, eager: false, shareScope: "default" },
@@ -55,7 +57,7 @@ export default defineConfig({
     chunkSplit: { strategy: "custom" },
   },
   output: {
-    distPath: { root: "dist" },
+    distPath: { root: "dist-web" },
     filename: { js: "[name].js" },
     minify: false,
     clean: false,

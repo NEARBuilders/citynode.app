@@ -4,9 +4,10 @@
  * data + generated route-config refs; gates are attached host-side; no
  * foreign route object is ever mutated.
  *
- * The construction code is resolution-agnostic: `PluginResolver` abstracts
- * manifest/route-config loading — disk-resolved (dev / this harness) or
- * MF-resolved (production) — satisfying ADR 0007 §4 dev=prod path shape.
+ * Resolution-agnostic: `PluginResolver` abstracts manifest/route-config
+ * loading — disk-resolved (dev) or MF-resolved (production) — and the
+ * digest deliberately excludes URLs/paths so the same effective composition
+ * digests identically on both paths (hydration parity, gate 7).
  */
 import {
   createRootRoute,
@@ -15,29 +16,31 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import {
+  digestOf,
   MOUNT_REGISTRY,
-  type AppDescriptor,
   type PluginManifest,
-  type RouteConfigModule,
+  type PluginRef,
+  type ResolvedApp,
   type RouteOptionsBundle,
 } from "@manifest-compose/shared";
 
 export interface HostContext {
   user?: { id: string; name: string; isAdmin?: boolean };
-  org?: { slug: string; member: boolean };
-  team?: { id: string; member: boolean };
 }
 
 export interface ResolvedPlugin {
-  pluginName: string;
+  key: string;
+  mfName: string;
   manifest: PluginManifest;
-  routeConfig: RouteConfigModule;
+  routeConfig: RouteOptionsModule;
 }
 
-export type PluginResolver = (entry: {
-  pluginName: string;
-  source: AppDescriptor["plugins"][string]["source"];
-}) => Promise<ResolvedPlugin>;
+export interface RouteOptionsModule {
+  routeConfigLoaders: Record<string, () => Promise<RouteOptionsBundle>>;
+  rootMeta?: RouteOptionsBundle;
+}
+
+export type PluginResolver = (ref: PluginRef) => Promise<ResolvedPlugin>;
 
 // ---- gates (host policy; plugins never write auth code for mounts) ----
 
@@ -52,82 +55,64 @@ const GATES: Record<string, ((args: GateArgs) => void) | undefined> = {
     if (!context.user) throw redirect({ to: "/login" });
     if (!context.user.isAdmin) throw redirect({ to: "/" });
   },
-  orgMember: ({ context }) => {
-    if (!context.user) throw redirect({ to: "/login" });
-    if (!context.org?.member) throw redirect({ to: "/orgs" });
-  },
-  teamMember: ({ context }) => {
-    if (!context.user) throw redirect({ to: "/login" });
-    if (!context.team?.member) throw redirect({ to: "/orgs" });
-  },
 };
 
-// ---- stable digest over composition inputs ----
-
-export function compositionDigest(app: AppDescriptor, manifests: PluginManifest[]): string {
-  const payload = JSON.stringify({
-    app: app.name,
-    plugins: Object.entries(app.plugins).map(([k, v]) => ({ k, v })),
-    manifests,
-    mountRegistryVersion: 2,
-  });
-  let h1 = 0xdeadbeef;
-  let h2 = 0x41c6ce57;
-  for (let i = 0; i < payload.length; i++) {
-    const ch = payload.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  return (((h1 >>> 0) * 4294967296 + (h2 >>> 0)) >>> 0).toString(16);
+export interface NavItem {
+  path: string;
+  label: string;
+  order?: number;
 }
 
 export interface ConstructedTree {
-  rootRoute: ReturnType<typeof createRootRoute>;
+  rootRoute: any;
   digest: string;
-  /** Per-plugin manifests in deterministic (name-ascending) order. */
   manifests: PluginManifest[];
+  /** Nav manifest assembled from composed routes' staticData (ADR 0008). */
+  nav: NavItem[];
+  /** Merged plugin __root head metas, lifted by construction. */
+  headMetas: Array<Record<string, unknown>>;
 }
 
-export async function constructTree(app: AppDescriptor, resolver: PluginResolver): Promise<ConstructedTree> {
-  const pluginNames = Object.keys(app.plugins).sort(); // deterministic (C7)
+function joinPath(a: string | undefined, b: string | undefined): string {
+  const left = a && a !== "/" ? a.replace(/\/+$/, "") : "";
+  const right = b && b !== "/" ? b.replace(/^\/+/, "") : "";
+  if (!left) return right ? `/${right}` : "/";
+  if (!right) return left;
+  return `${left}/${right}`;
+}
+
+export async function constructTree(app: ResolvedApp, resolver: PluginResolver): Promise<ConstructedTree> {
+  const keys = Object.keys(app.plugins).sort();
   const resolved: ResolvedPlugin[] = [];
-  for (const key of pluginNames) {
+  for (const key of keys) {
     resolved.push(await resolver(app.plugins[key]!));
   }
 
   const rootRoute = createRootRoute({
-    // host owns <html>/<head> chrome; plugin __root head fns are LIFTED here
-    head: () => {
-      const metas = resolved
-        .map((p) => p.routeConfig.rootMeta?.head?.({})?.meta ?? [])
-        .flat();
-      return { meta: metas };
-    },
     component: () => <Outlet />,
   });
 
-  // ---- host-owned mounts (gates only; shape-free) ----
-  // A childless pathless layout is a LEAF branch whose full path is "/" — it
-  // would compete with real index routes. Mounts exist only when a plugin
-  // declares them; unused mounts are simply not constructed.
+  const headMetas = resolved
+    .map((p) => p.routeConfig.rootMeta?.head?.({})?.meta ?? [])
+    .flat();
+  rootRoute.options.head = () => ({ meta: headMetas });
+
   const usedMounts = new Set<string>(
     resolved.flatMap((p) => p.manifest.routes.map((r) => r.mount).filter((m): m is string => Boolean(m))),
   );
   const mountRoutes = new Map<string, any>();
   for (const [mountId, def] of Object.entries(MOUNT_REGISTRY)) {
     if (!usedMounts.has(mountId)) continue;
-    // pathless mounts take a custom id; parameterized mounts derive their id
-    // from their owning path (TanStack forbids both)
     const route = createRoute({
+      id: `__mount_${mountId}`,
       getParentRoute: () => rootRoute,
-      ...(def.parameterized ? { path: def.parameterized.path } : { id: `__mount_${mountId}` }),
       beforeLoad: GATES[def.gate],
       component: () => <Outlet />,
     });
     mountRoutes.set(mountId, route as any);
   }
 
-  // ---- plugin subtrees: fresh constructed routes per composition ----
+  const nav: NavItem[] = [];
   const childrenByParent = new Map<any, any[]>();
   const attach = (parent: any, child: any) => {
     let list = childrenByParent.get(parent);
@@ -139,8 +124,6 @@ export async function constructTree(app: AppDescriptor, resolver: PluginResolver
   };
 
   for (const plugin of resolved) {
-    // await all per-route option bundles (boot-time config load; per-route
-    // chunks resolved through the generated dynamic-import map)
     const optionsById = new Map<string, RouteOptionsBundle>();
     await Promise.all(
       plugin.manifest.routes.map(async (r) => {
@@ -148,35 +131,27 @@ export async function constructTree(app: AppDescriptor, resolver: PluginResolver
       }),
     );
 
-    interface Node {
-      record: (typeof plugin.manifest.routes)[number];
-      route: any;
-    }
-    const byId = new Map<string, Node>();
+    const fullPathById = new Map<string, string>();
+    const byId = new Map<string, { record: (typeof plugin.manifest.routes)[number]; route: any }>();
 
-    // parents before children (constructed with real parent references)
     const pending = [...plugin.manifest.routes];
-    const built = new Set<string>();
     let progressed = true;
     while (pending.length > 0 && progressed) {
       progressed = false;
       for (let i = 0; i < pending.length; i++) {
         const record = pending[i]!;
-        const parentReady = !record.parentId || byId.has(record.parentId);
-        if (!parentReady) continue;
+        if (record.parentId && !byId.has(record.parentId)) continue;
         pending.splice(i, 1);
         progressed = true;
 
         const opts = optionsById.get(record.id)!;
-        // pathed routes derive their id from the path (TanStack forbids both);
-        // pathless layouts take a namespaced id for object identity
-        const parentRoute: any = record.parentId
-          ? byId.get(record.parentId)!.route
-          : mountRoutes.get(record.mount!)!;
+        const parentRoute: any = record.parentId ? byId.get(record.parentId)!.route : mountRoutes.get(record.mount!)!;
+        const parentFullPath = record.parentId ? fullPathById.get(record.parentId)! : "";
+        const fullPath = joinPath(parentFullPath, record.path ?? (record.isIndex ? "/" : undefined));
 
         const route = record.isLayout
           ? createRoute({
-              id: `${plugin.pluginName}__${record.id}`,
+              id: `${plugin.key}__${record.id}`,
               getParentRoute: () => parentRoute,
               component: opts.component ?? (() => <Outlet />),
             })
@@ -191,25 +166,37 @@ export async function constructTree(app: AppDescriptor, resolver: PluginResolver
             });
 
         byId.set(record.id, { record, route });
-        built.add(record.id);
+        fullPathById.set(record.id, fullPath);
         attach(parentRoute, route);
+
+        const navMeta = opts.staticData?.nav as { label?: string; order?: number } | undefined;
+        if (navMeta?.label) {
+          nav.push({ path: fullPath, label: navMeta.label, order: navMeta.order });
+        }
         break;
       }
     }
     if (pending.length > 0) {
       throw new Error(
-        `unresolvable parentage in ${plugin.pluginName}: ${pending.map((r) => r.id).join(", ")}`,
+        `unresolvable parentage in ${plugin.key}: ${pending.map((r) => r.id).join(", ")}`,
       );
     }
   }
 
-  // assemble: parents own their constructed children (public addChildren API
-  // on host-owned routes — the entire graft-mutation class never appears)
   for (const [parent, children] of childrenByParent) {
     parent.addChildren(children);
   }
   rootRoute.addChildren([...mountRoutes.values()] as any);
+  nav.sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.path.localeCompare(b.path));
 
-  const manifests = resolved.map((p) => p.manifest);
-  return { rootRoute, digest: compositionDigest(app, manifests), manifests };
+  const digest = await digestOf({
+    appName: app.name,
+    plugins: keys.map((key) => ({
+      key,
+      mfName: app.plugins[key]!.source.kind === "remote" ? app.plugins[key]!.source.mfName : key,
+    })),
+    manifests: resolved.map((p) => p.manifest),
+  });
+
+  return { rootRoute, digest, manifests: resolved.map((p) => p.manifest), nav, headMetas };
 }
