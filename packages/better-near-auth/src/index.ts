@@ -26,6 +26,7 @@ import {
   verifyNep413Signature,
 } from "near-kit";
 import z from "zod";
+import { isDeterministicAccountId, verifyPasskeyNep413Signature } from "./passkey.js";
 import { defaultGetProfile, getImageUrl, getNetworkFromAccountId } from "./profile.js";
 import { schema } from "./schema.js";
 import {
@@ -701,17 +702,26 @@ export const siwn = (options: SIWNPluginOptions) => {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
 
-            const isValid = signedMessage.publicKey.startsWith("ml-dsa-65:")
-              ? await verifyMlDsa65Nep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                )
-              : await verifyNep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                );
+            const isValid = isDeterministicAccountId(accountId)
+              ? verifyPasskeyNep413Signature({
+                  accountId,
+                  publicKey: signedMessage.publicKey,
+                  signature: signedMessage.signature,
+                  message,
+                  recipient,
+                  nonce: nonceBytes,
+                })
+              : signedMessage.publicKey.startsWith("ml-dsa-65:")
+                ? await verifyMlDsa65Nep413Signature(
+                    signedMessage,
+                    { message, recipient, nonce: nonceBytes, callbackUrl },
+                    { near, maxAge: 15 * 60 * 1000 },
+                  )
+                : await verifyNep413Signature(
+                    signedMessage,
+                    { message, recipient, nonce: nonceBytes, callbackUrl },
+                    { near, maxAge: 15 * 60 * 1000 },
+                  );
 
             if (!isValid) {
               throw new APIError("UNAUTHORIZED", {
@@ -1082,17 +1092,26 @@ export const siwn = (options: SIWNPluginOptions) => {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
 
-            const isValid = signedMessage.publicKey.startsWith("ml-dsa-65:")
-              ? await verifyMlDsa65Nep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                )
-              : await verifyNep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                );
+            const isValid = isDeterministicAccountId(accountId)
+              ? verifyPasskeyNep413Signature({
+                  accountId,
+                  publicKey: signedMessage.publicKey,
+                  signature: signedMessage.signature,
+                  message,
+                  recipient,
+                  nonce: nonceBytes,
+                })
+              : signedMessage.publicKey.startsWith("ml-dsa-65:")
+                ? await verifyMlDsa65Nep413Signature(
+                    signedMessage,
+                    { message, recipient, nonce: nonceBytes, callbackUrl },
+                    { near, maxAge: 15 * 60 * 1000 },
+                  )
+                : await verifyNep413Signature(
+                    signedMessage,
+                    { message, recipient, nonce: nonceBytes, callbackUrl },
+                    { near, maxAge: 15 * 60 * 1000 },
+                  );
 
             if (!isValid) {
               throw new APIError("UNAUTHORIZED", {
@@ -1130,7 +1149,7 @@ export const siwn = (options: SIWNPluginOptions) => {
               expiresAt: new Date(Date.now() + 15 * 60 * 1000),
             });
 
-            if (!options.requireFullAccessKey) {
+            if (!options.requireFullAccessKey && !isDeterministicAccountId(accountId)) {
               const validateKey =
                 options.validateLimitedAccessKey ||
                 ((args: { accountId: string; publicKey: string; recipient?: string }) =>

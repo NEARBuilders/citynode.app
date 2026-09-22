@@ -5,13 +5,14 @@ import { useRouter } from "@tanstack/react-router";
 import {
   adminClient,
   anonymousClient,
+  deviceAuthorizationClient,
   inferAdditionalFields,
   organizationClient,
   phoneNumberClient,
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import type { RelayedTransactionT } from "better-near-auth";
-import { siwnClient } from "better-near-auth/client";
+import { passkeyWalletManifest, siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "../types";
 import { getRuntimeConfig } from "./runtime";
 
@@ -104,13 +105,17 @@ export function createAuthClient(options: CreateAuthClientOptions = {}) {
     },
     plugins: [
       inferAdditionalFields<any>(),
-      siwnClient(nearAuthConfig),
+      siwnClient({
+        ...nearAuthConfig,
+        wallets: nearAuthConfig.networkId === "mainnet" ? [passkeyWalletManifest] : [],
+      }),
       adminClient(),
       anonymousClient(),
       phoneNumberClient(),
       passkeyClient(),
       organizationClient({ teams: { enabled: true } }),
       apiKeyClient(),
+      deviceAuthorizationClient(),
     ],
   });
 }

@@ -3,7 +3,13 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
-import { admin, anonymous, organization, phoneNumber } from "better-auth/plugins";
+import {
+  admin,
+  anonymous,
+  deviceAuthorization,
+  organization,
+  phoneNumber,
+} from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
   adminAc,
@@ -13,6 +19,7 @@ import {
 } from "better-auth/plugins/organization/access";
 import { type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
+import { DEVICE_LINK_CLIENT_ID, deviceLink } from "./device-link";
 
 const orgStatements = {
   ...defaultStatements,
@@ -383,6 +390,11 @@ export function createAuthInstance(
         },
       }),
       nearInvitations(db, membershipPolicy),
+      deviceAuthorization({
+        verificationUri: "/device",
+        validateClient: (clientId) => clientId === DEVICE_LINK_CLIENT_ID,
+      }),
+      deviceLink(db),
       apiKey([
         {
           configId: "user-keys",

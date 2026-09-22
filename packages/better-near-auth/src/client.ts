@@ -1,4 +1,4 @@
-import type { EventMap } from "@hot-labs/near-connect";
+import type { EventMap, WalletManifest } from "@hot-labs/near-connect";
 import { hex } from "@scure/base";
 import type {
   BetterFetch,
@@ -59,6 +59,7 @@ export interface SIWNClientConfig {
   recipients?: DualNetworkConfig<string>;
   networkId?: "mainnet" | "testnet";
   cspNonce?: string;
+  wallets?: WalletManifest[];
 }
 
 interface SignWithWalletResult {
@@ -120,6 +121,39 @@ export interface SIWNClientActions {
   };
 }
 
+/**
+ * Executor build of NEAR-DevHub/near-connect-passkey (mainnet only). Bump the
+ * version on every executor change — near-connect caches executor code in
+ * IndexedDB keyed by `id:version`.
+ */
+export const passkeyWalletManifest: WalletManifest = {
+  id: "passkey",
+  version: "1.0.1",
+  name: "Passkey",
+  icon: "https://trezu.org/icons/passkey.svg",
+  description: "Sign in with Face ID, Touch ID, or your device passcode.",
+  website: "https://trezu.org",
+  executor:
+    "https://raw.githubusercontent.com/NEAR-DevHub/near-connect-passkey/refs/heads/main/passkey-executor.js",
+  type: "sandbox",
+  platform: ["web"],
+  features: {
+    signMessage: true,
+    signTransaction: false,
+    signAndSendTransaction: true,
+    signAndSendTransactions: true,
+    signInWithoutAddKey: true,
+    signInAndSignMessage: true,
+    signInWithFunctionCallKey: false,
+    signDelegateActions: true,
+    mainnet: true,
+    testnet: false,
+  },
+  permissions: {
+    storage: true,
+  },
+};
+
 export const siwnClient = (config: SIWNClientConfig) => {
   const nearState = atom<NearState>(null);
   const walletConnected = atom<boolean>(false);
@@ -180,6 +214,9 @@ export const siwnClient = (config: SIWNClientConfig) => {
     const initPromise = (async () => {
       const NearConnector = await loadConnector();
       const connector = new NearConnector({ network, cspNonce: config.cspNonce });
+      for (const manifest of config.wallets ?? []) {
+        await connector.registerWallet(manifest).catch(() => {});
+      }
       connectors.set(network, connector);
 
       const near = new Near({

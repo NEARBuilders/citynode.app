@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { UnderConstruction } from "@/components/under-construction";
+import { PairPanel } from "./-pair-panel";
 
 type SearchParams = {
   redirect?: string;
@@ -63,6 +64,7 @@ function LoginPage() {
 
   const [nearPending, setNearPending] = useState(false);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
+  const [showPair, setShowPair] = useState(false);
 
   useEffect(() => {
     void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
@@ -107,57 +109,72 @@ function LoginPage() {
             <p className="text-sm text-muted-foreground">Connect your NEAR wallet to continue.</p>
           </div>
 
-          {detectedAccount ? (
-            <div className="space-y-3">
-              <Button
-                type="button"
-                variant="default"
-                onClick={handleNear}
-                disabled={nearPending}
-                className="w-full"
-                data-testid="near.signin-button"
-              >
-                {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
-              </Button>
+          {showPair ? (
+            <PairPanel redirect={redirect} onClose={() => setShowPair(false)} />
+          ) : (
+            <>
+              {detectedAccount ? (
+                <div className="space-y-3">
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={handleNear}
+                    disabled={nearPending}
+                    className="w-full"
+                    data-testid="near.signin-button"
+                  >
+                    {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      setNearPending(true);
+                      try {
+                        await auth.near.disconnect();
+                        await auth.signIn.near({
+                          onSuccess: async () => {
+                            setNearPending(false);
+                            await handleSuccess("Signed in with NEAR");
+                          },
+                          onError: (error: { code?: string; message?: string }) => {
+                            setNearPending(false);
+                            handleError(error);
+                          },
+                        });
+                      } catch {
+                        setNearPending(false);
+                        toast.error("Failed to disconnect wallet");
+                      }
+                    }}
+                    disabled={nearPending}
+                    className="w-full"
+                  >
+                    Use another wallet
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={handleNear}
+                  disabled={nearPending}
+                  className="w-full"
+                  data-testid="near.signin-button"
+                >
+                  {nearPending ? "connecting..." : "connect with NEAR"}
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
-                onClick={async () => {
-                  setNearPending(true);
-                  try {
-                    await auth.near.disconnect();
-                    await auth.signIn.near({
-                      onSuccess: async () => {
-                        setNearPending(false);
-                        await handleSuccess("Signed in with NEAR");
-                      },
-                      onError: (error: { code?: string; message?: string }) => {
-                        setNearPending(false);
-                        handleError(error);
-                      },
-                    });
-                  } catch {
-                    setNearPending(false);
-                    toast.error("Failed to disconnect wallet");
-                  }
-                }}
-                disabled={nearPending}
                 className="w-full"
+                onClick={() => setShowPair(true)}
+                data-testid="login.device-button"
               >
-                Use another wallet
+                sign in with phone
               </Button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="default"
-              onClick={handleNear}
-              disabled={nearPending}
-              className="w-full"
-              data-testid="near.signin-button"
-            >
-              {nearPending ? "connecting..." : "connect with NEAR"}
-            </Button>
+            </>
           )}
         </div>
 
