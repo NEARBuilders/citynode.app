@@ -542,12 +542,13 @@ The repo standardizes on the Effect v4 dev toolchain ([docs](https://effect.webs
 
 ## Vendored Repositories
 
-This project vendors the Effect v4 monorepo (tag `effect@4.0.0-rc.112`, matching the catalog pin) under `repos/effect` via `git subtree`.
+This project vendors the Effect v4 monorepo (tag `effect@4.0.0-rc.112`, matching the catalog pin) under `repos/effect` as a **gitignored local clone**, restored automatically by `bun run prepare` (safe to re-run; skips the clone when it already exists).
 
 - Treat `repos/effect` as **read-only reference material**. Never edit files under it and never import from it — application code imports from normal package dependencies.
 - Always read `repos/effect/LLMS.md` before writing Effect code.
 - For idiomatic v4 patterns (`Context.Service`, `Layer`, scoped resources, `Effect.gen`), study the source and tests under `repos/effect/packages/effect/src` and treat them as the source of truth over documentation, generated guesses, or web search.
-- Update the subtree deliberately when bumping the `effect` catalog pin: `git subtree pull --prefix=repos/effect https://github.com/Effect-TS/effect.git effect@<new-tag> --squash`.
+- `bun run prepare` also symlinks `node_modules/@effect/oxc` → the vendored `packages/tools/oxc` workspace package (not published to npm); the patched Oxlint requires it to load the `effecttsgo` plugin — deleting `repos/` without re-running `prepare` breaks `bun lint`.
+- Update the clone deliberately when bumping the `effect` catalog pin: `git -C repos/effect fetch --tags && git -C repos/effect checkout effect@<new-tag>`, or delete `repos/` and re-run `bun run prepare` (adjust the tag in the `prepare` script).
 - Pattern references live in `docs/agents/effect-patterns.md`.
 
 ## TypeScript configuration (TS 7)
