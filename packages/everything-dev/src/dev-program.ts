@@ -17,26 +17,26 @@ import {
   suppressWarnings,
 } from "./config";
 import type { DevOptions, PhaseTiming, StartOptions } from "./contract";
-import { buildRegistryConfigUrl } from "./fastkv";
 import {
   captureShellEnv,
   type EnvEnsureError,
   type EnvLoadError,
   ProjectEnv,
-  type ProjectEnvService,
   ProjectEnvLive,
+  type ProjectEnvService,
 } from "./env/project-env";
+import { buildRegistryConfigUrl } from "./fastkv";
 import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
-import { pluginEvents, ProgressEvent, timePhase } from "./progress";
+import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
+  type AppOrchestrator,
   buildDescription,
   buildServiceDescriptorMap,
   buildServiceDescriptorMapFromPlan,
-  type AppOrchestrator,
   type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
@@ -94,7 +94,9 @@ export class StartRemoteConfigMissing extends Data.TaggedError("StartRemoteConfi
   message: string;
 }> {}
 
-export class StartConfigMissing extends Data.TaggedError("StartConfigMissing")<Record<string, never>> {}
+export class StartConfigMissing extends Data.TaggedError("StartConfigMissing")<
+  Record<string, never>
+> {}
 
 function parseSourceMode(value: string | undefined, defaultValue: SourceMode): SourceMode {
   if (value === "local" || value === "remote") return value;
@@ -140,19 +142,19 @@ const timedEffect = <A, E, R>(
     timings.push({ name, durationMs: Date.now() - startedAt });
     yield* emitProgress({ phase: name, status: "done", durationMs: Date.now() - startedAt });
     return result;
-  }).pipe(
-    Effect.onError(() => emitProgress({ phase: name, status: "error" })),
-  );
+  }).pipe(Effect.onError(() => emitProgress({ phase: name, status: "error" })));
 
 const ensureEnvStep = (projectEnv: ProjectEnvService, configDir: string) =>
-  projectEnv.ensureFile(configDir).pipe(
-    Effect.mapError((cause: EnvEnsureError) => new DevStepError({ phase: "ensure env", cause })),
-  );
+  projectEnv
+    .ensureFile(configDir)
+    .pipe(
+      Effect.mapError((cause: EnvEnsureError) => new DevStepError({ phase: "ensure env", cause })),
+    );
 
 const loadEnvStep = (projectEnv: ProjectEnvService, configDir: string) =>
-  projectEnv.load(configDir).pipe(
-    Effect.mapError((cause: EnvLoadError) => new DevStepError({ phase: "load env", cause })),
-  );
+  projectEnv
+    .load(configDir)
+    .pipe(Effect.mapError((cause: EnvLoadError) => new DevStepError({ phase: "load env", cause })));
 
 export const devBootstrap = (
   deps: BootstrapDeps,
@@ -290,18 +292,16 @@ export const devBootstrap = (
     yield* ensureEnvStep(projectEnv, deps.configDir);
     yield* loadEnvStep(projectEnv, deps.configDir);
 
-    yield* projectEnv.sync(deps.configDir, plan.envGenerated, shell).pipe(
-      Effect.catchTag("EnvSyncError", (error) =>
-        Effect.logWarning(`[env] failed to refresh .env from resolved ports: ${error.cause}`),
-      ),
-    );
+    yield* projectEnv
+      .sync(deps.configDir, plan.envGenerated, shell)
+      .pipe(
+        Effect.catchTag("EnvSyncError", (error) =>
+          Effect.logWarning(`[env] failed to refresh .env from resolved ports: ${error.cause}`),
+        ),
+      );
 
     const mergedEnv = yield* Effect.sync(() =>
-      mergeGeneratedOverFileEnv(
-        plan.envGenerated,
-        process.env as Record<string, string>,
-        shell,
-      ),
+      mergeGeneratedOverFileEnv(plan.envGenerated, process.env as Record<string, string>, shell),
     );
     const preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
     if (preflightFailures.length > 0) {

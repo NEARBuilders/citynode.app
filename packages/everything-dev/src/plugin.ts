@@ -7,7 +7,7 @@ import * as p from "@clack/prompts";
 import { Context, Effect, Layer } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
-import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
+import { buildRuntimeConfig } from "./app";
 import { openInBrowser, startLoginServer } from "./auth-login";
 import {
   deleteSessionHandle,
@@ -18,19 +18,13 @@ import {
   writeSessionHandle,
 } from "./auth-session";
 import {
-  buildBetterNearAuthQuietly,
-  buildEveryPluginQuietly,
-  buildEverythingDevQuietly,
   buildWorkspaceTargets,
   fileExists,
   getPluginRef,
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
-import {
-  buildCiInfraPlan,
-  type CiInfraPlan,
-} from "./cli/infra";
+import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
@@ -53,10 +47,8 @@ import { syncTemplate } from "./cli/sync";
 import { upgradeTemplate } from "./cli/upgrade";
 import { generateCodeArtifacts } from "./code-artifacts";
 import {
-  buildRuntimePluginsForConfig,
   drainConfigWarnings,
   findConfigPath,
-  getHostDevelopmentPort,
   getProjectRoot,
   loadLocalConfig,
   loadResolvedConfig,
@@ -83,16 +75,14 @@ import {
 import { getLogsDir, readDevLatestLog } from "./dev-logs";
 import {
   bootstrapLayers,
-  devBootstrap,
   type DevSessionData,
-  type BootstrapHelpers,
+  devBootstrap,
   resolveProxyUrl,
   type StartSummary,
   startBootstrap,
 } from "./dev-program";
-import { ProjectEnv, ProjectEnvLive, makeProjectEnv } from "./env/project-env";
+import { makeProjectEnv, ProjectEnv, ProjectEnvLive } from "./env/project-env";
 import {
-  buildRegistryConfigUrl,
   fetchBosConfigFromFastKv,
   fetchRemotePluginManifest,
   getRegistryNamespaceForAccount,
@@ -100,9 +90,6 @@ import {
   parseBosUrl,
 } from "./fastkv";
 import { materializeViaLayer } from "./infra/materializer";
-import { planInfra } from "./infra/planner";
-import { preflightLocalInfra } from "./infra/preflight";
-import type { InfraPlan } from "./infra/types";
 import { computeSriHashForUrl, parseDeployLines } from "./integrity";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import { checkFederationCompat } from "./mf";
@@ -115,26 +102,19 @@ import {
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
-import { pluginEvents, timePhase } from "./progress";
+import { timePhase } from "./progress";
 import { extractPublishedUrl, publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
 import { createPlugin, z } from "./sdk";
-import {
-  type AppOrchestrator,
-  buildDescription,
-  buildServiceDescriptorMap,
-  buildServiceDescriptorMapFromPlan,
-  type ServiceDescriptor,
-} from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
-import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig, SourceMode } from "./types";
+import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig } from "./types";
 import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
 
 export type { DevSessionData, StartSummary } from "./dev-program";
-export { pluginEvents, type ProgressEvent } from "./progress";
+export { type ProgressEvent, pluginEvents } from "./progress";
 
 let pendingSession: DevSessionData | null = null;
 let pendingStartSummary: StartSummary | null = null;
@@ -161,11 +141,6 @@ type BosDeps = {
 class BosDepsTag extends Context.Service<BosDepsTag, BosDeps>()("bos/BosDeps") {}
 
 type PluginAttachmentConfig = NonNullable<BosConfig["plugins"]>[string];
-
-function parseSourceMode(value: string | undefined, defaultValue: SourceMode): SourceMode {
-  if (value === "local" || value === "remote") return value;
-  return defaultValue;
-}
 
 function buildConfigResult(
   bosConfig: BosConfigInput | BosConfig | null,
@@ -395,14 +370,12 @@ export default createPlugin({
             loadRuntimeConfig: async () =>
               (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
             loadEnv: () => {
-              void projectEnv
-                .load(base.configDir)
-                .pipe(
-                  Effect.catchTag("EnvLoadError", (error) =>
-                    Effect.logWarning(`[env] failed to load .env: ${error.cause}`),
-                  ),
-                  Effect.runPromise,
-                );
+              void projectEnv.load(base.configDir).pipe(
+                Effect.catchTag("EnvLoadError", (error) =>
+                  Effect.logWarning(`[env] failed to load .env: ${error.cause}`),
+                ),
+                Effect.runPromise,
+              );
             },
           }),
           makeDrizzleKitLive({

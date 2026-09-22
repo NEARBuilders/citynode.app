@@ -4,8 +4,8 @@ import { join, resolve } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
-import { makeProjectEnv } from "../../src/env/project-env";
 import { loadResolvedConfig } from "../../src/config";
+import { makeProjectEnv } from "../../src/env/project-env";
 import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
 import type { RuntimeConfig } from "../../src/types";
 

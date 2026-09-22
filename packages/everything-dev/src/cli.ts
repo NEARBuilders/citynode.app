@@ -26,8 +26,8 @@ import type {
   TypecheckWorkspaceResult,
 } from "./contract";
 import type { StartSummary } from "./dev-program";
-import { pluginEvents, type ProgressEvent } from "./progress";
 import bosPlugin, { consumeDevSession } from "./plugin";
+import { type ProgressEvent, pluginEvents } from "./progress";
 import { createPluginRuntime } from "./sdk";
 import { printBanner } from "./utils/banner";
 import { colors, frames, gradients, icons } from "./utils/theme";
