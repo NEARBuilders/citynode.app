@@ -6,10 +6,10 @@ import { AuthServicesTag } from "../service-types";
 import {
   createHeaders,
   getActiveOrganizationId,
-  getActiveTeamId,
   parseTeamAreas,
   safeAuthApi,
   serializeTeamAreas,
+  withoutSessionDataCookie,
 } from "../utils";
 
 function toDate(value: unknown): Date {
@@ -102,15 +102,27 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
         const headers = createHeaders(context.reqHeaders);
-        const session = await services.auth.api.getSession({ headers });
-        if (getActiveTeamId(session?.session) === input.teamId) {
-          await safeAuthApi(() =>
-            services.auth.api.setActiveTeam({ headers, body: { teamId: null } }),
+        // Clear directly in the database rather than through
+        // auth.api.setActiveTeam: that call would only echo back whatever
+        // session the request's session_data cookie already carries (see
+        // below), not the DB row this write targets.
+        await services.db
+          .update(schema.session)
+          .set({ activeTeamId: null })
+          .where(
+            and(
+              eq(schema.session.userId, context.userId),
+              eq(schema.session.activeTeamId, input.teamId),
+            ),
           );
-        }
+        // removeTeam's own FORBIDDEN-on-own-active-team guard resolves the
+        // session from the request's better-auth.session_data cookie, a
+        // short-lived cache of the session as of its last refresh — not the
+        // database row just cleared above. Strip it so removeTeam falls
+        // back to a fresh database read via the session token instead.
         await safeAuthApi(() =>
           services.auth.api.removeTeam({
-            headers,
+            headers: withoutSessionDataCookie(headers),
             body: {
               teamId: input.teamId,
               organizationId: input.organizationId,

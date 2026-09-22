@@ -21,6 +21,27 @@ export function createHeaders(reqHeaders?: HeaderInput): Headers {
   return new Headers(reqHeaders);
 }
 
+/**
+ * Drops the `better-auth.session_data` cookie (and its chunked
+ * `.0`, `.1`, … variants) from a `cookie` header, forcing Better Auth's
+ * session lookup to fall back to a fresh database read via the session
+ * token instead of the cached payload — which reflects the session as of
+ * that cookie's last refresh, not writes made earlier in the same request.
+ */
+export function withoutSessionDataCookie(headers: Headers): Headers {
+  const cookie = headers.get("cookie");
+  if (!cookie) return headers;
+  const kept = cookie
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter((pair) => !pair.startsWith("better-auth.session_data"))
+    .join("; ");
+  const result = new Headers(headers);
+  if (kept) result.set("cookie", kept);
+  else result.delete("cookie");
+  return result;
+}
+
 export const localDevTrustedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
