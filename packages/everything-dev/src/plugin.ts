@@ -1,12 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import * as p from "@clack/prompts";
 import { Context, Effect, Layer } from "effect";
-import { buildScopedContext } from "every-plugin";
+import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
 import { buildRuntimeConfig, detectLocalPackages, PortAllocatorLive } from "./app";
 import { openInBrowser, startLoginServer } from "./auth-login";
@@ -31,9 +30,6 @@ import {
 import {
   buildCiInfraPlan,
   type CiInfraPlan,
-  ensureEnvFile,
-  loadProjectEnv,
-  syncEnvFile,
 } from "./cli/infra";
 import {
   buildInitPatterns,
@@ -86,6 +82,16 @@ import {
 } from "./db";
 import { getLogsDir, readDevLatestLog } from "./dev-logs";
 import {
+  bootstrapLayers,
+  devBootstrap,
+  type DevSessionData,
+  type BootstrapHelpers,
+  resolveProxyUrl,
+  type StartSummary,
+  startBootstrap,
+} from "./dev-program";
+import { ProjectEnv, ProjectEnvLive, makeProjectEnv } from "./env/project-env";
+import {
   buildRegistryConfigUrl,
   fetchBosConfigFromFastKv,
   fetchRemotePluginManifest,
@@ -108,8 +114,8 @@ import {
   listPublishKeys,
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
-import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
+import { pluginEvents, timePhase } from "./progress";
 import { extractPublishedUrl, publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
 import { createPlugin, z } from "./sdk";
@@ -121,37 +127,14 @@ import {
   type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
-import { shellEnv } from "./shell-env";
 import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig, SourceMode } from "./types";
 import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
 import { saveBosConfig } from "./utils/save-config";
 import { colors } from "./utils/theme";
 
-export interface DevSessionData {
-  orchestrator: AppOrchestrator;
-  services: Map<string, ServiceDescriptor>;
-  runtimeConfig: RuntimeConfig;
-  envGenerated?: Record<string, string>;
-}
-
-export interface StartSummary {
-  configSource: string;
-  configSourceHttp?: string;
-  account: string;
-  domain?: string;
-  modules: { host?: string; ui?: string; api?: string; auth?: string };
-  warnings: string[];
-}
-
-export type ProgressEvent = {
-  phase: string;
-  status: "running" | "done" | "error";
-  durationMs?: number;
-  message?: string;
-};
-
-export const pluginEvents = new EventEmitter();
+export type { DevSessionData, StartSummary } from "./dev-program";
+export { pluginEvents, type ProgressEvent } from "./progress";
 
 let pendingSession: DevSessionData | null = null;
 let pendingStartSummary: StartSummary | null = null;
@@ -163,35 +146,6 @@ export function consumeDevSession(): (DevSessionData & { summary?: StartSummary 
   pendingStartSummary = null;
   if (!data) return null;
   return summary ? { ...data, summary } : data;
-}
-
-async function timePhase<T>(
-  timings: PhaseTiming[],
-  name: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  pluginEvents.emit("progress", {
-    phase: name,
-    status: "running",
-  } satisfies ProgressEvent);
-  const startedAt = Date.now();
-  try {
-    const result = await fn();
-    timings.push({ name, durationMs: Date.now() - startedAt });
-    pluginEvents.emit("progress", {
-      phase: name,
-      status: "done",
-      durationMs: Date.now() - startedAt,
-    } satisfies ProgressEvent);
-    return result;
-  } catch (error) {
-    pluginEvents.emit("progress", {
-      phase: name,
-      status: "error",
-      durationMs: Date.now() - startedAt,
-    } satisfies ProgressEvent);
-    throw error;
-  }
 }
 
 const PUBLISH_FUNCTION_NAMES = ["__fastdata_kv"];
@@ -227,24 +181,6 @@ function buildConfigResult(
     remotes,
     full,
   };
-}
-
-function isValidProxyUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function resolveProxyUrl(bosConfig: BosConfig | null): string | null {
-  if (!bosConfig) return null;
-  const apiConfig = bosConfig.app.api;
-  if (!apiConfig) return null;
-  if (apiConfig.proxy && isValidProxyUrl(apiConfig.proxy)) return apiConfig.proxy;
-  if (apiConfig.production && isValidProxyUrl(apiConfig.production)) return apiConfig.production;
-  return null;
 }
 
 function sanitizePluginKey(value: string): string {
@@ -450,13 +386,24 @@ export default createPlugin({
         };
       });
 
+      const projectEnv = yield* buildScoped(ProjectEnv, ProjectEnvLive);
+
       const services = yield* buildScopedContext(
         Layer.mergeAll(
           makeDatabaseBindings({
             projectDir: base.configDir,
             loadRuntimeConfig: async () =>
               (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
-            loadEnv: () => loadProjectEnv(base.configDir),
+            loadEnv: () => {
+              void projectEnv
+                .load(base.configDir)
+                .pipe(
+                  Effect.catchTag("EnvLoadError", (error) =>
+                    Effect.logWarning(`[env] failed to load .env: ${error.cause}`),
+                  ),
+                  Effect.runPromise,
+                );
+            },
           }),
           makeDrizzleKitLive({
             projectDir: base.configDir,
@@ -767,419 +714,70 @@ export default createPlugin({
       const deps = Context.get(context["effect/context"], BosDepsTag);
       const devTimings: PhaseTiming[] = [];
 
-      ensureEnvFile(deps.configDir);
-      loadProjectEnv(deps.configDir);
-
-      const localPackages = detectLocalPackages(
-        deps.bosConfig ?? undefined,
-        deps.runtimeConfig ?? undefined,
-      );
-
-      const hostSource: SourceMode = localPackages.includes("host")
-        ? parseSourceMode(input.host, "local")
-        : "remote";
-      const uiSource: SourceMode = localPackages.includes("ui")
-        ? parseSourceMode(input.ui, "local")
-        : "remote";
-      const apiSource: SourceMode = localPackages.includes("api")
-        ? parseSourceMode(input.api, "local")
-        : "remote";
-      const authSource: SourceMode = localPackages.includes("auth")
-        ? parseSourceMode(input.auth, "local")
-        : "remote";
-      const ssr = input.ssr ?? false;
-      const proxy = input.proxy ?? false;
-
-      if (ssr) {
-        process.env.BOS_SSR = "1";
-      }
-
-      const sharedSync = await timePhase(devTimings, "shared deps", () =>
-        syncResolvedSharedDeps({
-          configDir: deps.configDir,
-          hostMode: hostSource,
-          bosConfig: deps.bosConfig ?? undefined,
-          extendsChain: [],
-        }),
-      );
-      let configMayHaveChanged = false;
-      if (sharedSync.catalogChanged) {
-        await timePhase(devTimings, "install", () =>
-          run("bun", ["install"], { cwd: deps.configDir }),
-        );
-        configMayHaveChanged = true;
-      }
-      const shouldBuildPlugin =
-        (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
-
-      await timePhase(devTimings, "build", async () => {
-        const buildTasks: Promise<void>[] = [
-          buildEverythingDevQuietly(deps.configDir),
-          buildBetterNearAuthQuietly(deps.configDir),
-        ];
-        if (shouldBuildPlugin) {
-          buildTasks.push(buildEveryPluginQuietly(deps.configDir));
-        }
-        await Promise.all(buildTasks);
-      });
-
-      let devExtendsChain: string[] | undefined;
-      if (configMayHaveChanged || input.remotePlugins !== undefined) {
-        const refreshed = await timePhase(devTimings, "resolve config", () =>
-          loadResolvedConfig({
-            cwd: deps.configDir,
-            remotePlugins: input.remotePlugins,
+      const outcome = await Effect.runPromise(
+        devBootstrap(deps, input, devTimings, { resolveProxyUrl }).pipe(
+          Effect.provide(bootstrapLayers),
+          Effect.catchTags({
+            DevConfigMissing: () => Effect.succeed({ failed: "No bos.config.json found" }),
+            DevProxyMissing: () =>
+              Effect.succeed({ failed: "No valid proxy URL configured in bos.config.json" }),
+            DevPreflightFailed: (error) =>
+              Effect.succeed({ failed: `Infra preflight failed: ${error.messages.join("; ")}` }),
           }),
-        );
-        deps.bosConfig = refreshed?.config ?? deps.bosConfig;
-        deps.runtimeConfig = refreshed?.runtime ?? deps.runtimeConfig;
-        devExtendsChain = refreshed?.source.extended;
-      }
-
-      if (!deps.bosConfig) {
-        return {
-          status: "error" as const,
-          description: "No bos.config.json found",
-          processes: [],
-          timings: devTimings,
-        };
-      }
-
-      if (proxy && !resolveProxyUrl(deps.bosConfig)) {
-        return {
-          status: "error" as const,
-          description: "No valid proxy URL configured in bos.config.json",
-          processes: [],
-          timings: devTimings,
-        };
-      }
-
-      suppressWarnings();
-      const developmentRuntime = await buildRuntimeConfig(deps.bosConfig, {
-        uiSource,
-        apiSource,
-        authSource,
-        hostSource,
-        env: "development",
-        plugins: deps.runtimeConfig?.plugins,
-      });
-      drainConfigWarnings();
-      resumeWarnings();
-
-      const plan: InfraPlan = await timePhase(devTimings, "ports", () =>
-        Effect.runPromise(
-          planInfra({
-            configDir: deps.configDir,
-            bosConfig: developmentRuntime,
-            cli: {
-              port: input.port,
-              apiPort: input.apiPort,
-              authPort: input.authPort,
-              uiPort: input.uiPort,
-              pluginPortStart: input.pluginPortStart,
-              ssr,
-              proxy,
-              hostSource,
-              uiSource,
-              apiSource,
-              authSource,
-              interactive: input.interactive,
-            },
-          }).pipe(Effect.provide(PortAllocatorLive)),
         ),
       );
 
-      await materializeViaLayer(deps.configDir, plan.runtimeConfig);
-      ensureEnvFile(deps.configDir);
-      loadProjectEnv(deps.configDir);
-
-      await Effect.runPromise(
-        syncEnvFile(deps.configDir, plan.envGenerated, shellEnv).pipe(
-          Effect.catchTag("EnvSyncError", (error) =>
-            Effect.logWarning(`[env] failed to refresh .env from resolved ports: ${error.cause}`),
-          ),
-        ),
-      );
-
-      const mergedEnv = mergeGeneratedOverFileEnv(
-        plan.envGenerated,
-        process.env as Record<string, string>,
-        shellEnv,
-      );
-      const preflightFailures = await Effect.runPromise(
-        preflightLocalInfra(plan.envGenerated, mergedEnv),
-      );
-      if (preflightFailures.length > 0) {
-        const messages = preflightFailures.map((f) => f.error).join("; ");
+      if ("failed" in outcome) {
         return {
           status: "error" as const,
-          description: `Infra preflight failed: ${messages}`,
+          description: outcome.failed,
           processes: [],
           timings: devTimings,
         };
       }
 
-      const services = buildServiceDescriptorMapFromPlan(plan, { ssr, proxy });
-
-      const packages = [...plan.serviceDescriptors.keys()];
-      if (process.env.DEBUG === "true" || process.env.DEBUG === "1") {
-        console.error("[DEBUG dev] services keys:", packages.join(", "));
-      }
-      const apiSvc = services.get("api");
-      if (apiSvc?.proxy) {
-        const proxyUrl = resolveProxyUrl(deps.bosConfig);
-        if (proxyUrl) plan.orchestrator.env.API_PROXY = proxyUrl;
-      }
-
-      pendingSession = {
-        orchestrator: plan.orchestrator,
-        services,
-        runtimeConfig: plan.runtimeConfig,
-        envGenerated: plan.envGenerated,
-      };
-
-      await timePhase(devTimings, "generate artifacts", () =>
-        generateCodeArtifacts(deps.configDir, deps.bosConfig!, {
-          env: "development",
-          extendsChain: devExtendsChain,
-          runtimeConfig: plan.runtimeConfig,
-        }),
-      );
+      pendingSession = outcome.session;
 
       return {
         status: "started" as const,
-        description: buildDescription(services) || plan.description,
-        processes: packages,
+        description: outcome.description,
+        processes: outcome.processes,
         timings: devTimings,
       };
     }),
 
     start: builder.start.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
-      ensureEnvFile(deps.configDir);
-      loadProjectEnv(deps.configDir);
 
-      pluginEvents.emit("progress", {
-        phase: "config",
-        status: "running",
-      } satisfies ProgressEvent);
+      const outcome = await Effect.runPromise(
+        startBootstrap(deps, input, { resolveProxyUrl, fetchPublishedConfig }).pipe(
+          Effect.provide(bootstrapLayers),
+          Effect.catchTags({
+            StartRemoteConfigMissing: (error) => Effect.succeed({ failed: error.message }),
+            StartFetchFailed: (error) => Effect.succeed({ failed: error.message }),
+            StartConfigMissing: () =>
+              Effect.succeed({
+                failed:
+                  "No configuration found. Provide --account and --gateway flags, or create a local bos.config.json.",
+              }),
+          }),
+        ),
+      );
 
-      const bosEnv = input.env ?? (process.env.BOS_ENV === "staging" ? "staging" : "production");
-      const account = input.account ?? process.env.BOS_ACCOUNT;
-      const domain = input.domain ?? process.env.BOS_GATEWAY;
-
-      let config: BosConfig | null = null;
-      let remoteConfig: BosConfig | null = null;
-
-      if (account && domain) {
-        try {
-          remoteConfig = await fetchPublishedConfig(account, domain, input.registry);
-          if (remoteConfig) {
-            config = remoteConfig;
-          } else {
-            return {
-              status: "error" as const,
-              url: "",
-              error: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${buildRegistryConfigUrl(
-                account,
-                domain,
-                input.registry,
-              )}`,
-            };
-          }
-        } catch (error) {
-          return {
-            status: "error" as const,
-            url: "",
-            error: `Failed to fetch config for bos://${account}/${domain}: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }\nExpected URL: ${buildRegistryConfigUrl(account, domain, input.registry)}`,
-          };
-        }
-      } else {
-        config = deps.bosConfig;
-      }
-
-      if (!config) {
+      if ("failed" in outcome) {
         return {
           status: "error" as const,
           url: "",
-          error:
-            "No configuration found. Provide --account and --gateway flags, or create a local bos.config.json.",
+          error: outcome.failed,
         };
       }
 
-      // Apply runtime overrides from CLI flags / env vars
-      if (account) {
-        config = { ...config, account };
-      }
-      if (domain) {
-        config = { ...config, domain };
-      }
-
-      const port = input.port ?? getHostDevelopmentPort(config.app.host.development);
-      const isStaging = bosEnv === "staging";
-      const runtimePlugins = await buildRuntimePluginsForConfig(
-        config,
-        deps.configDir,
-        "production",
-      );
-      suppressWarnings();
-      const runtimeConfig = await buildRuntimeConfig(config, {
-        uiSource: "remote",
-        apiSource: "remote",
-        authSource: "remote",
-        hostSource: "remote",
-        env: "production",
-        plugins: runtimePlugins,
-      });
-      drainConfigWarnings();
-      resumeWarnings();
-
-      if (isStaging && config.staging?.domain) {
-        runtimeConfig.domain = config.staging.domain;
-      }
-
-      if (isStaging) {
-        runtimeConfig.env = "staging";
-      }
-
-      await materializeViaLayer(deps.configDir, runtimeConfig);
-      ensureEnvFile(deps.configDir);
-      loadProjectEnv(deps.configDir);
-
-      pluginEvents.emit("progress", {
-        phase: "generate artifacts",
-        status: "running",
-      } satisfies ProgressEvent);
-      await generateCodeArtifacts(deps.configDir, config, {
-        env: "production",
-        runtimeConfig,
-      });
-      pluginEvents.emit("progress", {
-        phase: "generate artifacts",
-        status: "done",
-      } satisfies ProgressEvent);
-
-      // ── Production Readiness Validation ──
-      const productionEnv: Record<string, string> = {};
-      const warnings: string[] = [];
-
-      // Default CORS_ORIGIN to the configured domain if not set
-      if (!process.env.CORS_ORIGIN && config.domain) {
-        const effectiveDomain = isStaging
-          ? (config.staging?.domain ?? config.domain)
-          : config.domain;
-        const defaultOrigin = `https://${effectiveDomain}`;
-        productionEnv.CORS_ORIGIN = defaultOrigin;
-        warnings.push(`CORS_ORIGIN defaulting to ${defaultOrigin}`);
-      }
-
-      // Validate required secrets
-      const requiredSecrets = new Set<string>();
-      const missingSecrets: string[] = [];
-
-      if (runtimeConfig.host.secrets) {
-        for (const s of runtimeConfig.host.secrets) requiredSecrets.add(s);
-      }
-      if (runtimeConfig.auth?.secrets) {
-        for (const s of runtimeConfig.auth.secrets) requiredSecrets.add(s);
-      }
-      if (runtimeConfig.api?.secrets) {
-        for (const s of runtimeConfig.api.secrets) requiredSecrets.add(s);
-      }
-      for (const plugin of Object.values(runtimeConfig.plugins ?? {})) {
-        if (plugin.secrets) {
-          for (const s of plugin.secrets) requiredSecrets.add(s);
-        }
-      }
-
-      for (const secret of requiredSecrets) {
-        const value = process.env[secret];
-        if (!value || value.length === 0) {
-          missingSecrets.push(secret);
-        }
-      }
-
-      if (missingSecrets.length > 0) {
-        warnings.push(`Missing ${missingSecrets.length} secret(s): ${missingSecrets.join(", ")}`);
-      }
-
-      const stagingEnvVars: Record<string, string> = isStaging
-        ? { BOS_GATEWAY: config.staging?.domain ?? config.domain ?? "" }
-        : {};
-
-      const plan: InfraPlan = await Effect.runPromise(
-        planInfra({
-          configDir: deps.configDir,
-          bosConfig: runtimeConfig,
-          cli: {
-            port: input.port,
-            ssr: false,
-            proxy: false,
-            hostSource: "remote",
-            uiSource: "remote",
-            apiSource: "remote",
-            authSource: "remote",
-            interactive: input.interactive,
-          },
-        }).pipe(Effect.provide(PortAllocatorLive)),
-      );
-
-      const services = buildServiceDescriptorMap(plan.runtimeConfig);
-
-      const configSource = remoteConfig
-        ? `bos://${account}/${domain}`
-        : (findConfigPath() ?? "bos.config.json");
-
-      const configSourceHttp =
-        remoteConfig && account && domain
-          ? buildRegistryConfigUrl(account, domain, input.registry)
-          : undefined;
-
-      const summary: StartSummary = {
-        configSource,
-        configSourceHttp,
-        account: config.account,
-        domain: config.domain ?? undefined,
-        modules: {
-          host: plan.runtimeConfig.host.remoteUrl ?? plan.runtimeConfig.host.url ?? "local",
-          ui: plan.runtimeConfig.ui.url ?? "local",
-          api: plan.runtimeConfig.api.url ?? "local",
-          auth: plan.runtimeConfig.auth?.url ?? undefined,
-        },
-        warnings,
-      };
-
-      const orchestrator: AppOrchestrator = {
-        packages: ["host"],
-        env: {
-          NODE_ENV: "production",
-          ...productionEnv,
-          ...stagingEnvVars,
-          ...plan.launch.env,
-        },
-        description: `${isStaging ? "Staging" : "Production"} Mode (${config.account})`,
-        port: plan.resolvedPorts.host ?? port,
-        interactive: input.interactive,
-        noLogs: true,
-      };
-
-      pendingSession = {
-        orchestrator,
-        services,
-        runtimeConfig: plan.runtimeConfig,
-      };
-      pendingStartSummary = summary;
-
-      pluginEvents.emit("progress", {
-        phase: "config",
-        status: "done",
-      } satisfies ProgressEvent);
+      pendingSession = outcome.session;
+      pendingStartSummary = outcome.summary;
 
       return {
         status: "running" as const,
-        url: plan.launch.hostUrl ?? `http://localhost:${plan.resolvedPorts.host ?? port}`,
+        url: outcome.url,
       };
     }),
 
@@ -1855,7 +1453,7 @@ export default createPlugin({
             });
           }
           await timePhase(timings, "create env file", async () => {
-            ensureEnvFile(targetDir);
+            await Effect.runPromise(makeProjectEnv().ensureFile(targetDir));
           });
 
           if (!input.noInstall) {

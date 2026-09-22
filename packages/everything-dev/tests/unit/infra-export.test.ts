@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildCiInfraPlan, buildOriginMap, ensureEnvFile } from "../../src/cli/infra";
+import { buildCiInfraPlan, buildOriginMap } from "../../src/cli/infra";
+import { makeProjectEnv } from "../../src/env/project-env";
 import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
 import type { RuntimeConfig, RuntimePluginConfig } from "../../src/types";
 
@@ -70,7 +71,7 @@ describe("buildCiInfraPlan", () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-ci-infra-"));
     tempDirs.push(dir);
     await materialize(dir, buildRuntimeConfig());
-    ensureEnvFile(dir);
+    await Effect.runPromise(makeProjectEnv().ensureFile(dir));
 
     const runtime = {
       ...buildRuntimeConfig(),

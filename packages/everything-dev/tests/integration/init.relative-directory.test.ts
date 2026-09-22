@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ensureEnvFile } from "../../src/cli/infra";
 import { buildInitPatterns, copyFilteredFiles, personalizeConfig } from "../../src/cli/init";
+import { makeProjectEnv } from "../../src/env/project-env";
 import { loadResolvedConfig } from "../../src/config";
 import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
 import type { RuntimeConfig } from "../../src/types";
@@ -65,7 +65,7 @@ describe("bos init - relative directory", () => {
     }
 
     await materialize(targetDir, loaded.runtime);
-    ensureEnvFile(targetDir);
+    await Effect.runPromise(makeProjectEnv().ensureFile(targetDir));
 
     expect(existsSync(join(targetDir, "bos.config.json"))).toBe(true);
     expect(existsSync(join(targetDir, ".env.example"))).toBe(true);

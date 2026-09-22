@@ -137,19 +137,20 @@ const navOf = (options: RouteOptionsBundle): NavDeclaration | undefined => {
   return undefined;
 };
 
-/** Options a layout route (mount or pathless) may carry — the rest would be
- * silently dropped by construction, so declaring them is a hard error. */
-const LAYOUT_OPTIONS = ["loader", "beforeLoad", "head", "staticData"] as const;
-
-function assertNoDroppedLayoutOptions(options: RouteOptionsBundle, where: string): void {
-  const declared = LAYOUT_OPTIONS.filter(
-    (key) => options[key as keyof RouteOptionsBundle] !== undefined,
-  );
-  if (declared.length > 0) {
-    throw new Error(
-      `${where} declares layout-unsupported options (${declared.join(", ")}) — only component/errorComponent/pendingComponent/notFoundComponent survive composition`,
-    );
-  }
+/** Layout routes (mount or pathless) pass their authored options through,
+ * like every other route kind. On mount routes the registry gate composes
+ * BEFORE the declaration's own beforeLoad so a source can never escape its
+ * mount's gate (ADR 0008 §3), while the declaration's return value still
+ * flows to children as route context. */
+function layoutBeforeLoad(
+  gate: GateFn | undefined,
+  declared: RouteOptionsBundle["beforeLoad"],
+): RouteOptionsBundle["beforeLoad"] {
+  if (!gate) return declared;
+  return (args) => {
+    gate(args);
+    return declared?.(args);
+  };
 }
 
 export async function constructTree(input: ConstructInput): Promise<ConstructedTree> {
@@ -219,19 +220,22 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
     const declaration = declarations.get(mountId);
     if (!declaration) continue;
     const def = MOUNT_REGISTRY[mountId]!;
+    const gate = GATES[def.gate];
+    const options = declaration.options;
     const route = createRoute({
       id: `__mount_${mountId}`,
       getParentRoute: () => rootRoute,
-      ...(GATES[def.gate] ? { beforeLoad: GATES[def.gate] } : {}),
-      component: declaration.options.component ?? Outlet,
-      ...(declaration.options.errorComponent
-        ? { errorComponent: declaration.options.errorComponent }
+      ...(gate || options.beforeLoad
+        ? { beforeLoad: layoutBeforeLoad(gate, options.beforeLoad) }
         : {}),
+      ...(options.loader ? { loader: options.loader } : {}),
+      ...(options.head ? { head: options.head } : {}),
+      ...(options.staticData ? { staticData: options.staticData } : {}),
+      component: options.component ?? Outlet,
+      ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
+      ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
+      ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
     });
-    assertNoDroppedLayoutOptions(
-      declaration.options,
-      `mount "${mountId}" (${declaration.record.file})`,
-    );
     mountRoutes.set(mountId, toAnyRoute(route));
   }
 
@@ -312,12 +316,7 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
         const parent = parentFor(record);
         const routePath = record.path;
         const isLayoutRoute = record.isLayout || routePath === undefined;
-        if (isLayoutRoute) {
-          assertNoDroppedLayoutOptions(
-            options,
-            `layout route "${record.id}" in "${plugin.key}" (${record.file})`,
-          );
-        } else {
+        if (!isLayoutRoute) {
           const siblings = claimedPathsByParent.get(parent.route) ?? new Map<string, string>();
           const claimant = siblings.get(routePath);
           if (claimant) {
@@ -330,12 +329,18 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
         }
         const fullPath = joinPath(parent.fullPath, routePath);
         let route: AnyRoute;
-        if (isLayoutRoute || routePath === undefined) {
+        if (isLayoutRoute) {
           route = createRoute({
             id: `${plugin.key}__${record.id}`,
             getParentRoute: () => parent.route,
+            ...(options.loader ? { loader: options.loader } : {}),
+            ...(options.beforeLoad ? { beforeLoad: options.beforeLoad } : {}),
+            ...(options.head ? { head: options.head } : {}),
+            ...(options.staticData ? { staticData: options.staticData } : {}),
             component: options.component ?? Outlet,
             ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
+            ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
+            ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
           });
         } else {
           route = createRoute({

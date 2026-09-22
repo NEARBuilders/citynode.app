@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { syncEnvFile } from "../../src/cli/infra";
+import { syncEnvFile } from "../../src/env/project-env";
 
 function makeEnvDir(content: string | null): string {
   const dir = mkdtempSync(join(tmpdir(), "bos-env-sync-"));

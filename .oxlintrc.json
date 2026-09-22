@@ -1,6 +1,8 @@
 {
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
-  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"],
+  "extends": [
+    "./node_modules/@effect/tsgo/oxlint-presets/recommended.json"
+  ],
   "rules": {
     "effecttsgo/node-builtin-import": "off",
     "effecttsgo/async-function": "off",
@@ -13,5 +15,14 @@
     "effecttsgo/global-timers": "off",
     "effecttsgo/global-random": "off"
   },
-  "ignorePatterns": ["plans", "node_modules", "dist", "dist-*", "**/*.gen.ts", "**/types.gen.ts"]
+  "ignorePatterns": [
+    "plans",
+    "node_modules",
+    "repos",
+    "repos/**",
+    "dist",
+    "dist-*",
+    "**/*.gen.ts",
+    "**/types.gen.ts"
+  ]
 }

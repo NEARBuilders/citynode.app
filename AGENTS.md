@@ -540,6 +540,16 @@ The repo standardizes on the Effect v4 dev toolchain ([docs](https://effect.webs
 - **Editor** — install the Effect VS Code/Cursor extension (`effectful-tech.effect-vscode`, recommended in `.vscode/extensions.json`) for fiber inspection, span stack, and pause-on-defect. The language service requires the **workspace** TypeScript version, not the editor-bundled one.
 - When adding Effect code, follow the enforced conventions: `Context.Service<TagName, Shape>()` tags, `return yield* Effect.fail(...)` for definitive failure exits inside `Effect.gen`.
 
+## Vendored Repositories
+
+This project vendors the Effect v4 monorepo (tag `effect@4.0.0-rc.112`, matching the catalog pin) under `repos/effect` via `git subtree`.
+
+- Treat `repos/effect` as **read-only reference material**. Never edit files under it and never import from it — application code imports from normal package dependencies.
+- Always read `repos/effect/LLMS.md` before writing Effect code.
+- For idiomatic v4 patterns (`Context.Service`, `Layer`, scoped resources, `Effect.gen`), study the source and tests under `repos/effect/packages/effect/src` and treat them as the source of truth over documentation, generated guesses, or web search.
+- Update the subtree deliberately when bumping the `effect` catalog pin: `git subtree pull --prefix=repos/effect https://github.com/Effect-TS/effect.git effect@<new-tag> --squash`.
+- Pattern references live in `docs/agents/effect-patterns.md`.
+
 ## TypeScript configuration (TS 7)
 
 Parent-owned workspace tsconfigs (`host/`, `packages/*`) extend the root `tsconfig.base.json` (strict flags, `module`/`target` ESNext, `moduleResolution: bundler`, and the `@effect/language-service` plugin entry). **Scaffolded tsconfigs** — `ui/`, `api/`, `plugins/*` — are copied verbatim into generated child projects by `bos init`/`bos sync`, so they must stay **self-contained** (no `extends` into the parent repo; the child has no parent base file). Rules that keep the repo TS 7-compatible:
