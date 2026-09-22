@@ -25,8 +25,9 @@ import type {
   StartResult,
   TypecheckWorkspaceResult,
 } from "./contract";
-import type { ProgressEvent, StartSummary } from "./plugin";
-import bosPlugin, { consumeDevSession, pluginEvents } from "./plugin";
+import type { StartSummary } from "./dev-program";
+import bosPlugin, { consumeDevSession } from "./plugin";
+import { type ProgressEvent, pluginEvents } from "./progress";
 import { createPluginRuntime } from "./sdk";
 import { printBanner } from "./utils/banner";
 import { colors, frames, gradients, icons } from "./utils/theme";
@@ -252,7 +253,13 @@ async function main() {
       await outdatedWarning;
       if (session) {
         const { devApp } = await import("./dev-session");
-        devApp(session.orchestrator, session.services, session.runtimeConfig, session.envGenerated);
+        devApp(
+          session.orchestrator,
+          session.services,
+          session.runtimeConfig,
+          session.envGenerated,
+          session.shellEnv,
+        );
       }
       return;
     }
@@ -302,6 +309,7 @@ async function main() {
           session.services,
           session.runtimeConfig,
           session.envGenerated,
+          session.shellEnv,
         );
       }
       return;

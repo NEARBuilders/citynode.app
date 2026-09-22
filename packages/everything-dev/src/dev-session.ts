@@ -8,6 +8,7 @@ import {
 import { renderStreamingView } from "./components/streaming-view";
 import { getProjectRoot } from "./config";
 import { createDevLogger, formatLogLine, isDebug, isLogNoise } from "./dev-logs";
+import { ShellEnvLive } from "./env/project-env";
 import {
   getProcessStates,
   makeDevProcess,
@@ -306,6 +307,7 @@ const runApp = (
   services: Map<string, ServiceDescriptor>,
   runtimeConfig: RuntimeConfig,
   envGenerated: Record<string, string> = {},
+  shellEnv: Record<string, string> = {},
 ) => {
   let controls: DevSessionControls | null = null;
   let signalCount = 0;
@@ -325,6 +327,7 @@ const runApp = (
     Effect.provide(ServiceDescriptorMapLive(services)),
     Effect.provide(DevRuntimeConfigLive(runtimeConfig)),
     Effect.provide(DevGeneratedEnvLive(envGenerated)),
+    Effect.provide(ShellEnvLive(shellEnv)),
     Effect.catchDefect((defect) =>
       Effect.sync(() => {
         console.error("[Dev] Unhandled defect in orchestrator:", defect);

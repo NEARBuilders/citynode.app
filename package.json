@@ -85,7 +85,7 @@
     "bos": "bun packages/everything-dev/src/cli.ts",
     "typecheck": "BOS_NO_BANNER=1 bun run bos typecheck",
     "lint": "biome check . && bun run lint:effect",
-    "lint:effect": "oxlint --type-aware .",
+    "lint:effect": "oxlint --type-aware --ignore-pattern=repos .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "format:check": "biome format .",

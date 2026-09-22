@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { Deferred, Effect, Option, Ref, Stream } from "effect";
+import { ShellEnv } from "./env/project-env";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
   DevGeneratedEnv,
@@ -8,7 +9,6 @@ import {
   type ServiceDescriptor,
   ServiceDescriptorMap,
 } from "./service-descriptor";
-import { shellEnv } from "./shell-env";
 import type { RuntimeConfig } from "./types";
 
 process.on("unhandledRejection", (reason) => {
@@ -268,7 +268,8 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
 /**
  * Spawn env precedence, three tiers: values explicitly exported by the
- * caller (shell / CI / regression harness — see `shell-env.ts`) outrank the
+ * caller (shell / CI / regression harness — captured by the bootstrap
+ * program into the `ShellEnv` service before any `.env` loading) outrank the
  * generated infra env, which outranks `.env`-file values inherited through
  * `processEnv`. The service's resolved port is always authoritative.
  */
@@ -327,11 +328,12 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     callbacks.onStatus(name, "starting");
 
     const generatedEnv = yield* DevGeneratedEnv;
+    const shellTier = yield* ShellEnv;
     const envVars = composeSpawnEnv(
       process.env as Record<string, string>,
       generatedEnv,
       port,
-      shellEnv,
+      shellTier,
     );
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);

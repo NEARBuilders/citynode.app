@@ -11,13 +11,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
-import { ensureEnvFile, loadPortState, loadProjectEnv, savePortState } from "../../src/cli/infra";
+import { loadPortState, savePortState } from "../../src/cli/infra";
+import { makeProjectEnv } from "../../src/env/project-env";
 import {
   buildGeneratedInfraSpec,
   InfraMaterializer,
   InfraMaterializerLive,
 } from "../../src/infra/materializer";
 import type { RuntimeConfig } from "../../src/types";
+
+const projectEnv = makeProjectEnv();
 
 async function materialize(configDir: string, runtimeConfig: RuntimeConfig): Promise<void> {
   await Effect.runPromise(
@@ -374,7 +377,7 @@ describe("generated infra", () => {
     tempDirs.push(dir);
 
     await materialize(dir, buildRuntimeConfig());
-    ensureEnvFile(dir);
+    await Effect.runPromise(projectEnv.ensureFile(dir));
 
     const env = readFileSync(join(dir, ".env"), "utf-8");
 
@@ -420,7 +423,7 @@ describe("generated infra", () => {
     expect(statSync(join(dir, "docker-compose.yml")).mtimeMs).toBe(firstMtimes[2]!);
   });
 
-  it("loads .env into the bos process without overriding exported values", () => {
+  it("loads .env into the bos process without overriding exported values", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-load-env-"));
     tempDirs.push(dir);
 
@@ -442,7 +445,7 @@ describe("generated infra", () => {
         ].join("\n"),
       );
 
-      loadProjectEnv(dir);
+      await Effect.runPromise(projectEnv.load(dir));
 
       expect(process.env.API_DATABASE_URL).toBe("postgres://already-exported");
       expect(process.env.AUTH_DATABASE_URL).toBe("postgres://auth-from-dotenv");
