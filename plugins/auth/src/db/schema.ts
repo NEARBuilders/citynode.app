@@ -44,6 +44,7 @@ export const session = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     impersonatedBy: text("impersonated_by"),
     activeOrganizationId: text("active_organization_id"),
+    activeTeamId: text("active_team_id"),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );
@@ -172,11 +173,15 @@ export const invitation = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     teamId: text("team_id"),
+    nearAccountId: text("near_account_id"),
+    nearNetwork: text("near_network"),
   },
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
     index("invitation_teamId_idx").on(table.teamId),
+    index("invitation_nearAccountId_idx").on(table.nearAccountId),
+    index("invitation_nearNetwork_idx").on(table.nearNetwork),
   ],
 );
 
@@ -188,6 +193,7 @@ export const team = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    metadata: text("metadata"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },

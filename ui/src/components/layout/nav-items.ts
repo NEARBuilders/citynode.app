@@ -9,6 +9,7 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
+import type { FeatureArea } from "@/lib/feature-areas";
 
 export type SidebarRole = "anon" | "member" | "admin";
 
@@ -26,6 +27,7 @@ export interface SidebarItem {
   label: string;
   to: string;
   roleRequired: SidebarRole;
+  area?: FeatureArea;
   children?: SidebarItem[];
   /** group the item belongs to (plugin nav manifest groups) */
   group?: string;
@@ -43,7 +45,13 @@ export const NAV_ITEMS: SidebarItem[] = [
     roleRequired: "anon",
     children: [
       { icon: Home, label: "overview", to: "/dashboard", roleRequired: "anon" },
-      { icon: Network, label: "my node", to: "/dashboard/node", roleRequired: "member" },
+      {
+        icon: Network,
+        label: "my node",
+        to: "/dashboard/node",
+        roleRequired: "member",
+        area: "node-operations",
+      },
     ],
   },
   {
@@ -51,12 +59,13 @@ export const NAV_ITEMS: SidebarItem[] = [
     label: "things",
     to: "/things",
     roleRequired: "member",
+    area: "things",
     children: [
       { icon: Boxes, label: "all things", to: "/things", roleRequired: "member" },
       { icon: CirclePlus, label: "new thing", to: "/things/new", roleRequired: "member" },
     ],
   },
-  { icon: Landmark, label: "stake", to: "/stake", roleRequired: "anon" },
+  { icon: Landmark, label: "stake", to: "/stake", roleRequired: "anon", area: "stake" },
   { icon: Building2, label: "orgs", to: "/orgs", roleRequired: "anon" },
   { icon: Shield, label: "admin", to: "/admin", roleRequired: "admin" },
 ];
@@ -86,6 +95,22 @@ export function filterSidebarByRole(items: SidebarItem[], userRole: SidebarRole)
   };
 
   return items.map(filterChildren).filter((item): item is SidebarItem => item !== null);
+}
+
+export function filterSidebarByArea(
+  items: SidebarItem[],
+  allowedAreas: readonly FeatureArea[] | null,
+): SidebarItem[] {
+  if (!allowedAreas) return items;
+  const visible = (item: SidebarItem): SidebarItem | null => {
+    if (item.area && !allowedAreas.includes(item.area)) return null;
+    if (!item.children) return item;
+    const children = item.children
+      .map(visible)
+      .filter((child): child is SidebarItem => child !== null);
+    return { ...item, children };
+  };
+  return items.map(visible).filter((item): item is SidebarItem => item !== null);
 }
 
 const PLUGIN_ICON_MAP: Record<string, SidebarItem["icon"]> = {

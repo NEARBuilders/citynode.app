@@ -1,39 +1,35 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { AuthClient } from "@/app";
+import type { ApiClient } from "@/app";
 import type { InvitationCardInvitation } from "./-invitation-card";
+import type { InviteMemberValues } from "./-invite-member-form";
 import { orgInvitationsQueryKey } from "./-organization-query-keys";
 
-export function useOrganizationInvitationActions(
-  auth: AuthClient,
-  orgId: string,
-  inviteEmail: string,
-  inviteRole: "admin" | "member",
-  onInvited: () => void,
-) {
+export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: string) {
   const queryClient = useQueryClient();
   const invalidateInvitations = () =>
     queryClient.invalidateQueries({ queryKey: orgInvitationsQueryKey(orgId) });
   const inviteMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await auth.organization.inviteMember({
+    mutationFn: async (values: InviteMemberValues) => {
+      return apiClient.auth.inviteMember({
         organizationId: orgId,
-        email: inviteEmail,
-        role: inviteRole,
+        role: values.role,
+        ...(values.email ? { email: values.email } : {}),
+        ...(values.nearAccountId
+          ? { nearAccountId: values.nearAccountId, nearNetwork: values.nearNetwork }
+          : {}),
+        ...(values.teamId ? { teamId: values.teamId } : {}),
       });
-      if (error) throw new Error(error.message);
     },
-    onSuccess: async () => {
-      toast.success(`Invitation sent to ${inviteEmail}`);
-      onInvited();
+    onSuccess: async (_, values) => {
+      toast.success(`Invitation created for ${values.email ?? values.nearAccountId}`);
       await invalidateInvitations();
     },
     onError: (error: Error) => toast.error(error.message || "Failed to send invitation"),
   });
   const cancelInvitationMutation = useMutation({
     mutationFn: async (invitationId: string) => {
-      const { error } = await auth.organization.cancelInvitation({ invitationId });
-      if (error) throw new Error(error.message);
+      await apiClient.auth.cancelInvitation({ invitationId });
     },
     onSuccess: async () => {
       toast.success("Invitation cancelled");
@@ -43,13 +39,21 @@ export function useOrganizationInvitationActions(
   });
   const resendInvitationMutation = useMutation({
     mutationFn: async (invitation: InvitationCardInvitation) => {
-      const { error } = await auth.organization.inviteMember({
+      if (invitation.nearAccountId && !invitation.nearNetwork) {
+        throw new Error("Cancel and reissue this wallet invitation with an explicit network.");
+      }
+      return apiClient.auth.inviteMember({
         organizationId: orgId,
-        email: invitation.email,
-        role: invitation.role as "admin" | "member" | "owner",
+        role: (invitation.role ?? "member") as "admin" | "member" | "owner",
+        ...(invitation.nearAccountId
+          ? {
+              nearAccountId: invitation.nearAccountId,
+              nearNetwork: invitation.nearNetwork ?? undefined,
+            }
+          : { email: invitation.email }),
+        ...(invitation.teamId ? { teamId: invitation.teamId } : {}),
         resend: true,
       });
-      if (error) throw new Error(error.message);
     },
     onSuccess: async () => {
       toast.success("Invitation resent");

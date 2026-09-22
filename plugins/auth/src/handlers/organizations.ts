@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { Context } from "effect";
 import * as schema from "../db/schema";
 import { AuthServicesTag } from "../service-types";
-import { createHeaders, safeAuthApi, tryJsonParse } from "../utils";
+import { createHeaders, parseTeamAreas, safeAuthApi, tryJsonParse } from "../utils";
 
 function toOrganizationInfo(organization: {
   id: string;
@@ -80,6 +80,7 @@ export function createOrganizationHandlers(builder: any, requireAuth: any) {
                   id: t.id,
                   name: t.name,
                   organizationId: t.organizationId,
+                  areas: parseTeamAreas(t.metadata),
                   createdAt: t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt),
                   updatedAt: t.updatedAt instanceof Date ? t.updatedAt : new Date(t.updatedAt),
                 }))

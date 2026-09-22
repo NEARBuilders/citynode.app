@@ -48,12 +48,20 @@ const organizationInfoSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
+const teamContextSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  areas: z.array(z.string()),
+});
+
 const organizationContextSchema = z.object({
   activeOrganizationId: z.string().nullable(),
   organization: organizationInfoSchema.nullable(),
   member: organizationMemberSchema.nullable(),
   isPersonal: z.boolean(),
   hasOrganization: z.boolean(),
+  teams: z.array(teamContextSchema),
+  activeTeamId: z.string().nullable(),
 });
 
 const sessionUserSchema = z.object({
@@ -183,12 +191,16 @@ const invitationSchema = z.object({
   status: z.string(),
   expiresAt: z.date(),
   inviterId: z.string(),
+  teamId: z.string().nullable(),
+  nearAccountId: z.string().nullable(),
+  nearNetwork: z.enum(["mainnet", "testnet"]).nullable(),
 });
 
 const teamSchema = z.object({
   id: z.string(),
   name: z.string(),
   organizationId: z.string(),
+  areas: z.array(z.string()),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -508,9 +520,12 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/v1/auth/invitations" })
     .input(
       z.object({
-        email: z.string(),
+        email: z.string().optional(),
+        nearAccountId: z.string().optional(),
+        nearNetwork: z.enum(["mainnet", "testnet"]).optional(),
         role: z.enum(["owner", "admin", "member"]),
         organizationId: z.string().optional(),
+        teamId: z.string().optional(),
         resend: z.boolean().optional(),
       }),
     )
@@ -530,6 +545,9 @@ export const contract = oc.router({
           status: z.string(),
           expiresAt: z.date(),
           inviterId: z.string(),
+          teamId: z.string().nullable(),
+          nearAccountId: z.string().nullable(),
+          nearNetwork: z.enum(["mainnet", "testnet"]).nullable(),
           organizationName: z.string(),
           organizationSlug: z.string(),
           inviterEmail: z.string(),
@@ -550,7 +568,14 @@ export const contract = oc.router({
 
   listUserInvitations: oc
     .route({ method: "GET", path: "/v1/auth/invitations/user" })
-    .output(z.array(invitationSchema))
+    .output(
+      z.array(
+        invitationSchema.extend({
+          organizationName: z.string().optional(),
+          organizationSlug: z.string().optional(),
+        }),
+      ),
+    )
     .errors(Errors),
 
   cancelInvitation: oc
@@ -561,6 +586,18 @@ export const contract = oc.router({
 
   acceptInvitation: oc
     .route({ method: "POST", path: "/v1/auth/invitations/accept" })
+    .input(z.object({ invitationId: z.string() }))
+    .output(z.object({ success: z.boolean() }))
+    .errors(Errors),
+
+  acceptNearInvitation: oc
+    .route({ method: "POST", path: "/v1/auth/invitations/accept-near" })
+    .input(z.object({ invitationId: z.string() }))
+    .output(z.object({ success: z.boolean() }))
+    .errors(Errors),
+
+  rejectNearInvitation: oc
+    .route({ method: "POST", path: "/v1/auth/invitations/reject-near" })
     .input(z.object({ invitationId: z.string() }))
     .output(z.object({ success: z.boolean() }))
     .errors(Errors),
@@ -579,6 +616,7 @@ export const contract = oc.router({
       z.object({
         name: z.string(),
         organizationId: z.string().optional(),
+        areas: z.array(z.string()).optional(),
       }),
     )
     .output(teamSchema)
@@ -589,8 +627,10 @@ export const contract = oc.router({
     .input(
       z.object({
         teamId: z.string(),
+        organizationId: z.string().optional(),
         data: z.object({
           name: z.string().optional(),
+          areas: z.array(z.string()).optional(),
         }),
       }),
     )
@@ -615,6 +655,18 @@ export const contract = oc.router({
         organizationId: z.string().optional(),
       }),
     )
+    .output(z.array(teamSchema))
+    .errors(Errors),
+
+  setActiveTeam: oc
+    .route({ method: "POST", path: "/v1/auth/teams/set-active" })
+    .input(z.object({ teamId: z.string().nullable() }))
+    .output(teamSchema.nullable())
+    .errors(Errors),
+
+  listUserTeams: oc
+    .route({ method: "GET", path: "/v1/auth/teams/user" })
+    .input(z.object({ organizationId: z.string().optional() }).optional())
     .output(z.array(teamSchema))
     .errors(Errors),
 

@@ -7,11 +7,17 @@ import {
   sessionQueryOptions,
   useAuthClient,
 } from "@/app";
+import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { useNearAccount } from "@/lib/use-near-account";
+import { RestrictedAreaNotice } from "./-restricted-area-notice";
 import { TenantSummary } from "./-tenant-summary";
 import { WorkspaceIdentity } from "./-workspace-identity";
 
 export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboard/")({
+  validateSearch: (search: Record<string, unknown>): { restricted?: FeatureArea } =>
+    typeof search.restricted === "string" && isFeatureArea(search.restricted)
+      ? { restricted: search.restricted }
+      : {},
   beforeLoad: async ({ context }) => {
     const { apiClient, runtimeConfig } = context;
     const accountId = getAccount(runtimeConfig);
@@ -32,6 +38,7 @@ export const Route = createFileRoute("/_layout/_authenticated/_dashboard/dashboa
 function Home() {
   const auth = useAuthClient();
   const { tenant } = Route.useRouteContext();
+  const { restricted } = Route.useSearch();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth, undefined));
   const { data: passkeys = [] } = useQuery({
     queryKey: ["passkeys"],
@@ -56,6 +63,7 @@ function Home() {
 
   return (
     <div className="space-y-8">
+      {restricted && <RestrictedAreaNotice area={restricted} />}
       <WorkspaceIdentity
         nearAccountId={nearAccountId}
         passkeys={passkeys}

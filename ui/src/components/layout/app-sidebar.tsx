@@ -18,7 +18,10 @@ import {
 } from "@/components/ui/sidebar";
 import type { SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
+import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
 import { useIdentity } from "./use-identity";
+import { useSwitchTeam } from "./use-switch-team";
+import { useTeamWorkspace } from "./use-team-workspace";
 
 interface AppSidebarProps {
   items: SidebarItem[];
@@ -27,7 +30,11 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
-  const { organizations, activeOrgId } = useIdentity();
+  const { user, organizations, activeOrgId } = useIdentity();
+  const { data: workspace } = useTeamWorkspace(!!user);
+  const switchTeam = useSwitchTeam();
+  const teams = workspace?.teams ?? [];
+  const activeTeamId = workspace?.activeTeam?.id ?? null;
 
   return (
     <Sidebar collapsible="icon">
@@ -36,6 +43,12 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
           appName={appName}
           organizations={organizations}
           activeOrgId={activeOrgId}
+        />
+        <SidebarTeamSwitcher
+          teams={teams}
+          activeTeamId={activeTeamId}
+          isPending={switchTeam.isPending}
+          onSelect={(teamId) => switchTeam.mutate(teamId)}
         />
       </SidebarHeader>
 

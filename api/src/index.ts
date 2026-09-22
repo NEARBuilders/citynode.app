@@ -18,6 +18,7 @@ import type { TenantsService } from "./services/tenants";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
+import { createRequireTeamArea } from "./team-access-policy";
 
 class ApiServices extends Context.Service<
   ApiServices,
@@ -95,6 +96,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
   createRouter: (builder, plugins) => {
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware(builder);
+    const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
 
     const authorizedTenant = async (
       input: { tenantId: string },
@@ -506,6 +508,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       createNode: builder.createNode
         .use(requireAuth)
         .use(requireOrganization)
+        .use(requireNodeOperations)
         .handler(async ({ input, context }) => {
           const services = Context.get(context["effect/context"], ApiServices);
           const tenant = await services.tenants.resolveTenantById(input.tenantId);
@@ -530,43 +533,47 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
-      updateNode: builder.updateNode.use(requireAuth).handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const node = await services.nodes.getById(input.nodeId);
-        if (!node) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Node not found",
-            data: { resource: "node", resourceId: input.nodeId },
+      updateNode: builder.updateNode
+        .use(requireAuth)
+        .use(requireNodeOperations)
+        .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          const node = await services.nodes.getById(input.nodeId);
+          if (!node) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Node not found",
+              data: { resource: "node", resourceId: input.nodeId },
+            });
+          }
+          const tenant = await services.tenants.resolveTenantById(node.tenantId);
+          if (!tenant) {
+            throw new ORPCError("NOT_FOUND", {
+              message: "Tenant not found",
+              data: { resource: "tenant", resourceId: node.tenantId },
+            });
+          }
+          if (
+            context.user.role !== "admin" &&
+            (!context.organization?.activeOrganizationId ||
+              tenant.orgId !== context.organization.activeOrganizationId)
+          ) {
+            throw new ORPCError("FORBIDDEN", {
+              message: "This node does not belong to your organization",
+            });
+          }
+          return await services.nodes.update(input.nodeId, {
+            ...(input.kind !== undefined && { kind: input.kind }),
+            ...(input.slug !== undefined && { slug: input.slug }),
+            ...(input.name !== undefined && { name: input.name }),
+            ...(input.parentId !== undefined && { parentId: input.parentId }),
+            ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
-        }
-        const tenant = await services.tenants.resolveTenantById(node.tenantId);
-        if (!tenant) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Tenant not found",
-            data: { resource: "tenant", resourceId: node.tenantId },
-          });
-        }
-        if (
-          context.user.role !== "admin" &&
-          (!context.organization?.activeOrganizationId ||
-            tenant.orgId !== context.organization.activeOrganizationId)
-        ) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "This node does not belong to your organization",
-          });
-        }
-        return await services.nodes.update(input.nodeId, {
-          ...(input.kind !== undefined && { kind: input.kind }),
-          ...(input.slug !== undefined && { slug: input.slug }),
-          ...(input.name !== undefined && { name: input.name }),
-          ...(input.parentId !== undefined && { parentId: input.parentId }),
-          ...(input.metadata !== undefined && { metadata: input.metadata }),
-        });
-      }),
+        }),
 
       deleteNode: builder.deleteNode
         .use(requireAuth)
         .use(requireOrgRole("admin"))
+        .use(requireNodeOperations)
         .handler(async ({ input, context }) => {
           const services = Context.get(context["effect/context"], ApiServices);
           const node = await services.nodes.getById(input.nodeId);
@@ -708,6 +715,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       createValidator: builder.createValidator
         .use(requireAuth)
+        .use(requireNodeOperations)
         .handler(async ({ input, context }) => {
           const services = Context.get(context["effect/context"], ApiServices);
           await authorizedNodeForValidators(input.nodeId, context);
@@ -724,6 +732,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       updateValidator: builder.updateValidator
         .use(requireAuth)
+        .use(requireNodeOperations)
         .handler(async ({ input, context }) => {
           const services = Context.get(context["effect/context"], ApiServices);
           const validator = await services.validators.getById(input.validatorId);
@@ -750,6 +759,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       deleteValidator: builder.deleteValidator
         .use(requireAuth)
+        .use(requireNodeOperations)
         .handler(async ({ input, context }) => {
           const services = Context.get(context["effect/context"], ApiServices);
           const validator = await services.validators.getById(input.validatorId);
@@ -766,6 +776,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       setDefaultValidator: builder.setDefaultValidator
         .use(requireAuth)
+        .use(requireNodeOperations)
         .handler(async ({ input, context }) => {
           const services = Context.get(context["effect/context"], ApiServices);
           const target = await services.validators.getById(input.validatorId);

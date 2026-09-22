@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Key, Layers, Mail, Users } from "lucide-react";
+import { Building2, Key, Layers, Mail, Users, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -9,6 +9,7 @@ import {
   type Organization,
   type SessionData,
   sessionQueryOptions,
+  useApiClient,
   useAuthClient,
 } from "@/app";
 import {
@@ -41,12 +42,14 @@ import {
   orgMembersQueryKey,
 } from "./-organization-query-keys";
 import { useOrganizationSettings } from "./-organization-settings";
+import { useOrganizationTeams } from "./-organization-teams";
+import { TeamsTab } from "./-teams-tab";
 
 type AuthClientType = import("@/app").AuthClient;
+type ApiClientType = import("@/app").ApiClient;
 type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
 type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
-type InvitationsResponse = Awaited<ReturnType<AuthClientType["organization"]["listInvitations"]>>;
-type InvitationItem = NonNullable<InvitationsResponse["data"]>[number];
+type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
 
 async function handleCopyApiKey(value: string, message = "API key copied") {
   try {
@@ -82,6 +85,7 @@ function OrganizationDetail() {
   const router = useRouter();
   const { slug: orgSlug } = Route.useParams();
   const auth = useAuthClient();
+  const apiClient = useApiClient();
   const { runtimeConfig } = Route.useRouteContext();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "";
   const baseAccount = getAccount(runtimeConfig);
@@ -114,11 +118,7 @@ function OrganizationDetail() {
     useQuery({
       queryKey: orgInvitationsQueryKey(orgId),
       queryFn: async (): Promise<InvitationItem[]> => {
-        const { data, error } = await auth.organization.listInvitations({
-          query: { organizationId: orgId },
-        });
-        if (error) throw new Error(error.message);
-        return (data ?? []) as InvitationItem[];
+        return apiClient.auth.listInvitations({ organizationId: orgId });
       },
       enabled: !!orgId,
     }).data ?? [];
@@ -140,8 +140,6 @@ function OrganizationDetail() {
   const pendingInvitationsCount = invitations.filter(
     (invitation) => invitation.status === "pending",
   ).length;
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
 
@@ -153,15 +151,15 @@ function OrganizationDetail() {
       (org?.metadata as { isPersonal?: boolean } | null | undefined)?.isPersonal === true
     : false;
   const { cancelInvitationMutation, inviteMutation, resendInvitationMutation } =
-    useOrganizationInvitationActions(auth, orgId, inviteEmail, inviteRole, () =>
-      setInviteEmail(""),
-    );
+    useOrganizationInvitationActions(apiClient, orgId);
   const { createApiKeyMutation, deleteApiKeyMutation } = useOrganizationApiKeyActions(
     auth,
     orgId,
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
+  const [activeTab, setActiveTab] = useState("members");
+  const teamsState = useOrganizationTeams(orgId, activeTab === "teams");
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
     orgId,
@@ -246,11 +244,15 @@ function OrganizationDetail() {
             onSlugChange={setEditSlug}
           />
         )}
-        <Tabs defaultValue="members" className="w-full min-w-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="members" className="shrink-0">
               <Users className="h-4 w-4 mr-1.5" />
               Members ({members.length})
+            </TabsTrigger>
+            <TabsTrigger value="teams" className="shrink-0" data-testid="orgs-tab-teams">
+              <UsersRound className="h-4 w-4 mr-1.5" />
+              Teams ({teamsState.teams.length})
             </TabsTrigger>
             <TabsTrigger value="invitations" className="shrink-0">
               <Mail className="h-4 w-4 mr-1.5" />
@@ -276,20 +278,36 @@ function OrganizationDetail() {
             onRemove={(member) => removeMemberMutation.mutate(member)}
             sessionUserId={session?.user?.id}
           />
+          <TeamsTab
+            canManage={canManageMembers}
+            isMutating={teamsState.isMutating}
+            onAddMember={(teamId, userId) => teamsState.addTeamMember.mutate({ teamId, userId })}
+            onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
+            onCreate={(name) => teamsState.createTeam.mutate(name)}
+            onDelete={(teamId) => {
+              const team = teamsState.teams.find((candidate) => candidate.id === teamId);
+              if (confirm(`Delete team "${team?.name ?? ""}"?`))
+                teamsState.deleteTeam.mutate(teamId);
+            }}
+            onRemoveMember={(teamId, userId) =>
+              teamsState.removeTeamMember.mutate({ teamId, userId })
+            }
+            onRetryMembers={teamsState.retryTeamMembers}
+            onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
+            orgMembers={members}
+            teams={teamsState.teams}
+          />
           <InvitationsTab
             canManageMembers={canManageMembers}
-            inviteEmail={inviteEmail}
             invitePending={inviteMutation.isPending}
-            inviteRole={inviteRole}
             invitations={invitations}
             isPersonal={isPersonal}
             isCancelling={cancelInvitationMutation.isPending}
             isResending={resendInvitationMutation.isPending}
             onCancel={(invitationId) => cancelInvitationMutation.mutate(invitationId)}
-            onEmailChange={setInviteEmail}
-            onInvite={() => inviteMutation.mutate()}
+            onInvite={(values) => inviteMutation.mutateAsync(values)}
             onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
-            onRoleChange={setInviteRole}
+            teams={teamsState.teams}
           />
           <ApiKeysTab
             apiKeys={apiKeys}

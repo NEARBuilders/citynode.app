@@ -7,6 +7,12 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 
+const workspace = vi.hoisted(() => ({
+  teams: [] as Array<{ id: string; name: string; areas: string[] }>,
+  activeTeam: null as { id: string; name: string; areas: string[] } | null,
+  allowedAreas: null as string[] | null,
+}));
+
 const identity = vi.hoisted(() => ({
   user: { id: "user-1" },
   isSessionLoading: false,
@@ -24,6 +30,14 @@ const identity = vi.hoisted(() => ({
 
 vi.mock("./use-identity", () => ({
   useIdentity: () => identity,
+}));
+
+vi.mock("./use-team-workspace", () => ({
+  useTeamWorkspace: () => ({ data: workspace }),
+}));
+
+vi.mock("./use-switch-team", () => ({
+  useSwitchTeam: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("./theme-toggle", () => ({
@@ -103,6 +117,25 @@ describe("app shell chrome", () => {
       </SidebarProvider>,
     );
     expect(screen.getByTestId("account-menu")).toBeTruthy();
+  });
+
+  it("shows which team the user is operating as", () => {
+    workspace.activeTeam = { id: "team-fin", name: "Finance", areas: ["finance"] };
+    render(
+      <SidebarProvider>
+        <AppHeader />
+      </SidebarProvider>,
+    );
+    expect(screen.getByTestId("workspace-active-team").textContent).toContain("Finance");
+    cleanup();
+
+    workspace.activeTeam = null;
+    render(
+      <SidebarProvider>
+        <AppHeader />
+      </SidebarProvider>,
+    );
+    expect(screen.queryByTestId("workspace-active-team")).toBeNull();
   });
 
   it("does not place the account menu in the sidebar footer", () => {

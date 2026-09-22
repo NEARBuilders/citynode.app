@@ -7,6 +7,7 @@ import {
   toError,
   toORPCError,
   tryJsonParse,
+  withoutSessionDataCookie,
 } from "../../src/utils";
 
 describe("toError", () => {
@@ -78,6 +79,12 @@ describe("createHeaders", () => {
     expect(headers.get("x-api-key")).toBe("abc");
   });
 
+  it("preserves headers passed as a native Headers instance", () => {
+    const headers = createHeaders(new Headers({ cookie: "session=abc", origin: "https://app" }));
+    expect(headers.get("cookie")).toBe("session=abc");
+    expect(headers.get("origin")).toBe("https://app");
+  });
+
   it("returns empty Headers for undefined", () => {
     const headers = createHeaders();
     expect(headers).toBeInstanceOf(Headers);
@@ -87,6 +94,48 @@ describe("createHeaders", () => {
   it("returns empty Headers for empty object", () => {
     const headers = createHeaders({});
     expect([...headers.entries()]).toHaveLength(0);
+  });
+});
+
+describe("withoutSessionDataCookie", () => {
+  it("drops the session_data cookie but keeps others", () => {
+    const headers = createHeaders({
+      cookie: "better-auth.session_token=tok; better-auth.session_data=cached; other=value",
+    });
+    const result = withoutSessionDataCookie(headers);
+    expect(result.get("cookie")).toBe("better-auth.session_token=tok; other=value");
+  });
+
+  it("drops chunked session_data cookies (.0, .1, …)", () => {
+    const headers = createHeaders({
+      cookie:
+        "better-auth.session_token=tok; better-auth.session_data.0=chunk0; better-auth.session_data.1=chunk1",
+    });
+    const result = withoutSessionDataCookie(headers);
+    expect(result.get("cookie")).toBe("better-auth.session_token=tok");
+  });
+
+  it("removes the cookie header entirely when nothing else remains", () => {
+    const headers = createHeaders({ cookie: "better-auth.session_data=cached" });
+    const result = withoutSessionDataCookie(headers);
+    expect(result.get("cookie")).toBeNull();
+  });
+
+  it("returns headers unchanged when there is no cookie header", () => {
+    const headers = createHeaders({ "x-api-key": "abc" });
+    const result = withoutSessionDataCookie(headers);
+    expect(result.get("cookie")).toBeNull();
+    expect(result.get("x-api-key")).toBe("abc");
+  });
+
+  it("leaves other headers on the original instance untouched", () => {
+    const headers = createHeaders({
+      cookie: "better-auth.session_data=cached",
+      "content-type": "application/json",
+    });
+    const result = withoutSessionDataCookie(headers);
+    expect(result.get("content-type")).toBe("application/json");
+    expect(headers.get("cookie")).toBe("better-auth.session_data=cached");
   });
 });
 
