@@ -76,6 +76,11 @@ const createRouter = (opts: CreateRouterOptions) => {
     defaultStructuralSharing: true,
     defaultPreloadStaleTime: 0,
     defaultErrorComponent: RouterError,
+    defaultOnCatch: (error, errorInfo) => {
+      console.error("[SSR] Router error boundary caught:", error, {
+        componentStack: errorInfo.componentStack,
+      });
+    },
     defaultNotFoundComponent,
     defaultPendingComponent,
     defaultPendingMinMs: 0,
@@ -96,7 +101,10 @@ const createRouter = (opts: CreateRouterOptions) => {
   return { router, queryClient };
 };
 
-const getRouteHead = async (pathname: string, context?: Partial<RouterContext>) => {
+const getRouteHead = async (
+  pathname: string,
+  context?: Partial<RouterContext> & { routeTree?: unknown },
+) => {
   const history = createMemoryHistory({ initialEntries: [pathname] });
   const queryClient = new QueryClient();
   const runtimeConfig = context?.runtimeConfig;
@@ -105,7 +113,7 @@ const getRouteHead = async (pathname: string, context?: Partial<RouterContext>) 
   }
 
   const router = createTanStackRouter({
-    routeTree,
+    routeTree: (context?.routeTree ?? routeTree) as typeof routeTree,
     history,
     context: {
       queryClient,
@@ -189,7 +197,6 @@ const routerModule = {
   createRouter,
   getRouteHead,
   renderToStream,
-  routeTree,
 } as const;
 
 export default routerModule;

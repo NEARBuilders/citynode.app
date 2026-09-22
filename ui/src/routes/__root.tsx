@@ -13,17 +13,20 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { getRemoteScripts, getThemeInitScript } from "everything-dev/ui/head";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
 import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "next-themes";
+import { useEffect, useState } from "react";
 import type { RouterContext } from "@/app";
 import { getBaseStyles } from "@/app";
 import { RootError } from "@/components/root-error";
 import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks";
 import { sessionQueryKey } from "@/lib/auth";
 import { resolveSessionFromCache } from "@/lib/session-cache";
@@ -130,7 +133,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
           hydratePath: "./Hydrate",
           integrity: runtimeConfig?.ui?.integrity,
           cspNonce,
-          includePluginUiRemotes: true,
         }),
         {
           type: "application/ld+json",
@@ -163,7 +165,7 @@ function RootComponent() {
         <MotionConfig reducedMotion="user">
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem nonce={cspNonce}>
             <div id="root">
-              <Outlet />
+              <GlobalChrome />
             </div>
             <Toaster position={isDesktop ? "bottom-right" : "top-center"} closeButton />
           </ThemeProvider>
@@ -185,5 +187,40 @@ function RootComponent() {
         )}
       </body>
     </html>
+  );
+}
+
+function GlobalChrome() {
+  const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
+  const [showBar, setShowBar] = useState(false);
+
+  useEffect(() => {
+    if (!isNavigating) {
+      setShowBar(false);
+      return;
+    }
+    const t = setTimeout(() => setShowBar(true), 150);
+    return () => clearTimeout(t);
+  }, [isNavigating]);
+
+  return (
+    <TooltipProvider>
+      <div
+        className="h-dvh w-full flex flex-col overflow-hidden bg-background text-foreground"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}
+      >
+        {showBar && (
+          <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">
+            <div className="h-full bg-foreground animate-progress-bar" style={{ width: "100%" }} />
+          </div>
+        )}
+
+        <Outlet />
+      </div>
+    </TooltipProvider>
   );
 }

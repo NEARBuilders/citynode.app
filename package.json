@@ -7,6 +7,7 @@
       "ui",
       "host",
       "plugins/*",
+      "plugins/*/ui",
       "packages/*"
     ],
     "catalog": {
@@ -16,6 +17,7 @@
       "@tanstack/react-query-devtools": "^5.102.8",
       "@tanstack/react-router": "1.170.32",
       "@tanstack/react-router-devtools": "1.167.1",
+      "@tanstack/router-generator": "1.167.33",
       "@tanstack/router-plugin": "1.168.35",
       "@tanstack/react-devtools": "^0.10.1",
       "@tanstack/react-form": "^1.29.1",

@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { pluginPath } from "@/lib/plugin-path";
 
 interface SignOutMutationLike {
   mutate: () => void;
@@ -61,7 +62,7 @@ export function UserNavMenuContent({
             {identityContent}
           </Link>
         ) : (
-          <Link to="/settings/profile">{identityContent}</Link>
+          <Link to={pluginPath("/settings/profile")}>{identityContent}</Link>
         )}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
@@ -80,7 +81,7 @@ export function UserNavMenuContent({
         </DropdownMenuItem>
       )}
       <DropdownMenuItem asChild>
-        <Link to="/settings">
+        <Link to={pluginPath("/settings")}>
           <Settings />
           settings
         </Link>
