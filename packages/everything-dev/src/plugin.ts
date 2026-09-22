@@ -108,6 +108,7 @@ import {
   listPublishKeys,
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
+import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { extractPublishedUrl, publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
@@ -120,6 +121,7 @@ import {
   type ServiceDescriptor,
 } from "./service-descriptor";
 import { syncResolvedSharedDeps } from "./shared-deps";
+import { shellEnv } from "./shell-env";
 import type { BosConfig, BosConfigInput, ExtendsConfig, RuntimeConfig, SourceMode } from "./types";
 import { BosConfigSchema } from "./types";
 import { run } from "./utils/run";
@@ -891,18 +893,19 @@ export default createPlugin({
       ensureEnvFile(deps.configDir);
       loadProjectEnv(deps.configDir);
 
-      for (const drift of syncEnvFile(deps.configDir, plan.envGenerated)) {
-        console.log(
-          `[env] ${drift.key} updated: ${drift.from} → ${drift.to} (generated from resolved ports)`,
-        );
-      }
+      await Effect.runPromise(
+        syncEnvFile(deps.configDir, plan.envGenerated, shellEnv).pipe(
+          Effect.catchTag("EnvSyncError", (error) =>
+            Effect.logWarning(`[env] failed to refresh .env from resolved ports: ${error.cause}`),
+          ),
+        ),
+      );
 
-      const mergedEnv: Record<string, string> = { ...plan.envGenerated };
-      for (const [k, v] of Object.entries(process.env)) {
-        if (v != null && !(k in plan.envGenerated)) {
-          mergedEnv[k] = v;
-        }
-      }
+      const mergedEnv = mergeGeneratedOverFileEnv(
+        plan.envGenerated,
+        process.env as Record<string, string>,
+        shellEnv,
+      );
       const preflightFailures = await Effect.runPromise(
         preflightLocalInfra(plan.envGenerated, mergedEnv),
       );

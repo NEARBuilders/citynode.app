@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { syncEnvFile } from "../../src/cli/infra";
 
@@ -12,8 +13,14 @@ function makeEnvDir(content: string | null): string {
   return dir;
 }
 
+const runSync = (
+  dir: string,
+  generated: Record<string, string>,
+  shellEnv: Record<string, string> = {},
+) => Effect.runPromise(syncEnvFile(dir, generated, shellEnv));
+
 describe("syncEnvFile", () => {
-  it("updates drifted bos-owned lines and preserves everything else", () => {
+  it("updates drifted bos-owned lines and preserves everything else", async () => {
     const dir = makeEnvDir(
       [
         "# Generated from configured bos secrets",
@@ -25,7 +32,7 @@ describe("syncEnvFile", () => {
       ].join("\n"),
     );
 
-    const drift = syncEnvFile(dir, {
+    const drift = await runSync(dir, {
       CORS_ORIGIN: "http://localhost:3008",
       API_DATABASE_URL: "postgres://everythingdev:everythingdev@localhost:5432/api_db",
     });
@@ -40,10 +47,10 @@ describe("syncEnvFile", () => {
     expect(content).toContain("MY_CUSTOM_FLAG=keep-me");
   });
 
-  it("appends generated keys missing from the file", () => {
+  it("appends generated keys missing from the file", async () => {
     const dir = makeEnvDir("MY_CUSTOM_FLAG=keep-me\n");
 
-    const drift = syncEnvFile(dir, { CORS_ORIGIN: "http://localhost:3000" });
+    const drift = await runSync(dir, { CORS_ORIGIN: "http://localhost:3000" });
 
     expect(drift).toEqual([{ key: "CORS_ORIGIN", from: undefined, to: "http://localhost:3000" }]);
     const content = readFileSync(join(dir, ".env"), "utf-8");
@@ -51,27 +58,49 @@ describe("syncEnvFile", () => {
     expect(content).toContain("CORS_ORIGIN=http://localhost:3000");
   });
 
-  it("is idempotent once aligned", () => {
+  it("skips shell-exported keys — a deliberate override is not reverted on disk", async () => {
+    const dir = makeEnvDir(
+      "CORS_ORIGIN=http://localhost:3000\nAPI_DATABASE_URL=postgres://u:p@127.0.0.1:5434/api_test_db\n",
+    );
+
+    const drift = await runSync(
+      dir,
+      {
+        CORS_ORIGIN: "http://localhost:3008",
+        API_DATABASE_URL: "postgres://u:p@127.0.0.1:5432/api_db",
+      },
+      { API_DATABASE_URL: "postgres://u:p@127.0.0.1:5434/api_test_db" },
+    );
+
+    expect(drift).toEqual([
+      { key: "CORS_ORIGIN", from: "http://localhost:3000", to: "http://localhost:3008" },
+    ]);
+    const content = readFileSync(join(dir, ".env"), "utf-8");
+    expect(content).toContain("CORS_ORIGIN=http://localhost:3008");
+    expect(content).toContain("API_DATABASE_URL=postgres://u:p@127.0.0.1:5434/api_test_db");
+  });
+
+  it("is idempotent once aligned", async () => {
     const dir = makeEnvDir("CORS_ORIGIN=http://localhost:3008\n");
 
-    expect(syncEnvFile(dir, { CORS_ORIGIN: "http://localhost:3008" })).toEqual([]);
-    expect(syncEnvFile(dir, { CORS_ORIGIN: "http://localhost:3008" })).toEqual([]);
+    expect(await runSync(dir, { CORS_ORIGIN: "http://localhost:3008" })).toEqual([]);
+    expect(await runSync(dir, { CORS_ORIGIN: "http://localhost:3008" })).toEqual([]);
 
     const content = readFileSync(join(dir, ".env"), "utf-8");
     expect(content).toBe("CORS_ORIGIN=http://localhost:3008\n");
   });
 
-  it("returns no drift and does not create the file when .env is absent", () => {
+  it("returns no drift and does not create the file when .env is absent", async () => {
     const dir = makeEnvDir(null);
 
-    expect(syncEnvFile(dir, { CORS_ORIGIN: "http://localhost:3000" })).toEqual([]);
+    expect(await runSync(dir, { CORS_ORIGIN: "http://localhost:3000" })).toEqual([]);
     expect(() => readFileSync(join(dir, ".env"), "utf-8")).toThrow();
   });
 
-  it("ignores commented-out lines and does not treat them as present keys", () => {
+  it("ignores commented-out lines and does not treat them as present keys", async () => {
     const dir = makeEnvDir("# CORS_ORIGIN=http://localhost:3000\n");
 
-    const drift = syncEnvFile(dir, { CORS_ORIGIN: "http://localhost:3008" });
+    const drift = await runSync(dir, { CORS_ORIGIN: "http://localhost:3008" });
 
     expect(drift).toEqual([{ key: "CORS_ORIGIN", from: undefined, to: "http://localhost:3008" }]);
     const content = readFileSync(join(dir, ".env"), "utf-8");

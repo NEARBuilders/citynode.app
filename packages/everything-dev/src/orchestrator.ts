@@ -8,6 +8,7 @@ import {
   type ServiceDescriptor,
   ServiceDescriptorMap,
 } from "./service-descriptor";
+import { shellEnv } from "./shell-env";
 import type { RuntimeConfig } from "./types";
 
 process.on("unhandledRejection", (reason) => {
@@ -266,21 +267,44 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
   });
 
 /**
- * Spawn env precedence: the parent's process env (including .env values)
- * is the base, generated infra env wins for bos-owned keys (ports drift),
- * and the service's resolved port is always authoritative.
+ * Spawn env precedence, three tiers: values explicitly exported by the
+ * caller (shell / CI / regression harness — see `shell-env.ts`) outrank the
+ * generated infra env, which outranks `.env`-file values inherited through
+ * `processEnv`. The service's resolved port is always authoritative.
  */
 export function composeSpawnEnv(
   processEnv: Record<string, string>,
   generatedEnv: Record<string, string>,
   port: number,
+  shellEnv: Record<string, string> = {},
 ): Record<string, string> {
   return {
     ...processEnv,
-    ...generatedEnv,
+    ...mergeGeneratedOverFileEnv(generatedEnv, processEnv, shellEnv),
     FORCE_COLOR: "1",
     ...(port > 0 ? { PORT: String(port) } : {}),
   };
+}
+
+/**
+ * Overlay the generated infra env (ports drift, so stale `.env` values must
+ * lose) while keeping every explicitly exported key from `shellEnv` intact.
+ * Keys absent from both are untouched.
+ */
+export function mergeGeneratedOverFileEnv(
+  generatedEnv: Record<string, string>,
+  processEnv: Record<string, string>,
+  shellEnv: Record<string, string> = {},
+): Record<string, string> {
+  const result: Record<string, string> = { ...processEnv };
+  for (const [key, value] of Object.entries(generatedEnv)) {
+    if (key in shellEnv) {
+      result[key] = shellEnv[key]!;
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
@@ -303,7 +327,12 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     callbacks.onStatus(name, "starting");
 
     const generatedEnv = yield* DevGeneratedEnv;
-    const envVars = composeSpawnEnv(process.env as Record<string, string>, generatedEnv, port);
+    const envVars = composeSpawnEnv(
+      process.env as Record<string, string>,
+      generatedEnv,
+      port,
+      shellEnv,
+    );
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
 

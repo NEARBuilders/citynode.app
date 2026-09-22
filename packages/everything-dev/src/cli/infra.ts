@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as p from "@clack/prompts";
 import { config as loadDotenv } from "dotenv";
+import { Data, Effect } from "effect";
 import type { RuntimeConfig } from "../types";
 
 const POSTGRES_USER = "everythingdev";
@@ -702,47 +703,67 @@ export interface EnvDrift {
   to: string;
 }
 
+export class EnvSyncError extends Data.TaggedError("EnvSyncError")<{ cause: unknown }> {}
+
 /**
  * Align the bos-owned lines of `.env` with the generated infra env
- * (ports/secrets derived from the resolved dev topology). Lines the user
- * added or edited outside the generated key set are untouched. Idempotent.
+ * (ports/secrets derived from the resolved dev topology). Keys the caller
+ * explicitly exported (`shellEnv`) are skipped — a deliberate override must
+ * not be silently reverted on disk. Lines the user added outside the
+ * generated key set are untouched. Idempotent.
  */
-export function syncEnvFile(configDir: string, generated: Record<string, string>): EnvDrift[] {
-  if (Object.keys(generated).length === 0) return [];
+export const syncEnvFile = (
+  configDir: string,
+  generated: Record<string, string>,
+  shellEnv: Record<string, string> = {},
+): Effect.Effect<EnvDrift[], EnvSyncError> =>
+  Effect.gen(function* () {
+    if (Object.keys(generated).length === 0) return [];
 
-  const envPath = join(configDir, ".env");
-  if (!existsSync(envPath)) return [];
+    const envPath = join(configDir, ".env");
+    if (!existsSync(envPath)) return [];
 
-  const lines = readFileSync(envPath, "utf-8").split("\n");
-  const drift: EnvDrift[] = [];
-  const seen = new Set<string>();
-  const keyOf = (line: string): string | null => {
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
-    return match?.[1] ?? null;
-  };
+    const lines = yield* Effect.try({
+      try: () => readFileSync(envPath, "utf-8").split("\n"),
+      catch: (cause) => new EnvSyncError({ cause }),
+    });
 
-  const updated = lines.map((line) => {
-    const key = keyOf(line);
-    if (!key || !(key in generated)) return line;
-    seen.add(key);
-    const value = line.slice(key.length + 1);
-    if (value === generated[key]) return line;
-    drift.push({ key, from: value, to: generated[key] });
-    return `${key}=${generated[key]}`;
-  });
+    const drift: EnvDrift[] = [];
+    const seen = new Set<string>();
+    const keyOf = (line: string): string | null => {
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+      return match?.[1] ?? null;
+    };
 
-  for (const [key, value] of Object.entries(generated)) {
-    if (!seen.has(key)) {
+    const updated = lines.map((line) => {
+      const key = keyOf(line);
+      if (!key || !(key in generated) || key in shellEnv) return line;
+      seen.add(key);
+      const value = line.slice(key.length + 1);
+      if (value === generated[key]) return line;
+      drift.push({ key, from: value, to: generated[key] });
+      return `${key}=${generated[key]}`;
+    });
+
+    for (const [key, value] of Object.entries(generated)) {
+      if (key in shellEnv || seen.has(key)) continue;
       drift.push({ key, from: undefined, to: value });
       updated.push(`${key}=${value}`);
     }
-  }
 
-  if (drift.length > 0) {
-    writeFileSync(envPath, updated.join("\n"));
-  }
-  return drift;
-}
+    if (drift.length > 0) {
+      yield* Effect.try({
+        try: () => writeFileSync(envPath, updated.join("\n")),
+        catch: (cause) => new EnvSyncError({ cause }),
+      });
+      for (const { key, from, to } of drift) {
+        yield* Effect.logInfo(
+          `[env] ${key} updated: ${from ?? "(absent)"} → ${to} (generated from resolved ports)`,
+        );
+      }
+    }
+    return drift;
+  });
 
 export interface CiServiceSpec {
   key: string;
