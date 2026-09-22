@@ -1,5 +1,5 @@
 {
-  "id": "33fb8645-a6dd-4ed5-897a-bff9ec264bb3",
+  "id": "a685488e-6d7a-4c3f-a135-60e5121dacff",
   "prevId": "cff12f4a-5cd4-4b57-a5b2-9f55b34586fb",
   "version": "7",
   "dialect": "postgresql",
@@ -385,6 +385,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "near_network": {
+          "name": "near_network",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -438,6 +444,21 @@
           "columns": [
             {
               "expression": "near_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "invitation_nearNetwork_idx": {
+          "name": "invitation_nearNetwork_idx",
+          "columns": [
+            {
+              "expression": "near_network",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

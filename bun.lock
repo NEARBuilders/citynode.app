@@ -527,7 +527,6 @@
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "api": "workspace:*",
         "every-plugin": "catalog:",
         "everything-dev": "catalog:",
         "jsdom": "^30.0.1",
