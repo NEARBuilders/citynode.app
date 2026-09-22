@@ -5,6 +5,7 @@ import sirv from "sirv";
 import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
+import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
 import { classifyPluginFailure } from "../runtime/errors";
 
 const corsHeaders = {
@@ -67,17 +68,22 @@ const RETRY_MAX_DELAY_MS = 5_000;
 const loadPluginWithRetry = async (
   runtime: any,
   pluginId: string,
+  remoteUrl: string,
+  options: Record<string, unknown> = { variables: {}, secrets: {} },
+  pluginsMap?: Record<string, unknown>,
   timeoutMs = 90000,
 ): Promise<any> => {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
   let lastSignature: string | undefined;
   let delay = RETRY_BASE_DELAY_MS;
+  await waitForRemoteEntryReady(pluginId, remoteUrl);
   while (Date.now() < deadline) {
     try {
-      return await runtime.usePlugin(pluginId, { variables: {}, secrets: {} } as any);
+      return await runtime.usePlugin(pluginId, options, pluginsMap);
     } catch (error) {
       lastError = error;
+      purgeRemoteEntryCache(remoteUrl);
       const classification = classifyPluginFailure(error);
       const signature = `${classification.kind}::${classification.message}`;
       if (signature !== lastSignature) {
@@ -311,7 +317,7 @@ export async function startPluginDevServer(
       const pluginsMap: Record<string, unknown> = {};
       const siblingEffectContexts: unknown[] = [];
       for (const depId of Object.keys(siblings)) {
-        const dep = await loadPluginWithRetry(mfRuntime, depId);
+        const dep = await loadPluginWithRetry(mfRuntime, depId, siblings[depId]!.remote);
         pluginsMap[depId] = { client: dep.createClient, router: dep.router };
         if (dep.initialized?.effectContext) {
           siblingEffectContexts.push(dep.initialized.effectContext);
@@ -319,10 +325,11 @@ export async function startPluginDevServer(
         console.log(`✅ Loaded dependency plugin: ${depId}`);
       }
 
-      const defaultConfig = { variables: {}, secrets: {} };
-      const loaded: any = await mfRuntime.usePlugin<typeof pluginId>(
+      const loaded: any = await loadPluginWithRetry(
+        mfRuntime,
         pluginId,
-        (devConfig?.config ?? defaultConfig) as any,
+        registry[pluginId]!.remote,
+        (devConfig?.config ?? { variables: {}, secrets: {} }) as Record<string, unknown>,
         Object.keys(pluginsMap).length > 0 ? pluginsMap : undefined,
       );
 

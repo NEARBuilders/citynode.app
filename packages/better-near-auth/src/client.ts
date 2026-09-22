@@ -676,7 +676,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
           getRelayerInfo: async (params?: GetRelayerInfoRequestT) => {
             return await $fetch("/near/relayer-info", {
               method: "POST",
-              body: { ...(params ?? {}), network: params?.network ?? activeNetwork.get() },
+              body: { ...params, network: params?.network ?? activeNetwork.get() },
             });
           },
           relayHistory: async () => {

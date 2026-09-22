@@ -54,6 +54,15 @@
       "import": "./dist/errors.mjs",
       "require": "./dist/errors.cjs"
     },
+    "./remote-entry": {
+      "development": {
+        "types": "./src/remote-entry.ts",
+        "import": "./src/remote-entry.ts"
+      },
+      "types": "./dist/remote-entry.d.mts",
+      "import": "./dist/remote-entry.mjs",
+      "require": "./dist/remote-entry.cjs"
+    },
     "./types": {
       "development": {
         "types": "./src/types.ts",
