@@ -44,7 +44,6 @@ is found inside it. The standalone `bos dev` path does not pass a budget today; 
 | api | 3001 | http://localhost:3001 |
 | auth | 3002 | http://localhost:3002 |
 | ui | 3003 | http://localhost:3003 |
-| ui-ssr | 3004 | http://localhost:3004 |
 | plugins | 3010+ | http://localhost:3010+ (incremental — one per plugin in config order) |
 
 ## Service-Descriptor Architecture
@@ -67,7 +66,7 @@ The orchestrator:
 - **UI changes**: Rsbuild HMR — instant at :3003, no rebuild
 - **API changes**: Rspack HMR — instant at :3001, no rebuild
 - **Auth / Plugin changes**: No HMR — require full restart (`bos kill && bos dev`)
-- **SSR (ui-ssr)**: No HMR — restart required after UI changes
+- **SSR (`bos dev --ssr`)**: source-composed SSR in the host dev process — manifests read from disk; restart not required
 - **Config changes**: Require host restart (`bos kill && bos dev`)
 
 ## Contract Sync & Type Generation
@@ -157,7 +156,6 @@ bos dev                                # Start fresh
 1. Check browser console for Module Federation errors
 2. `bos.config.json` — is `app.ui.development` correct?
 3. Clear browser cache and hard reload (Cmd+Shift+R)
-4. Verify UI SSR restart if using SSR
 
 ### Module Federation errors
 

@@ -69,7 +69,7 @@ test.describe("Error boundary", () => {
     await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
 
-    page.route("**/api/rpc/**", (route) =>
+    void page.route("**/api/rpc/**", (route) =>
       route.fulfill({
         status: 500,
         contentType: "application/json",

@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import { Deferred, Effect, Option, Ref, Stream } from "effect";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
+  DevGeneratedEnv,
   DevRuntimeConfig,
   type ServiceDescriptor,
   ServiceDescriptorMap,
@@ -264,6 +265,24 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     } satisfies ProcessHandle;
   });
 
+/**
+ * Spawn env precedence: the parent's process env (including .env values)
+ * is the base, generated infra env wins for bos-owned keys (ports drift),
+ * and the service's resolved port is always authoritative.
+ */
+export function composeSpawnEnv(
+  processEnv: Record<string, string>,
+  generatedEnv: Record<string, string>,
+  port: number,
+): Record<string, string> {
+  return {
+    ...processEnv,
+    ...generatedEnv,
+    FORCE_COLOR: "1",
+    ...(port > 0 ? { PORT: String(port) } : {}),
+  };
+}
+
 const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
   Effect.gen(function* () {
     const runtimeConfig = yield* DevRuntimeConfig;
@@ -283,11 +302,8 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
     callbacks.onStatus(name, "starting");
 
-    const envVars: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      FORCE_COLOR: "1",
-      ...(port > 0 ? { PORT: String(port) } : {}),
-    };
+    const generatedEnv = yield* DevGeneratedEnv;
+    const envVars = composeSpawnEnv(process.env as Record<string, string>, generatedEnv, port);
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
 
@@ -380,7 +396,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         const looksLikeError =
           isStderr &&
           /^(error|fail|fatal|exception|unhandled|reject)/i.test(cleanLine) &&
-          !/^\$/.test(cleanLine);
+          !cleanLine.startsWith("$");
         callbacks.onLog(name, line, looksLikeError);
 
         const currentStatus = yield* Ref.get(statusRef);

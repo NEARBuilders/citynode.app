@@ -119,7 +119,7 @@ function mergeStringMaps(
 ): Record<string, string> | undefined {
   if (!local && !template) return undefined;
 
-  const merged: Record<string, string> = { ...(local ?? {}) };
+  const merged: Record<string, string> = { ...local };
   for (const [name, value] of Object.entries(template ?? {})) {
     merged[name] = value;
   }
@@ -142,7 +142,7 @@ function mergeWorkspacePackages(local: unknown, template: unknown): string[] | u
 
   const hasPluginEntry = [...ordered].some((e) => e.startsWith("plugins/") && e !== "plugins/*");
   if (hasPluginEntry) {
-    for (const entry of [...ordered]) {
+    for (const entry of ordered) {
       if (entry.startsWith("plugins/") && entry !== "plugins/*") {
         ordered.delete(entry);
       }

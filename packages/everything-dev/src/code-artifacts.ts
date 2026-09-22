@@ -1,12 +1,44 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { type ContractBridgeStatus, syncApiContractBridge } from "./api-contract";
 import { loadResolvedConfig, writeResolvedConfig } from "./config";
 import type { BosEnv } from "./merge";
 import type { BosConfig, RuntimeConfig } from "./types";
+import { CORE_UI_PLUGIN_KEY } from "./ui/manifest/contract";
+import { generateUiManifest } from "./ui/manifest/generator";
 
 interface GeneratedArtifacts {
   resolvedConfigPath?: string;
   contractBridgePath: string;
+}
+
+interface UiManifestTarget {
+  workspaceRoot: string;
+  pluginName: string;
+  emitRouteTree: boolean;
+}
+
+function uiManifestTargets(runtimeConfig: RuntimeConfig): UiManifestTarget[] {
+  const targets: UiManifestTarget[] = [];
+  const ui = runtimeConfig.ui;
+  if (
+    ui?.source === "local" &&
+    ui.localPath &&
+    existsSync(join(ui.localPath, "rsbuild.config.ts"))
+  ) {
+    targets.push({
+      workspaceRoot: ui.localPath,
+      pluginName: CORE_UI_PLUGIN_KEY,
+      emitRouteTree: !existsSync(join(ui.localPath, "src/routeTree.gen.ts")),
+    });
+  }
+  for (const [key, plugin] of Object.entries(runtimeConfig.plugins ?? {})) {
+    const uiPath = plugin.ui?.localPath;
+    if (plugin.ui?.source === "local" && uiPath && existsSync(join(uiPath, "rsbuild.config.ts"))) {
+      targets.push({ workspaceRoot: uiPath, pluginName: key, emitRouteTree: false });
+    }
+  }
+  return targets;
 }
 
 export async function generateCodeArtifacts(
@@ -31,6 +63,10 @@ export async function generateCodeArtifacts(
     runtimeConfig,
     apiBaseUrl: runtimeConfig.api.url,
   });
+
+  for (const target of uiManifestTargets(runtimeConfig)) {
+    await generateUiManifest(target);
+  }
 
   return {
     resolvedConfigPath: opts?.env ? join(configDir, ".bos/bos.resolved-config.json") : undefined,

@@ -1,5 +1,30 @@
 import { Context, Layer } from "effect";
-import type { JsonObject, RuntimeConfig, SourceMode } from "./types";
+import type { JsonObject, RuntimeConfig, RuntimePluginConfig, SourceMode } from "./types";
+
+/**
+ * True when a `plugins.<id>` entry is the runtime-config mirror of the
+ * app-slot auth plugin (same backend target) — the `auth` service already
+ * spawns that backend, so the mirror contributes only its `ui` surface.
+ */
+export function isAuthMirrorPluginEntry(
+  runtimeConfig: RuntimeConfig,
+  pluginId: string,
+  pluginConfig: RuntimePluginConfig,
+): boolean {
+  if (pluginId !== "auth" || !runtimeConfig.auth) return false;
+  const auth = runtimeConfig.auth;
+  if (pluginConfig === auth) return true;
+  if (pluginConfig.localPath && pluginConfig.localPath === auth.localPath) return true;
+  if (
+    !pluginConfig.localPath &&
+    pluginConfig.source === "remote" &&
+    pluginConfig.url &&
+    pluginConfig.url === auth.url
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export interface ServiceDescriptor {
   key: string;
@@ -31,6 +56,13 @@ export class ServiceDescriptorMap extends Context.Service<
 export class DevRuntimeConfig extends Context.Service<DevRuntimeConfig, RuntimeConfig>()(
   "DevRuntimeConfig",
 ) {}
+
+export class DevGeneratedEnv extends Context.Service<DevGeneratedEnv, Record<string, string>>()(
+  "DevGeneratedEnv",
+) {}
+
+export const DevGeneratedEnvLive = (env: Record<string, string>) =>
+  Layer.succeed(DevGeneratedEnv, env);
 
 const PLUGIN_READY_PATTERNS = [/ready in/i, /compiled.*successfully/i, /listening/i, /started/i];
 
@@ -71,14 +103,6 @@ const SERVICE_CONFIGS: Record<
     errorPatterns: [/error/i, /failed to compile/i],
     defaultPort: 3003,
     readinessPath: "/remoteEntry.js",
-  },
-  "ui-ssr": {
-    command: "bun",
-    args: ["run", "dev:ssr"],
-    readyPatterns: [/\bready\s+built in\b/i, /\bcompiled\b.*successfully/i],
-    errorPatterns: [/error/i, /failed/i],
-    defaultPort: 3004,
-    readinessPath: "/",
   },
   api: {
     command: "bun",
@@ -133,21 +157,6 @@ export function buildServiceDescriptorMap(
     ...SERVICE_CONFIGS.ui,
   });
 
-  if (ssr && runtimeConfig.ui.source === "local") {
-    map.set("ui-ssr", {
-      key: "ui-ssr",
-      source: runtimeConfig.ui.source,
-      url: runtimeConfig.ui.ssrUrl ?? "",
-      entry: "",
-      name: "ui-ssr",
-      localPath: runtimeConfig.ui.localPath,
-      port: runtimeConfig.ui.ssrUrl
-        ? Number.parseInt(new URL(runtimeConfig.ui.ssrUrl).port, 10)
-        : (runtimeConfig.ui.port ?? 3003) + 1,
-      ...SERVICE_CONFIGS["ui-ssr"],
-    });
-  }
-
   map.set("api", {
     key: "api",
     source: runtimeConfig.api.source,
@@ -185,30 +194,33 @@ export function buildServiceDescriptorMap(
   if (runtimeConfig.plugins) {
     let pluginBasePort = 3010;
     for (const [pluginId, pluginConfig] of Object.entries(runtimeConfig.plugins)) {
+      const isAuthMirror = isAuthMirrorPluginEntry(runtimeConfig, pluginId, pluginConfig);
       const pluginKey = `plugin:${pluginId}`;
       const resolvedPort = pluginConfig.port ?? pluginBasePort;
       pluginBasePort = resolvedPort + 1;
 
-      map.set(pluginKey, {
-        key: pluginKey,
-        source: pluginConfig.source,
-        url: pluginConfig.url,
-        remoteUrl: pluginConfig.source === "remote" ? pluginConfig.url : undefined,
-        entry: pluginConfig.entry,
-        name: pluginConfig.name,
-        localPath: pluginConfig.localPath,
-        port: resolvedPort,
-        integrity: pluginConfig.integrity,
-        proxy: pluginConfig.proxy,
-        variables: pluginConfig.variables,
-        secrets: pluginConfig.secrets,
-        command: "bun",
-        args: ["run", "dev"],
-        readyPatterns: PLUGIN_READY_PATTERNS,
-        errorPatterns: PLUGIN_ERROR_PATTERNS,
-        defaultPort: resolvedPort,
-        readinessPath: "/remoteEntry.js",
-      });
+      if (!isAuthMirror) {
+        map.set(pluginKey, {
+          key: pluginKey,
+          source: pluginConfig.source,
+          url: pluginConfig.url,
+          remoteUrl: pluginConfig.source === "remote" ? pluginConfig.url : undefined,
+          entry: pluginConfig.entry,
+          name: pluginConfig.name,
+          localPath: pluginConfig.localPath,
+          port: resolvedPort,
+          integrity: pluginConfig.integrity,
+          proxy: pluginConfig.proxy,
+          variables: pluginConfig.variables,
+          secrets: pluginConfig.secrets,
+          command: "bun",
+          args: ["run", "dev"],
+          readyPatterns: PLUGIN_READY_PATTERNS,
+          errorPatterns: PLUGIN_ERROR_PATTERNS,
+          defaultPort: resolvedPort,
+          readinessPath: "/remoteEntry.js",
+        });
+      }
 
       if (pluginConfig.ui?.localPath && pluginConfig.ui.source === "local") {
         const uiKey = `plugin-ui:${pluginId}`;
@@ -270,9 +282,7 @@ interface ServiceDescriptorInfo {
 }
 
 export function buildDescription(map: Map<string, ServiceDescriptorInfo>): string {
-  const descriptors = [...map.values()].filter(
-    (d) => d.key !== "ui-ssr" && !d.key.startsWith("plugin:"),
-  );
+  const descriptors = [...map.values()].filter((d) => !d.key.startsWith("plugin:"));
 
   const allLocal = descriptors.every((d) => d.source === "local");
   const hasProxy = [...map.values()].some((d) => d.proxy && d.source === "local");

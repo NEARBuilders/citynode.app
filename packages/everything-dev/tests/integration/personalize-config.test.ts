@@ -113,22 +113,12 @@ describe("personalizeConfig with real root config", () => {
     expect(existsSync(join(testDir, "plugins", "example"))).toBe(false);
     expect(
       existsSync(
-        join(
-          testDir,
-          "ui",
-          "src",
-          "routes",
-          "_layout",
-          "_authenticated",
-          "_dashboard",
-          "things",
-          "index.tsx",
-        ),
+        join(testDir, "ui", "src", "routes", "_authenticated", "_dashboard", "things", "index.tsx"),
       ),
     ).toBe(true);
-    expect(
-      existsSync(join(testDir, "ui", "src", "routes", "_layout", "_authenticated", "example.tsx")),
-    ).toBe(false);
+    expect(existsSync(join(testDir, "ui", "src", "routes", "_authenticated", "example.tsx"))).toBe(
+      false,
+    );
 
     const config = JSON.parse(readFileSync(join(testDir, "bos.config.json"), "utf-8")) as {
       plugins?: Record<string, Record<string, unknown>>;
@@ -198,7 +188,7 @@ describe("personalizeConfig with real root config", () => {
       app?: Record<string, unknown>;
     };
     existingConfig.app = {
-      ...(existingConfig.app ?? {}),
+      ...existingConfig.app,
       auth: {
         development: "local:plugins/auth",
         production: "https://auth.child.dev",

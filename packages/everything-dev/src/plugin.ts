@@ -28,7 +28,13 @@ import {
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
-import { buildCiInfraPlan, type CiInfraPlan, ensureEnvFile, loadProjectEnv } from "./cli/infra";
+import {
+  buildCiInfraPlan,
+  type CiInfraPlan,
+  ensureEnvFile,
+  loadProjectEnv,
+  syncEnvFile,
+} from "./cli/infra";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
@@ -78,6 +84,7 @@ import {
   makeDatabaseBindings,
   makeDrizzleKitLive,
 } from "./db";
+import { getLogsDir, readDevLatestLog } from "./dev-logs";
 import {
   buildRegistryConfigUrl,
   fetchBosConfigFromFastKv,
@@ -123,6 +130,7 @@ export interface DevSessionData {
   orchestrator: AppOrchestrator;
   services: Map<string, ServiceDescriptor>;
   runtimeConfig: RuntimeConfig;
+  envGenerated?: Record<string, string>;
 }
 
 export interface StartSummary {
@@ -531,7 +539,7 @@ export default createPlugin({
       );
       const existing = deps.bosConfig.plugins?.[key];
       const existingEntry = existing && typeof existing === "object" ? existing : {};
-      const nextPlugins = { ...(deps.bosConfig.plugins ?? {}) };
+      const nextPlugins = { ...deps.bosConfig.plugins };
 
       if (isBosRef) {
         nextPlugins[key] = {
@@ -590,7 +598,7 @@ export default createPlugin({
         };
       }
 
-      const nextPlugins = { ...(deps.bosConfig.plugins ?? {}) };
+      const nextPlugins = { ...deps.bosConfig.plugins };
       delete nextPlugins[input.key];
       deps.bosConfig = {
         ...deps.bosConfig,
@@ -780,6 +788,10 @@ export default createPlugin({
       const ssr = input.ssr ?? false;
       const proxy = input.proxy ?? false;
 
+      if (ssr) {
+        process.env.BOS_SSR = "1";
+      }
+
       const sharedSync = await timePhase(devTimings, "shared deps", () =>
         syncResolvedSharedDeps({
           configDir: deps.configDir,
@@ -875,6 +887,16 @@ export default createPlugin({
         ),
       );
 
+      await materializeViaLayer(deps.configDir, plan.runtimeConfig);
+      ensureEnvFile(deps.configDir);
+      loadProjectEnv(deps.configDir);
+
+      for (const drift of syncEnvFile(deps.configDir, plan.envGenerated)) {
+        console.log(
+          `[env] ${drift.key} updated: ${drift.from} → ${drift.to} (generated from resolved ports)`,
+        );
+      }
+
       const mergedEnv: Record<string, string> = { ...plan.envGenerated };
       for (const [k, v] of Object.entries(process.env)) {
         if (v != null && !(k in plan.envGenerated)) {
@@ -895,9 +917,6 @@ export default createPlugin({
       }
 
       const services = buildServiceDescriptorMapFromPlan(plan, { ssr, proxy });
-      await materializeViaLayer(deps.configDir, plan.runtimeConfig);
-      ensureEnvFile(deps.configDir);
-      loadProjectEnv(deps.configDir);
 
       const packages = [...plan.serviceDescriptors.keys()];
       if (process.env.DEBUG === "true" || process.env.DEBUG === "1") {
@@ -913,6 +932,7 @@ export default createPlugin({
         orchestrator: plan.orchestrator,
         services,
         runtimeConfig: plan.runtimeConfig,
+        envGenerated: plan.envGenerated,
       };
 
       await timePhase(devTimings, "generate artifacts", () =>
@@ -2441,6 +2461,35 @@ export default createPlugin({
           packages: [],
           envFile: "missing" as const,
           error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }),
+
+    logs: builder.logs.handler(async ({ input }) => {
+      try {
+        const configDir = getProjectRoot();
+        const text = await readDevLatestLog(configDir, { tail: input.tail });
+        const service = input.service;
+        const lines = text
+          .split("\n")
+          .filter((line) => line.length > 0)
+          .filter((line) => {
+            if (!service) return true;
+            const match = /\] \[([^\]]+)\] \[(?:OUT|ERR)\] /.exec(line);
+            return match?.[1] === service || match?.[1] === `plugin:${service}`;
+          });
+        return {
+          logFile: join(getLogsDir(configDir), "dev-latest.log"),
+          lines,
+        };
+      } catch (error) {
+        return {
+          logFile: "unknown",
+          lines: [
+            error instanceof Error
+              ? `Failed to read logs: ${error.message}`
+              : "Failed to read logs",
+          ],
         };
       }
     }),

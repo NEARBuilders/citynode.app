@@ -674,7 +674,7 @@ export function ensureEnvFile(configDir: string): void {
   const secret = randomBytes(32).toString("base64url");
   const updated = lines
     .map((line) => {
-      if (/^BETTER_AUTH_SECRET=/.test(line)) {
+      if (line.startsWith("BETTER_AUTH_SECRET=")) {
         return `BETTER_AUTH_SECRET=${secret}`;
       }
       return line;
@@ -694,6 +694,54 @@ export function loadProjectEnv(configDir: string): void {
 
   loadDotenv({ path: envPath, processEnv: process.env, quiet: true });
   envLoadedDir = configDir;
+}
+
+export interface EnvDrift {
+  key: string;
+  from: string | undefined;
+  to: string;
+}
+
+/**
+ * Align the bos-owned lines of `.env` with the generated infra env
+ * (ports/secrets derived from the resolved dev topology). Lines the user
+ * added or edited outside the generated key set are untouched. Idempotent.
+ */
+export function syncEnvFile(configDir: string, generated: Record<string, string>): EnvDrift[] {
+  if (Object.keys(generated).length === 0) return [];
+
+  const envPath = join(configDir, ".env");
+  if (!existsSync(envPath)) return [];
+
+  const lines = readFileSync(envPath, "utf-8").split("\n");
+  const drift: EnvDrift[] = [];
+  const seen = new Set<string>();
+  const keyOf = (line: string): string | null => {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    return match?.[1] ?? null;
+  };
+
+  const updated = lines.map((line) => {
+    const key = keyOf(line);
+    if (!key || !(key in generated)) return line;
+    seen.add(key);
+    const value = line.slice(key.length + 1);
+    if (value === generated[key]) return line;
+    drift.push({ key, from: value, to: generated[key] });
+    return `${key}=${generated[key]}`;
+  });
+
+  for (const [key, value] of Object.entries(generated)) {
+    if (!seen.has(key)) {
+      drift.push({ key, from: undefined, to: value });
+      updated.push(`${key}=${value}`);
+    }
+  }
+
+  if (drift.length > 0) {
+    writeFileSync(envPath, updated.join("\n"));
+  }
+  return drift;
 }
 
 export interface CiServiceSpec {

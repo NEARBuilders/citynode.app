@@ -150,6 +150,7 @@ export function regressionStackOptions(config, mode, env = process.env) {
       ...config.dbUrls,
       BETTER_AUTH_SECRET: config.authSecret,
       ...(mode === "prod" ? { PORT: String(basePort) } : {}),
+      ...(mode === "dev" ? { BETTER_AUTH_URL: config.baseUrl } : {}),
       BOS_NO_PERSIST_PORTS: "1",
       CORS_ORIGIN: env.CORS_ORIGIN ?? config.baseUrl,
     },

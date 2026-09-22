@@ -30,7 +30,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test("resolved test configuration owns child secrets and ports for every mode", () => {
+void test("resolved test configuration owns child secrets and ports for every mode", () => {
   const repoRoot = fixture();
   writeFileSync(
     join(repoRoot, ".env.test"),
@@ -65,7 +65,7 @@ test("resolved test configuration owns child secrets and ports for every mode", 
   }
 });
 
-test("ambient test settings reach the stack when no test file exists", () => {
+void test("ambient test settings reach the stack when no test file exists", () => {
   const repoRoot = fixture();
   const env = {
     API_DATABASE_URL: "postgres://test:test@localhost:5434/api_test",
@@ -78,7 +78,7 @@ test("ambient test settings reach the stack when no test file exists", () => {
   assert.equal(stack.env.BETTER_AUTH_SECRET, env.BETTER_AUTH_SECRET);
 });
 
-test("dev database rejection does not reveal credentials", () => {
+void test("dev database rejection does not reveal credentials", () => {
   const repoRoot = fixture();
   assert.throws(
     () => computeRegressionEnv({ repoRoot, env: {} }),
@@ -86,11 +86,11 @@ test("dev database rejection does not reveal credentials", () => {
   );
 });
 
-test("invalid modes fail before starting a stack", () => {
+void test("invalid modes fail before starting a stack", () => {
   assert.throws(() => regressionStackOptions({}, "invalid", {}), /unknown mode/);
 });
 
-test("loading browser configuration in a worker leaves the running stack alive", async () => {
+void test("loading browser configuration in a worker leaves the running stack alive", async () => {
   const repoRoot = fixture();
   writeFileSync(join(repoRoot, "bos.config.json"), "{}");
   writeFileSync(join(repoRoot, ".env.test"), "BETTER_AUTH_SECRET=test-secret\n");

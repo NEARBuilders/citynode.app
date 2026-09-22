@@ -284,6 +284,18 @@ export const cliCommandMeta = {
     summary: "List tracked development processes",
     interactive: false,
   },
+  logs: {
+    commandPath: ["logs"],
+    summary: "Read dev session logs (.bos/logs/dev-latest.log)",
+    interactive: false,
+    fields: {
+      service: {
+        description: "Filter by service name (e.g. host, api, auth, ui, plugin:votes)",
+      },
+      tail: { description: "Show only the last N lines" },
+      follow: { description: "Stream the log as lines are appended" },
+    },
+  },
   kill: {
     commandPath: ["kill"],
     summary: "Stop tracked development processes",
