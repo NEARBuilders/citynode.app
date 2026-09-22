@@ -44,6 +44,10 @@
     "auth": {
       "name": "@everything-dev/auth-plugin",
       "development": "local:plugins/auth",
+      "ui": {
+        "name": "auth-ui",
+        "development": "local:plugins/auth/ui"
+      },
       "production": "https://elliot-braem-7935-everything-dev-auth-plugin-city-65ff7220e-ze.zephyrcloud.app",
       "integrity": "sha384-aUjuPBUbUXcTiMpUOl5sqYT1deA2VAAff3RzwFLddV3GvBqExojjbNcl+6MTtZfZ",
       "secrets": [
