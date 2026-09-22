@@ -6,6 +6,7 @@ import { AuthServicesTag } from "../service-types";
 import {
   createHeaders,
   getActiveOrganizationId,
+  getActiveTeamId,
   parseTeamAreas,
   safeAuthApi,
   serializeTeamAreas,
@@ -100,9 +101,16 @@ export function createTeamHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
+        const headers = createHeaders(context.reqHeaders);
+        const session = await services.auth.api.getSession({ headers });
+        if (getActiveTeamId(session?.session) === input.teamId) {
+          await safeAuthApi(() =>
+            services.auth.api.setActiveTeam({ headers, body: { teamId: null } }),
+          );
+        }
         await safeAuthApi(() =>
           services.auth.api.removeTeam({
-            headers: createHeaders(context.reqHeaders),
+            headers,
             body: {
               teamId: input.teamId,
               organizationId: input.organizationId,

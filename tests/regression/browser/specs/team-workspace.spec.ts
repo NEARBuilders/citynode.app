@@ -82,15 +82,6 @@ async function useCookieHeader(page: Page, cookieHeader: string) {
 
 test.describe("team workspace", () => {
   test("team membership, rename and deletion refresh the mounted workspace", async ({ page }) => {
-    page.on("response", async (response) => {
-      if (response.url().includes("get-session")) {
-        const data = await response.json().catch(() => null);
-        console.log("SESSION TRACE", data?.session?.activeTeamId);
-      }
-      if (response.url().includes("set-active-team") || response.url().includes("deleteTeam")) {
-        console.log("TEAM TRACE", response.url(), response.status(), response.request().postData());
-      }
-    });
     const pageErrors = collectErrors(page);
     const ownerCookie = await signInAnonymously();
     const session = await (await authFetch("/get-session", ownerCookie)).json();

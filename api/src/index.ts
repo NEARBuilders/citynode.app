@@ -9,7 +9,6 @@ import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
-import { createTeamMiddleware } from "./lib/team-auth";
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
@@ -19,6 +18,7 @@ import type { TenantsService } from "./services/tenants";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
+import { createRequireTeamArea } from "./team-access-policy";
 
 class ApiServices extends Context.Service<
   ApiServices,
@@ -96,8 +96,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
   createRouter: (builder, plugins) => {
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
       createAuthMiddleware(builder);
-    const { requireTeamArea } = createTeamMiddleware(builder);
-    const requireNodeOperations = requireTeamArea("node-operations");
+    const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
 
     const authorizedTenant = async (
       input: { tenantId: string },

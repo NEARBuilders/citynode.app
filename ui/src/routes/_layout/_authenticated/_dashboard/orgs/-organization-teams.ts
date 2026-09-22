@@ -82,21 +82,7 @@ export function useOrganizationTeams(orgId: string, membershipsEnabled = false) 
     onError: onError("Failed to update team"),
   });
   const deleteTeam = useMutation({
-    mutationFn: async (teamId: string) => {
-      const { data, error } = await auth.getSession({ query: { disableCookieCache: true } });
-      if (error) throw new Error(error.message);
-      const wasActive = data?.session.activeTeamId === teamId;
-      if (wasActive) {
-        const { error: clearError } = await auth.organization.setActiveTeam({ teamId: null });
-        if (clearError) throw new Error(clearError.message);
-      }
-      try {
-        return await apiClient.auth.deleteTeam({ teamId, organizationId: orgId });
-      } catch (deleteError) {
-        if (wasActive) await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
-        throw deleteError;
-      }
-    },
+    mutationFn: (teamId: string) => apiClient.auth.deleteTeam({ teamId, organizationId: orgId }),
     onSuccess: async () => {
       await synchronizeAfterMutation([orgTeamsQueryKey(orgId)]);
       toast.success("Team deleted");

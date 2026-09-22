@@ -53,19 +53,14 @@ describe("useOrganizationTeams", () => {
   it.each([
     false,
     true,
-  ])("clears the selected team before deletion and refreshes even if deletion fails: %s", async (fails) => {
-    let activeTeamId: string | null = "team-1";
-    const getSession = vi.fn(async () => ({ data: { session: { activeTeamId } }, error: null }));
-    const setActiveTeam = vi.fn(async () => {
-      activeTeamId = null;
-      return { error: null };
-    });
+  ])("deletes a team and refreshes the workspace only on success: fails=%s", async (fails) => {
     const deleteTeam = vi.fn(async () => {
-      expect(activeTeamId).toBeNull();
       if (fails) throw new Error("Team deletion failed");
       return { success: true };
     });
-    mocks.auth = { getSession, organization: { setActiveTeam } } as unknown as AuthClient;
+    mocks.auth = {
+      getSession: vi.fn().mockResolvedValue({ data: null, error: null }),
+    } as unknown as AuthClient;
     mocks.apiClient = {
       auth: {
         listTeams: vi.fn().mockResolvedValue([]),
@@ -79,10 +74,8 @@ describe("useOrganizationTeams", () => {
       if (fails) await expect(deletion).rejects.toThrow("Team deletion failed");
       else await deletion;
     });
-    expect(setActiveTeam).toHaveBeenCalledWith({ teamId: null });
-    expect(deleteTeam).toHaveBeenCalledOnce();
-    expect(mocks.invalidateRouter).toHaveBeenCalledOnce();
-    expect(getSession).toHaveBeenCalledTimes(2);
+    expect(deleteTeam).toHaveBeenCalledWith({ teamId: "team-1", organizationId: "org-1" });
+    expect(mocks.invalidateRouter).toHaveBeenCalledTimes(fails ? 0 : 1);
     hook.unmount();
     hook.queryClient.clear();
   });

@@ -1,5 +1,7 @@
+import type { DecoratedMiddleware } from "@orpc/server";
+import { ORPCError } from "@orpc/server";
 import { type FeatureArea, isFeatureArea } from "./feature-areas";
-import type { AuthOrganizationContext } from "./lib/auth";
+import type { AuthContext, AuthOrganizationContext } from "./lib/auth";
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
@@ -45,4 +47,35 @@ export function resolveTeamAccess(context: TeamAccessContext | undefined): TeamA
     bypass,
     allowedAreas: activeTeam && !bypass ? activeTeam.areas.filter(isFeatureArea) : null,
   };
+}
+
+/**
+ * Gates a route on the caller's active team having one of the given areas.
+ * Assumes `requireAuth` already ran on the route — it only adds the
+ * team-specific check on top, rather than re-deriving auth from scratch.
+ */
+export function createRequireTeamArea(builder: any) {
+  type TeamAreaMiddleware = DecoratedMiddleware<
+    AuthContext,
+    { activeTeam: WorkspaceTeam | null },
+    any,
+    any,
+    any
+  >;
+
+  return <TAreas extends readonly FeatureArea[]>(...areas: TAreas) =>
+    builder.middleware(async ({ context, next }: { context: AuthContext; next: any }) => {
+      const { activeTeam, allowedAreas } = resolveTeamAccess(context);
+      if (
+        activeTeam &&
+        allowedAreas !== null &&
+        !areas.some((area) => allowedAreas.includes(area))
+      ) {
+        throw new ORPCError("FORBIDDEN", {
+          message: `Your active team "${activeTeam.name}" is not granted ${areas.join(" or ")}. Switch teams or ask an organization owner to grant it.`,
+          data: { requiredPermissions: [...areas], action: "switch-team" },
+        });
+      }
+      return next({ context: { activeTeam } });
+    }) as TeamAreaMiddleware;
 }
