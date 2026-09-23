@@ -293,7 +293,7 @@ function unredactSecrets(
   );
 }
 
-function buildAuthBaseVariables(
+export function buildAuthBaseVariables(
   config: RuntimeConfig,
   corsOrigins: string[],
 ): Effect.Effect<Record<string, unknown>> {
@@ -307,6 +307,11 @@ function buildAuthBaseVariables(
       account: config.account,
       domain: hostUrl,
       hostUrl,
+      // The plugin's Better Auth baseURL — invite-email links, passkey RP-id
+      // derivation, and callback URLs all derive from it. Without it the
+      // plugin falls back to a hardcoded http://localhost:3000 while the host
+      // actually serves on its configured port.
+      baseUrl: hostUrl,
     };
     if (corsOrigins.length > 0) {
       base.trustedOrigins = corsOrigins;
