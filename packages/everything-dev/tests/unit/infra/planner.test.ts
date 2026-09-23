@@ -99,6 +99,75 @@ describe("buildServiceDescriptors", () => {
     expect(api?.url).toBe("https://api.example.com/mf-manifest.json");
     expect(api?.port).toBeUndefined();
   });
+
+  it("skips a local plugins.auth mirror (the auth slot owns the backend)", () => {
+    const rc = stubRuntimeConfig({
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "",
+          entry: "",
+          source: "local",
+          localPath: "/tmp/auth",
+          ui: {
+            name: "auth-ui",
+            url: "http://localhost:3011",
+            entry: "",
+            source: "local",
+            localPath: "/tmp/auth-ui",
+            port: 3011,
+          },
+        },
+      },
+    } as Partial<RuntimeConfig>);
+    const ports = stubResolvedPorts({
+      plugins: { auth: { api: 3010, ui: 3011 } },
+    });
+    const descs = buildServiceDescriptors(rc, ports);
+    expect(descs.find((d) => d.key === "plugin:auth")).toBeUndefined();
+    expect(descs.find((d) => d.key === "plugin-ui:auth")?.port).toBe(3011);
+  });
+
+  it("skips a remote plugins.auth mirror", () => {
+    const rc = stubRuntimeConfig({
+      auth: {
+        name: "auth",
+        url: "https://auth.example.com",
+        entry: "",
+        source: "remote",
+      },
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "https://auth.example.com",
+          entry: "",
+          source: "remote",
+        },
+      },
+    } as Partial<RuntimeConfig>);
+    const ports = stubResolvedPorts();
+    const descs = buildServiceDescriptors(rc, ports);
+    expect(descs.find((d) => d.key === "plugin:auth")).toBeUndefined();
+  });
+
+  it("keeps plugins.auth as its own descriptor when it is not a mirror", () => {
+    const rc = stubRuntimeConfig({
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "",
+          entry: "",
+          source: "local",
+          localPath: "/tmp/other-auth",
+        },
+      },
+    } as Partial<RuntimeConfig>);
+    const ports = stubResolvedPorts({
+      plugins: { auth: { api: 3010, ui: undefined } },
+    });
+    const descs = buildServiceDescriptors(rc, ports);
+    expect(descs.find((d) => d.key === "plugin:auth")?.port).toBe(3010);
+  });
 });
 
 describe("buildLaunchSpec", () => {

@@ -50,11 +50,60 @@ export const getDisplayName = (name: string): string =>
     ? name.slice(PLUGIN_PREFIX.length).toUpperCase()
     : name.toUpperCase();
 
-export const isPlugin = (name: string): boolean => name.startsWith(PLUGIN_PREFIX);
+const isPlugin = (name: string): boolean => name.startsWith(PLUGIN_PREFIX);
+
+const CORE_SERVICES = new Set(["host", "api", "ui"]);
+
+const UI_PREFIX = "plugin-ui:";
+
+export interface MergedProcess extends DevProcessState {
+  ui?: DevProcessState;
+}
+
+const STATUS_RANK: Record<DevProcessStatus, number> = {
+  ready: 0,
+  pending: 1,
+  starting: 2,
+  error: 3,
+};
+
+const worstStatus = (a: DevProcessStatus, b: DevProcessStatus): DevProcessStatus =>
+  STATUS_RANK[a] >= STATUS_RANK[b] ? a : b;
+
+/**
+ * One row per plugin: `plugin-ui:<id>` companions merge into their parent
+ * (`plugin:<id>`, or the `auth` app slot for the auth mirror) as an inline
+ * ui-port annotation. Orphan ui rows (no parent process) render as-is.
+ */
+export const mergePluginUiRows = (processes: DevProcessState[]): MergedProcess[] => {
+  const byName = new Map(processes.map((p) => [p.name, p]));
+  const consumed = new Set<string>();
+  const merged: MergedProcess[] = [];
+
+  for (const proc of processes) {
+    if (proc.name.startsWith(UI_PREFIX)) continue;
+    const row: MergedProcess = { ...proc };
+    const pluginId = isPlugin(proc.name) ? proc.name.slice(PLUGIN_PREFIX.length) : proc.name;
+    const ui = byName.get(`${UI_PREFIX}${pluginId}`);
+    if (ui) {
+      row.ui = ui;
+      row.status = worstStatus(proc.status, ui.status);
+      consumed.add(ui.name);
+    }
+    merged.push(row);
+  }
+
+  for (const proc of processes) {
+    if (!consumed.has(proc.name) && proc.name.startsWith(UI_PREFIX)) merged.push({ ...proc });
+  }
+  return merged;
+};
 
 const getServiceColor = (name: string): ((text: string) => string) => {
-  if (name.startsWith(PLUGIN_PREFIX)) return colors.orange;
-  return name === "host" ? colors.cyan : name === "ui" ? colors.magenta : colors.blue;
+  if (name === "host") return colors.cyan;
+  if (name === "ui") return colors.magenta;
+  if (CORE_SERVICES.has(name)) return colors.blue;
+  return colors.orange;
 };
 
 const getStatusText = (proc: DevProcessState): string => {
@@ -84,29 +133,29 @@ const getStatusIcon = (status: DevProcessStatus): string => {
 };
 
 export const sectionProcesses = (
-  processes: DevProcessState[],
+  processes: MergedProcess[],
 ): Array<{
   key: string;
   title: string;
-  processes: DevProcessState[];
+  processes: MergedProcess[];
 }> => {
-  const plugins = processes.filter((p) => isPlugin(p.name));
-  const services = processes.filter((p) => !isPlugin(p.name));
-  const sections: Array<{ key: string; title: string; processes: DevProcessState[] }> = [];
+  const plugins = processes.filter((p) => !CORE_SERVICES.has(p.name));
+  const services = processes.filter((p) => CORE_SERVICES.has(p.name));
+  const sections: Array<{ key: string; title: string; processes: MergedProcess[] }> = [];
   if (plugins.length > 0) sections.push({ key: "plugins", title: "PLUGINS", processes: plugins });
   if (services.length > 0)
     sections.push({ key: "services", title: "SERVICES", processes: services });
   return sections;
 };
 
-const getColumnWidths = (processes: DevProcessState[]): { name: number; source: number } => {
+const getColumnWidths = (processes: MergedProcess[]): { name: number; source: number } => {
   const name = Math.max(6, ...processes.map((p) => getDisplayName(p.name).length));
   const source = Math.max(10, ...processes.map((p) => (p.source ? ` (${p.source})`.length : 0)));
   return { name, source };
 };
 
 export const renderProcessRow = (
-  proc: DevProcessState,
+  proc: MergedProcess,
   nameWidth: number,
   sourceWidth: number,
 ): string => {
@@ -117,7 +166,8 @@ export const renderProcessRow = (
   const portStr = showPort ? `:${proc.port}` : "";
   const sourceLabel = proc.source ? ` (${proc.source})` : "";
   const statusColor = proc.status === "ready" ? colors.green : colors.gray;
-  return `  ${getStatusIcon(proc.status)} ${chalk.bold(color(getDisplayName(proc.name).padEnd(nameWidth)))}${colors.gray(sourceLabel.padEnd(sourceWidth))} ${statusColor(getStatusText(proc))}${showPort ? colors.cyan(` ${portStr}`) : ""}`;
+  const uiAnnotation = proc.ui ? colors.gray(` · ui :${proc.ui.port}`) : "";
+  return `  ${getStatusIcon(proc.status)} ${chalk.bold(color(getDisplayName(proc.name).padEnd(nameWidth)))}${colors.gray(sourceLabel.padEnd(sourceWidth))} ${statusColor(getStatusText(proc))}${showPort ? colors.cyan(` ${portStr}`) : ""}${uiAnnotation}`;
 };
 
 export const renderLogLine = (entry: DevLogLine): string => {
@@ -155,9 +205,10 @@ const getHostPort = (processes: DevProcessState[]): number =>
   processes.find((p) => p.name === "host")?.port || 3000;
 
 export function renderDevState(state: DevSessionState): string {
+  const rows = mergePluginUiRows(state.processes);
   const lines: string[] = renderBanner(state.description);
 
-  const allReady = state.processes.length > 0 && state.processes.every((p) => p.status === "ready");
+  const allReady = rows.length > 0 && rows.every((p) => p.status === "ready");
   const hostPort = getHostPort(state.processes);
 
   if (allReady) {
@@ -173,8 +224,8 @@ export function renderDevState(state: DevSessionState): string {
   lines.push("");
   lines.push(colors.dim(divider(VIEW_WIDTH)));
 
-  const widths = getColumnWidths(state.processes);
-  for (const section of sectionProcesses(state.processes)) {
+  const widths = getColumnWidths(rows);
+  for (const section of sectionProcesses(rows)) {
     lines.push(`  ${chalk.bold(colors.cyan(section.title))}`);
     for (const proc of section.processes) {
       lines.push(renderProcessRow(proc, widths.name, widths.source));
@@ -185,8 +236,8 @@ export function renderDevState(state: DevSessionState): string {
   lines.push(
     `  ${allReady ? colors.green(icons.ok) : colors.cyan(icons.scan)} ${
       allReady
-        ? `All ${state.processes.length} services running`
-        : `${state.processes.filter((p) => p.status === "ready").length}/${state.processes.length} ready`
+        ? `All ${rows.length} services running`
+        : `${rows.filter((p) => p.status === "ready").length}/${rows.length} ready`
     }${colors.gray(`   ${icons.dot} q quit ${icons.dot} l logs`)}`,
   );
 
@@ -248,20 +299,23 @@ export function createDevRenderer(
   if (!isInteractive) {
     let readyPrinted = false;
     let printedLogCount = 0;
-    const printedStatuses = new Map<string, DevProcessStatus>();
+    const printedRows = new Map<string, string>();
+
+    const rowKey = (row: MergedProcess): string => `${row.status}:${row.ui?.port ?? ""}`;
 
     const printHeader = () => {
-      const widths = getColumnWidths(state.processes);
+      const rows = mergePluginUiRows(state.processes);
+      const widths = getColumnWidths(rows);
       const lines = ["", ...renderBanner(description)];
       if (state.proxyTarget) {
         lines.push(renderProxyLine(state.proxyTarget));
       }
       lines.push("");
-      for (const section of sectionProcesses(state.processes)) {
+      for (const section of sectionProcesses(rows)) {
         lines.push(`  ${chalk.bold(colors.cyan(section.title))}`);
         for (const proc of section.processes) {
           lines.push(renderProcessRow(proc, widths.name, widths.source));
-          printedStatuses.set(proc.name, proc.status);
+          printedRows.set(proc.name, rowKey(proc));
         }
       }
       lines.push("");
@@ -269,15 +323,15 @@ export function createDevRenderer(
     };
 
     const printChanges = () => {
-      const widths = getColumnWidths(state.processes);
-      for (const proc of state.processes) {
-        if (printedStatuses.get(proc.name) !== proc.status) {
-          printedStatuses.set(proc.name, proc.status);
-          output.write(`${renderProcessRow(proc, widths.name, widths.source)}\n`);
+      const rows = mergePluginUiRows(state.processes);
+      const widths = getColumnWidths(rows);
+      for (const row of rows) {
+        if (printedRows.get(row.name) !== rowKey(row)) {
+          printedRows.set(row.name, rowKey(row));
+          output.write(`${renderProcessRow(row, widths.name, widths.source)}\n`);
         }
       }
-      const ready =
-        state.processes.length > 0 && state.processes.every((p) => p.status === "ready");
+      const ready = rows.length > 0 && rows.every((p) => p.status === "ready");
       if (ready && !readyPrinted) {
         readyPrinted = true;
         output.write(`\n${renderReadyBlock(getHostPort(state.processes)).join("\n")}\n\n`);

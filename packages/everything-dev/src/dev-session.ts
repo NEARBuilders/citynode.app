@@ -105,7 +105,7 @@ export const runDevSession = (
       addPort("auth", runtimeConfig.auth?.port);
       if (runtimeConfig.plugins) {
         for (const [id, plugin] of Object.entries(runtimeConfig.plugins)) {
-          if (!isAuthMirrorPluginEntry(runtimeConfig, id, plugin)) {
+          if (!isAuthMirrorPluginEntry(runtimeConfig.auth, id, plugin)) {
             addPort(`plugin:${id}`, plugin.port);
           }
           addPort(`plugin-ui:${id}`, plugin.ui?.port);

@@ -128,6 +128,95 @@ describe("renderDevState", () => {
     );
     expect(out).toContain("failed");
   });
+
+  it("merges plugin-ui companion rows into the parent plugin row", () => {
+    const out = stripAnsi(
+      renderDevState({
+        ...baseState,
+        processes: [...baseState.processes, proc("plugin-ui:apps", "ready", 3011, "local")],
+      }),
+    );
+    expect(out).toContain("ui :3011");
+    expect(out).not.toContain("PLUGIN-UI");
+    expect(out.match(/APPS/g)?.length).toBe(1);
+  });
+
+  it("merges plugin-ui:auth into the auth app-slot row", () => {
+    const out = stripAnsi(
+      renderDevState({
+        description: "dev session",
+        processes: [
+          proc("auth", "ready", 3002, "local"),
+          proc("plugin-ui:auth", "ready", 3011, "local"),
+          proc("host", "ready", 3000),
+          proc("api", "ready", 3001),
+          proc("ui", "ready", 3003),
+        ],
+        logs: [],
+      }),
+    );
+    expect(out).toContain("AUTH");
+    expect(out).toContain("ui :3011");
+    const authIdx = out.indexOf("AUTH");
+    const pluginsIdx = out.indexOf("PLUGINS");
+    const servicesIdx = out.indexOf("SERVICES");
+    expect(authIdx).toBeGreaterThan(pluginsIdx);
+    expect(authIdx).toBeLessThan(servicesIdx);
+  });
+
+  it("shows only host, api, ui in SERVICES", () => {
+    const out = stripAnsi(
+      renderDevState({
+        description: "dev session",
+        processes: [
+          proc("auth", "ready", 3002, "local"),
+          proc("plugin:votes", "ready", 3012, "local"),
+          proc("host", "ready", 3000),
+          proc("api", "ready", 3001),
+          proc("ui", "ready", 3003),
+        ],
+        logs: [],
+      }),
+    );
+    const servicesIdx = out.indexOf("SERVICES");
+    const tail = out.slice(servicesIdx);
+    expect(tail).toContain("HOST");
+    expect(tail).toContain("API");
+    expect(tail).toContain("UI");
+    expect(tail).not.toContain("AUTH");
+    expect(tail).not.toContain("VOTES");
+  });
+
+  it("counts a merged plugin row as ready only when its ui is ready too", () => {
+    const out = stripAnsi(
+      renderDevState({
+        description: "dev session",
+        processes: [
+          proc("plugin:apps", "ready", 3010, "local"),
+          proc("plugin-ui:apps", "starting", 3011, "local"),
+          proc("host", "ready", 3000),
+        ],
+        logs: [],
+      }),
+    );
+    expect(out).not.toContain("All 2 services running");
+    expect(out).toContain("1/2 ready");
+  });
+
+  it("shows a failed ui as a failed merged row", () => {
+    const out = stripAnsi(
+      renderDevState({
+        description: "dev session",
+        processes: [
+          proc("plugin:apps", "ready", 3010, "local"),
+          proc("plugin-ui:apps", "error", 3011, "local"),
+          proc("host", "ready", 3000),
+        ],
+        logs: [],
+      }),
+    );
+    expect(out).toContain("failed");
+  });
 });
 
 describe("createDevRenderer (non-TTY incremental)", () => {

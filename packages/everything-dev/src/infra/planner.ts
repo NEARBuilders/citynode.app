@@ -12,7 +12,11 @@ import {
   type RedisSecretConfig,
   savePortState,
 } from "../cli/infra";
-import { buildDescription } from "../service-descriptor";
+import {
+  type AuthSlotShape,
+  buildDescription,
+  isAuthMirrorPluginEntry,
+} from "../service-descriptor";
 import type { RuntimeConfig } from "../types";
 import { shouldPersistPortState } from "./materializer";
 import type {
@@ -67,7 +71,7 @@ function allocateServices(
     { source: string; localPath?: string; ui?: { source: string; localPath?: string } }
   >,
   configDir: string,
-  authLocalPath?: string,
+  auth?: AuthSlotShape,
 ): Effect.Effect<AllocateServicesResult, InfraError, PortAllocator> {
   return Effect.gen(function* () {
     const wKey = workspaceKey(configDir);
@@ -94,10 +98,10 @@ function allocateServices(
     const pluginKeys = Object.keys(plugins).sort();
     const pluginStart =
       cliPorts.pluginsStart ?? persisted?.pluginPortStart ?? DEFAULT_PLUGIN_PORT_START;
-    const isAuthMirror = (pluginId: string, pluginCfg: { localPath?: string } | undefined) =>
-      pluginId === "auth" &&
-      Boolean(authLocalPath) &&
-      Boolean(pluginCfg?.localPath && pluginCfg.localPath === authLocalPath);
+    const isAuthMirror = (
+      pluginId: string,
+      pluginCfg: { source: string; localPath?: string } | undefined,
+    ) => pluginCfg !== undefined && isAuthMirrorPluginEntry(auth, pluginId, pluginCfg);
     let nextPluginPort = pluginStart;
     for (const pluginId of pluginKeys) {
       const pluginCfg = plugins[pluginId];
@@ -307,17 +311,7 @@ export function buildServiceDescriptors(
     for (const [pluginId, pluginCfg] of Object.entries(runtimeConfig.plugins)) {
       const pluginIsLocal = pluginCfg.source === "local";
       const p = resolvedPorts.plugins[pluginId];
-      const authEntry = runtimeConfig.auth;
-      const isAuthMirror =
-        pluginId === "auth" &&
-        Boolean(authEntry) &&
-        Boolean(
-          (pluginCfg.localPath && pluginCfg.localPath === authEntry?.localPath) ||
-            (!pluginCfg.localPath &&
-              pluginCfg.source === "remote" &&
-              pluginCfg.url &&
-              pluginCfg.url === authEntry?.url),
-        );
+      const isAuthMirror = isAuthMirrorPluginEntry(runtimeConfig.auth, pluginId, pluginCfg);
       if (pluginIsLocal && p?.api && !isAuthMirror) {
         descriptors.push({
           key: `plugin:${pluginId}`,
@@ -421,12 +415,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       ports: svcPorts,
       claims,
       devPortsState,
-    } = yield* allocateServices(
-      cliPorts,
-      plugins,
-      input.configDir,
-      input.bosConfig.auth?.localPath,
-    );
+    } = yield* allocateServices(cliPorts, plugins, input.configDir, input.bosConfig.auth);
 
     const {
       dbs,
@@ -495,14 +484,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       plugins: input.bosConfig.plugins
         ? Object.fromEntries(
             Object.entries(input.bosConfig.plugins).map(([id, p]) => {
-              const authEntry = input.bosConfig.auth;
-              const isAuthMirror =
-                id === "auth" &&
-                Boolean(authEntry) &&
-                Boolean(
-                  (p.localPath && p.localPath === authEntry?.localPath) ||
-                    (!p.localPath && p.source === "remote" && p.url && p.url === authEntry?.url),
-                );
+              const isAuthMirror = isAuthMirrorPluginEntry(input.bosConfig.auth, id, p);
               const pluginPort = resolvedPorts.plugins[id];
               const patchedUi = (() => {
                 if (p.ui?.source !== "local" || !p.ui?.localPath || !pluginPort?.ui) return p.ui;

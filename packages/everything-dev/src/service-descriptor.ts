@@ -1,27 +1,34 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { Context, Layer } from "effect";
-import type { JsonObject, RuntimeConfig, RuntimePluginConfig, SourceMode } from "./types";
+import type { JsonObject, RuntimeConfig, SourceMode } from "./types";
+
+export interface AuthSlotShape {
+  source: string;
+  localPath?: string;
+  url?: string;
+}
 
 /**
  * True when a `plugins.<id>` entry is the runtime-config mirror of the
  * app-slot auth plugin (same backend target) — the `auth` service already
  * spawns that backend, so the mirror contributes only its `ui` surface.
+ * The single implementation; consumed by the service descriptors, the DAG,
+ * the infra planner, and the dev session.
  */
 export function isAuthMirrorPluginEntry(
-  runtimeConfig: RuntimeConfig,
+  authEntry: AuthSlotShape | undefined,
   pluginId: string,
-  pluginConfig: RuntimePluginConfig,
+  pluginConfig: AuthSlotShape,
 ): boolean {
-  if (pluginId !== "auth" || !runtimeConfig.auth) return false;
-  const auth = runtimeConfig.auth;
-  if (pluginConfig === auth) return true;
-  if (pluginConfig.localPath && pluginConfig.localPath === auth.localPath) return true;
+  if (pluginId !== "auth" || !authEntry) return false;
+  if (pluginConfig === authEntry) return true;
+  if (pluginConfig.localPath && pluginConfig.localPath === authEntry.localPath) return true;
   if (
     !pluginConfig.localPath &&
     pluginConfig.source === "remote" &&
     pluginConfig.url &&
-    pluginConfig.url === auth.url
+    pluginConfig.url === authEntry.url
   ) {
     return true;
   }
@@ -200,7 +207,7 @@ export function buildServiceDescriptorMap(
   if (runtimeConfig.plugins) {
     let pluginBasePort = 3010;
     for (const [pluginId, pluginConfig] of Object.entries(runtimeConfig.plugins)) {
-      const isAuthMirror = isAuthMirrorPluginEntry(runtimeConfig, pluginId, pluginConfig);
+      const isAuthMirror = isAuthMirrorPluginEntry(runtimeConfig.auth, pluginId, pluginConfig);
       const pluginKey = `plugin:${pluginId}`;
       const resolvedPort = pluginConfig.port ?? pluginBasePort;
       pluginBasePort = resolvedPort + 1;
