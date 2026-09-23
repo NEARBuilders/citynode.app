@@ -71,6 +71,17 @@ const childEnv = {
   BASE_URL: regressionEnv.baseUrl,
   CORS_ORIGIN: regressionEnv.baseUrl,
   REGRESSION_VARIANT: variant,
+  // The Go harness tunes the host's rate-limit and body-limit middlewares for
+  // the suite (regtest/process.go setIfUnset) — forward them; without them
+  // the container's host runs middleware defaults and the body-limit and
+  // rate-limit pins fail (no 413, no 429).
+  RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS ?? "1000",
+  RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX ?? "100",
+  BODY_LIMIT_MAX: process.env.BODY_LIMIT_MAX ?? "65536",
+  // better-auth's internal limiter defaults on in production with a single
+  // shared per-path bucket (no client IP behind the harness) — the suite's
+  // /api/auth/* traffic trips it within seconds.
+  BETTER_AUTH_RATE_LIMIT_DISABLED: "1",
 };
 
 const dockerRun = () =>

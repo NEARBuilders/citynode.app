@@ -263,6 +263,13 @@ export function createAuthInstance(
     trustedOrigins: config.trustedOrigins?.length ? config.trustedOrigins : undefined,
     secret: config.secret,
     baseURL: config.baseUrl,
+    // better-auth's core limiter defaults to enabled in production with a
+    // single shared per-path bucket when no client IP is resolvable — the
+    // regression container's whole /api/auth/* traffic shares one bucket and
+    // trips it within seconds. Test environments opt out explicitly.
+    ...(process.env.BETTER_AUTH_RATE_LIMIT_DISABLED === "1"
+      ? { rateLimit: { enabled: false } }
+      : {}),
     socialProviders: {
       github: {
         clientId: githubConfig?.clientId ?? "",
