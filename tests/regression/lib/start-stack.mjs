@@ -73,17 +73,27 @@ await waitForDatabases(regressionEnv.dbUrls);
 killStalePorts(regressionEnv.stalePorts);
 
 log(`starting ${mode} stack on port ${regressionEnv.basePort} with test databases`);
+// Own process group: bos dev spawns service trees (rspack/rsbuild watchers
+// included) that don't always die from a plain SIGTERM to the orchestrator —
+// the group kill is what playwright's webServer teardown can rely on.
 const child = spawn(process.execPath, spec.command, {
   cwd: root,
   env: spec.env,
   stdio: "inherit",
+  detached: true,
 });
 
 const forward = (signal) => {
-  child.kill(signal);
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
 };
 process.on("SIGTERM", () => forward("SIGTERM"));
 process.on("SIGINT", () => forward("SIGINT"));
+const teardown = () => forward("SIGTERM");
+process.on("exit", teardown);
 
 const exitCode = await new Promise((resolve) => {
   child.once("error", (error) => {

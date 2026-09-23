@@ -409,6 +409,9 @@ jobs:
       - name: Run browser regression suite
         run: bun run test:regression:browser:dev
 
+      - name: Run browser regression suite (CSR, no-SSR)
+        run: bun run test:regression:browser:csr
+
       - name: Upload regression artifacts on failure
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)

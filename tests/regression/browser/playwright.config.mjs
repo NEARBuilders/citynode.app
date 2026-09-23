@@ -7,7 +7,9 @@ const command =
     ? "bun run regression:start:prod"
     : mode === "backcompat"
       ? "bun run regression:start:backcompat"
-      : "bun run regression:start:dev";
+      : mode === "csr"
+        ? "bun run regression:start:csr"
+        : "bun run regression:start:dev";
 
 const regressionEnv = computeRegressionEnv();
 
@@ -46,5 +48,19 @@ export default defineConfig({
     stderr: "pipe",
     env: webServerEnv,
   },
-  projects: [{ name: "dev" }, { name: "prod" }, { name: "backcompat" }],
+  projects: [
+    { name: "dev" },
+    { name: "prod" },
+    { name: "backcompat" },
+    {
+      // CSR (no-SSR) focused set: the client-side compose path plus the
+      // redirect/load specs that exercise it end-to-end.
+      name: "csr",
+      testMatch: [
+        "specs/csr-compose.spec.ts",
+        "specs/auth-redirect.spec.ts",
+        "specs/app-load.spec.ts",
+      ],
+    },
+  ],
 });

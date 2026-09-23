@@ -1,0 +1,103 @@
+import { expect, test } from "@playwright/test";
+import { waitForApp } from "../helpers/page-ready";
+
+/**
+ * CSR (no-SSR) compose regression — the default `bos dev` path. The shell
+ * must carry the compose payload so the browser itself registers the plugin
+ * remotes, loads their routeConfig, and constructs the route tree. Guards
+ * against the failure class where plugin routes are absent client-side and
+ * dynamic core routes (/_public/$accountId) swallow static paths like
+ * /login. Complements the SSR (dev) project which covers the server-composed
+ * path; see auth-redirect.spec.ts for the redirect flows shared by both.
+ */
+test.describe("CSR compose", () => {
+  test("/login renders the auth plugin's sign-in page client-side", async ({ page }) => {
+    const consoleMarks: string[] = [];
+    page.on("console", (msg) => {
+      const text = msg.text();
+      if (text.includes("[Hydrate]")) consoleMarks.push(text);
+    });
+
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const signInHeading = page.getByTestId("login.heading");
+    await expect(signInHeading).toBeVisible({ timeout: 15000 });
+    await expect(signInHeading).toHaveText("Sign in");
+
+    // The payload must be present client-side with the auth remote registered.
+    const compose = await page.evaluate(() => {
+      const config = (
+        window as {
+          __RUNTIME_CONFIG__?: {
+            ui?: { compose?: { remotes?: Array<{ key: string; entry: string }> } };
+          };
+        }
+      ).__RUNTIME_CONFIG__;
+      return config?.ui?.compose ?? null;
+    });
+    expect(compose, "CSR shell must carry a compose payload").toBeTruthy();
+    const authRemote = compose!.remotes?.find((remote) => remote.key === "auth");
+    expect(authRemote, "auth ui remote must be in the payload").toBeTruthy();
+
+    // The remote entry must actually be reachable from the browser context.
+    const entryStatus = await page.evaluate(async (entry: string) => {
+      const response = await fetch(entry, { method: "GET" });
+      return response.status;
+    }, authRemote!.entry);
+    expect(entryStatus, `auth remoteEntry at ${authRemote!.entry}`).toBe(200);
+
+    // The tree was constructed from core + auth manifests (2 sources).
+    const constructed = consoleMarks.find((mark) => mark.includes("tree constructed"));
+    expect(
+      constructed,
+      `expected a "tree constructed" mark, got: ${consoleMarks.join(" | ")}`,
+    ).toBeTruthy();
+
+    const failed = consoleMarks.find((mark) => mark.includes("Client compose failed"));
+    expect(failed, "client compose must not fail").toBeUndefined();
+  });
+
+  test("a static plugin route beats the dynamic $accountId route", async ({ page }) => {
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("login.heading")).toBeVisible({ timeout: 15000 });
+    const pathname = new URL(page.url()).pathname;
+    expect(pathname).toBe("/login");
+  });
+
+  test("an account path renders the account page, not the sign-in page", async ({ page }) => {
+    await page.goto("/regression-no-account.near", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const pathname = new URL(page.url()).pathname;
+    expect(pathname, "account path must not redirect to /login").toBe(
+      "/regression-no-account.near",
+    );
+    await expect(page.getByTestId("login.heading")).toHaveCount(0);
+  });
+});
+
+test.describe("CSR compose CSP", () => {
+  test("loading the composed app raises no securitypolicyviolation", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as { __CSP_VIOLATIONS__?: string[] }).__CSP_VIOLATIONS__ = [];
+      document.addEventListener("securitypolicyviolation", (event) => {
+        const violations = (window as { __CSP_VIOLATIONS__?: string[] }).__CSP_VIOLATIONS__ ?? [];
+        violations.push(
+          `${event.violatedDirective}: ${event.blockedURL || event.srcElement?.nodeName || "?"}`,
+        );
+      });
+    });
+
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+    await expect(page.getByTestId("login.heading")).toBeVisible({ timeout: 15000 });
+
+    const violations = await page.evaluate(
+      () => (window as { __CSP_VIOLATIONS__?: string[] }).__CSP_VIOLATIONS__ ?? [],
+    );
+    expect(violations, `CSP violations: ${violations.join("; ")}`).toEqual([]);
+  });
+});

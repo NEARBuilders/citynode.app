@@ -106,8 +106,8 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
 }
 
 export function regressionStackOptions(config, mode, env = process.env) {
-  if (!["dev", "prod", "backcompat"].includes(mode)) {
-    throw new Error(`unknown mode: ${mode} (expected dev | prod | backcompat)`);
+  if (!["dev", "csr", "prod", "backcompat"].includes(mode)) {
+    throw new Error(`unknown mode: ${mode} (expected dev | csr | prod | backcompat)`);
   }
   const { basePort } = config;
   const command =
@@ -117,7 +117,9 @@ export function regressionStackOptions(config, mode, env = process.env) {
           "packages/everything-dev/src/cli.ts",
           "dev",
           "--no-interactive",
-          "--ssr",
+          // `dev` exercises source-composed SSR; `csr` boots the default
+          // no-SSR stack so the client-side compose path is covered too.
+          ...(mode === "dev" ? ["--ssr"] : []),
           ...(mode === "backcompat"
             ? [
                 "--host",
