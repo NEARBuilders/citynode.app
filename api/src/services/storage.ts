@@ -71,7 +71,7 @@ export interface BundleStorage {
   get(key: string): Promise<BundleObjectContent | null>;
 }
 
-export class StorageTag extends Context.Service<BundleStorage, BundleStorage>()("api/Storage") {}
+export class StorageTag extends Context.Service<StorageTag, BundleStorage>()("api/Storage") {}
 
 export const StorageLive = Layer.effect(
   StorageTag,
