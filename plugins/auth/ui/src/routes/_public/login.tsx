@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
-import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { sessionQueryOptions, signInWithPasskey, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,7 @@ function LoginPage() {
 
   const [nearPending, setNearPending] = useState(false);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
+  const [passkeyPending, setPasskeyPending] = useState(false);
   const [showPair, setShowPair] = useState(false);
 
   useEffect(() => {
@@ -94,6 +95,20 @@ function LoginPage() {
     });
   };
 
+  const handlePasskey = async () => {
+    setPasskeyPending(true);
+    await signInWithPasskey(auth, {
+      onSuccess: async () => {
+        setPasskeyPending(false);
+        await handleSuccess("Signed in with passkey");
+      },
+      onError: (error) => {
+        setPasskeyPending(false);
+        toast.error(error.message || "Passkey sign-in failed");
+      },
+    });
+  };
+
   if (session?.user) {
     return <Navigate to={redirect} replace />;
   }
@@ -113,6 +128,16 @@ function LoginPage() {
             <PairPanel redirect={redirect} onClose={() => setShowPair(false)} />
           ) : (
             <>
+              <Button
+                type="button"
+                variant="default"
+                onClick={handlePasskey}
+                disabled={passkeyPending || nearPending}
+                className="w-full"
+                data-testid="login.passkey-button"
+              >
+                {passkeyPending ? "waiting for passkey..." : "sign in with passkey"}
+              </Button>
               {detectedAccount ? (
                 <div className="space-y-3">
                   <Button

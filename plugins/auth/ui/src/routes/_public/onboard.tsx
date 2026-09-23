@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { sessionQueryOptions, signInWithPasskey, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,9 @@ function OnboardPage() {
   });
 
   const [nearPending, setNearPending] = useState(false);
+  const [passkeyPending, setPasskeyPending] = useState(false);
+  const [walletPending, setWalletPending] = useState(false);
+  const [walletAccountId, setWalletAccountId] = useState<string | null>(null);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<{
     organizationName: string;
@@ -83,6 +86,20 @@ function OnboardPage() {
     });
   };
 
+  const handlePasskey = async () => {
+    setPasskeyPending(true);
+    await signInWithPasskey(auth, {
+      onSuccess: async () => {
+        setPasskeyPending(false);
+        await queryClient.invalidateQueries({ queryKey: ["session"] });
+      },
+      onError: (error) => {
+        setPasskeyPending(false);
+        toast.error(error.message || "Passkey sign-in failed");
+      },
+    });
+  };
+
   if (redeemed) {
     return (
       <div className="flex-1 flex items-center justify-center px-6 py-12">
@@ -95,6 +112,38 @@ function OnboardPage() {
             <span className="text-foreground font-medium">{redeemed.organizationName}</span> for{" "}
             {redeemed.eventName}.
           </p>
+          {walletAccountId ? (
+            <p
+              className="font-mono text-sm text-foreground break-all"
+              data-testid="onboard.wallet-account"
+            >
+              {walletAccountId}
+            </p>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={async () => {
+                setWalletPending(true);
+                const result = await auth.near.linkPasskeyWallet({
+                  onSuccess: () => {
+                    setWalletPending(false);
+                    toast.success("NEAR wallet ready");
+                  },
+                  onError: (error) => {
+                    setWalletPending(false);
+                    toast.error(error.message || "Failed to set up wallet");
+                  },
+                });
+                if (result) setWalletAccountId(result.accountId);
+              }}
+              disabled={walletPending}
+              data-testid="onboard.setup-wallet-button"
+            >
+              {walletPending ? "setting up..." : "Set up your NEAR wallet"}
+            </Button>
+          )}
           <Button asChild variant="outline" className="w-full">
             <Link to="/dashboard">Go to dashboard</Link>
           </Button>
@@ -175,8 +224,18 @@ function OnboardPage() {
             <Button
               type="button"
               variant="default"
+              onClick={handlePasskey}
+              disabled={passkeyPending || nearPending}
+              className="w-full"
+              data-testid="onboard.passkey-button"
+            >
+              {passkeyPending ? "waiting for passkey..." : "Create your account"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               onClick={handleNear}
-              disabled={nearPending}
+              disabled={passkeyPending || nearPending}
               className="w-full"
               data-testid="onboard.signin-button"
             >
@@ -202,16 +261,28 @@ function OnboardPage() {
             </Button>
           </div>
         ) : (
-          <Button
-            type="button"
-            variant="default"
-            onClick={handleNear}
-            disabled={nearPending}
-            className="w-full"
-            data-testid="onboard.signin-button"
-          >
-            {nearPending ? "connecting..." : "Create your account"}
-          </Button>
+          <div className="space-y-3">
+            <Button
+              type="button"
+              variant="default"
+              onClick={handlePasskey}
+              disabled={passkeyPending || nearPending}
+              className="w-full"
+              data-testid="onboard.passkey-button"
+            >
+              {passkeyPending ? "waiting for passkey..." : "Create your account"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleNear}
+              disabled={passkeyPending || nearPending}
+              className="w-full"
+              data-testid="onboard.signin-button"
+            >
+              {nearPending ? "connecting..." : "sign in with a NEAR wallet"}
+            </Button>
+          </div>
         )}
 
         <p className="text-xs text-center text-muted-foreground">

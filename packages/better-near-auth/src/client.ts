@@ -9,6 +9,7 @@ import type {
 import { atom } from "nanostores";
 import type { Near as NearType, SignedMessage } from "near-kit";
 import { fromNearConnect, generateNonce, Near, type TransactionBuilder } from "near-kit";
+import { linkPasskeyWallet } from "./passkey-client.js";
 import {
   type NearClientAtoms,
   type NearNetwork,
@@ -86,6 +87,7 @@ export interface SIWNClientActions {
     ensureConnected: () => Promise<boolean>;
     disconnect: () => Promise<void>;
     link: (callbacks?: AuthCallbacks) => Promise<void>;
+    linkPasskeyWallet: (callbacks?: AuthCallbacks) => Promise<{ accountId: string } | null>;
     unlink: (params: {
       accountId: string;
       network?: "mainnet" | "testnet";
@@ -672,6 +674,47 @@ export const siwnClient = (config: SIWNClientConfig) => {
               body: params,
               ...fetchOptions,
             });
+          },
+          linkPasskeyWallet: async (callbacks?: AuthCallbacks) => {
+            try {
+              const net = activeNetwork.get();
+              const recipient = getRecipient(net);
+              const result = await linkPasskeyWallet({
+                recipient,
+                listCredentialIds: async () => {
+                  const response = await $fetch<Array<{ credentialID: string }> | null>(
+                    "/passkey/list-user-passkeys",
+                    { method: "GET" },
+                  );
+                  return (response.data ?? []).map((passkey) => passkey.credentialID);
+                },
+                fetchLink: async (body) => {
+                  const response = await $fetch<{ accountId: string; success: boolean } | null>(
+                    "/near/link-passkey-wallet",
+                    {
+                      method: "POST",
+                      body,
+                    },
+                  );
+                  if (response.error || !response.data) {
+                    throw new Error(response.error?.message || "Failed to link passkey wallet");
+                  }
+                  return { accountId: response.data.accountId };
+                },
+              });
+
+              nearState.set({
+                accountId: result.accountId,
+                publicKey: null,
+                networkId: net,
+              });
+              $store.notify("$sessionSignal");
+              callbacks?.onSuccess?.();
+              return result;
+            } catch (error) {
+              callbacks?.onError?.(error instanceof Error ? error : new Error(String(error)));
+              return null;
+            }
           },
           listAccounts: async (): Promise<BetterFetchResponse<ListAccountsResponseT>> => {
             return await $fetch("/near/list-accounts", { method: "GET" });

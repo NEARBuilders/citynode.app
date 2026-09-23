@@ -12,7 +12,7 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import type { RelayedTransactionT } from "better-near-auth";
-import { passkeyWalletManifest, siwnClient } from "better-near-auth/client";
+import { siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "../types";
 import { getRuntimeConfig } from "./runtime";
 
@@ -105,10 +105,7 @@ export function createAuthClient(options: CreateAuthClientOptions = {}) {
     },
     plugins: [
       inferAdditionalFields<any>(),
-      siwnClient({
-        ...nearAuthConfig,
-        wallets: nearAuthConfig.networkId === "mainnet" ? [passkeyWalletManifest] : [],
-      }),
+      siwnClient(nearAuthConfig),
       adminClient(),
       anonymousClient(),
       phoneNumberClient(),
@@ -160,4 +157,52 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
     enabled: !!session,
     refetchInterval: 2000,
   });
+}
+
+/**
+ * Passkey sign-in orchestration: authenticate with an existing credential,
+ * and on first use (no discoverable credential) create one — which
+ * provisions the Better Auth user via the passkey plugin's session-less
+ * registration — then sign in. Two biometrics on first run, one after.
+ */
+export async function signInWithPasskey(
+  authClient: AuthClient,
+  options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+): Promise<SessionData | null> {
+  const fail = (error: Error) => {
+    options?.onError?.(error);
+    return null;
+  };
+
+  const attempt = async (): Promise<SessionData | null> => {
+    const { error, data } = await authClient.signIn.passkey();
+    if (error || !data) return null;
+    const { data: session } = await authClient.getSession();
+    options?.onSuccess?.();
+    return (session as SessionData) ?? null;
+  };
+
+  try {
+    const first = await attempt();
+    if (first) return first;
+  } catch (error) {
+    return fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+  }
+
+  try {
+    const { error } = await authClient.passkey.addPasskey();
+    if (error) {
+      return fail(new Error(error.message || "Passkey setup failed"));
+    }
+  } catch (error) {
+    return fail(error instanceof Error ? error : new Error("Passkey setup failed"));
+  }
+
+  try {
+    const second = await attempt();
+    if (second) return second;
+    return fail(new Error("Passkey sign-in failed"));
+  } catch (error) {
+    return fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+  }
 }

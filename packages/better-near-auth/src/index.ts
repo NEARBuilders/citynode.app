@@ -26,7 +26,13 @@ import {
   verifyNep413Signature,
 } from "near-kit";
 import z from "zod";
-import { isDeterministicAccountId, verifyPasskeyNep413Signature } from "./passkey.js";
+import {
+  derivePasskeyAccountId,
+  isDeterministicAccountId,
+  parseCosePublicKey,
+  passkeyPublicKeyToString,
+  verifyPasskeyNep413Signature,
+} from "./passkey.js";
 import { defaultGetProfile, getImageUrl, getNetworkFromAccountId } from "./profile.js";
 import { schema } from "./schema.js";
 import {
@@ -811,6 +817,152 @@ export const siwn = (options: SIWNPluginOptions) => {
               status: 401,
             });
           }
+        },
+      ),
+      linkPasskeyWallet: createAuthEndpoint(
+        "/near/link-passkey-wallet",
+        {
+          method: "POST",
+          body: z.object({
+            nonce: z.string(),
+            proof: z.string(),
+          }),
+          use: [sessionMiddleware],
+          requireRequest: true,
+        },
+        async (ctx) => {
+          const { nonce, proof } = ctx.body;
+          const session = ctx.context.session;
+
+          if (!session) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Must be logged in to link a passkey wallet",
+              status: 401,
+            });
+          }
+
+          const passkeys = await ctx.context.adapter.findMany({
+            model: "passkey",
+            where: [{ field: "userId", operator: "eq", value: session.user.id }],
+          });
+          if (!passkeys.length) {
+            throw new APIError("BAD_REQUEST", {
+              message: "No passkey registered for this account",
+            });
+          }
+
+          const network = "mainnet" as const;
+          const recipient = getRecipient(network);
+          const message = `Sign in to ${recipient}`;
+          let nonceBytes: Uint8Array;
+          try {
+            nonceBytes = hex.decode(nonce);
+          } catch {
+            throw new APIError("BAD_REQUEST", { message: "Invalid nonce" });
+          }
+          if (nonceBytes.length !== 32) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid nonce" });
+          }
+
+          const nonceHash = await hashNonce(nonceBytes);
+          const existingNonce = await ctx.context.internalAdapter.findVerificationValue(
+            `siwn-nonce:${nonceHash}`,
+          );
+          if (existingNonce) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Unauthorized: Nonce already used (replay attack detected)",
+              status: 401,
+              code: "UNAUTHORIZED_NONCE_REPLAY",
+            });
+          }
+
+          let accountId: string | null = null;
+          let publicKey: string | null = null;
+          for (const passkey of passkeys as Array<{ publicKey: string }>) {
+            let cose: Uint8Array;
+            try {
+              cose = base64.decode(passkey.publicKey);
+            } catch {
+              continue;
+            }
+            const key = parseCosePublicKey(cose);
+            if (!key) continue;
+            const pubKey = passkeyPublicKeyToString(key);
+            const derived = derivePasskeyAccountId(pubKey);
+            if (!derived) continue;
+            const isValid = verifyPasskeyNep413Signature({
+              accountId: derived,
+              publicKey: pubKey,
+              signature: proof,
+              message,
+              recipient,
+              nonce: nonceBytes,
+            });
+            if (isValid) {
+              accountId = derived;
+              publicKey = pubKey;
+              break;
+            }
+          }
+
+          if (!accountId || !publicKey) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Unauthorized: Invalid passkey signature",
+              status: 401,
+            });
+          }
+
+          await ctx.context.internalAdapter.createVerificationValue({
+            identifier: `siwn-nonce:${nonceHash}`,
+            value: "used",
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          });
+
+          const existingNearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [{ field: "accountId", operator: "eq", value: accountId }],
+          });
+          if (existingNearAccount && existingNearAccount.userId !== session.user.id) {
+            throw new APIError("BAD_REQUEST", {
+              message: "This NEAR account is already linked to another user",
+              status: 400,
+            });
+          }
+
+          if (!existingNearAccount) {
+            const userAccounts = await ctx.context.adapter.findMany({
+              model: "nearAccount",
+              where: [{ field: "userId", operator: "eq", value: session.user.id }],
+            });
+
+            await ctx.context.adapter.create({
+              model: "nearAccount",
+              data: {
+                userId: session.user.id,
+                accountId,
+                network,
+                publicKey,
+                isPrimary: userAccounts.length === 0,
+                createdAt: new Date(),
+              },
+            });
+
+            await ctx.context.internalAdapter.createAccount({
+              userId: session.user.id,
+              providerId: "siwn",
+              accountId: `${accountId}:${network}`,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+
+          await ensureRelayer(ctx.context.adapter, ctx.context.secret, network);
+
+          return ctx.json({
+            success: true,
+            accountId,
+            network,
+          });
         },
       ),
       unlinkNearAccount: createAuthEndpoint(

@@ -133,6 +133,86 @@ export function derivePasskeyAccountId(publicKey: string): string | null {
   return key ? deriveAccountId(key) : null;
 }
 
+export function passkeyPublicKeyToString(key: PasskeyPublicKey): string {
+  return `${key.curve}:${base58.encode(key.bytes)}`;
+}
+
+type CborValue = number | Uint8Array | Map<number, CborValue>;
+
+function readCborItem(bytes: Uint8Array, offset: number): [CborValue, number] {
+  const initial = bytes[offset]!;
+  const major = initial >> 5;
+  const info = initial & 0x1f;
+  offset += 1;
+  const readLength = (): [number, number] => {
+    if (info < 24) return [info, offset];
+    if (info === 24) return [bytes[offset]!, offset + 1];
+    if (info === 25) return [(bytes[offset]! << 8) | bytes[offset + 1]!, offset + 2];
+    if (info === 26) {
+      return [
+        bytes[offset]! * 0x1000000 +
+          ((bytes[offset + 1]! << 16) | (bytes[offset + 2]! << 8) | bytes[offset + 3]!),
+        offset + 4,
+      ];
+    }
+    throw new Error("CBOR: unsupported length");
+  };
+
+  if (major === 0) {
+    const [value, next] = readLength();
+    return [value, next];
+  }
+  if (major === 1) {
+    const [value, next] = readLength();
+    return [-1 - value, next];
+  }
+  if (major === 2) {
+    const [length, next] = readLength();
+    return [bytes.slice(next, next + length), next + length];
+  }
+  if (major === 5) {
+    const [count, next] = readLength();
+    const map: Map<number, CborValue> = new Map();
+    let cursor = next;
+    for (let i = 0; i < count; i++) {
+      const [key, afterKey] = readCborItem(bytes, cursor);
+      const [value, afterValue] = readCborItem(bytes, afterKey);
+      if (typeof key !== "number") throw new Error("CBOR: non-integer map key");
+      map.set(key, value);
+      cursor = afterValue;
+    }
+    return [map, cursor];
+  }
+  if (major === 7 && info < 20) return [info, offset];
+  throw new Error(`CBOR: unsupported major type ${major}`);
+}
+
+/** COSE_Key (RFC 8152) → passkey public key. Supports EC2/P-256 and OKP/Ed25519. */
+export function parseCosePublicKey(cose: Uint8Array): PasskeyPublicKey | null {
+  try {
+    const [value] = readCborItem(cose, 0);
+    if (!(value instanceof Map)) return null;
+    const kty = value.get(1);
+    const alg = value.get(3);
+    if (kty === 2 && alg === -7) {
+      if (value.get(-1) !== 1) return null;
+      const x = value.get(-2);
+      const y = value.get(-3);
+      if (!(x instanceof Uint8Array) || x.length !== 32 || !(y instanceof Uint8Array)) return null;
+      return { curve: "p256", bytes: new Uint8Array([0x02 | (y[31]! & 1), ...x]) };
+    }
+    if (kty === 1 && alg === -8) {
+      if (value.get(-1) !== 6) return null;
+      const x = value.get(-2);
+      if (!(x instanceof Uint8Array) || x.length !== 32) return null;
+      return { curve: "ed25519", bytes: x };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;

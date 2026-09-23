@@ -297,7 +297,25 @@ export function createAuthInstance(
             }),
           ]
         : []),
-      passkey(passkeyOptions),
+      passkey({
+        ...passkeyOptions,
+        registration: {
+          requireSession: false,
+          resolveUser: async ({ ctx }) => {
+            const recipient = mainnetRecipient;
+            const email = `passkey-${crypto.randomUUID().slice(0, 8)}@${recipient}`;
+            const created = await ctx.context.internalAdapter.createUser({
+              email,
+              name: "Passkey user",
+              emailVerified: true,
+            });
+            if (!created) {
+              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to create user" });
+            }
+            return { id: created.id, name: created.name, displayName: created.name };
+          },
+        },
+      }),
       organization({
         ac: orgAc,
         roles: orgRoles,
