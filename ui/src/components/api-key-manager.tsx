@@ -46,6 +46,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          maxLength={64}
           placeholder="API key name"
         />
       </div>

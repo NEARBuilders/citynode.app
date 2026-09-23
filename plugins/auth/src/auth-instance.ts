@@ -428,6 +428,7 @@ export function createAuthInstance(
           references: "user",
           enableSessionForAPIKeys: true,
           enableMetadata: true,
+          maximumNameLength: 64,
           rateLimit: {
             enabled: true,
             timeWindow: 60 * 1000,
@@ -439,6 +440,7 @@ export function createAuthInstance(
           defaultPrefix: "org_",
           references: "organization",
           enableMetadata: true,
+          maximumNameLength: 64,
           rateLimit: {
             enabled: true,
             timeWindow: 60 * 1000,
