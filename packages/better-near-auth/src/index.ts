@@ -191,7 +191,7 @@ function createNear(
   return new Near(config);
 }
 
-async function initRelayer(
+export async function initRelayer(
   networkConfig: RelayerConfig | undefined,
   network: "mainnet" | "testnet",
   adapter: DBAdapter,
@@ -232,6 +232,7 @@ async function initRelayer(
   }
 
   const existing = await adapter.findOne<{
+    accountId: string;
     encryptedPrivateKey: string;
     iv: string;
     createdAt: Date;
@@ -241,13 +242,32 @@ async function initRelayer(
     where: [{ field: "network", operator: "eq", value: network }],
   });
 
+  let privateKeyBytes: Uint8Array | null = null;
   if (existing) {
     if (!secret) throw new Error("BETTER_AUTH_SECRET required for relayer key decryption");
-    const privateKeyBytes = await decryptPrivateKey(
-      existing.encryptedPrivateKey,
-      existing.iv,
-      secret,
-    );
+    try {
+      privateKeyBytes = await decryptPrivateKey(existing.encryptedPrivateKey, existing.iv, secret);
+    } catch (decryptError) {
+      // AES-GCM auth-tag mismatch: the row was encrypted under a different
+      // (or since-rotated) BETTER_AUTH_SECRET — the private key is already
+      // unrecoverable. Recover by deleting the stale row and generating a
+      // fresh ephemeral keypair rather than staying permanently broken.
+      // Transient failures elsewhere in the recovery path must NOT take
+      // this branch — only decryptPrivateKey is in scope here.
+      console.warn(
+        `[siwn] Relayer key for ${network} could not be decrypted (BETTER_AUTH_SECRET changed?). ` +
+          `Previous relayer account ${existing.accountId} is no longer recoverable — ` +
+          `generating a new ephemeral keypair. Fund the new account to re-enable relay.`,
+      );
+      await adapter.delete({
+        model: "relayerKey",
+        where: [{ field: "network", operator: "eq", value: network }],
+      });
+      void decryptError;
+    }
+  }
+
+  if (privateKeyBytes) {
     const keyPair = parseKey(`ed25519:${base58.encode(privateKeyBytes)}`);
     const accountId = bytesToHex(keyPair.publicKey.data);
 
@@ -266,14 +286,14 @@ async function initRelayer(
       whitelistedContracts: networkConfig.whitelistedContracts,
       maxGasPerTransaction: networkConfig.maxGasPerTransaction,
       maxDepositPerTransaction: networkConfig.maxDepositPerTransaction,
-      createdAt: existing.createdAt,
-      lastUsedAt: existing.lastUsedAt,
+      createdAt: existing!.createdAt,
+      lastUsedAt: existing!.lastUsedAt,
     };
   }
 
   const keyPair = generateKey();
   if (!secret) throw new Error("BETTER_AUTH_SECRET required for relayer key encryption");
-  const privateKeyBytes = keyPair.secretKey.startsWith("ed25519:")
+  const generatedPrivateKeyBytes = keyPair.secretKey.startsWith("ed25519:")
     ? base58.decode(keyPair.secretKey.slice(8))
     : new Uint8Array(0);
 
@@ -281,7 +301,7 @@ async function initRelayer(
   const accountId = bytesToHex(keyPair.publicKey.data);
   const createdAt = new Date();
 
-  const { encrypted, iv } = await encryptPrivateKey(privateKeyBytes, secret);
+  const { encrypted, iv } = await encryptPrivateKey(generatedPrivateKeyBytes, secret);
 
   await adapter.create({
     model: "relayerKey",
