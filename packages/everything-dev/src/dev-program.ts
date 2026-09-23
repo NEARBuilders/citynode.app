@@ -212,15 +212,14 @@ export const devBootstrap = (
       (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
 
     yield* step(timings, "build", async () => {
-      const buildTasks: Promise<void | boolean>[] = [
+      const [everythingDevRebuilt] = await Promise.all([
         buildEverythingDevQuietly(deps.configDir),
         buildBetterNearAuthQuietly(deps.configDir),
-      ];
+      ]);
       if (shouldBuildPlugin) {
-        buildTasks.push(buildEveryPluginQuietly(deps.configDir));
+        await buildEveryPluginQuietly(deps.configDir);
       }
-      const results = await Promise.all(buildTasks);
-      if (results[0] === true) {
+      if (everythingDevRebuilt === true) {
         // Only the bos process itself runs the everything-dev dist (plugin
         // children spawn after this step and load the fresh build). A source
         // run (bun src/cli.ts) never imported dist, so nothing is stale for
