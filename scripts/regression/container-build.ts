@@ -28,7 +28,6 @@ const localPlugins = Object.entries(bosConfig.plugins ?? {})
   .map(([key, ref]) => [key, ref.development.slice("local:".length)] as const)
   .sort(([a], [b]) => a.localeCompare(b));
 
-
 const run = (cmd: string, args: string[], cwd: string, env: Record<string, string> = {}) => {
   const result = spawnSync(cmd, args, {
     cwd: path.join(root, cwd),
