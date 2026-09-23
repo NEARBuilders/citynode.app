@@ -52,7 +52,18 @@ export default defineConfig({
       // branch builds are what CI validates.
       name: "start:ssr",
     },
-    { name: "start:csr" },
+    {
+      // The csr stack cannot render SSR assertions (no ssr URL — the CSR
+      // shell has no server-rendered content), so it runs only the
+      // variant-sensitive specs; the variant-blind majority is identical on
+      // start:ssr and gains nothing from a second run.
+      name: "start:csr",
+      testMatch: [
+        "specs/csr-compose.spec.ts",
+        "specs/auth-redirect.spec.ts",
+        "specs/app-load.spec.ts",
+      ],
+    },
     {
       // The dev server is smoke-only — boot + one page per render mode + the
       // redirect spec. Its resource profile must never stall CI again.

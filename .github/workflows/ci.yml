@@ -67,7 +67,7 @@ jobs:
             echo "regression-unit=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if echo "$DIFF" | grep -qE '^tests/regression/lib/|^packages/(everything-dev|every-plugin)/|^(package\.json|bun\.lock|bunfig\.toml|tsconfig\.json)$|^\.github/workflows/ci\.yml$'; then
+          if echo "$DIFF" | grep -qE '^tests/regression/lib/|^(package\.json|bun\.lock|bunfig\.toml|tsconfig\.json)$|^\.github/workflows/ci\.yml$'; then
             echo "regression-unit=true" >> "$GITHUB_OUTPUT"
           else
             echo "regression-unit=false" >> "$GITHUB_OUTPUT"
@@ -87,12 +87,12 @@ jobs:
           else
             echo "host=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^tests/regression/(http|lib)/|^host/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+          if echo "$DIFF" | grep -qE '^tests/regression/(http|lib)/|^host/|^api/|^plugins/|^packages/|^scripts/|^Dockerfile$|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
             echo "regression-http=true" >> "$GITHUB_OUTPUT"
           else
             echo "regression-http=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^tests/regression/(browser|lib)/|^host/|^ui/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+          if echo "$DIFF" | grep -qE '^tests/regression/(browser|lib)/|^host/|^ui/|^api/|^plugins/|^packages/|^scripts/|^Dockerfile$|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
             echo "regression-browser=true" >> "$GITHUB_OUTPUT"
           else
             echo "regression-browser=false" >> "$GITHUB_OUTPUT"
