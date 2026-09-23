@@ -1,0 +1,171 @@
+import { describe, expect, it } from "vitest";
+import {
+  prepareLocalProductionConfig,
+  resolveStartConfigSource,
+} from "../../src/local-prod-config";
+import type { BosConfig } from "../../src/types";
+
+const baseConfig = {
+  account: "v1.citynode.near",
+  domain: "citynode.app",
+  repository: "https://github.com/NEARBuilders/citynode.app",
+  staging: { domain: "testnet.citynode.app", account: "v1.citynode.testnet" },
+  app: {
+    host: {
+      development: "local:host",
+      production: "https://host.example.com",
+      secrets: ["CORS_ORIGIN"],
+    },
+    ui: {
+      development: "local:ui",
+      production: "https://ui.example.com",
+      ssr: "https://ssr.example.com",
+      integrity: "sha384-ui",
+      ssrIntegrity: "sha384-ui-ssr",
+    },
+    api: {
+      development: "local:api",
+      production: "https://api.example.com",
+      integrity: "sha384-api",
+      variables: { platformAccount: "v1.citynode.near" },
+      secrets: ["API_DATABASE_URL"],
+    },
+    auth: {
+      name: "@everything-dev/auth-plugin",
+      development: "local:plugins/auth",
+      production: "https://auth.example.com",
+      integrity: "sha384-auth",
+      secrets: ["AUTH_DATABASE_URL"],
+      ui: {
+        name: "auth-ui",
+        development: "local:plugins/auth/ui",
+        production: "https://auth-ui.example.com",
+        integrity: "sha384-auth-ui",
+        ssr: "https://auth-ui-ssr.example.com",
+        ssrIntegrity: "sha384-auth-ui-ssr",
+      },
+    },
+  },
+  plugins: {
+    template: {
+      development: "local:plugins/_template",
+      production: "https://template.example.com",
+      integrity: "sha384-template",
+      secrets: ["TEMPLATE_DATABASE_URL"],
+    },
+    remoteOnly: { production: "https://remote.example.com", integrity: "sha384-remote" },
+    stringRef: "some-account.near",
+  },
+} as unknown as BosConfig;
+
+describe("prepareLocalProductionConfig", () => {
+  it("rewrites every planned remote to localhost and drops integrity", () => {
+    const result = prepareLocalProductionConfig(baseConfig, {
+      ui: { production: "http://localhost:4103", ssr: "http://localhost:4103/ssr" },
+      api: "http://localhost:4101",
+      auth: "http://localhost:4102",
+      authUi: { production: "http://localhost:4112", ssr: "http://localhost:4112/ssr" },
+      plugins: {
+        template: { production: "http://localhost:4113" },
+        remoteOnly: { production: "http://localhost:4114" },
+      },
+    });
+
+    expect(result.app.ui).toEqual({
+      development: "local:ui",
+      production: "http://localhost:4103",
+      ssr: "http://localhost:4103/ssr",
+    });
+    expect(result.app.api).toMatchObject({
+      production: "http://localhost:4101",
+      variables: { platformAccount: "v1.citynode.near" },
+      secrets: ["API_DATABASE_URL"],
+    });
+    expect(result.app.api).not.toHaveProperty("integrity");
+    expect(result.app.auth).toMatchObject({
+      name: "@everything-dev/auth-plugin",
+      production: "http://localhost:4102",
+      secrets: ["AUTH_DATABASE_URL"],
+    });
+    expect(result.app.auth).not.toHaveProperty("integrity");
+    expect(result.app.auth?.ui).toEqual({
+      name: "auth-ui",
+      development: "local:plugins/auth/ui",
+      production: "http://localhost:4112",
+      ssr: "http://localhost:4112/ssr",
+    });
+    expect(result.plugins?.template).toMatchObject({ production: "http://localhost:4113" });
+    expect(result.plugins?.template).not.toHaveProperty("integrity");
+    expect(result.plugins?.remoteOnly).toMatchObject({ production: "http://localhost:4114" });
+  });
+
+  it("a planned ui without an ssr origin is the csr variant", () => {
+    const result = prepareLocalProductionConfig(baseConfig, {
+      ui: { production: "http://localhost:4103" },
+      authUi: { production: "http://localhost:4112" },
+      api: "http://localhost:4101",
+      auth: "http://localhost:4102",
+    });
+    expect(result.app.ui).not.toHaveProperty("ssr");
+    expect(result.app.ui).not.toHaveProperty("ssrIntegrity");
+    expect(result.app.ui).toMatchObject({ production: "http://localhost:4103" });
+    expect(result.app.auth?.ui).not.toHaveProperty("ssr");
+  });
+
+  it("leaves unplanned remotes verbatim — origin and integrity", () => {
+    const result = prepareLocalProductionConfig(baseConfig, {
+      ui: { production: "http://localhost:4103", ssr: "http://localhost:4103/ssr" },
+    });
+    expect(result.plugins?.template).toEqual(baseConfig.plugins?.template);
+    expect(result.plugins?.remoteOnly).toEqual(baseConfig.plugins?.remoteOnly);
+    expect(result.app.api).toEqual(baseConfig.app.api);
+    expect(result.app.auth).toEqual(baseConfig.app.auth);
+  });
+
+  it("passes string plugin refs and unrelated config through untouched", () => {
+    const result = prepareLocalProductionConfig(baseConfig, {
+      ui: { production: "http://localhost:4103" },
+      api: "http://localhost:4101",
+    });
+    expect(result.plugins?.stringRef).toBe("some-account.near");
+    expect(result.account).toBe("v1.citynode.near");
+    expect(result.domain).toBe("citynode.app");
+    expect(result.staging).toEqual(baseConfig.staging);
+    expect(result.app.host).toEqual(baseConfig.app.host);
+  });
+
+  it("does not mutate the input config", () => {
+    const frozen = JSON.parse(JSON.stringify(baseConfig));
+    prepareLocalProductionConfig(baseConfig, {
+      ui: { production: "http://localhost:4103", ssr: "http://localhost:4103/ssr" },
+      api: "http://localhost:4101",
+      auth: "http://localhost:4102",
+      authUi: { production: "http://localhost:4112" },
+      plugins: { template: { production: "http://localhost:4113" } },
+    });
+    expect(baseConfig).toEqual(frozen);
+  });
+});
+
+describe("resolveStartConfigSource", () => {
+  it("an explicit config outranks the registry identity", () => {
+    const source = resolveStartConfigSource(
+      { configPath: "/tmp/resolved.json", account: "acc.near", domain: "gw.app" },
+      { BOS_ACCOUNT: "env.near", BOS_GATEWAY: "env.app" },
+    );
+    expect(source).toEqual({ configPath: "/tmp/resolved.json" });
+  });
+
+  it("falls back to the registry identity from input or env", () => {
+    expect(resolveStartConfigSource({}, { BOS_ACCOUNT: "a.near", BOS_GATEWAY: "b.app" })).toEqual({
+      registry: { account: "a.near", domain: "b.app" },
+    });
+    expect(resolveStartConfigSource({ account: "a.near", domain: "b.app" }, {})).toEqual({
+      registry: { account: "a.near", domain: "b.app" },
+    });
+  });
+
+  it("yields a local discovery source when nothing is set", () => {
+    expect(resolveStartConfigSource({}, {})).toEqual({});
+  });
+});

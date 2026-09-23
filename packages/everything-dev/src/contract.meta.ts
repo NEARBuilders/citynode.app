@@ -32,6 +32,10 @@ export const cliCommandMeta = {
         description:
           "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
       },
+      configPath: {
+        description:
+          "Boot from a local bos config file — skips FastKV resolution and SRI integrity verification",
+      },
     },
   },
   build: {

@@ -30,6 +30,7 @@ import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
+import { resolveStartConfigSource } from "./local-prod-config";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
@@ -370,13 +371,15 @@ export const startBootstrap = (
     yield* emitProgress({ phase: "config", status: "running" });
 
     const bosEnv = input.env ?? (process.env.BOS_ENV === "staging" ? "staging" : "production");
-    const account = input.account ?? process.env.BOS_ACCOUNT;
-    const domain = input.domain ?? process.env.BOS_GATEWAY;
+    const explicitConfig = resolveStartConfigSource(input, process.env);
 
     let config: BosConfig | null = null;
     let remoteConfig: BosConfig | null = null;
 
-    if (account && domain) {
+    if (explicitConfig.configPath) {
+      config = deps.bosConfig;
+    } else if (explicitConfig.registry) {
+      const { account, domain } = explicitConfig.registry;
       const expectedUrl = buildRegistryConfigUrl(account, domain, input.registry);
       remoteConfig = yield* Effect.tryPromise({
         try: () => helpers.fetchPublishedConfig(account, domain, input.registry),
@@ -404,11 +407,13 @@ export const startBootstrap = (
       return yield* Effect.fail(new StartConfigMissing({}));
     }
 
-    if (account) {
-      config = { ...config, account };
-    }
-    if (domain) {
-      config = { ...config, domain };
+    if (!explicitConfig.configPath) {
+      if (explicitConfig.registry?.account) {
+        config = { ...config, account: explicitConfig.registry.account };
+      }
+      if (explicitConfig.registry?.domain) {
+        config = { ...config, domain: explicitConfig.registry.domain };
+      }
     }
     const baseConfig: BosConfig = config;
 
@@ -524,13 +529,19 @@ export const startBootstrap = (
 
     const services = buildServiceDescriptorMap(plan.runtimeConfig);
 
-    const configSource = remoteConfig
-      ? `bos://${account}/${domain}`
-      : (findConfigPath() ?? "bos.config.json");
+    const configSource = explicitConfig.configPath
+      ? explicitConfig.configPath
+      : remoteConfig
+        ? `bos://${explicitConfig.registry?.account}/${explicitConfig.registry?.domain}`
+        : (findConfigPath() ?? "bos.config.json");
 
     const configSourceHttp =
-      remoteConfig && account && domain
-        ? buildRegistryConfigUrl(account, domain, input.registry)
+      remoteConfig && explicitConfig.registry
+        ? buildRegistryConfigUrl(
+            explicitConfig.registry.account,
+            explicitConfig.registry.domain,
+            input.registry,
+          )
         : undefined;
 
     const summary: StartSummary = {

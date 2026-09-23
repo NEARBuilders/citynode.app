@@ -38,6 +38,7 @@ export const StartOptionsSchema = z.object({
   domain: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
   registry: z.string().optional(),
+  configPath: z.string().optional(),
 });
 
 export const StartResultSchema = z.object({
