@@ -1,6 +1,9 @@
 import { Deferred, Effect, Exit } from "effect";
-import { type DevViewHandle, type ProcessState, renderDevView } from "./components/dev-view";
-import { renderStreamingView } from "./components/streaming-view";
+import {
+  createDevRenderer,
+  type DevProcessState,
+  type DevRendererHandle,
+} from "./components/dev-render";
 import { getProjectRoot } from "./config";
 import { createLogPipeline, type LogEvent, resolveLogLevel } from "./dev-log-pipeline";
 import { createDevLogger, formatLogLine } from "./dev-logs";
@@ -59,7 +62,7 @@ export const runDevSession = (
     const services = yield* ServiceDescriptorMap;
     const runtimeConfig = yield* DevRuntimeConfig;
     const orderedPackages = sortByOrder(orchestrator.packages);
-    const initialProcesses: ProcessState[] = getProcessStates(
+    const initialProcesses: DevProcessState[] = getProcessStates(
       orderedPackages,
       services,
       orchestrator.port,
@@ -117,7 +120,7 @@ export const runDevSession = (
       });
     }
 
-    let view: DevViewHandle | null = null;
+    let view: DevRendererHandle | null = null;
     let shouldExportLogs = false;
 
     const logLevel = resolveLogLevel();
@@ -144,20 +147,14 @@ export const runDevSession = (
     };
 
     const useInteractive = orchestrator.interactive ?? isInteractiveSupported();
-    view = useInteractive
-      ? renderDevView(
-          initialProcesses,
-          orchestrator.description,
-          orchestrator.env,
-          () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
-          requestShutdownAndExport,
-        )
-      : renderStreamingView(
-          initialProcesses,
-          orchestrator.description,
-          orchestrator.env,
-          () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
-        );
+    view = createDevRenderer(
+      initialProcesses,
+      orchestrator.description,
+      orchestrator.env,
+      () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
+      requestShutdownAndExport,
+      { interactive: useInteractive },
+    );
 
     const callbacks: ProcessCallbacks = {
       onStatus: (name, status, message) => {
