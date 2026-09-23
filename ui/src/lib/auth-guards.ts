@@ -1,6 +1,7 @@
 import { redirect } from "@tanstack/react-router";
 import type { RouterContext, SessionData } from "@/app";
 import { sessionQueryOptions } from "@/app";
+import { pluginHref, pluginPath } from "./plugin-path";
 
 export interface AuthContext {
   isAuthenticated: boolean;
@@ -37,10 +38,10 @@ function buildAuthContext(session: SessionData | null | undefined): AuthContext 
 export async function requireSession({ context, location }: GuardArgs) {
   const session = await ensureSession(context);
   if (!session?.user) {
-    throw redirect({ to: "/login", search: { redirect: location.href } });
+    throw redirect({ href: pluginHref("/login", { redirect: location.href }) });
   }
   if (session.user.banned) {
-    throw redirect({ to: "/login", hash: "banned" });
+    throw redirect({ href: pluginPath("/login#banned") });
   }
   return { auth: buildAuthContext(session), session };
 }

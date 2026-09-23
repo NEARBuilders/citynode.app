@@ -7,7 +7,6 @@ export interface CliPorts {
   api?: number;
   auth?: number;
   ui?: number;
-  uiSsr?: number;
   pluginsStart?: number;
   plugins?: Record<string, { api?: number; ui?: number }>;
 }
@@ -17,7 +16,6 @@ export interface ResolvedPorts {
   api?: number;
   auth?: number;
   ui?: number;
-  uiSsr?: number;
   plugins: Record<string, { api?: number; ui?: number }>;
   postgres: Record<string, number>;
   redis: Record<string, number>;

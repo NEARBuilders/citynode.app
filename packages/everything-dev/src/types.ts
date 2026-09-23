@@ -1,3 +1,4 @@
+import { ComposePayloadSchema } from "every-plugin/ui/manifest";
 import * as z from "zod";
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -54,6 +55,16 @@ export const FederationEntrySchema = z.object({
 });
 export type FederationEntry = z.infer<typeof FederationEntrySchema>;
 
+export const PluginUiConfigSchema = z.object({
+  name: z.string(),
+  development: z.string().optional(),
+  production: z.string().optional(),
+  integrity: z.string().optional(),
+  ssr: z.string().optional(),
+  ssrIntegrity: z.string().optional(),
+});
+export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
+
 export const ComposableAppEntrySchema = z.object({
   extends: ExtendsSchema.optional(),
   name: z.string().optional(),
@@ -66,6 +77,7 @@ export const ComposableAppEntrySchema = z.object({
   routes: z.array(z.string()).optional(),
   shared: SharedDepMapSchema.optional(),
   connectSrc: z.array(z.string()).optional(),
+  ui: PluginUiConfigSchema.optional(),
 });
 export type ComposableAppEntry = z.infer<typeof ComposableAppEntrySchema>;
 
@@ -73,16 +85,6 @@ export const ApiPluginConfigSchema = ComposableAppEntrySchema.extend({
   dependsOn: z.array(z.string()).optional(),
 });
 export type ApiPluginConfig = z.infer<typeof ApiPluginConfigSchema>;
-
-export const PluginUiConfigSchema = z.object({
-  name: z.string(),
-  development: z.string().optional(),
-  production: z.string().optional(),
-  integrity: z.string().optional(),
-  ssr: z.string().optional(),
-  ssrIntegrity: z.string().optional(),
-});
-export type PluginUiConfig = z.infer<typeof PluginUiConfigSchema>;
 
 export const BosPluginRefSchema = ComposableAppEntrySchema.extend({
   version: z.string().optional(),
@@ -366,10 +368,8 @@ export const ClientRuntimeConfigSchema = z.object({
       url: z.string(),
       entry: z.string(),
       integrity: z.string().optional(),
-      /** plugin ui grafting enabled (server sets it; client composes before hydrate) */
-      compose: z.boolean().optional(),
-      /** digest of the composed remote set — client must match it before hydrate */
-      composeDigest: z.string().optional(),
+      /** composition payload — the server sets it; the client reconstructs the same tree from it before hydrate */
+      compose: ComposePayloadSchema.optional(),
     })
     .optional(),
   api: z

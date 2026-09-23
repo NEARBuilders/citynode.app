@@ -30,7 +30,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test("resolved test configuration owns child secrets and ports for every mode", () => {
+void test("resolved test configuration owns child secrets and ports for every mode", () => {
   const repoRoot = fixture();
   writeFileSync(
     join(repoRoot, ".env.test"),
@@ -50,22 +50,22 @@ test("resolved test configuration owns child secrets and ports for every mode", 
   assert.equal(config.basePort, 5200);
   assert.equal(config.stalePorts[0], 5200);
   assert.ok(config.stalePorts.includes(5210));
-  for (const mode of ["dev", "prod", "backcompat"]) {
+  for (const mode of ["dev:ssr", "dev:csr", "backcompat"]) {
     const stack = regressionStackOptions(config, mode, env);
     assert.equal(stack.env.API_DATABASE_URL, config.dbUrls.API_DATABASE_URL);
     assert.equal(stack.env.AUTH_DATABASE_URL, config.dbUrls.AUTH_DATABASE_URL);
     assert.equal(stack.env.BETTER_AUTH_SECRET, "test#secret");
     assert.equal(stack.env.CORS_ORIGIN, config.baseUrl);
     assert.equal(stack.env.CUSTOM, "preserved");
-    if (mode === "prod") assert.equal(stack.env.PORT, "5200");
-    else {
-      assert.equal(stack.command[stack.command.indexOf("--port") + 1], "5200");
-      assert.equal(stack.command[stack.command.indexOf("--plugin-port-start") + 1], "5210");
-    }
+    assert.equal(stack.command[stack.command.indexOf("--port") + 1], "5200");
+    assert.equal(stack.command[stack.command.indexOf("--plugin-port-start") + 1], "5210");
   }
+
+  // start:* stacks boot through the deployment image, not a runner-side command.
+  assert.throws(() => regressionStackOptions(config, "start:ssr", {}), /unknown mode/);
 });
 
-test("ambient test settings reach the stack when no test file exists", () => {
+void test("ambient test settings reach the stack when no test file exists", () => {
   const repoRoot = fixture();
   const env = {
     API_DATABASE_URL: "postgres://test:test@localhost:5434/api_test",
@@ -73,12 +73,12 @@ test("ambient test settings reach the stack when no test file exists", () => {
     BETTER_AUTH_SECRET: "test-secret",
   };
   const config = computeRegressionEnv({ repoRoot, env });
-  const stack = regressionStackOptions(config, "dev", {});
+  const stack = regressionStackOptions(config, "dev:ssr", {});
   assert.equal(stack.env.API_DATABASE_URL, env.API_DATABASE_URL);
   assert.equal(stack.env.BETTER_AUTH_SECRET, env.BETTER_AUTH_SECRET);
 });
 
-test("dev database rejection does not reveal credentials", () => {
+void test("dev database rejection does not reveal credentials", () => {
   const repoRoot = fixture();
   assert.throws(
     () => computeRegressionEnv({ repoRoot, env: {} }),
@@ -86,11 +86,11 @@ test("dev database rejection does not reveal credentials", () => {
   );
 });
 
-test("invalid modes fail before starting a stack", () => {
+void test("invalid modes fail before starting a stack", () => {
   assert.throws(() => regressionStackOptions({}, "invalid", {}), /unknown mode/);
 });
 
-test("loading browser configuration in a worker leaves the running stack alive", async () => {
+void test("loading browser configuration in a worker leaves the running stack alive", async () => {
   const repoRoot = fixture();
   writeFileSync(join(repoRoot, "bos.config.json"), "{}");
   writeFileSync(join(repoRoot, ".env.test"), "BETTER_AUTH_SECRET=test-secret\n");

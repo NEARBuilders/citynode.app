@@ -159,6 +159,7 @@ export class SecurityMiddleware extends Context.Service<
               "data:",
               "https:",
               ...(isDev ? ["http:"] : []),
+              ...uniqueOrigins,
               ...(uiConfig.url ? [new URL(uiConfig.url).origin] : []),
             ],
             connectSrc: [

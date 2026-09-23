@@ -205,7 +205,7 @@ describe("syncTemplate", () => {
     config.title = "child app";
     config.repository = "https://github.com/example/child-app";
     config.plugins = {
-      ...(config.plugins ?? {}),
+      ...config.plugins,
       example: {
         development: "local:plugins/example",
       },
@@ -286,7 +286,7 @@ describe("syncTemplate", () => {
       scripts?: Record<string, string>;
     };
     packageJson.scripts = {
-      ...(packageJson.scripts ?? {}),
+      ...packageJson.scripts,
       custom: "bun run custom",
     };
     writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);

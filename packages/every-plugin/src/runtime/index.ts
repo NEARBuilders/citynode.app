@@ -191,7 +191,7 @@ export class PluginRuntime<R = RegisteredPlugins> {
     const createClient = (context?: any) =>
       createRouterClient(router, {
         context: {
-          ...(context ?? {}),
+          ...context,
           "effect/context": initialized.effectContext,
         },
       });

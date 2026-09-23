@@ -4,6 +4,7 @@ import type {
   RelayerDualNetworkConfig,
   SubAccountConfig,
 } from "better-near-auth";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID } from "better-near-auth";
 import type { AuthConfig } from "./auth-config";
 import type { AuthPluginSecrets, AuthPluginVariables } from "./config-schemas";
 import { localDevTrustedOrigins } from "./utils";
@@ -170,6 +171,7 @@ export function normalizeAuthConfig(
       },
     },
     passkey: variables.passkey,
+    deviceLink: { clientId: variables.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID },
     phoneNumber:
       secrets.TWILIO_ACCOUNT_SID && secrets.TWILIO_AUTH_TOKEN && secrets.TWILIO_PHONE_NUMBER
         ? {

@@ -23,7 +23,7 @@ const urls: string[] = [];
 function stubFetch() {
   urls.length = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-    urls.push(String(input));
+    urls.push(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     return new Response(JSON.stringify({ json: "pong" }), {
       status: 200,
       headers: { "content-type": "application/json" },

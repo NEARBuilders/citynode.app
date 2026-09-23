@@ -223,7 +223,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> 
       headers: {
         accept: "application/json",
         "content-type": "application/json",
-        ...(init?.headers ?? {}),
+        ...(init?.headers as Record<string, string> | undefined),
       },
       signal: controller.signal,
     });

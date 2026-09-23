@@ -20,7 +20,7 @@ type fatalf interface {
 func WaitForReady(f fatalf, proc *Process) {
 	mode := Mode()
 	deadline := readinessTimeoutDev
-	if mode == ModeProd {
+	if mode == ModeStart {
 		deadline = readinessTimeoutProd
 	}
 	baseURL := proc.BaseURL

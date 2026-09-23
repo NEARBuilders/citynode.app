@@ -22,7 +22,7 @@ const write = (text: string) => process.stdout.write(`${text}\n`);
 const getServiceColor = (name: string): ((s: string) => string) => {
   if (name.startsWith(PLUGIN_PREFIX)) return orange;
   if (name === "host") return colors.cyan;
-  if (name === "ui" || name === "ui-ssr") return colors.magenta;
+  if (name === "ui") return colors.magenta;
   if (name === "api") return colors.blue;
   return colors.white;
 };

@@ -1,16 +1,25 @@
 import { getBaseStyles, getHydrateScript, getThemeInitScript } from "everything-dev/ui/head";
 import type { ClientRuntimeConfig, RuntimeConfig } from "../services/config";
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 export function renderClientShellHtml(
   nonce: string | undefined,
   runtimeSourceConfig: RuntimeConfig,
   runtimeConfig: ClientRuntimeConfig,
   error?: Error | null,
+  requestId?: string,
 ): string {
   const uiIntegrity = runtimeSourceConfig.ui.integrity;
   const assetsUrl = runtimeConfig.assetsUrl.replace(/\/$/, "");
   const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
-  const sriAttr = uiIntegrity ? ` integrity="${uiIntegrity}" crossorigin="anonymous"` : "";
+  const sriAttr = ` crossorigin="anonymous"${uiIntegrity ? ` integrity="${uiIntegrity}"` : ""}`;
   const uiVersion = uiIntegrity ? `?v=${encodeURIComponent(uiIntegrity)}` : "";
 
   const pluginUiScripts = (
@@ -19,11 +28,9 @@ export function renderClientShellHtml(
           const ui = plugin?.ui;
           if (!ui?.url) return [];
           const pluginVersion = ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : "";
-          const pluginSri = ui.integrity
-            ? ` integrity="${ui.integrity}" crossorigin="anonymous"`
-            : "";
+          const pluginSri = ui.integrity ? ` integrity="${ui.integrity}"` : "";
           return [
-            `<script${nonceAttr} src="${ui.url.replace(/\/$/, "")}/remoteEntry.js${pluginVersion}"${pluginSri}></script>`,
+            `<script${nonceAttr} src="${ui.url.replace(/\/$/, "")}/remoteEntry.js${pluginVersion}" crossorigin="anonymous"${pluginSri}></script>`,
           ];
         })
       : []
@@ -41,7 +48,7 @@ export function renderClientShellHtml(
 
   const shellBody = `<div id="root"><div class="shell"><div class="fade">${
     error
-      ? `<p class="error">SSR unavailable, showing client app.</p><p>${error.message}</p>`
+      ? `<p class="error">SSR unavailable, showing client app.</p><p>${escapeHtml(error.message)}${requestId ? `<br /><small>(request ${escapeHtml(requestId)})</small>` : ""}</p>`
       : `<p>Loading...</p>`
   }</div></div></div>`;
 
@@ -62,7 +69,7 @@ export function renderClientShellHtml(
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-          <title>${title}</title>
+          <title>${escapeHtml(title)}</title>
           <link rel="manifest" href="${assetsUrl}/site.webmanifest" />
           <link rel="stylesheet" href="${assetsUrl}/static/css/style.css${uiVersion}" />
           <style>${baseStyles}</style>
@@ -81,13 +88,20 @@ export function renderClientShell(
   runtimeConfig: ClientRuntimeConfig,
   error?: Error | null,
   cspHeader?: string | null,
+  requestId?: string,
 ): Response {
   const headers = new Headers({ "content-type": "text/html; charset=UTF-8" });
   if (cspHeader) {
     headers.set("Content-Security-Policy", cspHeader);
   }
-  return new Response(renderClientShellHtml(nonce, runtimeSourceConfig, runtimeConfig, error), {
-    status: 200,
-    headers,
-  });
+  if (requestId) {
+    headers.set("x-request-id", requestId);
+  }
+  return new Response(
+    renderClientShellHtml(nonce, runtimeSourceConfig, runtimeConfig, error, requestId),
+    {
+      status: 200,
+      headers,
+    },
+  );
 }

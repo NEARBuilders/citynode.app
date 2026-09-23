@@ -6,7 +6,7 @@
     "declarationMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM"],
     "types": ["node"],
     "moduleDetection": "force",
     "jsx": "react-jsx",

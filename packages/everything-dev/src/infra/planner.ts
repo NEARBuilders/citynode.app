@@ -49,7 +49,6 @@ function normalizeCliPorts(input: InfraInput["cli"]): CliPorts {
     api: input.apiPort,
     auth: input.authPort,
     ui: input.uiPort,
-    uiSsr: undefined,
     pluginsStart: input.pluginPortStart,
     plugins: input.plugins,
   };
@@ -68,6 +67,7 @@ function allocateServices(
     { source: string; localPath?: string; ui?: { source: string; localPath?: string } }
   >,
   configDir: string,
+  authLocalPath?: string,
 ): Effect.Effect<AllocateServicesResult, InfraError, PortAllocator> {
   return Effect.gen(function* () {
     const wKey = workspaceKey(configDir);
@@ -88,21 +88,26 @@ function allocateServices(
 
     const uiPort = yield* allocator.pickAvailable(cliPorts.ui ?? persisted?.ui ?? DEFAULT_UI_PORT);
 
-    const uiSsrPort = yield* allocator.pickAvailable(cliPorts.uiSsr ?? uiPort + 1);
-
     const pluginApiPorts: Record<string, number> = {};
     const pluginUiPorts: Record<string, number> = {};
 
     const pluginKeys = Object.keys(plugins).sort();
     const pluginStart =
       cliPorts.pluginsStart ?? persisted?.pluginPortStart ?? DEFAULT_PLUGIN_PORT_START;
+    const isAuthMirror = (pluginId: string, pluginCfg: { localPath?: string } | undefined) =>
+      pluginId === "auth" &&
+      Boolean(authLocalPath) &&
+      Boolean(pluginCfg?.localPath && pluginCfg.localPath === authLocalPath);
     let nextPluginPort = pluginStart;
     for (const pluginId of pluginKeys) {
       const pluginCfg = plugins[pluginId];
-      const preferred = cliPorts.plugins?.[pluginId]?.api ?? nextPluginPort;
-      const pluginPort = yield* allocator.pickAvailable(preferred);
-      pluginApiPorts[pluginId] = pluginPort;
-      nextPluginPort = pluginPort + 1;
+      const mirror = isAuthMirror(pluginId, pluginCfg);
+      if (!mirror) {
+        const preferred = cliPorts.plugins?.[pluginId]?.api ?? nextPluginPort;
+        const pluginPort = yield* allocator.pickAvailable(preferred);
+        pluginApiPorts[pluginId] = pluginPort;
+        nextPluginPort = pluginPort + 1;
+      }
 
       if (
         pluginCfg?.source === "local" &&
@@ -121,9 +126,8 @@ function allocateServices(
       api: apiPort,
       auth: authPort,
       ui: uiPort,
-      uiSsr: uiSsrPort,
       plugins: Object.fromEntries(
-        Object.entries(pluginApiPorts).map(([k, v]) => [k, { api: v, ui: pluginUiPorts[k] }]),
+        pluginKeys.map((k) => [k, { api: pluginApiPorts[k], ui: pluginUiPorts[k] }]),
       ),
       postgres: {},
       redis: {},
@@ -142,7 +146,6 @@ function allocateServices(
       api: apiPort,
       auth: authPort,
       ui: uiPort,
-      uiSsr: uiSsrPort,
     };
     for (const [id, port] of Object.entries(pluginApiPorts)) {
       claimPorts[`plugin:${id}`] = port;
@@ -298,22 +301,24 @@ export function buildServiceDescriptors(
       port: isLocal ? resolvedPorts.ui : undefined,
       localPath: isLocal ? runtimeConfig.ui.localPath : undefined,
     });
-    if (isLocal && resolvedPorts.uiSsr && runtimeConfig.ui.ssrUrl) {
-      descriptors.push({
-        key: "ui-ssr",
-        source: "local",
-        url: `http://localhost:${resolvedPorts.uiSsr}`,
-        port: resolvedPorts.uiSsr,
-        localPath: runtimeConfig.ui.localPath,
-      });
-    }
   }
 
   if (runtimeConfig.plugins) {
     for (const [pluginId, pluginCfg] of Object.entries(runtimeConfig.plugins)) {
       const pluginIsLocal = pluginCfg.source === "local";
       const p = resolvedPorts.plugins[pluginId];
-      if (pluginIsLocal && p?.api) {
+      const authEntry = runtimeConfig.auth;
+      const isAuthMirror =
+        pluginId === "auth" &&
+        Boolean(authEntry) &&
+        Boolean(
+          (pluginCfg.localPath && pluginCfg.localPath === authEntry?.localPath) ||
+            (!pluginCfg.localPath &&
+              pluginCfg.source === "remote" &&
+              pluginCfg.url &&
+              pluginCfg.url === authEntry?.url),
+        );
+      if (pluginIsLocal && p?.api && !isAuthMirror) {
         descriptors.push({
           key: `plugin:${pluginId}`,
           source: "local",
@@ -322,7 +327,7 @@ export function buildServiceDescriptors(
           localPath: pluginCfg.localPath,
         });
       }
-      if (!pluginIsLocal && pluginCfg.url) {
+      if (!pluginIsLocal && pluginCfg.url && !isAuthMirror) {
         descriptors.push({
           key: `plugin:${pluginId}`,
           source: "remote",
@@ -387,6 +392,9 @@ export function buildEnvGenerated(
 
   if (resolvedPorts.host) {
     env.CORS_ORIGIN = `http://localhost:${resolvedPorts.host}`;
+    // The host origin for plugins that derive absolute URLs from it (e.g. the
+    // auth plugin's Better Auth baseURL — email links, passkey RP id).
+    env.BASE_URL = `http://localhost:${resolvedPorts.host}`;
   }
 
   for (const db of dbs) {
@@ -413,7 +421,12 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       ports: svcPorts,
       claims,
       devPortsState,
-    } = yield* allocateServices(cliPorts, plugins, input.configDir);
+    } = yield* allocateServices(
+      cliPorts,
+      plugins,
+      input.configDir,
+      input.bosConfig.auth?.localPath,
+    );
 
     const {
       dbs,
@@ -468,10 +481,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
               ...input.bosConfig.ui,
               port: resolvedPorts.ui,
               url: `http://localhost:${resolvedPorts.ui}`,
-              ssrUrl:
-                input.cli.ssr && resolvedPorts.uiSsr
-                  ? `http://localhost:${resolvedPorts.uiSsr}`
-                  : input.bosConfig.ui.ssrUrl,
+              ssrUrl: undefined,
             }
           : input.bosConfig.ui,
       auth:
@@ -485,11 +495,36 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       plugins: input.bosConfig.plugins
         ? Object.fromEntries(
             Object.entries(input.bosConfig.plugins).map(([id, p]) => {
+              const authEntry = input.bosConfig.auth;
+              const isAuthMirror =
+                id === "auth" &&
+                Boolean(authEntry) &&
+                Boolean(
+                  (p.localPath && p.localPath === authEntry?.localPath) ||
+                    (!p.localPath && p.source === "remote" && p.url && p.url === authEntry?.url),
+                );
               const pluginPort = resolvedPorts.plugins[id];
+              const patchedUi = (() => {
+                if (p.ui?.source !== "local" || !p.ui?.localPath || !pluginPort?.ui) return p.ui;
+                return {
+                  ...p.ui,
+                  port: pluginPort.ui,
+                  url: `http://localhost:${pluginPort.ui}`,
+                  ssrUrl: undefined,
+                };
+              })();
+              if (isAuthMirror) {
+                return [id, { ...p, ui: patchedUi }];
+              }
               if (p.source === "local" && pluginPort?.api) {
                 return [
                   id,
-                  { ...p, port: pluginPort.api, url: `http://localhost:${pluginPort.api}` },
+                  {
+                    ...p,
+                    port: pluginPort.api,
+                    url: `http://localhost:${pluginPort.api}`,
+                    ui: patchedUi,
+                  },
                 ];
               }
               return [id, p];

@@ -251,6 +251,77 @@ export const apikey = pgTable(
   ],
 );
 
+export const deviceCode = pgTable(
+  "device_code",
+  {
+    id: text("id").primaryKey(),
+    deviceCode: text("device_code").notNull(),
+    userCode: text("user_code").notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    status: text("status").notNull(),
+    lastPolledAt: timestamp("last_polled_at", { mode: "date", withTimezone: true }),
+    pollingInterval: integer("polling_interval"),
+    clientId: text("client_id"),
+    scope: text("scope"),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("deviceCode_deviceCode_uidx").on(table.deviceCode),
+    uniqueIndex("deviceCode_userCode_uidx").on(table.userCode),
+  ],
+);
+
+export const onboardingCode = pgTable(
+  "onboarding_code",
+  {
+    id: text("id").primaryKey(),
+    codeHash: text("code_hash").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    eventName: text("event_name").notNull(),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => team.id, { onDelete: "cascade" }),
+    role: text("role").default("member").notNull(),
+    maxUses: integer("max_uses").default(50).notNull(),
+    usedCount: integer("used_count").default(0).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("onboardingCode_codeHash_uidx").on(table.codeHash)],
+);
+
+export const onboardingRedemption = pgTable(
+  "onboarding_redemption",
+  {
+    id: text("id").primaryKey(),
+    codeId: text("code_id")
+      .notNull()
+      .references(() => onboardingCode.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("onboardingRedemption_codeId_userId_uidx").on(table.codeId, table.userId),
+    index("onboardingRedemption_codeId_idx").on(table.codeId),
+  ],
+);
+
 export const relayedTransaction = pgTable(
   "relayed_transaction",
   {

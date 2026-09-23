@@ -5,9 +5,9 @@ import type {
   SharedConfig,
   SourceMode,
 } from "everything-dev/types";
+import type { ComposePayload } from "everything-dev/ui/manifest";
 import type { RuntimePlugin } from "../types";
 import { normalizeUrl } from "../utils/normalize";
-import { hasComposablePluginUi, uiComposeDigest } from "./ui-compose";
 
 export type { ClientRuntimeConfig, RuntimeConfig, SharedConfig, SourceMode };
 
@@ -56,6 +56,7 @@ export function buildRuntimeClientConfig(
   request: Request,
   activeRuntime: ActiveRuntimeState,
   authAvailable: boolean,
+  composePayload?: ComposePayload,
 ): RuntimeClientConfig {
   const requestUrl = new URL(request.url);
   const uiConfig = config.ui;
@@ -79,8 +80,7 @@ export function buildRuntimeClientConfig(
       url: uiConfig.url,
       entry: uiConfig.entry,
       integrity: uiConfig.integrity,
-      compose: hasComposablePluginUi(config),
-      composeDigest: hasComposablePluginUi(config) ? uiComposeDigest(config) : undefined,
+      compose: composePayload,
     },
     api: config.api
       ? {

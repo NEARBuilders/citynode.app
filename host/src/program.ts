@@ -14,12 +14,19 @@ import { resetFederationInstance } from "./services/federation.server";
 import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { closeMcpServer } from "./services/mcp";
 import { PluginsService } from "./services/plugins";
+import { composeUi, isSsrAvailable } from "./services/ui-compose";
 import { extractErrorDetails } from "./utils/errors";
 import { logger } from "./utils/logger";
 
 type HonoEnv = { Variables: AuthVariables };
 
 suppressPgQueryQueueDeprecation();
+
+interface CompositionHealth {
+  status: "disabled" | "composing" | "ready" | "failed";
+  digest?: string;
+  error?: string;
+}
 
 export const createStartServer = (onReady?: () => void) =>
   Effect.gen(function* () {
@@ -28,10 +35,14 @@ export const createStartServer = (onReady?: () => void) =>
     const CSP_STRICT = getCspStrict(isDev);
 
     const config = yield* ConfigService;
-    const uiConfig = config.ui!;
     const plugins = yield* PluginsService;
     const security = yield* SecurityMiddleware;
     const apiProxyMode = Boolean(config.api?.proxy);
+
+    const ssrEnabled = isSsrAvailable(config);
+    const compositionHealth: CompositionHealth = ssrEnabled
+      ? { status: "composing" }
+      : { status: "disabled" };
 
     const app = new Hono<HonoEnv>();
 
@@ -53,15 +64,42 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("/*", security.rateLimit);
     app.use("*", security.csp);
 
-    app.get("/health", (c: Context<HonoEnv>) =>
-      c.json({
-        status:
-          apiProxyMode || (plugins.api?.router && plugins.status.available) ? "ready" : "degraded",
-        api: apiProxyMode || plugins.api ? "ready" : "unavailable",
-        auth: plugins.auth ? "ready" : "unavailable",
-        ...(plugins.status.error ? { error: plugins.status.error } : {}),
-      }),
-    );
+    if (ssrEnabled) {
+      const boot = yield* Effect.exit(composeUi(config));
+      if (Exit.isFailure(boot)) {
+        const cause = Cause.squash(boot.cause);
+        compositionHealth.status = "failed";
+        compositionHealth.error = cause instanceof Error ? cause.message : String(cause);
+        logger.error("[Server] Boot SSR composition FAILED — health stays degraded:", cause);
+        if (!isDev) {
+          logger.error("[Server] Exiting so the deploy rolls back");
+          process.exit(1);
+        }
+      } else {
+        compositionHealth.status = "ready";
+        compositionHealth.digest = boot.value.digest;
+        logger.info(`[Server] SSR composition ready (digest ${boot.value.digest})`);
+      }
+    }
+
+    app.get("/health", (c: Context<HonoEnv>) => {
+      const apiReady = apiProxyMode || Boolean(plugins.api?.router && plugins.status.available);
+      const composeOk =
+        !ssrEnabled ||
+        compositionHealth.status === "ready" ||
+        compositionHealth.status === "composing";
+      return c.json(
+        {
+          status:
+            apiReady && composeOk && compositionHealth.status !== "failed" ? "ready" : "degraded",
+          api: apiProxyMode || plugins.api ? "ready" : "unavailable",
+          auth: plugins.auth ? "ready" : "unavailable",
+          ssr: compositionHealth,
+          ...(plugins.status.error ? { error: plugins.status.error } : {}),
+        },
+        compositionHealth.status === "failed" ? 503 : 200,
+      );
+    });
 
     app.get("/.well-known/mcp.json", (c: Context<HonoEnv>) => {
       const url = new URL(c.req.url);
@@ -85,7 +123,7 @@ export const createStartServer = (onReady?: () => void) =>
       startTime: Date.now(),
       milestones: [],
       error: null,
-      ssrEnabled: Boolean(uiConfig.ssrUrl),
+      ssrEnabled,
     };
 
     app.on(["GET", "HEAD"], "*", createStaticAssetProxyHandler(config));
@@ -138,6 +176,30 @@ export const createStartServer = (onReady?: () => void) =>
           `[Server] Host ${isDev ? "dev" : "production"} server running at http://${hostname}:${port}`,
         );
         onReady?.();
+        void (async () => {
+          try {
+            const origin = `http://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname}:${port}`;
+            const [health, root] = await Promise.all([
+              fetch(`${origin}/health`),
+              ssrEnabled && compositionHealth.status === "ready"
+                ? fetch(`${origin}/`)
+                : Promise.resolve(null),
+            ]);
+            if (!health.ok) throw new Error(`self-probe /health returned ${health.status}`);
+            if (root && !root.ok) throw new Error(`self-probe / returned ${root.status}`);
+            if (root && !(await root.text()).includes("window.__RUNTIME_CONFIG__")) {
+              throw new Error(
+                "self-probe / rendered without the client bootstrap (window.__RUNTIME_CONFIG__)",
+              );
+            }
+            logger.info("[Server] Live self-probe passed");
+          } catch (error) {
+            logger.error(
+              "[Server] Live self-probe FAILED — the server accepted the connection but a root render failed:",
+              error,
+            );
+          }
+        })();
       });
       return server;
     };

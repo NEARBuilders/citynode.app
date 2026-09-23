@@ -184,8 +184,9 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     return { status: "dry-run", registryUrl, built, skipped };
   }
 
-  let strategy: SigningStrategy;
-  if (input.wallet) {
+  const useWallet = input.wallet === true;
+  let strategy: SigningStrategy | undefined;
+  if (useWallet) {
     console.log(
       `  Signing via ${colors.cyan("gasless NEP-366 delegate action (relayed by the platform relayer)")}`,
     );
@@ -318,7 +319,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     console.log(`  Submitting transaction on ${network}...`);
 
     let result: { success: boolean; txHash?: string };
-    if (input.wallet) {
+    if (useWallet) {
       const session = readSessionHandle(configDir);
       const credential = session?.credential;
       if (!credential || credential.accountId !== account) {
@@ -345,6 +346,13 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         apiKey: credential.apiKey,
       });
     } else {
+      if (!strategy) {
+        return {
+          status: "error",
+          registryUrl,
+          error: "non-wallet publish requires a resolved signing strategy",
+        };
+      }
       result = await submitRegistryWrite(
         {
           account,

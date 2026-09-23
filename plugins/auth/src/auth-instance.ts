@@ -3,7 +3,13 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
-import { admin, anonymous, organization, phoneNumber } from "better-auth/plugins";
+import {
+  admin,
+  anonymous,
+  deviceAuthorization,
+  organization,
+  phoneNumber,
+} from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
   adminAc,
@@ -11,8 +17,9 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
-import { type SIWNPluginOptions, siwn } from "better-near-auth";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
+import { deviceLink } from "./device-link";
 
 const orgStatements = {
   ...defaultStatements,
@@ -263,6 +270,13 @@ export function createAuthInstance(
     trustedOrigins: config.trustedOrigins?.length ? config.trustedOrigins : undefined,
     secret: config.secret,
     baseURL: config.baseUrl,
+    // better-auth's core limiter defaults to enabled in production with a
+    // single shared per-path bucket when no client IP is resolvable — the
+    // regression container's whole /api/auth/* traffic shares one bucket and
+    // trips it within seconds. Test environments opt out explicitly.
+    ...(process.env.BETTER_AUTH_RATE_LIMIT_DISABLED === "1"
+      ? { rateLimit: { enabled: false } }
+      : {}),
     socialProviders: {
       github: {
         clientId: githubConfig?.clientId ?? "",
@@ -290,7 +304,25 @@ export function createAuthInstance(
             }),
           ]
         : []),
-      passkey(passkeyOptions),
+      passkey({
+        ...passkeyOptions,
+        registration: {
+          requireSession: false,
+          resolveUser: async ({ ctx }) => {
+            const recipient = mainnetRecipient;
+            const email = `passkey-${crypto.randomUUID().slice(0, 8)}@${recipient}`;
+            const created = await ctx.context.internalAdapter.createUser({
+              email,
+              name: "Passkey user",
+              emailVerified: true,
+            });
+            if (!created) {
+              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to create user" });
+            }
+            return { id: created.id, name: created.name, displayName: created.name };
+          },
+        },
+      }),
       organization({
         ac: orgAc,
         roles: orgRoles,
@@ -383,6 +415,12 @@ export function createAuthInstance(
         },
       }),
       nearInvitations(db, membershipPolicy),
+      deviceAuthorization({
+        verificationUri: "/device",
+        validateClient: (clientId) =>
+          clientId === (config.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID),
+      }),
+      deviceLink(db),
       apiKey([
         {
           configId: "user-keys",
@@ -467,9 +505,14 @@ export function createAuthInstance(
       },
     },
     advanced: {
+      // One switch for the Secure attribute and the __Secure- name prefix,
+      // derived from the baseURL protocol — not NODE_ENV. An https baseURL
+      // (production, staging) keeps Secure cookies; an http baseURL (the
+      // regression container serving http://localhost:<port> in production
+      // mode) must issue cookies plain clients can send back.
+      useSecureCookies: config.baseUrl.startsWith("https://"),
       defaultCookieAttributes: {
         sameSite: "lax",
-        secure: config.isProduction ?? false,
         httpOnly: true,
       },
     },

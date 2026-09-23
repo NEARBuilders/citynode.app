@@ -26,6 +26,13 @@ import {
   verifyNep413Signature,
 } from "near-kit";
 import z from "zod";
+import {
+  derivePasskeyAccountId,
+  isDeterministicAccountId,
+  parseCosePublicKey,
+  passkeyPublicKeyToString,
+  verifyPasskeyNep413Signature,
+} from "./passkey.js";
 import { defaultGetProfile, getImageUrl, getNetworkFromAccountId } from "./profile.js";
 import { schema } from "./schema.js";
 import {
@@ -83,6 +90,37 @@ function deriveEmail(accountId: string, recipient: string): string {
   }
   const randomId = crypto.randomUUID().slice(0, 8);
   return `temp-${randomId}@${recipient}`;
+}
+
+interface Nep413Payload {
+  message: string;
+  recipient: string;
+  nonce: Uint8Array;
+  callbackUrl?: string;
+}
+
+async function verifySignedMessage(
+  accountId: string,
+  signedMessage: { publicKey: string; signature: string },
+  payload: Nep413Payload,
+  near: Near,
+): Promise<boolean> {
+  if (isDeterministicAccountId(accountId)) {
+    return verifyPasskeyNep413Signature({
+      accountId,
+      publicKey: signedMessage.publicKey,
+      signature: signedMessage.signature,
+      message: payload.message,
+      recipient: payload.recipient,
+      nonce: payload.nonce,
+    });
+  }
+  return signedMessage.publicKey.startsWith("ml-dsa-65:")
+    ? verifyMlDsa65Nep413Signature(signedMessage as never, payload, {
+        near,
+        maxAge: 15 * 60 * 1000,
+      })
+    : verifyNep413Signature(signedMessage as never, payload, { near, maxAge: 15 * 60 * 1000 });
 }
 
 function nearAccountKey(account: Pick<NearAccount, "accountId" | "network">): string {
@@ -191,7 +229,7 @@ function createNear(
   return new Near(config);
 }
 
-async function initRelayer(
+export async function initRelayer(
   networkConfig: RelayerConfig | undefined,
   network: "mainnet" | "testnet",
   adapter: DBAdapter,
@@ -232,6 +270,7 @@ async function initRelayer(
   }
 
   const existing = await adapter.findOne<{
+    accountId: string;
     encryptedPrivateKey: string;
     iv: string;
     createdAt: Date;
@@ -241,13 +280,32 @@ async function initRelayer(
     where: [{ field: "network", operator: "eq", value: network }],
   });
 
+  let privateKeyBytes: Uint8Array | null = null;
   if (existing) {
     if (!secret) throw new Error("BETTER_AUTH_SECRET required for relayer key decryption");
-    const privateKeyBytes = await decryptPrivateKey(
-      existing.encryptedPrivateKey,
-      existing.iv,
-      secret,
-    );
+    try {
+      privateKeyBytes = await decryptPrivateKey(existing.encryptedPrivateKey, existing.iv, secret);
+    } catch (decryptError) {
+      // AES-GCM auth-tag mismatch: the row was encrypted under a different
+      // (or since-rotated) BETTER_AUTH_SECRET — the private key is already
+      // unrecoverable. Recover by deleting the stale row and generating a
+      // fresh ephemeral keypair rather than staying permanently broken.
+      // Transient failures elsewhere in the recovery path must NOT take
+      // this branch — only decryptPrivateKey is in scope here.
+      console.warn(
+        `[siwn] Relayer key for ${network} could not be decrypted (BETTER_AUTH_SECRET changed?). ` +
+          `Previous relayer account ${existing.accountId} is no longer recoverable — ` +
+          `generating a new ephemeral keypair. Fund the new account to re-enable relay.`,
+      );
+      await adapter.delete({
+        model: "relayerKey",
+        where: [{ field: "network", operator: "eq", value: network }],
+      });
+      void decryptError;
+    }
+  }
+
+  if (privateKeyBytes) {
     const keyPair = parseKey(`ed25519:${base58.encode(privateKeyBytes)}`);
     const accountId = bytesToHex(keyPair.publicKey.data);
 
@@ -266,14 +324,14 @@ async function initRelayer(
       whitelistedContracts: networkConfig.whitelistedContracts,
       maxGasPerTransaction: networkConfig.maxGasPerTransaction,
       maxDepositPerTransaction: networkConfig.maxDepositPerTransaction,
-      createdAt: existing.createdAt,
-      lastUsedAt: existing.lastUsedAt,
+      createdAt: existing!.createdAt,
+      lastUsedAt: existing!.lastUsedAt,
     };
   }
 
   const keyPair = generateKey();
   if (!secret) throw new Error("BETTER_AUTH_SECRET required for relayer key encryption");
-  const privateKeyBytes = keyPair.secretKey.startsWith("ed25519:")
+  const generatedPrivateKeyBytes = keyPair.secretKey.startsWith("ed25519:")
     ? base58.decode(keyPair.secretKey.slice(8))
     : new Uint8Array(0);
 
@@ -281,7 +339,7 @@ async function initRelayer(
   const accountId = bytesToHex(keyPair.publicKey.data);
   const createdAt = new Date();
 
-  const { encrypted, iv } = await encryptPrivateKey(privateKeyBytes, secret);
+  const { encrypted, iv } = await encryptPrivateKey(generatedPrivateKeyBytes, secret);
 
   await adapter.create({
     model: "relayerKey",
@@ -701,17 +759,12 @@ export const siwn = (options: SIWNPluginOptions) => {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
 
-            const isValid = signedMessage.publicKey.startsWith("ml-dsa-65:")
-              ? await verifyMlDsa65Nep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                )
-              : await verifyNep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                );
+            const isValid = await verifySignedMessage(
+              accountId,
+              signedMessage,
+              { message, recipient, nonce: nonceBytes, callbackUrl },
+              near,
+            );
 
             if (!isValid) {
               throw new APIError("UNAUTHORIZED", {
@@ -801,6 +854,152 @@ export const siwn = (options: SIWNPluginOptions) => {
               status: 401,
             });
           }
+        },
+      ),
+      linkPasskeyWallet: createAuthEndpoint(
+        "/near/link-passkey-wallet",
+        {
+          method: "POST",
+          body: z.object({
+            nonce: z.string(),
+            proof: z.string(),
+          }),
+          use: [sessionMiddleware],
+          requireRequest: true,
+        },
+        async (ctx) => {
+          const { nonce, proof } = ctx.body;
+          const session = ctx.context.session;
+
+          if (!session) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Must be logged in to link a passkey wallet",
+              status: 401,
+            });
+          }
+
+          const passkeys = await ctx.context.adapter.findMany({
+            model: "passkey",
+            where: [{ field: "userId", operator: "eq", value: session.user.id }],
+          });
+          if (!passkeys.length) {
+            throw new APIError("BAD_REQUEST", {
+              message: "No passkey registered for this account",
+            });
+          }
+
+          const network = "mainnet" as const;
+          const recipient = getRecipient(network);
+          const message = `Sign in to ${recipient}`;
+          let nonceBytes: Uint8Array;
+          try {
+            nonceBytes = hex.decode(nonce);
+          } catch {
+            throw new APIError("BAD_REQUEST", { message: "Invalid nonce" });
+          }
+          if (nonceBytes.length !== 32) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid nonce" });
+          }
+
+          const nonceHash = await hashNonce(nonceBytes);
+          const existingNonce = await ctx.context.internalAdapter.findVerificationValue(
+            `siwn-nonce:${nonceHash}`,
+          );
+          if (existingNonce) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Unauthorized: Nonce already used (replay attack detected)",
+              status: 401,
+              code: "UNAUTHORIZED_NONCE_REPLAY",
+            });
+          }
+
+          let accountId: string | null = null;
+          let publicKey: string | null = null;
+          for (const passkey of passkeys as Array<{ publicKey: string }>) {
+            let cose: Uint8Array;
+            try {
+              cose = base64.decode(passkey.publicKey);
+            } catch {
+              continue;
+            }
+            const key = parseCosePublicKey(cose);
+            if (!key) continue;
+            const pubKey = passkeyPublicKeyToString(key);
+            const derived = derivePasskeyAccountId(pubKey);
+            if (!derived) continue;
+            const isValid = verifyPasskeyNep413Signature({
+              accountId: derived,
+              publicKey: pubKey,
+              signature: proof,
+              message,
+              recipient,
+              nonce: nonceBytes,
+            });
+            if (isValid) {
+              accountId = derived;
+              publicKey = pubKey;
+              break;
+            }
+          }
+
+          if (!accountId || !publicKey) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Unauthorized: Invalid passkey signature",
+              status: 401,
+            });
+          }
+
+          await ctx.context.internalAdapter.createVerificationValue({
+            identifier: `siwn-nonce:${nonceHash}`,
+            value: "used",
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          });
+
+          const existingNearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [{ field: "accountId", operator: "eq", value: accountId }],
+          });
+          if (existingNearAccount && existingNearAccount.userId !== session.user.id) {
+            throw new APIError("BAD_REQUEST", {
+              message: "This NEAR account is already linked to another user",
+              status: 400,
+            });
+          }
+
+          if (!existingNearAccount) {
+            const userAccounts = await ctx.context.adapter.findMany({
+              model: "nearAccount",
+              where: [{ field: "userId", operator: "eq", value: session.user.id }],
+            });
+
+            await ctx.context.adapter.create({
+              model: "nearAccount",
+              data: {
+                userId: session.user.id,
+                accountId,
+                network,
+                publicKey,
+                isPrimary: userAccounts.length === 0,
+                createdAt: new Date(),
+              },
+            });
+
+            await ctx.context.internalAdapter.createAccount({
+              userId: session.user.id,
+              providerId: "siwn",
+              accountId: `${accountId}:${network}`,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+
+          await ensureRelayer(ctx.context.adapter, ctx.context.secret, network);
+
+          return ctx.json({
+            success: true,
+            accountId,
+            network,
+          });
         },
       ),
       unlinkNearAccount: createAuthEndpoint(
@@ -1082,17 +1281,12 @@ export const siwn = (options: SIWNPluginOptions) => {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
 
-            const isValid = signedMessage.publicKey.startsWith("ml-dsa-65:")
-              ? await verifyMlDsa65Nep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                )
-              : await verifyNep413Signature(
-                  signedMessage,
-                  { message, recipient, nonce: nonceBytes, callbackUrl },
-                  { near, maxAge: 15 * 60 * 1000 },
-                );
+            const isValid = await verifySignedMessage(
+              accountId,
+              signedMessage,
+              { message, recipient, nonce: nonceBytes, callbackUrl },
+              near,
+            );
 
             if (!isValid) {
               throw new APIError("UNAUTHORIZED", {
@@ -1130,7 +1324,7 @@ export const siwn = (options: SIWNPluginOptions) => {
               expiresAt: new Date(Date.now() + 15 * 60 * 1000),
             });
 
-            if (!options.requireFullAccessKey) {
+            if (!options.requireFullAccessKey && !isDeterministicAccountId(accountId)) {
               const validateKey =
                 options.validateLimitedAccessKey ||
                 ((args: { accountId: string; publicKey: string; recipient?: string }) =>
@@ -1985,3 +2179,5 @@ export const siwn = (options: SIWNPluginOptions) => {
     },
   };
 };
+
+export { DEFAULT_DEVICE_LINK_CLIENT_ID } from "./constants.js";

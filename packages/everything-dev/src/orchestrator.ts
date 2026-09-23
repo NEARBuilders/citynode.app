@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
-import { Deferred, Effect, Option, Ref, Stream } from "effect";
+import { Data, Deferred, Effect, Option, Ref, Stream } from "effect";
+import { ShellEnv } from "./env/project-env";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
+  DevGeneratedEnv,
   DevRuntimeConfig,
   type ServiceDescriptor,
   ServiceDescriptorMap,
@@ -147,12 +149,34 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
   };
 };
 
+export class HostRemoteUrlMissing extends Data.TaggedError("HostRemoteUrlMissing")<
+  Record<string, never>
+> {
+  get message() {
+    return "remoteUrl not provided on host descriptor";
+  }
+}
+
+export class HostModuleInvalid extends Data.TaggedError("HostModuleInvalid")<
+  Record<string, never>
+> {
+  get message() {
+    return "Host module does not export runServer function";
+  }
+}
+
+export class LocalPathMissing extends Data.TaggedError("LocalPathMissing")<{ key: string }> {
+  get message() {
+    return `No localPath for local service: ${this.key}`;
+  }
+}
+
 const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
   Effect.gen(function* () {
     const runtimeConfig = yield* DevRuntimeConfig;
     const remoteUrl = descriptor.remoteUrl;
     if (!remoteUrl) {
-      return yield* Effect.fail(new Error("remoteUrl not provided on host descriptor"));
+      return yield* new HostRemoteUrlMissing({});
     }
 
     callbacks.onStatus(descriptor.key, "starting");
@@ -228,7 +252,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     });
 
     if (!hostModule?.runServer) {
-      return yield* Effect.fail(new Error("Host module does not export runServer function"));
+      return yield* new HostModuleInvalid({});
     }
 
     callbacks.onLog(descriptor.key, "Starting server...");
@@ -264,12 +288,54 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     } satisfies ProcessHandle;
   });
 
+/**
+ * Spawn env precedence, three tiers: values explicitly exported by the
+ * caller (shell / CI / regression harness — captured by the bootstrap
+ * program into the `ShellEnv` service before any `.env` loading) outrank the
+ * generated infra env, which outranks `.env`-file values inherited through
+ * `processEnv`. The service's resolved port is always authoritative.
+ */
+export function composeSpawnEnv(
+  processEnv: Record<string, string>,
+  generatedEnv: Record<string, string>,
+  port: number,
+  shellEnv: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    ...processEnv,
+    ...mergeGeneratedOverFileEnv(generatedEnv, processEnv, shellEnv),
+    FORCE_COLOR: "1",
+    ...(port > 0 ? { PORT: String(port) } : {}),
+  };
+}
+
+/**
+ * Overlay the generated infra env (ports drift, so stale `.env` values must
+ * lose) while keeping every explicitly exported key from `shellEnv` intact.
+ * Keys absent from both are untouched.
+ */
+export function mergeGeneratedOverFileEnv(
+  generatedEnv: Record<string, string>,
+  processEnv: Record<string, string>,
+  shellEnv: Record<string, string> = {},
+): Record<string, string> {
+  const result: Record<string, string> = { ...processEnv };
+  for (const [key, value] of Object.entries(generatedEnv)) {
+    if (key in shellEnv) {
+      result[key] = shellEnv[key]!;
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
   Effect.gen(function* () {
     const runtimeConfig = yield* DevRuntimeConfig;
 
     if (!descriptor.localPath) {
-      return yield* Effect.fail(new Error(`No localPath for local service: ${descriptor.key}`));
+      return yield* new LocalPathMissing({ key: descriptor.key });
     }
 
     const fullCwd = descriptor.localPath;
@@ -283,13 +349,17 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
     callbacks.onStatus(name, "starting");
 
-    const envVars: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      FORCE_COLOR: "1",
-      ...(port > 0 ? { PORT: String(port) } : {}),
-    };
+    const generatedEnv = yield* DevGeneratedEnv;
+    const shellTier = yield* ShellEnv;
+    const envVars = composeSpawnEnv(
+      process.env as Record<string, string>,
+      generatedEnv,
+      port,
+      shellTier,
+    );
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
+    Object.assign(envVars, descriptor.env);
 
     const cmd = spawn(command, args, {
       cwd: fullCwd,
@@ -366,7 +436,15 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       Effect.gen(function* () {
         const exitCodeValue = yield* exitCode;
         const currentStatus = yield* Ref.get(statusRef);
-        if (currentStatus === "ready" || currentStatus === "error") return;
+        if (currentStatus === "ready" || currentStatus === "error") {
+          // Post-ready exits must stay visible — a silently dead child (OOM
+          // kill included) used to leave the stack answering with nothing.
+          if (currentStatus === "ready") {
+            callbacks.onLog(name, `Process exited after ready (exit code: ${exitCodeValue})`, true);
+            yield* markError(`Process exited after ready: ${name}`);
+          }
+          return;
+        }
         callbacks.onLog(name, `Process exited before ready (exit code: ${exitCodeValue})`, true);
         yield* markError(`Process exited before ready: ${name}`);
       }),
@@ -380,7 +458,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         const looksLikeError =
           isStderr &&
           /^(error|fail|fatal|exception|unhandled|reject)/i.test(cleanLine) &&
-          !/^\$/.test(cleanLine);
+          !cleanLine.startsWith("$");
         callbacks.onLog(name, line, looksLikeError);
 
         const currentStatus = yield* Ref.get(statusRef);

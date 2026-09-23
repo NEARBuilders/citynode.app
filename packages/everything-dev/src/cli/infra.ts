@@ -1,8 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import * as p from "@clack/prompts";
-import { config as loadDotenv } from "dotenv";
 import type { RuntimeConfig } from "../types";
 
 const POSTGRES_USER = "everythingdev";
@@ -661,39 +659,6 @@ function syncTextFile(filePath: string, nextContent: string): boolean {
 
   writeFileSync(filePath, nextContent);
   return true;
-}
-
-export function ensureEnvFile(configDir: string): void {
-  const envPath = join(configDir, ".env");
-  const examplePath = join(configDir, ".env.example");
-
-  if (existsSync(envPath) || !existsSync(examplePath)) return;
-
-  const content = readFileSync(examplePath, "utf-8");
-  const lines = content.split("\n");
-  const secret = randomBytes(32).toString("base64url");
-  const updated = lines
-    .map((line) => {
-      if (/^BETTER_AUTH_SECRET=/.test(line)) {
-        return `BETTER_AUTH_SECRET=${secret}`;
-      }
-      return line;
-    })
-    .join("\n");
-
-  writeFileSync(envPath, updated);
-  p.log.info("Created .env from generated .env.example with generated BETTER_AUTH_SECRET");
-}
-
-let envLoadedDir: string | null = null;
-
-export function loadProjectEnv(configDir: string): void {
-  if (envLoadedDir === configDir) return;
-  const envPath = join(configDir, ".env");
-  if (!existsSync(envPath)) return;
-
-  loadDotenv({ path: envPath, processEnv: process.env, quiet: true });
-  envLoadedDir = configDir;
 }
 
 export interface CiServiceSpec {

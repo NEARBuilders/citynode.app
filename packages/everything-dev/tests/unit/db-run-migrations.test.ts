@@ -6,15 +6,20 @@ import { describe, expect, it } from "vitest";
 import { migrate as apiMigrate } from "../../../../api/src/db/migrate";
 import { migrate as proposalsMigrate } from "../../../../plugins/proposals/src/db/migrate";
 import { migrate as votesMigrate } from "../../../../plugins/votes/src/db/migrate";
-import { runMigrations } from "../../src/db/run-migrations";
+import {
+  type DatabaseError,
+  type Migration,
+  type MigrationDatabase,
+  type MigrationStorage,
+  runMigrations,
+} from "../../src/db";
 
-interface Migration {
-  idx: number;
-  when: number;
-  tag: string;
-  hash: string;
-  sql: string[];
-}
+type Runner = (
+  db: MigrationDatabase,
+  migrations: Migration[],
+  storage?: MigrationStorage,
+  schemaName?: string,
+) => Effect.Effect<number, DatabaseError>;
 
 function migration(idx: number, tag: string, statements: string[]): Migration {
   return {
@@ -57,7 +62,8 @@ describe("db migration runners (008 characterization)", () => {
   });
 
   it("partial overlap (the 25P2 bug): every runner — including votes/proposals via adapters — survives via savepoints", async () => {
-    for (const runner of [apiMigrate, votesMigrate, proposalsMigrate] as const) {
+    const runners: readonly Runner[] = [apiMigrate, votesMigrate, proposalsMigrate];
+    for (const runner of runners) {
       const db = makeDb();
       await db.execute(sql.raw('CREATE TABLE "t_legacy" (id int)'));
 
@@ -68,7 +74,7 @@ describe("db migration runners (008 characterization)", () => {
         ]),
       ];
 
-      const applied = await Effect.runPromise(runner(db as never, migrations, JOURNAL) as never);
+      const applied = await Effect.runPromise(runner(db, migrations, JOURNAL));
       expect(applied).toBe(1);
 
       const exists = (await db.execute(

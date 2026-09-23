@@ -5,6 +5,10 @@
  * sha384 preflight so a wrong UI bundle cannot brick the tenant site.
  */
 
+import {
+  UI_REMOTE_ENTRY_FILENAME,
+  UI_REMOTE_SERVER_ENTRY_FILENAME,
+} from "everything-dev/ui/manifest";
 import { z } from "zod";
 import type { TenantUiOverride } from "./dao-policy";
 
@@ -149,14 +153,14 @@ export async function computeSubresourceIntegrity(url: string): Promise<string> 
 }
 
 export function resolveClientEntryUrl(url: string): string {
-  if (url.endsWith("/remoteEntry.js")) return url;
+  if (url.endsWith(`/${UI_REMOTE_ENTRY_FILENAME}`)) return url;
   if (url.endsWith("/mf-manifest.json"))
-    return `${url.replace(/\/mf-manifest\.json$/, "")}/remoteEntry.js`;
-  return `${url.replace(/\/$/, "")}/remoteEntry.js`;
+    return `${url.replace(/\/mf-manifest\.json$/, "")}/${UI_REMOTE_ENTRY_FILENAME}`;
+  return `${url.replace(/\/$/, "")}/${UI_REMOTE_ENTRY_FILENAME}`;
 }
 
 export function resolveServerEntryUrl(url: string): string {
-  return `${url.replace(/\/$/, "")}/remoteEntry.server.js`;
+  return `${url.replace(/\/$/, "")}/${UI_REMOTE_SERVER_ENTRY_FILENAME}`;
 }
 
 export function normalizeBundleBaseUrl(url: string): string {

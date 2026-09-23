@@ -189,7 +189,10 @@ export class EveryPluginBuild implements RspackPluginInstance {
     compiler.options.output.uniqueName = pluginInfo.normalizedName;
     compiler.options.output.publicPath = "auto";
     compiler.options.output.path = path.resolve(context, "dist");
-    compiler.options.output.clean = true;
+    // Watch rebuilds must not wipe dist: the dev serve static handler serves
+    // this directory, and a clean on every rebuild opens a window where
+    // remoteEntry.js 404s for any consumer that loads mid-rebuild.
+    compiler.options.output.clean = !compiler.options.watch;
     compiler.options.output.library = { type: "commonjs-module" };
 
     if (!compiler.options.target) {

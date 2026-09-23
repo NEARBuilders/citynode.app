@@ -520,9 +520,17 @@ export async function syncApiContractBridge(opts: {
   status: ContractBridgeStatus[];
 }> {
   const runtimeDir = join(opts.configDir, ".bos", "generated");
-  const pluginEntries = Object.entries(opts.runtimeConfig.plugins ?? {}).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
+  const authRuntime = opts.runtimeConfig.auth;
+  const isAuthMirrorEntry = (key: string, plugin: RuntimePluginConfig) =>
+    Boolean(
+      authRuntime &&
+        key === "auth" &&
+        ((plugin.localPath && plugin.localPath === authRuntime.localPath) ||
+          (!plugin.localPath && plugin.source === "remote" && plugin.url === authRuntime.url)),
+    );
+  const pluginEntries = Object.entries(opts.runtimeConfig.plugins ?? {})
+    .filter(([key, plugin]) => !isAuthMirrorEntry(key, plugin))
+    .sort(([a], [b]) => a.localeCompare(b));
   const sources: ContractSource[] = [];
   const status: ContractBridgeStatus[] = [];
   let manifest: ApiPluginManifest | null = null;

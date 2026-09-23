@@ -3,6 +3,7 @@ import { User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { pluginPath } from "@/lib/plugin-path";
 import { NetworkToggle } from "./network-toggle";
 import { OrgSwitcher } from "./org-switcher";
 import { ThemeToggle } from "./theme-toggle";
@@ -47,7 +48,7 @@ function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavP
         <NetworkToggle />
         {showConnect && (
           <Button asChild variant="outline">
-            <Link to="/login">connect</Link>
+            <Link to={pluginPath("/login")}>connect</Link>
           </Button>
         )}
       </div>

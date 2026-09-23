@@ -277,9 +277,12 @@ export function parseDeployLines(output: string): DeployResultEntry[] {
     if (!urlMatch || !urlFieldMatch) continue;
     const integrityFieldMatch = line.match(/integrityField=(\S+)/);
     const integrityMatch = line.match(/integrity=(\S+)/);
+    const url = urlMatch[1];
+    const urlField = urlFieldMatch[1];
+    if (url === undefined || urlField === undefined) continue;
     results.push({
-      url: urlMatch[1],
-      urlField: urlFieldMatch[1],
+      url,
+      urlField,
       integrityField: integrityFieldMatch?.[1] || undefined,
       integrity: integrityMatch?.[1] || undefined,
     });

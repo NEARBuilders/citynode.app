@@ -1,3 +1,5 @@
+import { watch } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { findCommandDescriptor } from "./cli/catalog";
@@ -15,14 +17,17 @@ import type {
   InitResult,
   KillOptions,
   KillResult,
+  LogsOptions,
+  LogsResult,
   OverrideSection,
   PsResult,
   StartOptions,
   StartResult,
   TypecheckWorkspaceResult,
 } from "./contract";
-import type { ProgressEvent, StartSummary } from "./plugin";
-import bosPlugin, { consumeDevSession, pluginEvents } from "./plugin";
+import type { StartSummary } from "./dev-program";
+import bosPlugin, { consumeDevSession } from "./plugin";
+import { type ProgressEvent, pluginEvents } from "./progress";
 import { createPluginRuntime } from "./sdk";
 import { printBanner } from "./utils/banner";
 import { colors, frames, gradients, icons } from "./utils/theme";
@@ -248,7 +253,13 @@ async function main() {
       await outdatedWarning;
       if (session) {
         const { devApp } = await import("./dev-session");
-        devApp(session.orchestrator, session.services, session.runtimeConfig);
+        devApp(
+          session.orchestrator,
+          session.services,
+          session.runtimeConfig,
+          session.envGenerated,
+          session.shellEnv,
+        );
       }
       return;
     }
@@ -293,7 +304,13 @@ async function main() {
           printStartSummary(summary);
         }
         const { startApp } = await import("./dev-session");
-        startApp(session.orchestrator, session.services, session.runtimeConfig);
+        startApp(
+          session.orchestrator,
+          session.services,
+          session.runtimeConfig,
+          session.envGenerated,
+          session.shellEnv,
+        );
       }
       return;
     }
@@ -800,6 +817,46 @@ async function main() {
         }
         console.log(`    ${colors.dim("desc:")}   ${entry.description}`);
         console.log();
+      }
+      return;
+    }
+
+    if (descriptor.key === "logs") {
+      const logsResult = result as LogsResult;
+      const opts = input as LogsOptions;
+      for (const line of logsResult.lines) {
+        console.log(line);
+      }
+      if (logsResult.lines.length === 0) {
+        console.log(colors.dim(`  No matching log lines in ${logsResult.logFile}.`));
+      }
+      if (opts.follow) {
+        const filter = opts.service;
+        let byteOffset = 0;
+        for (const line of logsResult.lines) byteOffset += Buffer.byteLength(line, "utf8") + 1;
+        const followMatch = (line: string): boolean => {
+          if (!filter) return true;
+          const source = /\] \[([^\]]+)\] \[(?:OUT|ERR)\] /.exec(line)?.[1];
+          return source === filter || source === `plugin:${filter}`;
+        };
+        const watcher = watch(logsResult.logFile, (event) => {
+          if (event !== "change") return;
+          void readFile(logsResult.logFile, "utf8").then((text) => {
+            const newLines = text
+              .slice(byteOffset)
+              .split("\n")
+              .filter((line) => line.length > 0 && followMatch(line));
+            byteOffset = Buffer.byteLength(text, "utf8");
+            for (const line of newLines) {
+              console.log(line);
+            }
+          });
+        });
+        console.log(colors.dim("  Following — Ctrl+C to stop."));
+        process.on("SIGINT", () => {
+          watcher.close();
+          process.exit(0);
+        });
       }
       return;
     }

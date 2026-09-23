@@ -6,6 +6,9 @@ import { useRouter } from "@tanstack/react-router";
 
 export type { RouterContract };
 
+/** typed client for the app's default router contract (router-context default) */
+export type ApiClient<T extends RouterContract = RouterContract> = ContractRouterClient<T>;
+
 export interface ClientServiceConfig {
   hostUrl: string;
   rpcBase: `/${string}`;

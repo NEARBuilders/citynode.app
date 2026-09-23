@@ -122,9 +122,9 @@ vi.mock("near-kit", () => {
           actions: [],
           nonce: 1n,
           maxBlockHeight: 1000n,
-          publicKey: { ed25519Key: { data: new Array(32).fill(0) } },
+          publicKey: { ed25519Key: { data: Array.from({ length: 32 }, () => 0) } },
         },
-        signature: { ed25519Signature: { data: new Array(64).fill(0) } },
+        signature: { ed25519Signature: { data: Array.from({ length: 64 }, () => 0) } },
       },
     })),
     InMemoryKeyStore: vi.fn(function (this: any) {

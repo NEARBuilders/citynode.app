@@ -30,8 +30,33 @@ interface PoolLike {
   end(): Promise<void>;
 }
 
+/**
+ * Connection-level guardrails. `ALTER DATABASE ... SET` only reaches sessions
+ * opened after it runs — pooled connections that already exist never inherit
+ * it, so any bound must ride on every connection's startup options. Defaults:
+ * a lock wait fails after 10s (unbounded waits wedge the whole pool silently),
+ * a session idle inside a transaction is reaped after 30s, and statement
+ * timeout stays off unless DB_STATEMENT_TIMEOUT_MS is set (long migrations and
+ * analytical queries must not break).
+ */
+function connectionOptions(namespace: string | undefined): string {
+  const settings = [
+    ...(namespace ? [`-c search_path="${namespace}",public`] : []),
+    `-c lock_timeout=${Number(process.env.DB_LOCK_TIMEOUT_MS) || 10_000}`,
+    `-c idle_in_transaction_session_timeout=${Number(process.env.DB_IDLE_TX_TIMEOUT_MS) || 30_000}`,
+    ...(process.env.DB_STATEMENT_TIMEOUT_MS
+      ? [`-c statement_timeout=${Number(process.env.DB_STATEMENT_TIMEOUT_MS)}`]
+      : []),
+  ];
+  return settings.join(" ");
+}
+
 function buildPoolConfig(url: string, namespace: string | undefined) {
-  const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
+  // host.docker.internal is docker-local development networking — the test
+  // databases a container reaches through the host gateway, which do not
+  // terminate TLS.
+  const isLocal =
+    url.includes("localhost") || url.includes("127.0.0.1") || url.includes("host.docker.internal");
   return {
     connectionString: url,
     ssl: isLocal
@@ -40,7 +65,7 @@ function buildPoolConfig(url: string, namespace: string | undefined) {
     max: Number(process.env.DB_POOL_MAX) || 10,
     connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 30_000,
     idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS) || 30_000,
-    ...(namespace ? { options: `-c search_path="${namespace}",public` } : {}),
+    options: connectionOptions(namespace),
   };
 }
 

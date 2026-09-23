@@ -586,7 +586,7 @@ describe("Scope lifecycle", () => {
     ) {
       static Live = Layer.effect(
         Counter,
-        Effect.gen(function* () {
+        Effect.sync(() => {
           let n = 0;
           return {
             increment: Effect.sync(() => ++n),
