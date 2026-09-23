@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
+import type { SessionData } from "everything-dev/ui/auth";
 import {
-  sessionQueryKey,
+  refreshSessionCache,
   sessionQueryOptions,
   signInWithPasskey,
   useAuthClient,
@@ -28,14 +29,18 @@ export const Route = createFileRoute("/_public/login")({
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     redirect: sanitizeRedirect(search.redirect),
   }),
-  beforeLoad: ({ context, search }) => {
+  beforeLoad: async ({ context, search }) => {
     const { queryClient, authClient } = context;
-    const initialSession = context.session;
-    const session =
-      initialSession ??
-      queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
+    // Read the session exactly like the authed route guards do (ensureSession
+    // in ui/src/lib/auth-guards.ts): an awaited queryClient.query() over the
+    // same query options. The optimistic context/cache read disagreed with
+    // the guard on a stale value, and the two redirect throwers ping-ponged
+    // /login <-> /dashboard until the router tripped its redirect limit.
+    const session = await queryClient.query(sessionQueryOptions(authClient, context.session));
 
-    if (session?.user) {
+    // Banned users must not be bounced into the /login#banned <-> /dashboard
+    // redirect cycle — the authed guard sends them back here.
+    if (session?.user && !session.user.banned) {
       throw redirect({ to: search.redirect });
     }
   },
@@ -80,10 +85,14 @@ function LoginPage() {
     });
   }, [auth.near]);
 
-  const handleSuccess = async (message: string) => {
+  const handleSuccess = async (message: string, session?: SessionData | null) => {
     toast.success(message);
-    void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-    void navigate({ to: redirect, replace: true });
+    // Refresh the session cache authoritatively (cookie cache disabled) BEFORE
+    // navigating — the authed route guards read this cache synchronously, and
+    // navigating against a stale signed-out value ping-pongs login <-> dashboard
+    // until TanStack Router throws "Too many redirects".
+    await refreshSessionCache(auth, queryClient, session);
+    await navigate({ to: redirect, replace: true });
   };
 
   const handleNear = async () => {
@@ -103,9 +112,9 @@ function LoginPage() {
   const handlePasskey = async () => {
     setPasskeyPending(true);
     await signInWithPasskey(auth, {
-      onSuccess: async () => {
+      onSuccess: async (session) => {
         setPasskeyPending(false);
-        await handleSuccess("Signed in with passkey");
+        await handleSuccess("Signed in with passkey", session);
       },
       onError: (error) => {
         setPasskeyPending(false);
@@ -114,7 +123,7 @@ function LoginPage() {
     });
   };
 
-  if (session?.user) {
+  if (session?.user && !session.user.banned) {
     return <Navigate to={redirect} replace />;
   }
 
