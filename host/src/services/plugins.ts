@@ -301,11 +301,7 @@ export function buildAuthBaseVariables(
     const rawHostUrl =
       config.env === "development"
         ? (config.host?.url ?? `http://localhost:${config.host?.port ?? 3000}`)
-        : // Local-production stacks (the regression container) serve on a
-          // reachable origin passed via BASE_URL — the domain would derive an
-          // unreachable https:// baseURL, and better-auth's Secure cookies
-          // become unusable over the plain-http origin the tests hit.
-          process.env.BASE_URL || config.domain;
+        : config.domain;
     const hostUrl = toProtocolUrl(rawHostUrl, config.env);
     const base: Record<string, unknown> = {
       account: config.account,

@@ -145,6 +145,18 @@ const stage = () => {
         ...(variant === "ssr" ? { ssr: `http://localhost:${ports.authUi}/ssr` } : {}),
       },
     });
+    // The container's actual ingress is the bos start port, not the config's
+    // domain (a local fixture can't serve https://<domain>) — and an https
+    // baseURL makes better-auth set Secure cookies no http client can send
+    // back. The auth plugin's own baseUrl variable is the config-driven seam
+    // for the reachable origin; it wins over the host's domain derivation.
+    if (resolved.app.auth) {
+      const authVariables = (resolved.app.auth.variables ?? {}) as Record<string, unknown>;
+      resolved.app.auth = {
+        ...resolved.app.auth,
+        variables: { ...authVariables, baseUrl: `http://localhost:${basePort}` },
+      };
+    }
     writeFileSync(
       path.join(imageDir, `config-${variant}.json`),
       `${JSON.stringify(resolved, null, 2)}\n`,
