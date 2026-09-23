@@ -388,12 +388,16 @@ jobs:
         # the docker build, hence the longer timeout.
         include:
           - mode: start:ssr
+            slug: start-ssr
             timeout: 25
           - mode: start:csr
+            slug: start-csr
             timeout: 25
           - mode: dev:ssr
+            slug: dev-ssr
             timeout: 10
           - mode: dev:csr
+            slug: dev-csr
             timeout: 10
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
@@ -479,7 +483,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
         with:
-          name: regression-browser-artifacts-${{ replace(matrix.mode, ':', '-') }}
+          name: regression-browser-artifacts-${{ matrix.slug }}
           path: |
             .bos/logs/**
             resource-watchdog.log
