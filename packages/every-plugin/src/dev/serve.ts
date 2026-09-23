@@ -7,6 +7,7 @@ import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
 import { classifyPluginFailure } from "../runtime/errors";
+import { ensureGeneratedUiRsbuildConfig } from "../ui/generated-config";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -152,6 +153,21 @@ export async function startPluginDevServer(
     watcher.on("error", (error) => {
       console.error(`❌ Failed to spawn rspack build --watch: ${error.message}`);
     });
+  }
+
+  let uiWatcher: ReturnType<typeof spawn> | null = null;
+  const uiPort = process.env.BOS_UI_PORT;
+  const uiConfig = ensureGeneratedUiRsbuildConfig(cwd);
+  if (uiConfig) {
+    uiWatcher = spawn("rsbuild", ["dev", "--config", uiConfig], {
+      cwd,
+      stdio: "inherit",
+      env: uiPort ? { ...process.env, PORT: uiPort } : process.env,
+    });
+    uiWatcher.on("error", (error) => {
+      console.error(`❌ Failed to spawn rsbuild ui dev: ${error.message}`);
+    });
+    console.log(`├─ 🎨 UI:     ${uiPort ? `http://localhost:${uiPort}` : "(rsbuild auto port)"}`);
   }
 
   const handlers: { rpc: any; api: any } = { rpc: null, api: null };
@@ -378,8 +394,10 @@ export async function startPluginDevServer(
     handlers.rpc = null;
     handlers.api = null;
     effectContextHolder.context = null;
-    if (watcher && watcher.exitCode === null && !watcher.killed) {
-      watcher.kill("SIGTERM");
+    for (const child of [watcher, uiWatcher]) {
+      if (child && child.exitCode === null && !child.killed) {
+        child.kill("SIGTERM");
+      }
     }
     if (runtime) await runtime.shutdown().catch(() => {});
     await new Promise<void>((resolve) => server.close(() => resolve()));

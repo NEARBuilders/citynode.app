@@ -212,14 +212,24 @@ export const devBootstrap = (
       (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
 
     yield* step(timings, "build", async () => {
-      const buildTasks: Promise<void>[] = [
+      const buildTasks: Promise<void | boolean>[] = [
         buildEverythingDevQuietly(deps.configDir),
         buildBetterNearAuthQuietly(deps.configDir),
       ];
       if (shouldBuildPlugin) {
         buildTasks.push(buildEveryPluginQuietly(deps.configDir));
       }
-      await Promise.all(buildTasks);
+      const results = await Promise.all(buildTasks);
+      if (results[0] === true) {
+        // The running bos process imported the previous everything-dev dist at
+        // startup — service descriptors, port wiring, and orchestrator
+        // behavior in THIS session are one build behind. Everything else
+        // (plugin child processes) spawns after this step and runs fresh.
+        console.log(
+          "[dev] everything-dev was rebuilt — this session still runs the previous " +
+            "orchestrator build. Restart `bos dev` once to pick it up.",
+        );
+      }
     });
 
     let devExtendsChain: string[] | undefined;

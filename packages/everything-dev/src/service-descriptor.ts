@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { Context, Layer } from "effect";
 import type { JsonObject, RuntimeConfig, RuntimePluginConfig, SourceMode } from "./types";
 
@@ -44,6 +46,7 @@ export interface ServiceDescriptor {
   ssr?: boolean;
   command?: string;
   args?: string[];
+  env?: Record<string, string>;
   readyPatterns?: RegExp[];
   errorPatterns?: RegExp[];
 }
@@ -199,6 +202,19 @@ export function buildServiceDescriptorMap(
       const resolvedPort = pluginConfig.port ?? pluginBasePort;
       pluginBasePort = resolvedPort + 1;
 
+      // Folder-form ui source: the ui dir lives inside the plugin workspace
+      // (no own package.json) — `every-plugin dev` spawns its UI build as a
+      // child (BOS_UI_PORT), so no separate plugin-ui service is spawned.
+      const uiLocalPath = pluginConfig.ui?.localPath;
+      const isFolderFormUi = Boolean(
+        uiLocalPath &&
+          pluginConfig.ui?.source === "local" &&
+          existsSync(path.join(uiLocalPath, "src", "routes")) &&
+          !existsSync(path.join(uiLocalPath, "package.json")),
+      );
+      const folderUiPort = pluginConfig.ui?.port ?? pluginBasePort;
+      if (isFolderFormUi) pluginBasePort = folderUiPort + 1;
+
       if (!isAuthMirror) {
         map.set(pluginKey, {
           key: pluginKey,
@@ -215,14 +231,24 @@ export function buildServiceDescriptorMap(
           secrets: pluginConfig.secrets,
           command: "bun",
           args: ["run", "dev"],
+          env: isFolderFormUi ? { BOS_UI_PORT: String(folderUiPort) } : undefined,
           readyPatterns: PLUGIN_READY_PATTERNS,
           errorPatterns: PLUGIN_ERROR_PATTERNS,
           defaultPort: resolvedPort,
           readinessPath: "/remoteEntry.js",
         });
+      } else if (isFolderFormUi) {
+        // Folder-form ui for the auth mirror: the `auth` app slot owns the
+        // dev process (plugin:auth is not spawned), so BOS_UI_PORT rides on
+        // the auth descriptor. folderUiPort is the same port the runtime
+        // config wired into the mirror's ui.url (withLocalRuntimeUrl).
+        const authDescriptor = map.get("auth");
+        if (authDescriptor) {
+          map.set("auth", { ...authDescriptor, env: { BOS_UI_PORT: String(folderUiPort) } });
+        }
       }
 
-      if (pluginConfig.ui?.localPath && pluginConfig.ui.source === "local") {
+      if (pluginConfig.ui?.localPath && pluginConfig.ui.source === "local" && !isFolderFormUi) {
         const uiKey = `plugin-ui:${pluginId}`;
         const uiPort = pluginConfig.ui.port ?? pluginBasePort;
         pluginBasePort = uiPort + 1;

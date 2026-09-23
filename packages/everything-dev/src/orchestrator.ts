@@ -337,6 +337,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     );
 
     envVars.BOS_RUNTIME_CONFIG = JSON.stringify(runtimeConfig);
+    Object.assign(envVars, descriptor.env);
 
     const cmd = spawn(command, args, {
       cwd: fullCwd,

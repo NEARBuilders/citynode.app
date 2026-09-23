@@ -608,15 +608,15 @@ export async function isWorkspaceDistStale(
   return Math.max(srcMtime, pkgMtime) > distMtime;
 }
 
-export async function buildEverythingDevQuietly(cwd: string, force = false) {
+export async function buildEverythingDevQuietly(cwd: string, force = false): Promise<boolean> {
   const packageDir = `${cwd}/packages/everything-dev`;
   const packageExists = await fileExists(`${packageDir}/package.json`);
   if (!packageExists) {
-    return;
+    return false;
   }
 
   if (!force && !(await isWorkspaceDistStale(packageDir, "dist/index.mjs"))) {
-    return;
+    return false;
   }
 
   const result = (await run("bun", ["run", "--cwd", "packages/everything-dev", "build"], {
@@ -625,7 +625,7 @@ export async function buildEverythingDevQuietly(cwd: string, force = false) {
   })) as { stdout: string; stderr: string; exitCode: number };
 
   if (result.exitCode === 0) {
-    return;
+    return true;
   }
 
   if (result.stdout.trim()) {
