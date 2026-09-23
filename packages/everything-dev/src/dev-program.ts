@@ -249,11 +249,11 @@ export const devBootstrap = (
     }
 
     if (!deps.bosConfig) {
-      return yield* Effect.fail(new DevConfigMissing({}));
+      return yield* new DevConfigMissing({});
     }
 
     if (proxy && !helpers.resolveProxyUrl(deps.bosConfig)) {
-      return yield* Effect.fail(new DevProxyMissing({}));
+      return yield* new DevProxyMissing({});
     }
     const bosConfig: BosConfig = deps.bosConfig;
 
@@ -318,9 +318,7 @@ export const devBootstrap = (
     );
     const preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
     if (preflightFailures.length > 0) {
-      return yield* Effect.fail(
-        new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) }),
-      );
+      return yield* new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) });
     }
 
     const services = buildServiceDescriptorMapFromPlan(plan, { ssr, proxy });
@@ -393,18 +391,16 @@ export const startBootstrap = (
       if (remoteConfig) {
         config = remoteConfig;
       } else {
-        return yield* Effect.fail(
-          new StartRemoteConfigMissing({
-            message: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${expectedUrl}`,
-          }),
-        );
+        return yield* new StartRemoteConfigMissing({
+          message: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${expectedUrl}`,
+        });
       }
     } else {
       config = deps.bosConfig;
     }
 
     if (!config) {
-      return yield* Effect.fail(new StartConfigMissing({}));
+      return yield* new StartConfigMissing({});
     }
 
     if (!explicitConfig.configPath) {

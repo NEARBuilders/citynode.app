@@ -1,4 +1,4 @@
-import { Context as EffectContext } from "effect";
+import { Effect, Context as EffectContext } from "effect";
 import type { Context, Hono, Next } from "hono";
 import type { AuthClient, AuthPluginContext, AuthServices, HonoEnv } from "../lib/auth";
 import type { PluginResult } from "./plugins";
@@ -30,13 +30,14 @@ export function registerAuthHandler(app: Hono<HonoEnv>, plugins: PluginResult) {
   const services = getAuthServices(plugins);
   if (!services) return;
   app.on(["POST", "GET"], "/api/auth/*", (c) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<Response>((resolve) => {
-      timer = setTimeout(resolve, AUTH_TIMEOUT_MS, authTimeoutResponse());
-    });
     const pending = services.handler(c.req.raw);
     pending.catch(() => {});
-    return Promise.race([pending, deadline]).finally(() => clearTimeout(timer));
+    return Effect.runPromise(
+      Effect.promise(() => pending).pipe(
+        Effect.timeout(`${AUTH_TIMEOUT_MS} millis`),
+        Effect.catchTag("TimeoutError", () => Effect.succeed(authTimeoutResponse())),
+      ),
+    );
   });
 }
 

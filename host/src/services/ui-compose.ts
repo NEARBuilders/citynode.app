@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,
@@ -43,6 +43,15 @@ import {
 } from "./federation.server";
 
 const MAX_COMPOSE_VARIANTS = 64;
+
+export class ComposeDigestMismatchError extends Data.TaggedError("ComposeDigestMismatchError")<{
+  readonly engineDigest: string;
+  readonly manifestDigest: string;
+}> {
+  get message() {
+    return `Digest mismatch between composition engine (${this.engineDigest}) and manifest inputs (${this.manifestDigest}) — refusing to serve a tree the client cannot reconstruct`;
+  }
+}
 export interface ComposedUi {
   routerModule: RouterModule;
   routeTree: ConstructedTree["routeTree"];
@@ -312,11 +321,10 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
     );
 
     if (constructed.digest !== digest) {
-      return yield* Effect.fail(
-        new Error(
-          `Digest mismatch between composition engine (${constructed.digest}) and manifest inputs (${digest}) — refusing to serve a tree the client cannot reconstruct`,
-        ),
-      );
+      return yield* new ComposeDigestMismatchError({
+        engineDigest: constructed.digest,
+        manifestDigest: digest,
+      });
     }
 
     const variant: ComposedUi = {

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
-import { Deferred, Effect, Option, Ref, Stream } from "effect";
+import { Data, Deferred, Effect, Option, Ref, Stream } from "effect";
 import { ShellEnv } from "./env/project-env";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
@@ -149,12 +149,34 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
   };
 };
 
+export class HostRemoteUrlMissing extends Data.TaggedError("HostRemoteUrlMissing")<
+  Record<string, never>
+> {
+  get message() {
+    return "remoteUrl not provided on host descriptor";
+  }
+}
+
+export class HostModuleInvalid extends Data.TaggedError("HostModuleInvalid")<
+  Record<string, never>
+> {
+  get message() {
+    return "Host module does not export runServer function";
+  }
+}
+
+export class LocalPathMissing extends Data.TaggedError("LocalPathMissing")<{ key: string }> {
+  get message() {
+    return `No localPath for local service: ${this.key}`;
+  }
+}
+
 const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallbacks) =>
   Effect.gen(function* () {
     const runtimeConfig = yield* DevRuntimeConfig;
     const remoteUrl = descriptor.remoteUrl;
     if (!remoteUrl) {
-      return yield* Effect.fail(new Error("remoteUrl not provided on host descriptor"));
+      return yield* new HostRemoteUrlMissing({});
     }
 
     callbacks.onStatus(descriptor.key, "starting");
@@ -230,7 +252,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     });
 
     if (!hostModule?.runServer) {
-      return yield* Effect.fail(new Error("Host module does not export runServer function"));
+      return yield* new HostModuleInvalid({});
     }
 
     callbacks.onLog(descriptor.key, "Starting server...");
@@ -313,7 +335,7 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     const runtimeConfig = yield* DevRuntimeConfig;
 
     if (!descriptor.localPath) {
-      return yield* Effect.fail(new Error(`No localPath for local service: ${descriptor.key}`));
+      return yield* new LocalPathMissing({ key: descriptor.key });
     }
 
     const fullCwd = descriptor.localPath;

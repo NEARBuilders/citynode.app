@@ -486,15 +486,24 @@ export const initializePlugins = Effect.gen(function* () {
 
   if (config.env === "production" && config.account) {
     const bosUrl = `bos://${config.account}/${config.domain ?? "everything.dev"}`;
-    verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl)
-      .then(({ verified, mismatches }) => {
+    // Scope-owned: the fiber lives with the plugins service — an abandoned
+    // attestation used to float outside any fiber's lifetime.
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        const { verified, mismatches } = yield* Effect.promise(() =>
+          verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl),
+        );
         if (!verified) {
           logger.error(
             `[Attestation] Config integrity does not match on-chain anchor. Mismatches: ${mismatches.join(", ")}`,
           );
         }
-      })
-      .catch(() => {});
+      }).pipe(
+        Effect.catch(() =>
+          Effect.sync(() => logger.warn("[Attestation] On-chain config check failed")),
+        ),
+      ),
+    );
   }
 
   const corsOrigins = yield* readCorsOrigins();

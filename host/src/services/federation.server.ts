@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { createInstance } from "@module-federation/enhanced/runtime";
-import { Effect, Schedule } from "effect";
+import { Effect, Schedule, Semaphore } from "effect";
 import { verifySriForUrl } from "everything-dev/integrity";
 import {
   type ConstructedTree,
@@ -12,7 +12,7 @@ import {
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
 import type { RuntimeConfig } from "./config";
-import { FederationError } from "./errors";
+import { ExposeModuleMissing, FederationError } from "./errors";
 import { type LocalDistServer, startLocalDistServer } from "./local-dist-server";
 import { enforceCacheLimit, pruneExpiredEntries as pruneExpiredCacheEntries } from "./ttl-cache";
 
@@ -113,40 +113,28 @@ function removeInstanceRemotes(instance: ModuleFederationInstance, remoteName?: 
  * before any expose load so core Router and plugin trees negotiate
  * singletons (react, react-dom, @tanstack/*) in one share scope.
  *
- * The runtime's `initializeSharing` returns a promises ARRAY (an empty one
- * when sharing is disabled), so resolve through Promise.all — an `await` on
- * the bare array would return before share registration completes.
+ * Serialized across concurrent expose loads: the runtime's `initializeSharing`
+ * is not documented as concurrency-safe, and a settled share scope must exist
+ * before ANY expose resolves. The semaphore holds one permit for the whole
+ * initialization and releases it on any outcome — each load surfaces its own
+ * error.
  */
-/**
- * Serialize share-scope initialization across concurrent expose loads: the
- * runtime's `initializeSharing` is not documented as concurrency-safe, and a
- * settled share scope must exist before ANY expose resolves. The chain
- * swallows its own result — each load surfaces its own error.
- */
-let shareScopeInitChain: Promise<void> = Promise.resolve();
+const shareScopePermits = Semaphore.makeUnsafe(1);
 
 function initializeShareScope(mf: ModuleFederationInstance): Effect.Effect<void, Error> {
-  return Effect.mapError(
+  return shareScopePermits.withPermits(1)(
     Effect.tryPromise(() => {
-      const run = shareScopeInitChain.then(() => {
-        const sharing = (
-          mf as unknown as { initializeSharing?: (scope: string) => unknown }
-        ).initializeSharing?.("default");
-        if (sharing instanceof Promise) {
-          return sharing.then(() => undefined);
-        }
-        if (Array.isArray(sharing)) {
-          return Promise.all(sharing).then(() => undefined);
-        }
-        return Promise.resolve();
-      });
-      shareScopeInitChain = run.then(
-        () => undefined,
-        () => undefined,
-      );
-      return run;
+      const sharing = (
+        mf as unknown as { initializeSharing?: (scope: string) => unknown }
+      ).initializeSharing?.("default");
+      if (sharing instanceof Promise) {
+        return sharing.then(() => undefined);
+      }
+      if (Array.isArray(sharing)) {
+        return Promise.all(sharing).then(() => undefined);
+      }
+      return Promise.resolve();
     }),
-    (e) => (e instanceof Error ? e : new Error(String(e))),
   );
 }
 
@@ -343,11 +331,11 @@ function loadRemoteExpose<T>(params: RemoteModuleLoad<T>): Promise<T> {
       catch: (e) => e as Error,
     });
     if (!result) {
-      return yield* Effect.fail(new Error(`Module not found: ${expose}`));
+      return yield* new ExposeModuleMissing({ expose, reason: "not-found" });
     }
     return unwrapDefault
       ? ((result.default as T | undefined) ??
-          (yield* Effect.fail(new Error(`${expose} has no default export`))))
+          (yield* new ExposeModuleMissing({ expose, reason: "no-default" })))
       : (result as T);
   }).pipe(Effect.retry(retrySchedule));
 
