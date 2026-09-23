@@ -158,6 +158,10 @@ export function regressionStackOptions(config, mode, env = process.env) {
       // every baseURL-derived URL (invite links, passkey RP id) is wrong
       // whenever the stack runs on a non-3000 host port.
       BASE_URL: config.baseUrl,
+      // No watchers in regression stacks: each service builds once and serves
+      // the built output — watchers are the heaviest processes in the stack
+      // and stall shared CI runners under their accumulated footprint.
+      BOS_NO_WATCH: "1",
       BOS_NO_PERSIST_PORTS: "1",
       CORS_ORIGIN: env.CORS_ORIGIN ?? config.baseUrl,
     },

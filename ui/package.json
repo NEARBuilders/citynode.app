@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "rsbuild dev",
+    "dev:built": "rsbuild build && rsbuild preview",
     "build": "rsbuild build",
     "deploy": "DEPLOY=true FORCE_COLOR=1 bun run build",
     "build:client": "rsbuild build --environment web",

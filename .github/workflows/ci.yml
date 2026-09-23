@@ -338,7 +338,12 @@ jobs:
           path: .bos/logs/**
 
   regression-browser:
-    name: Regression Browser
+    name: Regression Browser (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # dev = source-composed SSR; csr = default no-SSR client compose.
+        mode: [dev, csr]
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-browser == 'true'
@@ -406,18 +411,25 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Run browser regression suite
-        run: bun run test:regression:browser:dev
+      - name: Resource watchdog
+        run: |
+          nohup bash -c 'while true; do
+            echo "=== watchdog $(date -u +%H:%M:%S) ==="
+            free -m
+            ps aux --sort=-rss | head -11
+            sleep 30
+          done' >> resource-watchdog.log 2>&1 &
 
-      - name: Run browser regression suite (CSR, no-SSR)
-        run: bun run test:regression:browser:csr
+      - name: Run browser regression suite (${{ matrix.mode }})
+        run: bun run test:regression:browser:${{ matrix.mode }}
 
       - name: Upload regression artifacts on failure
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
         with:
-          name: regression-browser-artifacts
+          name: regression-browser-artifacts-${{ matrix.mode }}
           path: |
             .bos/logs/**
+            resource-watchdog.log
             playwright-report/**
             test-results/**
