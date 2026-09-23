@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
+import { sanitizeContainerName } from "../../../packages/every-plugin/src/ui/manifest/contract";
 import { prepareLocalProductionConfig } from "../../../packages/everything-dev/src/local-prod-config";
 import { computeRegressionEnv } from "./regression-env.mjs";
 import { startStaticServer, stopStaticServer } from "./static-server.mjs";
