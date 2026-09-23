@@ -23,3 +23,12 @@ export const UI_EXPOSES = {
 export const PLUGIN_UI_SHARED_EXPOSES = {
   routeConfig: UI_EXPOSES.routeConfig,
 } as const;
+
+/**
+ * MF container naming rule shared by the build (rsbuild config) and runtime
+ * config resolution — the host must register remotes under exactly the name
+ * the built container declares. Lives here so both sides agree without
+ * importing the build toolchain into runtime bundles.
+ */
+export const sanitizeContainerName = (pkgName: string): string =>
+  pkgName.replace(/[^A-Za-z0-9_]/g, "_");

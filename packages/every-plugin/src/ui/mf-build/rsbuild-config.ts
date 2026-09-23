@@ -4,6 +4,7 @@ import { defineConfig, type EnvironmentConfig, type RsbuildConfig, rspack } from
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "../../build/rspack";
+import { sanitizeContainerName } from "../manifest/contract";
 import {
   createUiSharedDeps,
   MANIFEST_FILENAME,
@@ -63,8 +64,7 @@ export interface UiRsbuildConfigOptions {
   }) => NonNullable<EnvironmentConfig["plugins"]>;
 }
 
-export const sanitizeContainerName = (pkgName: string): string =>
-  pkgName.replace(/[^A-Za-z0-9_]/g, "_");
+export { sanitizeContainerName };
 
 export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildConfig {
   const {
