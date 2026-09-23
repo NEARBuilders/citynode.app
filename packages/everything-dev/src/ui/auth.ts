@@ -1,6 +1,6 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
 import { passkeyClient } from "@better-auth/passkey/client";
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
   adminClient,
@@ -156,6 +156,27 @@ export function sessionQueryOptions(authClient: AuthClient, initialSession?: Ses
     : { ...baseOptions, initialData: initialSession };
 }
 
+/**
+ * Authoritative post-sign-in session sync. Reads the session with Better Auth's
+ * cookie cache disabled — the cache cookie can still hold the pre-sign-in
+ * (signed-out) snapshot for up to its maxAge, so a plain getSession right after
+ * sign-in may report no user — then writes the fresh session into the query
+ * cache before any navigation, so route guards (which read the cache) never
+ * act on a stale value and bounce the user back to /login.
+ */
+export async function refreshSessionCache(
+  authClient: AuthClient,
+  queryClient: QueryClient,
+  knownSession?: SessionData | null,
+): Promise<SessionData | null> {
+  if (knownSession === undefined) {
+    const { data } = await authClient.getSession({ query: { disableCookieCache: true } });
+    knownSession = (data as SessionData | null) ?? null;
+  }
+  queryClient.setQueryData(sessionQueryKey, knownSession);
+  return knownSession;
+}
+
 export function useRelayHistory(session: SessionData | null | undefined, authClient: AuthClient) {
   return useQuery({
     queryKey: ["relay-history"],
@@ -170,7 +191,7 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
 
 export async function signInWithPasskey(
   authClient: AuthClient,
-  options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+  options?: { onSuccess?: (session: SessionData | null) => void; onError?: (error: Error) => void },
 ): Promise<SessionData | null> {
   const fail = (error: Error) => {
     options?.onError?.(error);
@@ -180,9 +201,14 @@ export async function signInWithPasskey(
   const attempt = async (): Promise<SessionData | null> => {
     const { error, data } = await authClient.signIn.passkey();
     if (error || !data) return null;
-    const { data: session } = await authClient.getSession();
-    options?.onSuccess?.();
-    return (session as SessionData) ?? null;
+    // disableCookieCache: the cookie cache can still serve the pre-sign-in
+    // (signed-out) snapshot right after the passkey ceremony completes.
+    const { data: session } = await authClient.getSession({
+      query: { disableCookieCache: true },
+    });
+    const resolved = (session as SessionData) ?? null;
+    options?.onSuccess?.(resolved);
+    return resolved;
   };
 
   try {

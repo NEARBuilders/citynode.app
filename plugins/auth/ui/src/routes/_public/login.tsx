@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
+import type { SessionData } from "everything-dev/ui/auth";
 import {
-  sessionQueryKey,
+  refreshSessionCache,
   sessionQueryOptions,
   signInWithPasskey,
   useAuthClient,
@@ -35,7 +36,9 @@ export const Route = createFileRoute("/_public/login")({
       initialSession ??
       queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
 
-    if (session?.user) {
+    // Banned users must not be bounced into the /login#banned <-> /dashboard
+    // redirect cycle — the authed guard sends them back here.
+    if (session?.user && !session.user.banned) {
       throw redirect({ to: search.redirect });
     }
   },
@@ -80,10 +83,14 @@ function LoginPage() {
     });
   }, [auth.near]);
 
-  const handleSuccess = async (message: string) => {
+  const handleSuccess = async (message: string, session?: SessionData | null) => {
     toast.success(message);
-    void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-    void navigate({ to: redirect, replace: true });
+    // Refresh the session cache authoritatively (cookie cache disabled) BEFORE
+    // navigating — the authed route guards read this cache synchronously, and
+    // navigating against a stale signed-out value ping-pongs login <-> dashboard
+    // until TanStack Router throws "Too many redirects".
+    await refreshSessionCache(auth, queryClient, session);
+    await navigate({ to: redirect, replace: true });
   };
 
   const handleNear = async () => {
@@ -103,9 +110,9 @@ function LoginPage() {
   const handlePasskey = async () => {
     setPasskeyPending(true);
     await signInWithPasskey(auth, {
-      onSuccess: async () => {
+      onSuccess: async (session) => {
         setPasskeyPending(false);
-        await handleSuccess("Signed in with passkey");
+        await handleSuccess("Signed in with passkey", session);
       },
       onError: (error) => {
         setPasskeyPending(false);
@@ -114,7 +121,7 @@ function LoginPage() {
     });
   };
 
-  if (session?.user) {
+  if (session?.user && !session.user.banned) {
     return <Navigate to={redirect} replace />;
   }
 
