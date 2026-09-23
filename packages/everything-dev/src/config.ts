@@ -1201,7 +1201,7 @@ function buildRuntimeUiConfig(
  * value here — an authored `ui.name` is only a fallback, and can never
  * override what the container actually registers under.
  */
-function resolveUiRuntimeName(
+export function resolveUiRuntimeName(
   uiConfig: Record<string, unknown> | undefined,
   localPath: string | undefined,
   apiName: string,
