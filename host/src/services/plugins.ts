@@ -683,8 +683,66 @@ export class PluginsService extends Context.Service<PluginsService, PluginResult
   );
 }
 
-export function createPluginsClient(result: PluginResult, context?: unknown): unknown {
+export interface PluginsClientOptions {
+  /**
+   * Per-call deadline for oRPC plugin procedures. A hung plugin call rejects
+   * with a named timeout error instead of suspending the caller (an SSR
+   * stream) forever. Opt-in: unset means no deadline.
+   */
+  callTimeoutMs?: number;
+}
+
+/**
+ * Deadline-wrap every callable leaf of a nested oRPC client (namespaces are
+ * plain objects, procedures are functions). The underlying call keeps running
+ * after a deadline rejection — in-process, so a stray late settle is
+ * harmless; the point is that the CALLER (an SSR route loader) fails fast
+ * and the stream closes.
+ */
+function withCallDeadline(client: unknown, timeoutMs: number, path = "plugin"): unknown {
+  if (client === null || typeof client !== "object") return client;
+  const wrap = (fn: unknown, key: string) => {
+    if (typeof fn !== "function") return fn;
+    return (...args: unknown[]) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`[SSR] ${path}.${key}() exceeded ${timeoutMs}ms call deadline`)),
+          timeoutMs,
+        );
+        Promise.resolve(Reflect.apply(fn, target, args)).then(
+          (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          (error) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        );
+      });
+  };
+  const target = client as Record<string, unknown>;
+  return new Proxy(target, {
+    get(t, key, receiver) {
+      if (typeof key === "symbol") return Reflect.get(t, key, receiver);
+      const value = Reflect.get(t, key, receiver);
+      if (typeof value === "function") return wrap(value, key);
+      if (value !== null && typeof value === "object") {
+        return withCallDeadline(value, timeoutMs, `${path}.${key}`);
+      }
+      return value;
+    },
+  });
+}
+
+export function createPluginsClient(
+  result: PluginResult,
+  context?: unknown,
+  options?: PluginsClientOptions,
+): unknown {
+  const deadline = options?.callTimeoutMs;
   const apiClient = result.api?.createClient(context);
+  const scoped = (client: unknown) => (deadline ? withCallDeadline(client, deadline) : client);
 
   // Do NOT Object.assign the result — apiClient is a Proxy and assign would copy
   // only static own-properties, silently dropping Proxy-resolved RPC methods.
@@ -692,10 +750,13 @@ export function createPluginsClient(result: PluginResult, context?: unknown): un
   const pluginClients: Record<string, unknown> = {};
   for (const [key, plugin] of Object.entries(result.plugins)) {
     if (key === "api") continue;
-    pluginClients[key] = plugin.createClient(context);
+    pluginClients[key] = scoped(plugin.createClient(context));
   }
 
   if (result.authClient) {
+    // The better-auth client surface carries non-call function-valued
+    // members (atoms/markers) — leave it unwrapped; deadline only guards
+    // oRPC procedure calls.
     pluginClients.auth = result.authClient(context);
   }
 
@@ -703,7 +764,7 @@ export function createPluginsClient(result: PluginResult, context?: unknown): un
     return pluginClients;
   }
 
-  return new Proxy(apiClient, {
+  return new Proxy(scoped(apiClient) as Record<string, unknown>, {
     get(target, key) {
       if (typeof key === "string" && key in pluginClients) {
         return pluginClients[key];

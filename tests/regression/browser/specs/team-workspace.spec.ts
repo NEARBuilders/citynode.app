@@ -4,11 +4,16 @@ import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/
 
 const { baseUrl } = computeRegressionEnv();
 
+// A wedged server endpoint must fail the test with a named error instead of
+// hanging the suite for minutes — every regression fetch carries a deadline.
+const FETCH_TIMEOUT_MS = 15_000;
+
 async function authFetch(path: string, cookie: string, body?: unknown) {
   const response = await fetch(`${baseUrl}/api/auth${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { "content-type": "application/json", origin: baseUrl, cookie },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`${path} failed: ${response.status} ${await response.text()}`);
@@ -21,6 +26,7 @@ async function signInAnonymously() {
     method: "POST",
     headers: { "content-type": "application/json", origin: baseUrl },
     body: JSON.stringify({}),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`anonymous sign-in failed: ${response.status}`);
   return response.headers

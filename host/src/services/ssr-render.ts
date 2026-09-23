@@ -164,7 +164,12 @@ export function createSsrRender(deps: SsrRenderDeps) {
     const ssrRouterModule: RouterModule = composed.routerModule;
 
     try {
-      const ssrApiClient = createPluginsClient(deps.plugins, ctx.pluginContext);
+      const ssrApiClient = createPluginsClient(deps.plugins, ctx.pluginContext, {
+        // Loader API calls get a deadline: a wedged plugin endpoint rejects
+        // into the route's error boundary and closes the stream instead of
+        // suspending it forever.
+        callTimeoutMs: 15_000,
+      });
 
       const result = await ssrRouterModule.renderToStream(request, {
         session: ctx.session ? { session: ctx.session, user: ctx.user } : null,
