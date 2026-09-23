@@ -4,10 +4,7 @@ import { computeRegressionEnv } from "../lib/regression-env.mjs";
 
 const stallWatchdog = fileURLToPath(new URL("./helpers/stall-watchdog.mjs", import.meta.url));
 const mode = process.env.REGRESSION_MODE ?? "dev:ssr";
-const command =
-  mode === "backcompat"
-    ? "bun run regression:start:backcompat"
-    : `bun run regression:start:${mode}`;
+const command = `bun run regression:${mode}`;
 
 const regressionEnv = computeRegressionEnv();
 
@@ -51,11 +48,11 @@ export default defineConfig({
   },
   projects: [
     {
-      // Production stacks (ADR 0009) run the FULL suite: the artifacts the
+      // Start-command stacks (ADR 0009) run the FULL suite: the artifacts the
       // branch builds are what CI validates.
-      name: "prod:ssr",
+      name: "start:ssr",
     },
-    { name: "prod:csr" },
+    { name: "start:csr" },
     {
       // The dev server is smoke-only — boot + one page per render mode + the
       // redirect spec. Its resource profile must never stall CI again.

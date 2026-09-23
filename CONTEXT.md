@@ -63,11 +63,11 @@ _Avoid_: social account, imported activity
 ## Regression stacks
 
 **Stack**:
-The fixture a regression suite runs against: `prod` (the production host booted over locally built, statically served artifacts via `bos start --config`) or `dev` (the dev server, `bos dev` — smoke-covered only).
+The fixture a regression suite runs against: `start` (the production command — the host booted over locally built, statically served artifacts via `bos start --config`) or `dev` (the dev server, `bos dev` — smoke-covered only).
 _Avoid_: environment (that's `production`/`staging`), target
 
 **Variant**:
-The render mode a stack runs with: `ssr` (server-composed) or `csr` (no ssr URL — the client composes). Written `stack:variant` (e.g. `prod:csr`); a bare stack name runs both variants serially.
+The render mode a stack runs with: `ssr` (server-composed) or `csr` (no ssr URL — the client composes). Written `stack:variant` (e.g. `start:csr`); a bare stack name runs both variants serially (`test:regression:start` / `test:regression:dev`).
 _Avoid_: mode (reserved for `production`/`staging` env), project
 
 **Stall Watchdog**:

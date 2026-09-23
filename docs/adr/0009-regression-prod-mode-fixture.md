@@ -11,7 +11,7 @@ Meanwhile the `prod` regression mode tested the **published** FastKV config: it 
 ## Decision
 
 1. **The full browser regression suite runs on production stacks built from the branch's own artifacts.** CI builds every workspace once, serves the dists statically, and boots the real production host via a **first-class local config** on `bos start` (`--config <path>` / `BOS_CONFIG_PATH`). No NEAR credentials, no FastKV, no publish in PR CI.
-2. **Stack:variant scheme.** Two stacks — `prod` (built artifacts) and `dev` (the dev server) — each with `ssr` and `csr` variants (`prod:ssr`, `prod:csr`, `dev:ssr`, `dev:csr`); a bare stack name runs both variants serially. The full suite runs on `prod:*`; the dev stack is smoke-only, so its resource profile can no longer stall CI.
+2. **Stack:variant scheme.** Two stacks — `prod` (built artifacts) and `dev` (the dev server) — each with `ssr` and `csr` variants (`start:ssr`, `start:csr`, `dev:ssr`, `dev:csr`); a bare stack name runs both variants serially. The full suite runs on `start:*`; the dev stack is smoke-only, so its resource profile can no longer stall CI.
 3. **SRI integrity is skipped for local configs.** Integrity hashes bind an artifact to a deployment; local artifacts change every build. FastKV-resolved configs keep full verification.
 4. **Published-config coverage moves out of PR CI** (both browser and Go HTTP suites) to the Deploy workflow's own smoke. PR CI validates the artifacts the change produces.
 5. **Fail fast, with evidence.** A stall-watchdog reporter fails the suite within minutes of zero test progress, printing a runner snapshot into the job log; CI browser jobs run without retries and a 10-minute job timeout. This is what makes artifact capture possible at all.

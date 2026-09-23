@@ -5,19 +5,19 @@ import "os"
 type TargetMode string
 
 const (
-	ModeSSR        TargetMode = "ssr"
-	ModeProd       TargetMode = "prod"
+	ModeDev        TargetMode = "dev"
+	ModeStart      TargetMode = "start"
 	ModeBackcompat TargetMode = "backcompat"
 )
 
 func Mode() TargetMode {
 	switch os.Getenv("REGRESSION_MODE") {
-	case "prod":
-		return ModeProd
+	case "start", "start:ssr", "start:csr":
+		return ModeStart
 	case "backcompat":
 		return ModeBackcompat
 	}
-	return ModeSSR
+	return ModeDev
 }
 
 // BaseURL comes from the repo-derived config (REGRESSION_BASE_URL or
@@ -34,10 +34,10 @@ func Origin() string {
 // ScriptName is the package.json script that boots the target for the mode.
 func ScriptName() string {
 	switch Mode() {
-	case ModeProd:
-		return "regression:start:prod"
+	case ModeStart:
+		return "regression:start:ssr"
 	case ModeBackcompat:
-		return "regression:start:backcompat"
+		return "regression:backcompat"
 	}
-	return "regression:start:ssr"
+	return "regression:dev:ssr"
 }

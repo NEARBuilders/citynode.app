@@ -50,14 +50,14 @@ void test("resolved test configuration owns child secrets and ports for every mo
   assert.equal(config.basePort, 5200);
   assert.equal(config.stalePorts[0], 5200);
   assert.ok(config.stalePorts.includes(5210));
-  for (const mode of ["dev:ssr", "dev:csr", "prod:ssr", "prod:csr", "backcompat"]) {
+  for (const mode of ["dev:ssr", "dev:csr", "start:ssr", "start:csr", "backcompat"]) {
     const stack = regressionStackOptions(config, mode, env);
     assert.equal(stack.env.API_DATABASE_URL, config.dbUrls.API_DATABASE_URL);
     assert.equal(stack.env.AUTH_DATABASE_URL, config.dbUrls.AUTH_DATABASE_URL);
     assert.equal(stack.env.BETTER_AUTH_SECRET, "test#secret");
     assert.equal(stack.env.CORS_ORIGIN, config.baseUrl);
     assert.equal(stack.env.CUSTOM, "preserved");
-    if (mode.startsWith("prod:")) assert.equal(stack.env.PORT, "5200");
+    if (mode.startsWith("start:")) assert.equal(stack.env.PORT, "5200");
     else {
       assert.equal(stack.command[stack.command.indexOf("--port") + 1], "5200");
       assert.equal(stack.command[stack.command.indexOf("--plugin-port-start") + 1], "5210");

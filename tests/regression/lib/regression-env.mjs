@@ -106,14 +106,14 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
 }
 
 export function regressionStackOptions(config, mode, env = process.env) {
-  if (!["dev:ssr", "dev:csr", "prod:ssr", "prod:csr", "backcompat"].includes(mode)) {
+  if (!["dev:ssr", "dev:csr", "start:ssr", "start:csr", "backcompat"].includes(mode)) {
     throw new Error(
-      `unknown mode: ${mode} (expected <stack>:<variant> — prod|dev × ssr|csr — or backcompat)`,
+      `unknown mode: ${mode} (expected <stack>:<variant> — start|dev × ssr|csr — or backcompat)`,
     );
   }
   const { basePort } = config;
   const command =
-    mode === "prod:ssr" || mode === "prod:csr"
+    mode === "start:ssr" || mode === "start:csr"
       ? [process.execPath, "tests/regression/lib/prod-stack.mjs", mode.split(":")[1]]
       : mode === "backcompat"
         ? [
@@ -166,7 +166,7 @@ export function regressionStackOptions(config, mode, env = process.env) {
       ...env,
       ...config.dbUrls,
       BETTER_AUTH_SECRET: config.authSecret,
-      ...(mode.startsWith("prod:") ? { PORT: String(basePort) } : {}),
+      ...(mode.startsWith("start:") ? { PORT: String(basePort) } : {}),
       ...(mode === "dev:ssr" || mode === "backcompat" ? { BETTER_AUTH_URL: config.baseUrl } : {}),
       // The auth plugin's dev config derives its Better Auth baseURL from
       // BASE_URL — without it the instance falls back to localhost:3000 and
