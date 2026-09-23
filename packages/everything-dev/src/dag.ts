@@ -19,7 +19,12 @@ function isAuthMirrorPluginEntry(
   const auth = config.auth;
   if (pluginConfig === auth) return true;
   if (pluginConfig.localPath && pluginConfig.localPath === auth.localPath) return true;
-  if (!pluginConfig.localPath && pluginConfig.source === "remote" && pluginConfig.url && pluginConfig.url === auth.url) {
+  if (
+    !pluginConfig.localPath &&
+    pluginConfig.source === "remote" &&
+    pluginConfig.url &&
+    pluginConfig.url === auth.url
+  ) {
     return true;
   }
   return false;
