@@ -20,6 +20,7 @@ export function uiDeployPlugins(
   ctx: UiDeployPluginContext,
 ): NonNullable<EnvironmentConfig["plugins"]> {
   if (process.env.DEPLOY !== "true") return [];
+  if (process.env.BOS_CDN_PROVIDER === "platform") return [];
   return [
     withZephyr({
       ...(ctx.ssr ? { snapshotType: "csr" as const } : {}),

@@ -10,7 +10,7 @@ import { withZephyr } from "zephyr-rsbuild-plugin";
 
 const __dirname = import.meta.dirname;
 const require = createRequire(import.meta.url);
-const shouldDeploy = process.env.DEPLOY === "true";
+const shouldDeploy = process.env.DEPLOY === "true" && process.env.BOS_CDN_PROVIDER !== "platform";
 
 const resolvedConfigPath = path.resolve(__dirname, "../.bos/bos.resolved-config.json");
 const rootBosConfigPath = path.resolve(__dirname, "../bos.config.json");

@@ -1,6 +1,8 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { CORE_UI_DEPLOY_FIELDS, UI_REMOTE_SERVER_ENTRY_FILENAME } from "every-plugin/ui/mf-build";
 import { fetchResponse } from "./http-client";
+import type { DeployResultEntry } from "./integrity";
 
 export interface PlatformBundleFile {
   path: string;
@@ -132,4 +134,37 @@ export async function uploadBundlesToPlatform(input: {
     objects: payload.objects ?? [],
     baseUrl: `${input.siteUrl.replace(/\/$/, "")}/${base}/`,
   };
+}
+
+export function platformDeployEntries(input: {
+  key: string;
+  kind: "app" | "plugin";
+  uploaded: PlatformUploadResult;
+}): DeployResultEntry[] {
+  const { key, kind, uploaded } = input;
+  const slot = kind === "app" ? "app" : "plugins";
+  const entries: DeployResultEntry[] = [
+    {
+      url: uploaded.baseUrl,
+      integrity: uploaded.objects.find((o) => o.key.endsWith("/remoteEntry.js"))?.integrity,
+      urlField: `${slot}.${key}.production`,
+      integrityField: `${slot}.${key}.integrity`,
+    },
+  ];
+
+  if (kind === "app") {
+    const ssrIntegrity = uploaded.objects.find((o) =>
+      o.key.endsWith(`/ssr/${UI_REMOTE_SERVER_ENTRY_FILENAME}`),
+    )?.integrity;
+    if (ssrIntegrity) {
+      entries.push({
+        url: `${uploaded.baseUrl}ssr/`,
+        integrity: ssrIntegrity,
+        urlField: CORE_UI_DEPLOY_FIELDS.ssrUrlField ?? "",
+        integrityField: CORE_UI_DEPLOY_FIELDS.ssrIntegrityField ?? "",
+      });
+    }
+  }
+
+  return entries;
 }

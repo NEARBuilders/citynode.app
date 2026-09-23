@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkCdnProviderDeployable, resolveCdnProvider } from "../../src/build";
-import { collectWorkspaceArtifacts, uploadBundlesToPlatform } from "../../src/platform-deploy";
+import {
+  collectWorkspaceArtifacts,
+  platformDeployEntries,
+  uploadBundlesToPlatform,
+} from "../../src/platform-deploy";
 import type { BosConfig } from "../../src/types";
 
 let activeDir: string | null = null;
@@ -174,5 +178,60 @@ describe("uploadBundlesToPlatform", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("platformDeployEntries", () => {
+  const uploaded = {
+    base: "bundles/alice.near/citynode.app/ui",
+    objects: [
+      {
+        key: "bundles/alice.near/citynode.app/ui/remoteEntry.js",
+        sha256: "aa",
+        integrity: "sha384-entry",
+      },
+      {
+        key: "bundles/alice.near/citynode.app/ui/ssr/remoteEntry.server.js",
+        sha256: "bb",
+        integrity: "sha384-ssr",
+      },
+    ],
+    baseUrl: "http://localhost:9999/bundles/alice.near/citynode.app/ui/",
+  };
+
+  it("writes production + integrity fields for an app", () => {
+    const entries = platformDeployEntries({ key: "ui", kind: "app", uploaded });
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      url: uploaded.baseUrl,
+      integrity: "sha384-entry",
+      urlField: "app.ui.production",
+      integrityField: "app.ui.integrity",
+    });
+  });
+
+  it("derives the SSR container URL and fields from the ssr dist for an app", () => {
+    const entries = platformDeployEntries({ key: "ui", kind: "app", uploaded });
+    expect(entries[1]).toMatchObject({
+      url: `${uploaded.baseUrl}ssr/`,
+      integrity: "sha384-ssr",
+      urlField: "app.ui.ssr",
+      integrityField: "app.ui.ssrIntegrity",
+    });
+  });
+
+  it("omits the SSR entry when the app dist has no ssr container", () => {
+    const withoutSsr = { ...uploaded, objects: [uploaded.objects[0]!] };
+    const entries = platformDeployEntries({ key: "ui", kind: "app", uploaded: withoutSsr });
+    expect(entries).toHaveLength(1);
+  });
+
+  it("never writes SSR fields for plugins", () => {
+    const entries = platformDeployEntries({ key: "auth", kind: "plugin", uploaded });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      urlField: "plugins.auth.production",
+      integrityField: "plugins.auth.integrity",
+    });
   });
 });

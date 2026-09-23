@@ -339,6 +339,7 @@ export interface PluginDeployOptions {
 
 export function withPluginDeploy(baseConfig: unknown, options: PluginDeployOptions): unknown {
   if (process.env.DEPLOY !== "true") return baseConfig;
+  if (process.env.BOS_CDN_PROVIDER === "platform") return baseConfig;
 
   const { withZephyr } = createRequire(import.meta.url)("zephyr-rspack-plugin");
 
