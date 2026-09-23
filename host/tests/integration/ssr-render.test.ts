@@ -17,8 +17,9 @@ const mocks = vi.hoisted(() => ({
     }
   },
   composeUi: vi.fn(),
+  composeClientPayload: vi.fn(),
   isSsrAvailable: vi.fn(),
-  renderClientShell: vi.fn(() => new Response("shell", { status: 200 })),
+  renderClientShell: vi.fn((..._args: unknown[]) => new Response("shell", { status: 200 })),
   createPluginsClient: vi.fn(() => ({})),
 }));
 
@@ -33,6 +34,7 @@ vi.mock("../../src/services/ui-compose", async (importOriginal) => {
   return {
     ...actual,
     composeUi: mocks.composeUi,
+    composeClientPayload: mocks.composeClientPayload,
     isSsrAvailable: mocks.isSsrAvailable,
   };
 });
@@ -112,6 +114,11 @@ const composedVariant = () => ({
   },
 });
 
+const clientCompose = () => {
+  const variant = composedVariant();
+  return { digest: variant.digest, clientPayload: variant.clientPayload };
+};
+
 describe("createSsrRender", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -124,6 +131,7 @@ describe("createSsrRender", () => {
       ssrAllowed: true,
     });
     mocks.composeUi.mockImplementation(() => Effect.succeed(composedVariant()));
+    mocks.composeClientPayload.mockImplementation(() => Effect.succeed(clientCompose()));
   });
 
   it("turns tenant runtime errors into status responses through the interface", async () => {
@@ -141,14 +149,36 @@ describe("createSsrRender", () => {
     expect(response.headers.get("content-type")).toContain("text/plain");
   });
 
-  it("falls back to the client shell when the tenant stripped its own SSR", async () => {
+  it("serves the CSR shell with a compose payload when the tenant stripped its own SSR", async () => {
     mocks.isSsrAvailable.mockReturnValue(false);
 
     const render = createSsrRender({ config: createConfig(), plugins });
     const response = await render(request(), renderContext());
 
     expect(mocks.composeUi).not.toHaveBeenCalled();
+    expect(mocks.composeClientPayload).toHaveBeenCalledTimes(1);
     expect(mocks.renderClientShell).toHaveBeenCalledTimes(1);
+    const shellConfig = mocks.renderClientShell.mock.calls[0]![2] as {
+      ui?: { compose?: unknown };
+    };
+    expect(shellConfig.ui?.compose).toEqual(
+      expect.objectContaining({ digest: "digest-1", remotes: expect.any(Array) }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("serves the core-only CSR shell when the client compose payload fails", async () => {
+    mocks.isSsrAvailable.mockReturnValue(false);
+    mocks.composeClientPayload.mockImplementation(() => Effect.fail(new Error("manifest down")));
+
+    const render = createSsrRender({ config: createConfig(), plugins });
+    const response = await render(request(), renderContext());
+
+    expect(mocks.renderClientShell).toHaveBeenCalledTimes(1);
+    const shellConfig = mocks.renderClientShell.mock.calls[0]![2] as {
+      ui?: { compose?: unknown };
+    };
+    expect(shellConfig.ui?.compose).toBeUndefined();
     expect(response.status).toBe(200);
   });
 
