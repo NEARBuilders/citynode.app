@@ -40,8 +40,10 @@ async function signInAnonymously() {
  * cookie is a snapshot from the last fresh session read, so server-side
  * mutations made OUT OF BAND (this fixture's raw accept-invitation, not the
  * app's synchronize path) are invisible for the 5-minute cache window. A
- * cache-disabled get-session re-reads the DB and re-sets a fresh snapshot —
- * use its Set-Cookie pairs to replace the injected cookie set.
+ * cache-disabled get-session re-reads the DB and refreshes the cache cookie —
+ * merge its Set-Cookie pairs over the jar like a real cookie jar: same-name
+ * replaces, an empty-valued pair deletes, and the rest (the session token —
+ * which the refresh does not re-issue) survives.
  */
 async function refreshSessionCookies(cookie: string) {
   const response = await fetch(`${baseUrl}/api/auth/get-session?disableCookieCache=true`, {
@@ -49,8 +51,22 @@ async function refreshSessionCookies(cookie: string) {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`session refresh failed: ${response.status}`);
-  const setCookies = response.headers.getSetCookie().map((value) => value.split(";")[0]);
-  return setCookies.length > 0 ? setCookies.join("; ") : cookie;
+
+  const jar = new Map(cookie.split("; ").map((pair) => [pair.slice(0, pair.indexOf("=")), pair]));
+  for (const pair of response.headers.getSetCookie().map((value) => value.split(";")[0])) {
+    const name = pair.slice(0, pair.indexOf("="));
+    const value = pair.slice(pair.indexOf("=") + 1);
+    if (value.length === 0) jar.delete(name);
+    else jar.set(name, pair);
+  }
+  const merged = [...jar.values()].join("; ");
+  if (
+    !merged.includes("better-auth.session_token=") &&
+    !merged.includes("__Secure-better-auth.session_token=")
+  ) {
+    throw new Error(`refreshed cookie set lost the session token: ${merged.slice(0, 200)}`);
+  }
+  return merged;
 }
 
 async function seedTeamMember() {
