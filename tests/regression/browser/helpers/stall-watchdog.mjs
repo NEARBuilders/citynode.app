@@ -17,7 +17,12 @@ const CHECK_EVERY_MS = 15_000;
 
 function runnerSnapshot(label) {
   const lines = [`[stall-watchdog] ${label}`];
-  for (const command of ["free -m", "ps -eo pid,ppid,rss,etime,comm --sort=-rss | head -15"]) {
+  // `free` and GNU `ps --sort` don't exist on macOS (BSD ps) — pick per platform.
+  const commands =
+    process.platform === "linux"
+      ? ["free -m", "ps -eo pid,ppid,rss,etime,comm --sort=-rss | head -15"]
+      : ["ps -axo rss,pid,ppid,etime,comm | sort -rn | head -15"];
+  for (const command of commands) {
     try {
       lines.push(
         `[stall-watchdog] $ ${command}`,

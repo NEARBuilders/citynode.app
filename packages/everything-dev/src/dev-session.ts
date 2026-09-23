@@ -319,6 +319,21 @@ const runApp = (
     process.exit(0);
   };
 
+  // Orphan watch: when the wrapper chain above this process dies (playwright
+  // tree-kills its webServer with SIGKILL — no signal handler runs, detached
+  // group escapes), this orchestrator is reparented. Detect that and reap the
+  // whole service tree — the alternatives are zombie port squatters that
+  // poison the next run. Covers shell aborts (Ctrl+C killing only the
+  // wrapper) the same way.
+  const initialPpid = process.ppid;
+  const orphanWatch = setInterval(() => {
+    if (process.ppid !== initialPpid) {
+      console.error("\n[Dev] Parent process died — force exiting (orphaned service tree)");
+      forceExit();
+    }
+  }, 200);
+  orphanWatch.unref?.();
+
   const program = Effect.scoped(
     runDevSession(orchestrator, (sessionControls) => {
       controls = sessionControls;
@@ -350,6 +365,7 @@ const runApp = (
   process.on("SIGTERM", handleSignal);
 
   Effect.runPromiseExit(program).then((exit) => {
+    clearInterval(orphanWatch);
     if (forceExitTimer) clearTimeout(forceExitTimer);
     process.exit(Exit.isSuccess(exit) ? 0 : 0);
   });
