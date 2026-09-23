@@ -15,7 +15,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import {
   CORE_UI_PLUGIN_KEY as CORE_UI_KEY,
   type ComposePayload,
@@ -43,6 +43,15 @@ import {
 } from "./federation.server";
 
 const MAX_COMPOSE_VARIANTS = 64;
+
+export class ComposeDigestMismatchError extends Data.TaggedError("ComposeDigestMismatchError")<{
+  readonly engineDigest: string;
+  readonly manifestDigest: string;
+}> {
+  get message() {
+    return `Digest mismatch between composition engine (${this.engineDigest}) and manifest inputs (${this.manifestDigest}) — refusing to serve a tree the client cannot reconstruct`;
+  }
+}
 export interface ComposedUi {
   routerModule: RouterModule;
   routeTree: ConstructedTree["routeTree"];
@@ -173,6 +182,40 @@ const loadManifest = (source: UiSource): Effect.Effect<PluginManifest, Error> =>
   return loadRemoteManifestCached(source, source.manifestUrl);
 };
 
+interface ResolvedManifests {
+  manifests: PluginManifest[];
+  digest: string;
+}
+
+/** The shared front half of composition: manifests + digest. Both composeUi
+ * (full SSR variant) and composeClientPayload (payload only) run this so the
+ * two paths digest identically by construction. */
+const resolveManifestsAndDigest = (sources: UiSource[]): Effect.Effect<ResolvedManifests, Error> =>
+  Effect.gen(function* () {
+    const manifests = yield* Effect.forEach(sources, (source) => loadManifest(source), {
+      concurrency: "unbounded",
+    });
+    const digest = yield* Effect.tryPromise(() =>
+      digestOf({
+        plugins: sources.map((source) => ({ key: source.key, mfName: source.mfName })),
+        manifests,
+      }),
+    );
+    return { manifests, digest };
+  });
+
+const clientPayloadOf = (
+  sources: UiSource[],
+  manifests: PluginManifest[],
+  digest: string,
+): ComposePayload => ({
+  digest,
+  remotes: sources
+    .filter((source) => source.key !== CORE_UI_KEY && source.webEntry)
+    .map((source) => ({ key: source.key, name: source.mfName, entry: source.webEntry! })),
+  manifests,
+});
+
 const composeVariants = new Map<string, { variant: ComposedUi; staleAfter: number }>();
 
 export function resetUiComposeCache() {
@@ -215,16 +258,8 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
     const sources = uiSources(config);
     const core = sources.find((source) => source.key === CORE_UI_KEY)!;
 
-    const manifests = yield* Effect.forEach(sources, (source) => loadManifest(source), {
-      concurrency: "unbounded",
-    });
+    const { manifests, digest } = yield* resolveManifestsAndDigest(sources);
     const manifestByKey = new Map(sources.map((source, i) => [source.key, manifests[i]!]));
-    const digest = yield* Effect.tryPromise(() =>
-      digestOf({
-        plugins: sources.map((source) => ({ key: source.key, mfName: source.mfName })),
-        manifests,
-      }),
-    );
 
     const variantKey = `${digest}::${variantFingerprint(sources)}`;
     const isDev = sources.some((source) => source.localRoot);
@@ -286,11 +321,10 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
     );
 
     if (constructed.digest !== digest) {
-      return yield* Effect.fail(
-        new Error(
-          `Digest mismatch between composition engine (${constructed.digest}) and manifest inputs (${digest}) — refusing to serve a tree the client cannot reconstruct`,
-        ),
-      );
+      return yield* new ComposeDigestMismatchError({
+        engineDigest: constructed.digest,
+        manifestDigest: digest,
+      });
     }
 
     const variant: ComposedUi = {
@@ -298,13 +332,7 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
       routeTree: constructed.rootRoute,
       digest,
       nav: constructed.nav,
-      clientPayload: {
-        digest,
-        remotes: sources
-          .filter((source) => source.key !== CORE_UI_KEY && source.webEntry)
-          .map((source) => ({ key: source.key, name: source.mfName, entry: source.webEntry! })),
-        manifests,
-      },
+      clientPayload: clientPayloadOf(sources, manifests, digest),
     };
     rememberVariant(
       variantKey,
@@ -317,4 +345,29 @@ export const composeUi = (config: RuntimeConfig): Effect.Effect<ComposedUi, Erro
       composeVariants.delete(oldest);
     }
     return variant;
+  });
+
+export interface ClientCompose {
+  digest: string;
+  clientPayload: ComposePayload;
+}
+
+/**
+ * Client compose payload without the SSR machinery — manifests + digest +
+ * plugin web entries only. The no-SSR client shell (default dev, CSR-only
+ * deployments) embeds it so the browser composes plugin routes itself
+ * (hydrate's composeFromPayload); `undefined` when no plugin ui sources
+ * exist — the bundled core-only tree is already complete there, and serving
+ * a core-manifest payload would needlessly swap the bundled generated tree
+ * for the constructed one. Digest parity with composeUi is structural: both
+ * run resolveManifestsAndDigest over the same sources.
+ */
+export const composeClientPayload = (
+  config: RuntimeConfig,
+): Effect.Effect<ClientCompose | undefined, Error> =>
+  Effect.gen(function* () {
+    const sources = uiSources(config);
+    if (sources.every((source) => source.key === CORE_UI_KEY)) return undefined;
+    const { manifests, digest } = yield* resolveManifestsAndDigest(sources);
+    return { digest, clientPayload: clientPayloadOf(sources, manifests, digest) };
   });

@@ -59,3 +59,17 @@ _Avoid_: blockchain event, transaction
 **Social Update**:
 A node-associated public post with an attributed source, original publication time, and a link to the original content.
 _Avoid_: social account, imported activity
+
+## Regression stacks
+
+**Stack**:
+The fixture a regression suite runs against: `start` (the production command — the host booted over locally built, statically served artifacts via `bos start --config`) or `dev` (the dev server, `bos dev` — smoke-covered only).
+_Avoid_: environment (that's `production`/`staging`), target
+
+**Variant**:
+The render mode a stack runs with: `ssr` (server-composed) or `csr` (no ssr URL — the client composes). Written `stack:variant` (e.g. `start:csr`); a bare stack name runs both variants serially (`test:regression:start` / `test:regression:dev`).
+_Avoid_: mode (reserved for `production`/`staging` env), project
+
+**Stall Watchdog**:
+The Playwright reporter that fails the suite after minutes of zero test progress, printing a runner snapshot so a freeze produces evidence instead of eating the job timeout.
+_Avoid_: timeout (the job-level kill; the watchdog exists because that kill loses artifacts)

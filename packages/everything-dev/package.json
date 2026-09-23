@@ -27,6 +27,15 @@
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
     },
+    "./descriptor": {
+      "development": {
+        "types": "./src/descriptor/index.ts",
+        "import": "./src/descriptor/index.ts"
+      },
+      "types": "./dist/descriptor/index.d.mts",
+      "import": "./dist/descriptor/index.mjs",
+      "require": "./dist/descriptor/index.cjs"
+    },
     "./config": {
       "development": {
         "types": "./src/config.ts",

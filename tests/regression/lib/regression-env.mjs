@@ -106,32 +106,49 @@ export function computeRegressionEnv({ repoRoot, env = process.env } = {}) {
 }
 
 export function regressionStackOptions(config, mode, env = process.env) {
-  if (!["dev", "prod", "backcompat"].includes(mode)) {
-    throw new Error(`unknown mode: ${mode} (expected dev | prod | backcompat)`);
+  // start:* stacks boot through the deployment image (`regression:start:*`
+  // scripts → start-container.mjs) — they don't resolve a runner-side command.
+  if (!["dev:ssr", "dev:csr", "backcompat"].includes(mode)) {
+    throw new Error(
+      `unknown mode: ${mode} (expected dev:ssr | dev:csr | backcompat — start stacks boot via start-container)`,
+    );
   }
   const { basePort } = config;
   const command =
-    mode === "prod"
-      ? ["./node_modules/everything-dev/dist/cli.mjs", "start", "--no-interactive"]
+    mode === "backcompat"
+      ? [
+          "packages/everything-dev/src/cli.ts",
+          "dev",
+          "--no-interactive",
+          "--host",
+          "local",
+          "--ui",
+          "remote",
+          "--api",
+          "remote",
+          "--auth",
+          "local",
+          "--remote-plugins",
+          "apps,template",
+          "--port",
+          String(basePort),
+          "--api-port",
+          String(basePort + 1),
+          "--auth-port",
+          String(basePort + 2),
+          "--ui-port",
+          String(basePort + 3),
+          "--plugin-port-start",
+          String(basePort + 10),
+        ]
       : [
           "packages/everything-dev/src/cli.ts",
           "dev",
           "--no-interactive",
-          "--ssr",
-          ...(mode === "backcompat"
-            ? [
-                "--host",
-                "local",
-                "--ui",
-                "remote",
-                "--api",
-                "remote",
-                "--auth",
-                "local",
-                "--remote-plugins",
-                "apps,template",
-              ]
-            : []),
+          // `dev:ssr` exercises source-composed SSR; `dev:csr` boots the
+          // default no-SSR stack so the client-side compose path is
+          // covered too.
+          ...(mode === "dev:ssr" ? ["--ssr"] : []),
           "--port",
           String(basePort),
           "--api-port",
@@ -149,8 +166,16 @@ export function regressionStackOptions(config, mode, env = process.env) {
       ...env,
       ...config.dbUrls,
       BETTER_AUTH_SECRET: config.authSecret,
-      ...(mode === "prod" ? { PORT: String(basePort) } : {}),
-      ...(mode === "dev" ? { BETTER_AUTH_URL: config.baseUrl } : {}),
+      ...(mode === "dev:ssr" || mode === "backcompat" ? { BETTER_AUTH_URL: config.baseUrl } : {}),
+      // The auth plugin's dev config derives its Better Auth baseURL from
+      // BASE_URL — without it the instance falls back to localhost:3000 and
+      // every baseURL-derived URL (invite links, passkey RP id) is wrong
+      // whenever the stack runs on a non-3000 host port.
+      BASE_URL: config.baseUrl,
+      // No watchers in regression stacks: each service builds once and serves
+      // the built output — watchers are the heaviest processes in the stack
+      // and stall shared CI runners under their accumulated footprint.
+      BOS_NO_WATCH: "1",
       BOS_NO_PERSIST_PORTS: "1",
       CORS_ORIGIN: env.CORS_ORIGIN ?? config.baseUrl,
     },

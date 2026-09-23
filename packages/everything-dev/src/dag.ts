@@ -5,6 +5,31 @@ export interface DependencyDAG {
   sorted: string[];
 }
 
+/**
+ * True when a `plugins.<id>` entry mirrors the app-slot auth plugin (same
+ * backend target — the `auth` node already covers it). Mirrors the check in
+ * the host's plugin loading and the service descriptors, so all three agree.
+ */
+function isAuthMirrorPluginEntry(
+  config: RuntimeConfig,
+  pluginId: string,
+  pluginConfig: NonNullable<RuntimeConfig["plugins"]>[string],
+): boolean {
+  if (pluginId !== "auth" || !config.auth) return false;
+  const auth = config.auth;
+  if (pluginConfig === auth) return true;
+  if (pluginConfig.localPath && pluginConfig.localPath === auth.localPath) return true;
+  if (
+    !pluginConfig.localPath &&
+    pluginConfig.source === "remote" &&
+    pluginConfig.url &&
+    pluginConfig.url === auth.url
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function normalizeToNodes(config: RuntimeConfig): Map<string, RuntimeDependencyNode> {
   const nodes = new Map<string, RuntimeDependencyNode>();
 
@@ -70,6 +95,13 @@ export function normalizeToNodes(config: RuntimeConfig): Map<string, RuntimeDepe
 
   for (const [key, plugin] of Object.entries(config.plugins ?? {})) {
     if (!plugin.url) continue;
+    // The auth mirror (a plugins.auth entry mirroring app.auth) must not
+    // clobber the dedicated auth node: the mirror shares the auth backend's
+    // URL, so when it carries a filled url (production/start resolution — in
+    // dev the mirror's url stays empty) this loop would overwrite
+    // kind:"auth" with kind:"plugin" and the host would never wire the auth
+    // surface (no /api/auth/* mount, no session client).
+    if (isAuthMirrorPluginEntry(config, key, plugin)) continue;
     nodes.set(key, {
       key,
       kind: "plugin",

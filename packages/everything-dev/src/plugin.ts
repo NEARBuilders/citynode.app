@@ -720,7 +720,19 @@ export default createPlugin({
     }),
 
     start: builder.start.handler(async ({ input, context }) => {
-      const deps = Context.get(context["effect/context"], BosDepsTag);
+      const baseDeps = Context.get(context["effect/context"], BosDepsTag);
+      let deps = baseDeps;
+      if (input.configPath) {
+        const override = await loadResolvedConfig({ path: input.configPath });
+        if (!override?.config) {
+          return {
+            status: "error" as const,
+            url: "",
+            error: `No config found at ${input.configPath}`,
+          };
+        }
+        deps = { ...baseDeps, bosConfig: override.config };
+      }
 
       const outcome = await Effect.runPromise(
         startBootstrap(deps, input, { resolveProxyUrl, fetchPublishedConfig }).pipe(

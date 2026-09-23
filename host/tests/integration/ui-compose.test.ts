@@ -27,9 +27,13 @@ vi.mock("../../src/services/federation.server", async (importOriginal) => {
   };
 });
 
-const { composeUi, resetUiComposeCache, resetRemoteManifestCache, uiSources } = await import(
-  "../../src/services/ui-compose"
-);
+const {
+  composeUi,
+  composeClientPayload,
+  resetUiComposeCache,
+  resetRemoteManifestCache,
+  uiSources,
+} = await import("../../src/services/ui-compose");
 
 const CORE_MANIFEST = {
   name: "ui",
@@ -332,5 +336,41 @@ describe("composeUi", () => {
       variant.clientPayload,
     );
     expect(clientConfig.ui?.compose).toEqual(variant.clientPayload);
+  });
+});
+
+describe("composeClientPayload", () => {
+  it("mirrors the SSR variant's client payload and digest exactly", async () => {
+    const config = configWithPlugin();
+    const variant = await Effect.runPromise(composeUi(config));
+    const client = await Effect.runPromise(composeClientPayload(config));
+
+    expect(client).toEqual({ digest: variant.digest, clientPayload: variant.clientPayload });
+    expect(client?.clientPayload.remotes).toEqual([
+      { key: "auth", name: "auth-ui", entry: "https://cdn.example.com/auth-ui/remoteEntry.js" },
+    ]);
+    expect(client?.clientPayload.manifests).toEqual([AUTH_MANIFEST, CORE_MANIFEST]);
+  });
+
+  it("returns undefined when no plugin declares a ui — the bundled core-only tree is already complete", async () => {
+    const client = await Effect.runPromise(composeClientPayload(createBaseRuntimeConfig()));
+    expect(client).toBeUndefined();
+  });
+
+  it("builds the payload without touching any MF loader or the construction engine", async () => {
+    await Effect.runPromise(composeClientPayload(configWithPlugin()));
+
+    expect(federationMocks.loadUiComposeModule).not.toHaveBeenCalled();
+    expect(federationMocks.loadCoreUiRouteConfig).not.toHaveBeenCalled();
+    expect(federationMocks.loadUiRouteConfig).not.toHaveBeenCalled();
+    expect(federationMocks.loadRouterModule).not.toHaveBeenCalled();
+    expect(construct).not.toHaveBeenCalled();
+  });
+
+  it("fails when a manifest cannot be fetched (no silent plugin loss)", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    resetRemoteManifestCache();
+    const result = await Effect.runPromiseExit(composeClientPayload(configWithPlugin()));
+    expect(Exit.isFailure(result)).toBe(true);
   });
 });

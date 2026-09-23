@@ -2,7 +2,9 @@
 // Boots the regression stack (dev/prod/backcompat) with the test environment
 // from .env.test so regression runs never touch dev databases or dev ports.
 import { spawn } from "node:child_process";
+import { mkdirSync, openSync } from "node:fs";
 import net from "node:net";
+import { join } from "node:path";
 import { killStalePorts } from "./kill-stale-ports.mjs";
 import { computeRegressionEnv, findRepoRoot, regressionStackOptions } from "./regression-env.mjs";
 
@@ -73,23 +75,59 @@ await waitForDatabases(regressionEnv.dbUrls);
 killStalePorts(regressionEnv.stalePorts);
 
 log(`starting ${mode} stack on port ${regressionEnv.basePort} with test databases`);
+// Stack output goes to a file, not stdio: playwright pipes the webServer's
+// stdout/stderr and waits on them at teardown — inherited fds held by the
+// service tree delay EOF for minutes after the direct wrapper dies (the
+// teardown "stall"). `tail -f` the log for live output.
+const logsDir = join(root, ".bos", "logs");
+mkdirSync(logsDir, { recursive: true });
+const stackLogPath = join(logsDir, `regression-${mode}.log`);
+const stackLog = openSync(stackLogPath, "w");
+log(`stack output: ${stackLogPath}`);
+
+// Own process group: bos dev spawns service trees (rspack/rsbuild watchers
+// included) that don't always die from a plain SIGTERM to the orchestrator —
+// the group kill is what playwright's webServer teardown can rely on.
 const child = spawn(process.execPath, spec.command, {
   cwd: root,
   env: spec.env,
-  stdio: "inherit",
+  stdio: ["ignore", stackLog, stackLog],
+  detached: true,
 });
 
+let forceExitTimer = null;
+const killGroup = (signal) => {
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+};
+const forceExit = () => {
+  killGroup("SIGKILL");
+  process.exit(0);
+};
+// The signal has to survive the wrapper layers (playwright's `sh -c`, the
+// `bun run` npm runner) — forward to the whole group, then hard-kill after a
+// grace: a wedged graceful shutdown must never hold the webServer open.
 const forward = (signal) => {
-  child.kill(signal);
+  killGroup(signal);
+  if (forceExitTimer) clearTimeout(forceExitTimer);
+  forceExitTimer = setTimeout(forceExit, 5000);
+  forceExitTimer.unref?.();
 };
 process.on("SIGTERM", () => forward("SIGTERM"));
 process.on("SIGINT", () => forward("SIGINT"));
+process.on("exit", () => killGroup("SIGKILL"));
 
 const exitCode = await new Promise((resolve) => {
   child.once("error", (error) => {
     console.error(`[start-stack] ${error.message}`);
     resolve(1);
   });
-  child.once("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+  child.once("exit", (code, signal) => {
+    if (forceExitTimer) clearTimeout(forceExitTimer);
+    resolve(code ?? (signal ? 1 : 0));
+  });
 });
 process.exit(exitCode);

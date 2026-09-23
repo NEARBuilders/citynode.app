@@ -108,6 +108,18 @@
       "import": "./dist/ui/manifest/generator.mjs",
       "require": "./dist/ui/manifest/generator.cjs"
     },
+    "./ui/manifest/contract": {
+      "development": {
+        "types": "./src/ui/manifest/contract.ts",
+        "import": "./src/ui/manifest/contract.ts"
+      },
+      "types": {
+        "import": "./dist/ui/manifest/contract.d.mts",
+        "require": "./dist/ui/manifest/contract.d.cts"
+      },
+      "import": "./dist/ui/manifest/contract.mjs",
+      "require": "./dist/ui/manifest/contract.cjs"
+    },
     "./ui/mf-build": {
       "development": {
         "types": "./src/ui/mf-build/index.ts",

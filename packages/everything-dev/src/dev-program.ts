@@ -30,6 +30,7 @@ import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
+import { resolveStartConfigSource } from "./local-prod-config";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
@@ -212,14 +213,26 @@ export const devBootstrap = (
       (apiSource === "local" && !proxy) || localPackages.some((pkg) => pkg.startsWith("plugin:"));
 
     yield* step(timings, "build", async () => {
-      const buildTasks: Promise<void>[] = [
+      const [everythingDevRebuilt] = await Promise.all([
         buildEverythingDevQuietly(deps.configDir),
         buildBetterNearAuthQuietly(deps.configDir),
-      ];
+      ]);
       if (shouldBuildPlugin) {
-        buildTasks.push(buildEveryPluginQuietly(deps.configDir));
+        await buildEveryPluginQuietly(deps.configDir);
       }
-      await Promise.all(buildTasks);
+      if (everythingDevRebuilt === true) {
+        // Only the bos process itself runs the everything-dev dist (plugin
+        // children spawn after this step and load the fresh build). A source
+        // run (bun src/cli.ts) never imported dist, so nothing is stale for
+        // it — warn only where the previously imported build matters.
+        const runningFromDist = import.meta.url.includes("/dist/");
+        if (runningFromDist) {
+          console.log(
+            "[dev] everything-dev was rebuilt — this session still runs the previous " +
+              "orchestrator build. Restart `bos dev` once to pick it up.",
+          );
+        }
+      }
     });
 
     let devExtendsChain: string[] | undefined;
@@ -236,11 +249,11 @@ export const devBootstrap = (
     }
 
     if (!deps.bosConfig) {
-      return yield* Effect.fail(new DevConfigMissing({}));
+      return yield* new DevConfigMissing({});
     }
 
     if (proxy && !helpers.resolveProxyUrl(deps.bosConfig)) {
-      return yield* Effect.fail(new DevProxyMissing({}));
+      return yield* new DevProxyMissing({});
     }
     const bosConfig: BosConfig = deps.bosConfig;
 
@@ -305,9 +318,7 @@ export const devBootstrap = (
     );
     const preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
     if (preflightFailures.length > 0) {
-      return yield* Effect.fail(
-        new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) }),
-      );
+      return yield* new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) });
     }
 
     const services = buildServiceDescriptorMapFromPlan(plan, { ssr, proxy });
@@ -358,13 +369,15 @@ export const startBootstrap = (
     yield* emitProgress({ phase: "config", status: "running" });
 
     const bosEnv = input.env ?? (process.env.BOS_ENV === "staging" ? "staging" : "production");
-    const account = input.account ?? process.env.BOS_ACCOUNT;
-    const domain = input.domain ?? process.env.BOS_GATEWAY;
+    const explicitConfig = resolveStartConfigSource(input, process.env);
 
     let config: BosConfig | null = null;
     let remoteConfig: BosConfig | null = null;
 
-    if (account && domain) {
+    if (explicitConfig.configPath) {
+      config = deps.bosConfig;
+    } else if (explicitConfig.registry) {
+      const { account, domain } = explicitConfig.registry;
       const expectedUrl = buildRegistryConfigUrl(account, domain, input.registry);
       remoteConfig = yield* Effect.tryPromise({
         try: () => helpers.fetchPublishedConfig(account, domain, input.registry),
@@ -378,25 +391,25 @@ export const startBootstrap = (
       if (remoteConfig) {
         config = remoteConfig;
       } else {
-        return yield* Effect.fail(
-          new StartRemoteConfigMissing({
-            message: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${expectedUrl}`,
-          }),
-        );
+        return yield* new StartRemoteConfigMissing({
+          message: `No config found at bos://${account}/${domain}. Verify the account and gateway are correct and the config has been published.\nExpected URL: ${expectedUrl}`,
+        });
       }
     } else {
       config = deps.bosConfig;
     }
 
     if (!config) {
-      return yield* Effect.fail(new StartConfigMissing({}));
+      return yield* new StartConfigMissing({});
     }
 
-    if (account) {
-      config = { ...config, account };
-    }
-    if (domain) {
-      config = { ...config, domain };
+    if (!explicitConfig.configPath) {
+      if (explicitConfig.registry?.account) {
+        config = { ...config, account: explicitConfig.registry.account };
+      }
+      if (explicitConfig.registry?.domain) {
+        config = { ...config, domain: explicitConfig.registry.domain };
+      }
     }
     const baseConfig: BosConfig = config;
 
@@ -512,13 +525,19 @@ export const startBootstrap = (
 
     const services = buildServiceDescriptorMap(plan.runtimeConfig);
 
-    const configSource = remoteConfig
-      ? `bos://${account}/${domain}`
-      : (findConfigPath() ?? "bos.config.json");
+    const configSource = explicitConfig.configPath
+      ? explicitConfig.configPath
+      : remoteConfig
+        ? `bos://${explicitConfig.registry?.account}/${explicitConfig.registry?.domain}`
+        : (findConfigPath() ?? "bos.config.json");
 
     const configSourceHttp =
-      remoteConfig && account && domain
-        ? buildRegistryConfigUrl(account, domain, input.registry)
+      remoteConfig && explicitConfig.registry
+        ? buildRegistryConfigUrl(
+            explicitConfig.registry.account,
+            explicitConfig.registry.domain,
+            input.registry,
+          )
         : undefined;
 
     const summary: StartSummary = {

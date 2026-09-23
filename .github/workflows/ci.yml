@@ -27,6 +27,7 @@ jobs:
       host: ${{ steps.changes.outputs.host }}
       regression-http: ${{ steps.changes.outputs.regression-http }}
       regression-browser: ${{ steps.changes.outputs.regression-browser }}
+      regression-unit: ${{ steps.changes.outputs.regression-unit }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
@@ -45,6 +46,7 @@ jobs:
             echo "host=true" >> "$GITHUB_OUTPUT"
             echo "regression-http=true" >> "$GITHUB_OUTPUT"
             echo "regression-browser=true" >> "$GITHUB_OUTPUT"
+            echo "regression-unit=true" >> "$GITHUB_OUTPUT"
             exit 0
           else
             BEFORE="${{ github.event.before }}"
@@ -62,7 +64,13 @@ jobs:
             echo "host=true" >> "$GITHUB_OUTPUT"
             echo "regression-http=true" >> "$GITHUB_OUTPUT"
             echo "regression-browser=true" >> "$GITHUB_OUTPUT"
+            echo "regression-unit=true" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if echo "$DIFF" | grep -qE '^tests/regression/lib/|^(package\.json|bun\.lock|bunfig\.toml|tsconfig\.json)$|^\.github/workflows/ci\.yml$'; then
+            echo "regression-unit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "regression-unit=false" >> "$GITHUB_OUTPUT"
           fi
           if echo "$DIFF" | grep -qE '^packages/everything-dev/|^packages/every-plugin/|^packages/better-near-auth/|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci.yml$'; then
             echo "everything-dev=true" >> "$GITHUB_OUTPUT"
@@ -79,12 +87,12 @@ jobs:
           else
             echo "host=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^tests/regression/(http|lib)/|^host/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+          if echo "$DIFF" | grep -qE '^tests/regression/(http|lib)/|^host/|^api/|^plugins/|^packages/|^scripts/|^Dockerfile$|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
             echo "regression-http=true" >> "$GITHUB_OUTPUT"
           else
             echo "regression-http=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$DIFF" | grep -qE '^tests/regression/(browser|lib)/|^host/|^ui/|^api/|^plugins/|^packages/|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
+          if echo "$DIFF" | grep -qE '^tests/regression/(browser|lib)/|^host/|^ui/|^api/|^plugins/|^packages/|^scripts/|^Dockerfile$|^bos\.config\.json$|^\.env\.test$|^(package.json|bun.lock|bunfig.toml|tsconfig.json)$|^\.github/workflows/ci\.yml$'; then
             echo "regression-browser=true" >> "$GITHUB_OUTPUT"
           else
             echo "regression-browser=false" >> "$GITHUB_OUTPUT"
@@ -268,12 +276,44 @@ jobs:
       - name: Test host
         run: bun run --cwd host test
 
+  regression-unit:
+    name: Regression unit
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-and-typecheck]
+    if: needs.detect-changes.outputs.regression-unit == 'true'
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (Node 24)
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run regression lib unit tests
+        run: bun run test:regression:unit
+
   regression-http:
-    name: Regression HTTP
+    name: Regression HTTP (${{ matrix.command }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # dev = the dev server; start = the deployment image (ADR 0009).
+        # http is render-mode-blind, so it runs on :ssr only. The start leg
+        # pays the docker build, hence the longer timeout.
+        include:
+          - command: dev
+            timeout: 15
+          - command: start
+            timeout: 25
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-http == 'true'
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       CI: true
       API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
@@ -325,24 +365,44 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build every-plugin
+        if: matrix.command == 'dev'
         run: bun run --cwd packages/every-plugin build
 
-      - name: Run regression unit and HTTP suite
-        run: bun run test:regression:unit && bun run test:regression:http:dev
+      - name: Run HTTP regression suite (${{ matrix.command }})
+        run: bun run test:regression:http:${{ matrix.command }}
 
       - name: Upload regression artifacts on failure
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
         with:
-          name: regression-http-artifacts
+          name: regression-http-artifacts-${{ matrix.command }}
           path: .bos/logs/**
 
   regression-browser:
-    name: Regression Browser
+    name: Regression Browser (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # start:* = the deployment image via `bos start --config` (full suite);
+        # dev:* = the dev server, smoke-only (ADR 0009). The start legs pay
+        # the docker build, hence the longer timeout.
+        include:
+          - mode: start:ssr
+            slug: start-ssr
+            timeout: 25
+          - mode: start:csr
+            slug: start-csr
+            timeout: 25
+          - mode: dev:ssr
+            slug: dev-ssr
+            timeout: 10
+          - mode: dev:csr
+            slug: dev-csr
+            timeout: 10
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-browser == 'true'
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       CI: true
       API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
@@ -389,6 +449,7 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build every-plugin
+        if: startsWith(matrix.mode, 'dev:')
         run: bun run --cwd packages/every-plugin build
 
       - name: Cache Playwright browsers
@@ -406,15 +467,25 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Run browser regression suite
-        run: bun run test:regression:browser:dev
+      - name: Resource watchdog
+        run: |
+          nohup bash -c 'while true; do
+            echo "=== watchdog $(date -u +%H:%M:%S) ==="
+            free -m
+            ps aux --sort=-rss | head -11
+            sleep 30
+          done' >> resource-watchdog.log 2>&1 &
+
+      - name: Run browser regression suite (${{ matrix.mode }})
+        run: bun run test:regression:browser:${{ matrix.mode }}
 
       - name: Upload regression artifacts on failure
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
         with:
-          name: regression-browser-artifacts
+          name: regression-browser-artifacts-${{ matrix.slug }}
           path: |
             .bos/logs/**
+            resource-watchdog.log
             playwright-report/**
             test-results/**

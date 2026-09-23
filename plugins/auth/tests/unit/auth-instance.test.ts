@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AuthConfig } from "../../src/auth-config";
 import {
   buildSiwnOptions,
+  createAuthInstance,
   isRecipientsConfig,
   resolvePasskeyRelyingPartyOptions,
 } from "../../src/auth-instance";
@@ -211,5 +212,30 @@ describe("buildSiwnOptions", () => {
       accountId: "relayer.near",
       privateKey: "ed25519:key",
     });
+  });
+});
+
+describe("createAuthInstance cookie security", () => {
+  const dbStub = {} as Parameters<typeof createAuthInstance>[1];
+
+  it("derives useSecureCookies from an http baseURL, not NODE_ENV", () => {
+    const auth = createAuthInstance(
+      { ...baseConfig, baseUrl: "http://localhost:4100", isProduction: true },
+      dbStub,
+    );
+    const advanced = (auth.options as { advanced?: Record<string, unknown> }).advanced ?? {};
+    expect(advanced.useSecureCookies).toBe(false);
+    expect((advanced.defaultCookieAttributes as Record<string, unknown> | undefined)?.secure).toBe(
+      undefined,
+    );
+  });
+
+  it("derives useSecureCookies from an https baseURL in production", () => {
+    const auth = createAuthInstance(
+      { ...baseConfig, baseUrl: "https://citynode.app", isProduction: true },
+      dbStub,
+    );
+    const advanced = (auth.options as { advanced?: Record<string, unknown> }).advanced ?? {};
+    expect(advanced.useSecureCookies).toBe(true);
   });
 });

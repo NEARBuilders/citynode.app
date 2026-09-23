@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import sirv from "sirv";
@@ -7,6 +8,7 @@ import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
 import { classifyPluginFailure } from "../runtime/errors";
+import { ensureGeneratedUiRsbuildConfig } from "../ui/generated-config";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,8 +139,27 @@ export async function startPluginDevServer(
   const distDir = path.join(cwd, "dist");
   const serveStatic = sirv(distDir, { dev: true });
 
+  // No-watch mode (BOS_NO_WATCH=1): build once, serve the built output.
+  // Regression/CI stacks need no hot reload — watchers are the stack's
+  // heaviest processes and stall runs freeze under their accumulated
+  // footprint. One-shot builds exit; steady state is small static servers.
+  const noWatch = options.watch === false || process.env.BOS_NO_WATCH === "1";
+
+  const runOnce = (cmd: string, args: string[]) =>
+    new Promise<void>((resolve, reject) => {
+      const child = spawn(cmd, args, { cwd, stdio: "inherit", env: process.env });
+      child.on("error", reject);
+      child.on("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`❌ ${cmd} ${args.join(" ")} exited with ${code}`));
+      });
+    });
+
   let watcher: ReturnType<typeof spawn> | null = null;
-  if (options.watch !== false) {
+  if (noWatch) {
+    const generatedConfig = ensureGeneratedRspackConfig(cwd);
+    await runOnce("rspack", generatedConfig ? ["build", "--config", generatedConfig] : ["build"]);
+  } else if (options.watch !== false) {
     const generatedConfig = ensureGeneratedRspackConfig(cwd);
     watcher = spawn(
       "rspack",
@@ -152,6 +173,45 @@ export async function startPluginDevServer(
     watcher.on("error", (error) => {
       console.error(`❌ Failed to spawn rspack build --watch: ${error.message}`);
     });
+  }
+
+  let uiWatcher: ReturnType<typeof spawn> | null = null;
+  let uiStaticServer: http.Server | null = null;
+  const uiPort = process.env.BOS_UI_PORT;
+  const uiConfig = ensureGeneratedUiRsbuildConfig(cwd);
+  if (uiConfig && noWatch && uiPort) {
+    // Folder-form ui: one-shot build, then serve the ui source root's dist
+    // (the factory's absolute distPath target) statically on the ui port.
+    await runOnce("rsbuild", ["build", "--config", uiConfig]);
+    const uiDistDir =
+      path.basename(cwd) === "ui" ? path.join(cwd, "dist") : path.join(cwd, "ui", "dist");
+    if (!fs.existsSync(path.join(uiDistDir, "remoteEntry.js"))) {
+      console.error(
+        `❌ UI dist is missing at ${uiDistDir} — the ui static server would serve 404s for every asset (build output layout mismatch?)`,
+      );
+    }
+    const serveUiStatic = sirv(uiDistDir, { dev: true });
+    uiStaticServer = http.createServer((req, res) => {
+      applyCorsHeaders(res);
+      serveUiStatic(req, res, () => {
+        sendText(res, 404, "Not Found");
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      uiStaticServer!.once("error", reject);
+      uiStaticServer!.listen(Number(uiPort), () => resolve());
+    });
+    console.log(`├─ 🎨 UI:     http://localhost:${uiPort} (built, no watch)`);
+  } else if (uiConfig) {
+    uiWatcher = spawn("rsbuild", ["dev", "--config", uiConfig], {
+      cwd,
+      stdio: "inherit",
+      env: uiPort ? { ...process.env, PORT: uiPort } : process.env,
+    });
+    uiWatcher.on("error", (error) => {
+      console.error(`❌ Failed to spawn rsbuild ui dev: ${error.message}`);
+    });
+    console.log(`├─ 🎨 UI:     ${uiPort ? `http://localhost:${uiPort}` : "(rsbuild auto port)"}`);
   }
 
   const handlers: { rpc: any; api: any } = { rpc: null, api: null };
@@ -378,8 +438,13 @@ export async function startPluginDevServer(
     handlers.rpc = null;
     handlers.api = null;
     effectContextHolder.context = null;
-    if (watcher && watcher.exitCode === null && !watcher.killed) {
-      watcher.kill("SIGTERM");
+    for (const child of [watcher, uiWatcher]) {
+      if (child && child.exitCode === null && !child.killed) {
+        child.kill("SIGTERM");
+      }
+    }
+    if (uiStaticServer) {
+      await new Promise<void>((resolve) => uiStaticServer.close(() => resolve()));
     }
     if (runtime) await runtime.shutdown().catch(() => {});
     await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -4,6 +4,7 @@ import { defineConfig, type EnvironmentConfig, type RsbuildConfig, rspack } from
 import { pluginReact } from "@rsbuild/plugin-react";
 import { TanStackRouterRspack } from "@tanstack/router-plugin/rspack";
 import { FixMfDataUriPlugin } from "../../build/rspack";
+import { sanitizeContainerName } from "../manifest/contract";
 import {
   createUiSharedDeps,
   MANIFEST_FILENAME,
@@ -47,6 +48,9 @@ export interface UiRsbuildConfigOptions {
   nodeExposes: Record<string, string>;
   copy?: Array<{ from: string; to: string }>;
   define?: Record<string, string>;
+  /** routes dir relative to the rsbuild cwd — folder-form ui sources live at
+   * `ui/src/routes` while the build runs from the plugin root */
+  routesDirectory?: string;
   /**
    * Deploy hook factory — called once per environment when the platform CLI
    * builds for deploy. Returns extra rsbuild plugins (the Zephyr deploy +
@@ -60,7 +64,7 @@ export interface UiRsbuildConfigOptions {
   }) => NonNullable<EnvironmentConfig["plugins"]>;
 }
 
-const sanitizeContainerName = (pkgName: string): string => pkgName.replace(/[^A-Za-z0-9_]/g, "_");
+export { sanitizeContainerName };
 
 export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildConfig {
   const {
@@ -79,6 +83,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
     copy = [],
     define,
     deployPlugins,
+    routesDirectory,
   } = options;
   const workspaceRootAbsolute = path.resolve(workspaceRoot);
   const normalizedName = sanitizeContainerName(pkg.name);
@@ -107,7 +112,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
       ...deployFor(false),
     ],
     source: { entry: { index: webEntry }, ...(define ? { define } : {}) },
-    resolve: { alias: { "@": "./src" } },
+    resolve: { alias: { "@": path.join(workspaceRootAbsolute, "src") } },
     tools: {
       rspack: (config) => {
         const cssPlugin = config.plugins?.find((p) => p instanceof rspack.CssExtractRspackPlugin) as
@@ -134,7 +139,11 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
           stats: "errors-warnings",
           plugins: [
             ...(config.plugins ?? []),
-            TanStackRouterRspack({ target: "react", autoCodeSplitting: true }),
+            TanStackRouterRspack({
+              target: "react",
+              autoCodeSplitting: true,
+              ...(routesDirectory ? { routesDirectory } : {}),
+            }),
             new FixMfDataUriPlugin(),
           ],
         });
@@ -142,7 +151,13 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
       },
     },
     output: {
-      distPath: { root: "dist", css: "static/css", js: "static/js" },
+      // Absolute: the ui source root owns dist even when the build cwd is the
+      // parent plugin workspace (folder-form ui sources).
+      distPath: {
+        root: path.join(workspaceRootAbsolute, "dist"),
+        css: "static/css",
+        js: "static/js",
+      },
       assetPrefix: "auto",
       filename: { js: "[name].js", css: "style.css" },
       copy: [
@@ -179,7 +194,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
     source: { entry: { index: nodeEntry } },
     resolve: {
       alias: {
-        "@": "./src",
+        "@": path.join(workspaceRootAbsolute, "src"),
         "@tanstack/react-devtools": false,
         "@tanstack/react-router-devtools": false,
       },
@@ -197,14 +212,20 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
           stats: "errors-warnings",
           plugins: [
             ...(config.plugins ?? []),
-            TanStackRouterRspack({ target: "react", autoCodeSplitting: false }),
+            TanStackRouterRspack({
+              target: "react",
+              autoCodeSplitting: false,
+              ...(routesDirectory ? { routesDirectory } : {}),
+            }),
             new FixMfDataUriPlugin(),
           ],
         });
         return config;
       },
     },
-    output: { distPath: { root: "dist/ssr" } },
+    // Absolute, like the web dist above — the node container must land in the
+    // ui source root's dist/ssr where the host's local container server looks.
+    output: { distPath: { root: path.join(workspaceRootAbsolute, "dist", "ssr") } },
   };
 
   return defineConfig({

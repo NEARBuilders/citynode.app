@@ -50,19 +50,19 @@ void test("resolved test configuration owns child secrets and ports for every mo
   assert.equal(config.basePort, 5200);
   assert.equal(config.stalePorts[0], 5200);
   assert.ok(config.stalePorts.includes(5210));
-  for (const mode of ["dev", "prod", "backcompat"]) {
+  for (const mode of ["dev:ssr", "dev:csr", "backcompat"]) {
     const stack = regressionStackOptions(config, mode, env);
     assert.equal(stack.env.API_DATABASE_URL, config.dbUrls.API_DATABASE_URL);
     assert.equal(stack.env.AUTH_DATABASE_URL, config.dbUrls.AUTH_DATABASE_URL);
     assert.equal(stack.env.BETTER_AUTH_SECRET, "test#secret");
     assert.equal(stack.env.CORS_ORIGIN, config.baseUrl);
     assert.equal(stack.env.CUSTOM, "preserved");
-    if (mode === "prod") assert.equal(stack.env.PORT, "5200");
-    else {
-      assert.equal(stack.command[stack.command.indexOf("--port") + 1], "5200");
-      assert.equal(stack.command[stack.command.indexOf("--plugin-port-start") + 1], "5210");
-    }
+    assert.equal(stack.command[stack.command.indexOf("--port") + 1], "5200");
+    assert.equal(stack.command[stack.command.indexOf("--plugin-port-start") + 1], "5210");
   }
+
+  // start:* stacks boot through the deployment image, not a runner-side command.
+  assert.throws(() => regressionStackOptions(config, "start:ssr", {}), /unknown mode/);
 });
 
 void test("ambient test settings reach the stack when no test file exists", () => {
@@ -73,7 +73,7 @@ void test("ambient test settings reach the stack when no test file exists", () =
     BETTER_AUTH_SECRET: "test-secret",
   };
   const config = computeRegressionEnv({ repoRoot, env });
-  const stack = regressionStackOptions(config, "dev", {});
+  const stack = regressionStackOptions(config, "dev:ssr", {});
   assert.equal(stack.env.API_DATABASE_URL, env.API_DATABASE_URL);
   assert.equal(stack.env.BETTER_AUTH_SECRET, env.BETTER_AUTH_SECRET);
 });

@@ -12,7 +12,7 @@ import {
 import { createPluginsClient, type PluginResult } from "./plugins";
 import { getTenantRuntimeErrorResponse, resolveRequestRuntime } from "./tenant-runtime";
 import { enforceCacheLimit, pruneExpiredEntries } from "./ttl-cache";
-import { type ComposedUi, composeUi, isSsrAvailable } from "./ui-compose";
+import { type ComposedUi, composeClientPayload, composeUi, isSsrAvailable } from "./ui-compose";
 
 /**
  * One seam from request to stream: tenant resolution, manifest composition,
@@ -24,8 +24,10 @@ import { type ComposedUi, composeUi, isSsrAvailable } from "./ui-compose";
  * manifest-composed too, so composition runs whenever SSR is available —
  * boot health gates the base variant; per-request tenant variants compose
  * on first hit and cache by digest. Compose failures fail LOUD (500), never
- * a silent wrong-tree render; the CSR shell remains the tenant-gate and
- * stream-failure path only.
+ * a silent wrong-tree render; the CSR shell (no-SSR deployments and the
+ * stream-failure path) carries the client compose payload so the browser
+ * composes plugin routes itself, falling back to core-only only when the
+ * payload cannot be built.
  */
 
 export interface SsrRenderDeps {
@@ -116,11 +118,22 @@ export function createSsrRender(deps: SsrRenderDeps) {
 
     if (!isSsrAvailable(effectiveConfig)) {
       const activeRuntime = resolveActiveRuntime(effectiveConfig, request);
+      let composePayload: ComposePayload | undefined;
+      try {
+        composePayload = (await Effect.runPromise(composeClientPayload(effectiveConfig)))
+          ?.clientPayload;
+      } catch (error) {
+        logger.warn(
+          `[SSR] ${requestId} Client compose payload failed for ${pathname} — serving the core-only shell:`,
+          error,
+        );
+      }
       const runtimeConfig = buildRuntimeClientConfig(
         effectiveConfig,
         request,
         activeRuntime,
         deps.plugins.auth !== null,
+        composePayload,
       );
       return renderClientShell(
         ctx.cspNonce,
@@ -151,7 +164,12 @@ export function createSsrRender(deps: SsrRenderDeps) {
     const ssrRouterModule: RouterModule = composed.routerModule;
 
     try {
-      const ssrApiClient = createPluginsClient(deps.plugins, ctx.pluginContext);
+      const ssrApiClient = createPluginsClient(deps.plugins, ctx.pluginContext, {
+        // Loader API calls get a deadline: a wedged plugin endpoint rejects
+        // into the route's error boundary and closes the stream instead of
+        // suspending it forever.
+        callTimeoutMs: 15_000,
+      });
 
       const result = await ssrRouterModule.renderToStream(request, {
         session: ctx.session ? { session: ctx.session, user: ctx.user } : null,
