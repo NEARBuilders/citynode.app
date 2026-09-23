@@ -18,6 +18,19 @@ Meanwhile the `prod` regression mode tested the **published** FastKV config: it 
 6. **The Effect dividing line is deliberate.** Runtime code (orchestrator, dev-program, plugins service, every-plugin runtime, the host server layer) is idiomatic Effect v4 — `Context.Service` tags, layers with scoped finalizers, `Schema.TaggedError`, `Schedule`-based polling, `Effect.timeout` deadlines. Leaf dev servers, static file servers, and signal-handling process edges stay plain node. Two boundary bridges are sanctioned and stay: the ManagedRuntime bridge for Hono handlers, and the plugins-client deadline proxy (its consumer is non-Effect).
 7. **The Module Federation composition instance stays a process-level singleton.** One share scope per process is the invariant that prevents duplicate React copies (composed SSR crashes with "Invalid hook call" otherwise). It is excluded from layer-ification; a rebuilt layer silently reintroduces that crash class.
 
+## Amendment (2026-09-23): the start stack runs the deployment image
+
+The first implementation built every workspace on the CI runner (a `prod-stack`
+script) — runner build environments kept leaking into the fixture (bun export
+conditions resolving framework packages to stale-or-absent `dist` trees,
+`better-near-auth` unbuilt, fresh-checkout route-generation notices). The start
+stack now builds and runs through the committed Dockerfile instead: a
+`regression` stage builds all workspaces hermetically and the container serves
+the staged dists internally, booting the production host over them. Only the
+host port is mapped; test databases and secrets arrive via env with the docker
+host gateway. The container build is the same artifact production deploys, and
+it is identical locally and in CI.
+
 ## Consequences
 
 - PR CI validates the artifacts the change produces, end to end, in production mode — the same host program Railway runs.

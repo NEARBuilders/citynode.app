@@ -52,7 +52,11 @@ function connectionOptions(namespace: string | undefined): string {
 }
 
 function buildPoolConfig(url: string, namespace: string | undefined) {
-  const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
+  // host.docker.internal is docker-local development networking — the test
+  // databases a container reaches through the host gateway, which do not
+  // terminate TLS.
+  const isLocal =
+    url.includes("localhost") || url.includes("127.0.0.1") || url.includes("host.docker.internal");
   return {
     connectionString: url,
     ssl: isLocal

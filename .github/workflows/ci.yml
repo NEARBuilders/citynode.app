@@ -302,13 +302,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # dev = the dev server; start = built artifacts via `bos start --config`
-        # (ADR 0009). http is render-mode-blind, so it runs on :ssr only.
-        command: [dev, start]
+        # dev = the dev server; start = the deployment image (ADR 0009).
+        # http is render-mode-blind, so it runs on :ssr only. The start leg
+        # pays the docker build, hence the longer timeout.
+        include:
+          - command: dev
+            timeout: 15
+          - command: start
+            timeout: 25
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-http == 'true'
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       CI: true
       API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
@@ -378,13 +383,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # start:* = built artifacts via `bos start --config` (full suite);
-        # dev:* = the dev server, smoke-only (ADR 0009).
-        mode: [start:ssr, start:csr, dev:ssr, dev:csr]
+        # start:* = the deployment image via `bos start --config` (full suite);
+        # dev:* = the dev server, smoke-only (ADR 0009). The start legs pay
+        # the docker build, hence the longer timeout.
+        include:
+          - mode: start:ssr
+            timeout: 25
+          - mode: start:csr
+            timeout: 25
+          - mode: dev:ssr
+            timeout: 10
+          - mode: dev:csr
+            timeout: 10
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-browser == 'true'
-    timeout-minutes: 10
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       CI: true
       API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db
