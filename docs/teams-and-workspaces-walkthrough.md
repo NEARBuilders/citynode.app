@@ -10,7 +10,7 @@ bun run dev --port 3100 --api-port 3101 --ui-port 3103 --auth-port 3102 --plugin
 
 The stack reached `APP READY` at `http://localhost:3100` with all eight services running: host, UI, API, auth, and the four local plugins. Auth migrations, including the wallet invitation fields, loaded successfully during boot.
 
-The initial computer-use browser was unavailable. Chromium was subsequently installed with `bunx playwright install chromium`, and a headless Playwright walkthrough exercised the local development stack on `http://localhost:4100` using isolated regression databases. The stack used `CORS_ORIGIN=http://localhost:4100 RATE_LIMIT_WINDOW_MS=1000 RATE_LIMIT_MAX=100 CI=true bun run regression:start:dev`.
+The initial computer-use browser was unavailable. Chromium was subsequently installed with `bunx playwright install chromium`, and a headless Playwright walkthrough exercised the local development stack on `http://localhost:4100` using isolated regression databases. The stack used `CORS_ORIGIN=http://localhost:4100 RATE_LIMIT_WINDOW_MS=1000 RATE_LIMIT_MAX=100 CI=true bun run regression:start:ssr`.
 
 ## Observed browser results
 

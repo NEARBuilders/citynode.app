@@ -50,7 +50,7 @@ void test("resolved test configuration owns child secrets and ports for every mo
   assert.equal(config.basePort, 5200);
   assert.equal(config.stalePorts[0], 5200);
   assert.ok(config.stalePorts.includes(5210));
-  for (const mode of ["dev", "prod", "backcompat"]) {
+  for (const mode of ["ssr", "prod", "backcompat"]) {
     const stack = regressionStackOptions(config, mode, env);
     assert.equal(stack.env.API_DATABASE_URL, config.dbUrls.API_DATABASE_URL);
     assert.equal(stack.env.AUTH_DATABASE_URL, config.dbUrls.AUTH_DATABASE_URL);
@@ -73,7 +73,7 @@ void test("ambient test settings reach the stack when no test file exists", () =
     BETTER_AUTH_SECRET: "test-secret",
   };
   const config = computeRegressionEnv({ repoRoot, env });
-  const stack = regressionStackOptions(config, "dev", {});
+  const stack = regressionStackOptions(config, "ssr", {});
   assert.equal(stack.env.API_DATABASE_URL, env.API_DATABASE_URL);
   assert.equal(stack.env.BETTER_AUTH_SECRET, env.BETTER_AUTH_SECRET);
 });

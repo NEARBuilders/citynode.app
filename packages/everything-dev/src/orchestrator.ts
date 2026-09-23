@@ -414,7 +414,15 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       Effect.gen(function* () {
         const exitCodeValue = yield* exitCode;
         const currentStatus = yield* Ref.get(statusRef);
-        if (currentStatus === "ready" || currentStatus === "error") return;
+        if (currentStatus === "ready" || currentStatus === "error") {
+          // Post-ready exits must stay visible — a silently dead child (OOM
+          // kill included) used to leave the stack answering with nothing.
+          if (currentStatus === "ready") {
+            callbacks.onLog(name, `Process exited after ready (exit code: ${exitCodeValue})`, true);
+            yield* markError(`Process exited after ready: ${name}`);
+          }
+          return;
+        }
         callbacks.onLog(name, `Process exited before ready (exit code: ${exitCodeValue})`, true);
         yield* markError(`Process exited before ready: ${name}`);
       }),

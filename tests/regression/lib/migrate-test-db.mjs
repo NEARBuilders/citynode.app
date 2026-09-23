@@ -53,28 +53,6 @@ function expectedTablesOf(migration) {
   return [...tables];
 }
 
-/**
- * Regression databases must never wedge on a lock: postgres lock waits are
- * unbounded by default, so one lingering transaction would hang every later
- * request touching the same rows — an invisible, minutes-long suite stall.
- * A DB-level lock_timeout fails any wedged lock wait fast instead.
- */
-export async function setTestDatabaseLockTimeout(databaseUrl, lockTimeoutMs = 10_000) {
-  if (!databaseUrl) throw new Error("[migrate-test-db] databaseUrl is required");
-  const client = new pg.Client({ connectionString: databaseUrl });
-  await client.connect();
-  try {
-    const { rows } = await client.query("SELECT current_database() AS db");
-    const db = rows[0]?.db;
-    if (!db) return;
-    await client.query(
-      `ALTER DATABASE "${String(db).replace(/"/g, '""')}" SET lock_timeout = '${Number(lockTimeoutMs)}ms'`,
-    );
-  } finally {
-    await client.end();
-  }
-}
-
 export async function migrateTestDatabase({ migrationsDir, databaseUrl, schemaName, repoRoot }) {
   if (!databaseUrl) throw new Error("[migrate-test-db] databaseUrl is required");
   const root = repoRoot ?? findRepoRoot();

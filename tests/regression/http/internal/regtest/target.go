@@ -5,7 +5,7 @@ import "os"
 type TargetMode string
 
 const (
-	ModeDev        TargetMode = "dev"
+	ModeSSR        TargetMode = "ssr"
 	ModeProd       TargetMode = "prod"
 	ModeBackcompat TargetMode = "backcompat"
 )
@@ -17,7 +17,7 @@ func Mode() TargetMode {
 	case "backcompat":
 		return ModeBackcompat
 	}
-	return ModeDev
+	return ModeSSR
 }
 
 // BaseURL comes from the repo-derived config (REGRESSION_BASE_URL or
@@ -39,5 +39,5 @@ func ScriptName() string {
 	case ModeBackcompat:
 		return "regression:start:backcompat"
 	}
-	return "regression:start:dev"
+	return "regression:start:ssr"
 }

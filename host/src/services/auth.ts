@@ -11,10 +11,33 @@ function getAuthServices(plugins: PluginResult): AuthServices | null {
   return EffectContext.get(effectContext as never, servicesTag as never) as AuthServices;
 }
 
+/**
+ * A wedged Better Auth call must not pin its pool client (or the request)
+ * forever: `/api/auth/*` is registered before the `/api/*` timeout middleware,
+ * so the deadline lives here. On expiry the caller gets a 504 while the
+ * underlying call keeps running — its DB work stays bounded by the pool's
+ * connection-level timeouts instead.
+ */
+const AUTH_TIMEOUT_MS = Number(process.env.AUTH_TIMEOUT_MS) || 30_000;
+
+const authTimeoutResponse = () =>
+  new Response(JSON.stringify({ error: "auth request timed out" }), {
+    status: 504,
+    headers: { "content-type": "application/json" },
+  });
+
 export function registerAuthHandler(app: Hono<HonoEnv>, plugins: PluginResult) {
   const services = getAuthServices(plugins);
   if (!services) return;
-  app.on(["POST", "GET"], "/api/auth/*", (c) => services.handler(c.req.raw));
+  app.on(["POST", "GET"], "/api/auth/*", (c) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<Response>((resolve) => {
+      timer = setTimeout(resolve, AUTH_TIMEOUT_MS, authTimeoutResponse());
+    });
+    const pending = services.handler(c.req.raw);
+    pending.catch(() => {});
+    return Promise.race([pending, deadline]).finally(() => clearTimeout(timer));
+  });
 }
 
 export function createSessionMiddleware(plugins: PluginResult) {

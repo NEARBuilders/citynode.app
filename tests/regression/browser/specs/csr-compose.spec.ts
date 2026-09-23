@@ -40,12 +40,15 @@ test.describe("CSR compose", () => {
     const authRemote = compose!.remotes?.find((remote) => remote.key === "auth");
     expect(authRemote, "auth ui remote must be in the payload").toBeTruthy();
 
-    // The remote entry must actually be reachable from the browser context.
-    const entryStatus = await page.evaluate(async (entry: string) => {
-      const response = await fetch(entry, { method: "GET" });
+    // The runtime registers the remote via its mf-manifest.json (the entry
+    // URL's remoteEntry.js is rewritten to it in hydrate) — that manifest
+    // fetch is the exact point the client compose previously failed.
+    const manifestUrl = authRemote!.entry.replace(/\/?remoteEntry\.js$/, "/mf-manifest.json");
+    const entryStatus = await page.evaluate(async (url: string) => {
+      const response = await fetch(url, { method: "GET" });
       return response.status;
-    }, authRemote!.entry);
-    expect(entryStatus, `auth remoteEntry at ${authRemote!.entry}`).toBe(200);
+    }, manifestUrl);
+    expect(entryStatus, `auth mf-manifest at ${manifestUrl}`).toBe(200);
 
     // The tree was constructed from core + auth manifests (2 sources).
     const constructed = consoleMarks.find((mark) => mark.includes("tree constructed"));

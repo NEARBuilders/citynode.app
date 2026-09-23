@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createAuthTestInstance } from "../../lib/auth-test-instance.ts";
 import { seedMemberFixtures } from "../../lib/member-seed.ts";
-import { migrateTestDatabase, setTestDatabaseLockTimeout } from "../../lib/migrate-test-db.mjs";
+import { migrateTestDatabase } from "../../lib/migrate-test-db.mjs";
 import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 
 const ADMIN_COOKIES_PATH = ".bos/regression/admin-cookies.json";
@@ -66,8 +66,6 @@ export default async function globalSetup() {
   );
   console.log(`[global-setup] wrote ${seedResolved}`);
 
-  await setTestDatabaseLockTimeout(regressionEnv.dbUrls.API_DATABASE_URL);
-  await setTestDatabaseLockTimeout(regressionEnv.dbUrls.AUTH_DATABASE_URL);
   await migrateTestDatabase({
     migrationsDir: "api/src/db/migrations",
     databaseUrl: regressionEnv.dbUrls.API_DATABASE_URL,

@@ -328,7 +328,7 @@ jobs:
         run: bun run --cwd packages/every-plugin build
 
       - name: Run regression unit and HTTP suite
-        run: bun run test:regression:unit && bun run test:regression:http:dev
+        run: bun run test:regression:unit && bun run test:regression:http:ssr
 
       - name: Upload regression artifacts on failure
         if: failure()
@@ -342,8 +342,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # dev = source-composed SSR; csr = default no-SSR client compose.
-        mode: [dev, csr]
+        # ssr = source-composed SSR; csr = default no-SSR client compose.
+        mode: [ssr, csr]
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-browser == 'true'

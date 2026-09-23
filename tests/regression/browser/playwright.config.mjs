@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import { computeRegressionEnv } from "../lib/regression-env.mjs";
 
-const mode = process.env.REGRESSION_MODE ?? "dev";
+const mode = process.env.REGRESSION_MODE ?? "ssr";
 const command =
   mode === "prod"
     ? "bun run regression:start:prod"
@@ -9,7 +9,7 @@ const command =
       ? "bun run regression:start:backcompat"
       : mode === "csr"
         ? "bun run regression:start:csr"
-        : "bun run regression:start:dev";
+        : "bun run regression:start:ssr";
 
 const regressionEnv = computeRegressionEnv();
 
@@ -49,7 +49,7 @@ export default defineConfig({
     env: webServerEnv,
   },
   projects: [
-    { name: "dev" },
+    { name: "ssr" },
     { name: "prod" },
     { name: "backcompat" },
     {
