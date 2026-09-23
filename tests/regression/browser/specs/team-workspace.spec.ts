@@ -35,6 +35,24 @@ async function signInAnonymously() {
     .join("; ");
 }
 
+/**
+ * Production enables better-auth's session cookie cache: the `session_data`
+ * cookie is a snapshot from the last fresh session read, so server-side
+ * mutations made OUT OF BAND (this fixture's raw accept-invitation, not the
+ * app's synchronize path) are invisible for the 5-minute cache window. A
+ * cache-disabled get-session re-reads the DB and re-sets a fresh snapshot —
+ * use its Set-Cookie pairs to replace the injected cookie set.
+ */
+async function refreshSessionCookies(cookie: string) {
+  const response = await fetch(`${baseUrl}/api/auth/get-session?disableCookieCache=true`, {
+    headers: { cookie, origin: baseUrl },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`session refresh failed: ${response.status}`);
+  const setCookies = response.headers.getSetCookie().map((value) => value.split(";")[0]);
+  return setCookies.length > 0 ? setCookies.join("; ") : cookie;
+}
+
 async function seedTeamMember() {
   const suffix = `${process.pid}-${Date.now()}`;
   const ownerCookie = await signInAnonymously();
@@ -65,7 +83,7 @@ async function seedTeamMember() {
   await authFetch("/organization/accept-invitation", memberCookie, {
     invitationId: invitation.id,
   });
-  return { memberCookie, teamName: team.name as string };
+  return { memberCookie: await refreshSessionCookies(memberCookie), teamName: team.name as string };
 }
 
 async function useCookieHeader(page: Page, cookieHeader: string) {

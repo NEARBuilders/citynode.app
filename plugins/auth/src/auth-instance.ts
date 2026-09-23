@@ -474,9 +474,14 @@ export function createAuthInstance(
       },
     },
     advanced: {
+      // One switch for the Secure attribute and the __Secure- name prefix,
+      // derived from the baseURL protocol — not NODE_ENV. An https baseURL
+      // (production, staging) keeps Secure cookies; an http baseURL (the
+      // regression container serving http://localhost:<port> in production
+      // mode) must issue cookies plain clients can send back.
+      useSecureCookies: config.baseUrl.startsWith("https://"),
       defaultCookieAttributes: {
         sameSite: "lax",
-        secure: config.isProduction ?? false,
         httpOnly: true,
       },
     },

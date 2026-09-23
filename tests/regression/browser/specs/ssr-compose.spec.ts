@@ -18,7 +18,21 @@ test.describe("SSR compose", () => {
 
     expect(html, "page must be server-rendered").toContain("data-everything-ssr");
     expect(html, "SSR must embed a compose payload").toContain('"compose"');
-    expect(html, "compose payload must include the auth-ui remote").toContain("auth-ui");
+
+    // The embedded runtime config carries the compose payload — assert the
+    // auth remote by KEY, not by its MF container name (the built remote
+    // registers under the sanitized package name, e.g.
+    // `_everything_dev_auth_plugin`, which is an implementation detail).
+    const configMatch = html.match(/window\.__RUNTIME_CONFIG__=(\{.*?\});\s*function __hydrate/s);
+    expect(configMatch, "runtime config must be embedded for hydration").toBeTruthy();
+    const config = JSON.parse(configMatch![1]) as {
+      ui?: { compose?: { remotes?: Array<{ key: string; entry?: string }> } };
+    };
+    const authRemote = config.ui?.compose?.remotes?.find((remote) => remote.key === "auth");
+    expect(authRemote, "compose payload must include the auth remote (key: auth)").toBeTruthy();
+    expect(authRemote?.entry, "auth remote must point at a remoteEntry").toMatch(
+      /\/remoteEntry\.js$/,
+    );
   });
 
   test("a core route is server-rendered with content (not the CSR shell)", async ({ request }) => {
