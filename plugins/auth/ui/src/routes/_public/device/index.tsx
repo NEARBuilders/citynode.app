@@ -1,19 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { sessionQueryKey, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { sanitizeUserCode } from "./-user-code";
 
 type SearchParams = {
   user_code?: string;
 };
-
-function sanitizeUserCode(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const cleaned = value.trim().replace(/-/g, "").toUpperCase();
-  return /^[A-Z2-9]{4,12}$/.test(cleaned) ? cleaned : undefined;
-}
 
 export const Route = createFileRoute("/_public/device/")({
   ssr: false,
@@ -42,7 +37,7 @@ function DeviceVerifyPage() {
         setError("This code is invalid or has expired. Ask for a new one.");
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: ["session"] });
+      void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       void navigate({ to: "/device/approve", search: { user_code } });
     });
   }, [session?.user, user_code, claiming, auth, navigate, queryClient]);

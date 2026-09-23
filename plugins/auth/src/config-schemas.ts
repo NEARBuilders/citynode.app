@@ -1,3 +1,4 @@
+import { DEFAULT_DEVICE_LINK_CLIENT_ID } from "better-near-auth";
 import { z } from "zod";
 export const API_KEY_CONFIG_IDS = ["user-keys", "org-keys"] as const;
 
@@ -94,6 +95,11 @@ export const authVariablesSchema = z.object({
     })
     .optional(),
   siwn: z.union([authSiwnRecipientSchema, authSiwnRecipientsSchema]),
+  deviceLink: z
+    .object({
+      clientId: z.string().min(1).default(DEFAULT_DEVICE_LINK_CLIENT_ID),
+    })
+    .optional(),
   email: z
     .object({
       from: z.string(),

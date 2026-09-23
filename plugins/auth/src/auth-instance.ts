@@ -17,9 +17,9 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
-import { type SIWNPluginOptions, siwn } from "better-near-auth";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
-import { DEVICE_LINK_CLIENT_ID, deviceLink } from "./device-link";
+import { deviceLink } from "./device-link";
 
 const orgStatements = {
   ...defaultStatements,
@@ -410,7 +410,8 @@ export function createAuthInstance(
       nearInvitations(db, membershipPolicy),
       deviceAuthorization({
         verificationUri: "/device",
-        validateClient: (clientId) => clientId === DEVICE_LINK_CLIENT_ID,
+        validateClient: (clientId) =>
+          clientId === (config.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID),
       }),
       deviceLink(db),
       apiKey([

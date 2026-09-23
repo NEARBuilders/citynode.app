@@ -1,10 +1,6 @@
-import { p256 } from "@noble/curves/nist.js";
 import { base58, base64, base64url, hex } from "@scure/base";
 import { generateNonce } from "near-kit";
-import { computeNep413Challenge } from "./passkey.js";
-
-const FLAG_USER_PRESENT = 0x01;
-const FLAG_USER_VERIFIED = 0x04;
+import { computeNep413Challenge, ecdsaDerToRawLowS, isUserVerified } from "./passkey.js";
 
 interface AssertionParts {
   authenticatorData: Uint8Array;
@@ -12,26 +8,15 @@ interface AssertionParts {
   signature: Uint8Array;
 }
 
-function assertUserVerified(authenticatorData: Uint8Array): boolean {
-  if (authenticatorData.length < 37) return false;
-  const flags = authenticatorData[32]!;
-  return (flags & FLAG_USER_PRESENT) !== 0 && (flags & FLAG_USER_VERIFIED) !== 0;
-}
-
 function toProof(assertion: AssertionParts): string {
-  if (!assertUserVerified(assertion.authenticatorData)) {
+  if (!isUserVerified(assertion.authenticatorData)) {
     throw new Error("Passkey assertion is not user verified");
   }
-  const rawSignature = assertion.signature;
   let signature: string;
-  if (rawSignature.length > 64) {
-    const parsed = p256.Signature.fromBytes(rawSignature, "der");
-    const order = p256.Point.Fn.ORDER;
-    const normalized =
-      parsed.s * 2n > order ? new p256.Signature(parsed.r, order - parsed.s) : parsed;
-    signature = `p256:${base58.encode(normalized.toBytes("compact"))}`;
+  if (assertion.signature.length > 64) {
+    signature = `p256:${base58.encode(ecdsaDerToRawLowS(assertion.signature))}`;
   } else {
-    signature = `ed25519:${base58.encode(rawSignature)}`;
+    signature = `ed25519:${base58.encode(assertion.signature)}`;
   }
   const proof = JSON.stringify({
     authenticator_data: base64url.encode(assertion.authenticatorData),

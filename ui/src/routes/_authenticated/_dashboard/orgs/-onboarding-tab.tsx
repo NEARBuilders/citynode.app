@@ -191,9 +191,34 @@ export function OnboardingTab({
                     <h4 className="text-base font-semibold text-foreground">{created.eventName}</h4>
                     <Badge variant="outline">station</Badge>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <code
+                      className="min-w-0 truncate rounded border border-border bg-muted/40 px-2 py-1 font-mono text-xs"
+                      data-testid="onboard.code"
+                    >
+                      {created.code}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(created.code);
+                          toast.success("Code copied");
+                        } catch {
+                          toast.error("Failed to copy code");
+                        }
+                      }}
+                      data-testid="onboard.copy-code-button"
+                    >
+                      Copy code
+                    </Button>
+                  </div>
                   <p className="text-sm text-muted-foreground">
-                    Scan with a phone, or open
-                    <span className="font-mono text-foreground"> /onboard?code=…</span>
+                    People scan the QR, or open{" "}
+                    <span className="font-mono text-foreground">/onboard?code=…</span> and enter
+                    this code.
                   </p>
                   <p className="text-sm text-muted-foreground" data-testid="onboard.joined-count">
                     {activeStatus

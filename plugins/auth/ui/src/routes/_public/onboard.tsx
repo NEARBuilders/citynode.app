@@ -1,6 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { sessionQueryOptions, signInWithPasskey, useAuthClient } from "everything-dev/ui/auth";
+import {
+  sessionQueryKey,
+  sessionQueryOptions,
+  signInWithPasskey,
+  useAuthClient,
+} from "everything-dev/ui/auth";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -65,7 +70,7 @@ function OnboardPage() {
       .then((result) => {
         setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
         toast.success(`You've joined ${result.organizationName}`);
-        void queryClient.invalidateQueries({ queryKey: ["session"] });
+        void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       })
       .catch((error: { message?: string }) => {
         setRedeemError(error?.message || "Could not join this organization");
@@ -77,7 +82,7 @@ function OnboardPage() {
     await auth.signIn.near({
       onSuccess: async () => {
         setNearPending(false);
-        await queryClient.invalidateQueries({ queryKey: ["session"] });
+        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       },
       onError: (error: { code?: string; message?: string }) => {
         setNearPending(false);
@@ -91,7 +96,7 @@ function OnboardPage() {
     await signInWithPasskey(auth, {
       onSuccess: async () => {
         setPasskeyPending(false);
-        await queryClient.invalidateQueries({ queryKey: ["session"] });
+        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       },
       onError: (error) => {
         setPasskeyPending(false);

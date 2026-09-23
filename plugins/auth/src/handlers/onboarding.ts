@@ -31,7 +31,7 @@ function membershipPolicyOf(services: {
   return services.membershipPolicy ?? createOrganizationMembershipPolicy();
 }
 
-async function resolveActorOrganization(
+async function requireOrgAdminContext(
   services: any,
   context: any,
   inputOrganizationId?: string,
@@ -48,14 +48,6 @@ async function resolveActorOrganization(
   if (!userId || !organizationId) {
     throw new ORPCError("BAD_REQUEST", { message: "No organization selected" });
   }
-  return { userId, organizationId, headers };
-}
-
-async function requireOrgAdmin(
-  services: any,
-  headers: Headers,
-  organizationId: string,
-): Promise<void> {
   const result = await safeAuthApi(() =>
     services.auth.api.getActiveMemberRole({
       headers,
@@ -68,6 +60,7 @@ async function requireOrgAdmin(
       message: "Only organization owners and admins can manage onboarding codes",
     });
   }
+  return { userId, organizationId, headers };
 }
 
 function toSummary(row: typeof schema.onboardingCode.$inferSelect) {
@@ -90,12 +83,11 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { userId, organizationId, headers } = await resolveActorOrganization(
+        const { userId, organizationId } = await requireOrgAdminContext(
           services,
           context,
           input.organizationId,
         );
-        await requireOrgAdmin(services, headers, organizationId);
 
         const eventName = String(input.eventName).trim();
         if (!eventName) {
@@ -136,7 +128,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             organizationId,
             eventName,
             teamId: team.id,
-            role: input.role ?? "member",
+            role: "member",
             maxUses: input.maxUses ?? DEFAULT_MAX_USES,
             usedCount: 0,
             expiresAt: new Date(
@@ -158,12 +150,11 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { organizationId, headers } = await resolveActorOrganization(
+        const { organizationId } = await requireOrgAdminContext(
           services,
           context,
           input.organizationId,
         );
-        await requireOrgAdmin(services, headers, organizationId);
 
         const rows = await services.db
           .select()
@@ -178,12 +169,11 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { organizationId, headers } = await resolveActorOrganization(
+        const { organizationId } = await requireOrgAdminContext(
           services,
           context,
           input.organizationId,
         );
-        await requireOrgAdmin(services, headers, organizationId);
 
         const [revoked] = await services.db
           .update(schema.onboardingCode)
@@ -206,12 +196,11 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { organizationId, headers } = await resolveActorOrganization(
+        const { organizationId } = await requireOrgAdminContext(
           services,
           context,
           input.organizationId,
         );
-        await requireOrgAdmin(services, headers, organizationId);
 
         const row = await services.db.query.onboardingCode.findFirst({
           where: and(
@@ -303,6 +292,18 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
         });
         const organizationName = organization?.name ?? "";
 
+        if (codeRow.revokedAt) {
+          throw new ORPCError("FORBIDDEN", { message: "This onboarding code was revoked" });
+        }
+        if (toDate(codeRow.expiresAt) < new Date()) {
+          throw new ORPCError("BAD_REQUEST", { message: "This onboarding code has expired" });
+        }
+        if (codeRow.usedCount >= codeRow.maxUses) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "This onboarding code has reached its limit",
+          });
+        }
+
         const already = await services.db.query.onboardingRedemption.findFirst({
           where: and(
             eq(schema.onboardingRedemption.codeId, codeRow.id),
@@ -316,17 +317,6 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             organizationName,
             eventName: codeRow.eventName,
           };
-        }
-        if (codeRow.revokedAt) {
-          throw new ORPCError("FORBIDDEN", { message: "This onboarding code was revoked" });
-        }
-        if (toDate(codeRow.expiresAt) < new Date()) {
-          throw new ORPCError("BAD_REQUEST", { message: "This onboarding code has expired" });
-        }
-        if (codeRow.usedCount >= codeRow.maxUses) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "This onboarding code has reached its limit",
-          });
         }
 
         const teamId = await services.db.transaction(async (tx) => {

@@ -12,7 +12,7 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import type { RelayedTransactionT } from "better-near-auth";
-import { siwnClient } from "better-near-auth/client";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "../types";
 import { getRuntimeConfig } from "./runtime";
 
@@ -23,6 +23,9 @@ type RuntimeAuthVariables = {
       mainnet?: string;
       testnet?: string;
     };
+  };
+  deviceLink?: {
+    clientId?: string;
   };
 };
 
@@ -94,6 +97,12 @@ function getHostUrl(config?: Partial<ClientRuntimeConfig>) {
   return "";
 }
 
+export function getDeviceLinkClientId(config?: Partial<ClientRuntimeConfig>): string {
+  const runtimeConfig = readRuntimeConfig(config);
+  const variables = runtimeConfig?.auth?.variables as RuntimeAuthVariables | undefined;
+  return variables?.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID;
+}
+
 export function createAuthClient(options: CreateAuthClientOptions = {}) {
   const nearAuthConfig = getSiwnClientConfig(options);
 
@@ -159,12 +168,6 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
   });
 }
 
-/**
- * Passkey sign-in orchestration: authenticate with an existing credential,
- * and on first use (no discoverable credential) create one — which
- * provisions the Better Auth user via the passkey plugin's session-less
- * registration — then sign in. Two biometrics on first run, one after.
- */
 export async function signInWithPasskey(
   authClient: AuthClient,
   options?: { onSuccess?: () => void; onError?: (error: Error) => void },

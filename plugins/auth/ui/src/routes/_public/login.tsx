@@ -1,6 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
-import { sessionQueryOptions, signInWithPasskey, useAuthClient } from "everything-dev/ui/auth";
+import {
+  sessionQueryKey,
+  sessionQueryOptions,
+  signInWithPasskey,
+  useAuthClient,
+} from "everything-dev/ui/auth";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -77,7 +82,7 @@ function LoginPage() {
 
   const handleSuccess = async (message: string) => {
     toast.success(message);
-    void queryClient.invalidateQueries({ queryKey: ["session"] });
+    void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
     void navigate({ to: redirect, replace: true });
   };
 

@@ -6,8 +6,6 @@ import { z } from "zod";
 import type { Database } from "./db";
 import * as schema from "./db/schema";
 
-export const DEVICE_LINK_CLIENT_ID = "citynode-web";
-
 const claimBody = z.object({
   token: z.string().min(1),
 });

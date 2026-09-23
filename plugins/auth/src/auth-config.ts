@@ -52,6 +52,9 @@ export interface AuthConfig {
     };
   };
   passkey?: AuthPasskeyConfig;
+  deviceLink?: {
+    clientId: string;
+  };
   phoneNumber?: {
     twilio?: {
       accountSid: string;

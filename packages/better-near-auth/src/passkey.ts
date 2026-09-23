@@ -9,6 +9,22 @@ const NEP413_TAG = 2 ** 31 + 413;
 const FLAG_USER_PRESENT = 0x01;
 const FLAG_USER_VERIFIED = 0x04;
 
+/** A wallet must never sign on mere user-presence (a bare touch). */
+export function isUserVerified(authenticatorData: Uint8Array): boolean {
+  if (authenticatorData.length < 37) return false;
+  const flags = authenticatorData[32]!;
+  return (flags & FLAG_USER_PRESENT) !== 0 && (flags & FLAG_USER_VERIFIED) !== 0;
+}
+
+/** WebAuthn gives DER ECDSA signatures; `w_resolve_auth` expects raw low-S compact. */
+export function ecdsaDerToRawLowS(der: Uint8Array): Uint8Array {
+  const parsed = p256.Signature.fromBytes(der, "der");
+  const order = p256.Point.Fn.ORDER;
+  const normalized =
+    parsed.s * 2n > order ? new p256.Signature(parsed.r, order - parsed.s) : parsed;
+  return normalized.toBytes("compact");
+}
+
 const FACTORY_IDS: Record<PasskeyCurve, string> = {
   p256: "p256-passkey-wallet-contract.trezu.near",
   ed25519: "ed25519-passkey-wallet-contract.trezu.near",
@@ -293,9 +309,7 @@ export function verifyPasskeyNep413Signature(args: {
     return false;
   }
   if (authData.length < 37) return false;
-
-  const flags = authData[32]!;
-  if ((flags & FLAG_USER_PRESENT) === 0 || (flags & FLAG_USER_VERIFIED) === 0) return false;
+  if (!isUserVerified(authData)) return false;
 
   const clientDataBytes = new TextEncoder().encode(proof.client_data_json);
   const signedBytes = new Uint8Array(authData.length + 32);

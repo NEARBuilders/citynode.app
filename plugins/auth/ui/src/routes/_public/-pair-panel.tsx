@@ -1,12 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { sessionQueryKey, useAuthClient } from "everything-dev/ui/auth";
+import { getDeviceLinkClientId, sessionQueryKey, useAuthClient } from "everything-dev/ui/auth";
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
-const DEVICE_LINK_CLIENT_ID = "citynode-web";
 const DEVICE_LINK_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
 type DeviceLink = {
@@ -32,7 +31,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
     canceledRef.current = false;
     let active = true;
     void auth.device
-      .code({ client_id: DEVICE_LINK_CLIENT_ID })
+      .code({ client_id: getDeviceLinkClientId() })
       .then(({ data, error }: { data: Record<string, unknown> | null; error: unknown }) => {
         if (!active) return;
         if (error || !data) {
@@ -73,7 +72,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
       const { data, error } = await auth.device.token({
         grant_type: DEVICE_LINK_GRANT_TYPE,
         device_code: link.deviceCode,
-        client_id: DEVICE_LINK_CLIENT_ID,
+        client_id: getDeviceLinkClientId(),
       });
       if (canceledRef.current) return;
       const token = (data as { access_token?: string } | null)?.access_token;

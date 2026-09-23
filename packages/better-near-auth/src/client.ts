@@ -123,6 +123,8 @@ export interface SIWNClientActions {
   };
 }
 
+export { DEFAULT_DEVICE_LINK_CLIENT_ID } from "./constants.js";
+
 /**
  * Executor build of NEAR-DevHub/near-connect-passkey (mainnet only). Bump the
  * version on every executor change — near-connect caches executor code in

@@ -171,6 +171,33 @@ describe("onboarding handlers", () => {
     expect(member).toBeUndefined();
   });
 
+  it("rejects a revoked code even for prior redeemers", async () => {
+    const owner = await createTestUser(services.services);
+    const org = await createTestOrg(services.services, owner.userId);
+    const handlers = createTestHandlers(services.services);
+
+    const code = await handlers.onboarding.createOnboardingCode({
+      input: { eventName: "Revoked Later", organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    const member = await createTestUser(services.services, { email: undefined });
+    await handlers.onboarding.redeemOnboardingCode({
+      input: { code: code.code },
+      context: { reqHeaders: member.reqHeaders },
+    });
+
+    await handlers.onboarding.revokeOnboardingCode({
+      input: { codeId: code.id, organizationId: org.id },
+      context: { reqHeaders: owner.reqHeaders },
+    });
+    await expect(
+      handlers.onboarding.redeemOnboardingCode({
+        input: { code: code.code },
+        context: { reqHeaders: member.reqHeaders },
+      }),
+    ).rejects.toThrow(/revoked/i);
+  });
+
   it("rejects expired and revoked codes", async () => {
     const owner = await createTestUser(services.services);
     const org = await createTestOrg(services.services, owner.userId);

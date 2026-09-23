@@ -92,6 +92,37 @@ function deriveEmail(accountId: string, recipient: string): string {
   return `temp-${randomId}@${recipient}`;
 }
 
+interface Nep413Payload {
+  message: string;
+  recipient: string;
+  nonce: Uint8Array;
+  callbackUrl?: string;
+}
+
+async function verifySignedMessage(
+  accountId: string,
+  signedMessage: { publicKey: string; signature: string },
+  payload: Nep413Payload,
+  near: Near,
+): Promise<boolean> {
+  if (isDeterministicAccountId(accountId)) {
+    return verifyPasskeyNep413Signature({
+      accountId,
+      publicKey: signedMessage.publicKey,
+      signature: signedMessage.signature,
+      message: payload.message,
+      recipient: payload.recipient,
+      nonce: payload.nonce,
+    });
+  }
+  return signedMessage.publicKey.startsWith("ml-dsa-65:")
+    ? verifyMlDsa65Nep413Signature(signedMessage as never, payload, {
+        near,
+        maxAge: 15 * 60 * 1000,
+      })
+    : verifyNep413Signature(signedMessage as never, payload, { near, maxAge: 15 * 60 * 1000 });
+}
+
 function nearAccountKey(account: Pick<NearAccount, "accountId" | "network">): string {
   return `${account.accountId}:${account.network}`;
 }
@@ -708,26 +739,12 @@ export const siwn = (options: SIWNPluginOptions) => {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
 
-            const isValid = isDeterministicAccountId(accountId)
-              ? verifyPasskeyNep413Signature({
-                  accountId,
-                  publicKey: signedMessage.publicKey,
-                  signature: signedMessage.signature,
-                  message,
-                  recipient,
-                  nonce: nonceBytes,
-                })
-              : signedMessage.publicKey.startsWith("ml-dsa-65:")
-                ? await verifyMlDsa65Nep413Signature(
-                    signedMessage,
-                    { message, recipient, nonce: nonceBytes, callbackUrl },
-                    { near, maxAge: 15 * 60 * 1000 },
-                  )
-                : await verifyNep413Signature(
-                    signedMessage,
-                    { message, recipient, nonce: nonceBytes, callbackUrl },
-                    { near, maxAge: 15 * 60 * 1000 },
-                  );
+            const isValid = await verifySignedMessage(
+              accountId,
+              signedMessage,
+              { message, recipient, nonce: nonceBytes, callbackUrl },
+              near,
+            );
 
             if (!isValid) {
               throw new APIError("UNAUTHORIZED", {
@@ -1244,26 +1261,12 @@ export const siwn = (options: SIWNPluginOptions) => {
             const near = getNear(network);
             const nonceBytes = hex.decode(nonce);
 
-            const isValid = isDeterministicAccountId(accountId)
-              ? verifyPasskeyNep413Signature({
-                  accountId,
-                  publicKey: signedMessage.publicKey,
-                  signature: signedMessage.signature,
-                  message,
-                  recipient,
-                  nonce: nonceBytes,
-                })
-              : signedMessage.publicKey.startsWith("ml-dsa-65:")
-                ? await verifyMlDsa65Nep413Signature(
-                    signedMessage,
-                    { message, recipient, nonce: nonceBytes, callbackUrl },
-                    { near, maxAge: 15 * 60 * 1000 },
-                  )
-                : await verifyNep413Signature(
-                    signedMessage,
-                    { message, recipient, nonce: nonceBytes, callbackUrl },
-                    { near, maxAge: 15 * 60 * 1000 },
-                  );
+            const isValid = await verifySignedMessage(
+              accountId,
+              signedMessage,
+              { message, recipient, nonce: nonceBytes, callbackUrl },
+              near,
+            );
 
             if (!isValid) {
               throw new APIError("UNAUTHORIZED", {
@@ -2156,3 +2159,5 @@ export const siwn = (options: SIWNPluginOptions) => {
     },
   };
 };
+
+export { DEFAULT_DEVICE_LINK_CLIENT_ID } from "./constants.js";

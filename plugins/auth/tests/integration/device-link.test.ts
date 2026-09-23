@@ -20,7 +20,7 @@ describe("device link", () => {
   let user: TestUser;
 
   beforeEach(async () => {
-    ({ services } = await createTestServices());
+    ({ services } = await createTestServices({ deviceLink: { clientId: CLIENT_ID } }));
     user = await createTestUser(services);
   });
 
@@ -89,6 +89,23 @@ describe("device link", () => {
       authRequest("/device/token", {
         method: "POST",
         body: { grant_type: GRANT_TYPE, device_code: code.device_code, client_id: "evil-client" },
+      }),
+    );
+    expect(tokenRes.status).toBe(400);
+    const body = (await tokenRes.json()) as { error?: string };
+    expect(body.error).toBe("invalid_grant");
+  });
+
+  it("rejects client ids that are not configured", async () => {
+    const codeRes = await services.handler(
+      authRequest("/device/code", { method: "POST", body: { client_id: "everything-dev" } }),
+    );
+    expect(codeRes.status).toBe(400);
+
+    const tokenRes = await services.handler(
+      authRequest("/device/token", {
+        method: "POST",
+        body: { grant_type: GRANT_TYPE, device_code: "any", client_id: "everything-dev" },
       }),
     );
     expect(tokenRes.status).toBe(400);

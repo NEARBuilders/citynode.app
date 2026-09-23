@@ -66,6 +66,9 @@
         "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
       ],
       "variables": {
+        "deviceLink": {
+          "clientId": "citynode-web"
+        },
         "passkey": {
           "rpID": "citynode.app",
           "rpName": "City Nodes"

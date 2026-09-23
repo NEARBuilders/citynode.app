@@ -720,7 +720,6 @@ export const contract = oc.router({
       z.object({
         eventName: z.string().min(1).max(64),
         organizationId: z.string().optional(),
-        role: z.enum(["admin", "member"]).optional(),
         maxUses: z.number().int().min(1).max(500).optional(),
         expiresInHours: z.number().int().min(1).max(168).optional(),
       }),
