@@ -63,7 +63,8 @@ export interface UiRsbuildConfigOptions {
   }) => NonNullable<EnvironmentConfig["plugins"]>;
 }
 
-const sanitizeContainerName = (pkgName: string): string => pkgName.replace(/[^A-Za-z0-9_]/g, "_");
+export const sanitizeContainerName = (pkgName: string): string =>
+  pkgName.replace(/[^A-Za-z0-9_]/g, "_");
 
 export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildConfig {
   const {

@@ -30,6 +30,7 @@ const require = createRequire(import.meta.url);
 
 export {
   createUiRsbuildConfig,
+  sanitizeContainerName,
   type UiRsbuildConfigOptions,
 } from "./rsbuild-config";
 export type { UiManifestGenPluginOptions };

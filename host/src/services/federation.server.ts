@@ -471,7 +471,22 @@ export const loadUiRouteConfig = (entry: UiRemoteEntry) =>
     expose: UI_EXPOSES.routeConfig,
     unwrapDefault: false,
     timeoutLabel: "Ui routeConfig",
-  });
+  }).pipe(
+    Effect.flatMap((module) => {
+      if (module?.routeConfigLoaders && typeof module.routeConfigLoaders === "object") {
+        return Effect.succeed(module);
+      }
+      return Effect.fail(
+        new FederationError({
+          remoteName: entry.name,
+          remoteUrl: entry.ssrUrl,
+          cause: new Error(
+            `routeConfig expose resolved without routeConfigLoaders — the built container name likely does not match the registered remote name "${entry.name}"`,
+          ),
+        }),
+      );
+    }),
+  );
 
 export interface ComposeModule {
   constructTree: (input: ConstructInput) => Promise<ConstructedTree>;

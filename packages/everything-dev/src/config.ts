@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { sanitizeContainerName } from "every-plugin/ui/mf-build";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
 import { fetchBosConfigFromFastKv } from "./fastkv";
@@ -1168,7 +1169,7 @@ function buildRuntimeUiConfig(
   if (!uiRuntime) return undefined;
 
   return {
-    name: typeof uiConfig?.name === "string" ? uiConfig.name : `${apiName}-ui`,
+    name: resolveUiRuntimeName(uiConfig, uiRuntime.localPath, apiName),
     url: uiRuntime.url,
     entry: uiRuntime.url
       ? `${uiRuntime.url.replace(/\/$/, "")}/mf-manifest.json`
@@ -1191,6 +1192,33 @@ function buildRuntimeUiConfig(
         ? uiConfig.ssrIntegrity
         : undefined,
   };
+}
+
+/**
+ * MF container identity must match the build: folder-form plugin ui sources
+ * build under the sanitized plugin workspace package name (the generated
+ * rsbuild config imports the plugin's package.json), so derive the same
+ * value here — an authored `ui.name` is only a fallback, and can never
+ * override what the container actually registers under.
+ */
+function resolveUiRuntimeName(
+  uiConfig: Record<string, unknown> | undefined,
+  localPath: string | undefined,
+  apiName: string,
+): string {
+  if (localPath) {
+    const uiPkgPath = join(localPath, "package.json");
+    const pkgPath = existsSync(uiPkgPath) ? uiPkgPath : join(dirname(localPath), "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { name?: unknown };
+      if (typeof pkg.name === "string" && pkg.name.length > 0) {
+        return sanitizeContainerName(pkg.name);
+      }
+    } catch (e) {
+      console.warn(`[Config] Could not read package.json at ${pkgPath}: ${e}`);
+    }
+  }
+  return typeof uiConfig?.name === "string" ? uiConfig.name : `${apiName}-ui`;
 }
 
 export function resolvePluginRuntimeName(
