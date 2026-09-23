@@ -190,6 +190,12 @@ export const devBootstrap = (
     const ssr = input.ssr ?? false;
     const proxy = input.proxy ?? false;
 
+    if (input.logLevel) {
+      yield* Effect.sync(() => {
+        process.env.BOS_LOG_LEVEL = input.logLevel;
+      });
+    }
+
     if (ssr) {
       yield* Effect.sync(() => {
         process.env.BOS_SSR = "1";

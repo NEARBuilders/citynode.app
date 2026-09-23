@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { Data, Deferred, Effect, Option, Ref, Stream } from "effect";
+import { stripAnsi } from "./dev-log-pipeline";
 import { ShellEnv } from "./env/project-env";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
@@ -42,14 +43,6 @@ export interface ProcessState {
   source?: "local" | "remote";
 }
 
-const stripAnsi = (input: string): string => {
-  const ESC = String.fromCharCode(27);
-  const BEL = String.fromCharCode(7);
-  return input
-    .replace(new RegExp(`${ESC}\\][^${BEL}]*${BEL}`, "g"), "")
-    .replace(new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g"), "");
-};
-
 const probeHttpOk = (url: string, timeoutMs = 400) =>
   Effect.tryPromise({
     try: async () => {
@@ -69,6 +62,8 @@ const probeHttpOk = (url: string, timeoutMs = 400) =>
 
 const LOCAL_PROBE_DEADLINE_MS = 90_000;
 const LOCAL_PROBE_INTERVAL_MS = 200;
+
+const cleanExitSignals: Record<string, true> = { SIGTERM: true, SIGINT: true };
 
 const REMOTE_PROBE_TIMEOUT_MS = 5000;
 const REMOTE_PROBE_DEADLINE_MS = 60_000;
@@ -368,9 +363,12 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       detached: true,
     });
 
+    let lastExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
     const exitCode = Effect.callback<number, Error>((resume) => {
-      const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        lastExit = { code, signal };
         resume(Effect.succeed(code ?? (signal ? 1 : 0)));
+      };
       const onError = (err: Error) => resume(Effect.fail(err));
       cmd.once("exit", onExit);
       cmd.once("error", onError);
@@ -379,6 +377,13 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         cmd.off("error", onError);
       });
     });
+
+    const describeExit = (exitCodeValue: number): string => {
+      if (lastExit?.code === null && lastExit.signal) return `signal: ${lastExit.signal}`;
+      return `exit code: ${exitCodeValue}`;
+    };
+    const isCleanSignalExit = (): boolean =>
+      lastExit?.code === null && lastExit.signal != null && lastExit.signal in cleanExitSignals;
 
     const markReady = Effect.gen(function* () {
       const currentStatus = yield* Ref.get(statusRef);
@@ -439,13 +444,20 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         if (currentStatus === "ready" || currentStatus === "error") {
           // Post-ready exits must stay visible — a silently dead child (OOM
           // kill included) used to leave the stack answering with nothing.
+          // A SIGTERM/SIGINT-signalled exit is the polite-quit path, not a
+          // crash, so it logs as a plain shutdown line.
           if (currentStatus === "ready") {
-            callbacks.onLog(name, `Process exited after ready (exit code: ${exitCodeValue})`, true);
+            const detail = describeExit(exitCodeValue);
+            callbacks.onLog(name, `Process exited after ready (${detail})`, !isCleanSignalExit());
             yield* markError(`Process exited after ready: ${name}`);
           }
           return;
         }
-        callbacks.onLog(name, `Process exited before ready (exit code: ${exitCodeValue})`, true);
+        callbacks.onLog(
+          name,
+          `Process exited before ready (${describeExit(exitCodeValue)})`,
+          !isCleanSignalExit(),
+        );
         yield* markError(`Process exited before ready: ${name}`);
       }),
     );

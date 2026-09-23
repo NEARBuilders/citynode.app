@@ -22,6 +22,7 @@ export const DevOptionsSchema = z.object({
   authPort: z.number().optional(),
   pluginPortStart: z.number().optional(),
   interactive: z.boolean().optional(),
+  logLevel: z.enum(["error", "warn", "info", "debug"]).optional(),
 });
 
 export const DevResultSchema = z.object({

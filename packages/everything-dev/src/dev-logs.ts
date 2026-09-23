@@ -1,12 +1,7 @@
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-
-const ESC = "\x1b";
-const BEL = "\x07";
-const ANSI_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}]*${BEL}`, "g");
-
-const stripAnsi = (input: string): string => input.replace(ANSI_RE, "");
+import { stripAnsi } from "./dev-log-pipeline";
 
 export interface LogEntry {
   timestamp: number;
@@ -40,23 +35,6 @@ export function formatLogLine(entry: LogEntry): string {
   return [`${head}${first}`, ...rest.map((line) => `${pad}${line}`)].join("\n");
 }
 
-const LOG_NOISE_PATTERNS = [
-  /\[ Federation Runtime \] Version .* from (host|ui) of shared singleton module/,
-  /Executing an Effect versioned \d+\.\d+\.\d+ with a Runtime of version/,
-  /you may want to dedupe the effect dependencies/,
-  /\[MF\] ✅ Registered /,
-  /\[MF\] ✅ Loaded constructor /,
-  /rspack\.config\.js not found — using the every-plugin build composition/,
-];
-
-export function isDebug(): boolean {
-  return process.env.DEBUG === "true" || process.env.DEBUG === "1";
-}
-
-export function isLogNoise(line: string): boolean {
-  return LOG_NOISE_PATTERNS.some((pattern) => pattern.test(line));
-}
-
 export async function createDevLogger(configDir: string, description: string): Promise<DevLogger> {
   const dir = getLogsDir(configDir);
   if (!existsSync(dir)) {
@@ -85,7 +63,6 @@ export async function createDevLogger(configDir: string, description: string): P
     latestFile,
     write: (entry) =>
       enqueue(async () => {
-        if (!isDebug() && isLogNoise(entry.line)) return;
         const line = `${formatLogLine(entry)}\n`;
         await appendFile(logFile, line);
         await appendFile(latestFile, line);

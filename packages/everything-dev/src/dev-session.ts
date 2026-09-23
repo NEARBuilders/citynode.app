@@ -1,13 +1,9 @@
 import { Deferred, Effect, Exit } from "effect";
-import {
-  type DevViewHandle,
-  type LogEntry,
-  type ProcessState,
-  renderDevView,
-} from "./components/dev-view";
+import { type DevViewHandle, type ProcessState, renderDevView } from "./components/dev-view";
 import { renderStreamingView } from "./components/streaming-view";
 import { getProjectRoot } from "./config";
-import { createDevLogger, formatLogLine, isDebug, isLogNoise } from "./dev-logs";
+import { createLogPipeline, type LogEvent, resolveLogLevel } from "./dev-log-pipeline";
+import { createDevLogger, formatLogLine } from "./dev-logs";
 import { ShellEnvLive } from "./env/project-env";
 import {
   getProcessStates,
@@ -27,11 +23,6 @@ import {
   ServiceDescriptorMapLive,
 } from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
-
-const shouldDisplayLog = (line: string): boolean => {
-  if (isDebug()) return true;
-  return !isLogNoise(line);
-};
 
 const isInteractiveSupported = (): boolean => {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
@@ -126,9 +117,26 @@ export const runDevSession = (
       });
     }
 
-    const allLogs: LogEntry[] = [];
     let view: DevViewHandle | null = null;
     let shouldExportLogs = false;
+
+    const logLevel = resolveLogLevel();
+    const allLogs: LogEvent[] = [];
+    const pipeline = createLogPipeline({
+      level: logLevel,
+      sinks: {
+        display: (event) => {
+          view?.addLog(event.source, event.line, event.level === "error");
+        },
+        file: (event) => {
+          if (orchestrator.noLogs) return;
+          void logger.write(event);
+        },
+        export: (event) => {
+          allLogs.push(event);
+        },
+      },
+    });
 
     const requestShutdownAndExport = () => {
       shouldExportLogs = true;
@@ -156,20 +164,7 @@ export const runDevSession = (
         view?.updateProcess(name, status, message);
       },
       onLog: (name, line, isError) => {
-        const entry: LogEntry = {
-          id: `${Date.now()}-${allLogs.length + 1}`,
-          source: name,
-          line,
-          timestamp: Date.now(),
-          isError,
-        };
-        allLogs.push(entry);
-        if (shouldDisplayLog(line)) {
-          view?.addLog(name, line, isError);
-        }
-        if (!orchestrator.noLogs) {
-          void logger.write(entry);
-        }
+        pipeline.ingest({ source: name, line, isError });
       },
     };
 
@@ -279,16 +274,18 @@ export const runDevSession = (
           }
         }
 
+        pipeline.flush();
+
         if (shouldExportLogs) {
           console.log("\n");
           console.log("═".repeat(70));
           console.log(`  SESSION LOGS: ${orchestrator.description}`);
           console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
-          console.log(`  Total entries: ${allLogs.length}`);
+          console.log(`  Filtered entries: ${allLogs.length} (level: ${logLevel})`);
           console.log("═".repeat(70));
           console.log("");
-          for (const entry of allLogs) {
-            console.log(formatLogLine(entry));
+          for (const event of allLogs) {
+            console.log(formatLogLine(event));
           }
           console.log("");
           console.log("═".repeat(70));
