@@ -1,9 +1,9 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { describe, expect, it } from "vitest";
 import { resolveUiRuntimeName } from "../../src/config";
-import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 
 const fixtures: Array<{ name: string; build: (root: string) => string }> = [
   {
@@ -48,11 +48,7 @@ describe("resolveUiRuntimeName", () => {
       mkdirSync(root, { recursive: true });
       try {
         const localPath = fixture.build(root);
-        const name = resolveUiRuntimeName(
-          { name: "auth-ui" },
-          localPath,
-          "auth-plugin",
-        );
+        const name = resolveUiRuntimeName({ name: "auth-ui" }, localPath, "auth-plugin");
         const expected = sanitizeContainerName(
           fixture.name === "workspace-form"
             ? "@everything-dev/auth-ui"
@@ -79,7 +75,9 @@ describe("resolveUiRuntimeName", () => {
 
 describe("sanitizeContainerName", () => {
   it("matches the build's container naming rule", () => {
-    expect(sanitizeContainerName("@everything-dev/auth-plugin")).toBe("_everything_dev_auth_plugin");
+    expect(sanitizeContainerName("@everything-dev/auth-plugin")).toBe(
+      "_everything_dev_auth_plugin",
+    );
     expect(sanitizeContainerName("ui")).toBe("ui");
   });
 });
