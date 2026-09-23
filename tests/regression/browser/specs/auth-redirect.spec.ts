@@ -1,32 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { computeRegressionEnv } from "../../lib/regression-env.mjs";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
-
-const { baseUrl } = computeRegressionEnv();
-
-// A wedged server endpoint must fail the test with a named error instead of
-// hanging the suite for minutes — every regression fetch carries a deadline.
-const FETCH_TIMEOUT_MS = 15_000;
-
-/**
- * Anonymous sign-in via the API produces a real session cookie pair (the
- * session token, plus the signed session_data cookie in production mode) that
- * can be injected into a browser context to emulate a signed-in visitor.
- */
-async function signInAnonymouslyCookies(): Promise<Array<{ name: string; value: string }>> {
-  const response = await fetch(`${baseUrl}/api/auth/sign-in/anonymous`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: baseUrl },
-    body: JSON.stringify({}),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`anonymous sign-in failed: ${response.status}`);
-  return response.headers.getSetCookie().map((cookie) => {
-    const pair = cookie.split(";")[0];
-    const index = pair.indexOf("=");
-    return { name: pair.slice(0, index), value: pair.slice(index + 1) };
-  });
-}
+import { injectCookies } from "../helpers/seeded";
 
 test.describe("Auth redirect", () => {
   let pageErrors: string[];
@@ -78,10 +52,9 @@ test.describe("Auth redirect", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
 
-    const cookies = await signInAnonymouslyCookies();
-    await page.context().addCookies(cookies.map((cookie) => ({ ...cookie, url: baseUrl })));
+    await injectCookies(page);
 
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.goto("/login?redirect=%2Fdashboard", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/dashboard/, { timeout: 15000, waitUntil: "commit" });
     await waitForApp(page);
 

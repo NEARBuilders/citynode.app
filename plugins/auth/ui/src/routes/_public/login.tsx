@@ -29,12 +29,14 @@ export const Route = createFileRoute("/_public/login")({
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     redirect: sanitizeRedirect(search.redirect),
   }),
-  beforeLoad: ({ context, search }) => {
+  beforeLoad: async ({ context, search }) => {
     const { queryClient, authClient } = context;
-    const initialSession = context.session;
-    const session =
-      initialSession ??
-      queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
+    // Read the session exactly like the authed route guards do (ensureSession
+    // in ui/src/lib/auth-guards.ts): an awaited queryClient.query() over the
+    // same query options. The optimistic context/cache read disagreed with
+    // the guard on a stale value, and the two redirect throwers ping-ponged
+    // /login <-> /dashboard until the router tripped its redirect limit.
+    const session = await queryClient.query(sessionQueryOptions(authClient, context.session));
 
     // Banned users must not be bounced into the /login#banned <-> /dashboard
     // redirect cycle — the authed guard sends them back here.
