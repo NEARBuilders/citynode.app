@@ -105,6 +105,7 @@ function CliLoginPage() {
     mutationFn: async () => {
       if (!state || !port) throw new Error("Missing CLI login parameters");
       const { data, error } = await auth.apiKey.create({
+        configId: "user-keys",
         name: `bos login — ${device ?? "cli"} — ${new Date().toLocaleString()}`,
         ...(expiresIn ? { expiresIn } : {}),
       });
