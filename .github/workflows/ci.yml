@@ -347,7 +347,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-browser == 'true'
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       CI: true
       API_DATABASE_URL: postgres://everythingdev:everythingdev@127.0.0.1:5434/api_test_db

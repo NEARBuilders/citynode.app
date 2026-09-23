@@ -1,6 +1,8 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 import { computeRegressionEnv } from "../lib/regression-env.mjs";
 
+const stallWatchdog = fileURLToPath(new URL("./helpers/stall-watchdog.mjs", import.meta.url));
 const mode = process.env.REGRESSION_MODE ?? "ssr";
 const command =
   mode === "prod"
@@ -32,7 +34,10 @@ export default defineConfig({
   timeout: 60000,
   fullyParallel: false,
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
+  // Retries off: a degradation wedge showed up as a cluster of flaky-then-
+  // passed pairs that doubled the wall time behind a starving fixture (ADR 0009).
+  retries: 0,
+  reporter: [["list"], [stallWatchdog]],
   globalSetup: "./helpers/global-setup.ts",
   use: {
     browserName: "chromium",
