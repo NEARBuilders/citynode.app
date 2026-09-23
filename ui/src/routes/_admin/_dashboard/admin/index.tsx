@@ -18,9 +18,12 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/")({
 });
 
 function AdminDashboard() {
-  const { auth, tenant, tenantOrganizationSlug } = Route.useRouteContext();
+  const { auth, tenant, tenantOrganizationSlug, runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
-  const platformAccount = getAccount();
+  // Read from route context, not the window-only helper — a bare getAccount()
+  // falls back to the default account on the server and hydrates to a
+  // different text, tearing the tree down client-side.
+  const platformAccount = getAccount(runtimeConfig);
   const user = auth?.user ?? null;
   const walletAccount = useNearAccount();
   const pendingProposalsQuery = useQuery(pendingProposalCountQueryOptions(apiClient));

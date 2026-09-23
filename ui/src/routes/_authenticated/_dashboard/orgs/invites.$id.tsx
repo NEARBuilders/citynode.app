@@ -7,8 +7,8 @@ import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/c
 import { useInvitationActions } from "./-use-invitation-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$id")({
-  head: () => ({
-    meta: [{ title: `Accept Invitation | ${getAppName()}` }],
+  head: ({ match }) => ({
+    meta: [{ title: `Accept Invitation | ${getAppName(match.context.runtimeConfig)}` }],
   }),
   loader: async ({ context, params }) => {
     await context.queryClient.ensureQueryData({
