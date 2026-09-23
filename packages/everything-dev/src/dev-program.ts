@@ -221,14 +221,17 @@ export const devBootstrap = (
       }
       const results = await Promise.all(buildTasks);
       if (results[0] === true) {
-        // The running bos process imported the previous everything-dev dist at
-        // startup — service descriptors, port wiring, and orchestrator
-        // behavior in THIS session are one build behind. Everything else
-        // (plugin child processes) spawns after this step and runs fresh.
-        console.log(
-          "[dev] everything-dev was rebuilt — this session still runs the previous " +
-            "orchestrator build. Restart `bos dev` once to pick it up.",
-        );
+        // Only the bos process itself runs the everything-dev dist (plugin
+        // children spawn after this step and load the fresh build). A source
+        // run (bun src/cli.ts) never imported dist, so nothing is stale for
+        // it — warn only where the previously imported build matters.
+        const runningFromDist = import.meta.url.includes("/dist/");
+        if (runningFromDist) {
+          console.log(
+            "[dev] everything-dev was rebuilt — this session still runs the previous " +
+              "orchestrator build. Restart `bos dev` once to pick it up.",
+          );
+        }
       }
     });
 
