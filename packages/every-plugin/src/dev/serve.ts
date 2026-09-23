@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import sirv from "sirv";
@@ -182,9 +183,13 @@ export async function startPluginDevServer(
     // Folder-form ui: one-shot build, then serve the ui source root's dist
     // (the factory's absolute distPath target) statically on the ui port.
     await runOnce("rsbuild", ["build", "--config", uiConfig]);
-    const workspaceRoot = path.dirname(cwd);
     const uiDistDir =
-      path.basename(cwd) === "ui" ? path.join(cwd, "dist") : path.join(workspaceRoot, "ui", "dist");
+      path.basename(cwd) === "ui" ? path.join(cwd, "dist") : path.join(cwd, "ui", "dist");
+    if (!fs.existsSync(path.join(uiDistDir, "remoteEntry.js"))) {
+      console.error(
+        `❌ UI dist is missing at ${uiDistDir} — the ui static server would serve 404s for every asset (build output layout mismatch?)`,
+      );
+    }
     const serveUiStatic = sirv(uiDistDir, { dev: true });
     uiStaticServer = http.createServer((req, res) => {
       applyCorsHeaders(res);
