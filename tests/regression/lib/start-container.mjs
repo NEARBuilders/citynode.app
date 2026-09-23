@@ -81,8 +81,12 @@ const dockerRun = () =>
       "--rm",
       "--name",
       containerName,
+      // Map the whole in-container port map, not just the host port: the
+      // runtime config embeds container-internal localhost URLs (ui 4103,
+      // auth-ui 4104, host-dist 4105) that the BROWSER on the runner must
+      // reach — a 4100-only map leaves every page load hanging.
       "-p",
-      `${basePort}:${basePort}`,
+      `${basePort}-${basePort + 20}:${basePort}-${basePort + 20}`,
       "--add-host=host.docker.internal:host-gateway",
       ...Object.entries(childEnv).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
       image,

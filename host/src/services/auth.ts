@@ -1,6 +1,7 @@
 import { Effect, Context as EffectContext } from "effect";
 import type { Context, Hono, Next } from "hono";
 import type { AuthClient, AuthPluginContext, AuthServices, HonoEnv } from "../lib/auth";
+import { logger } from "../utils/logger";
 import type { PluginResult } from "./plugins";
 
 function getAuthServices(plugins: PluginResult): AuthServices | null {
@@ -8,7 +9,16 @@ function getAuthServices(plugins: PluginResult): AuthServices | null {
   const effectContext = entry?.initialized?.effectContext;
   const servicesTag = entry?.initialized?.plugin?.servicesTag;
   if (!effectContext || !servicesTag) return null;
-  return EffectContext.get(effectContext as never, servicesTag as never) as AuthServices;
+  try {
+    return EffectContext.get(effectContext as never, servicesTag as never) as AuthServices;
+  } catch (error) {
+    // A tag the context doesn't carry means the plugin's Effect copy diverged
+    // from the host's (shared-dep negotiation failure) — say so loudly.
+    logger.error(
+      `[Auth] The auth plugin's servicesTag is not in its effectContext: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
 }
 
 /**
@@ -28,7 +38,20 @@ const authTimeoutResponse = () =>
 
 export function registerAuthHandler(app: Hono<HonoEnv>, plugins: PluginResult) {
   const services = getAuthServices(plugins);
-  if (!services) return;
+  if (!services) {
+    // Fail loud: an auth plugin that loaded but exposes no services silently
+    // unmounts every /api/auth/* route — plain-text 404s that look like the
+    // routes never existed. Name exactly which link is broken.
+    if (plugins.auth) {
+      logger.error(
+        `[Auth] The auth plugin is loaded but its services are unresolvable — /api/auth/* is NOT mounted: ` +
+          `effectContext=${plugins.auth.initialized?.effectContext ? "present" : "MISSING"}, ` +
+          `servicesTag=${plugins.auth.initialized?.plugin?.servicesTag ? "present" : "MISSING"}, ` +
+          `pluginName=${String(plugins.auth.initialized?.plugin?.id ?? plugins.auth.name ?? "unknown")}`,
+      );
+    }
+    return;
+  }
   app.on(["POST", "GET"], "/api/auth/*", (c) => {
     const pending = services.handler(c.req.raw);
     pending.catch(() => {});
