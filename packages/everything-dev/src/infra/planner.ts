@@ -392,6 +392,9 @@ export function buildEnvGenerated(
 
   if (resolvedPorts.host) {
     env.CORS_ORIGIN = `http://localhost:${resolvedPorts.host}`;
+    // The host origin for plugins that derive absolute URLs from it (e.g. the
+    // auth plugin's Better Auth baseURL — email links, passkey RP id).
+    env.BASE_URL = `http://localhost:${resolvedPorts.host}`;
   }
 
   for (const db of dbs) {

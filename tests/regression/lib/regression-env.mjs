@@ -153,6 +153,11 @@ export function regressionStackOptions(config, mode, env = process.env) {
       BETTER_AUTH_SECRET: config.authSecret,
       ...(mode === "prod" ? { PORT: String(basePort) } : {}),
       ...(mode === "dev" ? { BETTER_AUTH_URL: config.baseUrl } : {}),
+      // The auth plugin's dev config derives its Better Auth baseURL from
+      // BASE_URL — without it the instance falls back to localhost:3000 and
+      // every baseURL-derived URL (invite links, passkey RP id) is wrong
+      // whenever the stack runs on a non-3000 host port.
+      BASE_URL: config.baseUrl,
       BOS_NO_PERSIST_PORTS: "1",
       CORS_ORIGIN: env.CORS_ORIGIN ?? config.baseUrl,
     },
