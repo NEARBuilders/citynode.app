@@ -95,8 +95,17 @@ test.describe("CSR compose CSP", () => {
       (window as { __CSP_VIOLATIONS__?: string[] }).__CSP_VIOLATIONS__ = [];
       document.addEventListener("securitypolicyviolation", (event) => {
         const violations = (window as { __CSP_VIOLATIONS__?: string[] }).__CSP_VIOLATIONS__ ?? [];
+        const target = event.target as HTMLElement | null;
         violations.push(
-          `${event.violatedDirective}: ${event.blockedURL || event.srcElement?.nodeName || "?"}`,
+          [
+            event.violatedDirective,
+            // An empty blockedURL (e.g. an <img src=""> resolving to the
+            // document) renders as "#document" via the target fallback —
+            // keep both so the real source is always visible.
+            `blocked=${event.blockedURL || "(empty)"}`,
+            `at=${event.sourceFile}:${event.lineNumber}:${event.columnNumber}`,
+            `target=${target?.tagName ?? "?"}${target?.outerHTML ? ` ${target.outerHTML.slice(0, 120)}` : ""}`,
+          ].join(" "),
         );
       });
     });
