@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
 import { fetchBosConfigFromFastKv } from "./fastkv";
@@ -326,16 +327,15 @@ export async function buildRuntimePluginsForConfig(
 }
 
 function getEntryAssociatedUi(entry: Partial<BosPluginRef>): Record<string, unknown> | undefined {
-  if (!isPlainObject(entry.app)) {
-    return undefined;
-  }
+  const flat = isPlainObject(entry.ui) ? (entry.ui as Record<string, unknown>) : undefined;
+  const nested = (() => {
+    if (!isPlainObject(entry.app)) return undefined;
+    const app = entry.app as Record<string, unknown>;
+    return isPlainObject(app.ui) ? (app.ui as Record<string, unknown>) : undefined;
+  })();
+  const ui = flat ?? nested;
+  if (!ui) return undefined;
 
-  const app = entry.app as Record<string, unknown>;
-  if (!isPlainObject(app.ui)) {
-    return undefined;
-  }
-
-  const ui = app.ui as Record<string, unknown>;
   if ("shared" in ui) {
     throw new Error(
       "app.ui.shared is no longer supported. Move shared deps to app.api.shared, app.auth.shared, or plugins.*.shared.",
@@ -784,6 +784,49 @@ export async function buildRuntimeConfig(
   const apiIsRemote = apiRuntime.source === "remote";
   const resolvedApiName = resolvePluginRuntimeName(apiConfig.name, apiRuntime.localPath, "api");
 
+  const authEntry = await (async () => {
+    if (!authConfig || !authRuntime) return undefined;
+    if (!authRuntime.localPath && !authRuntime.url) return undefined;
+    let authName = resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth");
+    if (
+      authRuntime.source === "remote" &&
+      authRuntime.url &&
+      !authRuntime.localPath &&
+      typeof authConfig.name !== "string"
+    ) {
+      authName = await resolveRemotePluginRuntimeName(authRuntime.url, authName);
+    }
+    return {
+      name: authName,
+      extendsRef: authExtendsRef,
+      url: authRuntime.url,
+      entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
+      localPath: authRuntime.localPath,
+      port: authRuntime.port,
+      source: authRuntime.source,
+      proxy: authConfig.proxy,
+      variables: authConfig.variables,
+      secrets: authConfig.secrets,
+      integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
+      shared: authConfig.shared,
+      ui: buildRuntimeUiConfig(
+        "auth",
+        env,
+        getEntryAssociatedUi(authConfig as Partial<BosPluginRef>),
+        baseDir,
+        authName,
+        options?.authSource,
+      ),
+    };
+  })();
+
+  const explicitPlugins =
+    options?.plugins && Object.keys(options.plugins).length > 0 ? options.plugins : undefined;
+  const runtimePlugins: Record<string, RuntimePluginConfig> = { ...explicitPlugins };
+  if (authEntry && !runtimePlugins.auth) {
+    runtimePlugins.auth = authEntry;
+  }
+
   const result: RuntimeConfig = {
     env,
     account: config.account,
@@ -831,35 +874,8 @@ export async function buildRuntimeConfig(
       shared: apiConfig.shared,
       dependsOn: apiConfig.dependsOn ? normalizeStringArray(apiConfig.dependsOn) : undefined,
     },
-    auth: await (async () => {
-      if (!authConfig || !authRuntime) return undefined;
-      if (!authRuntime.localPath && !authRuntime.url) return undefined;
-      let authName = resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth");
-      if (
-        authRuntime.source === "remote" &&
-        authRuntime.url &&
-        !authRuntime.localPath &&
-        typeof authConfig.name !== "string"
-      ) {
-        authName = await resolveRemotePluginRuntimeName(authRuntime.url, authName);
-      }
-      return {
-        name: authName,
-        extendsRef: authExtendsRef,
-        url: authRuntime.url,
-        entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
-        localPath: authRuntime.localPath,
-        port: authRuntime.port,
-        source: authRuntime.source,
-        proxy: authConfig.proxy,
-        variables: authConfig.variables,
-        secrets: authConfig.secrets,
-        integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
-        shared: authConfig.shared,
-      };
-    })(),
-    plugins:
-      options?.plugins && Object.keys(options.plugins).length > 0 ? options.plugins : undefined,
+    auth: authEntry,
+    plugins: Object.keys(runtimePlugins).length > 0 ? runtimePlugins : undefined,
   };
 
   let manifestNodes: RuntimeDependencyNode[] = [];
@@ -1089,22 +1105,14 @@ function buildRuntimePluginConfig(
       : resolveRuntimeTarget(production, resolved.providerBaseDir, "remote");
   const apiName = resolvePluginRuntimeName(source.name, runtimeTarget.localPath, pluginId);
 
-  const uiConfig = resolved.associatedUi;
-  const uiDevelopment =
-    typeof uiConfig?.development === "string" ? uiConfig.development : undefined;
-  const uiProduction = typeof uiConfig?.production === "string" ? uiConfig.production : undefined;
-  const uiRuntime =
-    uiConfig && (uiDevelopment || uiProduction)
-      ? env === "development"
-        ? resolveDevelopmentTarget(
-            uiDevelopment,
-            uiProduction,
-            resolved.providerBaseDir,
-            forceSource,
-            `plugins.${pluginId}.ui`,
-          )
-        : resolveRuntimeTarget(uiProduction, resolved.providerBaseDir, "remote")
-      : undefined;
+  const ui = buildRuntimeUiConfig(
+    pluginId,
+    env,
+    resolved.associatedUi,
+    resolved.providerBaseDir,
+    apiName,
+    forceSource,
+  );
 
   const routes = source.routes;
 
@@ -1124,35 +1132,93 @@ function buildRuntimePluginConfig(
     shared: source.shared,
     connectSrc: normalizeStringArray(source.connectSrc),
     integrity: runtimeTarget.source === "remote" ? source.integrity : undefined,
-    ui: uiRuntime
-      ? {
-          name: typeof uiConfig?.name === "string" ? uiConfig.name : `${apiName}-ui`,
-          url: uiRuntime.url,
-          entry: uiRuntime.url
-            ? `${uiRuntime.url.replace(/\/$/, "")}/mf-manifest.json`
-            : "/mf-manifest.json",
-          source: uiRuntime.source,
-          localPath: uiRuntime.localPath,
-          port: uiRuntime.port,
-          integrity:
-            uiRuntime.source === "remote" && typeof uiConfig?.integrity === "string"
-              ? uiConfig.integrity
-              : undefined,
-          ssrUrl:
-            uiRuntime.source === "remote" && typeof uiConfig?.ssr === "string"
-              ? uiConfig.ssr
-              : uiRuntime.source === "local"
-                ? uiRuntime.url
-                : undefined,
-          ssrIntegrity:
-            uiRuntime.source === "remote" && typeof uiConfig?.ssrIntegrity === "string"
-              ? uiConfig.ssrIntegrity
-              : undefined,
-        }
-      : undefined,
+    ui,
     routes,
     dependsOn: source.dependsOn ? normalizeStringArray(source.dependsOn) : undefined,
   };
+}
+
+/**
+ * Resolve a plugin entry's associated ui surface (`plugins.<id>.ui` / legacy
+ * `plugins.<id>.app.ui`) into the runtime ui config. Extracted so app-slot
+ * entries (app.auth) resolve their ui the same way.
+ */
+function buildRuntimeUiConfig(
+  pluginId: string,
+  env: BosEnv,
+  uiConfig: Record<string, unknown> | undefined,
+  providerBaseDir: string,
+  apiName: string,
+  forceSource?: "local" | "remote",
+): RuntimePluginConfig["ui"] {
+  const uiDevelopment =
+    typeof uiConfig?.development === "string" ? uiConfig.development : undefined;
+  const uiProduction = typeof uiConfig?.production === "string" ? uiConfig.production : undefined;
+  const uiRuntime =
+    uiConfig && (uiDevelopment || uiProduction)
+      ? env === "development"
+        ? resolveDevelopmentTarget(
+            uiDevelopment,
+            uiProduction,
+            providerBaseDir,
+            forceSource,
+            `plugins.${pluginId}.ui`,
+          )
+        : resolveRuntimeTarget(uiProduction, providerBaseDir, "remote")
+      : undefined;
+  if (!uiRuntime) return undefined;
+
+  return {
+    name: resolveUiRuntimeName(uiConfig, uiRuntime.localPath, apiName),
+    url: uiRuntime.url,
+    entry: uiRuntime.url
+      ? `${uiRuntime.url.replace(/\/$/, "")}/mf-manifest.json`
+      : "/mf-manifest.json",
+    source: uiRuntime.source,
+    localPath: uiRuntime.localPath,
+    port: uiRuntime.port,
+    integrity:
+      uiRuntime.source === "remote" && typeof uiConfig?.integrity === "string"
+        ? uiConfig.integrity
+        : undefined,
+    ssrUrl:
+      uiRuntime.source === "remote" && typeof uiConfig?.ssr === "string"
+        ? uiConfig.ssr
+        : uiRuntime.source === "local"
+          ? uiRuntime.url
+          : undefined,
+    ssrIntegrity:
+      uiRuntime.source === "remote" && typeof uiConfig?.ssrIntegrity === "string"
+        ? uiConfig.ssrIntegrity
+        : undefined,
+  };
+}
+
+/**
+ * MF container identity must match the build: folder-form plugin ui sources
+ * build under the sanitized plugin workspace package name (the generated
+ * rsbuild config imports the plugin's package.json), so derive the same
+ * value here — an authored `ui.name` is only a fallback, and can never
+ * override what the container actually registers under.
+ */
+export function resolveUiRuntimeName(
+  uiConfig: Record<string, unknown> | undefined,
+  localPath: string | undefined,
+  apiName: string,
+): string {
+  if (localPath) {
+    const uiPkgPath = join(localPath, "package.json");
+    const pkgPath = existsSync(uiPkgPath) ? uiPkgPath : join(dirname(localPath), "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { name?: unknown };
+      if (typeof pkg.name === "string" && pkg.name.length > 0) {
+        return sanitizeContainerName(pkg.name);
+      }
+    } catch (e) {
+      console.warn(`[Config] Could not read package.json at ${pkgPath}: ${e}`);
+    }
+  }
+  return typeof uiConfig?.name === "string" ? uiConfig.name : `${apiName}-ui`;
 }
 
 export function resolvePluginRuntimeName(

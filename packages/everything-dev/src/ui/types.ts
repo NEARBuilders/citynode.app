@@ -1,14 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { AnyRouteMatch, AnyRouter, RouterHistory } from "@tanstack/react-router";
+import type { AnyRoute, AnyRouteMatch, AnyRouter, RouterHistory } from "@tanstack/react-router";
+import type { NavManifest } from "every-plugin/ui/manifest";
 import type { ClientRuntimeConfig } from "../types";
-import type { NavManifest } from "./compose/types";
 
 export interface RouterContext<TSession = unknown> {
   queryClient: QueryClient;
   runtimeConfig?: Partial<ClientRuntimeConfig>;
   session?: TSession;
   cspNonce?: string;
-  /** nav manifest derived from grafted plugin subtrees */
+  /** nav manifest derived from composed routes' staticData.nav */
   pluginNav?: NavManifest;
 }
 
@@ -21,8 +21,7 @@ export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {
   history?: RouterHistory;
   context?: Partial<RouterContextWithApi<TApiClient, TSession>>;
   basepath?: string;
-  /** composed (grafted) route tree override — server composition passes the
-   * fully grafted tree here; the bundled tree stays the fallback. */
+  /** composed route tree — manifest construction passes it here; the bundled tree stays the core-only fallback. */
   routeTree?: unknown;
 }
 
@@ -41,10 +40,12 @@ export interface RenderOptions<TSession = unknown> {
   basepath?: string;
   session?: TSession;
   cspNonce?: string;
-  /** composed (grafted) route tree — server composition only. */
-  routeTree?: unknown;
-  /** nav manifest derived from grafted subtrees — server composition only. */
+  /** composed route tree — server composition only. */
+  routeTree?: AnyRoute;
+  /** nav manifest derived from composed routes — server composition only. */
   pluginNav?: NavManifest;
+  /** correlation id from the host request — appears in SSR error logs. */
+  requestId?: string;
 }
 
 export interface RenderOptionsWithApi<TApiClient = unknown, TSession = unknown>
@@ -72,6 +73,4 @@ export interface RouterModule<TApiClient = unknown, TSession = unknown> {
     request: Request,
     options: RenderOptionsWithApi<TApiClient, TSession>,
   ) => Promise<RenderResult>;
-  /** raw generated route tree — composition re-grafts plugin subtrees onto it. */
-  routeTree?: unknown;
 }

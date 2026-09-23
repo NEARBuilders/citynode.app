@@ -3,6 +3,7 @@ import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
 import { classifyPluginFailure } from "every-plugin/errors";
+import { withRemoteEntryResilience } from "every-plugin/remote-entry";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -292,24 +293,48 @@ function unredactSecrets(
   );
 }
 
-function buildAuthBaseVariables(
+export function buildAuthBaseVariables(
   config: RuntimeConfig,
   corsOrigins: string[],
-): Record<string, unknown> {
-  const rawHostUrl =
-    config.env === "development"
-      ? (config.host?.url ?? `http://localhost:${config.host?.port ?? 3000}`)
-      : config.domain;
-  const hostUrl = toProtocolUrl(rawHostUrl, config.env);
-  const base: Record<string, unknown> = {
-    account: config.account,
-    domain: hostUrl,
-    hostUrl,
-  };
-  if (corsOrigins.length > 0) {
-    base.trustedOrigins = corsOrigins;
-  }
-  return base;
+): Effect.Effect<Record<string, unknown>> {
+  return Effect.gen(function* () {
+    const rawHostUrl =
+      config.env === "development"
+        ? (config.host?.url ?? `http://localhost:${config.host?.port ?? 3000}`)
+        : config.domain;
+    const hostUrl = toProtocolUrl(rawHostUrl, config.env);
+    const base: Record<string, unknown> = {
+      account: config.account,
+      domain: hostUrl,
+      hostUrl,
+      // The plugin's Better Auth baseURL — invite-email links, passkey RP-id
+      // derivation, and callback URLs all derive from it. Without it the
+      // plugin falls back to a hardcoded http://localhost:3000 while the host
+      // actually serves on its configured port.
+      baseUrl: hostUrl,
+    };
+    if (corsOrigins.length > 0) {
+      base.trustedOrigins = corsOrigins;
+    }
+
+    yield* Effect.logInfo(
+      `[Auth] Better Auth origin: ${hostUrl}${corsOrigins.length > 0 ? ` · trustedOrigins: ${corsOrigins.join(", ")}` : " · trustedOrigins: (none — only baseURL trusted)"}`,
+    );
+
+    if (hostUrl) {
+      const hostOrigin = new URL(hostUrl).origin;
+      if (
+        corsOrigins.length > 0 &&
+        !corsOrigins.some((origin) => new URL(origin).origin === hostOrigin)
+      ) {
+        yield* Effect.logWarning(
+          `[Auth] CORS_ORIGIN (${corsOrigins.join(", ")}) does not include the host origin ${hostOrigin}. Sign-in may fail after login redirects — fix CORS_ORIGIN in .env or let bos dev regenerate it.`,
+        );
+      }
+    }
+
+    return base;
+  });
 }
 
 function logBootstrapError(err: PluginBootstrapError): Effect.Effect<void> {
@@ -368,9 +393,14 @@ function loadPluginEntryEffect(
     const args: [unknown, unknown?] = [{ variables, secrets }];
     if (pluginsClient) args.push(pluginsClient);
 
+    const remoteUrl = `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
     const result = yield* Effect.tryPromise({
       try: (): Promise<Omit<HostPluginEntry, "key" | "name">> =>
-        runtime.usePlugin(entry.runtimeId, ...args),
+        withRemoteEntryResilience({
+          label: entry.key,
+          remoteUrl,
+          load: () => runtime.usePlugin(entry.runtimeId, ...args),
+        }),
       catch: (error) => {
         if (dbSecret !== null && secretKey) {
           const url = Redacted.value(dbSecret);
@@ -431,9 +461,17 @@ export const initializePlugins = Effect.gen(function* () {
     entryMap.set("api", { key: "api", runtimeId: config.api.name, config: config.api });
   }
   for (const [key, plugin] of Object.entries(config.plugins ?? {})) {
-    if (plugin.url) {
-      entryMap.set(key, { key, runtimeId: plugin.name, config: plugin });
+    if (!plugin.url) continue;
+    if (
+      key === "auth" &&
+      config.auth &&
+      (plugin === config.auth ||
+        (plugin.localPath && plugin.localPath === config.auth.localPath) ||
+        (!plugin.localPath && plugin.source === "remote" && plugin.url === config.auth.url))
+    ) {
+      continue;
     }
+    entryMap.set(key, { key, runtimeId: plugin.name, config: plugin });
   }
 
   const loadableEntries = [...dag.sorted].filter((k) => entryMap.has(k));
@@ -448,15 +486,24 @@ export const initializePlugins = Effect.gen(function* () {
 
   if (config.env === "production" && config.account) {
     const bosUrl = `bos://${config.account}/${config.domain ?? "everything.dev"}`;
-    verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl)
-      .then(({ verified, mismatches }) => {
+    // Scope-owned: the fiber lives with the plugins service — an abandoned
+    // attestation used to float outside any fiber's lifetime.
+    yield* Effect.forkScoped(
+      Effect.gen(function* () {
+        const { verified, mismatches } = yield* Effect.promise(() =>
+          verifyConfigAgainstChain(config as unknown as Record<string, unknown>, bosUrl),
+        );
         if (!verified) {
           logger.error(
             `[Attestation] Config integrity does not match on-chain anchor. Mismatches: ${mismatches.join(", ")}`,
           );
         }
-      })
-      .catch(() => {});
+      }).pipe(
+        Effect.catch(() =>
+          Effect.sync(() => logger.warn("[Attestation] On-chain config check failed")),
+        ),
+      ),
+    );
   }
 
   const corsOrigins = yield* readCorsOrigins();
@@ -537,7 +584,7 @@ export const initializePlugins = Effect.gen(function* () {
 
     let baseVariables: Record<string, unknown> | undefined;
     if (node.kind === "auth") {
-      baseVariables = buildAuthBaseVariables(config, corsOrigins);
+      baseVariables = yield* buildAuthBaseVariables(config, corsOrigins);
     }
 
     yield* Effect.logInfo(`[Plugins] Loading ${key} (${entry.config.name})`);
@@ -650,8 +697,66 @@ export class PluginsService extends Context.Service<PluginsService, PluginResult
   );
 }
 
-export function createPluginsClient(result: PluginResult, context?: unknown): unknown {
+export interface PluginsClientOptions {
+  /**
+   * Per-call deadline for oRPC plugin procedures. A hung plugin call rejects
+   * with a named timeout error instead of suspending the caller (an SSR
+   * stream) forever. Opt-in: unset means no deadline.
+   */
+  callTimeoutMs?: number;
+}
+
+/**
+ * Deadline-wrap every callable leaf of a nested oRPC client (namespaces are
+ * plain objects, procedures are functions). The underlying call keeps running
+ * after a deadline rejection — in-process, so a stray late settle is
+ * harmless; the point is that the CALLER (an SSR route loader) fails fast
+ * and the stream closes.
+ */
+function withCallDeadline(client: unknown, timeoutMs: number, path = "plugin"): unknown {
+  if (client === null || typeof client !== "object") return client;
+  const wrap = (fn: unknown, key: string) => {
+    if (typeof fn !== "function") return fn;
+    return (...args: unknown[]) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`[SSR] ${path}.${key}() exceeded ${timeoutMs}ms call deadline`)),
+          timeoutMs,
+        );
+        Promise.resolve(Reflect.apply(fn, target, args)).then(
+          (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          (error) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        );
+      });
+  };
+  const target = client as Record<string, unknown>;
+  return new Proxy(target, {
+    get(t, key, receiver) {
+      if (typeof key === "symbol") return Reflect.get(t, key, receiver);
+      const value = Reflect.get(t, key, receiver);
+      if (typeof value === "function") return wrap(value, key);
+      if (value !== null && typeof value === "object") {
+        return withCallDeadline(value, timeoutMs, `${path}.${key}`);
+      }
+      return value;
+    },
+  });
+}
+
+export function createPluginsClient(
+  result: PluginResult,
+  context?: unknown,
+  options?: PluginsClientOptions,
+): unknown {
+  const deadline = options?.callTimeoutMs;
   const apiClient = result.api?.createClient(context);
+  const scoped = (client: unknown) => (deadline ? withCallDeadline(client, deadline) : client);
 
   // Do NOT Object.assign the result — apiClient is a Proxy and assign would copy
   // only static own-properties, silently dropping Proxy-resolved RPC methods.
@@ -659,10 +764,13 @@ export function createPluginsClient(result: PluginResult, context?: unknown): un
   const pluginClients: Record<string, unknown> = {};
   for (const [key, plugin] of Object.entries(result.plugins)) {
     if (key === "api") continue;
-    pluginClients[key] = plugin.createClient(context);
+    pluginClients[key] = scoped(plugin.createClient(context));
   }
 
   if (result.authClient) {
+    // The better-auth client surface carries non-call function-valued
+    // members (atoms/markers) — leave it unwrapped; deadline only guards
+    // oRPC procedure calls.
     pluginClients.auth = result.authClient(context);
   }
 
@@ -670,7 +778,7 @@ export function createPluginsClient(result: PluginResult, context?: unknown): un
     return pluginClients;
   }
 
-  return new Proxy(apiClient, {
+  return new Proxy(scoped(apiClient) as Record<string, unknown>, {
     get(target, key) {
       if (typeof key === "string" && key in pluginClients) {
         return pluginClients[key];

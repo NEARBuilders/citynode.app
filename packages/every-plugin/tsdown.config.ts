@@ -10,12 +10,16 @@ export default defineConfig({
     "src/index.ts",
     "src/types.ts",
     "src/errors.ts",
+    "src/remote-entry.ts",
     "src/runtime/index.ts",
     "src/testing/index.ts",
     "src/runtime/mf-config.ts",
     "src/runtime/services/normalize.ts",
     "src/build/shared-deps.ts",
     "src/build/rspack/index.ts",
+    "src/ui/manifest/index.ts",
+    "src/ui/manifest/generator.ts",
+    "src/ui/mf-build/index.ts",
     "src/dev/serve.ts",
     "src/cli.ts",
   ],
@@ -41,7 +45,7 @@ export default defineConfig({
         }
         await chmod(filepath, 0o755);
       } catch (err) {
-        console.warn(`[tsdown] Failed to set shebang/permissions on ${file}: ${err}`);
+        console.warn(`[tsdown] Failed to set shebang/permissions on ${file}: ${String(err)}`);
       }
     }
 

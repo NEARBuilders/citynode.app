@@ -7,7 +7,8 @@ import {
 } from "./components/dev-view";
 import { renderStreamingView } from "./components/streaming-view";
 import { getProjectRoot } from "./config";
-import { createDevLogger } from "./dev-logs";
+import { createDevLogger, formatLogLine, isDebug, isLogNoise } from "./dev-logs";
+import { ShellEnvLive } from "./env/project-env";
 import {
   getProcessStates,
   makeDevProcess,
@@ -17,42 +18,26 @@ import {
 import { registerStandalone, unregisterPid, updateChildPids } from "./process-registry";
 import {
   type AppOrchestrator,
+  DevGeneratedEnvLive,
   DevRuntimeConfig,
   DevRuntimeConfigLive,
+  isAuthMirrorPluginEntry,
   type ServiceDescriptor,
   ServiceDescriptorMap,
   ServiceDescriptorMapLive,
 } from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
 
-const LOG_NOISE_PATTERNS = [
-  /\[ Federation Runtime \] Version .* from (host|ui) of shared singleton module/,
-  /Executing an Effect versioned \d+\.\d+\.\d+ with a Runtime of version/,
-  /you may want to dedupe the effect dependencies/,
-];
-
-const SSR_LOG_ALLOWLIST = [
-  /\bready\s+built in\b/i,
-  /\bcompiled\b.*successfully/i,
-  /\berror\b/i,
-  /\bfailed\b/i,
-  /\bexception\b/i,
-];
-
-const shouldDisplayLog = (source: string, line: string, isError?: boolean): boolean => {
-  if (process.env.DEBUG === "true" || process.env.DEBUG === "1") return true;
-  if (source === "ui-ssr") {
-    if (isError) return true;
-    return SSR_LOG_ALLOWLIST.some((pattern) => pattern.test(line));
-  }
-  return !LOG_NOISE_PATTERNS.some((pattern) => pattern.test(line));
+const shouldDisplayLog = (line: string): boolean => {
+  if (isDebug()) return true;
+  return !isLogNoise(line);
 };
 
 const isInteractiveSupported = (): boolean => {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
 };
 
-const STARTUP_ORDER = ["ui-ssr", "ui", "auth", "api", "plugin", "host-build", "host"];
+const STARTUP_ORDER = ["ui", "auth", "api", "plugin", "host-build", "host"];
 
 const sortByOrder = (packages: string[]): string[] => {
   return [...packages].sort((a, b) => {
@@ -68,12 +53,6 @@ const sortByOrder = (packages: string[]): string[] => {
     return aIdx - bIdx;
   });
 };
-
-function formatLogLine(entry: LogEntry): string {
-  const ts = new Date(entry.timestamp).toISOString();
-  const prefix = entry.isError ? "ERR" : "OUT";
-  return `[${ts}] [${entry.source}] [${prefix}] ${entry.line}`;
-}
 
 export interface DevSessionControls {
   requestShutdown: () => void;
@@ -130,15 +109,11 @@ export const runDevSession = (
       addPort("api", runtimeConfig.api.port);
       addPort("ui", runtimeConfig.ui.port);
       addPort("auth", runtimeConfig.auth?.port);
-      addPort(
-        "uiSsr",
-        runtimeConfig.ui.ssrUrl
-          ? Number.parseInt(new URL(runtimeConfig.ui.ssrUrl).port, 10)
-          : undefined,
-      );
       if (runtimeConfig.plugins) {
         for (const [id, plugin] of Object.entries(runtimeConfig.plugins)) {
-          addPort(`plugin:${id}`, plugin.port);
+          if (!isAuthMirrorPluginEntry(runtimeConfig, id, plugin)) {
+            addPort(`plugin:${id}`, plugin.port);
+          }
           addPort(`plugin-ui:${id}`, plugin.ui?.port);
         }
       }
@@ -189,7 +164,7 @@ export const runDevSession = (
           isError,
         };
         allLogs.push(entry);
-        if (shouldDisplayLog(name, line, isError)) {
+        if (shouldDisplayLog(line)) {
           view?.addLog(name, line, isError);
         }
         if (!orchestrator.noLogs) {
@@ -331,6 +306,8 @@ const runApp = (
   orchestrator: AppOrchestrator,
   services: Map<string, ServiceDescriptor>,
   runtimeConfig: RuntimeConfig,
+  envGenerated: Record<string, string> = {},
+  shellEnv: Record<string, string> = {},
 ) => {
   let controls: DevSessionControls | null = null;
   let signalCount = 0;
@@ -342,6 +319,21 @@ const runApp = (
     process.exit(0);
   };
 
+  // Orphan watch: when the wrapper chain above this process dies (playwright
+  // tree-kills its webServer with SIGKILL — no signal handler runs, detached
+  // group escapes), this orchestrator is reparented. Detect that and reap the
+  // whole service tree — the alternatives are zombie port squatters that
+  // poison the next run. Covers shell aborts (Ctrl+C killing only the
+  // wrapper) the same way.
+  const initialPpid = process.ppid;
+  const orphanWatch = setInterval(() => {
+    if (process.ppid !== initialPpid) {
+      console.error("\n[Dev] Parent process died — force exiting (orphaned service tree)");
+      forceExit();
+    }
+  }, 200);
+  orphanWatch.unref?.();
+
   const program = Effect.scoped(
     runDevSession(orchestrator, (sessionControls) => {
       controls = sessionControls;
@@ -349,6 +341,8 @@ const runApp = (
   ).pipe(
     Effect.provide(ServiceDescriptorMapLive(services)),
     Effect.provide(DevRuntimeConfigLive(runtimeConfig)),
+    Effect.provide(DevGeneratedEnvLive(envGenerated)),
+    Effect.provide(ShellEnvLive(shellEnv)),
     Effect.catchDefect((defect) =>
       Effect.sync(() => {
         console.error("[Dev] Unhandled defect in orchestrator:", defect);
@@ -371,6 +365,7 @@ const runApp = (
   process.on("SIGTERM", handleSignal);
 
   Effect.runPromiseExit(program).then((exit) => {
+    clearInterval(orphanWatch);
     if (forceExitTimer) clearTimeout(forceExitTimer);
     process.exit(Exit.isSuccess(exit) ? 0 : 0);
   });

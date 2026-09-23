@@ -1,4 +1,4 @@
-import type { EventMap } from "@hot-labs/near-connect";
+import type { EventMap, WalletManifest } from "@hot-labs/near-connect";
 import { hex } from "@scure/base";
 import type {
   BetterFetch,
@@ -9,6 +9,7 @@ import type {
 import { atom } from "nanostores";
 import type { Near as NearType, SignedMessage } from "near-kit";
 import { fromNearConnect, generateNonce, Near, type TransactionBuilder } from "near-kit";
+import { linkPasskeyWallet } from "./passkey-client.js";
 import {
   type NearClientAtoms,
   type NearNetwork,
@@ -59,6 +60,7 @@ export interface SIWNClientConfig {
   recipients?: DualNetworkConfig<string>;
   networkId?: "mainnet" | "testnet";
   cspNonce?: string;
+  wallets?: WalletManifest[];
 }
 
 interface SignWithWalletResult {
@@ -85,6 +87,7 @@ export interface SIWNClientActions {
     ensureConnected: () => Promise<boolean>;
     disconnect: () => Promise<void>;
     link: (callbacks?: AuthCallbacks) => Promise<void>;
+    linkPasskeyWallet: (callbacks?: AuthCallbacks) => Promise<{ accountId: string } | null>;
     unlink: (params: {
       accountId: string;
       network?: "mainnet" | "testnet";
@@ -119,6 +122,41 @@ export interface SIWNClientActions {
     near: (callbacks?: AuthCallbacks) => Promise<void>;
   };
 }
+
+export { DEFAULT_DEVICE_LINK_CLIENT_ID } from "./constants.js";
+
+/**
+ * Executor build of NEAR-DevHub/near-connect-passkey (mainnet only). Bump the
+ * version on every executor change — near-connect caches executor code in
+ * IndexedDB keyed by `id:version`.
+ */
+export const passkeyWalletManifest: WalletManifest = {
+  id: "passkey",
+  version: "1.0.1",
+  name: "Passkey",
+  icon: "https://trezu.org/icons/passkey.svg",
+  description: "Sign in with Face ID, Touch ID, or your device passcode.",
+  website: "https://trezu.org",
+  executor:
+    "https://raw.githubusercontent.com/NEAR-DevHub/near-connect-passkey/refs/heads/main/passkey-executor.js",
+  type: "sandbox",
+  platform: ["web"],
+  features: {
+    signMessage: true,
+    signTransaction: false,
+    signAndSendTransaction: true,
+    signAndSendTransactions: true,
+    signInWithoutAddKey: true,
+    signInAndSignMessage: true,
+    signInWithFunctionCallKey: false,
+    signDelegateActions: true,
+    mainnet: true,
+    testnet: false,
+  },
+  permissions: {
+    storage: true,
+  },
+};
 
 export const siwnClient = (config: SIWNClientConfig) => {
   const nearState = atom<NearState>(null);
@@ -180,6 +218,9 @@ export const siwnClient = (config: SIWNClientConfig) => {
     const initPromise = (async () => {
       const NearConnector = await loadConnector();
       const connector = new NearConnector({ network, cspNonce: config.cspNonce });
+      for (const manifest of config.wallets ?? []) {
+        await connector.registerWallet(manifest).catch(() => {});
+      }
       connectors.set(network, connector);
 
       const near = new Near({
@@ -636,6 +677,47 @@ export const siwnClient = (config: SIWNClientConfig) => {
               ...fetchOptions,
             });
           },
+          linkPasskeyWallet: async (callbacks?: AuthCallbacks) => {
+            try {
+              const net = activeNetwork.get();
+              const recipient = getRecipient(net);
+              const result = await linkPasskeyWallet({
+                recipient,
+                listCredentialIds: async () => {
+                  const response = await $fetch<Array<{ credentialID: string }> | null>(
+                    "/passkey/list-user-passkeys",
+                    { method: "GET" },
+                  );
+                  return (response.data ?? []).map((passkey) => passkey.credentialID);
+                },
+                fetchLink: async (body) => {
+                  const response = await $fetch<{ accountId: string; success: boolean } | null>(
+                    "/near/link-passkey-wallet",
+                    {
+                      method: "POST",
+                      body,
+                    },
+                  );
+                  if (response.error || !response.data) {
+                    throw new Error(response.error?.message || "Failed to link passkey wallet");
+                  }
+                  return { accountId: response.data.accountId };
+                },
+              });
+
+              nearState.set({
+                accountId: result.accountId,
+                publicKey: null,
+                networkId: net,
+              });
+              $store.notify("$sessionSignal");
+              callbacks?.onSuccess?.();
+              return result;
+            } catch (error) {
+              callbacks?.onError?.(error instanceof Error ? error : new Error(String(error)));
+              return null;
+            }
+          },
           listAccounts: async (): Promise<BetterFetchResponse<ListAccountsResponseT>> => {
             return await $fetch("/near/list-accounts", { method: "GET" });
           },
@@ -676,7 +758,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
           getRelayerInfo: async (params?: GetRelayerInfoRequestT) => {
             return await $fetch("/near/relayer-info", {
               method: "POST",
-              body: { ...(params ?? {}), network: params?.network ?? activeNetwork.get() },
+              body: { ...params, network: params?.network ?? activeNetwork.get() },
             });
           },
           relayHistory: async () => {

@@ -7,7 +7,8 @@ const HYDRATION_PATTERNS = [
   "Cannot read properties of undefined (reading 'call')",
   "Text content did not match",
   "Hydration failed because the initial UI",
-  "Hydration failed because the server rendered HTML didn't match",
+  // React 19 wording — e.g. "the server rendered text didn't match the client".
+  "Hydration failed because the server rendered",
   "Expected server HTML to contain a matching",
   "did not match server-rendered HTML",
 ];

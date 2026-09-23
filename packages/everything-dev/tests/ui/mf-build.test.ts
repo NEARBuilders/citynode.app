@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   CORE_UI_DEPLOY_FIELDS,
   createUiSharedDeps,
-  isUiServerBuild,
   pluginUiDeployFields,
 } from "../../src/ui/mf-build";
 
@@ -44,6 +43,14 @@ describe("createUiSharedDeps", () => {
     const deps = createUiSharedDeps({ dependencies: { react: "19.1.0" } });
     expect(deps.react.requiredVersion).toBe("19.2.4");
   });
+
+  it("consumer role sets import: false — no bundled fallback copy", () => {
+    const provider = createUiSharedDeps(pkg, { role: "provider" });
+    const consumer = createUiSharedDeps(pkg, { role: "consumer" });
+    expect(provider.react.import).toBeUndefined();
+    expect(consumer.react.import).toBe(false);
+    expect(consumer.react).toMatchObject({ singleton: true, eager: false, strictVersion: true });
+  });
 });
 
 describe("pluginUiDeployFields", () => {
@@ -55,15 +62,5 @@ describe("pluginUiDeployFields", () => {
       ssrIntegrityField: "plugins.auth.ui.ssrIntegrity",
     });
     expect(CORE_UI_DEPLOY_FIELDS.urlField).toBe("app.ui.production");
-  });
-
-  it("reads the current build target flag", () => {
-    const was = process.env.BUILD_TARGET;
-    process.env.BUILD_TARGET = "server";
-    expect(isUiServerBuild()).toBe(true);
-    process.env.BUILD_TARGET = "client";
-    expect(isUiServerBuild()).toBe(false);
-    if (was === undefined) delete process.env.BUILD_TARGET;
-    else process.env.BUILD_TARGET = was;
   });
 });

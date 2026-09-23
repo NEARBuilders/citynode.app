@@ -6,6 +6,7 @@ import type {
 } from "better-near-auth";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { InferInput, InferOutput } from "./contract";
+import type { OrganizationMembershipPolicy } from "./organization-membership-policy";
 
 export type Auth = BetterAuthResult;
 export type { Auth as BaseAuth } from "better-auth";
@@ -44,6 +45,7 @@ export type AuthSiwnConfig = AuthSiwnRecipientConfig | AuthSiwnRecipientsConfig;
 export interface AuthConfig {
   secret: string;
   baseUrl: string;
+  organizationMembershipLimit?: number;
   trustedOrigins?: string[];
   isProduction?: boolean;
   socialProviders?: {
@@ -93,4 +95,5 @@ export interface AuthServices {
   db: AuthDatabase;
   handler: (req: Request) => Promise<Response>;
   apiKeyHeaders: string[];
+  membershipPolicy?: OrganizationMembershipPolicy;
 }

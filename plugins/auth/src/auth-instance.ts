@@ -2,7 +2,14 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin, anonymous, organization, phoneNumber } from "better-auth/plugins";
+import { APIError } from "better-auth/api";
+import {
+  admin,
+  anonymous,
+  deviceAuthorization,
+  organization,
+  phoneNumber,
+} from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import {
   adminAc,
@@ -10,7 +17,9 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
-import { type SIWNPluginOptions, siwn } from "better-near-auth";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
+import { gt } from "drizzle-orm";
+import { deviceLink } from "./device-link";
 
 const orgStatements = {
   ...defaultStatements,
@@ -37,6 +46,14 @@ const orgRoles = {
 import type { AuthConfig } from "./auth-config";
 import type { Database as AuthDatabase } from "./db";
 import * as schema from "./db/schema";
+import {
+  isNearInvitation,
+  isNearNetwork,
+  nearInvitationEmail,
+  nearInvitations,
+  normalizeNearAccountId,
+} from "./near-invitations";
+import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -240,6 +257,7 @@ export function createAuthInstance(
   const githubConfig = config.socialProviders?.github;
   const googleConfig = config.socialProviders?.google;
   const siwnOptions = buildSiwnOptions(config);
+  const membershipPolicy = createOrganizationMembershipPolicy(config.organizationMembershipLimit);
   const mainnetRecipient = isRecipientsConfig(siwnOptions)
     ? siwnOptions.recipients.mainnet
     : siwnOptions.recipient;
@@ -252,6 +270,13 @@ export function createAuthInstance(
     trustedOrigins: config.trustedOrigins?.length ? config.trustedOrigins : undefined,
     secret: config.secret,
     baseURL: config.baseUrl,
+    // better-auth's core limiter defaults to enabled in production with a
+    // single shared per-path bucket when no client IP is resolvable — the
+    // regression container's whole /api/auth/* traffic shares one bucket and
+    // trips it within seconds. Test environments opt out explicitly.
+    ...(process.env.BETTER_AUTH_RATE_LIMIT_DISABLED === "1"
+      ? { rateLimit: { enabled: false } }
+      : {}),
     socialProviders: {
       github: {
         clientId: githubConfig?.clientId ?? "",
@@ -279,15 +304,105 @@ export function createAuthInstance(
             }),
           ]
         : []),
-      passkey(passkeyOptions),
+      passkey({
+        ...passkeyOptions,
+        registration: {
+          requireSession: false,
+          resolveUser: async ({ ctx }) => {
+            const recipient = mainnetRecipient;
+            const email = `passkey-${crypto.randomUUID().slice(0, 8)}@${recipient}`;
+            const created = await ctx.context.internalAdapter.createUser({
+              email,
+              name: "Passkey user",
+              emailVerified: true,
+            });
+            if (!created) {
+              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to create user" });
+            }
+            return { id: created.id, name: created.name, displayName: created.name };
+          },
+        },
+      }),
       organization({
         ac: orgAc,
         roles: orgRoles,
+        membershipLimit: membershipPolicy.limit,
         teams: {
           enabled: true,
+          defaultTeam: { enabled: false },
+          allowRemovingAllTeams: true,
+        },
+        schema: {
+          team: {
+            additionalFields: {
+              metadata: { type: "string", required: false, input: true },
+            },
+          },
+          invitation: {
+            additionalFields: {
+              nearAccountId: { type: "string", required: false, input: true },
+              nearNetwork: { type: "string", required: false, input: true },
+            },
+          },
+        },
+        organizationHooks: {
+          beforeCreateInvitation: async ({ invitation }) => {
+            const accountId =
+              typeof invitation.nearAccountId === "string" ? invitation.nearAccountId : undefined;
+            const suppliedNetwork = invitation.nearNetwork;
+            if (accountId) {
+              const normalizedAccountId = normalizeNearAccountId(accountId);
+              if (!normalizedAccountId) {
+                throw new APIError("BAD_REQUEST", { message: "Invalid NEAR account id" });
+              }
+              if (!isNearNetwork(suppliedNetwork)) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "A wallet invitation requires a mainnet or testnet network",
+                });
+              }
+              const duplicate = await db.query.invitation.findFirst({
+                where: (stored, { and, eq }) =>
+                  and(
+                    eq(stored.organizationId, invitation.organizationId),
+                    eq(stored.status, "pending"),
+                    gt(stored.expiresAt, new Date()),
+                    eq(stored.nearAccountId, normalizedAccountId),
+                    eq(stored.nearNetwork, suppliedNetwork),
+                  ),
+              });
+              if (duplicate) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Wallet invitation already exists for this account and network",
+                });
+              }
+              return {
+                data: {
+                  ...invitation,
+                  email: nearInvitationEmail(normalizedAccountId, suppliedNetwork),
+                  nearAccountId: normalizedAccountId,
+                  nearNetwork: suppliedNetwork,
+                },
+              };
+            }
+            if (suppliedNetwork !== undefined) {
+              throw new APIError("BAD_REQUEST", {
+                message: "A NEAR network can only be supplied for wallet invitations",
+              });
+            }
+            return undefined;
+          },
+          beforeAcceptInvitation: async ({ invitation }) => {
+            if (isNearInvitation(invitation)) {
+              throw new APIError("BAD_REQUEST", {
+                message:
+                  "Wallet invitations are accepted by signing in with the invited NEAR account",
+              });
+            }
+          },
         },
         async sendInvitationEmail(data) {
-          const inviteLink = `${config.baseUrl}/accept-invitation/${data.id}`;
+          if (isNearInvitation(data.invitation)) return;
+          const inviteLink = `${config.baseUrl}/orgs/invites/${data.id}`;
           await sendEmail(
             {
               to: data.email,
@@ -299,6 +414,13 @@ export function createAuthInstance(
           );
         },
       }),
+      nearInvitations(db, membershipPolicy),
+      deviceAuthorization({
+        verificationUri: "/device",
+        validateClient: (clientId) =>
+          clientId === (config.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID),
+      }),
+      deviceLink(db),
       apiKey([
         {
           configId: "user-keys",
@@ -383,9 +505,14 @@ export function createAuthInstance(
       },
     },
     advanced: {
+      // One switch for the Secure attribute and the __Secure- name prefix,
+      // derived from the baseURL protocol — not NODE_ENV. An https baseURL
+      // (production, staging) keeps Secure cookies; an http baseURL (the
+      // regression container serving http://localhost:<port> in production
+      // mode) must issue cookies plain clients can send back.
+      useSecureCookies: config.baseUrl.startsWith("https://"),
       defaultCookieAttributes: {
         sameSite: "lax",
-        secure: config.isProduction ?? false,
         httpOnly: true,
       },
     },

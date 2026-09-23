@@ -29,13 +29,17 @@ type SessionAtom = WritableAtom<unknown>;
 const noopSubscribe = () => () => {};
 
 function useAtomValue<T>(atom: WritableAtom<T>): T {
-  return useSyncExternalStore(atom.subscribe, atom.get, atom.get);
+  return useSyncExternalStore(
+    (onStoreChange) => atom.subscribe(onStoreChange),
+    () => atom.get(),
+    () => atom.get(),
+  );
 }
 
 function useSessionAccountId(client: NearAtomsSource): string | null {
   const sessionAtom = client.$store?.atoms?.session as SessionAtom | undefined;
   return useSyncExternalStore(
-    sessionAtom ? sessionAtom.subscribe : noopSubscribe,
+    sessionAtom ? (onStoreChange) => sessionAtom.subscribe(onStoreChange) : noopSubscribe,
     () => readSessionNearAccountId(sessionAtom?.get()),
     () => null,
   );

@@ -13,5 +13,14 @@
     "effecttsgo/global-timers": "off",
     "effecttsgo/global-random": "off"
   },
-  "ignorePatterns": ["plans", "node_modules", "dist", "dist-*", "**/*.gen.ts", "**/types.gen.ts"]
+  "ignorePatterns": [
+    "plans",
+    "node_modules",
+    "repos",
+    "repos/**",
+    "dist",
+    "dist-*",
+    "**/*.gen.ts",
+    "**/types.gen.ts"
+  ]
 }

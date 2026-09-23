@@ -32,6 +32,10 @@ export const cliCommandMeta = {
         description:
           "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
       },
+      configPath: {
+        description:
+          "Boot from a local bos config file — skips FastKV resolution and SRI integrity verification",
+      },
     },
   },
   build: {
@@ -287,6 +291,18 @@ export const cliCommandMeta = {
     commandPath: ["ps"],
     summary: "List tracked development processes",
     interactive: false,
+  },
+  logs: {
+    commandPath: ["logs"],
+    summary: "Read dev session logs (.bos/logs/dev-latest.log)",
+    interactive: false,
+    fields: {
+      service: {
+        description: "Filter by service name (e.g. host, api, auth, ui, plugin:votes)",
+      },
+      tail: { description: "Show only the last N lines" },
+      follow: { description: "Stream the log as lines are appended" },
+    },
   },
   kill: {
     commandPath: ["kill"],

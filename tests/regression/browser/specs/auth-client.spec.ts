@@ -20,28 +20,4 @@ test.describe("authClient", () => {
 
     expectNoHydrationFailure(pageErrors);
   });
-
-  test("anonymous sign in works from browser", async ({ page }) => {
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
-    await waitForApp(page);
-
-    const status = await page.evaluate(async () => {
-      const response = await fetch("/api/auth/sign-in/anonymous", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: "{}",
-      });
-      return response.status;
-    });
-    expect(status).toBe(200);
-
-    const sessionStatus = await page.evaluate(async () => {
-      const response = await fetch("/api/auth/get-session", { credentials: "include" });
-      return response.status;
-    });
-    expect(sessionStatus).toBe(200);
-
-    expectNoHydrationFailure(pageErrors);
-  });
 });

@@ -77,9 +77,7 @@ function makeBindings(
   env: Record<string, string | undefined>,
 ): DatabaseBindingsService {
   return Effect.runSync(
-    Effect.gen(function* () {
-      return yield* DatabaseBindings;
-    }).pipe(
+    DatabaseBindings.pipe(
       Effect.provide(
         makeDatabaseBindings({
           projectDir: "/virtual/project",
@@ -92,14 +90,10 @@ function makeBindings(
 }
 
 function buildDrizzleKit(projectDir: string): DrizzleKitService {
-  return Effect.runSync(
-    Effect.gen(function* () {
-      return yield* DrizzleKit;
-    }).pipe(Effect.provide(makeDrizzleKitLive({ projectDir }))),
-  );
+  return Effect.runSync(DrizzleKit.pipe(Effect.provide(makeDrizzleKitLive({ projectDir }))));
 }
 
-async function expectFailure(effect: Effect.Effect<unknown, unknown>): Promise<unknown> {
+async function expectFailure<A, E extends Error>(effect: Effect.Effect<A, E>): Promise<unknown> {
   try {
     await Effect.runPromise(effect);
   } catch (error) {

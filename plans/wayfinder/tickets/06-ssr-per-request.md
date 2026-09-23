@@ -28,3 +28,9 @@ This ticket now gates two downstream flows, not one:
 2. **Member subdomains** (`<user>.<city>.<domain>`, map decision 15) — org-eligible members deploy UI-level overrides served per-request by a city node's dedicated host. Same composition problem, one more source of per-request variance (member runtime configs resolved via the tenant bindings table alongside tenant overrides).
 
 Any resolution must therefore handle three config sources per request: base runtime, tenant override, member override — with the member layer touching `ui`/`plugins.<id>.ui` only. The single-tree-runtime-override alternative (question 6) becomes more attractive as variance grows; measure before committing to per-request tree composition.
+
+## Resolution direction (2026-09-21, ADR 0007 §6)
+
+The digest-cache design **subsumes N config layers**: each distinct layer combination (base / +tenant / +member) resolves to a distinct config → distinct digest → its own cached composed tree. Per-request work is resolve + hash lookup — never load or compose (per-request tree composition stays dead, per the grafting-migration C2 decision). What remains deferred is the **member-subdomain resolver feature** (the third source), not architecture; when it arrives it is one more resolver step feeding the same cache. Question 4 (route-tree mutability) is dissolved by ADR 0008: the host constructs its own route objects from manifests — nothing foreign is mutated, and per-digest variants own fresh constructions.
+
+**Prototype evidence (2026-09-21, plan 033):** runtime-compose SSR + hydration proven end-to-end on the bundled generic host — base and tenant (full plugin swap, `landing` → `landingTenant`) compose at boot from descriptors, digest-cached, and hydrate cleanly with MF containers (`1941d45a9c505475` / `559ba09c779e4694`, zero mismatch errors). The digest-cache subsumption above is exercised, not just designed; the member-subdomain resolver remains the only deferred piece.

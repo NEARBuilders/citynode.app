@@ -38,6 +38,7 @@ export const StartOptionsSchema = z.object({
   domain: z.string().optional(),
   env: z.enum(["production", "staging"]).default("production"),
   registry: z.string().optional(),
+  configPath: z.string().optional(),
 });
 
 export const StartResultSchema = z.object({
@@ -491,6 +492,17 @@ export const PsResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const LogsOptionsSchema = z.object({
+  service: z.string().optional(),
+  tail: z.number().int().positive().max(100_000).optional(),
+  follow: z.boolean().optional(),
+});
+
+export const LogsResultSchema = z.object({
+  logFile: z.string(),
+  lines: z.array(z.string()),
+});
+
 export const KillOptionsSchema = z.object({
   configDir: z.string().optional(),
   signal: z.enum(["SIGTERM", "SIGKILL"]).default("SIGTERM"),
@@ -656,6 +668,10 @@ export const bosContract = oc.router({
     .input(DbRepairOptionsSchema)
     .output(DbRepairResultSchema),
   ps: oc.route({ method: "GET", path: "/ps" }).output(PsResultSchema),
+  logs: oc
+    .route({ method: "GET", path: "/logs" })
+    .input(LogsOptionsSchema)
+    .output(LogsResultSchema),
   kill: oc
     .route({ method: "POST", path: "/kill" })
     .input(KillOptionsSchema)
@@ -719,6 +735,8 @@ export type RuntimeOverrideTarget = z.infer<typeof RuntimeOverrideTargetSchema>;
 export type ProcessRole = z.infer<typeof ProcessRoleSchema>;
 export type PidEntry = z.infer<typeof PidEntrySchema>;
 export type PsResult = z.infer<typeof PsResultSchema>;
+export type LogsOptions = z.infer<typeof LogsOptionsSchema>;
+export type LogsResult = z.infer<typeof LogsResultSchema>;
 export type KillOptions = z.infer<typeof KillOptionsSchema>;
 export type KillResult = z.infer<typeof KillResultSchema>;
 export type TypecheckOptions = z.infer<typeof TypecheckOptionsSchema>;

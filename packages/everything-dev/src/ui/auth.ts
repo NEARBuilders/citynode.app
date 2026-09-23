@@ -5,13 +5,14 @@ import { useRouter } from "@tanstack/react-router";
 import {
   adminClient,
   anonymousClient,
+  deviceAuthorizationClient,
   inferAdditionalFields,
   organizationClient,
   phoneNumberClient,
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import type { RelayedTransactionT } from "better-near-auth";
-import { siwnClient } from "better-near-auth/client";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "../types";
 import { getRuntimeConfig } from "./runtime";
 
@@ -22,6 +23,9 @@ type RuntimeAuthVariables = {
       mainnet?: string;
       testnet?: string;
     };
+  };
+  deviceLink?: {
+    clientId?: string;
   };
 };
 
@@ -93,6 +97,12 @@ function getHostUrl(config?: Partial<ClientRuntimeConfig>) {
   return "";
 }
 
+export function getDeviceLinkClientId(config?: Partial<ClientRuntimeConfig>): string {
+  const runtimeConfig = readRuntimeConfig(config);
+  const variables = runtimeConfig?.auth?.variables as RuntimeAuthVariables | undefined;
+  return variables?.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID;
+}
+
 export function createAuthClient(options: CreateAuthClientOptions = {}) {
   const nearAuthConfig = getSiwnClientConfig(options);
 
@@ -109,8 +119,9 @@ export function createAuthClient(options: CreateAuthClientOptions = {}) {
       anonymousClient(),
       phoneNumberClient(),
       passkeyClient(),
-      organizationClient(),
+      organizationClient({ teams: { enabled: true } }),
       apiKeyClient(),
+      deviceAuthorizationClient(),
     ],
   });
 }
@@ -155,4 +166,46 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
     enabled: !!session,
     refetchInterval: 2000,
   });
+}
+
+export async function signInWithPasskey(
+  authClient: AuthClient,
+  options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+): Promise<SessionData | null> {
+  const fail = (error: Error) => {
+    options?.onError?.(error);
+    return null;
+  };
+
+  const attempt = async (): Promise<SessionData | null> => {
+    const { error, data } = await authClient.signIn.passkey();
+    if (error || !data) return null;
+    const { data: session } = await authClient.getSession();
+    options?.onSuccess?.();
+    return (session as SessionData) ?? null;
+  };
+
+  try {
+    const first = await attempt();
+    if (first) return first;
+  } catch (error) {
+    return fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+  }
+
+  try {
+    const { error } = await authClient.passkey.addPasskey();
+    if (error) {
+      return fail(new Error(error.message || "Passkey setup failed"));
+    }
+  } catch (error) {
+    return fail(error instanceof Error ? error : new Error("Passkey setup failed"));
+  }
+
+  try {
+    const second = await attempt();
+    if (second) return second;
+    return fail(new Error("Passkey sign-in failed"));
+  } catch (error) {
+    return fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+  }
 }

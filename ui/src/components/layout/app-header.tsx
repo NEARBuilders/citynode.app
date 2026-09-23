@@ -1,4 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
+import { UsersRound } from "lucide-react";
 import { Fragment } from "react";
 import type { ClientRuntimeConfig } from "@/app";
 import { getAccount, getActiveRuntime } from "@/app";
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useIdentity } from "./use-identity";
+import { useTeamWorkspace } from "./use-team-workspace";
 import { UserNav } from "./user-nav";
 
 interface AppHeaderProps {
@@ -19,6 +22,9 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ runtimeConfig }: AppHeaderProps) {
+  const { user } = useIdentity();
+  const { data: workspace } = useTeamWorkspace(!!user);
+  const activeTeamName = workspace?.activeTeam?.name;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const runtime = getActiveRuntime(runtimeConfig);
   const account = getAccount(runtimeConfig);
@@ -62,7 +68,18 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
             )}
           </BreadcrumbList>
         </Breadcrumb>
-        <div className="ml-auto shrink-0">
+        {activeTeamName && (
+          <div
+            className="ml-auto flex min-w-0 shrink items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-xs text-muted-foreground"
+            data-testid="workspace-active-team"
+          >
+            <UsersRound className="size-3.5 shrink-0" />
+            <span className="truncate">
+              operating as <span className="font-medium text-foreground">{activeTeamName}</span>
+            </span>
+          </div>
+        )}
+        <div className={activeTeamName ? "shrink-0" : "ml-auto shrink-0"}>
           <UserNav showOrgSwitcher={false} />
         </div>
       </div>

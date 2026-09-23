@@ -30,11 +30,31 @@ export function getLogsDir(configDir: string): string {
   return join(getBosDir(configDir), "logs");
 }
 
-function formatLogLine(entry: LogEntry): string {
+export function formatLogLine(entry: LogEntry): string {
   const ts = new Date(entry.timestamp).toISOString();
   const prefix = entry.isError ? "ERR" : "OUT";
   const clean = stripAnsi(entry.line);
-  return `[${ts}] [${entry.source}] [${prefix}] ${clean}`;
+  const head = `[${ts}] [${entry.source}] [${prefix}] `;
+  const pad = " ".repeat(head.length);
+  const [first, ...rest] = clean.split("\n");
+  return [`${head}${first}`, ...rest.map((line) => `${pad}${line}`)].join("\n");
+}
+
+const LOG_NOISE_PATTERNS = [
+  /\[ Federation Runtime \] Version .* from (host|ui) of shared singleton module/,
+  /Executing an Effect versioned \d+\.\d+\.\d+ with a Runtime of version/,
+  /you may want to dedupe the effect dependencies/,
+  /\[MF\] ✅ Registered /,
+  /\[MF\] ✅ Loaded constructor /,
+  /rspack\.config\.js not found — using the every-plugin build composition/,
+];
+
+export function isDebug(): boolean {
+  return process.env.DEBUG === "true" || process.env.DEBUG === "1";
+}
+
+export function isLogNoise(line: string): boolean {
+  return LOG_NOISE_PATTERNS.some((pattern) => pattern.test(line));
 }
 
 export async function createDevLogger(configDir: string, description: string): Promise<DevLogger> {
@@ -65,6 +85,7 @@ export async function createDevLogger(configDir: string, description: string): P
     latestFile,
     write: (entry) =>
       enqueue(async () => {
+        if (!isDebug() && isLogNoise(entry.line)) return;
         const line = `${formatLogLine(entry)}\n`;
         await appendFile(logFile, line);
         await appendFile(latestFile, line);

@@ -11,7 +11,7 @@ import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { buttonVariants } from "@/components/ui/button";
 
-const Toaster = ({ richColors: _, ...props }: ToasterProps) => {
+const Toaster = ({ richColors: _richColors, ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
 
   return (

@@ -78,7 +78,7 @@ function readWorkspaceCatalog(sourceDir: string): Record<string, string> {
   }
 
   const pkg = readJsonFile<{ workspaces?: { catalog?: Record<string, string> } }>(pkgPath);
-  return { ...(pkg.workspaces?.catalog ?? {}) };
+  return { ...pkg.workspaces?.catalog };
 }
 
 export async function resolveCatalogChainSource(opts: {

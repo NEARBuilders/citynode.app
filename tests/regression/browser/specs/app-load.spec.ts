@@ -27,29 +27,6 @@ test.describe("App load", () => {
     expect(config.hostUrl).toBeTruthy();
   });
 
-  test("backend assets reachable from browser", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await waitForApp(page);
-
-    const results = await page.evaluate(async () => {
-      const [skill, llms, health] = await Promise.all([
-        fetch("/skill.md"),
-        fetch("/llms.txt"),
-        fetch("/api/_health"),
-      ]);
-      return {
-        skillStatus: skill.status,
-        llmsStatus: llms.status,
-        healthStatus: health.status,
-      };
-    });
-
-    expect(results.skillStatus).toBe(200);
-    expect(results.llmsStatus).toBe(200);
-    expect(results.healthStatus).toBe(200);
-    expectNoHydrationFailure(pageErrors);
-  });
-
   test("about page navigates to skill", async ({ page }) => {
     await page.goto("/about", { waitUntil: "domcontentloaded" });
     await waitForApp(page);

@@ -37,11 +37,11 @@ export function applyRegistrySections(
   for (const section of sections) {
     if (section.startsWith("app.")) {
       const key = section.slice("app.".length);
-      merged.app = { ...(merged.app ?? {}), [key]: (remote as ComposableConfig).app?.[key] };
+      merged.app = { ...merged.app, [key]: (remote as ComposableConfig).app?.[key] };
     } else {
       const key = section.slice("plugins.".length);
       merged.plugins = {
-        ...(merged.plugins ?? {}),
+        ...merged.plugins,
         [key]: (remote as ComposableConfig).plugins?.[key],
       };
     }

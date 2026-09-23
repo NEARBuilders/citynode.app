@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { generateContractTypes } from "./build/contract-types";
 import { ensureGeneratedRspackConfig } from "./build/rspack/generated-config";
+import { ensureGeneratedUiRsbuildConfig } from "./ui/generated-config";
 
 function run(
   cmd: string,
@@ -36,6 +37,12 @@ async function runRspack(deploy: boolean): Promise<void> {
 
   const args = generatedConfig ? ["build", "--config", generatedConfig] : ["build"];
   await run("rspack", args, deploy ? { DEPLOY: "true" } : {});
+
+  const uiConfig = ensureGeneratedUiRsbuildConfig(process.cwd());
+  if (uiConfig) {
+    console.log("[every-plugin] Building folder-form ui source…");
+    await run("rsbuild", ["build", "--config", uiConfig], deploy ? { DEPLOY: "true" } : {});
+  }
 }
 
 export function runCliCommand(raw: string): Promise<void> {

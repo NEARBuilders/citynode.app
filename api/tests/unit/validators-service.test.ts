@@ -2,13 +2,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ORPCError } from "@orpc/server";
-import { Cause, Effect, Exit, Layer } from "effect";
+import { Cause, Data, Effect, Exit, Layer } from "effect";
 import { PluginIdTag } from "every-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseLive } from "@/db/layer";
 import { NodesLive, type NodesService, NodesTag } from "@/services/nodes";
 import { TenantsLive, type TenantsService, TenantsTag } from "@/services/tenants";
 import { ValidatorsLive, type ValidatorsService, ValidatorsTag } from "@/services/validators";
+
+class TestRunError extends Data.TaggedError("TestRunError")<{ cause: unknown }> {}
 
 let activeDir: string | null = null;
 
@@ -19,7 +21,7 @@ afterEach(() => {
   }
 });
 
-function freshLayer(): Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknown, never> {
+function freshLayer() {
   const dir = mkdtempSync(join(tmpdir(), "api-validators-"));
   activeDir = dir;
   const database = DatabaseLive(`pglite:${dir}`);
@@ -27,11 +29,7 @@ function freshLayer(): Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknow
     NodesLive.pipe(Layer.provide(database)),
     TenantsLive.pipe(Layer.provide(database)),
     ValidatorsLive.pipe(Layer.provide(database)),
-  ).pipe(Layer.provide(Layer.succeed(PluginIdTag, "api"))) as Layer.Layer<
-    NodesTag | TenantsTag | ValidatorsTag,
-    unknown,
-    never
-  >;
+  ).pipe(Layer.provide(Layer.succeed(PluginIdTag, "api")));
 }
 
 interface TestServices {
@@ -40,8 +38,8 @@ interface TestServices {
   validators: ValidatorsService;
 }
 
-async function runService<A>(
-  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknown, never>,
+async function runService<A, E>(
+  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, E, never>,
   fn: (svc: TestServices) => Promise<A>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
@@ -50,14 +48,14 @@ async function runService<A>(
     const validators = yield* ValidatorsTag;
     return yield* Effect.tryPromise({
       try: () => fn({ nodes, tenants, validators }),
-      catch: (error) => error,
+      catch: (error) => new TestRunError({ cause: error }),
     });
   });
   return Effect.runPromise(Effect.provide(effect, layer));
 }
 
-async function squashServiceError<A>(
-  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, unknown, never>,
+async function squashServiceError<A, E>(
+  layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, E, never>,
   fn: (svc: TestServices) => Promise<A>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {
@@ -66,14 +64,15 @@ async function squashServiceError<A>(
     const validators = yield* ValidatorsTag;
     return yield* Effect.tryPromise({
       try: () => fn({ nodes, tenants, validators }),
-      catch: (error) => error,
+      catch: (error) => new TestRunError({ cause: error }),
     });
   });
   const exit = await Effect.runPromiseExit(Effect.provide(effect, layer));
   if (Exit.isSuccess(exit)) {
     throw new Error("Expected effect to fail");
   }
-  return Cause.squash(exit.cause);
+  const squashed = Cause.squash(exit.cause);
+  return squashed instanceof TestRunError ? squashed.cause : squashed;
 }
 
 describe("ValidatorsService", () => {

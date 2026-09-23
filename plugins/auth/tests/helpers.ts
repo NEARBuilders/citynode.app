@@ -8,10 +8,12 @@ import { createApiKeyHandlers } from "../src/handlers/api-keys";
 import { createInvitationHandlers } from "../src/handlers/invitations";
 import { createMemberHandlers } from "../src/handlers/members";
 import { createNearHandlers } from "../src/handlers/near";
+import { createOnboardingHandlers } from "../src/handlers/onboarding";
 import { createOrganizationHandlers } from "../src/handlers/organizations";
 import { createSessionHandlers } from "../src/handlers/session";
 import { createTeamHandlers } from "../src/handlers/teams";
 import { createRequireAuth } from "../src/middleware";
+import { createOrganizationMembershipPolicy } from "../src/organization-membership-policy";
 import { AuthServicesTag, type PluginServices } from "../src/service-types";
 
 const TEST_DB_URL = "pglite::memory:";
@@ -40,6 +42,7 @@ export async function createTestServices(configOverrides?: Partial<AuthConfig>) 
     db: driver.db,
     handler: (req: Request) => auth.handler(req),
     apiKeyHeaders: ["x-api-key"],
+    membershipPolicy: createOrganizationMembershipPolicy(),
   };
 
   return { services, driver };
@@ -262,5 +265,6 @@ export function createTestHandlers(services: PluginServices) {
     apiKeys: wrap(createApiKeyHandlers(builder, requireAuth)),
     teams: wrap(createTeamHandlers(builder, requireAuth)),
     near: wrap(createNearHandlers(builder, requireAuth)),
+    onboarding: wrap(createOnboardingHandlers(builder, requireAuth)),
   };
 }

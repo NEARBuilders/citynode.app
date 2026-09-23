@@ -602,7 +602,10 @@ function createDiscovery(db: Database, lumaKeys: string) {
         isAdmin,
         nodes: await list({}),
         curators: isAdmin ? (await db.select().from(discoveryCurators)).map((r) => r.userId) : [],
-        reports: reports.map(({ token, ...r }) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+        reports: reports.map(({ token: _token, ...r }) => ({
+          ...r,
+          createdAt: r.createdAt.toISOString(),
+        })),
       };
     },
     setCurator: async (input: { userId: string; enabled: boolean }, context: AuthContext) => {
@@ -726,7 +729,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
         .where(eq(discoveryHistory.nodeId, nodeId))
         .orderBy(desc(discoveryHistory.recordedAt))
         .limit(100);
-      return rows.map(({ nodeId: _, ...row }) => ({
+      return rows.map(({ nodeId: _nodeId, ...row }) => ({
         ...row,
         recordedAt: row.recordedAt.toISOString(),
       }));

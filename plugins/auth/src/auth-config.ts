@@ -38,6 +38,7 @@ export type AuthSiwnConfig = AuthSiwnRecipientConfig | AuthSiwnRecipientsConfig;
 export interface AuthConfig {
   secret: string;
   baseUrl: string;
+  organizationMembershipLimit?: number;
   trustedOrigins?: string[];
   isProduction?: boolean;
   socialProviders?: {
@@ -51,6 +52,9 @@ export interface AuthConfig {
     };
   };
   passkey?: AuthPasskeyConfig;
+  deviceLink?: {
+    clientId: string;
+  };
   phoneNumber?: {
     twilio?: {
       accountSid: string;

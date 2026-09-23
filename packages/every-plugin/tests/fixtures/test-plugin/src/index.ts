@@ -144,6 +144,7 @@ export const TestPlugin = createPlugin({
         yield* client.streamItems(input.count, input.prefix);
       }),
 
+      // eslint-disable require-yield -- intentional empty async generator
       // biome-ignore lint/correctness/useYield: specific test case
       emptyStream: builder.emptyStream.handler(async function* ({ input }) {
         // Log why it's empty, do any setup/cleanup, but don't yield
@@ -151,6 +152,7 @@ export const TestPlugin = createPlugin({
         // Generator ends without yielding - creates empty AsyncIterable
         return;
       }),
+      // eslint-enable require-yield
 
       throwError: builder.throwError.handler(async ({ input, errors }) => {
         const message = input.customMessage || `Test ${input.errorType.toLowerCase()} error`;

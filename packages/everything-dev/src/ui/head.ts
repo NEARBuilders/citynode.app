@@ -7,8 +7,6 @@ export interface RemoteScriptsOptions {
   hydratePath?: string;
   integrity?: string;
   cspNonce?: string;
-  /** include each configured `plugins.<id>.ui` remoteEntry script */
-  includePluginUiRemotes?: boolean;
 }
 
 export function getThemeInitScript(): HeadScript {
@@ -19,7 +17,7 @@ export function getThemeInitScript(): HeadScript {
 }
 
 function escapeJsonForScript(value: unknown): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value ?? null)
     .replace(/<\/script/gi, "<\\/script")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
@@ -68,40 +66,17 @@ export function getHydrateScript(
 }
 
 export function getRemoteScripts(options: RemoteScriptsOptions): HeadScript[] {
-  const { runtimeConfig, containerName, hydratePath, integrity, cspNonce, includePluginUiRemotes } =
-    options;
+  const { runtimeConfig, containerName, hydratePath, integrity, cspNonce } = options;
   const assetsUrl = runtimeConfig?.assetsUrl?.replace(/\/$/, "");
   const entryScript: HeadScript = {
     src: `${assetsUrl ?? ""}/remoteEntry.js${integrity ? `?v=${encodeURIComponent(integrity)}` : ""}`,
+    crossOrigin: "anonymous",
   };
   if (integrity) {
     entryScript.integrity = integrity;
-    entryScript.crossOrigin = "anonymous";
   }
 
-  const pluginScripts: HeadScript[] = [];
-  if (includePluginUiRemotes && runtimeConfig?.ui?.compose) {
-    for (const plugin of Object.values(runtimeConfig?.plugins ?? {})) {
-      const ui = plugin?.ui;
-      if (!ui?.url) continue;
-      const script: HeadScript = {
-        src: `${ui.url.replace(/\/$/, "")}/remoteEntry.js${
-          ui.integrity ? `?v=${encodeURIComponent(ui.integrity)}` : ""
-        }`,
-      };
-      if (ui.integrity) {
-        script.integrity = ui.integrity;
-        script.crossOrigin = "anonymous";
-      }
-      pluginScripts.push(script);
-    }
-  }
-
-  return [
-    entryScript,
-    ...pluginScripts,
-    getHydrateScript(runtimeConfig, containerName, hydratePath, cspNonce),
-  ];
+  return [entryScript, getHydrateScript(runtimeConfig, containerName, hydratePath, cspNonce)];
 }
 
 export function getBaseStyles(): string {

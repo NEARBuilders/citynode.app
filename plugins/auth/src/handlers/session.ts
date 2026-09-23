@@ -1,9 +1,28 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { Context } from "effect";
 import { API_KEY_CONFIG_IDS } from "../config-schemas";
+import type { Database } from "../db";
 import * as schema from "../db/schema";
 import { AuthServicesTag } from "../service-types";
-import { createHeaders, getActiveOrganizationId, tryJsonParse } from "../utils";
+import {
+  createHeaders,
+  getActiveOrganizationId,
+  getActiveTeamId,
+  parseTeamAreas,
+  tryJsonParse,
+} from "../utils";
+
+async function listMemberTeams(db: Database, userId: string, organizationId: string) {
+  const rows = await db
+    .select({ id: schema.team.id, name: schema.team.name, metadata: schema.team.metadata })
+    .from(schema.teamMember)
+    .innerJoin(schema.team, eq(schema.teamMember.teamId, schema.team.id))
+    .where(
+      and(eq(schema.teamMember.userId, userId), eq(schema.team.organizationId, organizationId)),
+    )
+    .orderBy(asc(schema.team.name));
+  return rows.map((row) => ({ id: row.id, name: row.name, areas: parseTeamAreas(row.metadata) }));
+}
 
 export function createSessionHandlers(builder: any) {
   return {
@@ -233,6 +252,8 @@ export function createSessionHandlers(builder: any) {
         member: null as { id: string; role: string } | null,
         isPersonal: false,
         hasOrganization: false,
+        teams: [] as Array<{ id: string; name: string; areas: string[] }>,
+        activeTeamId: null as string | null,
       };
 
       const organizations: Array<{
@@ -260,6 +281,8 @@ export function createSessionHandlers(builder: any) {
             member: null,
             isPersonal: false,
             hasOrganization: true,
+            teams: [],
+            activeTeamId: null,
           };
         }
       } else if (user?.id) {
@@ -286,6 +309,8 @@ export function createSessionHandlers(builder: any) {
 
           if (activeMembership?.organization) {
             const org = activeMembership.organization;
+            const teams = await listMemberTeams(services.db, user.id, org.id);
+            const sessionTeamId = getActiveTeamId(session?.session);
             organizationContext = {
               activeOrganizationId: activeOrgId,
               organization: {
@@ -301,6 +326,8 @@ export function createSessionHandlers(builder: any) {
               },
               isPersonal: org.slug === user.id,
               hasOrganization: true,
+              teams,
+              activeTeamId: teams.some((team) => team.id === sessionTeamId) ? sessionTeamId : null,
             };
           }
         }

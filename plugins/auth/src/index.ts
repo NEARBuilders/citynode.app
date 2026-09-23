@@ -13,11 +13,13 @@ import { createApiKeyHandlers } from "./handlers/api-keys";
 import { createInvitationHandlers } from "./handlers/invitations";
 import { createMemberHandlers } from "./handlers/members";
 import { createNearHandlers } from "./handlers/near";
+import { createOnboardingHandlers } from "./handlers/onboarding";
 import { createOrganizationHandlers } from "./handlers/organizations";
 import { createSessionHandlers } from "./handlers/session";
 import { createTeamHandlers } from "./handlers/teams";
 import type { PluginsClient } from "./lib/plugins-client.gen";
 import { createRequireAuth } from "./middleware";
+import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
 import { AuthServicesTag } from "./service-types";
 import { toError } from "./utils";
 
@@ -51,6 +53,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         db,
         handler: (req: Request) => auth.handler(req),
         apiKeyHeaders,
+        membershipPolicy: createOrganizationMembershipPolicy(
+          authConfig.organizationMembershipLimit,
+        ),
       });
     }).pipe(Effect.mapError((e) => toError(e))),
 
@@ -65,6 +70,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
       ...createApiKeyHandlers(builder, requireAuth),
       ...createTeamHandlers(builder, requireAuth),
       ...createNearHandlers(builder, requireAuth),
+      ...createOnboardingHandlers(builder, requireAuth),
     };
   },
 });

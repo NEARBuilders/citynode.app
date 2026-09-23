@@ -141,7 +141,7 @@ describe("checkFederationCompat", () => {
     expect(report.ok).toBe(false);
     const api = report.remotes.find((r) => r.role === "api");
     expect(api?.ok).toBe(false);
-    expect(api?.reason).toMatch(/effect.*remote=3\.10\.0/) ?? api?.reason;
+    expect(api?.reason).toMatch(/effect.*remote=3\.10\.0/);
   });
 
   it("flags exact-version skew on a critical dep even when the semver range is satisfied", async () => {

@@ -307,12 +307,7 @@ export function prepareDevelopmentRuntimeConfig(
       );
       next.ui = withLocalRuntimeUrl(next.ui, uiPort);
       devPorts.ui = uiPort;
-      if (options?.ssr) {
-        const ssrPort = yield* allocator.pickAvailable(uiPort + 1, budget);
-        next.ui.ssrUrl = `http://localhost:${ssrPort}`;
-      } else {
-        next.ui.ssrUrl = undefined;
-      }
+      next.ui.ssrUrl = undefined;
     }
 
     if (next.plugins) {
