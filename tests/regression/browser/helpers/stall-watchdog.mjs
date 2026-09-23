@@ -19,7 +19,10 @@ function runnerSnapshot(label) {
   const lines = [`[stall-watchdog] ${label}`];
   for (const command of ["free -m", "ps -eo pid,ppid,rss,etime,comm --sort=-rss | head -15"]) {
     try {
-      lines.push(`[stall-watchdog] $ ${command}`, execSync(command, { timeout: 5_000 }).toString().trim());
+      lines.push(
+        `[stall-watchdog] $ ${command}`,
+        execSync(command, { timeout: 5_000 }).toString().trim(),
+      );
     } catch (error) {
       lines.push(`[stall-watchdog] $ ${command} failed: ${error.message}`);
     }
