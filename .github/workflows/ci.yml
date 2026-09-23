@@ -342,8 +342,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ssr = source-composed SSR; csr = default no-SSR client compose.
-        mode: [ssr, csr]
+        # prod:* = built artifacts via `bos start --config` (full suite);
+        # dev:* = the dev server, smoke-only (ADR 0009).
+        mode: [prod:ssr, prod:csr, dev:ssr, dev:csr]
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-and-typecheck]
     if: needs.detect-changes.outputs.regression-browser == 'true'

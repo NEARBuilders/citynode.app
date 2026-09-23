@@ -61,16 +61,26 @@ const baseConfig = {
 describe("prepareLocalProductionConfig", () => {
   it("rewrites every planned remote to localhost and drops integrity", () => {
     const result = prepareLocalProductionConfig(baseConfig, {
+      host: "http://localhost:4105",
       ui: { production: "http://localhost:4103", ssr: "http://localhost:4103/ssr" },
       api: "http://localhost:4101",
       auth: "http://localhost:4102",
-      authUi: { production: "http://localhost:4112", ssr: "http://localhost:4112/ssr" },
+      authUi: {
+        production: "http://localhost:4112",
+        ssr: "http://localhost:4112/ssr",
+        name: "_everything_dev_auth_plugin",
+      },
       plugins: {
         template: { production: "http://localhost:4113" },
         remoteOnly: { production: "http://localhost:4114" },
       },
     });
 
+    expect(result.app.host).toMatchObject({
+      development: "local:host",
+      production: "http://localhost:4105",
+      secrets: ["CORS_ORIGIN"],
+    });
     expect(result.app.ui).toEqual({
       development: "local:ui",
       production: "http://localhost:4103",
@@ -89,7 +99,7 @@ describe("prepareLocalProductionConfig", () => {
     });
     expect(result.app.auth).not.toHaveProperty("integrity");
     expect(result.app.auth?.ui).toEqual({
-      name: "auth-ui",
+      name: "_everything_dev_auth_plugin",
       development: "local:plugins/auth/ui",
       production: "http://localhost:4112",
       ssr: "http://localhost:4112/ssr",
@@ -102,7 +112,7 @@ describe("prepareLocalProductionConfig", () => {
   it("a planned ui without an ssr origin is the csr variant", () => {
     const result = prepareLocalProductionConfig(baseConfig, {
       ui: { production: "http://localhost:4103" },
-      authUi: { production: "http://localhost:4112" },
+      authUi: { production: "http://localhost:4112", name: "_everything_dev_auth_plugin" },
       api: "http://localhost:4101",
       auth: "http://localhost:4102",
     });

@@ -3,15 +3,11 @@ import { defineConfig } from "@playwright/test";
 import { computeRegressionEnv } from "../lib/regression-env.mjs";
 
 const stallWatchdog = fileURLToPath(new URL("./helpers/stall-watchdog.mjs", import.meta.url));
-const mode = process.env.REGRESSION_MODE ?? "ssr";
+const mode = process.env.REGRESSION_MODE ?? "dev:ssr";
 const command =
-  mode === "prod"
-    ? "bun run regression:start:prod"
-    : mode === "backcompat"
-      ? "bun run regression:start:backcompat"
-      : mode === "csr"
-        ? "bun run regression:start:csr"
-        : "bun run regression:start:ssr";
+  mode === "backcompat"
+    ? "bun run regression:start:backcompat"
+    : `bun run regression:start:${mode}`;
 
 const regressionEnv = computeRegressionEnv();
 
@@ -54,18 +50,22 @@ export default defineConfig({
     env: webServerEnv,
   },
   projects: [
-    { name: "ssr" },
-    { name: "prod" },
-    { name: "backcompat" },
     {
-      // CSR (no-SSR) focused set: the client-side compose path plus the
-      // redirect/load specs that exercise it end-to-end.
-      name: "csr",
-      testMatch: [
-        "specs/csr-compose.spec.ts",
-        "specs/auth-redirect.spec.ts",
-        "specs/app-load.spec.ts",
-      ],
+      // Production stacks (ADR 0009) run the FULL suite: the artifacts the
+      // branch builds are what CI validates.
+      name: "prod:ssr",
     },
+    { name: "prod:csr" },
+    {
+      // The dev server is smoke-only — boot + one page per render mode + the
+      // redirect spec. Its resource profile must never stall CI again.
+      name: "dev:ssr",
+      testMatch: ["specs/csr-compose.spec.ts", "specs/auth-redirect.spec.ts"],
+    },
+    {
+      name: "dev:csr",
+      testMatch: ["specs/csr-compose.spec.ts", "specs/auth-redirect.spec.ts"],
+    },
+    { name: "backcompat" },
   ],
 });

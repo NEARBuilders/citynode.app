@@ -18,11 +18,12 @@ import type { BosConfig, BosPluginRef } from "./types";
  */
 
 export interface LocalProdOriginPlan {
-  ui?: { production?: string; ssr?: string };
+  host?: string;
+  ui?: { production?: string; ssr?: string; name?: string };
   api?: string;
   auth?: string;
-  authUi?: { production?: string; ssr?: string };
-  plugins?: Record<string, { production?: string; ui?: string }>;
+  authUi?: { production?: string; ssr?: string; name?: string };
+  plugins?: Record<string, { production?: string; ui?: string; uiName?: string }>;
 }
 
 export interface StartConfigSource {
@@ -52,9 +53,9 @@ function stripIntegrity<T extends object>(section: T): T {
   return next;
 }
 
-function rewriteUi<T extends { production?: string; ssr?: string }>(
+function rewriteUi<T extends { production?: string; ssr?: string; name?: string }>(
   ui: T,
-  planned: { production?: string; ssr?: string } | undefined,
+  planned: { production?: string; ssr?: string; name?: string } | undefined,
 ): T {
   if (!planned) return ui;
   const next = stripIntegrity(ui);
@@ -66,12 +67,15 @@ function rewriteUi<T extends { production?: string; ssr?: string }>(
   } else {
     delete next.ssr;
   }
+  if (planned.name !== undefined) {
+    next.name = planned.name;
+  }
   return next;
 }
 
 function rewritePluginRef(
   plugin: BosPluginRef,
-  planned: { production?: string; ui?: string } | undefined,
+  planned: { production?: string; ui?: string; uiName?: string } | undefined,
 ): BosPluginRef {
   if (!planned) return plugin;
   const next =
@@ -79,7 +83,13 @@ function rewritePluginRef(
       ? stripIntegrity({ ...plugin, production: planned.production })
       : stripIntegrity(plugin);
   if (next.ui) {
-    next.ui = rewriteUi({ ...next.ui }, planned.ui ? { production: planned.ui } : undefined);
+    next.ui = rewriteUi(
+      { ...next.ui },
+      {
+        ...(planned.ui ? { production: planned.ui } : {}),
+        ...(planned.uiName ? { name: planned.uiName } : {}),
+      },
+    );
   }
   return next;
 }
@@ -89,6 +99,10 @@ export function prepareLocalProductionConfig(
   plan: LocalProdOriginPlan,
 ): BosConfig {
   const app = { ...config.app } as BosConfig["app"];
+
+  if (app.host && plan.host !== undefined) {
+    app.host = { ...app.host, production: plan.host };
+  }
 
   if (app.ui) {
     app.ui = rewriteUi({ ...app.ui }, plan.ui);
