@@ -479,7 +479,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (Node 24)
         with:
-          name: regression-browser-artifacts-${{ matrix.mode }}
+          name: regression-browser-artifacts-${{ replace(matrix.mode, ':', '-') }}
           path: |
             .bos/logs/**
             resource-watchdog.log
