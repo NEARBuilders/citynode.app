@@ -200,12 +200,12 @@
     },
     "./ui/manifest-generator": {
       "development": {
-        "types": "./src/ui/manifest/generator.ts",
-        "import": "./src/ui/manifest/generator.ts"
+        "types": "./src/ui/manifest-generator.ts",
+        "import": "./src/ui/manifest-generator.ts"
       },
-      "types": "./dist/ui/manifest/generator.d.mts",
-      "import": "./dist/ui/manifest/generator.mjs",
-      "require": "./dist/ui/manifest/generator.cjs"
+      "types": "./dist/ui/manifest-generator.d.mts",
+      "import": "./dist/ui/manifest-generator.mjs",
+      "require": "./dist/ui/manifest-generator.cjs"
     },
     "./ui/mf-build": {
       "development": {

@@ -212,6 +212,18 @@ const teamMemberSchema = z.object({
   createdAt: z.date(),
 });
 
+const onboardingCodeSummarySchema = z.object({
+  id: z.string(),
+  eventName: z.string(),
+  teamId: z.string(),
+  role: z.string(),
+  maxUses: z.number(),
+  usedCount: z.number(),
+  expiresAt: z.date(),
+  revokedAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+
 const daoOutputSchema = z.object({
   daoAccountId: z.string().nullable(),
   daoNetwork: z.enum(["mainnet", "testnet"]).nullable(),
@@ -698,6 +710,95 @@ export const contract = oc.router({
       }),
     )
     .output(z.object({ success: z.boolean() }))
+    .errors(Errors),
+
+  // ── Onboarding ──────────────────────────────────────────────────────
+
+  createOnboardingCode: oc
+    .route({ method: "POST", path: "/v1/auth/onboarding/codes" })
+    .input(
+      z.object({
+        eventName: z.string().min(1).max(64),
+        organizationId: z.string().optional(),
+        role: z.enum(["admin", "member"]).optional(),
+        maxUses: z.number().int().min(1).max(500).optional(),
+        expiresInHours: z.number().int().min(1).max(168).optional(),
+      }),
+    )
+    .output(onboardingCodeSummarySchema.extend({ code: z.string() }))
+    .errors(Errors),
+
+  listOnboardingCodes: oc
+    .route({ method: "GET", path: "/v1/auth/onboarding/codes" })
+    .input(
+      z.object({
+        organizationId: z.string().optional(),
+      }),
+    )
+    .output(z.array(onboardingCodeSummarySchema))
+    .errors(Errors),
+
+  revokeOnboardingCode: oc
+    .route({ method: "POST", path: "/v1/auth/onboarding/codes/revoke" })
+    .input(
+      z.object({
+        codeId: z.string(),
+        organizationId: z.string().optional(),
+      }),
+    )
+    .output(z.object({ success: z.boolean() }))
+    .errors(Errors),
+
+  getOnboardingStatus: oc
+    .route({ method: "GET", path: "/v1/auth/onboarding/codes/status" })
+    .input(
+      z.object({
+        codeId: z.string(),
+        organizationId: z.string().optional(),
+      }),
+    )
+    .output(
+      onboardingCodeSummarySchema.extend({
+        joined: z.array(
+          z.object({
+            userId: z.string(),
+            userName: z.string().nullable(),
+            accountId: z.string().nullable(),
+            createdAt: z.date(),
+          }),
+        ),
+      }),
+    )
+    .errors(Errors),
+
+  getOnboardingCodeInfo: oc
+    .route({ method: "GET", path: "/v1/auth/onboarding/info" })
+    .input(z.object({ code: z.string().min(1) }))
+    .output(
+      z
+        .object({
+          organizationName: z.string(),
+          eventName: z.string(),
+          inviterName: z.string().nullable(),
+          role: z.string(),
+          expired: z.boolean(),
+          revoked: z.boolean(),
+        })
+        .nullable(),
+    )
+    .errors(Errors),
+
+  redeemOnboardingCode: oc
+    .route({ method: "POST", path: "/v1/auth/onboarding/redeem" })
+    .input(z.object({ code: z.string().min(1) }))
+    .output(
+      z.object({
+        success: z.boolean(),
+        alreadyRedeemed: z.boolean(),
+        organizationName: z.string(),
+        eventName: z.string(),
+      }),
+    )
     .errors(Errors),
 
   // ── API Keys ───────────────────────────────────────────────────────

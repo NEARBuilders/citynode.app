@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Key, Layers, Mail, Users, UsersRound } from "lucide-react";
+import { Building2, Key, Layers, Mail, QrCode, Users, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,7 @@ import {
 import { InvitationsTab } from "./-invitations-tab";
 import { MembersTab } from "./-members-tab";
 import { NodeConfigTab } from "./-node-config";
+import { OnboardingTab } from "./-onboarding-tab";
 import { useOrganizationApiKeyActions } from "./-organization-api-keys";
 import { OrganizationEditForm } from "./-organization-edit-form";
 import { useOrganizationInvitationActions } from "./-organization-invitations";
@@ -258,6 +259,12 @@ function OrganizationDetail() {
               <Mail className="h-4 w-4 mr-1.5" />
               Invitations ({pendingInvitationsCount})
             </TabsTrigger>
+            {canManageMembers && (
+              <TabsTrigger value="onboard" className="shrink-0" data-testid="orgs-tab-onboard">
+                <QrCode className="h-4 w-4 mr-1.5" />
+                Onboard
+              </TabsTrigger>
+            )}
             <TabsTrigger value="apikeys" className="shrink-0">
               <Key className="h-4 w-4 mr-1.5" />
               API Keys ({apiKeys.length})
@@ -309,6 +316,7 @@ function OrganizationDetail() {
             onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
             teams={teamsState.teams}
           />
+          {canManageMembers && <OnboardingTab apiClient={apiClient} canManage orgId={orgId} />}
           <ApiKeysTab
             apiKeys={apiKeys}
             canManageMembers={canManageMembers}
