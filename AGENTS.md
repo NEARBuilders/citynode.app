@@ -398,6 +398,14 @@ bun run dev    # hot reload, all services local
    # builds workspaces → deploys to Zephyr CDN → publishes bos.config.json to FastKV at bos://<your-account>/citynode.app
    ```
 
+   **No Zephyr account?** Opt into the platform CDN — bundles upload to the platform storage and the host serves them from `/bundles/*`:
+   ```bash
+   bos publish --deploy --cdn platform   # or set deploy.cdn: "platform" in bos.config.json
+   # requires bos login (session credential; uploads are pinned to the session's NEAR account)
+   # bundles land at https://<site>/bundles/<account>/<gateway>/<workspace>/ with server-computed SRI
+   ```
+   `deploy.cdn` defaults to `"zephyr"`; `"platform"` needs no external account. See ADR 0007 for the storage/composition design.
+
 6. **Deploy to Railway** — use the one-click template (button in `README.md`) or `railway up` with the committed `railway.toml`. The image is built from the committed root `Dockerfile`, so the same container works unchanged on Railway today and on any other provider (Fly Machines, Hetzner, …) later — the provider surface is declared in code as Infrastructure-as-Effects via [alchemy](https://github.com/alchemy-run/alchemy), which makes providers swappable and self-hostable for sovereign tenants. Set these environment variables on your Railway service:
    | Variable | Value |
    |----------|-------|
@@ -452,6 +460,20 @@ The `bos` CLI wraps near-cli-rs for account and key management — you normally 
 1. Define in `api/src/contract.ts` — the oRPC route definitions and Zod schemas
 2. Implement in `api/src/index.ts` — the `createRouter` function
 3. Use in UI via `apiClient` from `useApiClient()` in `@/app`
+
+**Handler convention (required for new routes):** write handlers as Effect-native
+`.effect(function* ...)` generators (see `plugins/_template/src/index.ts`) and access
+services with `yield* Tag` — the tag must be exposed from the plugin's returned
+`initialize` layer. Auth checks fail via `Effect.fail(errors.UNAUTHORIZED(...))` /
+`errors.FORBIDDEN(...)` inside the generator (note: the shared `every-plugin/errors`
+shapes constrain the `data` payload — e.g. `UNAUTHORIZED` requires
+`{ apiKeyProvided: boolean }`, all-optional shapes still need explicit `data: {}`).
+`Context.get(context["effect/context"], Tag)` is reserved for streaming
+(async-generator) handlers. Do not introduce new plain `.handler(async)` routes with
+inline `Context.get` service access, and do not use the `createAuthMiddleware`
+middlewares via `.use()` for new routes — their `DecoratedMiddleware` typing does not
+currently compose with the `.use()` builder (see proposals plugin's local middleware
+for the workaround pattern).
 
 ### Plugin Architecture
 

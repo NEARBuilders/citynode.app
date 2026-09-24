@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { API, App, Plugin, UI } from "../../src/descriptor/constructors";
+import { API, App, applyDevOverlay, Plugin, UI } from "../../src/descriptor/constructors";
 import { resolveApp, resolveApps } from "../../src/descriptor/resolve";
 import type { AppRegistry } from "../../src/descriptor/schema";
 import type { BosConfigInput } from "../../src/types";
@@ -156,5 +156,58 @@ describe("resolveApps", () => {
     expect(Object.keys(resolved).sort()).toEqual(["citynode", "everything"]);
     expect(resolved.everything.name).toBeUndefined();
     expect(resolved.citynode.domain).toBe("citynode.app");
+  });
+});
+
+describe("imported-App extends", () => {
+  it("accepts an imported App descriptor value as an inlined parent", () => {
+    const child = App({
+      name: "tenant",
+      extends: baseApp,
+      account: "tenant.near",
+      domain: "tenant.everything.dev",
+    });
+    const resolved = resolveApp("tenant", { tenant: child });
+    expect(resolved.account).toBe("tenant.near");
+    expect(resolved.domain).toBe("tenant.everything.dev");
+    // inherited from the inlined parent — identical to a fetched parent
+    expect(resolved.app?.host).toEqual({ development: "local:host", secrets: ["CORS_ORIGIN"] });
+    expect(resolved.app?.auth).toMatchObject({
+      name: "auth",
+      development: "local:plugins/auth",
+      ui: { name: "auth-ui", development: "local:plugins/auth/ui" },
+    });
+    expect(resolved.extends).toBeUndefined();
+  });
+
+  it("rejects an inlined parent that itself extends (depth guard)", () => {
+    const mid = App({ name: "mid", extends: "everything" });
+    const leaf = App({ name: "leaf", extends: mid });
+    expect(() => resolveApp("leaf", { everything: baseApp, leaf })).toThrow(
+      /deeper than one level/,
+    );
+  });
+});
+
+describe("applyDevOverlay", () => {
+  it("merges the overlay child-wins and never mutates the resolved input", () => {
+    const resolved = resolveApp("citynode", REGISTRY);
+    const overlaid = applyDevOverlay(resolved, {
+      api: { path: "api", variables: { platformAccount: "dev-proxy.near" } },
+    });
+    expect(overlaid.app?.api).toMatchObject({
+      development: "local:api",
+      variables: { platformAccount: "dev-proxy.near" },
+    });
+    // the original resolved config is untouched
+    expect(resolved.app?.api).toMatchObject({
+      variables: { platformAccount: "v1.citynode.near" },
+    });
+  });
+
+  it("keeps authored secrets intact through the overlay", () => {
+    const resolved = resolveApp("citynode", REGISTRY);
+    const overlaid = applyDevOverlay(resolved, { ui: { path: "ui" } });
+    expect(overlaid.app?.ui).toEqual({ development: "local:ui" });
   });
 });

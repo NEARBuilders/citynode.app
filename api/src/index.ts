@@ -14,6 +14,8 @@ import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import type { NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
+import type { BundleStorage } from "./services/storage";
+import { StorageLive, StorageTag } from "./services/storage";
 import type { TenantsService } from "./services/tenants";
 import { TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
@@ -27,6 +29,7 @@ class ApiServices extends Context.Service<
     nodes: NodesService;
     validators: ValidatorsService;
     discovery: DiscoveryService;
+    storage: BundleStorage;
   }
 >()("api/ApiServices") {}
 
@@ -57,6 +60,37 @@ function validateHostname(hostname: string): void {
   }
 }
 
+const CONTENT_TYPES: Record<string, string> = {
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".cjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".map": "application/json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".wasm": "application/wasm",
+  ".txt": "text/plain",
+  ".xml": "application/xml",
+};
+
+function guessContentType(path: string): string {
+  const dot = path.lastIndexOf(".");
+  if (dot <= 0) return "application/octet-stream";
+  return CONTENT_TYPES[path.slice(dot).toLowerCase()] ?? "application/octet-stream";
+}
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
@@ -80,17 +114,22 @@ export default createPlugin.withPlugins<PluginsClient>()({
           NodesLive,
           ValidatorsLive,
           DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
+          StorageLive,
         ).pipe(Layer.provide(database)),
       );
 
       console.log("[API] Services Initialized");
 
-      return Layer.succeed(ApiServices, {
-        tenants: Context.get(services, TenantsTag),
-        nodes: Context.get(services, NodesTag),
-        validators: Context.get(services, ValidatorsTag),
-        discovery: Context.get(services, DiscoveryTag),
-      });
+      return Layer.mergeAll(
+        Layer.succeed(ApiServices, {
+          tenants: Context.get(services, TenantsTag),
+          nodes: Context.get(services, NodesTag),
+          validators: Context.get(services, ValidatorsTag),
+          discovery: Context.get(services, DiscoveryTag),
+          storage: Context.get(services, StorageTag),
+        }),
+        Layer.succeed(StorageTag, Context.get(services, StorageTag)),
+      );
     }),
 
   createRouter: (builder, plugins) => {
@@ -243,6 +282,79 @@ export default createPlugin.withPlugins<PluginsClient>()({
         status: "ok",
         timestamp: new Date().toISOString(),
       })),
+
+      uploadBundles: builder.uploadBundles.effect(function* ({ input, context, errors }) {
+        const apiKeyProvided = !context.user && !context.userId && !!context.apiKey;
+        if (!context.user && !context.userId && !context.apiKey) {
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({
+              message: "Authentication required — sign in or provide an API key",
+              data: { apiKeyProvided, authType: "apiKey" as const },
+            }),
+          );
+        }
+        const storage = yield* StorageTag;
+        if (context.near?.primaryAccountId && context.near.primaryAccountId !== input.account) {
+          return yield* Effect.fail(
+            errors.FORBIDDEN({
+              message: `Uploads are pinned to the authenticated account (${context.near.primaryAccountId}), not ${input.account}`,
+              data: {},
+            }),
+          );
+        }
+
+        const files = Object.entries(input.paths).map(([path, file]) => ({
+          path,
+          bytes: Buffer.from(file.content, "base64"),
+          contentType: file.contentType ?? guessContentType(path),
+        }));
+        const prefix = `${input.account}/${input.gateway}/${input.workspace}`;
+        const objects = yield* Effect.tryPromise({
+          try: () => storage.put(prefix, files),
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((error) =>
+            error instanceof ORPCError
+              ? Effect.fail(error)
+              : Effect.fail(
+                  new ORPCError("INTERNAL_SERVER_ERROR", {
+                    message: error instanceof Error ? error.message : "Storage failure",
+                  }),
+                ),
+          ),
+        );
+        return { base: `bundles/${prefix}`, objects };
+      }),
+
+      serveBundle: builder.serveBundle.effect(function* ({ input, context, errors }) {
+        const storage = yield* StorageTag;
+        const object = yield* Effect.tryPromise({
+          try: () =>
+            storage.get(
+              `bundles/${input.account}/${input.gateway}/${input.workspace}/${input.path}`,
+            ),
+          catch: (cause) => cause,
+        });
+        if (!object) {
+          return yield* Effect.fail(
+            errors.NOT_FOUND({ message: "Bundle object not found", data: {} }),
+          );
+        }
+        const resHeaders = (context as { resHeaders?: Headers }).resHeaders;
+        // content-hashed chunks are immutable; entrypoints (remoteEntry,
+        // mf-manifest, index.html) are fixed-name and must revalidate or a
+        // redeploy never reaches returning clients
+        const entrypoint = /^(remoteEntry|mf-manifest|index|manifest\.gen)\./.test(
+          input.path.split("/").pop() ?? "",
+        );
+        resHeaders?.set(
+          "cache-control",
+          entrypoint ? "public, max-age=0, must-revalidate" : "public, max-age=31536000, immutable",
+        );
+        return new File([Uint8Array.from(object.bytes)], input.path.split("/").pop() ?? "object", {
+          type: object.contentType,
+        });
+      }),
 
       listTenants: builder.listTenants.use(requireAuth).handler(async ({ context }) => {
         const services = Context.get(context["effect/context"], ApiServices);

@@ -21,7 +21,7 @@ import {
 import type { AuthClient, SessionData } from "everything-dev/ui/auth";
 import { refreshSessionCache, sessionQueryKey, sessionQueryOptions } from "everything-dev/ui/auth";
 import { describe, expect, it, vi } from "vitest";
-import { Route as LoginRoute } from "./login";
+import { Route as LoginRoute } from "./login/index";
 
 const signedInSession = {
   user: { id: "user-1", name: "Tester", banned: false },

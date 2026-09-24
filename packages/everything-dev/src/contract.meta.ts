@@ -119,6 +119,10 @@ export const cliCommandMeta = {
         description:
           "Override FastKV registry contract account (defaults: dev.everything.near / dev.allthethings.testnet)",
       },
+      cdn: {
+        description:
+          "CDN provider for bundle deploys: zephyr (default) or platform (uploads bundles to the platform storage — no external account, requires bos login)",
+      },
     },
   },
   deploy: {

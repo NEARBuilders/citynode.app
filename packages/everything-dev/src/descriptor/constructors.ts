@@ -32,15 +32,19 @@ export function UI(input: UiInput): UiRef {
 /**
  * Attach another App — by local workspace path (`Plugin("auth").path("plugins/auth")`)
  * or by published module reference (`Plugin("auth").extends("bos://…")`).
+ * The attachment's `name` (the plugin's package name, e.g.
+ * `@everything-dev/auth-plugin`) may differ from the registry key; pass it
+ * through `extra` to override.
  */
 export function Plugin<K extends string>(
   name: K,
 ): {
-  path: (dir: string, extra?: Omit<AttachmentInput, "name" | "path">) => AttachmentRef;
-  extends: (ref: string, extra?: Omit<AttachmentInput, "name" | "extends">) => AttachmentRef;
+  path: (dir: string, extra?: Omit<AttachmentInput, "path">) => AttachmentRef;
+  extends: (ref: string, extra?: Omit<AttachmentInput, "extends">) => AttachmentRef;
 } {
   return {
-    path: (dir, extra) => AttachmentRefSchema.parse({ ...extra, name, path: dir }),
-    extends: (ref, extra) => AttachmentRefSchema.parse({ ...extra, name, extends: ref }),
+    path: (dir, extra) => AttachmentRefSchema.parse({ name, ...extra, path: dir }),
+    extends: (ref, extra) => AttachmentRefSchema.parse({ name, ...extra, extends: ref }),
   };
 }
+export { applyDevOverlay } from "./resolve";

@@ -8,7 +8,7 @@ import { Context, Effect, Layer } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
 import { buildRuntimeConfig } from "./app";
-import { openInBrowser, startLoginServer } from "./auth-login";
+import { openInBrowser, startDeviceLogin } from "./auth-login";
 import {
   deleteSessionHandle,
   nearCredentialsPath,
@@ -851,6 +851,7 @@ export default createPlugin({
         privateKey: input.privateKey,
         wallet: input.wallet,
         registry: input.registry,
+        cdn: input.cdn,
       });
 
       if (result.publishConfig) {
@@ -1111,28 +1112,29 @@ export default createPlugin({
 
       try {
         const siteUrl = resolveLoginSiteUrl(input.site, deps, staging);
-        const login = await startLoginServer({ siteUrl });
-        const targetUrl = login.url({
-          account: account || undefined,
+        const login = await startDeviceLogin({
+          siteUrl,
           device: input.device,
+          account: account || undefined,
           expiresIn: input.expiresIn,
         });
 
-        await openInBrowser(targetUrl).catch((error: unknown) => {
+        console.log();
+        console.log(`  One-time code: ${colors.cyan(login.userCode)}`);
+        await openInBrowser(login.verificationUrl).catch((error: unknown) => {
           console.log(colors.yellow(`  ⚠ ${(error as Error).message}`));
         });
         console.log();
-        console.log(`  Waiting for browser handoff (${colors.dim(targetUrl)})…`);
+        console.log(`  Waiting for approval at ${colors.dim(login.verificationUrl)}…`);
 
-        const handoff = await login.waitForHandoff();
-        login.close();
+        const approval = await login.waitForApproval();
 
-        if (handoff.error || !handoff.apiKey) {
+        if (!approval.apiKey) {
           return {
             status: "error" as const,
             siteUrl,
-            loginUrl: targetUrl,
-            error: handoff.error ?? "Login page did not return an API key",
+            loginUrl: login.verificationUrl,
+            error: "Login approved but no CLI credential was created",
           };
         }
 
@@ -1141,9 +1143,9 @@ export default createPlugin({
           version: 1,
           credential: {
             kind: "session",
-            apiKey: handoff.apiKey,
-            apiKeyId: handoff.apiKeyId,
-            accountId: handoff.accountId,
+            apiKey: approval.apiKey.key,
+            apiKeyId: approval.apiKey.id,
+            accountId: approval.accountId,
             label: input.device ?? siteUrl,
             siteUrl,
             createdAt: new Date().toISOString(),
@@ -1154,8 +1156,8 @@ export default createPlugin({
         });
 
         let warning: string | null = null;
-        if (account && handoff.accountId && handoff.accountId !== account) {
-          warning = `Logged in as ${handoff.accountId}, but bos.config.json account is ${account}. Publishes will use the configured account.`;
+        if (account && approval.accountId && approval.accountId !== account) {
+          warning = `Logged in as ${approval.accountId}, but bos.config.json account is ${account}. Publishes will use the configured account.`;
         }
 
         let publishKey: LoginResult["publishKey"] = null;
@@ -1172,9 +1174,9 @@ export default createPlugin({
         return {
           status: "logged-in" as const,
           siteUrl,
-          accountId: handoff.accountId,
+          accountId: approval.accountId,
           expiresAt,
-          loginUrl: targetUrl,
+          loginUrl: login.verificationUrl,
           publishKey,
           warning,
         };
