@@ -10,7 +10,7 @@ WORKDIR /app
 # cache mount keeps re-downloads free when the layer busts.
 COPY . .
 
-RUN --mount=type=cache,id=bun-install-cache,target=/root/.bun/install/cache \
+RUN --mount=type=cache,id=s/2532431a-4bd9-48a4-ac79-e7aeac2fedb4-/root/.bun/install/cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts
 
 RUN test -e node_modules/.bin/every-plugin \
