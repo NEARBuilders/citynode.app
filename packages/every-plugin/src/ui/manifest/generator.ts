@@ -87,6 +87,7 @@ export async function generateUiManifest(
         routesDirectory,
         generatedRouteTree: routeTreeTarget,
         routeFileIgnorePrefix: "-",
+        routeFileIgnorePattern: "\\.(test|spec)\\.(ts|tsx)$",
         disableLogging: true,
       },
       workspaceRoot,

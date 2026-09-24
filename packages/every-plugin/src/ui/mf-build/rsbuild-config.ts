@@ -66,6 +66,15 @@ export interface UiRsbuildConfigOptions {
 
 export { sanitizeContainerName };
 
+/**
+ * The node environment never owns the routeTree write: the web env's
+ * generator produces identical content, and both environments resolve the
+ * same on-disk tree. Redirecting the node write to scratch removes the
+ * concurrent-writers race on src/routeTree.gen.ts (the generator's
+ * "Cannot overwrite" retry noise).
+ */
+const NODE_ROUTE_TREE_SCRATCH = "./node_modules/.cache/manifest-compose/routeTree.node.gen.ts";
+
 export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildConfig {
   const {
     workspaceRoot,
@@ -142,6 +151,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
             TanStackRouterRspack({
               target: "react",
               autoCodeSplitting: true,
+              routeFileIgnorePattern: "\\.(test|spec)\\.(ts|tsx)$",
               ...(routesDirectory ? { routesDirectory } : {}),
             }),
             new FixMfDataUriPlugin(),
@@ -215,6 +225,8 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
             TanStackRouterRspack({
               target: "react",
               autoCodeSplitting: false,
+              routeFileIgnorePattern: "\\.(test|spec)\\.(ts|tsx)$",
+              generatedRouteTree: NODE_ROUTE_TREE_SCRATCH,
               ...(routesDirectory ? { routesDirectory } : {}),
             }),
             new FixMfDataUriPlugin(),
