@@ -11,6 +11,54 @@ const pluginDescriptor = {
   readinessPath: "/",
 } satisfies ServiceDescriptor;
 
+describe("detectStatus false-positive guards (host/ui patterns)", () => {
+  const hostDescriptor = {
+    command: "bun",
+    args: ["run", "dev"],
+    readyPatterns: [/Host (dev|production) server running at/i, /Server running at/i],
+    errorPatterns: [/\berror\b(?!s)/i, /\bfailed to\b/i, /\bbuild failed\b/i, /exception/i],
+    defaultPort: 3000,
+    readinessPath: "/",
+  } satisfies ServiceDescriptor;
+
+  const uiDescriptor = {
+    command: "bun",
+    args: ["run", "dev"],
+    readyPatterns: [/\bready\s+built in\b/i, /\bLocal:\b/i, /\bcompiled\b.*successfully/i],
+    errorPatterns: [/\berror\b(?!s)/i, /\bfailed to\b/i, /\bbuild failed\b/i],
+    defaultPort: 3003,
+    readinessPath: "/remoteEntry.js",
+  } satisfies ServiceDescriptor;
+
+  it("counts as ready, not error: 'compiled successfully (0 errors)'", () => {
+    expect(detectStatus("compiled successfully (0 errors)", uiDescriptor)).toMatchObject({
+      status: "ready",
+    });
+  });
+
+  it("does not mark '0 failed' or 'watcher failed, retrying' style lines as errors", () => {
+    expect(detectStatus("build finished: 0 failed", hostDescriptor)).toBeNull();
+  });
+
+  it("still marks real errors on the same line shapes", () => {
+    expect(detectStatus("Failed to compile: cannot resolve module", uiDescriptor)).toMatchObject({
+      status: "error",
+    });
+    expect(detectStatus("Build failed: cannot resolve module", uiDescriptor)).toMatchObject({
+      status: "error",
+    });
+    expect(detectStatus("uncaught exception in boot", hostDescriptor)).toMatchObject({
+      status: "error",
+    });
+  });
+
+  it("ready patterns win over error patterns on overlapping lines", () => {
+    expect(detectStatus("Local: ready built in 412 ms (0 errors)", uiDescriptor)).toMatchObject({
+      status: "ready",
+    });
+  });
+});
+
 describe("detectStatus with plugin error patterns", () => {
   it("does not mark errors when a warning mentions an identifier containing 'Error'", () => {
     expect(

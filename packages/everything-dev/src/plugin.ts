@@ -72,7 +72,7 @@ import {
   makeDatabaseBindings,
   makeDrizzleKitLive,
 } from "./db";
-import { getLogsDir, readDevLatestLog } from "./dev-logs";
+import { readDevLatestLog, resolveDevLatestFile } from "./dev-logs";
 import {
   bootstrapLayers,
   type DevSessionData,
@@ -2068,7 +2068,7 @@ export default createPlugin({
             return match?.[1] === service || match?.[1] === `plugin:${service}`;
           });
         return {
-          logFile: join(getLogsDir(configDir), "dev-latest.log"),
+          logFile: resolveDevLatestFile(configDir),
           lines,
         };
       } catch (error) {

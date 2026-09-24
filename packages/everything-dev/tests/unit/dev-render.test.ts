@@ -256,6 +256,16 @@ describe("createDevRenderer (non-TTY incremental)", () => {
     expect(text()).toContain("ready in 412 ms");
   });
 
+  it("keeps printing logs past the 100-event cap (seq-based, no freeze)", () => {
+    const { renderer, text } = makeRenderer();
+    for (let i = 1; i <= 150; i++) {
+      renderer.addLog("api", `log line ${i}`, false);
+    }
+    expect(text()).toContain("log line 150");
+    expect(text()).toContain("log line 101");
+    expect(text()).toContain("log line 100");
+  });
+
   it("prints the all-ready block exactly once", () => {
     const { renderer, text } = makeRenderer();
     for (const p of baseState.processes) {
@@ -274,12 +284,13 @@ describe("createDevRenderer (non-TTY incremental)", () => {
 describe("createDevRenderer (TTY alt-screen)", () => {
   const makeTty = () => {
     const chunks: string[] = [];
-    const output = { write: (s: string) => chunks.push(s) };
+    const output = { write: (s: string) => chunks.push(s), isTTY: true, rows: 30, columns: 100 };
     const stdin = new EventEmitter() as EventEmitter & {
       setRawMode: (mode: boolean) => void;
       isTTY: boolean;
       unref?: () => void;
     };
+    stdin.isTTY = true;
     stdin.setRawMode = vi.fn();
     return { stdin, chunks, output };
   };
@@ -311,7 +322,7 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     const { stdin, chunks } = makeTty();
     const rows = 8;
     createDevRenderer(baseState.processes, "dev session", {}, undefined, undefined, {
-      output: { write: (s: string) => chunks.push(s), rows, columns: 80 },
+      output: { write: (s: string) => chunks.push(s), isTTY: true, rows, columns: 80 },
       interactive: true,
       stdin,
     });
@@ -328,6 +339,7 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const output = {
       write: (s: string) => chunks.push(s),
+      isTTY: true,
       rows: 30,
       columns: 100,
       on: (event: string, listener: (...args: unknown[]) => void) => {
@@ -366,7 +378,7 @@ describe("createDevRenderer (TTY alt-screen)", () => {
       undefined,
       undefined,
       {
-        output: { write: (s: string) => chunks.push(s) },
+        output: { write: (s: string) => chunks.push(s), isTTY: true },
         interactive: true,
         stdin,
       },
@@ -392,7 +404,7 @@ describe("createDevRenderer (TTY alt-screen)", () => {
       undefined,
       undefined,
       {
-        output: { write: (s: string) => chunks.push(s) },
+        output: { write: (s: string) => chunks.push(s), isTTY: true },
         interactive: true,
         stdin,
       },

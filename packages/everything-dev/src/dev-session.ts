@@ -190,7 +190,7 @@ export const runDevSession = (
       },
     });
 
-    const useInteractive = orchestrator.interactive ?? isInteractiveSupported();
+    const useInteractive = isInteractiveSupported() && orchestrator.interactive !== false;
     view = createDevRenderer(
       initialProcesses,
       orchestrator.description,

@@ -77,14 +77,14 @@ export const detectStatus = (
   const cleanLine = stripAnsi(line);
   const errorPatterns = descriptor.errorPatterns ?? [];
   const readyPatterns = descriptor.readyPatterns ?? [];
-  for (const pattern of errorPatterns) {
-    if (pattern.test(cleanLine)) {
-      return { status: "error", isError: true };
-    }
-  }
   for (const pattern of readyPatterns) {
     if (pattern.test(cleanLine)) {
       return { status: "ready", isError: false };
+    }
+  }
+  for (const pattern of errorPatterns) {
+    if (pattern.test(cleanLine)) {
+      return { status: "error", isError: true };
     }
   }
   return null;
@@ -369,7 +369,11 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         lastExit = { code, signal };
         resume(Effect.succeed(code ?? (signal ? 1 : 0)));
       };
-      const onError = (err: Error) => resume(Effect.fail(err));
+      const onError = (err: Error) => {
+        callbacks.onLog(name, `Spawn failed: ${err.message}`, true);
+        callbacks.onStatus(name, "error", `spawn failed: ${err.message}`);
+        resume(Effect.fail(err));
+      };
       cmd.once("exit", onExit);
       cmd.once("error", onError);
       return Effect.sync(() => {
@@ -449,6 +453,9 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
           if (currentStatus === "ready") {
             const detail = describeExit(exitCodeValue);
             callbacks.onLog(name, `Process exited after ready (${detail})`, !isCleanSignalExit());
+            if (!isCleanSignalExit()) {
+              callbacks.onStatus(name, "error", `exited after ready (${detail})`);
+            }
             yield* markError(`Process exited after ready: ${name}`);
           }
           return;

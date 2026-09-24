@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stripAnsi } from "./dev-log-pipeline";
@@ -43,8 +43,8 @@ export async function createDevLogger(configDir: string, description: string): P
 
   const now = new Date();
   const ts = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const logFile = join(dir, `dev-${ts}.log`);
-  const latestFile = join(dir, "dev-latest.log");
+  const logFile = join(dir, `dev-${ts}-${process.pid}.log`);
+  const latestFile = join(dir, `dev-latest-${process.pid}.log`);
 
   const header =
     `# everything-dev dev session: ${description}\n` + `# Started: ${now.toISOString()}\n\n`;
@@ -77,11 +77,25 @@ export async function createDevLogger(configDir: string, description: string): P
   };
 }
 
+export function resolveDevLatestFile(configDir: string): string {
+  const dir = getLogsDir(configDir);
+  const latestFile = join(dir, "dev-latest.log");
+  if (existsSync(latestFile)) return latestFile;
+  const candidates = readdirSync(dir)
+    .filter((name) => name.startsWith("dev-latest-") && name.endsWith(".log"))
+    .map((name) => {
+      const stats = statSync(join(dir, name));
+      return { name, mtimeMs: stats.mtimeMs };
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates.length > 0 ? join(dir, candidates[0]!.name) : latestFile;
+}
+
 export async function readDevLatestLog(
   configDir: string,
   opts?: { tail?: number },
 ): Promise<string> {
-  const latestFile = join(getLogsDir(configDir), "dev-latest.log");
+  const latestFile = resolveDevLatestFile(configDir);
   const text = await readFile(latestFile, "utf8").catch(() => "");
   const tail = opts?.tail;
   if (!tail || tail <= 0) return text;

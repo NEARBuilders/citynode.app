@@ -167,7 +167,7 @@ export const renderProcessRow = (
   const portStr = showPort ? `:${proc.port}` : "";
   const sourceLabel = proc.source ? ` (${proc.source})` : "";
   const statusColor = proc.status === "ready" ? colors.green : colors.gray;
-  const uiAnnotation = proc.ui ? colors.gray(` · ui :${proc.ui.port}`) : "";
+  const uiAnnotation = proc.ui && proc.ui.port > 0 ? colors.gray(` · ui :${proc.ui.port}`) : "";
   return `  ${getStatusIcon(proc.status)} ${chalk.bold(color(getDisplayName(proc.name).padEnd(nameWidth)))}${colors.gray(sourceLabel.padEnd(sourceWidth))} ${statusColor(getStatusText(proc))}${showPort ? colors.cyan(` ${portStr}`) : ""}${uiAnnotation}`;
 };
 
@@ -270,15 +270,19 @@ export function createDevRenderer(
   },
 ): DevRendererHandle {
   const output = options?.output ?? process.stdout;
+  const stdinSource = (options?.stdin ?? process.stdin) as DevRendererInput & { isTTY?: boolean };
+  const stdoutSource = output as DevRendererOutput & { isTTY?: boolean };
   const isInteractive =
-    options?.interactive ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
+    stdinSource.isTTY === true && stdoutSource.isTTY === true && options?.interactive !== false;
 
-  const state: DevSessionState = {
+  const state: Omit<DevSessionState, "logs"> & { logs: Array<DevLogLine & { seq: number }> } = {
     description,
     proxyTarget: env.API_PROXY,
     processes: initialProcesses.map((p) => ({ ...p })),
     logs: [],
   };
+
+  let nextLogSeq = 0;
 
   let lastLogKey: string | null = null;
   const listeners: Array<() => void> = [];
@@ -307,7 +311,7 @@ export function createDevRenderer(
         const nextKey = `${source}:${isError ? "1" : "0"}:${line}`;
         if (nextKey === lastLogKey) return;
         lastLogKey = nextKey;
-        state.logs = [...state.logs, { source, line, isError }];
+        state.logs = [...state.logs, { source, line, isError, seq: nextLogSeq++ }];
         if (state.logs.length > 100) state.logs = state.logs.slice(-100);
       }),
     unmount: () => {
@@ -317,7 +321,7 @@ export function createDevRenderer(
 
   if (!isInteractive) {
     let readyPrinted = false;
-    let printedLogCount = 0;
+    let printedLogSeq = -1;
     const printedRows = new Map<string, string>();
 
     const rowKey = (row: MergedProcess): string => `${row.status}:${row.ui?.port ?? ""}`;
@@ -355,10 +359,11 @@ export function createDevRenderer(
         readyPrinted = true;
         output.write(`\n${renderReadyBlock(getHostPort(state.processes)).join("\n")}\n\n`);
       }
-      for (const log of state.logs.slice(printedLogCount)) {
+      for (const log of state.logs) {
+        if (log.seq <= printedLogSeq) continue;
         output.write(`${renderLogLine(log)}\n`);
+        printedLogSeq = log.seq;
       }
-      printedLogCount = state.logs.length;
     };
 
     printHeader();
@@ -428,7 +433,7 @@ export function createDevRenderer(
   const onResize = () => repaint();
   ttyOutput.on?.("resize", onResize);
 
-  const stdin = options?.stdin ?? process.stdin;
+  const stdin = stdinSource;
   const rawCapable = stdin as DevRendererInput & { setRawMode?: (mode: boolean) => void };
 
   let quitCount = 0;
@@ -446,7 +451,11 @@ export function createDevRenderer(
     }
   };
 
-  rawCapable.setRawMode?.(true);
+  try {
+    rawCapable.setRawMode?.(true);
+  } catch {
+    // raw mode unavailable: key handling is inert; shutdown stays reachable via SIGTERM and bos kill
+  }
   rawCapable.on("data", onKey);
 
   let restored = false;
