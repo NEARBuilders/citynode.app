@@ -31,6 +31,11 @@ const CONTENT_TYPES: Record<string, string> = {
   ".webp": "image/webp",
   ".avif": "image/avif",
   ".ico": "image/x-icon",
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".webmanifest": "application/manifest+json",
+  ".md": "text/markdown",
+  ".ts": "text/plain",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
   ".ttf": "font/ttf",
@@ -56,6 +61,7 @@ export async function collectWorkspaceArtifacts(
   async function walk(relative: string): Promise<void> {
     const entries = await readdir(join(distPath, relative), { withFileTypes: true });
     for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
       const rel = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         await walk(rel);

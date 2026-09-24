@@ -83,6 +83,29 @@ describe("collectWorkspaceArtifacts", () => {
     expect(Buffer.from(entry.bytes).toString()).toBe("console.log('entry');");
   });
 
+  it("skips dotfiles (OS noise) and maps shell asset content types", async () => {
+    const wsPath = makeWorkspaceDist({
+      "dist/index.html": "<html></html>",
+      "dist/site.webmanifest": "{}",
+      "dist/skill.md": "# skill",
+      "dist/.DS_Store": "noise",
+      "dist/remoteEntry.js": "console.log('entry');",
+    });
+
+    const files = await collectWorkspaceArtifacts(wsPath);
+    const byPath = Object.fromEntries(files.map((f) => [f.path, f]));
+
+    expect(Object.keys(byPath).sort()).toEqual([
+      "index.html",
+      "remoteEntry.js",
+      "site.webmanifest",
+      "skill.md",
+    ]);
+    expect(byPath["index.html"]?.contentType).toBe("text/html");
+    expect(byPath["site.webmanifest"]?.contentType).toBe("application/manifest+json");
+    expect(byPath["skill.md"]?.contentType).toBe("text/markdown");
+  });
+
   it("returns empty array when dist/ is missing", async () => {
     const wsPath = makeWorkspaceDist({ "src/index.ts": "export {}; " });
     expect(await collectWorkspaceArtifacts(wsPath)).toEqual([]);

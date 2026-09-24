@@ -341,7 +341,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
         const resHeaders = (context as { resHeaders?: Headers }).resHeaders;
-        resHeaders?.set("cache-control", "public, max-age=31536000, immutable");
+        // content-hashed chunks are immutable; entrypoints (remoteEntry,
+        // mf-manifest, index.html) are fixed-name and must revalidate or a
+        // redeploy never reaches returning clients
+        const entrypoint = /^(remoteEntry|mf-manifest|index|manifest\.gen)\./.test(
+          input.path.split("/").pop() ?? "",
+        );
+        resHeaders?.set(
+          "cache-control",
+          entrypoint ? "public, max-age=0, must-revalidate" : "public, max-age=31536000, immutable",
+        );
         return new File([Uint8Array.from(object.bytes)], input.path.split("/").pop() ?? "object", {
           type: object.contentType,
         });
