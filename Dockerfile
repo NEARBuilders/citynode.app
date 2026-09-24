@@ -93,6 +93,8 @@ COPY --from=regression-builder --chown=appuser:appgroup /app/packages/every-plug
 COPY --from=regression-builder --chown=appuser:appgroup /app/packages/better-near-auth ./packages/better-near-auth
 COPY --from=regression-builder --chown=appuser:appgroup /app/scripts/regression ./scripts/regression
 COPY --from=regression-builder --chown=appuser:appgroup /app/.bos/regression/image ./.bos/regression/image
+COPY --from=regression-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
+ENV BOS_BUNDLE_DIR=/app/.bos/bundles
 
 RUN mkdir -p .bos/generated .bos/logs && \
     chown -R appuser:appgroup .bos && \
