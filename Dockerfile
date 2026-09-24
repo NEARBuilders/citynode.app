@@ -16,10 +16,18 @@ COPY plugins/votes/package.json plugins/votes/package.json
 COPY plugins/_template/package.json plugins/_template/package.json
 COPY packages/everything-dev/package.json packages/everything-dev/package.json
 COPY packages/every-plugin/package.json packages/every-plugin/package.json
-COPY packages/better-near-auth/package.json packages/better-near-auth/package.json
+# bun's hoisted linker skips workspace bin links whose target files are absent
+# at install time — every-plugin's bins are committed sources (everything-dev's
+# point at dist/, which nothing resolves via PATH). Copy them so
+# node_modules/.bin/every-plugin exists; the guard below fails loudly if a
+# future workspace adds a bin the same way.
+COPY packages/every-plugin/bin packages/every-plugin/bin
 
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts
+
+RUN test -e node_modules/.bin/every-plugin \
+    || { echo "workspace bin not linked — bun skips bin links whose targets are absent at install time; copy the workspace's bin/ dir in the manifests layer"; exit 1; }
 
 COPY . .
 RUN bun run --cwd packages/every-plugin build
