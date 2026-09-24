@@ -138,20 +138,36 @@ const stage = () => {
     readFileSync(path.join(root, "plugins", "auth", "package.json"), "utf8"),
   ).name as string;
 
+  // Browser-facing public urls: the SAME staged slots, addressed same-origin
+  // relative — /bundles/<account>/<gateway>/<slot>/ — so the host serves the
+  // exact bytes the static servers hold, on every origin the container is
+  // reachable at (regression localhost mapping or the public gateway).
+  const nsBase = nsAccount && nsGateway ? `/bundles/${nsAccount}/${nsGateway}` : undefined;
+
   const plan = {
     host: `http://localhost:${ports.hostDist}`,
-    ui: { production: `http://localhost:${ports.ui}` },
+    ui: {
+      production: `http://localhost:${ports.ui}`,
+      ...(nsBase ? { publicUrl: `${nsBase}/ui` } : {}),
+    },
     api: `http://localhost:${ports.api}`,
     auth: `http://localhost:${ports.auth}`,
     authUi: {
       production: `http://localhost:${ports.authUi}`,
       name: sanitizeContainerName(authPkgName),
+      ...(nsBase ? { publicUrl: `${nsBase}/auth-ui` } : {}),
     },
     plugins: Object.fromEntries(
       localPlugins.map(([key]) => {
         const port =
           key === "auth" ? ports.auth : basePort + 10 + localPlugins.findIndex(([k]) => k === key);
-        return [key, { production: `http://localhost:${port}` }];
+        return [
+          key,
+          {
+            production: `http://localhost:${port}`,
+            ...(nsBase ? { uiPublicUrl: `${nsBase}/${key}` } : {}),
+          },
+        ];
       }),
     ),
   };

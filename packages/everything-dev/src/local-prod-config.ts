@@ -19,11 +19,14 @@ import type { BosConfig, BosPluginRef } from "./types";
 
 export interface LocalProdOriginPlan {
   host?: string;
-  ui?: { production?: string; ssr?: string; name?: string };
+  ui?: { production?: string; ssr?: string; name?: string; publicUrl?: string };
   api?: string;
   auth?: string;
-  authUi?: { production?: string; ssr?: string; name?: string };
-  plugins?: Record<string, { production?: string; ui?: string; uiName?: string }>;
+  authUi?: { production?: string; ssr?: string; name?: string; publicUrl?: string };
+  plugins?: Record<
+    string,
+    { production?: string; ui?: string; uiName?: string; uiPublicUrl?: string }
+  >;
 }
 
 export interface StartConfigSource {
@@ -53,9 +56,11 @@ function stripIntegrity<T extends object>(section: T): T {
   return next;
 }
 
-function rewriteUi<T extends { production?: string; ssr?: string; name?: string }>(
+function rewriteUi<
+  T extends { production?: string; ssr?: string; name?: string; publicUrl?: string },
+>(
   ui: T,
-  planned: { production?: string; ssr?: string; name?: string } | undefined,
+  planned: { production?: string; ssr?: string; name?: string; publicUrl?: string } | undefined,
 ): T {
   if (!planned) return ui;
   const next = stripIntegrity(ui);
@@ -70,12 +75,15 @@ function rewriteUi<T extends { production?: string; ssr?: string; name?: string 
   if (planned.name !== undefined) {
     next.name = planned.name;
   }
+  if (planned.publicUrl !== undefined) {
+    next.publicUrl = planned.publicUrl;
+  }
   return next;
 }
 
 function rewritePluginRef(
   plugin: BosPluginRef,
-  planned: { production?: string; ui?: string; uiName?: string } | undefined,
+  planned: { production?: string; ui?: string; uiName?: string; uiPublicUrl?: string } | undefined,
 ): BosPluginRef {
   if (!planned) return plugin;
   const next =
@@ -88,6 +96,7 @@ function rewritePluginRef(
       {
         ...(planned.ui ? { production: planned.ui } : {}),
         ...(planned.uiName ? { name: planned.uiName } : {}),
+        ...(planned.uiPublicUrl ? { publicUrl: planned.uiPublicUrl } : {}),
       },
     );
   }
