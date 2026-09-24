@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stripAnsi } from "./dev-log-pipeline";
@@ -81,13 +81,18 @@ export function resolveDevLatestFile(configDir: string): string {
   const dir = getLogsDir(configDir);
   const latestFile = join(dir, "dev-latest.log");
   if (existsSync(latestFile)) return latestFile;
+  const STARTED_RE = /^# Started: (.+)$/m;
+  const startedMsOf = (name: string): number => {
+    const header = readFileSync(join(dir, name), "utf8").slice(0, 256);
+    const started = STARTED_RE.exec(header)?.[1];
+    const parsed = started ? Date.parse(started) : NaN;
+    return Number.isNaN(parsed) ? statSync(join(dir, name)).mtimeMs : parsed;
+  };
+  const pidOf = (name: string): number => Number(/^dev-latest-(\d+)\.log$/.exec(name)?.[1] ?? 0);
   const candidates = readdirSync(dir)
-    .filter((name) => name.startsWith("dev-latest-") && name.endsWith(".log"))
-    .map((name) => {
-      const stats = statSync(join(dir, name));
-      return { name, mtimeMs: stats.mtimeMs };
-    })
-    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    .filter((name) => /^dev-latest-\d+\.log$/.test(name))
+    .map((name) => ({ name, startedMs: startedMsOf(name), pid: pidOf(name) }))
+    .sort((a, b) => b.startedMs - a.startedMs || b.pid - a.pid || a.name.localeCompare(b.name));
   return candidates.length > 0 ? join(dir, candidates[0]!.name) : latestFile;
 }
 
