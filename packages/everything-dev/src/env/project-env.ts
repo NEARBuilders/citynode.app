@@ -45,6 +45,16 @@ export const ShellEnvLive = (env: Record<string, string>) => Layer.succeed(Shell
  * not be silently reverted on disk. Lines the user added outside the
  * generated key set are untouched. Idempotent.
  */
+const GENERATED_OWNED_KEYS = new Set(["BASE_URL", "CORS_ORIGIN"]);
+
+const maskValue = (key: string, value: string | undefined): string => {
+  if (value === undefined) return "(absent)";
+  if (/_DATABASE_URL$|_REDIS_URL$|_SECRET$|_KEY$/.test(key)) {
+    return value.replace(/\/\/([^:/@]+):([^@]+)@/, "//***:***@");
+  }
+  return value;
+};
+
 export const syncEnvFile = (
   configDir: string,
   generated: Record<string, string>,
@@ -70,7 +80,9 @@ export const syncEnvFile = (
 
     const updated = lines.map((line) => {
       const key = keyOf(line);
-      if (!key || !(key in generated) || key in shellEnv) return line;
+      if (!key || !(key in generated)) return line;
+      const shellOwned = key in shellEnv && !GENERATED_OWNED_KEYS.has(key);
+      if (shellOwned) return line;
       seen.add(key);
       const value = line.slice(key.length + 1);
       if (value === generated[key]) return line;
@@ -79,7 +91,9 @@ export const syncEnvFile = (
     });
 
     for (const [key, value] of Object.entries(generated)) {
-      if (key in shellEnv || seen.has(key)) continue;
+      if (seen.has(key)) continue;
+      const shellOwned = key in shellEnv && !GENERATED_OWNED_KEYS.has(key);
+      if (shellOwned) continue;
       drift.push({ key, from: undefined, to: value });
       updated.push(`${key}=${value}`);
     }
@@ -91,7 +105,7 @@ export const syncEnvFile = (
       });
       for (const { key, from, to } of drift) {
         yield* Effect.logInfo(
-          `[env] ${key} updated: ${from ?? "(absent)"} → ${to} (generated from resolved ports)`,
+          `[env] ${key} updated: ${maskValue(key, from)} → ${maskValue(key, to)} (generated from resolved ports)`,
         );
       }
     }

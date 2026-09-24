@@ -308,7 +308,13 @@ export function composeSpawnEnv(
  * Overlay the generated infra env (ports drift, so stale `.env` values must
  * lose) while keeping every explicitly exported key from `shellEnv` intact.
  * Keys absent from both are untouched.
+ *
+ * Exception (ADR 0012 / plan 038): the origin keys BASE_URL and CORS_ORIGIN
+ * are always generated-owned — a wrapper that sourced a stale `.env` must not
+ * win over the resolved host port, in the child env or on disk.
  */
+const GENERATED_OWNED_KEYS = new Set(["BASE_URL", "CORS_ORIGIN"]);
+
 export function mergeGeneratedOverFileEnv(
   generatedEnv: Record<string, string>,
   processEnv: Record<string, string>,
@@ -316,7 +322,7 @@ export function mergeGeneratedOverFileEnv(
 ): Record<string, string> {
   const result: Record<string, string> = { ...processEnv };
   for (const [key, value] of Object.entries(generatedEnv)) {
-    if (key in shellEnv) {
+    if (!GENERATED_OWNED_KEYS.has(key) && key in shellEnv) {
       result[key] = shellEnv[key]!;
     } else {
       result[key] = value;
