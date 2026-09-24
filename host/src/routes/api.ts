@@ -177,21 +177,22 @@ export async function setupApiRoutes(
     return c.json({ memory: getMemorySnapshot(), gc: gcRan });
   });
 
-  app.use(
-    "/api/storage/bundles",
-    bodyLimit({
-      maxSize: BUNDLE_UPLOAD_BODY_LIMIT_MAX,
-      onError: (c) => c.json({ error: "Request body too large" }, 413),
-    }),
-  );
+  const storageBodyLimit = bodyLimit({
+    maxSize: BUNDLE_UPLOAD_BODY_LIMIT_MAX,
+    onError: (c) => c.json({ error: "Request body too large" }, 413),
+  });
+  const apiBodyLimit = bodyLimit({
+    maxSize: BODY_LIMIT_MAX,
+    onError: (c) => c.json({ error: "Request body too large" }, 413),
+  });
 
-  app.use(
-    "/api/*",
-    bodyLimit({
-      maxSize: BODY_LIMIT_MAX,
-      onError: (c) => c.json({ error: "Request body too large" }, 413),
-    }),
-  );
+  app.use("/api/storage/bundles", storageBodyLimit);
+  // the catch-all must not double-cap the storage route — bundle uploads
+  // legitimately exceed BODY_LIMIT_MAX and carry their own ceiling
+  app.use("/api/*", (c, next) => {
+    if (c.req.path.startsWith("/api/storage/bundles")) return next();
+    return apiBodyLimit(c, next);
+  });
 
   app.use(
     "/api/*",

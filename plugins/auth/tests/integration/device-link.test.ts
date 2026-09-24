@@ -96,11 +96,16 @@ describe("device link", () => {
     expect(body.error).toBe("invalid_grant");
   });
 
-  it("rejects client ids that are not configured", async () => {
-    const codeRes = await services.handler(
+  it("rejects empty client ids on the code endpoint but accepts any non-empty one (public-client device flow)", async () => {
+    const empty = await services.handler(
+      authRequest("/device/code", { method: "POST", body: { client_id: "" } }),
+    );
+    expect(empty.status).toBe(400);
+
+    const unknown = await services.handler(
       authRequest("/device/code", { method: "POST", body: { client_id: "everything-dev" } }),
     );
-    expect(codeRes.status).toBe(400);
+    expect(unknown.status).toBe(200);
 
     const tokenRes = await services.handler(
       authRequest("/device/token", {

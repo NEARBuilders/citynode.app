@@ -100,6 +100,7 @@ export function createStaticAssetProxyHandler(config: RuntimeConfig) {
       pathname === "/" ||
       pathname === "/api" ||
       pathname.startsWith("/api/") ||
+      pathname.startsWith("/bundles/") ||
       pathname === "/health"
     ) {
       return next();

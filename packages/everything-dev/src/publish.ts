@@ -26,7 +26,11 @@ import {
   submitRegistryWrite,
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
-import { collectWorkspaceArtifacts, uploadBundlesToPlatform } from "./platform-deploy";
+import {
+  collectWorkspaceArtifacts,
+  platformDeployEntries,
+  uploadBundlesToPlatform,
+} from "./platform-deploy";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
@@ -344,16 +348,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         files,
       });
 
-      const entryIntegrity = uploaded.objects.find((o) =>
-        o.key.endsWith("/remoteEntry.js"),
-      )?.integrity;
-      const urlField = ws.kind === "app" ? `app.${key}.production` : `plugins.${key}.production`;
-      platformEntries.push({
-        url: uploaded.baseUrl,
-        integrity: entryIntegrity,
-        urlField,
-        integrityField: `${ws.kind}.${key}.integrity`,
-      });
+      platformEntries.push(...platformDeployEntries({ key, kind: ws.kind, uploaded }));
       console.log(
         `    ${colors.green(icons.ok)} ${padRight(key, 28)} ${uploaded.objects.length} object(s) → ${uploaded.baseUrl}`,
       );

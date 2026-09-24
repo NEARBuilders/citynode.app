@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { getDeviceLinkClientId, sessionQueryKey, useAuthClient } from "everything-dev/ui/auth";
+import { getDeviceLinkClientId, refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -86,9 +86,9 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
           setFailed("Failed to complete sign-in");
           return;
         }
-        void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        await refreshSessionCache(auth, queryClient);
         toast.success("Signed in");
-        void navigate({ to: redirect, replace: true });
+        await navigate({ to: redirect, replace: true });
         return;
       }
       const err = (error as TokenError)?.error;

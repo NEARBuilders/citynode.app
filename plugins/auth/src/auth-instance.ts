@@ -17,7 +17,7 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
-import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
+import { type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
 import { deviceLink } from "./device-link";
 
@@ -416,9 +416,13 @@ export function createAuthInstance(
       }),
       nearInvitations(db, membershipPolicy),
       deviceAuthorization({
-        verificationUri: "/device",
-        validateClient: (clientId) =>
-          clientId === (config.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID),
+        // Public-client device flow (RFC 8628): the CLI cannot know the
+        // tenant's configured clientId, and client secrets don't exist for
+        // public clients — user approval is the trust boundary. Any non-empty
+        // client id may start a flow; the code↔client binding is still
+        // enforced at the token endpoint.
+        verificationUri: "/login/device",
+        validateClient: (clientId) => typeof clientId === "string" && clientId.trim().length > 0,
       }),
       deviceLink(db),
       apiKey([
@@ -428,6 +432,7 @@ export function createAuthInstance(
           references: "user",
           enableSessionForAPIKeys: true,
           enableMetadata: true,
+          maximumNameLength: 64,
           rateLimit: {
             enabled: true,
             timeWindow: 60 * 1000,
@@ -439,6 +444,7 @@ export function createAuthInstance(
           defaultPrefix: "org_",
           references: "organization",
           enableMetadata: true,
+          maximumNameLength: 64,
           rateLimit: {
             enabled: true,
             timeWindow: 60 * 1000,

@@ -104,7 +104,10 @@ export function toConfigInput(descriptor: AppDescriptor): BosConfigInput {
   if (descriptor.plugins) {
     const plugins: Record<string, unknown> = {};
     for (const [key, attachment] of Object.entries(descriptor.plugins)) {
-      plugins[key] = attachmentToEntry(attachment);
+      const entry = attachmentToEntry(attachment);
+      // today's authored shape omits a name identical to the registry key
+      if (entry.name === key) delete entry.name;
+      plugins[key] = entry;
     }
     input.plugins = plugins;
   }
@@ -140,6 +143,9 @@ function applyDeployMap(config: Record<string, unknown>, entry: AppDeployEntry |
  * composition, the child's entries win (depth-1 — chains are deferred,
  * wayfinder ticket 08). The consumed `extends` key is dropped from the
  * output; the deploy map injects pipeline state.
+ *
+ * `extends` accepts a registry name or an imported App descriptor value —
+ * an imported parent is an inlined parent: same materialization, no fetch.
  */
 export function resolveApp(
   name: string,
@@ -157,17 +163,15 @@ export function resolveApp(
 
   let parentInput: BosConfigInput | undefined;
   if (descriptor.extends) {
-    const parentRaw = registry[descriptor.extends];
-    if (!parentRaw) {
-      throw new Error(`extends target "${descriptor.extends}" not found in registry`);
+    if (typeof descriptor.extends === "string") {
+      const parentRaw = registry[descriptor.extends];
+      if (!parentRaw) {
+        throw new Error(`extends target "${descriptor.extends}" not found in registry`);
+      }
+      parentInput = flattenParent(parentRaw, nextSeen);
+    } else {
+      parentInput = flattenParent(descriptor.extends, nextSeen);
     }
-    const parentDescriptor = AppDescriptorSchema.parse(parentRaw);
-    if (parentDescriptor.extends) {
-      throw new Error(
-        `extends chains deeper than one level are not supported yet ("${descriptor.extends}" extends "${parentDescriptor.extends}") — wayfinder ticket 08`,
-      );
-    }
-    parentInput = toConfigInput(parentDescriptor);
   }
 
   const childInput = toConfigInput(descriptor);
@@ -177,6 +181,33 @@ export function resolveApp(
   delete resolved.extends;
   applyDeployMap(resolved, deployMap[name]);
   return resolved as BosConfigInput;
+}
+
+function flattenParent(parentRaw: unknown, seen: Set<string>): BosConfigInput {
+  const parentDescriptor = AppDescriptorSchema.parse(parentRaw);
+  if (parentDescriptor.extends) {
+    const parentName =
+      typeof parentDescriptor.extends === "string"
+        ? parentDescriptor.extends
+        : (parentDescriptor.extends as { name?: string }).name;
+    throw new Error(
+      `extends chains deeper than one level are not supported yet ("${parentDescriptor.name}" extends "${parentName ?? "?"}") — wayfinder ticket 08`,
+    );
+  }
+  return toConfigInput(parentDescriptor);
+}
+
+/**
+ * Dev-time overlay — merged child-wins over a resolved config by the dev
+ * runner (ports, local-vs-remote sources, seeding). Overlays are never
+ * published: they exist only in `bos.dev.ts` and apply when the environment
+ * is development.
+ */
+export function applyDevOverlay(
+  resolved: BosConfigInput,
+  overlay: Partial<AppDescriptor>,
+): BosConfigInput {
+  return mergeBosConfigWithExtends(resolved, toConfigInput(overlay as AppDescriptor));
 }
 
 /** Resolve every app in the registry. */
