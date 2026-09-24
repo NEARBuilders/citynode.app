@@ -28,6 +28,7 @@ export const tenants = pgTable("tenants", {
   id: uuid("id").defaultRandom().primaryKey(),
   accountId: text("account_id").notNull().unique(),
   orgId: text("org_id"),
+  ownerUserId: text("owner_user_id"),
   name: text("name").notNull(),
   status: tenantStatus("status").default("active").notNull(),
   ownerKind: text("owner_kind").default("platform").notNull(),

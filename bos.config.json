@@ -33,7 +33,8 @@
       "development": "local:api",
       "production": "https://elliot-braem-8579-api-citynode-app-nearbuilders-dceed5498-ze.zephyrcloud.app",
       "variables": {
-        "platformAccount": "v1.citynode.near"
+        "platformAccount": "v1.citynode.near",
+        "gatewayDomains": "citynode.app,testnet.citynode.app"
       },
       "secrets": [
         "API_DATABASE_URL",
