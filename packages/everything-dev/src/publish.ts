@@ -2,12 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { readSessionHandle } from "./auth-session";
-import {
-  buildWorkspaceTargets,
-  resolveCdnProvider,
-  resolveWorkspaceTarget,
-  selectWorkspaceTargets,
-} from "./build";
+import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets } from "./build";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
@@ -33,14 +28,6 @@ import { colors, icons } from "./utils/theme";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export function extractPublishedUrl(output: string): string | null {
-  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
-  if (deployMatch) return deployMatch[1];
-  const match = output.match(/https?:\/\/[^\s"'<>]+/g);
-  if (!match || match.length === 0) return null;
-  return match[match.length - 1] ?? null;
 }
 
 export async function waitForPublishedConfig(opts: {
@@ -113,7 +100,6 @@ interface PublishToFastKvInput {
   privateKey?: string;
   wallet?: boolean;
   registry?: string;
-  cdn?: "zephyr" | "platform";
 }
 
 interface PublishToFastKvResult {
@@ -188,8 +174,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     }
   }
 
-  const cdnProvider = resolveCdnProvider(bosConfig, input.cdn);
-
   if (dryRun) {
     return { status: "dry-run", registryUrl, built, skipped };
   }
@@ -226,7 +210,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
       targets,
       deploy: true,
       verbose: input.verbose,
-      cdnProviderOverride: cdnProvider,
     });
     built = result.built;
     skipped = result.skipped;
@@ -282,44 +265,42 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
-  if (cdnProvider === "platform") {
-    // Image-native deploy (plan 043): artifacts ship inside the runtime image
-    // and each host serves its own namespace from its own filesystem — the
-    // publish writes the deterministic bundle URLs, nothing is uploaded.
-    const origin = `https://${gateway}`;
-    const deployTargets = (built ?? []).filter((key) => targets.includes(key));
-    const platformEntries: DeployResultEntry[] = [];
+  // Image-native deploy (plan 043): artifacts ship inside the runtime image
+  // and each host serves its own namespace from its own filesystem — the
+  // publish writes the deterministic bundle URLs, nothing is uploaded.
+  const origin = `https://${gateway}`;
+  const deployTargets = (built ?? []).filter((key) => targets.includes(key));
+  const platformEntries: DeployResultEntry[] = [];
 
-    console.log();
-    console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
-    for (const key of deployTargets) {
-      const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
-      if (!ws) continue;
+  console.log();
+  console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
+  for (const key of deployTargets) {
+    const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
+    if (!ws) continue;
 
-      platformEntries.push(
-        ...platformUrlDeployEntries({ origin, account, gateway, key, kind: ws.kind }),
-      );
-      console.log(
-        `    ${colors.green(icons.ok)} ${padRight(key, 28)} → https://${gateway}/bundles/${account}/${gateway}/${key}/`,
-      );
+    platformEntries.push(
+      ...platformUrlDeployEntries({ origin, account, gateway, key, kind: ws.kind }),
+    );
+    console.log(
+      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → https://${gateway}/bundles/${account}/${gateway}/${key}/`,
+    );
+  }
+
+  if (platformEntries.length > 0) {
+    const merged = applyDeployResults(rawConfig as Record<string, unknown>, platformEntries);
+    try {
+      writeFileSync(rawConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
+    } catch (error) {
+      return {
+        status: "error",
+        registryUrl,
+        built,
+        skipped,
+        deployResults,
+        error: `Failed to write bundle URLs to bos.config.json: ${error instanceof Error ? error.message : error}`,
+      };
     }
-
-    if (platformEntries.length > 0) {
-      const merged = applyDeployResults(rawConfig as Record<string, unknown>, platformEntries);
-      try {
-        writeFileSync(rawConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
-      } catch (error) {
-        return {
-          status: "error",
-          registryUrl,
-          built,
-          skipped,
-          deployResults,
-          error: `Failed to write bundle URLs to bos.config.json: ${error instanceof Error ? error.message : error}`,
-        };
-      }
-      publishPayload = (isStaging ? { ...merged, domain: gateway } : merged) as BosConfigInput;
-    }
+    publishPayload = (isStaging ? { ...merged, domain: gateway } : merged) as BosConfigInput;
   }
 
   const registryKey = `apps/${account}/${gateway}/bos.config.json`;

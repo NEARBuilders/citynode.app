@@ -14,19 +14,10 @@ function pluginDisplayName(cwd: string): string {
   }
 }
 
-function generatedRspackConfig(
-  deployLabel: string,
-  hasOverrides: boolean,
-  bosConfigPath: string | null,
-): string {
+function generatedRspackConfig(hasOverrides: boolean): string {
   return `import { createPluginBaseConfig } from "every-plugin/build/rspack";
-import { withPluginDeploy } from "everything-dev/integrity";
 ${hasOverrides ? `import buildOverrides from "../build.config.ts";\n` : ""}
-const config = createPluginBaseConfig(${hasOverrides ? "buildOverrides" : "{}"});
-const bosConfigPath = ${JSON.stringify(bosConfigPath)};
-export default bosConfigPath
-  ? withPluginDeploy(config, { bosConfigPath, deployLabel: ${JSON.stringify(deployLabel)} })
-  : config;
+export default createPluginBaseConfig(${hasOverrides ? "buildOverrides" : "{}"});
 `;
 }
 
@@ -39,16 +30,12 @@ export default bosConfigPath
 export function ensureGeneratedRspackConfig(cwd: string = process.cwd()): string | null {
   if (fs.existsSync(path.join(cwd, "rspack.config.js"))) return null;
 
-  const bosConfigPath = findBosConfigPath(cwd);
   const overridesPath = path.resolve(cwd, "build.config.ts");
   const hasOverrides = fs.existsSync(overridesPath);
   const generatedDir = path.join(cwd, ".every-plugin");
   const generatedConfig = path.join(generatedDir, "rspack.config.generated.mjs");
   fs.mkdirSync(generatedDir, { recursive: true });
-  fs.writeFileSync(
-    generatedConfig,
-    generatedRspackConfig(pluginDisplayName(cwd), hasOverrides, bosConfigPath),
-  );
+  fs.writeFileSync(generatedConfig, generatedRspackConfig(hasOverrides));
 
   console.log(
     "[every-plugin] rspack.config.js not found — using the every-plugin build composition.",

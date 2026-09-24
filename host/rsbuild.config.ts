@@ -5,12 +5,9 @@ import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { getPluginSharedDependencies } from "every-plugin/build/rspack";
-import { computeSriHashForUrl, reportDeployResult } from "everything-dev/integrity";
-import { withZephyr } from "zephyr-rsbuild-plugin";
 
 const __dirname = import.meta.dirname;
 const require = createRequire(import.meta.url);
-const shouldDeploy = process.env.DEPLOY === "true" && process.env.BOS_CDN_PROVIDER !== "platform";
 
 const resolvedConfigPath = path.resolve(__dirname, "../.bos/bos.resolved-config.json");
 const rootBosConfigPath = path.resolve(__dirname, "../bos.config.json");
@@ -101,27 +98,6 @@ const shared = mergeSharedMaps(
 );
 
 const plugins = [pluginReact()];
-
-if (shouldDeploy) {
-  plugins.push(
-    withZephyr({
-      snapshotType: "csr",
-      hooks: {
-        onDeployComplete: async (info: { url: string }) => {
-          console.log("🚀 Host Deployed:", info.url);
-          const integrity = await computeSriHashForUrl(info.url);
-          reportDeployResult({
-            url: info.url,
-            integrity,
-            bosConfigPath: rootBosConfigPath,
-            urlField: "app.host.production",
-            integrityField: "app.host.integrity",
-          });
-        },
-      },
-    }),
-  );
-}
 
 export default defineConfig({
   plugins,

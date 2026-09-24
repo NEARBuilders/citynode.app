@@ -90,7 +90,6 @@ import {
   parseBosUrl,
 } from "./fastkv";
 import { materializeViaLayer } from "./infra/materializer";
-import { computeSriHashForUrl, parseDeployLines } from "./integrity";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import { checkFederationCompat } from "./mf";
 import {
@@ -101,9 +100,10 @@ import {
   listPublishKeys,
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
+import { applyPluginPublishUrl } from "./platform-deploy";
 import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { timePhase } from "./progress";
-import { extractPublishedUrl, publishToFastKv } from "./publish";
+import { publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
 import { createPlugin, z } from "./sdk";
 import { syncResolvedSharedDeps } from "./shared-deps";
@@ -589,9 +589,8 @@ export default createPlugin({
         name?: string;
         version?: string;
       }>(pkgPath);
-      const script = pkgJson.scripts?.deploy ? "deploy" : "build";
 
-      const { stdout, stderr, exitCode } = (await run("bun", ["run", script], {
+      const { stdout, stderr, exitCode } = (await run("bun", ["run", "build"], {
         cwd: localPath,
         capture: true,
       })) as { stdout: string; stderr: string; exitCode: number };
@@ -602,29 +601,42 @@ export default createPlugin({
         return {
           status: "error" as const,
           key: input.key,
-          error: `Publish failed with exit code ${exitCode}`,
+          error: `Build failed with exit code ${exitCode}`,
         };
       }
 
-      if (stdout.trim()) process.stdout.write(stdout);
-      if (stderr.trim()) process.stderr.write(stderr);
+      const account = deps.bosConfig.account;
+      const gateway = deps.bosConfig.domain;
+      if (!account || !gateway) {
+        return {
+          status: "error" as const,
+          key: input.key,
+          error: "bos.config.json must define account and domain to publish a plugin",
+        };
+      }
 
-      const output = `${stdout}\n${stderr}`;
-      const deployEntries = parseDeployLines(output);
-      const deployEntry = deployEntries.find(
-        (e) => e.urlField === `plugins.${input.key}.production`,
-      );
-
+      const rootConfigPath = join(deps.configDir, "bos.config.json");
       let publishedUrl: string | undefined;
-      let integrity: string | undefined;
-      if (deployEntry) {
-        publishedUrl = deployEntry.url;
-        integrity = deployEntry.integrity;
-      } else {
-        publishedUrl = extractPublishedUrl(output) ?? undefined;
-        integrity = publishedUrl
-          ? ((await computeSriHashForUrl(publishedUrl)) ?? undefined)
-          : undefined;
+      try {
+        const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<
+          string,
+          unknown
+        >;
+        const merged = applyPluginPublishUrl(rootConfig, {
+          origin: `https://${gateway}`,
+          account,
+          gateway,
+          key: input.key,
+        });
+        writeFileSync(rootConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
+        const plugins = merged.plugins as Record<string, Record<string, unknown>> | undefined;
+        publishedUrl = plugins?.[input.key]?.production as string | undefined;
+        console.log(`   ✅ Updated bos.config.json: plugins.${input.key}.production`);
+      } catch (err) {
+        console.error(
+          `   ❌ Failed to update bos.config.json:`,
+          err instanceof Error ? err.message : err,
+        );
       }
 
       let manifest: PluginManifest | null = null;
@@ -640,35 +652,6 @@ export default createPlugin({
       const version = manifest?.plugin.version ?? pkgJson.version;
 
       if (publishedUrl) {
-        const rootConfigPath = join(deps.configDir, "bos.config.json");
-        try {
-          const rootConfig = JSON.parse(readFileSync(rootConfigPath, "utf-8")) as Record<
-            string,
-            unknown
-          >;
-          if (!rootConfig.plugins || typeof rootConfig.plugins !== "object") {
-            rootConfig.plugins = {};
-          }
-          const plugins = rootConfig.plugins as Record<string, unknown>;
-          if (!plugins[input.key] || typeof plugins[input.key] !== "object") {
-            plugins[input.key] = {};
-          }
-          const entry = plugins[input.key] as Record<string, unknown>;
-          entry.production = publishedUrl;
-          if (integrity) {
-            entry.integrity = integrity;
-          } else {
-            delete entry.integrity;
-          }
-          writeFileSync(rootConfigPath, `${JSON.stringify(rootConfig, null, 2)}\n`);
-          console.log(`   ✅ Updated bos.config.json: plugins.${input.key}.production`);
-        } catch (err) {
-          console.error(
-            `   ❌ Failed to update bos.config.json:`,
-            err instanceof Error ? err.message : err,
-          );
-        }
-
         await generateCodeArtifacts(deps.configDir, deps.bosConfig);
       }
 
@@ -676,9 +659,8 @@ export default createPlugin({
         status: "published" as const,
         key: input.key,
         path: localPath,
-        script,
+        script: "build",
         production: publishedUrl ?? attachmentRef?.production,
-        integrity: integrity ?? undefined,
         version: version ?? undefined,
       };
     }),

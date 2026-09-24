@@ -12,11 +12,7 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { timeout } from "hono/timeout";
 import type { AuthVariables } from "../lib/auth";
-import {
-  API_TIMEOUT_MS,
-  BODY_LIMIT_MAX,
-  BUNDLE_UPLOAD_BODY_LIMIT_MAX,
-} from "../middleware/security";
+import { API_TIMEOUT_MS, BODY_LIMIT_MAX } from "../middleware/security";
 import { proxyRequest } from "../middleware/static-proxy";
 import { buildPluginContext, type createSessionMiddleware } from "../services/auth";
 import type { RuntimeConfig } from "../services/config";
@@ -183,22 +179,12 @@ export async function setupApiRoutes(
     return c.json({ memory: getMemorySnapshot(), gc: gcRan });
   });
 
-  const storageBodyLimit = bodyLimit({
-    maxSize: BUNDLE_UPLOAD_BODY_LIMIT_MAX,
-    onError: (c) => c.json({ error: "Request body too large" }, 413),
-  });
   const apiBodyLimit = bodyLimit({
     maxSize: BODY_LIMIT_MAX,
     onError: (c) => c.json({ error: "Request body too large" }, 413),
   });
 
-  app.use("/api/storage/bundles", storageBodyLimit);
-  // the catch-all must not double-cap the storage route — bundle uploads
-  // legitimately exceed BODY_LIMIT_MAX and carry their own ceiling
-  app.use("/api/*", (c, next) => {
-    if (c.req.path.startsWith("/api/storage/bundles")) return next();
-    return apiBodyLimit(c, next);
-  });
+  app.use("/api/*", apiBodyLimit);
 
   app.use(
     "/api/*",

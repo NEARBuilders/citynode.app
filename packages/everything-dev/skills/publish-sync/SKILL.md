@@ -10,10 +10,9 @@ metadata:
 ## Core Workflow
 
 ```
-Build → Deploy → Publish → Sync
-  ↓       ↓        ↓        ↓
-rspack  Zephyr   FastKV   bos sync
-        CDN      registry
+Build → Publish → Sync
+  ↓        ↓        ↓
+rspack  FastKV    bos sync
 ```
 
 ## Publish
@@ -34,8 +33,8 @@ bos publish --packages ui,api      # Manual subset
 The registry transaction is signed in-process via near-kit — key resolution order: explicit key → `NEAR_PRIVATE_KEY` / `BOS_NEAR_PRIVATE_KEY` env → `~/.near-credentials/<network>/<account>.json` → near-cli-rs OS keychain (`sign-with-keychain`, interactive only). Publishes are skipped when FastKV already holds an identical config. Reads are indexed by tx signer, so the config resolves at `bos://<account>/<gateway>` only when signed by `<account>` itself — see the `registry` skill for the namespace=signer law and composing other runtimes (`bos registry use`).
 
 After `bos publish --deploy`:
-1. Each workspace builds and deploys to Zephyr CDN
-2. `bos.config.json` is auto-updated with production URLs + integrity hashes
+1. Each workspace builds; the publish writes deterministic bundle URLs (`https://<domain>/bundles/<account>/<gateway>/<workspace>/`)
+2. `bos.config.json` is auto-updated with the production URLs
 3. Config is published to the FastKV registry at `{account}/bos/gateways/{gateway}/bos.config.json`
 
 The `--network` flag controls the NEAR network (mainnet by default). With `--network testnet`, publishes go to the NEAR testnet chain under the testnet account specified in config.
@@ -71,7 +70,7 @@ You don't need to wait for CI/CD to see changes in production. Publish your own 
 2. Create a NEAR account via near-cli-rs (testnet or mainnet; named accounts can own subaccounts, implicit hex accounts cannot)
 3. `bos key generate` — generates a function-call key scoped to the FastKV registry contract; set the output as `NEAR_PRIVATE_KEY`
 4. Update `bos.config.json`: set `account` to your NEAR account, add `"extends": "bos://<parent-account>/<parent-gateway>"`, keep `domain` as the parent gateway
-5. `bos publish --deploy` — builds workspaces, deploys to Zephyr CDN, publishes config to FastKV at `bos://<your-account>/<gateway>`
+5. `bos publish --deploy` — builds workspaces, writes deterministic bundle URLs, publishes config to FastKV at `bos://<your-account>/<gateway>`
 6. Deploy to Railway (one-click template or `railway up`), set `BOS_ACCOUNT`, `BOS_GATEWAY` (same as parent), `BETTER_AUTH_SECRET` — the host fetches your config from FastKV and serves live
 
 **Subaccount creation** (for the tenant wizard) requires a named NEAR account with a full access key. Export the key via `near account export-account <account> explicitly-provide-private-key`, set `NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET` / `_TESTNET`, and point `siwn.subAccount.parentAccount`, `siwn.recipients`, and `siwn.relayer.*.whitelistedContracts` to your account.
@@ -87,7 +86,7 @@ bos sync --dry-run
 ```
 
 What gets synced from the parent template:
-- `app.*.production` — Zephyr URLs
+- `app.*.production` — bundle URLs
 - `app.*.ssr` — SSR URLs
 - `shared` — shared dependency versions
 - framework-owned files like build configs, router wiring, and shared runtime scaffolding
@@ -227,8 +226,7 @@ If `bos mf check` fails for one plugin, redeploy only that plugin from this repo
 
 ```bash
 cd plugins/<key>
-bun run deploy                        # rebuild + Zephyr upload + reportDeployResult writes
-                                      # the new url + integrity to bos.config.json locally
+bos plugin publish <key>             # rebuild + write the deterministic bundle URL to bos.config.json
 ```
 
 Then from the repo root: `bos publish --deploy --packages local` and `bos mf check` to confirm.

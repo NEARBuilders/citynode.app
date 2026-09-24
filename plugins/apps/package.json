@@ -35,12 +35,10 @@
     "every-plugin": "catalog:",
     "host": "workspace:*",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "catalog:",
-    "zephyr-rspack-plugin": "catalog:"
+    "vitest": "catalog:"
   },
   "scripts": {
     "build": "every-plugin build",
-    "deploy": "every-plugin deploy",
     "dev": "every-plugin dev",
     "test": "vitest run",
     "test:watch": "vitest",

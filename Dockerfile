@@ -3,9 +3,25 @@
 FROM oven/bun:1.3.14-alpine AS builder
 WORKDIR /app
 
-COPY . .
+# Manifests first: dependency install caches independently of source changes
+# (and downloads persist via the cache mount even when the layer busts).
+COPY package.json bun.lock bunfig.toml ./
+COPY host/package.json host/package.json
+COPY ui/package.json ui/package.json
+COPY api/package.json api/package.json
+COPY plugins/auth/package.json plugins/auth/package.json
+COPY plugins/apps/package.json plugins/apps/package.json
+COPY plugins/proposals/package.json plugins/proposals/package.json
+COPY plugins/votes/package.json plugins/votes/package.json
+COPY plugins/_template/package.json plugins/_template/package.json
+COPY packages/everything-dev/package.json packages/everything-dev/package.json
+COPY packages/every-plugin/package.json packages/every-plugin/package.json
+COPY packages/better-near-auth/package.json packages/better-near-auth/package.json
 
-RUN bun install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --ignore-scripts
+
+COPY . .
 RUN bun run --cwd packages/every-plugin build
 RUN bun run --cwd packages/everything-dev build
 RUN bun run scripts/resolve-workspace-refs.ts

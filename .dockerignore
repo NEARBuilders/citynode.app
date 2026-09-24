@@ -1,9 +1,25 @@
 # Git
 .git
 .gitignore
+.gitattributes
 .github
 .changeset
 .release
+
+# Vendored reference clones (gitignored, restored by bun run prepare)
+repos
+
+# Plans, scratch space, agent/IDE config — not needed in any image
+.scratch
+advisor-plans
+plans
+.agents
+.opencode
+.cursor
+CLAUDE.md
+
+# BOS runtime state (regression stacks regenerate it inside the container)
+.bos
 
 # Dependencies (installed fresh in container)
 node_modules

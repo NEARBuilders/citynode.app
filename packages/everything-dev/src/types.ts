@@ -234,11 +234,6 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
         auth: z.enum(["session", "key", "custody"]).optional(),
       })
       .optional(),
-    deploy: z
-      .object({
-        cdn: z.enum(["zephyr", "platform"]).optional(),
-      })
-      .optional(),
     ci: CiConfigSchema.optional(),
   }),
 );
@@ -269,7 +264,6 @@ export interface BosConfigInput {
   app?: Record<string, BosConfigInputAppEntry>;
   plugins?: Record<string, string | BosConfigInput>;
   publish?: PublishConfig;
-  deploy?: DeployConfig;
   ci?: CiConfig;
 }
 
@@ -291,14 +285,6 @@ export const PublishConfigSchema = z.object({
 });
 export type PublishConfig = z.infer<typeof PublishConfigSchema>;
 
-export const DeployCdnSchema = z.enum(["zephyr", "platform"]);
-export type DeployCdn = z.infer<typeof DeployCdnSchema>;
-
-export const DeployConfigSchema = z.object({
-  cdn: DeployCdnSchema.optional(),
-});
-export type DeployConfig = z.infer<typeof DeployConfigSchema>;
-
 export const BosConfigSchema = z.object({
   account: z.string(),
   extends: ExtendsSchema.optional(),
@@ -309,7 +295,6 @@ export const BosConfigSchema = z.object({
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
   publish: PublishConfigSchema.optional(),
-  deploy: DeployConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
   plugins: z.record(z.string(), z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
