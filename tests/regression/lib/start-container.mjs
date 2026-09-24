@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Start-command regression stack (ADR 0009): builds the deployment image
- * (Dockerfile `regression` target — hermetic, the same artifact production
+ * (Dockerfile `runtime` target — hermetic, the same artifact production
  * runs) and boots it with the regression test databases. The container
  * serves every dist internally; only the host port is mapped. No runner-side
  * builds, no FastKV, no NEAR credentials.
@@ -113,8 +113,8 @@ const main = async () => {
     /* nothing to clean */
   }
 
-  log(`building the deployment image (docker build --target regression)…`);
-  await run("docker", ["build", "--target", "regression", "-t", image, "."]);
+  log(`building the deployment image (docker build --target runtime)…`);
+  await run("docker", ["build", "--target", "runtime", "-t", image, "."]);
 
   const child = dockerRun();
   const teardown = () => {

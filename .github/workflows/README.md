@@ -136,7 +136,7 @@ Final stage:
   COPY --from=prod-builder bos.config.json    # Runtime config
   COPY --from=prod-builder packages/everything-dev  # Framework CLI (bos)
   COPY --from=prod-builder packages/every-plugin    # Plugin runtime
-  COPY --from=regression-builder .bos/bundles # Image-native artifacts (BOS_BUNDLE_DIR)
+  COPY --from=dist-builder .bos/bundles      # Image-native artifacts (BOS_BUNDLE_DIR)
 ```
 
 **Why this design:**

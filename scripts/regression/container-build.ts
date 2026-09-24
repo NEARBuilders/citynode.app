@@ -1,5 +1,5 @@
 /**
- * Regression image build (ADR 0009): runs inside the `regression-builder`
+ * Deployment dist build (ADR 0009): runs inside the `dist-builder`
  * stage. Builds every workspace the start-command stack serves — framework
  * auth provider, core ui (web + ssr, sequential environments), host dist,
  * api, and every local plugin from bos.config.json — then stages a

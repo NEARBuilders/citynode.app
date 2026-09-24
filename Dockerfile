@@ -19,10 +19,9 @@ RUN bun run --cwd packages/every-plugin build
 RUN bun run --cwd packages/everything-dev build
 RUN bun run scripts/resolve-workspace-refs.ts
 
-# ── Regression build (ADR 0009): all workspaces the local start stack serves ──
+# ── Dist build (ADR 0009): all workspaces the start stack serves ──
 # Forked BEFORE the prod stage strips sources — the ui/api/plugins builds run here.
-FROM builder AS regression-builder
-RUN bun run --cwd packages/better-near-auth build
+FROM builder AS dist-builder
 RUN bun run scripts/regression/container-build.ts
 
 # ── Prod build: strip sources — the framework loads remotes at runtime ──
@@ -51,9 +50,9 @@ COPY --from=prod-builder --chown=appuser:appgroup /app/packages/everything-dev .
 COPY --from=prod-builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
 
 # Image-native artifacts (plan 043): the namespace-staged bundle layout built
-# by the regression stage — the host serves /bundles/* from this directory.
+# by the dist-builder stage — the host serves /bundles/* from this directory.
 # BOS_BUNDLE_DIR unset in other consumers falls through to remote loading.
-COPY --from=regression-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
+COPY --from=dist-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
 ENV BOS_BUNDLE_DIR=/app/.bos/bundles
 
 RUN mkdir -p .bos/generated .bos/logs && \
@@ -73,27 +72,29 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 USER appuser
 CMD ["sh", "-c", "bun run start --port ${PORT:-3000}"]
 
-# ── Regression runtime (ADR 0009): serves the staged dists and boots the
-# production host over them. One container = the whole start stack; only the
-# host port is mapped. Databases and secrets arrive via env at `docker run`.
-FROM oven/bun:1.3.14-alpine AS regression
+# ── Deployment runtime (ADR 0009 amendment): the last stage — what Railway
+# builds and deploys. Serves the staged dists and boots the production host
+# over them. One container = the whole start stack; only the host port is
+# mapped. Databases and secrets arrive via env at `docker run`. The
+# regression harness builds this same target for its browser suites.
+FROM oven/bun:1.3.14-alpine AS runtime
 WORKDIR /app
 
 RUN apk add --no-cache curl
 
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
 
-COPY --from=regression-builder --chown=appuser:appgroup /app/node_modules ./node_modules
-COPY --from=regression-builder --chown=appuser:appgroup /app/package.json .
-COPY --from=regression-builder --chown=appuser:appgroup /app/bun.lock .
-COPY --from=regression-builder --chown=appuser:appgroup /app/bunfig.toml .
-COPY --from=regression-builder --chown=appuser:appgroup /app/bos.config.json ./
-COPY --from=regression-builder --chown=appuser:appgroup /app/packages/everything-dev ./packages/everything-dev
-COPY --from=regression-builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
-COPY --from=regression-builder --chown=appuser:appgroup /app/packages/better-near-auth ./packages/better-near-auth
-COPY --from=regression-builder --chown=appuser:appgroup /app/scripts/regression ./scripts/regression
-COPY --from=regression-builder --chown=appuser:appgroup /app/.bos/regression/image ./.bos/regression/image
-COPY --from=regression-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
+COPY --from=dist-builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=dist-builder --chown=appuser:appgroup /app/package.json .
+COPY --from=dist-builder --chown=appuser:appgroup /app/bun.lock .
+COPY --from=dist-builder --chown=appuser:appgroup /app/bunfig.toml .
+COPY --from=dist-builder --chown=appuser:appgroup /app/bos.config.json ./
+COPY --from=dist-builder --chown=appuser:appgroup /app/packages/everything-dev ./packages/everything-dev
+COPY --from=dist-builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
+COPY --from=dist-builder --chown=appuser:appgroup /app/packages/better-near-auth ./packages/better-near-auth
+COPY --from=dist-builder --chown=appuser:appgroup /app/scripts/regression ./scripts/regression
+COPY --from=dist-builder --chown=appuser:appgroup /app/.bos/regression/image ./.bos/regression/image
+COPY --from=dist-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
 ENV BOS_BUNDLE_DIR=/app/.bos/bundles
 
 RUN mkdir -p .bos/generated .bos/logs && \

@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Regression container entrypoint (ADR 0009): serves the staged dist
- * servers on the container's own localhost, picks the render-variant
+ * Deployment container entrypoint (ADR 0009 amendment): serves the staged
+ * dist servers on the container's own localhost, picks the render-variant
  * runtime config, and boots the real production host (`bos start
- * --config-path`). REGRESSION_VARIANT selects ssr | csr (default ssr).
+ * --config-path`). REGRESSION_VARIANT selects ssr | csr (default ssr) —
+ * the name is harness heritage; the deployment boots the ssr default.
  *
  * Zero runtime dependencies — node builtins only — so the runtime stage
  * stays free of hoisted-transitive assumptions.
@@ -65,7 +66,7 @@ const serve = (dir, port) => {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "0.0.0.0", () => {
-      console.log(`[regression] serving ${dir} → http://localhost:${port}`);
+      console.log(`[runtime] serving ${dir} → http://localhost:${port}`);
       servers.push(server);
       resolve();
     });
@@ -79,7 +80,7 @@ const main = async () => {
     await serve(dir, port);
   }
 
-  console.log(`[regression] variant ${variant} — config ${path.basename(configPath)}`);
+  console.log(`[runtime] variant ${variant} — config ${path.basename(configPath)}`);
   const child = spawn(
     process.execPath,
     [
@@ -127,14 +128,14 @@ const main = async () => {
     }
   }
   if (!ready) {
-    console.error(`[regression] host never became healthy at http://localhost:${hostPort}/health`);
+    console.error(`[runtime] host never became healthy at http://localhost:${hostPort}/health`);
     teardown();
     process.exit(1);
   }
-  console.log(`[regression] production stack (${variant}) ready at http://localhost:${hostPort}`);
+  console.log(`[runtime] production stack (${variant}) ready at http://localhost:${hostPort}`);
 };
 
 main().catch((error) => {
-  console.error("[regression] fatal:", error);
+  console.error("[runtime] fatal:", error);
   process.exit(1);
 });
