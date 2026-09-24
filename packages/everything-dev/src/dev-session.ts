@@ -51,6 +51,9 @@ const sortByOrder = (packages: string[]): string[] => {
 export interface DevSessionControls {
   requestShutdown: () => void;
   emergencyKill: () => void;
+  requestShutdownEscalating: () => void;
+  forceExit: () => void;
+  restoreView: () => void;
 }
 
 export const runDevSession = (
@@ -89,6 +92,9 @@ export const runDevSession = (
         void Effect.runPromise(Deferred.succeed(shutdown, undefined));
       },
       emergencyKill: () => {},
+      requestShutdownEscalating: () => {},
+      forceExit: () => {},
+      restoreView: () => {},
     };
 
     onShutdownReady?.(controls);
@@ -141,20 +147,19 @@ export const runDevSession = (
       },
     });
 
-    const requestShutdownAndExport = () => {
-      shouldExportLogs = true;
-      void Effect.runPromise(Deferred.succeed(shutdown, undefined));
-    };
-
     const useInteractive = orchestrator.interactive ?? isInteractiveSupported();
     view = createDevRenderer(
       initialProcesses,
       orchestrator.description,
       orchestrator.env,
-      () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
-      requestShutdownAndExport,
-      { interactive: useInteractive },
+      () => controls.requestShutdownEscalating(),
+      () => {
+        shouldExportLogs = true;
+        controls.requestShutdownEscalating();
+      },
+      { interactive: useInteractive, onForceExit: () => controls.forceExit() },
     );
+    controls.restoreView = () => view?.unmount();
 
     const callbacks: ProcessCallbacks = {
       onStatus: (name, status, message) => {
@@ -309,6 +314,7 @@ const runApp = (
 
   const forceExit = () => {
     console.log("\n[Dev] Force exit");
+    controls?.restoreView();
     controls?.emergencyKill();
     process.exit(0);
   };
@@ -331,6 +337,17 @@ const runApp = (
   const program = Effect.scoped(
     runDevSession(orchestrator, (sessionControls) => {
       controls = sessionControls;
+      sessionControls.requestShutdownEscalating = () => {
+        signalCount++;
+        if (signalCount > 1) {
+          forceExit();
+          return;
+        }
+        console.log("\n[Dev] Shutting down...");
+        forceExitTimer = setTimeout(forceExit, 5000);
+        sessionControls.requestShutdown();
+      };
+      sessionControls.forceExit = forceExit;
     }),
   ).pipe(
     Effect.provide(ServiceDescriptorMapLive(services)),

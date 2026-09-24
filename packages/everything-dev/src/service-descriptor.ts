@@ -83,13 +83,7 @@ const PLUGIN_ERROR_PATTERNS = [
   /Cannot find module/i,
 ];
 
-const SERVICE_CONFIGS: Record<
-  string,
-  Pick<
-    ServiceDescriptor,
-    "command" | "args" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
-  >
-> = {
+const SERVICE_CONFIGS = {
   host: {
     command: "bun",
     args: ["run", "dev"],
@@ -122,7 +116,13 @@ const SERVICE_CONFIGS: Record<
     defaultPort: 3001,
     readinessPath: "/remoteEntry.js",
   },
-};
+} as const satisfies Record<
+  string,
+  Pick<
+    ServiceDescriptor,
+    "command" | "args" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
+  >
+>;
 
 export function buildServiceDescriptorMap(
   runtimeConfig: RuntimeConfig,

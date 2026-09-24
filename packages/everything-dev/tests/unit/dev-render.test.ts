@@ -284,7 +284,7 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     return { stdin, chunks, output };
   };
 
-  it("enters alt-screen, hides cursor, and redraws on state change", () => {
+  it("enters alt-screen, hides cursor, and repaints on state change without clearing the screen", () => {
     const { stdin, chunks, output } = makeTty();
     const renderer = createDevRenderer(
       baseState.processes,
@@ -303,7 +303,58 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     expect(chunks.join("")).toContain("DEV SESSION");
 
     renderer.updateProcess("host", "ready");
-    expect(chunks.filter((c) => c.includes("\x1b[H\x1b[2J")).length).toBeGreaterThanOrEqual(1);
+    expect(chunks.filter((c) => c.includes("\x1b[H")).length).toBeGreaterThanOrEqual(2);
+    expect(chunks.join("")).not.toContain("\x1b[2J");
+  });
+
+  it("caps the frame to the viewport height and never uses full-screen clear", () => {
+    const { stdin, chunks } = makeTty();
+    const rows = 8;
+    createDevRenderer(baseState.processes, "dev session", {}, undefined, undefined, {
+      output: { write: (s: string) => chunks.push(s), rows, columns: 80 },
+      interactive: true,
+      stdin,
+    });
+    const frame = chunks[chunks.length - 1] ?? "";
+    const renderedLines = stripAnsi(frame)
+      .split("\n")
+      .filter((l) => l.length > 0).length;
+    expect(renderedLines).toBeLessThanOrEqual(rows - 1);
+    expect(frame).not.toContain("\x1b[2J");
+  });
+
+  it("repaints on terminal resize", () => {
+    const { stdin, chunks } = makeTty();
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const output = {
+      write: (s: string) => chunks.push(s),
+      rows: 30,
+      columns: 100,
+      on: (event: string, listener: (...args: unknown[]) => void) => {
+        listeners.set(event, listener);
+      },
+      removeListener: (event: string) => {
+        listeners.delete(event);
+      },
+    };
+    const renderer = createDevRenderer(
+      baseState.processes,
+      "dev session",
+      {},
+      undefined,
+      undefined,
+      {
+        output,
+        interactive: true,
+        stdin,
+      },
+    );
+    const repaintsBefore = chunks.length;
+    listeners.get("resize")?.();
+    expect(chunks.length).toBeGreaterThan(repaintsBefore);
+
+    renderer.unmount();
+    expect(listeners.has("resize")).toBe(false);
   });
 
   it("q triggers exit; unmount restores the terminal and raw mode", () => {
@@ -335,6 +386,40 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     });
     stdin.emit("data", Buffer.from("\x03"));
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it("second ctrl+c escalates to force exit instead of being swallowed", () => {
+    const { stdin, output } = makeTty();
+    const onExit = vi.fn();
+    const onForceExit = vi.fn();
+    createDevRenderer(baseState.processes, "dev session", {}, onExit, undefined, {
+      output,
+      interactive: true,
+      stdin,
+      onForceExit,
+    });
+    stdin.emit("data", Buffer.from("\x03"));
+    stdin.emit("data", Buffer.from("\x03"));
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onForceExit).toHaveBeenCalledTimes(1);
+  });
+
+  it("q after l escalates to force exit", () => {
+    const { stdin, output } = makeTty();
+    const onExit = vi.fn();
+    const onExportLogs = vi.fn();
+    const onForceExit = vi.fn();
+    createDevRenderer(baseState.processes, "dev session", {}, onExit, onExportLogs, {
+      output,
+      interactive: true,
+      stdin,
+      onForceExit,
+    });
+    stdin.emit("data", Buffer.from("l"));
+    stdin.emit("data", Buffer.from("q"));
+    expect(onExportLogs).toHaveBeenCalledTimes(1);
+    expect(onExit).not.toHaveBeenCalled();
+    expect(onForceExit).toHaveBeenCalledTimes(1);
   });
 
   it("l triggers export", () => {

@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { stripAnsi } from "../dev-log-pipeline";
 import { linkify } from "../utils/linkify";
 import { colors, divider, frames, gradients, icons } from "../utils/theme";
 
@@ -204,7 +205,7 @@ const renderBanner = (description: string): string[] => [
 const getHostPort = (processes: DevProcessState[]): number =>
   processes.find((p) => p.name === "host")?.port || 3000;
 
-export function renderDevState(state: DevSessionState): string {
+export function renderDevLines(state: DevSessionState): string[] {
   const rows = mergePluginUiRows(state.processes);
   const lines: string[] = renderBanner(state.description);
 
@@ -248,7 +249,11 @@ export function renderDevState(state: DevSessionState): string {
     }
   }
 
-  return `${lines.join("\n")}\n`;
+  return lines;
+}
+
+export function renderDevState(state: DevSessionState): string {
+  return `${renderDevLines(state).join("\n")}\n`;
 }
 
 export function createDevRenderer(
@@ -257,7 +262,12 @@ export function createDevRenderer(
   env: Record<string, string>,
   onExit?: () => Promise<void> | void,
   onExportLogs?: () => Promise<void> | void,
-  options?: { output?: DevRendererOutput; stdin?: DevRendererInput; interactive?: boolean },
+  options?: {
+    output?: DevRendererOutput;
+    stdin?: DevRendererInput;
+    interactive?: boolean;
+    onForceExit?: () => void;
+  },
 ): DevRendererHandle {
   const output = options?.output ?? process.stdout;
   const isInteractive =
@@ -349,28 +359,81 @@ export function createDevRenderer(
   }
 
   output.write("\x1b[?1049h\x1b[?25l");
-  output.write(`\x1b[H\x1b[2J${renderDevState(state)}`);
 
-  listeners.push(() => {
-    output.write(`\x1b[H\x1b[2J${renderDevState(state)}`);
-  });
+  const ttyOutput = output as DevRendererOutput & {
+    rows?: number;
+    columns?: number;
+    on?: (event: string, listener: (...args: unknown[]) => void) => unknown;
+    removeListener?: (event: string, listener: (...args: unknown[]) => void) => unknown;
+  };
+
+  const viewportRows = (): number => Math.max(4, ttyOutput.rows ?? 24);
+  const viewportCols = (): number => Math.max(20, ttyOutput.columns ?? 80);
+
+  const clipLine = (line: string, cols: number): string => {
+    const visible = stripAnsi(line);
+    if (visible.length <= cols) return line;
+    let consumed = 0;
+    let cut = line.length;
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i];
+      if (ch === "\x1b") {
+        const next = line[i + 1];
+        if (next === "[") {
+          i += 2;
+          while (i < line.length && !(line.charCodeAt(i) >= 64 && line.charCodeAt(i) <= 126)) i++;
+          i++;
+          continue;
+        }
+        if (next === "]") {
+          const bel = line.indexOf("\x07", i + 2);
+          i = bel === -1 ? line.length : bel + 1;
+          continue;
+        }
+        i += 2;
+        continue;
+      }
+      consumed++;
+      if (consumed > cols - 1) {
+        cut = i;
+        break;
+      }
+      i++;
+    }
+    return `${line.slice(0, cut)}…`;
+  };
+
+  const repaint = () => {
+    const maxRows = viewportRows() - 1;
+    const lines = renderDevLines(state).slice(0, maxRows);
+    const cols = viewportCols();
+    const frame = lines.map((line) => clipLine(line, cols)).join("\n");
+    output.write(`\x1b[H${frame}\x1b[J`);
+  };
+
+  repaint();
+
+  listeners.push(repaint);
+
+  const onResize = () => repaint();
+  ttyOutput.on?.("resize", onResize);
 
   const stdin = options?.stdin ?? process.stdin;
   const rawCapable = stdin as DevRendererInput & { setRawMode?: (mode: boolean) => void };
 
-  let exiting = false;
+  let quitCount = 0;
   const onKey = (...args: unknown[]) => {
-    if (exiting) return;
     const data = args[0] as Buffer;
     const key = data.toString();
-    if (key === "q" || key === "\x03") {
-      exiting = true;
-      void Promise.resolve(onExit?.());
-      return;
-    }
-    if (key === "l") {
-      exiting = true;
-      void Promise.resolve(onExportLogs?.());
+    if (key === "q" || key === "\x03" || key === "l") {
+      quitCount++;
+      if (quitCount > 1) {
+        void Promise.resolve(options?.onForceExit?.());
+        return;
+      }
+      if (key === "l") void Promise.resolve(onExportLogs?.());
+      else void Promise.resolve(onExit?.());
     }
   };
 
@@ -379,6 +442,7 @@ export function createDevRenderer(
 
   handle.unmount = () => {
     rawCapable.removeListener("data", onKey);
+    ttyOutput.removeListener?.("resize", onResize);
     rawCapable.setRawMode?.(false);
     output.write("\x1b[?25h\x1b[?1049l");
   };
