@@ -3,33 +3,18 @@
 FROM oven/bun:1.3.14-alpine AS builder
 WORKDIR /app
 
-# Manifests first: dependency install caches independently of source changes
-# (and downloads persist via the cache mount even when the layer busts).
-COPY package.json bun.lock bunfig.toml ./
-COPY host/package.json host/package.json
-COPY ui/package.json ui/package.json
-COPY api/package.json api/package.json
-COPY plugins/auth/package.json plugins/auth/package.json
-COPY plugins/apps/package.json plugins/apps/package.json
-COPY plugins/proposals/package.json plugins/proposals/package.json
-COPY plugins/votes/package.json plugins/votes/package.json
-COPY plugins/_template/package.json plugins/_template/package.json
-COPY packages/everything-dev/package.json packages/everything-dev/package.json
-COPY packages/every-plugin/package.json packages/every-plugin/package.json
-# bun's hoisted linker skips workspace bin links whose target files are absent
-# at install time — every-plugin's bins are committed sources (everything-dev's
-# point at dist/, which nothing resolves via PATH). Copy them so
-# node_modules/.bin/every-plugin exists; the guard below fails loudly if a
-# future workspace adds a bin the same way.
-COPY packages/every-plugin/bin packages/every-plugin/bin
+# NOTE: do NOT split this into a manifests-first COPY + install. Bun's frozen
+# install resolves a different tree on a manifests-only context than on a full
+# checkout (and skips workspace bin links whose targets are absent), which
+# breaks the lockfile check and the workspace build scripts. Full source + a
+# cache mount keeps re-downloads free when the layer busts.
+COPY . .
 
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts
 
 RUN test -e node_modules/.bin/every-plugin \
-    || { echo "workspace bin not linked — bun skips bin links whose targets are absent at install time; copy the workspace's bin/ dir in the manifests layer"; exit 1; }
-
-COPY . .
+    || { echo "workspace bin not linked — bun skips bin links whose targets are absent at install time"; exit 1; }
 RUN bun run --cwd packages/every-plugin build
 RUN bun run --cwd packages/everything-dev build
 RUN bun run scripts/resolve-workspace-refs.ts
