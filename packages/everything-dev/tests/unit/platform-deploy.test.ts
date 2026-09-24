@@ -6,6 +6,7 @@ import { checkCdnProviderDeployable, resolveCdnProvider } from "../../src/build"
 import {
   collectWorkspaceArtifacts,
   platformDeployEntries,
+  platformUrlDeployEntries,
   uploadBundlesToPlatform,
 } from "../../src/platform-deploy";
 import type { BosConfig } from "../../src/types";
@@ -42,8 +43,10 @@ const PLATFORM_CONFIG = {
 } as BosConfig;
 
 describe("resolveCdnProvider", () => {
-  it("defaults to zephyr when deploy.cdn is absent", () => {
-    expect(resolveCdnProvider({ account: "a.near", domain: "d.app" } as BosConfig)).toBe("zephyr");
+  it("defaults to platform when deploy.cdn is absent", () => {
+    expect(resolveCdnProvider({ account: "a.near", domain: "d.app" } as BosConfig)).toBe(
+      "platform",
+    );
   });
 
   it("returns zephyr when explicitly configured", () => {
@@ -255,6 +258,60 @@ describe("platformDeployEntries", () => {
     expect(entries[0]).toMatchObject({
       urlField: "plugins.auth.production",
       integrityField: "plugins.auth.integrity",
+    });
+  });
+});
+
+describe("platformUrlDeployEntries (image-native)", () => {
+  const ORIGIN = "https://citynode.app";
+  const BASE = `${ORIGIN}/bundles/v1.citynode.near/citynode.app`;
+
+  it("writes production + integrity fields with no integrity value", () => {
+    const entries = platformUrlDeployEntries({
+      origin: ORIGIN,
+      account: "v1.citynode.near",
+      gateway: "citynode.app",
+      key: "ui",
+      kind: "app",
+    });
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toEqual({
+      url: `${BASE}/ui/`,
+      urlField: "app.ui.production",
+      integrityField: "app.ui.integrity",
+    });
+    // integrity omitted — applyDeployResults deletes stale pipeline hashes
+    expect(entries[0].integrity).toBeUndefined();
+  });
+
+  it("derives the SSR container URL for the ui slot", () => {
+    const entries = platformUrlDeployEntries({
+      origin: ORIGIN,
+      account: "v1.citynode.near",
+      gateway: "citynode.app",
+      key: "ui",
+      kind: "app",
+    });
+    expect(entries[1]).toEqual({
+      url: `${BASE}/ui/ssr/`,
+      urlField: "app.ui.ssr",
+      integrityField: "app.ui.ssrIntegrity",
+    });
+  });
+
+  it("maps plugins to the plugins slot without ssr", () => {
+    const entries = platformUrlDeployEntries({
+      origin: ORIGIN,
+      account: "v1.citynode.near",
+      gateway: "citynode.app",
+      key: "votes",
+      kind: "plugin",
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({
+      url: `${BASE}/votes/`,
+      urlField: "plugins.votes.production",
+      integrityField: "plugins.votes.integrity",
     });
   });
 });

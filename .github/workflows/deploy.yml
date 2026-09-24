@@ -24,15 +24,9 @@ jobs:
     name: Deploy Production
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_PRIVATE_KEY }}
-      # Zephyr server-token auth. Zephyr directly advised us to retain this flow for
-      # our workflow even though server tokens are being deprecated in favor of CI
-      # ZE_SECRET_TOKEN is used directly as the bearer token — no API exchange needed.
-      # We fall back to ZE_CI_TOKEN (below) only if ZEPHYR_AUTH_TOKEN is unset.
-      ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
-      ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - name: Checkout code
@@ -59,36 +53,17 @@ jobs:
       - name: Build better-near-auth
         run: bun run --cwd packages/better-near-auth build
 
-      - name: Configure Zephyr CI token fallback
-        if: ${{ env.ZE_SECRET_TOKEN == '' }}
-        env:
-          ZEPHYR_CI_TOKEN: ${{ secrets.ZEPHYR_CI_TOKEN }}
-        run: |
-          echo "ZE_CI_TOKEN=$ZEPHYR_CI_TOKEN" >> "$GITHUB_ENV"
-
       - name: Publish with deploy
         timeout-minutes: 20
         run: bun run bos publish --deploy --packages local${{ inputs.verbose == true && ' --verbose' || '' }}
 
-      - name: Verify release-train identity (mf check)
-        timeout-minutes: 5
-        run: |
-          # Gate the release train: all host/plugin bundles must agree on shared-dep
-          # versions (exact for effect-critical deps) and pluginVersion. Catches a
-          # half-deployed train before Railway serves it.
-          attempts=4
-          until bun run bos mf check; do
-            attempts=$((attempts - 1))
-            if [ "$attempts" -le 0 ]; then
-              echo "::error::Release-train identity check failed — bundles are inconsistent (stale Zephyr snapshot or skew). See bos mf check output."
-              exit 1
-            fi
-            echo "mf check failed; retrying in 20s ($attempts attempt(s) left)…"
-            sleep 20
-          done
-
       - name: Install Railway CLI
         run: npm i -g @railway/cli@5.47.1
 
-      - name: Redeploy Railway
-        run: railway redeploy --service app --yes
+      - name: Build and deploy Railway image
+        timeout-minutes: 45
+        # railway up builds the committed Dockerfile (multi-stage: all
+        # workspace dists stage into the image) and deploys — the image IS
+        # the deployment artifact (plan 043). railway redeploy would re-run
+        # the previous build and never ship the new artifacts.
+        run: railway up --service app --ci --verbose

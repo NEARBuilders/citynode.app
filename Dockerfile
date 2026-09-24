@@ -16,7 +16,7 @@ FROM builder AS regression-builder
 RUN bun run --cwd packages/better-near-auth build
 RUN bun run scripts/regression/container-build.ts
 
-# ── Prod build: strip sources — everything loads remotely at runtime ──
+# ── Prod build: strip sources — the framework loads remotes at runtime ──
 FROM builder AS prod-builder
 
 RUN rm -rf host api ui plugins
@@ -40,6 +40,12 @@ COPY --from=prod-builder --chown=appuser:appgroup /app/bunfig.toml .
 COPY --from=prod-builder --chown=appuser:appgroup /app/bos.config.json ./
 COPY --from=prod-builder --chown=appuser:appgroup /app/packages/everything-dev ./packages/everything-dev
 COPY --from=prod-builder --chown=appuser:appgroup /app/packages/every-plugin ./packages/every-plugin
+
+# Image-native artifacts (plan 043): the namespace-staged bundle layout built
+# by the regression stage — the host serves /bundles/* from this directory.
+# BOS_BUNDLE_DIR unset in other consumers falls through to remote loading.
+COPY --from=regression-builder --chown=appuser:appgroup /app/.bos/bundles ./.bos/bundles
+ENV BOS_BUNDLE_DIR=/app/.bos/bundles
 
 RUN mkdir -p .bos/generated .bos/logs && \
     chown -R appuser:appgroup .bos && \
