@@ -23,6 +23,7 @@ import {
   isGasKeyWallet,
   loadSessionGasKey,
   nextLane,
+  resolveGasUnits,
   saveSessionGasKey,
 } from "./gas-key-client.js";
 import { linkPasskeyWallet } from "./passkey-client.js";
@@ -134,7 +135,7 @@ export interface SIWNClientActions {
       receiverId: string;
       methodName: string;
       args?: object | Uint8Array;
-      gas?: `${number} Tgas` | `${number}`;
+      gas?: string;
     }) => Promise<{ txHash: string }>;
     refreshGasKeyInfo: () => Promise<GasKeyState>;
     ensureGasKeyFunded: (callbacks?: AuthCallbacks) => Promise<boolean>;
@@ -686,7 +687,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
     receiverId: string;
     methodName: string;
     args?: object | Uint8Array;
-    gas?: `${number} Tgas` | `${number}`;
+    gas?: string;
   }): Promise<{ txHash: string }> => {
     const session = await requireGasKeySession();
     const lane = nextLane(session.net, session.accountId, gasKeyState.get()?.numNonces ?? 4);
@@ -696,7 +697,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
       .signWith(session.privateKey)
       .useGasKey(lane)
       .functionCall(params.receiverId, params.methodName, params.args ?? {}, {
-        gas: params.gas ?? "30 Tgas",
+        gas: resolveGasUnits(params.gas) ?? "30 Tgas",
       })
       .send({ waitUntil: "EXECUTED" });
     return { txHash: result.transaction.hash };

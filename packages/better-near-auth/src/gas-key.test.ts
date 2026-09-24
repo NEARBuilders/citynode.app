@@ -52,6 +52,12 @@ vi.mock("near-kit", () => ({
   })),
   generateNonce: vi.fn(() => new Uint8Array(32)),
   fromNearConnect: vi.fn(() => ({})),
+  parseGas: (gas: string) => {
+    const tgasMatch = /^([0-9.]+) Tgas$/.exec(gas);
+    if (tgasMatch) return String(Math.floor(Number(tgasMatch[1]) * 1e12));
+    if (/^\d+$/.test(gas)) return gas;
+    throw new Error(`Invalid gas: ${gas}`);
+  },
   parseKey: vi.fn(() => ({
     publicKey: { data: new Uint8Array(32).fill(1), toString: () => MOCK_GENERATED_PUBLIC_KEY },
     secretKey: MOCK_GENERATED_SECRET_KEY,
@@ -328,6 +334,28 @@ describe("sendWithGasKey", () => {
       {},
       { gas: "30 Tgas" },
     );
+  });
+
+  it("normalizes prepared yocto-gas and Tgas strings through parseGas", async () => {
+    const { actions, plugin } = setupClient(null, {});
+    await setActiveNetworkTestnet(actions);
+    setSignedIn(plugin);
+    const first = await actions.near.sendWithGasKey({
+      receiverId: "dev.allthethings.testnet",
+      methodName: "__fastdata_kv",
+      gas: "10000000000000",
+    });
+    const second = await actions.near.sendWithGasKey({
+      receiverId: "dev.allthethings.testnet",
+      methodName: "__fastdata_kv",
+      gas: "10 Tgas",
+    });
+    expect(first.txHash).toBe("gas-key-tx-hash");
+    expect(second.txHash).toBe("gas-key-tx-hash");
+    expect(state.builder.functionCall.mock.calls.map(([, , , options]) => options.gas)).toEqual([
+      "10000000000000",
+      "10000000000000",
+    ]);
   });
 
   it("refuses when no key is stored for the account", async () => {

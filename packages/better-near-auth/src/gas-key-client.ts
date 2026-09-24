@@ -1,4 +1,5 @@
 import { atom } from "nanostores";
+import { parseGas } from "near-kit";
 import type { GasKeyState, NearNetwork } from "./store.js";
 
 export { deleteSessionGasKey, loadSessionGasKey, saveSessionGasKey } from "./gas-key-store.js";
@@ -35,4 +36,11 @@ export function nextLane(networkId: NearNetwork, accountId: string, numNonces: n
   const lane = numNonces > 0 ? current % numNonces : 0;
   laneCounters.set(key, current + 1);
   return lane;
+}
+
+export function resolveGasUnits(
+  gas: string | undefined,
+): `${number} Tgas` | `${number}` | undefined {
+  if (!gas) return undefined;
+  return parseGas(gas as `${number} Tgas` | `${number}`) as `${number}`;
 }
