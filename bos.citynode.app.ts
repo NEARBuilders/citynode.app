@@ -44,8 +44,6 @@ export default App({
       "RESEND_API_KEY",
       "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
       "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
-      "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-      "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET",
     ],
     variables: {
       deviceLink: { clientId: "citynode-web" },

@@ -126,14 +126,6 @@ export function buildSessionGasKeyConfig(
   };
 }
 
-export function buildSecrets(secrets: AuthPluginSecrets): AuthConfig["siwn"]["secrets"] {
-  const parentKey = {
-    mainnet: secrets.NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET,
-    testnet: secrets.NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET,
-  } as DualNetworkConfig<string>;
-  return { parentKey } as AuthConfig["siwn"]["secrets"];
-}
-
 export function normalizeAuthConfig(
   variables: AuthPluginVariables,
   secrets: AuthPluginSecrets,
@@ -146,14 +138,12 @@ export function normalizeAuthConfig(
   const relayer = buildRelayerConfig(variables.siwn, secrets);
   const sessionGasKey = buildSessionGasKeyConfig(variables.siwn);
   const subAccount = buildSubAccountConfig(variables.siwn);
-  const secretsConfig = buildSecrets(secrets);
   const commonSiwn = {
     apiKey: variables.siwn.apiKey,
     rpcUrl: variables.siwn.rpcUrl,
     relayer,
     sessionGasKey,
     subAccount,
-    secrets: secretsConfig,
   };
 
   const siwn =

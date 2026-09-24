@@ -114,7 +114,6 @@ export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0]
     relayer: config.siwn.relayer,
     sessionGasKey: config.siwn.sessionGasKey,
     subAccount: config.siwn.subAccount,
-    secrets: config.siwn.secrets,
   };
 
   if (isRecipientsConfig(config.siwn)) {

@@ -73,7 +73,7 @@ You don't need to wait for CI/CD to see changes in production. Publish your own 
 5. `bos publish --deploy` — builds workspaces, writes deterministic bundle URLs, publishes config to FastKV at `bos://<your-account>/<gateway>`
 6. Deploy to Railway (one-click template or `railway up`), set `BOS_ACCOUNT`, `BOS_GATEWAY` (same as parent), `BETTER_AUTH_SECRET` — the host fetches your config from FastKV and serves live
 
-**Subaccount creation** (for the tenant wizard) requires a named NEAR account with a full access key. Export the key via `near account export-account <account> explicitly-provide-private-key`, set `NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET` / `_TESTNET`, and point `siwn.subAccount.parentAccount`, `siwn.recipients`, and `siwn.relayer.*.whitelistedContracts` to your account.
+**Subaccount creation** (unused by the tenant wizard today — tenants are owned by the connected sputnik-dao account) requires an explicit relayer with a named account: set `siwn.relayer.{mainnet,testnet}.accountId` + a private key, and point `siwn.subAccount.parentAccount`, `siwn.recipients`, and `siwn.relayer.*.whitelistedContracts` to your account.
 
 ## Sync
 

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildRelayerConfig,
-  buildSecrets,
   buildSubAccountConfig,
   ensureOrigin,
   normalizeAuthConfig,
@@ -271,32 +270,6 @@ describe("buildSubAccountConfig", () => {
   });
 });
 
-describe("buildSecrets", () => {
-  it("returns parentKey with mainnet and testnet from secrets", () => {
-    const result = buildSecrets({
-      ...baseSecrets,
-      NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET: "key-mainnet",
-      NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET: "key-testnet",
-    });
-    expect(result).toEqual({
-      parentKey: {
-        mainnet: "key-mainnet",
-        testnet: "key-testnet",
-      },
-    });
-  });
-
-  it("returns undefined values when secrets are missing", () => {
-    const result = buildSecrets(baseSecrets);
-    expect(result).toEqual({
-      parentKey: {
-        mainnet: undefined,
-        testnet: undefined,
-      },
-    });
-  });
-});
-
 describe("normalizeAuthConfig", () => {
   beforeEach(() => {
     process.env.NODE_ENV = "test";
@@ -372,17 +345,6 @@ describe("normalizeAuthConfig", () => {
     expect((authConfig.siwn as any).subAccount).toEqual({
       mainnet: { parentAccount: "parent.near" },
       testnet: undefined,
-    });
-  });
-
-  it("includes secrets config with parentKey", () => {
-    const { authConfig } = normalizeAuthConfig(baseVariables, {
-      ...baseSecrets,
-      NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET: "mk",
-      NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET: "tk",
-    });
-    expect((authConfig.siwn as any).secrets).toEqual({
-      parentKey: { mainnet: "mk", testnet: "tk" },
     });
   });
 

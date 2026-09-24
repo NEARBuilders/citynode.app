@@ -8,7 +8,7 @@ description: >
   via createPlugin.withPlugins, and use the auth context (getContext) in your
   own oRPC middleware. Sub-account creation is supported in bos.config.json
   for scalar fields (parentHasFullAccess, minDeposit, deploy.fromPublished,
-  init with static args, addRelayerFCAK, relayerFCAK). Load when adding auth
+  init with static args). Load when adding auth
   to an everything.dev app, configuring SIWN recipients from runtime config,
   calling auth endpoints from another plugin, or debugging auth context
   resolution. As of better-near-auth 1.8.2 the client uses getNearClient()
@@ -112,9 +112,7 @@ The current canonical example lives in `examples/auth.everything.dev/bos.config.
         "TWILIO_AUTH_TOKEN",
         "TWILIO_PHONE_NUMBER",
         "RESEND_API_KEY",
-        "NEAR_RELAYER_PRIVATE_KEY",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
+        "NEAR_RELAYER_PRIVATE_KEY"
       ]
     }
   }
@@ -349,4 +347,4 @@ interface AuthRequestContext {
 ### MEDIUM Configuring sub-account fields that aren't serializable through JSON
 
 - **Cause**: Only scalar fields survive JSON round-trip (`bos.config.json`). Function-typed fields (`extendTx`, `onCreated`, `onRollback`, dynamic `init.args`) and binary data (`deploy.wasm`) cannot be expressed in a config file.
-- **Fix**: Use `bos.config.json` for `parentAccount`, `parentHasFullAccess`, `minDeposit`, `deploy.fromPublished`, static `init.args`, `addRelayerFCAK`, `relayerFCAK`. Configure `extendTx` / `onCreated` / `onRollback` / dynamic `init.args` / raw wasm through `siwn()` directly on the server instead of through the plugin.
+- **Fix**: Use `bos.config.json` for `parentAccount`, `parentHasFullAccess`, `minDeposit`, `deploy.fromPublished`, static `init.args`. Configure `extendTx` / `onCreated` / `onRollback` / dynamic `init.args` / raw wasm through `siwn()` directly on the server instead of through the plugin.

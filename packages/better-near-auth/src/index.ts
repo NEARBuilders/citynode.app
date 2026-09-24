@@ -2278,7 +2278,7 @@ export const siwn = (options: SIWNPluginOptions) => {
             const configuredParent = subAccountCfg?.parentAccount;
             let msg: string;
             if (configuredParent && !parentKey) {
-              msg = `Sub-account creation unavailable on ${network}: parent key not configured for ${configuredParent}. Set NEAR_SUB_ACCOUNT_PARENT_KEY_${network.toUpperCase()} in your environment, or use an explicit relayer with a named account.`;
+              msg = `Sub-account creation unavailable on ${network}: parent key not configured for ${configuredParent}. Provide siwn({ secrets: { parentKey } }) on the server, or use an explicit relayer with a named account.`;
             } else if (!configuredParent) {
               msg = `Sub-account creation unavailable on ${network}: no parent account configured. Set subAccount.${network}.parentAccount in your SIWN plugin options, or use an explicit relayer with a named account.`;
             } else {
@@ -2332,27 +2332,6 @@ export const siwn = (options: SIWNPluginOptions) => {
                 ? rState.publicKey
                 : parseKey(effectiveParentKey!).publicKey.toString();
             txBuilder = txBuilder.addKey(parentPublicKey, { type: "fullAccess" });
-          }
-
-          if (subAccountCfg?.addRelayerFCAK !== false && subAccountCfg?.relayerFCAK && rState) {
-            const fcakPermission: {
-              type: "functionCall";
-              receiverId: string;
-              methodNames?: string[];
-              allowance?: string;
-            } = {
-              type: "functionCall",
-              receiverId: subAccountCfg.relayerFCAK.receiverId,
-            };
-            if (subAccountCfg.relayerFCAK.methodNames) {
-              fcakPermission.methodNames = subAccountCfg.relayerFCAK.methodNames;
-            }
-            if (subAccountCfg.relayerFCAK.allowance) {
-              fcakPermission.allowance = subAccountCfg.relayerFCAK.allowance as
-                | `${number} NEAR`
-                | `${bigint} yocto`;
-            }
-            txBuilder.addKey(rState.publicKey, fcakPermission as any);
           }
 
           txBuilder.transfer(newAccountId, minDeposit as `${number} NEAR`);

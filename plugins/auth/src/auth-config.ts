@@ -17,9 +17,6 @@ export interface AuthSiwnBaseConfig {
   relayer?: RelayerDualNetworkConfig;
   sessionGasKey?: SessionGasKeyDualNetworkConfig;
   subAccount?: SubAccountConfig | DualNetworkConfig<SubAccountConfig>;
-  secrets?: {
-    parentKey?: string | DualNetworkConfig<string>;
-  };
 }
 
 export interface AuthSiwnRecipientConfig extends AuthSiwnBaseConfig {

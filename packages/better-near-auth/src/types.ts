@@ -284,12 +284,6 @@ export const GetRelayerInfoRequest = z.object({
 });
 export type GetRelayerInfoRequestT = z.infer<typeof GetRelayerInfoRequest>;
 
-export interface SubAccountRelayerFCAKConfig {
-  receiverId: string;
-  methodNames?: string[];
-  allowance?: string;
-}
-
 export interface SubAccountTxCtx {
   newAccountId: string;
   parentAccount: string;
@@ -315,8 +309,6 @@ export interface SubAccountConfig {
   extendTx?: (tx: TransactionBuilder, ctx: SubAccountTxCtx) => TransactionBuilder;
   onCreated?: (ctx: SubAccountLifecycleCtx) => Promise<void>;
   onRollback?: (ctx: SubAccountLifecycleCtx) => Promise<void>;
-  addRelayerFCAK?: boolean;
-  relayerFCAK?: SubAccountRelayerFCAKConfig;
 }
 
 export const SUB_ACCOUNT_LABEL_REGEX = /^([a-z\d]+[-_])*[a-z\d]+$/;

@@ -22,14 +22,6 @@ export const subAccountNetworkSchema = z.object({
       args: z.record(z.string(), z.any()).optional(),
     })
     .optional(),
-  addRelayerFCAK: z.boolean().optional(),
-  relayerFCAK: z
-    .object({
-      receiverId: z.string(),
-      methodNames: z.array(z.string()).optional(),
-      allowance: z.string().optional(),
-    })
-    .optional(),
 });
 
 export const relayerNetworkSchema = z.object({
@@ -133,8 +125,6 @@ export const authSecretsSchema = z.object({
   TWILIO_PHONE_NUMBER: z.string().optional(),
   NEAR_RELAYER_PRIVATE_KEY_MAINNET: z.string().optional(),
   NEAR_RELAYER_PRIVATE_KEY_TESTNET: z.string().optional(),
-  NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET: z.string().optional(),
-  NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
 });
 

@@ -185,14 +185,16 @@ describe("buildSiwnOptions", () => {
     expect(result.subAccount).toEqual(subAccount);
   });
 
-  it("passes secrets through", () => {
-    const secrets = { parentKey: { mainnet: "mk", testnet: "tk" } };
+  it("omits secrets from the plugin options", () => {
     const config: AuthConfig = {
       ...baseConfig,
-      siwn: { recipient: "test.near", secrets } as any,
+      siwn: {
+        recipient: "test.near",
+        secrets: { parentKey: { mainnet: "mk", testnet: "tk" } },
+      } as any,
     };
     const result = buildSiwnOptions(config);
-    expect(result.secrets).toEqual(secrets);
+    expect(result.secrets).toBeUndefined();
   });
 
   it("handles recipients mode with relayer", () => {
