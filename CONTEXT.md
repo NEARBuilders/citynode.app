@@ -73,3 +73,25 @@ _Avoid_: mode (reserved for `production`/`staging` env), project
 **Stall Watchdog**:
 The Playwright reporter that fails the suite after minutes of zero test progress, printing a runner snapshot so a freeze produces evidence instead of eating the job timeout.
 _Avoid_: timeout (the job-level kill; the watchdog exists because that kill loses artifacts)
+
+## Gasless transactions
+
+**Gas Key**:
+A NEAR access key (NEP-611) with its own prepaid gas balance and parallel nonce lanes; gas burns from the key's balance, not the account's.
+_Avoid_: prepaid key, allowance (a function-call key's allowance spends the account's own NEAR — a different mechanism)
+
+**Session Gas Key**:
+The browser-generated Gas Key scoped to the FastKV namespace's `__fastdata_kv` method, bootstrapped onto a user's account at their opt-in and used to sign platform writes locally.
+_Avoid_: session key, FCAK, gas key (that's the protocol concept — be specific about which)
+
+**Sponsor**:
+The funding role of the ephemeral relayer account: it tops up Session Gas Keys via `TransferToGasKey` under server-enforced per-user caps.
+_Avoid_: relayer for this role (the relayer is the NEP-366 role of the same account — say which you mean)
+
+**Bootstrap**:
+The one-time, wallet-signed `AddKey` transaction that installs a Session Gas Key on the user's account; refused for wallets whose manifest lacks `features.gasKeys`.
+_Avoid_: provision, register
+
+**Lane**:
+One of a Gas Key's independent nonce sequences; parallel sends pick different Lanes and never serialize on each other.
+_Avoid_: nonce (the per-lane counter), slot

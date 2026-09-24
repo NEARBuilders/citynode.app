@@ -122,14 +122,14 @@
         "@noble/post-quantum": "^0.6.1",
         "@scure/base": "^2.2.0",
         "nanostores": "^1.1.0",
-        "near-kit": "^0.19.0",
+        "near-kit": "^0.20.2",
         "zod": "^4.4.3",
       },
       "devDependencies": {
         "@better-auth/core": "^1.6.25",
         "@changesets/changelog-github": "^0.6.0",
         "@changesets/cli": "^2.30.0",
-        "@hot-labs/near-connect": "0.11.4",
+        "@fastnear/near-connect": "^0.14.1",
         "@tanstack/intent": "^0.0.40",
         "@types/bun": "latest",
         "@types/node": "^25.0.9",
@@ -491,7 +491,7 @@
         "@better-auth/api-key": "catalog:",
         "@better-auth/core": "catalog:",
         "@better-auth/passkey": "catalog:",
-        "@hot-labs/near-connect": "catalog:",
+        "@fastnear/near-connect": "catalog:",
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
         "@orpc/tanstack-query": "catalog:",
@@ -580,12 +580,15 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@fastnear/near-connect@0.14.1": "patches/@fastnear%2Fnear-connect@0.14.1.patch",
+  },
   "catalog": {
     "@better-auth/api-key": "1.6.25",
     "@better-auth/core": "1.6.25",
     "@better-auth/passkey": "1.6.25",
     "@electric-sql/pglite": "^0.4.5",
-    "@hot-labs/near-connect": "0.11.4",
+    "@fastnear/near-connect": "^0.14.1",
     "@libsql/client": "0.17.0",
     "@modelcontextprotocol/server": "2.0.0-beta.5",
     "@module-federation/dts-plugin": "^2.9.0",
@@ -631,7 +634,7 @@
     "effect": "4.0.0-rc.112",
     "every-plugin": "^2.10.1",
     "everything-dev": "^1.53.2",
-    "near-kit": "^0.19.0",
+    "near-kit": "^0.20.2",
     "pg": "^8.12.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -881,6 +884,8 @@
     "@everything-dev/votes-plugin": ["@everything-dev/votes-plugin@workspace:plugins/votes"],
 
     "@exodus/bytes": ["@exodus/bytes@1.15.1", "", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q=="],
+
+    "@fastnear/near-connect": ["@fastnear/near-connect@0.14.1", "", {}, "sha512-q/hC87Y1uo48c+eIwMF5m0TeRSl0ADCpfi0xy/98Gk+dszDRva1uWCT4YC3Yi4+WWzW3d/PYTz5j/EAd6f6L2A=="],
 
     "@floating-ui/core": ["@floating-ui/core@1.8.0", "", { "dependencies": { "@floating-ui/utils": "^0.2.12" } }, "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ=="],
 
@@ -2276,7 +2281,7 @@
 
     "nanostores": ["nanostores@1.5.3", "", {}, "sha512-rQLB6eV4f2AW/n3L0JmwCROpaisYy9EDEADvEFSd1C/qG8hB6O5TPlh9A791JRbJr4CnMQBzptDcvD9OR1+6WA=="],
 
-    "near-kit": ["near-kit@0.19.0", "", { "dependencies": { "@napi-rs/keyring": "^1.3.0", "@noble/curves": "^2.2.0", "@noble/hashes": "^2.0.1", "@noble/post-quantum": "^0.6.1", "@scure/base": "^2.2.0", "@scure/bip32": "^2.2.0", "@scure/bip39": "^2.2.0", "@zorsh/zorsh": "^0.5.0", "tar": "^7.5.20", "zod": "^4.4.3" }, "peerDependencies": { "@hot-labs/near-connect": ">=0.11.0", "@near-wallet-selector/core": ">=8.0.0" }, "optionalPeers": ["@hot-labs/near-connect", "@near-wallet-selector/core"] }, "sha512-O/h6hJ4bLu9IXeSG5VV+f4fpmDPGBggGOpaZJiuMHznZ+0CBQUuE+YhZkTXZ+x7Fp9E0SDPr3eLZgucG2xqT6w=="],
+    "near-kit": ["near-kit@0.20.2", "", { "dependencies": { "@napi-rs/keyring": "^1.3.0", "@noble/curves": "^2.2.0", "@noble/hashes": "^2.0.1", "@noble/post-quantum": "^0.6.1", "@scure/base": "^2.2.0", "@scure/bip32": "^2.2.0", "@scure/bip39": "^2.2.0", "@zorsh/zorsh": "^0.5.1", "tar": "^7.5.20", "zod": "^4.4.3" }, "peerDependencies": { "@hot-labs/near-connect": ">=0.11.0", "@near-wallet-selector/core": ">=8.0.0" }, "optionalPeers": ["@hot-labs/near-connect", "@near-wallet-selector/core"] }, "sha512-434on2oFgimsUfvqLSvM3bDntQRnZvoD9QlWbjiORvbGIycrC84//Dol7tq0g2S0VcMySctU+ooljxggmnTkMw=="],
 
     "near-social-js": ["near-social-js@2.0.4", "", { "dependencies": { "bignumber.js": "^9.3.1", "near-kit": "^0.10.0" } }, "sha512-CObpWWuE73jd0phsswAI9biA9pt0nYA3CD35EXvD6Y8FhyXlACmb2BQlfL46ZYR+Q9mGTwWJoic//zRvaI5z1A=="],
 

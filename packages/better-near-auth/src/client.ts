@@ -1,4 +1,5 @@
-import type { EventMap, WalletManifest } from "@hot-labs/near-connect";
+import type { WalletManifest } from "@fastnear/near-connect";
+import type { EventMap } from "@fastnear/near-connect/build/types";
 import { hex } from "@scure/base";
 import type {
   BetterFetch,
@@ -148,8 +149,9 @@ export const passkeyWalletManifest: WalletManifest = {
     signAndSendTransactions: true,
     signInWithoutAddKey: true,
     signInAndSignMessage: true,
-    signInWithFunctionCallKey: false,
+    addFunctionCallKey: false,
     signDelegateActions: true,
+    gasKeys: false,
     mainnet: true,
     testnet: false,
   },
@@ -177,15 +179,15 @@ export const siwnClient = (config: SIWNClientConfig) => {
 
   const connectors = new Map<
     "mainnet" | "testnet",
-    InstanceType<typeof import("@hot-labs/near-connect").NearConnector>
+    InstanceType<typeof import("@fastnear/near-connect").NearConnector>
   >();
   const nearClients = new Map<"mainnet" | "testnet", Near>();
   const initializedNetworks = new Set<"mainnet" | "testnet">();
-  let connectorModulePromise: Promise<typeof import("@hot-labs/near-connect")> | null = null;
+  let connectorModulePromise: Promise<typeof import("@fastnear/near-connect")> | null = null;
   const initPromises = new Map<"mainnet" | "testnet", Promise<boolean>>();
 
   const loadConnector = async () => {
-    connectorModulePromise ??= import("@hot-labs/near-connect");
+    connectorModulePromise ??= import("@fastnear/near-connect");
     const { NearConnector } = await connectorModulePromise;
     return NearConnector;
   };
@@ -225,7 +227,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
 
       const near = new Near({
         network,
-        wallet: fromNearConnect(connector),
+        wallet: fromNearConnect(connector as unknown as Parameters<typeof fromNearConnect>[0]),
       });
       nearClients.set(network, near);
 
