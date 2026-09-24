@@ -9,6 +9,7 @@ import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
 import { classifyPluginFailure } from "../runtime/errors";
 import { ensureGeneratedUiRsbuildConfig } from "../ui/generated-config";
+import { killChildEscalating, watchParentDeath } from "./watch-kill";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -439,8 +440,8 @@ export async function startPluginDevServer(
     handlers.api = null;
     effectContextHolder.context = null;
     for (const child of [watcher, uiWatcher]) {
-      if (child && child.exitCode === null && !child.killed) {
-        child.kill("SIGTERM");
+      if (child) {
+        await killChildEscalating(child);
       }
     }
     if (uiStaticServer) {
@@ -457,6 +458,13 @@ export async function startPluginDevServer(
     process.exit(0);
   });
   process.once("SIGTERM", async () => {
+    const timeout = setTimeout(() => process.exit(0), 3000);
+    await close();
+    clearTimeout(timeout);
+    process.exit(0);
+  });
+
+  watchParentDeath(async () => {
     const timeout = setTimeout(() => process.exit(0), 3000);
     await close();
     clearTimeout(timeout);

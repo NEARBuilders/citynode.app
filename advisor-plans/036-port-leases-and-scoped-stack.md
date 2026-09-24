@@ -97,6 +97,7 @@ Extend `tests/unit/process-registry.test.ts` and `tests/unit/infra.test.ts` wher
    - Idempotent: killing an already-dead entry exits cleanly with ESRCH handling (already partly present at 2128 — keep).
 3. Verified release in the session finalizer (`dev-session.ts` 263-308): after the kill-all step, probe each owned port; on a still-bound port log the owner info (do not crash shutdown).
 4. Startup adoption (`dev-session.ts` bootstrap, before allocation): for registry entries whose pid is dead but whose ports are still listening, `ownerOfPort` each; if the listener pid is a descendant of / equal to the dead entry's childPids, group-kill it and prune the entry. Foreign owners are left alone (Phase 2 reports them).
+   - **Amended (plan 042, live orphan incident 2026-09-24)**: adoption must ALSO group-kill any still-alive `childPids` of dead-pid entries even when they hold no ports — rspack/rsbuild watcher grandchildren and any service child that survived a non-graceful orchestrator death hold no registry presence of their own; the dead entry's `childPids` list is the only surviving map of what to reap. (Plan 042 closed the source of these orphans — watcher kill escalation + parent-death supervision in `every-plugin/src/dev/serve.ts` — this amendment reaps the ones that already escaped.)
 
 **Verify**: characterization tests from Phase 0 still pass (kill-handler test flipped to expect escalation + verified release); new unit tests for `port-ownership.ts` (mock lsof binary via injectable command path); `bun lint`, `bun typecheck`.
 
