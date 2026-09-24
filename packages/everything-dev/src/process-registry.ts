@@ -14,6 +14,10 @@ export interface PidEntry {
   ports: Record<string, number>;
   childPids?: number[];
   budget?: { min: number; max: number };
+  // Lease seam (ADR 0012 §6): entries are leases on shared resources, keyed
+  // by what they hold; refcount-ready for the shared-plugin broker.
+  leaseKey?: string;
+  refcount?: number;
   startedAt: number;
   description: string;
 }

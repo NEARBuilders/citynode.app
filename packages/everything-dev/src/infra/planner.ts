@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { Effect } from "effect";
-import { PortAllocator } from "../app";
+import { PortAllocator, type PortBlockEntry } from "../app";
 import {
   buildDatabaseConfigs,
   buildOriginMap,
@@ -19,6 +19,7 @@ import {
 } from "../service-descriptor";
 import type { RuntimeConfig } from "../types";
 import { shouldPersistPortState } from "./materializer";
+import { ownerOfPort } from "./port-ownership";
 import type {
   ClaimRecord,
   CliPorts,
@@ -34,10 +35,6 @@ import type {
 import { InfraError } from "./types";
 
 const DEFAULT_HOST_PORT = 3000;
-const DEFAULT_API_PORT = 3001;
-const DEFAULT_AUTH_PORT = 3002;
-const DEFAULT_UI_PORT = 3003;
-const DEFAULT_PLUGIN_PORT_START = 3010;
 
 const POSTGRES_USER = "everythingdev";
 const POSTGRES_PASSWORD = "everythingdev";
@@ -61,8 +58,17 @@ function normalizeCliPorts(input: InfraInput["cli"]): CliPorts {
 interface AllocateServicesResult {
   ports: ResolvedPorts;
   claims: ClaimRecord[];
-  devPortsState: { host: number; api: number; auth: number; ui: number; pluginPortStart: number };
+  devPortsState: {
+    host?: number;
+    api?: number;
+    auth?: number;
+    ui?: number;
+    pluginPortStart?: number;
+  };
 }
+
+const PLUGIN_START_OFFSET = 10;
+const BLOCK_STEP = 100;
 
 function allocateServices(
   cliPorts: CliPorts,
@@ -78,58 +84,102 @@ function allocateServices(
     const persisted = loadPortState(configDir).devPorts;
     const allocator = yield* PortAllocator;
 
-    const hostPort = yield* allocator.pickAvailable(
-      cliPorts.host ?? persisted?.host ?? DEFAULT_HOST_PORT,
-    );
+    const base = cliPorts.host ?? persisted?.host ?? DEFAULT_HOST_PORT;
+    const pluginStartPreferred =
+      cliPorts.pluginsStart ?? persisted?.pluginPortStart ?? base + PLUGIN_START_OFFSET;
+    const pluginStartPinned =
+      cliPorts.pluginsStart !== undefined || persisted?.pluginPortStart !== undefined;
 
-    const apiPort = yield* allocator.pickAvailable(
-      cliPorts.api ?? persisted?.api ?? DEFAULT_API_PORT,
-    );
+    const entries: PortBlockEntry[] = [];
+    const addEntry = (
+      key: string,
+      flag: number | undefined,
+      persistedValue: number | undefined,
+      derived: number,
+    ) => {
+      if (flag !== undefined) {
+        entries.push({ key, preferred: flag, pinned: true });
+      } else if (persistedValue !== undefined) {
+        entries.push({ key, preferred: persistedValue, pinned: true });
+      } else {
+        entries.push({ key, preferred: derived, pinned: false });
+      }
+    };
 
-    const authPort = yield* allocator.pickAvailable(
-      cliPorts.auth ?? persisted?.auth ?? DEFAULT_AUTH_PORT,
-    );
-
-    const uiPort = yield* allocator.pickAvailable(cliPorts.ui ?? persisted?.ui ?? DEFAULT_UI_PORT);
-
-    const pluginApiPorts: Record<string, number> = {};
-    const pluginUiPorts: Record<string, number> = {};
+    addEntry("host", cliPorts.host, undefined, base);
+    addEntry("api", cliPorts.api, persisted?.api, base + 1);
+    addEntry("auth", cliPorts.auth, persisted?.auth, base + 2);
+    addEntry("ui", cliPorts.ui, persisted?.ui, base + 3);
 
     const pluginKeys = Object.keys(plugins).sort();
-    const pluginStart =
-      cliPorts.pluginsStart ?? persisted?.pluginPortStart ?? DEFAULT_PLUGIN_PORT_START;
-    const isAuthMirror = (
+    const isAuthMirrorFor = (
       pluginId: string,
       pluginCfg: { source: string; localPath?: string } | undefined,
     ) => pluginCfg !== undefined && isAuthMirrorPluginEntry(auth, pluginId, pluginCfg);
-    let nextPluginPort = pluginStart;
+
+    let pluginSlot = 0;
     for (const pluginId of pluginKeys) {
       const pluginCfg = plugins[pluginId];
-      const mirror = isAuthMirror(pluginId, pluginCfg);
-      if (!mirror) {
-        const preferred = cliPorts.plugins?.[pluginId]?.api ?? nextPluginPort;
-        const pluginPort = yield* allocator.pickAvailable(preferred);
-        pluginApiPorts[pluginId] = pluginPort;
-        nextPluginPort = pluginPort + 1;
-      }
-
+      if (isAuthMirrorFor(pluginId, pluginCfg)) continue;
+      const slotBase = pluginStartPinned ? pluginStartPreferred : base + PLUGIN_START_OFFSET;
+      addEntry(
+        `plugin:${pluginId}`,
+        cliPorts.plugins?.[pluginId]?.api,
+        undefined,
+        slotBase + pluginSlot,
+      );
+      pluginSlot += 1;
       if (
         pluginCfg?.source === "local" &&
         pluginCfg?.localPath &&
         pluginCfg?.ui?.source === "local"
       ) {
-        const uiPreferred = cliPorts.plugins?.[pluginId]?.ui ?? nextPluginPort;
-        const pluginUiPort = yield* allocator.pickAvailable(uiPreferred);
-        pluginUiPorts[pluginId] = pluginUiPort;
-        nextPluginPort = pluginUiPort + 1;
+        addEntry(
+          `plugin-ui:${pluginId}`,
+          cliPorts.plugins?.[pluginId]?.ui,
+          undefined,
+          slotBase + pluginSlot,
+        );
+        pluginSlot += 1;
       }
     }
 
+    const allocation = yield* allocator.acquireBlock({ base, step: BLOCK_STEP, entries });
+
+    if (allocation.base !== base) {
+      console.error(
+        `[Dev] Preferred port block starting at ${base} is occupied — using ${allocation.base} (this run only; restarts will retry ${base})`,
+      );
+      for (const conflict of allocation.conflicts.slice(0, 6)) {
+        if (conflict.claimed) {
+          console.error(
+            `[Dev]   port ${conflict.port} (${conflict.key}) — live bos session (registry claim)`,
+          );
+        } else {
+          const owner = yield* ownerOfPort(conflict.port);
+          console.error(
+            `[Dev]   port ${conflict.port} (${conflict.key}) — ${
+              owner ? `pid ${owner.pid} (${owner.command})` : "foreign holder (lsof unavailable)"
+            }`,
+          );
+        }
+      }
+    }
+
+    const pluginApiPorts: Record<string, number> = {};
+    const pluginUiPorts: Record<string, number> = {};
+    for (const pluginId of pluginKeys) {
+      const api = allocation.ports[`plugin:${pluginId}`];
+      if (api !== undefined) pluginApiPorts[pluginId] = api;
+      const ui = allocation.ports[`plugin-ui:${pluginId}`];
+      if (ui !== undefined) pluginUiPorts[pluginId] = ui;
+    }
+
     const resolved: ResolvedPorts = {
-      host: hostPort,
-      api: apiPort,
-      auth: authPort,
-      ui: uiPort,
+      host: allocation.ports.host,
+      api: allocation.ports.api,
+      auth: allocation.ports.auth,
+      ui: allocation.ports.ui,
       plugins: Object.fromEntries(
         pluginKeys.map((k) => [k, { api: pluginApiPorts[k], ui: pluginUiPorts[k] }]),
       ),
@@ -138,24 +188,16 @@ function allocateServices(
     };
 
     const devPortsState = {
-      host: hostPort,
-      api: apiPort,
-      auth: authPort,
-      ui: uiPort,
-      pluginPortStart: pluginStart,
+      host: cliPorts.host,
+      api: cliPorts.api,
+      auth: cliPorts.auth,
+      ui: cliPorts.ui,
+      pluginPortStart: cliPorts.pluginsStart,
     };
 
-    const claimPorts: Record<string, number> = {
-      host: hostPort,
-      api: apiPort,
-      auth: authPort,
-      ui: uiPort,
-    };
-    for (const [id, port] of Object.entries(pluginApiPorts)) {
-      claimPorts[`plugin:${id}`] = port;
-    }
-    for (const [id, port] of Object.entries(pluginUiPorts)) {
-      claimPorts[`plugin-ui:${id}`] = port;
+    const claimPorts: Record<string, number> = {};
+    for (const [key, port] of Object.entries(allocation.ports)) {
+      claimPorts[key] = port;
     }
 
     const claim: ClaimRecord = {
@@ -432,11 +474,21 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
 
     // Write merged state once after all allocations succeed
     // Skip persistence for regression tests / ephemeral runs
+    // devPorts pins are explicit choices only (ADR 0012 §4): this run's flags,
+    // falling back to previously-persisted explicit choices — never drift.
+    const previousDevPorts = loadPortState(input.configDir).devPorts ?? {};
+    const devPorts = {
+      host: devPortsState.host ?? previousDevPorts.host,
+      api: devPortsState.api ?? previousDevPorts.api,
+      auth: devPortsState.auth ?? previousDevPorts.auth,
+      ui: devPortsState.ui ?? previousDevPorts.ui,
+      pluginPortStart: devPortsState.pluginPortStart ?? previousDevPorts.pluginPortStart,
+    };
     if (shouldPersistPortState()) {
       savePortState(input.configDir, {
         postgresPorts: pgPorts,
         redisPorts: rdPorts,
-        devPorts: devPortsState,
+        devPorts,
       });
     }
 
