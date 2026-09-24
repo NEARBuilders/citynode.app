@@ -130,6 +130,7 @@ export interface SIWNClientActions {
       params: CheckSubAccountAvailabilityRequestT,
     ) => Promise<BetterFetchResponse<CheckSubAccountAvailabilityResponseT>>;
     getGasKeyScope: () => Promise<BetterFetchResponse<GasKeyScope>>;
+    isGasKeyWalletSupported: () => Promise<boolean>;
     addSessionGasKey: (callbacks?: AuthCallbacks) => Promise<void>;
     sendWithGasKey: (params: {
       receiverId: string;
@@ -998,6 +999,16 @@ export const siwnClient = (config: SIWNClientConfig) => {
           },
           getGasKeyScope: async () => {
             return await $fetch("/near/gas-key/scope", { method: "GET" });
+          },
+          isGasKeyWalletSupported: async () => {
+            try {
+              if (!walletConnected.get()) return false;
+              const conn = await requireConnector(activeNetwork.get());
+              const { wallet } = await conn.getConnectedWallet();
+              return isGasKeyWallet(wallet.manifest?.features);
+            } catch {
+              return false;
+            }
           },
           addSessionGasKey: async (callbacks?: AuthCallbacks) => {
             await addSessionGasKeyInternal($fetch, callbacks);

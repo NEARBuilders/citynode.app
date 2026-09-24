@@ -3,6 +3,10 @@ import { useGasKeyState } from "better-near-auth/react";
 import { useCallback, useEffect } from "react";
 import { useAuthClient } from "@/app";
 
+export function hasFundedGasKey(state: GasKeyState): boolean {
+  return !!(state?.balance && /^\d+$/.test(state.balance) && BigInt(state.balance) > 0n);
+}
+
 export function useSessionGasKey(): {
   state: GasKeyState;
   isReady: boolean;
@@ -26,6 +30,6 @@ export function useSessionGasKey(): {
     void auth.near.ensureGasKeyFunded();
   }, [auth, publicKey, refresh]);
 
-  const isReady = !!(state?.balance && /^\d+$/.test(state.balance) && BigInt(state.balance) > 0n);
+  const isReady = hasFundedGasKey(state);
   return { state, isReady, refresh };
 }

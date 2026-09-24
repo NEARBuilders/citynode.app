@@ -165,6 +165,7 @@ describe("publishTenantConfigForMode", () => {
     const auth = {
       near: {
         ensureConnected: vi.fn().mockResolvedValue(true),
+        refreshGasKeyInfo: vi.fn().mockResolvedValue(null),
         getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: false } }),
         getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
         getNetwork: vi.fn().mockReturnValue("mainnet"),
@@ -180,6 +181,89 @@ describe("publishTenantConfigForMode", () => {
     expect(auth.near.getNearClient).toHaveBeenCalled();
     expect(transaction).toHaveBeenCalledWith("chicago.sputnik-dao.near");
     expect(result).toEqual({ transaction: "signed" });
+  });
+
+  it("prefers the session gas key when one is bootstrapped and funded", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: { key: "value" },
+        gas: "300000000000000",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const sendWithGasKey = vi.fn().mockResolvedValue({ txHash: "gas-key-tx" });
+    const auth = {
+      near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
+        refreshGasKeyInfo: vi.fn().mockResolvedValue({
+          accountId: "chicago.sputnik-dao.near",
+          publicKey: "ed25519:gaskey",
+          networkId: "mainnet",
+          balance: "50000000000000000000000",
+          numNonces: 4,
+        }),
+        sendWithGasKey,
+        getRelayerInfo: vi.fn(),
+        getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    const result = await publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+      ...baseInput,
+      mode: "platform",
+    });
+
+    expect(sendWithGasKey).toHaveBeenCalledWith({
+      receiverId: "dev.everything.near",
+      methodName: "__fastdata_kv",
+      args: { key: "value" },
+      gas: "300000000000000",
+    });
+    expect(auth.near.getRelayerInfo).not.toHaveBeenCalled();
+    expect(result).toEqual({ txHash: "gas-key-tx" });
+  });
+
+  it("uses the relayer when the gas key exists but is unfunded", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const signed = vi.fn().mockResolvedValue("signed-payload");
+    const relay = vi.fn().mockResolvedValue({ data: { txHash: "relayed-tx" }, error: null });
+    const auth = {
+      near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
+        refreshGasKeyInfo: vi.fn().mockResolvedValue({
+          accountId: "chicago.sputnik-dao.near",
+          publicKey: "ed25519:gaskey",
+          networkId: "mainnet",
+          balance: "0",
+          numNonces: 4,
+        }),
+        buildSignedDelegateAction: signed,
+        relayTransaction: relay,
+        getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: true } }),
+        getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    const result = await publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+      ...baseInput,
+      mode: "platform",
+    });
+
+    expect(signed).toHaveBeenCalled();
+    expect(relay).toHaveBeenCalledWith({ payload: "signed-payload" });
+    expect(result).toEqual({ data: { txHash: "relayed-tx" }, error: null });
   });
 
   it("requires a wallet for platform mode without a relayer", async () => {
