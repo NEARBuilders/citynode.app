@@ -2,6 +2,7 @@ package framework
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 	"testing"
 )
@@ -21,7 +22,8 @@ func TestHardKillThenBosKillReapsOrphans(t *testing.T) {
 	}
 	requireTestDatabases(t)
 
-	stack := StartStack(t, 5600)
+	registry := filepath.Join(t.TempDir(), "pids.json")
+	stack := StartStack(t, 5600, registry)
 	pids := stack.SnapshotPids()
 
 	stack.Signal(syscall.SIGKILL)
@@ -40,13 +42,14 @@ func TestNextBootAdoptsOrphans(t *testing.T) {
 	}
 	requireTestDatabases(t)
 
-	stack := StartStack(t, 5600)
+	registry := filepath.Join(t.TempDir(), "pids.json")
+	stack := StartStack(t, 5600, registry)
 	pids := stack.SnapshotPids()
 
 	stack.Signal(syscall.SIGKILL)
 	stack.WaitExit(128 + int(syscall.SIGKILL))
 
-	next := StartStack(t, 5700)
+	next := StartStack(t, 5700, registry)
 	defer next.Reap()
 
 	AssertAllDead(t, pids, deadRetryWindow)

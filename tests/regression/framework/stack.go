@@ -66,11 +66,13 @@ func requireTestDatabases(t *testing.T) {
 
 // StartStack boots a real `bos dev` session from source (bun cli.ts) on an
 // explicit port block, waits for the host to answer /health, then waits for
-// the registry to carry the session's full childPids map.
-func StartStack(t *testing.T, basePort int) *Stack {
+// the registry to carry the session's full childPids map. registryPath is
+// caller-owned: tests that boot multiple stacks pass the SAME path (like the
+// real shared registry) so adoption scenarios can observe a predecessor's
+// dead entries.
+func StartStack(t *testing.T, basePort int, registryPath string) *Stack {
 	t.Helper()
 	repoRoot := findRepoRoot(t)
-	registryPath := filepath.Join(t.TempDir(), "pids.json")
 
 	dotenv, err := parseDotenvFile(filepath.Join(repoRoot, ".env.test"))
 	if err != nil {
@@ -267,6 +269,7 @@ func (s *Stack) RunBosKill() {
 	if err != nil {
 		s.t.Fatalf("bos kill failed: %v\n%s", err, tailString(string(out), 20))
 	}
+	s.t.Logf("bos kill output: %s", tailString(string(out), 20))
 }
 
 func exitCodeOf(cmd *exec.Cmd, err error) int {

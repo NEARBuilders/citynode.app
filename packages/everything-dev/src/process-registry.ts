@@ -117,9 +117,9 @@ export function updateChildPids(pid: number, childPids: number[]): void {
 }
 
 export function unregisterPid(pid: number): void {
-  const live = pruneDead(readRegistry());
-  const next = live.filter((entry) => entry.pid !== pid);
-  if (next.length === live.length) return;
+  const entries = readRegistry();
+  const next = pruneDead(entries).filter((entry) => entry.pid !== pid);
+  if (next.length === entries.length) return;
   writeRegistry(next);
 }
 

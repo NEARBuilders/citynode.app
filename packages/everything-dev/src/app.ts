@@ -113,7 +113,7 @@ export async function buildRuntimeConfig(
   });
 }
 
-function probePortBindable(port: number): Effect.Effect<boolean> {
+export function probePortBindable(port: number): Effect.Effect<boolean> {
   return Effect.callback<boolean>((resume) => {
     const server = createServer();
 

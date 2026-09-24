@@ -1,4 +1,5 @@
 import { Deferred, Effect, Exit } from "effect";
+import { probePortBindable } from "./app";
 import {
   createDevRenderer,
   type DevProcessState,
@@ -8,13 +9,22 @@ import { getProjectRoot } from "./config";
 import { createLogPipeline, type LogEvent, resolveLogLevel } from "./dev-log-pipeline";
 import { createDevLogger, formatLogLine } from "./dev-logs";
 import { ShellEnvLive } from "./env/project-env";
+import { ownerOfPort } from "./infra/port-ownership";
 import {
   getProcessStates,
   makeDevProcess,
   type ProcessCallbacks,
   type ProcessHandle,
 } from "./orchestrator";
-import { registerStandalone, unregisterPid, updateChildPids } from "./process-registry";
+import { reapGroup } from "./process-kill";
+import {
+  isPidAlive,
+  readRegistry,
+  registerStandalone,
+  unregisterPid,
+  updateChildPids,
+  writeRegistry,
+} from "./process-registry";
 import {
   type AppOrchestrator,
   DevGeneratedEnvLive,
@@ -26,6 +36,34 @@ import {
   ServiceDescriptorMapLive,
 } from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
+
+const adoptOrphanedChildren = (configDir: string): void => {
+  try {
+    const entries = readRegistry().filter(
+      (entry) => entry.pid > 1 && entry.configDir === configDir && !isPidAlive(entry.pid),
+    );
+    if (entries.length === 0) return;
+    const reaped: number[] = [];
+    for (const entry of entries) {
+      for (const childPid of entry.childPids ?? []) {
+        if (childPid === process.pid) continue;
+        if (isPidAlive(childPid)) {
+          reapGroup(childPid);
+          reaped.push(childPid);
+        }
+      }
+    }
+    if (reaped.length > 0) {
+      console.error(
+        `[Dev] Reaped ${reaped.length} orphaned child process(es) from dead session(s): ${reaped.join(", ")}`,
+      );
+    }
+    const deadPids = new Set(entries.map((entry) => entry.pid));
+    writeRegistry(readRegistry().filter((entry) => !deadPids.has(entry.pid)));
+  } catch {
+    // best-effort; registry hygiene is non-critical for the running session
+  }
+};
 
 const isInteractiveSupported = (): boolean => {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
@@ -63,6 +101,7 @@ export const runDevSession = (
 ) =>
   Effect.gen(function* () {
     const configDir = getProjectRoot();
+    adoptOrphanedChildren(configDir);
     const services = yield* ServiceDescriptorMap;
     const runtimeConfig = yield* DevRuntimeConfig;
     const orderedPackages = sortByOrder(orchestrator.packages);
@@ -102,6 +141,7 @@ export const runDevSession = (
     onShutdownReady?.(controls);
 
     const isWorkspaceChild = process.env.BOS_WORKSPACE_CHILD === "1";
+    let ownedPorts: number[] = [];
     if (!isWorkspaceChild) {
       const regPorts: Record<string, number> = {};
       const addPort = (key: string, value: number | undefined | null) => {
@@ -126,6 +166,7 @@ export const runDevSession = (
         startedAt: Date.now(),
         description: orchestrator.description,
       });
+      ownedPorts = Object.values(regPorts);
     }
 
     let view: DevRendererHandle | null = null;
@@ -201,6 +242,20 @@ export const runDevSession = (
         });
 
         yield* Effect.sleep("200 millis");
+
+        for (const port of ownedPorts) {
+          const bindable = yield* probePortBindable(port);
+          if (!bindable) {
+            const owner = yield* ownerOfPort(port);
+            console.error(
+              `[Dev] Port ${port} still bound after teardown${
+                owner
+                  ? ` — pid ${owner.pid} (${owner.command})`
+                  : " — owner unknown (lsof unavailable)"
+              }`,
+            );
+          }
+        }
 
         if (!isWorkspaceChild) {
           try {
