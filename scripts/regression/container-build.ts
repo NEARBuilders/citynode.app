@@ -111,6 +111,26 @@ const stage = () => {
     copyDist(path.join(workspace, "dist"), path.join("plugins", key));
   }
 
+  // Namespace staging (plan 043): the same artifacts laid out at the exact
+  // paths the /bundles/* FS route serves — bundles/<account>/<gateway>/<ws>/.
+  // The prod image's runtime points BOS_BUNDLE_DIR here.
+  const nsAccount = bosConfig.account;
+  const nsGateway = bosConfig.domain;
+  if (nsAccount && nsGateway) {
+    const ns = path.join(root, ".bos", "bundles", nsAccount, nsGateway);
+    rmSync(ns, { recursive: true, force: true });
+    for (const [from, to] of [
+      ["host/dist", "host"],
+      ["ui/dist", "ui"],
+      ["api/dist", "api"],
+      ["plugins/auth/ui/dist", "auth-ui"],
+      ...(authWorkspace ? [[path.join(authWorkspace, "dist"), "auth"] as const] : []),
+      ...localPlugins.map(([key, workspace]) => [path.join(workspace, "dist"), key] as const),
+    ]) {
+      cpSync(path.join(root, from), path.join(ns, to), { recursive: true });
+    }
+  }
+
   // The auth ui must register under its BUILT container name (the sanitized
   // plugin package name) — the authored ui.name can never match it, and the
   // sources are gone by the time the runtime stage boots.

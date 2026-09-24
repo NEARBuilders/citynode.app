@@ -158,7 +158,7 @@ export function platformDeployEntries(input: {
     },
   ];
 
-  if (kind === "app") {
+  if (kind === "app" && key === "ui") {
     const ssrIntegrity = uploaded.objects.find((o) =>
       o.key.endsWith(`/ssr/${UI_REMOTE_SERVER_ENTRY_FILENAME}`),
     )?.integrity;
@@ -170,6 +170,41 @@ export function platformDeployEntries(input: {
         integrityField: CORE_UI_DEPLOY_FIELDS.ssrIntegrityField ?? "",
       });
     }
+  }
+
+  return entries;
+}
+
+/**
+ * Image-native deploy entries (plan 043): the runtime image serves its own
+ * staged artifacts at its own origin — the publish writes the deterministic
+ * URLs, nothing is uploaded. Integrity is omitted: the published URL carries
+ * the bytes' identity via the image build itself.
+ */
+export function platformUrlDeployEntries(input: {
+  origin: string;
+  account: string;
+  gateway: string;
+  key: string;
+  kind: "app" | "plugin";
+}): DeployResultEntry[] {
+  const { origin, account, gateway, key, kind } = input;
+  const slot = kind === "app" ? "app" : "plugins";
+  const base = `${origin.replace(/\/$/, "")}/bundles/${account}/${gateway}/${key}/`;
+  const entries: DeployResultEntry[] = [
+    {
+      url: base,
+      urlField: `${slot}.${key}.production`,
+      integrityField: `${slot}.${key}.integrity`,
+    },
+  ];
+
+  if (kind === "app" && key === "ui") {
+    entries.push({
+      url: `${base}ssr/`,
+      urlField: CORE_UI_DEPLOY_FIELDS.ssrUrlField ?? "",
+      integrityField: CORE_UI_DEPLOY_FIELDS.ssrIntegrityField ?? "",
+    });
   }
 
   return entries;

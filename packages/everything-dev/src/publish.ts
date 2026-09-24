@@ -26,11 +26,7 @@ import {
   submitRegistryWrite,
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
-import {
-  collectWorkspaceArtifacts,
-  platformDeployEntries,
-  uploadBundlesToPlatform,
-} from "./platform-deploy";
+import { platformUrlDeployEntries } from "./platform-deploy";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
@@ -193,28 +189,6 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   }
 
   const cdnProvider = resolveCdnProvider(bosConfig, input.cdn);
-  if (cdnProvider === "platform" && !input.privateKey) {
-    const session = readSessionHandle(configDir);
-    if (!session?.credential) {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          'Platform CDN is enabled (bos.config.json sets deploy.cdn = "platform", or --cdn platform), ' +
-          "but no CLI session is stored in .bos/ for this project. Run bos login to create one.",
-      };
-    }
-    if (session.credential.accountId && session.credential.accountId !== account) {
-      return {
-        status: "error",
-        registryUrl,
-        error:
-          `The CLI session was created for ${session.credential.accountId}, but the configured ` +
-          `account is ${account}. Platform bundle uploads are pinned to the session's NEAR account. ` +
-          "Run bos login again under the matching account.",
-      };
-    }
-  }
 
   if (dryRun) {
     return { status: "dry-run", registryUrl, built, skipped };
@@ -309,48 +283,24 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
   if (cdnProvider === "platform") {
-    const session = readSessionHandle(configDir);
-    const credential = session?.credential;
-    if (!credential) {
-      return {
-        status: "error",
-        registryUrl,
-        built,
-        skipped,
-        deployResults,
-        error: "Platform CDN is enabled but no CLI session is stored. Run bos login first.",
-      };
-    }
-
-    const uploadTargets = (built ?? []).filter((key) => targets.includes(key));
+    // Image-native deploy (plan 043): artifacts ship inside the runtime image
+    // and each host serves its own namespace from its own filesystem — the
+    // publish writes the deterministic bundle URLs, nothing is uploaded.
+    const origin = `https://${gateway}`;
+    const deployTargets = (built ?? []).filter((key) => targets.includes(key));
     const platformEntries: DeployResultEntry[] = [];
 
     console.log();
-    console.log("  Uploading bundles to platform storage...");
-    for (const key of uploadTargets) {
+    console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
+    for (const key of deployTargets) {
       const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
       if (!ws) continue;
 
-      const files = await collectWorkspaceArtifacts(ws.path);
-      if (files.length === 0) {
-        console.log(
-          `    ${colors.yellow("⚠")} ${padRight(key, 28)} no dist/ artifacts found — skipped`,
-        );
-        continue;
-      }
-
-      const uploaded = await uploadBundlesToPlatform({
-        siteUrl: credential.siteUrl,
-        apiKey: credential.apiKey,
-        account,
-        gateway,
-        workspace: key,
-        files,
-      });
-
-      platformEntries.push(...platformDeployEntries({ key, kind: ws.kind, uploaded }));
+      platformEntries.push(
+        ...platformUrlDeployEntries({ origin, account, gateway, key, kind: ws.kind }),
+      );
       console.log(
-        `    ${colors.green(icons.ok)} ${padRight(key, 28)} ${uploaded.objects.length} object(s) → ${uploaded.baseUrl}`,
+        `    ${colors.green(icons.ok)} ${padRight(key, 28)} → https://${gateway}/bundles/${account}/${gateway}/${key}/`,
       );
     }
 

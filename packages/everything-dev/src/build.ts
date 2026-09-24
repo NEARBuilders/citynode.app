@@ -110,7 +110,7 @@ export function resolveCdnProvider(
   bosConfig: BosConfig | null,
   override?: "zephyr" | "platform",
 ): "zephyr" | "platform" {
-  return override ?? bosConfig?.deploy?.cdn ?? "zephyr";
+  return override ?? bosConfig?.deploy?.cdn ?? "platform";
 }
 
 export function checkCdnProviderDeployable(bosConfig: BosConfig | null): string | null {
