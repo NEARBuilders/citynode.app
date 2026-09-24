@@ -15,7 +15,7 @@ import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
 import type { NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import type { TenantsService } from "./services/tenants";
-import { TenantsLive, TenantsTag } from "./services/tenants";
+import { TenantsConfigLive, TenantsLive, TenantsTag } from "./services/tenants";
 import type { ValidatorsService } from "./services/validators";
 import { ValidatorsLive, ValidatorsTag } from "./services/validators";
 import { createRequireTeamArea } from "./team-access-policy";
@@ -57,9 +57,19 @@ function validateHostname(hostname: string): void {
   }
 }
 
+function publishStatusFor(ownerAccountId: string): "pending_funding" | "ready" {
+  return ownerAccountId.startsWith("0s") ? "pending_funding" : "ready";
+}
+
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
     platformAccount: z.string().optional(),
+    gatewayDomains: z
+      .string()
+      .default("")
+      .describe(
+        "Comma-separated domains whose subdomains the platform controls (auto-verified bindings)",
+      ),
   }),
 
   secrets: z.object({
@@ -74,13 +84,17 @@ export default createPlugin.withPlugins<PluginsClient>()({
   initialize: (config) =>
     Effect.gen(function* () {
       const database = DatabaseLive(config.secrets.API_DATABASE_URL);
+      const gatewayDomains = config.variables.gatewayDomains
+        .split(",")
+        .map((domain) => domain.trim().toLowerCase())
+        .filter((domain) => domain.length > 0);
       const services = yield* buildScopedContext(
         Layer.mergeAll(
           TenantsLive,
           NodesLive,
           ValidatorsLive,
           DiscoveryLive(config.secrets.LUMA_CALENDAR_API_KEYS),
-        ).pipe(Layer.provide(database)),
+        ).pipe(Layer.provide(database), Layer.provide(TenantsConfigLive(gatewayDomains))),
       );
 
       console.log("[API] Services Initialized");
@@ -103,7 +117,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
     const authorizedTenant = async (
       input: { tenantId: string },
       context: {
-        user?: { role?: string | null };
+        user?: { id?: string; role?: string | null };
         organization?: { activeOrganizationId: string | null };
         near?: { primaryAccountId: string | null };
       },
@@ -117,6 +131,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
         });
       }
       if (context.user?.role === "admin") return tenant;
+      if (tenant.ownerKind === "user") {
+        if (!context.user?.id || tenant.ownerUserId !== context.user.id) {
+          throw new ORPCError("FORBIDDEN", {
+            message: "You do not own this tenant",
+          });
+        }
+        return tenant;
+      }
       if (tenant.orgId === null) {
         const isOwner =
           !!context.near?.primaryAccountId && context.near.primaryAccountId === tenant.accountId;
@@ -249,14 +271,47 @@ export default createPlugin.withPlugins<PluginsClient>()({
       listTenants: builder.listTenants.use(requireAuth).handler(async ({ context }) => {
         const services = Context.get(context["effect/context"], ApiServices);
         if (context.user.role === "admin") return services.tenants.listAllTenants();
+        const ownerTenants = await services.tenants.listTenantsByOwnerUserId(context.user.id);
         const orgId = context.organization?.activeOrganizationId;
         if (!orgId) {
+          return ownerTenants;
+        }
+        const orgTenants = await services.tenants.listTenantsByOrgIds([orgId]);
+        return [...ownerTenants, ...orgTenants.filter((t) => t.ownerUserId === null)];
+      }),
+
+      spawnTenant: builder.spawnTenant.use(requireAuth).handler(async ({ input, context }) => {
+        const services = Context.get(context["effect/context"], ApiServices);
+        const ownerAccountId = context.near?.primaryAccountId;
+        if (!ownerAccountId) {
           throw new ORPCError("FORBIDDEN", {
-            message: "Active organization required",
+            message: "Link a NEAR account to your session before spawning a tenant",
           });
         }
-        return services.tenants.listTenantsByOrgIds([orgId]);
+        validateAccountId(ownerAccountId);
+        validateHostname(input.hostname);
+        const { tenant, binding } = await services.tenants.spawnTenant({
+          name: input.name,
+          hostname: input.hostname.toLowerCase(),
+          ownerAccountId,
+          ownerUserId: context.user.id,
+        });
+        return { tenant, binding, ownerAccountId, publishStatus: publishStatusFor(ownerAccountId) };
       }),
+
+      getSpawnStatus: builder.getSpawnStatus
+        .use(requireAuth)
+        .handler(async ({ input, context }) => {
+          const tenant = await authorizedTenant(input, context);
+          const services = Context.get(context["effect/context"], ApiServices);
+          const bindings = await services.tenants.listBindingsForTenant(tenant.id);
+          return {
+            tenant,
+            bindings,
+            ownerAccountId: tenant.accountId,
+            publishStatus: publishStatusFor(tenant.accountId),
+          };
+        }),
 
       createTenant: builder.createTenant
         .use(requireAuth)

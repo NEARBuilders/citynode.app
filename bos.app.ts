@@ -19,7 +19,7 @@ export default App({
   ci: { railway: { service: "app" } },
   host: { path: "host" },
   ui: UI({ path: "ui" }),
-  api: API({ path: "api" }),
+  api: API({ path: "api", variables: { gatewayDomains: "everything.dev,dev.everything.dev" } }),
   auth: Plugin("auth").path("plugins/auth", { name: "@everything-dev/auth-plugin" }),
   plugins: {
     apps: Plugin("apps").path("plugins/apps", {

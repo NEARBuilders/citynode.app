@@ -14,6 +14,7 @@ export default {
   config: {
     variables: {
       platformAccount: "audit.citynode.near",
+      gatewayDomains: "citynode.app,testnet.citynode.app",
     },
     secrets: {
       LUMA_CALENDAR_API_KEYS: process.env.LUMA_CALENDAR_API_KEYS || "",
