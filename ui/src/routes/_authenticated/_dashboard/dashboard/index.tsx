@@ -39,7 +39,7 @@ function Home() {
   const auth = useAuthClient();
   const { tenant } = Route.useRouteContext();
   const { restricted } = Route.useSearch();
-  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth, undefined));
+  const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const { data: passkeys = [] } = useQuery({
     queryKey: ["passkeys"],
     queryFn: async () => {

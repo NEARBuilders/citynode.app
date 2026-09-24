@@ -81,7 +81,7 @@ log(`starting ${mode} stack on port ${regressionEnv.basePort} with test database
 // teardown "stall"). `tail -f` the log for live output.
 const logsDir = join(root, ".bos", "logs");
 mkdirSync(logsDir, { recursive: true });
-const stackLogPath = join(logsDir, `regression-${mode}.log`);
+const stackLogPath = join(logsDir, `regression-${mode.replace(/:/g, "-")}.log`);
 const stackLog = openSync(stackLogPath, "w");
 log(`stack output: ${stackLogPath}`);
 

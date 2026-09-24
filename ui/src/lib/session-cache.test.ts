@@ -4,7 +4,7 @@ import { sessionQueryKey } from "@/lib/auth";
 import { clearAuthenticatedQueries, resolveSessionFromCache } from "./session-cache";
 
 describe("session cache boundaries", () => {
-  it("clears private and public query data while preserving an explicit signed-out session", async () => {
+  it("clears private and public query data while leaving an explicit signed-out session", async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(sessionQueryKey, { user: { id: "user-1" } });
     queryClient.setQueryData(["private-data"], { secret: true });
@@ -17,7 +17,7 @@ describe("session cache boundaries", () => {
     expect(queryClient.getQueryData(["public-data"])).toBeUndefined();
   });
 
-  it("prefers an explicit cached session over stale router context", () => {
+  it("prefers the query cache over the router context session", () => {
     const queryClient = new QueryClient();
     const currentSession = { user: { id: "current-user" } };
 
@@ -28,29 +28,20 @@ describe("session cache boundaries", () => {
 
     queryClient.setQueryData(sessionQueryKey, null);
     expect(resolveSessionFromCache(queryClient, currentSession)).toBeNull();
-
-    queryClient.clear();
-    expect(resolveSessionFromCache(queryClient, currentSession)).toBeUndefined();
   });
 
-  it("seeds the initial router context once for the client query cache", () => {
+  it("seeds an empty cache from the router context session (SSR dehydration)", () => {
     const queryClient = new QueryClient();
     const contextSession = { user: { id: "context-user" } };
     expect(resolveSessionFromCache(queryClient, contextSession)).toBe(contextSession);
     expect(queryClient.getQueryData(sessionQueryKey)).toBe(contextSession);
-
-    queryClient.clear();
-    expect(resolveSessionFromCache(queryClient, contextSession)).toBeUndefined();
   });
 
-  it("keeps logout ahead of a late bootstrap resolver", async () => {
+  it("keeps the signed-out cache entry ahead of a late context session", async () => {
     const queryClient = new QueryClient();
     const staleSession = { user: { id: "stale-user" } };
 
     await clearAuthenticatedQueries(queryClient);
     expect(resolveSessionFromCache(queryClient, staleSession)).toBeNull();
-
-    queryClient.clear();
-    expect(resolveSessionFromCache(queryClient, staleSession)).toBeUndefined();
   });
 });

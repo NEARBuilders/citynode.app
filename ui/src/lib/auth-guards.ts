@@ -13,27 +13,27 @@ export interface AuthContext {
   isBanned: boolean;
 }
 
-/**
- * The router's context carries the session as `SessionData | null | undefined`
- * (the root route resolves it to null for signed-out visitors), so guards
- * accept the widened session instead of the narrower `RouterContext`.
- */
-interface GuardContext extends Omit<RouterContext, "session"> {
-  session: RouterContext["session"] | null;
-}
-
 interface GuardArgs {
   context: GuardContext;
   location: { href: string };
 }
 
+/**
+ * The root route resolves the session to `SessionData | null` for signed-out
+ * visitors, so guards accept the widened session instead of the narrower
+ * `RouterContext`.
+ */
+interface GuardContext extends Omit<RouterContext, "session"> {
+  session: RouterContext["session"] | null;
+}
+
+/**
+ * Every guard reads the same session query the login route and sign-in flows
+ * use, so all redirect decisions see one authoritative answer.
+ */
 async function ensureSession(context: GuardContext): Promise<SessionData | null> {
   const { queryClient, authClient } = context;
-  // query() awaits a refetch when the cached session is stale (e.g. right after
-  // sign-in invalidation). ensureQueryData would return the stale signed-out
-  // value immediately and redirect, bouncing authed users back to /login until
-  // the router trips its redirect limit ("Too many redirects").
-  return queryClient.query(sessionQueryOptions(authClient, context.session));
+  return queryClient.query(sessionQueryOptions(authClient));
 }
 
 function buildAuthContext(session: SessionData | null | undefined): AuthContext {
@@ -65,15 +65,4 @@ export async function requireAdmin(args: GuardArgs) {
     throw redirect({ to: "/dashboard" });
   }
   return result;
-}
-
-export async function rejectAuthed({ context }: GuardArgs) {
-  const { queryClient, authClient } = context;
-  const initialSession = context.session;
-  const session =
-    initialSession ??
-    queryClient.getQueryData(sessionQueryOptions(authClient, initialSession).queryKey);
-  if (session?.user) {
-    throw redirect({ to: "/dashboard", search: {} });
-  }
 }

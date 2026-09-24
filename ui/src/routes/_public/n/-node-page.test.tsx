@@ -162,7 +162,7 @@ async function showNode(url: string, signedIn = false) {
     beforeLoad: ({ context: ctx, search }) => {
       const target = (search as { redirect?: string }).redirect ?? "/dashboard";
       const session = ctx.queryClient.getQueryData<SessionData>(
-        sessionQueryOptions(ctx.authClient, undefined).queryKey,
+        sessionQueryOptions(ctx.authClient).queryKey,
       );
       if (session?.user) {
         throw redirect({ to: target });
