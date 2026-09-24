@@ -184,7 +184,8 @@ describe("runDevSession quit correctness", () => {
 
     const exit = await exitPromise;
     expect(Exit.isSuccess(exit)).toBe(true);
-    expect(mocks.kills).toEqual(["api"]);
+    expect(mocks.kills).toContain("api");
+    expect(mocks.kills).not.toContain("host");
     expect(mocks.view.unmount).toHaveBeenCalled();
   });
 
@@ -200,7 +201,7 @@ describe("runDevSession quit correctness", () => {
 
     const exit = await exitPromise;
     expect(Exit.isSuccess(exit)).toBe(true);
-    expect(mocks.kills.sort()).toEqual(["api", "host"]);
+    expect(new Set(mocks.kills)).toEqual(new Set(["api", "host"]));
     const killIndexes = mocks.sequence
       .filter((s) => s.startsWith("kill:"))
       .map((s) => mocks.sequence.indexOf(s));

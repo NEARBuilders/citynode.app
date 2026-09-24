@@ -293,6 +293,9 @@ export const runDevSession = (
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
       return makeDevProcess(pkg, callbacks, portOverride).pipe(
         Effect.tap((handle) => Effect.sync(() => spawned.push(handle))),
+        Effect.flatMap((handle) =>
+          Effect.acquireRelease(Effect.succeed(handle), () => handle.kill.pipe(Effect.ignore)),
+        ),
         Effect.tapError((err) =>
           Effect.sync(() => {
             callbacks.onLog(pkg, `Failed to start: ${err}`, true);
