@@ -11,6 +11,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { UnderConstruction } from "@/components/under-construction";
+import type { LoginTranslator } from "@/i18n/catalogs";
+import { LoginLanguageSelector } from "@/i18n/language-selector";
+import { LoginI18nProvider, useLoginTranslation } from "@/i18n/runtime";
 import { PairPanel } from "./-pair-panel";
 
 type SearchParams = {
@@ -53,21 +56,33 @@ export const Route = createFileRoute("/_public/login")({
 
 type AuthError = { code?: string; message?: string } | Error;
 
-function handleError(error: AuthError) {
+function handleError(error: AuthError, t: LoginTranslator) {
   const code = "code" in error ? error.code : undefined;
-  const message = "message" in error ? error.message : "Failed to sign in";
-  if (code === "UNAUTHORIZED_NONCE_REPLAY") toast.error("Sign-in already used");
-  else if (code === "UNAUTHORIZED_INVALID_SIGNATURE") toast.error("Invalid signature");
-  else if (code === "SIGNER_NOT_AVAILABLE") toast.error("NEAR wallet not available");
-  else if (code === "RECIPIENT_MISMATCH") toast.error("Sign-in configuration error");
-  else if (code === "UNAUTHORIZED_INVALID_NONCE") toast.error("Session expired, please try again");
-  else toast.error(message || "Failed to sign in");
+  if (code === "UNAUTHORIZED_NONCE_REPLAY") toast.error(t("auth.login.error.used"));
+  else if (code === "UNAUTHORIZED_INVALID_SIGNATURE") {
+    toast.error(t("auth.login.error.signature"));
+  } else if (code === "SIGNER_NOT_AVAILABLE") {
+    toast.error(t("auth.login.error.walletUnavailable"));
+  } else if (code === "RECIPIENT_MISMATCH") {
+    toast.error(t("auth.login.error.configuration"));
+  } else if (code === "UNAUTHORIZED_INVALID_NONCE") {
+    toast.error(t("auth.login.error.expired"));
+  } else toast.error(t("auth.login.error.generic"));
 }
 
 function LoginPage() {
+  return (
+    <LoginI18nProvider>
+      <LoginPageContent />
+    </LoginI18nProvider>
+  );
+}
+
+function LoginPageContent() {
   const navigate = useNavigate();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
+  const t = useLoginTranslation();
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
   const { redirect } = Route.useSearch();
   const { runtimeConfig } = Route.useRouteContext();
@@ -100,11 +115,11 @@ function LoginPage() {
     await auth.signIn.near({
       onSuccess: async () => {
         setNearPending(false);
-        await handleSuccess("Signed in with NEAR");
+        await handleSuccess(t("auth.login.success.near"));
       },
       onError: (error: { code?: string; message?: string }) => {
         setNearPending(false);
-        handleError(error);
+        handleError(error, t);
       },
     });
   };
@@ -114,11 +129,11 @@ function LoginPage() {
     await signInWithPasskey(auth, {
       onSuccess: async (session) => {
         setPasskeyPending(false);
-        await handleSuccess("Signed in with passkey", session);
+        await handleSuccess(t("auth.login.success.passkey"), session);
       },
-      onError: (error) => {
+      onError: () => {
         setPasskeyPending(false);
-        toast.error(error.message || "Passkey sign-in failed");
+        toast.error(t("auth.login.error.passkey"));
       },
     });
   };
@@ -131,11 +146,16 @@ function LoginPage() {
     <div className="flex-1 flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm flex flex-col items-center gap-5">
         <div className="w-full rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
+          {!showPair && (
+            <div className="flex justify-end">
+              <LoginLanguageSelector />
+            </div>
+          )}
           <div className="space-y-1 text-center">
             <h1 className="text-xl font-semibold text-foreground" data-testid="login.heading">
-              Sign in
+              {t("auth.login.title")}
             </h1>
-            <p className="text-sm text-muted-foreground">Connect your NEAR wallet to continue.</p>
+            <p className="text-sm text-muted-foreground">{t("auth.login.subtitle")}</p>
           </div>
 
           {showPair ? (
@@ -150,7 +170,7 @@ function LoginPage() {
                 className="w-full"
                 data-testid="login.passkey-button"
               >
-                {passkeyPending ? "waiting for passkey..." : "sign in with passkey"}
+                {passkeyPending ? t("auth.login.passkey.pending") : t("auth.login.passkey.action")}
               </Button>
               {detectedAccount ? (
                 <div className="space-y-3">
@@ -162,7 +182,9 @@ function LoginPage() {
                     className="w-full"
                     data-testid="near.signin-button"
                   >
-                    {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
+                    {nearPending
+                      ? t("auth.login.near.pending")
+                      : t("auth.login.near.continueAs", { account: detectedAccount })}
                   </Button>
                   <Button
                     type="button"
@@ -174,22 +196,22 @@ function LoginPage() {
                         await auth.signIn.near({
                           onSuccess: async () => {
                             setNearPending(false);
-                            await handleSuccess("Signed in with NEAR");
+                            await handleSuccess(t("auth.login.success.near"));
                           },
                           onError: (error: { code?: string; message?: string }) => {
                             setNearPending(false);
-                            handleError(error);
+                            handleError(error, t);
                           },
                         });
                       } catch {
                         setNearPending(false);
-                        toast.error("Failed to disconnect wallet");
+                        toast.error(t("auth.login.error.disconnect"));
                       }
                     }}
                     disabled={nearPending}
                     className="w-full"
                   >
-                    Use another wallet
+                    {t("auth.login.near.useAnother")}
                   </Button>
                 </div>
               ) : (
@@ -201,7 +223,7 @@ function LoginPage() {
                   className="w-full"
                   data-testid="near.signin-button"
                 >
-                  {nearPending ? "connecting..." : "connect with NEAR"}
+                  {nearPending ? t("auth.login.near.pending") : t("auth.login.near.action")}
                 </Button>
               )}
               <Button
@@ -211,7 +233,7 @@ function LoginPage() {
                 onClick={() => setShowPair(true)}
                 data-testid="login.device-button"
               >
-                sign in with phone
+                {t("auth.login.phone.action")}
               </Button>
             </>
           )}

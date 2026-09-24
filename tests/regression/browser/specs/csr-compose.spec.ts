@@ -77,6 +77,31 @@ test.describe("CSR compose", () => {
     expect(pathname).toBe("/login");
   });
 
+  test("the login language persists across reloads", async ({ context, page }) => {
+    await context.clearCookies();
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    const selector = page.getByTestId("login.language-select");
+    await expect(selector).toBeVisible({ timeout: 15000 });
+    await selector.selectOption("es");
+
+    await expect(page.getByTestId("login.heading")).toHaveText("Iniciar sesión");
+    await expect(page.getByTestId("login.device-button")).toHaveText(
+      "iniciar sesión con el teléfono",
+    );
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+
+    const savedLocale = await context.cookies();
+    expect(savedLocale.find((cookie) => cookie.name === "citynode_locale")?.value).toBe("es");
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForApp(page);
+
+    await expect(page.getByTestId("login.language-select")).toHaveValue("es");
+    await expect(page.getByTestId("login.heading")).toHaveText("Iniciar sesión");
+  });
+
   test("an account path renders the account page, not the sign-in page", async ({ page }) => {
     await page.goto("/regression-no-account.near", { waitUntil: "domcontentloaded" });
     await waitForApp(page);
