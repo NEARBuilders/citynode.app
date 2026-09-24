@@ -1,4 +1,4 @@
-package teardown
+package framework
 
 import (
 	"encoding/json"
@@ -97,7 +97,7 @@ func StartStack(t *testing.T, basePort int) *Stack {
 	cmd.Dir = repoRoot
 	cmd.Env = childEnv(overrides)
 
-	logPath := filepath.Join(repoRoot, ".bos", "logs", fmt.Sprintf("teardown-%d.log", basePort))
+	logPath := filepath.Join(repoRoot, ".bos", "logs", fmt.Sprintf("framework-%d.log", basePort))
 	if mkErr := os.MkdirAll(filepath.Dir(logPath), 0o755); mkErr != nil {
 		t.Fatalf("creating log dir: %v", mkErr)
 	}
@@ -236,7 +236,7 @@ func (s *Stack) reap() {
 }
 
 func (s *Stack) logTail(n int) string {
-	raw, err := os.ReadFile(fmt.Sprintf("%s/.bos/logs/teardown-%d.log", s.repoRoot, s.basePort))
+	raw, err := os.ReadFile(fmt.Sprintf("%s/.bos/logs/framework-%d.log", s.repoRoot, s.basePort))
 	if err != nil {
 		return fmt.Sprintf("(no log: %v)", err)
 	}
