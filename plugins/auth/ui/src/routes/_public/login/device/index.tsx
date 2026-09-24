@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { sessionQueryKey, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,9 +30,8 @@ export const Route = createFileRoute("/_public/login/device/")({
 
 function DeviceVerifyPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const auth = useAuthClient();
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const { data: session } = useQuery(sessionQueryOptions(auth));
   const { user_code, pubKey, contract, account, network, source } = Route.useSearch();
   const [code, setCode] = useState(user_code ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -47,13 +46,12 @@ function DeviceVerifyPage() {
         setError("This code is invalid or has expired. Ask for a new one.");
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
       void navigate({
         to: "/login/device/approve",
         search: { user_code, pubKey, contract, account, network, source },
       });
     });
-  }, [session?.user, user_code, claiming, auth, navigate, queryClient]);
+  }, [session?.user, user_code, claiming, auth, navigate]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();

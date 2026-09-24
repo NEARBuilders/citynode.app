@@ -140,41 +140,37 @@ export function useAuthClient(): AuthClient {
 
 export const sessionQueryKey = ["session"] as const;
 
-export function sessionQueryOptions(authClient: AuthClient, initialSession?: SessionData | null) {
-  const baseOptions = {
+/**
+ * The app's single session read path. disableCookieCache forces the server to
+ * answer from the session table (the cookie cache can lag it) so every
+ * consumer — route guards, the login route, useQuery observers — sees the
+ * same authoritative answer. Client-side staleness is handled by staleTime.
+ */
+export function sessionQueryOptions(authClient: AuthClient) {
+  return {
     queryKey: sessionQueryKey,
     queryFn: async () => {
-      const { data: session } = await authClient.getSession();
+      const { data: session } = await authClient.getSession({
+        query: { disableCookieCache: true },
+      });
       return session ?? null;
     },
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
   };
-
-  return initialSession === undefined
-    ? baseOptions
-    : { ...baseOptions, initialData: initialSession };
 }
 
 /**
- * Authoritative post-sign-in session sync. Reads the session with Better Auth's
- * cookie cache disabled — the cache cookie can still hold the pre-sign-in
- * (signed-out) snapshot for up to its maxAge, so a plain getSession right after
- * sign-in may report no user — then writes the fresh session into the query
- * cache before any navigation, so route guards (which read the cache) never
- * act on a stale value and bounce the user back to /login.
+ * Authoritative post-sign-in session sync. Fetches through sessionQueryOptions
+ * with staleness overridden so a fresh signed-out cache entry (written by the
+ * login page's observer moments earlier) cannot short-circuit the read, then
+ * leaves the fresh session in the cache for the route guards.
  */
 export async function refreshSessionCache(
   authClient: AuthClient,
   queryClient: QueryClient,
-  knownSession?: SessionData | null,
 ): Promise<SessionData | null> {
-  if (knownSession === undefined) {
-    const { data } = await authClient.getSession({ query: { disableCookieCache: true } });
-    knownSession = (data as SessionData | null) ?? null;
-  }
-  queryClient.setQueryData(sessionQueryKey, knownSession);
-  return knownSession;
+  return queryClient.fetchQuery({ ...sessionQueryOptions(authClient), staleTime: 0 });
 }
 
 export function useRelayHistory(session: SessionData | null | undefined, authClient: AuthClient) {
@@ -191,47 +187,45 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
 
 export async function signInWithPasskey(
   authClient: AuthClient,
-  options?: { onSuccess?: (session: SessionData | null) => void; onError?: (error: Error) => void },
-): Promise<SessionData | null> {
+  options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+): Promise<void> {
   const fail = (error: Error) => {
     options?.onError?.(error);
-    return null;
   };
 
-  const attempt = async (): Promise<SessionData | null> => {
+  const attempt = async (): Promise<boolean> => {
     const { error, data } = await authClient.signIn.passkey();
-    if (error || !data) return null;
-    // disableCookieCache: the cookie cache can still serve the pre-sign-in
-    // (signed-out) snapshot right after the passkey ceremony completes.
-    const { data: session } = await authClient.getSession({
-      query: { disableCookieCache: true },
-    });
-    const resolved = (session as SessionData) ?? null;
-    options?.onSuccess?.(resolved);
-    return resolved;
+    return !error && !!data;
   };
 
   try {
-    const first = await attempt();
-    if (first) return first;
+    if (await attempt()) {
+      options?.onSuccess?.();
+      return;
+    }
   } catch (error) {
-    return fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+    fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+    return;
   }
 
   try {
     const { error } = await authClient.passkey.addPasskey();
     if (error) {
-      return fail(new Error(error.message || "Passkey setup failed"));
+      fail(new Error(error.message || "Passkey setup failed"));
+      return;
     }
   } catch (error) {
-    return fail(error instanceof Error ? error : new Error("Passkey setup failed"));
+    fail(error instanceof Error ? error : new Error("Passkey setup failed"));
+    return;
   }
 
   try {
-    const second = await attempt();
-    if (second) return second;
-    return fail(new Error("Passkey sign-in failed"));
+    if (await attempt()) {
+      options?.onSuccess?.();
+      return;
+    }
+    fail(new Error("Passkey sign-in failed"));
   } catch (error) {
-    return fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+    fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
   }
 }

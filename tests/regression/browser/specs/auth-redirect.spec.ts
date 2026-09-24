@@ -52,6 +52,16 @@ test.describe("Auth redirect", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
 
+    // Every session read must go through the single authoritative path —
+    // a read without disableCookieCache can serve a lagging cookie-cache
+    // snapshot and split the guard's answer from the login route's.
+    const sessionReadUrls: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/get-session")) {
+        sessionReadUrls.push(request.url());
+      }
+    });
+
     await injectCookies(page);
 
     await page.goto("/login?redirect=%2Fdashboard", { waitUntil: "domcontentloaded" });
@@ -65,5 +75,12 @@ test.describe("Auth redirect", () => {
     expect(consoleErrors.join("\n")).not.toContain("Too many redirects");
     expect(consoleErrors.join("\n")).not.toContain("Error in route match");
     expectNoHydrationFailure(pageErrors);
+
+    expect(sessionReadUrls.length).toBeGreaterThan(0);
+    for (const url of sessionReadUrls) {
+      expect(url, "session reads must bypass the cookie cache").toContain(
+        "disableCookieCache=true",
+      );
+    }
   });
 });

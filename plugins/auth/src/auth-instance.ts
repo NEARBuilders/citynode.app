@@ -504,12 +504,10 @@ export function createAuthInstance(
         updateUserInfoOnLink: true,
       },
     },
-    session: {
-      cookieCache: {
-        enabled: config.isProduction ?? false,
-        maxAge: 5 * 60,
-      },
-    },
+    // session.cookieCache stays disabled: every session read (client queryFn
+    // and route guards) goes through disableCookieCache anyway, and a
+    // prod-only cache would make dev and prod behave differently while
+    // delaying revocation/ban visibility for up to its maxAge.
     advanced: {
       // One switch for the Secure attribute and the __Secure- name prefix,
       // derived from the baseURL protocol — not NODE_ENV. An https baseURL

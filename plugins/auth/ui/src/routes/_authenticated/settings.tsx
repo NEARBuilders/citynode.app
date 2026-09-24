@@ -11,9 +11,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
     ],
   }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      sessionQueryOptions(context.authClient, context.session),
-    );
+    await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
   },
   component: SettingsLayout,
 });

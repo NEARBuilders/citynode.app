@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_public/login/device/approve")({
 function DeviceApprovePage() {
   const navigate = useNavigate();
   const auth = useAuthClient();
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const { data: session } = useQuery(sessionQueryOptions(auth));
   const { user_code, pubKey, contract, account: configAccount, source } = Route.useSearch();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
