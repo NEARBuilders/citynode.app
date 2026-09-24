@@ -13,6 +13,7 @@ import {
   resolveBosConfigPath,
   writeResolvedConfig,
 } from "../../src/config";
+
 vi.mock("../../src/fastkv", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/fastkv")>();
   return {

@@ -274,8 +274,6 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
-    "@effect/platform": "^0.97.2",
-    "@effect/platform-node": "4.0.0-rc.112",
     "@module-federation/enhanced": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
@@ -288,7 +286,8 @@
     "glob": "^13.0.6",
     "near-kit": "catalog:",
     "pg": "catalog:",
-    "tar": "^7.4.3"
+    "tar": "^7.4.3",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/api-key": "catalog:",
@@ -351,14 +350,14 @@
     "@tanstack/react-router": "catalog:",
     "@tanstack/router-generator": "catalog:",
     "@tanstack/router-plugin": "catalog:",
-    "@types/node": "^22.10.2",
+    "@types/node": "catalog:",
     "@types/tar": "^7.0.0",
     "better-auth": "catalog:",
     "better-near-auth": "catalog:",
     "tsdown": "^0.22.0",
     "typescript": "^7.0.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.0.18",
+    "vitest": "catalog:",
     "zephyr-rsbuild-plugin": "catalog:"
   }
 }

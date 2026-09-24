@@ -270,7 +270,7 @@ bos kill      # SIGTERM processes owned by the cwd
 bos kill --all              # SIGTERM across all config directories
 bos kill --signal SIGKILL    # Force kill
 bos status    # Project health check
-bos info      # Show configuration
+bos config    # Show configuration
 ```
 
 ## Architecture

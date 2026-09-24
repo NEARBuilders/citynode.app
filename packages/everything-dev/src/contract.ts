@@ -588,6 +588,33 @@ export const MfCheckResultSchema = z.object({
   remotes: z.array(MfCheckRemoteResultSchema),
 });
 
+export const commandOptionSchemas = {
+  dev: DevOptionsSchema,
+  start: StartOptionsSchema,
+  build: BuildOptionsSchema,
+  config: ConfigOptionsSchema,
+  registryUse: RegistryUseOptionsSchema,
+  pluginAdd: PluginAddOptionsSchema,
+  pluginRemove: PluginRemoveOptionsSchema,
+  pluginPublish: PluginPublishOptionsSchema,
+  publish: PublishOptionsSchema,
+  deploy: DeployOptionsSchema,
+  keyPublish: KeyPublishOptionsSchema,
+  login: LoginOptionsSchema,
+  logout: LogoutOptionsSchema,
+  init: InitOptionsSchema,
+  sync: SyncOptionsSchema,
+  upgrade: UpgradeOptionsSchema,
+  typecheck: TypecheckOptionsSchema,
+  mfCheck: MfCheckOptionsSchema,
+  infraExport: InfraExportOptionsSchema,
+  dbStudio: DbStudioOptionsSchema,
+  dbDoctor: DbDoctorOptionsSchema,
+  dbRepair: DbRepairOptionsSchema,
+  logs: LogsOptionsSchema,
+  kill: KillOptionsSchema,
+} satisfies Partial<Record<keyof typeof bosContract, z.ZodType>>;
+
 export const bosContract = oc.router({
   dev: oc.route({ method: "POST", path: "/dev" }).input(DevOptionsSchema).output(DevResultSchema),
   start: oc

@@ -152,7 +152,11 @@ async function warnIfOutdated(client: any, command: string): Promise<void> {
     for (const pkg of outdated) {
       warn(colors.dim(`    ${pkg.name}  ${pkg.installed} → ${pkg.latest}`));
     }
-    warn(colors.dim(`    Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`));
+    warn(
+      colors.dim(
+        `    Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`,
+      ),
+    );
     warn("");
   } catch {
     // silently ignore if status check fails
