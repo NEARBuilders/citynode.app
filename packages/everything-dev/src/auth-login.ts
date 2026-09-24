@@ -1,146 +1,246 @@
-import { createServer } from "node:http";
 import { platform } from "node:os";
 import { execa } from "execa";
 
-export const CALLBACK_PATH = "/callback";
+const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
+const DEFAULT_CLIENT_ID = "bos-cli";
+const DEFAULT_POLL_INTERVAL_SECONDS = 5;
+const SLOW_DOWN_PENALTY_SECONDS = 5;
 
-export interface LoginHandoff {
-  apiKey: string;
-  apiKeyId: string;
+export interface DeviceLoginOptions {
+  siteUrl: string;
+  /** label for the approving device, shown on the approval page */
+  device?: string;
+  /** the NEAR account the CLI expects to authenticate as (approval-page copy only) */
+  account?: string;
+  /** delegate mode — the approval page adds this scoped function-call key to the user's account */
+  delegate?: { pubKey: string; contract: string; network: string };
+  /** seconds the minted API key stays valid (login mode) */
+  expiresIn?: number;
+}
+
+export interface DeviceApproval {
+  sessionToken: string;
+  /** the NEAR account signed in on the approving browser (login mode) */
   accountId: string | null;
-  added?: boolean;
-  error?: string;
+  /** the minted CLI credential (login mode) */
+  apiKey: { key: string; id: string } | null;
 }
 
-export interface LoginServerHandle {
-  url: (params?: {
-    account?: string;
-    device?: string;
-    expiresIn?: number;
-    mode?: string;
-    extra?: Record<string, string>;
-  }) => string;
-  state: string;
-  port: number;
-  waitForHandoff: (timeoutMs?: number) => Promise<LoginHandoff>;
-  close: () => void;
+export interface DeviceLoginHandle {
+  userCode: string;
+  verificationUrl: string;
+  waitForApproval: (timeoutMs?: number) => Promise<DeviceApproval>;
+  abort: (reason?: string) => void;
 }
 
-export function createLoginState(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+interface DeviceCodeResponse {
+  device_code: string;
+  user_code: string;
+  verification_uri?: string;
+  verification_uri_complete?: string;
+  expires_in?: number;
+  interval?: number;
 }
 
-export async function startLoginServer(opts: { siteUrl: string }): Promise<LoginServerHandle> {
-  const state = createLoginState();
+interface DeviceTokenSuccess {
+  access_token: string;
+  token_type: "Bearer";
+}
 
-  let resolveHandoff!: (value: LoginHandoff) => void;
-  let rejectHandoff!: (reason?: Error) => void;
-  const handoff = new Promise<LoginHandoff>((resolve, reject) => {
-    resolveHandoff = resolve;
-    rejectHandoff = reject;
+interface DeviceTokenError {
+  error:
+    | "authorization_pending"
+    | "slow_down"
+    | "expired_token"
+    | "access_denied"
+    | "invalid_grant"
+    | "invalid_request"
+    | "invalid_client";
+  error_description?: string;
+}
+
+interface ApiKeyCreated {
+  id: string;
+  key: string;
+}
+
+interface NearAccountsResponse {
+  accounts: { accountId: string }[];
+  activeAccount: { accountId: string } | null;
+}
+
+function sessionCookieName(siteUrl: string): string {
+  return siteUrl.startsWith("https://")
+    ? "__Secure-better-auth.session_token"
+    : "better-auth.session_token";
+}
+
+async function authFetch(
+  siteUrl: string,
+  path: string,
+  body: unknown,
+  sessionToken?: string,
+): Promise<{ status: number; json: unknown }> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (sessionToken) headers.cookie = `${sessionCookieName(siteUrl)}=${sessionToken}`;
+  const response = await fetch(`${siteUrl.replace(/\/$/, "")}/api/auth${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, json: await response.json().catch(() => ({})) };
+}
+
+/**
+ * CLI login via the OAuth 2.0 Device Flow (RFC 8628) — the same flow the
+ * site's QR pairing uses. The CLI requests a device code, the user approves
+ * at `/login/device` in any browser (same machine or not), and the CLI polls
+ * the token endpoint until the grant completes.
+ */
+export async function startDeviceLogin(opts: DeviceLoginOptions): Promise<DeviceLoginHandle> {
+  const siteUrl = opts.siteUrl.replace(/\/$/, "");
+  const clientId = DEFAULT_CLIENT_ID;
+
+  const codeResponse = await fetch(`${siteUrl}/api/auth/device/code`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_id: clientId }),
+  });
+  if (!codeResponse.ok) {
+    throw new Error(
+      `Device login could not start (${codeResponse.status}) — is ${siteUrl} running the platform auth plugin?`,
+    );
+  }
+  const code = (await codeResponse.json()) as DeviceCodeResponse;
+
+  const verificationUrl = buildVerificationUrl(siteUrl, code, opts);
+
+  let abortReason: string | null = null;
+  let rejectPending!: (reason?: Error) => void;
+  let pendingReject = new Promise<never>((_, reject) => {
+    rejectPending = reject;
   });
 
-  const server = createServer((req, res) => {
-    const url = new URL(req.url ?? "", "http://127.0.0.1");
-    if (url.pathname !== CALLBACK_PATH) {
-      res.statusCode = 404;
-      res.end("not found");
-      return;
-    }
+  const waitForApproval = (timeoutMs = 10 * 60_000): Promise<DeviceApproval> => {
+    const deadline = Date.now() + timeoutMs;
+    let intervalSeconds = code.interval ?? DEFAULT_POLL_INTERVAL_SECONDS;
 
-    if (req.method === "OPTIONS") {
-      res.statusCode = 204;
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-      res.end();
-      return;
-    }
-
-    if (req.method !== "POST") {
-      res.statusCode = 405;
-      res.setHeader("Allow", "POST, OPTIONS");
-      res.end("method not allowed — POST the handoff payload");
-      return;
-    }
-
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-    });
-    req.on("end", () => {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      let payload: Record<string, unknown>;
-      try {
-        payload = JSON.parse(body) as Record<string, unknown>;
-      } catch {
-        res.statusCode = 400;
-        res.end("invalid JSON body");
-        return;
+    const poll = async (): Promise<DeviceApproval> => {
+      if (abortReason) throw new Error(abortReason);
+      if (Date.now() > deadline) {
+        throw new Error("Login timed out — the device code expired before approval");
       }
 
-      if (payload.state !== state) {
-        res.statusCode = 400;
-        res.end("state mismatch — unknown login session");
-        return;
-      }
-
-      resolveHandoff({
-        apiKey: typeof payload.key === "string" ? payload.key : "",
-        apiKeyId: typeof payload.keyId === "string" ? payload.keyId : "",
-        accountId: typeof payload.account === "string" && payload.account ? payload.account : null,
-        added: payload.added === 1 || payload.added === true || undefined,
-        error: typeof payload.error === "string" ? payload.error : undefined,
+      const { status, json } = await authFetch(siteUrl, "/device/token", {
+        grant_type: DEVICE_CODE_GRANT_TYPE,
+        device_code: code.device_code,
+        client_id: clientId,
       });
 
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/html");
-      res.end(`<script>window.close();</script><p>Login captured — you can close this window.</p>`);
-    });
-  });
-
-  const port = await new Promise<number>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        reject(new Error("Failed to bind loopback login server"));
-        return;
+      if (status === 200) {
+        const { access_token: sessionToken } = json as DeviceTokenSuccess;
+        return await completeLogin(siteUrl, sessionToken, opts);
       }
-      resolve(address.port);
-    });
-  });
+
+      const error = (json as DeviceTokenError).error;
+      if (error === "authorization_pending") {
+        // keep polling
+      } else if (error === "slow_down") {
+        intervalSeconds += SLOW_DOWN_PENALTY_SECONDS;
+      } else if (error === "expired_token") {
+        throw new Error("Login timed out — the device code expired before approval");
+      } else if (error === "access_denied") {
+        throw new Error("Login request was denied on the approval page");
+      } else {
+        throw new Error(
+          (json as DeviceTokenError).error_description ?? `Login failed (${error ?? status})`,
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalSeconds * 1000));
+      return poll();
+    };
+
+    return Promise.race([pendingReject, poll()]);
+  };
 
   return {
-    state,
-    port,
-    url: ({ account, device, expiresIn, mode, extra } = {}) => {
-      const params = new URLSearchParams({
-        state,
-        port: String(port),
-      });
-      if (account) params.set("account", account);
-      if (device) params.set("device", device);
-      if (expiresIn !== undefined) params.set("expiresIn", String(expiresIn));
-      if (mode) params.set("mode", mode);
-      for (const [key, value] of Object.entries(extra ?? {})) {
-        params.set(key, value);
-      }
-      return `${opts.siteUrl}/cli?${params.toString()}`;
-    },
-    waitForHandoff: (timeoutMs = 10 * 60_000) => {
-      const timeout = setTimeout(() => {
-        rejectHandoff(new Error("Login timed out — no browser handoff received"));
-      }, timeoutMs);
-      return handoff.finally(() => clearTimeout(timeout));
-    },
-    close: () => {
-      server.close();
-      rejectHandoff(new Error("Login server closed — no browser handoff received"));
+    userCode: code.user_code,
+    verificationUrl,
+    waitForApproval,
+    abort: (reason) => {
+      abortReason = reason ?? "Login aborted";
+      rejectPending(new Error(abortReason));
     },
   };
+}
+
+function buildVerificationUrl(
+  siteUrl: string,
+  code: DeviceCodeResponse,
+  opts: DeviceLoginOptions,
+): string {
+  const base = code.verification_uri_complete ?? code.verification_uri ?? "/login/device";
+  const url = new URL(base, siteUrl);
+  const params = url.searchParams;
+  params.set("user_code", code.user_code);
+  if (opts.account) params.set("account", opts.account);
+  if (opts.device) params.set("device", opts.device);
+  if (opts.delegate) {
+    params.set("pubKey", opts.delegate.pubKey);
+    params.set("contract", opts.delegate.contract);
+    params.set("network", opts.delegate.network);
+  }
+  return url.toString();
+}
+
+async function completeLogin(
+  siteUrl: string,
+  sessionToken: string,
+  opts: DeviceLoginOptions,
+): Promise<DeviceApproval> {
+  const apiKey = await mintApiKey(siteUrl, sessionToken, opts);
+  const accountId = await resolveNearAccount(siteUrl, sessionToken);
+  return { sessionToken, accountId, apiKey };
+}
+
+async function mintApiKey(
+  siteUrl: string,
+  sessionToken: string,
+  opts: DeviceLoginOptions,
+): Promise<DeviceApproval["apiKey"]> {
+  const { status, json } = await authFetch(
+    siteUrl,
+    "/api-key/create",
+    {
+      configId: "user-keys",
+      name: `bos login — ${opts.device ?? "cli"} — ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+      ...(opts.expiresIn ? { expiresIn: opts.expiresIn } : {}),
+    },
+    sessionToken,
+  );
+  if (status !== 200) {
+    const detail = (json as { message?: string }).message;
+    throw new Error(
+      `CLI credential could not be created${detail ? `: ${detail}` : ` (${status})`}`,
+    );
+  }
+  const created = json as ApiKeyCreated;
+  if (!created.key) throw new Error("API key creation returned no key");
+  return { key: created.key, id: created.id };
+}
+
+async function resolveNearAccount(siteUrl: string, sessionToken: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${siteUrl.replace(/\/$/, "")}/api/auth/near/list-accounts`, {
+      headers: { cookie: `${sessionCookieName(siteUrl)}=${sessionToken}` },
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as NearAccountsResponse;
+    return data.activeAccount?.accountId ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function openInBrowser(url: string): Promise<void> {

@@ -8,12 +8,22 @@ import { sanitizeUserCode } from "./-user-code";
 
 type SearchParams = {
   user_code?: string;
+  pubKey?: string;
+  contract?: string;
+  account?: string;
+  network?: string;
+  source?: string;
 };
 
-export const Route = createFileRoute("/_public/device/")({
+export const Route = createFileRoute("/_public/login/device/")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     user_code: sanitizeUserCode(search.user_code),
+    pubKey: typeof search.pubKey === "string" ? search.pubKey : undefined,
+    contract: typeof search.contract === "string" ? search.contract : undefined,
+    account: typeof search.account === "string" ? search.account : undefined,
+    network: typeof search.network === "string" ? search.network : undefined,
+    source: typeof search.source === "string" ? search.source : undefined,
   }),
   component: DeviceVerifyPage,
 });
@@ -23,7 +33,7 @@ function DeviceVerifyPage() {
   const queryClient = useQueryClient();
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
-  const { user_code } = Route.useSearch();
+  const { user_code, pubKey, contract, account, network, source } = Route.useSearch();
   const [code, setCode] = useState(user_code ?? "");
   const [error, setError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
@@ -38,7 +48,10 @@ function DeviceVerifyPage() {
         return;
       }
       void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-      void navigate({ to: "/device/approve", search: { user_code } });
+      void navigate({
+        to: "/login/device/approve",
+        search: { user_code, pubKey, contract, account, network, source },
+      });
     });
   }, [session?.user, user_code, claiming, auth, navigate, queryClient]);
 
@@ -47,7 +60,10 @@ function DeviceVerifyPage() {
     setError(null);
     const cleaned = code.trim().replace(/-/g, "").toUpperCase();
     if (!cleaned) return;
-    void navigate({ to: "/device", search: { user_code: cleaned } });
+    void navigate({
+      to: "/login/device",
+      search: { user_code: cleaned, pubKey, contract, account, network, source },
+    });
   };
 
   return (
@@ -106,12 +122,24 @@ function DeviceVerifyPage() {
             type="button"
             variant="outline"
             className="w-full"
-            onClick={() =>
+            onClick={() => {
+              const deviceSearch = new URLSearchParams();
+              for (const [key, value] of Object.entries({
+                user_code,
+                pubKey,
+                contract,
+                account,
+                network,
+                source,
+              })) {
+                if (value) deviceSearch.set(key, value);
+              }
+              const query = deviceSearch.toString();
               void navigate({
                 to: "/login",
-                search: { redirect: user_code ? `/device?user_code=${user_code}` : "/device" },
-              })
-            }
+                search: { redirect: `/login/device${query ? `?${query}` : ""}` },
+              });
+            }}
             data-testid="device.signin-redirect-button"
           >
             Sign in to continue

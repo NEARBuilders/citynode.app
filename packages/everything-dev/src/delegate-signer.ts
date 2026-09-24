@@ -1,5 +1,5 @@
 import { isPrivateKey, Near, type PrivateKey } from "near-kit";
-import { openInBrowser, startLoginServer } from "./auth-login";
+import { openInBrowser, startDeviceLogin } from "./auth-login";
 import { type DelegateKeyRecord, readSessionHandle, updateSessionHandle } from "./auth-session";
 import type { NetworkId } from "./fastkv";
 import { generateNearKeyPair } from "./near-cli";
@@ -98,24 +98,23 @@ export async function ensureDelegateKey(
 
   const keyPair = generateNearKeyPair();
 
-  const login = await startLoginServer({ siteUrl: opts.siteUrl });
-  const targetUrl = login.url({
-    mode: "delegate",
+  const login = await startDeviceLogin({
+    siteUrl: opts.siteUrl,
+    delegate: {
+      pubKey: keyPair.publicKey,
+      contract: opts.contract,
+      network: opts.network,
+    },
     account: opts.account,
-    extra: { pubKey: keyPair.publicKey, contract: opts.contract, network: opts.network },
   });
 
-  await openInBrowser(targetUrl).catch((error: unknown) => {
+  console.log(`  One-time code: ${login.userCode}`);
+  await openInBrowser(login.verificationUrl).catch((error: unknown) => {
     console.log(`  ⚠ ${(error as Error).message}`);
   });
-  console.log(`  Waiting for delegate-key approval (${targetUrl})…`);
+  console.log(`  Waiting for delegate-key approval at ${login.verificationUrl}…`);
 
-  const handoff = await login.waitForHandoff();
-  login.close();
-
-  if (handoff.error || !handoff.added) {
-    throw new Error(handoff.error ?? "Wallet did not approve adding the delegate key");
-  }
+  await login.waitForApproval();
 
   const record: DelegateKeyRecord = {
     publicKey: keyPair.publicKey,
