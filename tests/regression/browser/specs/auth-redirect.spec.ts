@@ -52,13 +52,18 @@ test.describe("Auth redirect", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
 
-    // Every session read must go through the single authoritative path —
-    // a read without disableCookieCache can serve a lagging cookie-cache
-    // snapshot and split the guard's answer from the login route's.
-    const sessionReadUrls: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().includes("/get-session")) {
-        sessionReadUrls.push(request.url());
+    // The server-side cookie cache must stay disabled: the session_data
+    // cache cookie is only ever set when `session.cookieCache` is enabled,
+    // and a re-enabled cache is what lets a get-session read serve a stale
+    // snapshot (the original loop class). Paramless /get-session requests in
+    // the network log are expected — better-auth's internal session atom
+    // (subscribed via useNearAccountId) fetches without query params, and
+    // with the cache disabled those are DB-truth reads.
+    const cacheCookieResponses: string[] = [];
+    page.on("response", (response) => {
+      const setCookie = response.headers()["set-cookie"];
+      if (setCookie?.toLowerCase().includes("session_data")) {
+        cacheCookieResponses.push(`${response.url()} → ${setCookie}`);
       }
     });
 
@@ -76,11 +81,9 @@ test.describe("Auth redirect", () => {
     expect(consoleErrors.join("\n")).not.toContain("Error in route match");
     expectNoHydrationFailure(pageErrors);
 
-    expect(sessionReadUrls.length).toBeGreaterThan(0);
-    for (const url of sessionReadUrls) {
-      expect(url, "session reads must bypass the cookie cache").toContain(
-        "disableCookieCache=true",
-      );
-    }
+    expect(
+      cacheCookieResponses,
+      "no response may set the better-auth session_data cache cookie",
+    ).toEqual([]);
   });
 });
