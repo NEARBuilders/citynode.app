@@ -112,6 +112,7 @@
     "test:regression:http:dev": "REGRESSION_MODE=dev:ssr sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
     "test:regression:http:start": "REGRESSION_MODE=start:ssr sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
     "test:regression:http:backcompat": "REGRESSION_MODE=backcompat sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
+    "test:regression:teardown": "cd tests/regression/teardown && go test ./... -count=1 -v -timeout 15m",
     "regression:dev:ssr": "bun tests/regression/lib/start-stack.mjs dev:ssr",
     "regression:dev:csr": "bun tests/regression/lib/start-stack.mjs dev:csr",
     "regression:start:ssr": "bun tests/regression/lib/start-container.mjs ssr",
