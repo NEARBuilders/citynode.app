@@ -23,6 +23,7 @@ import type { RuntimeConfig } from "../services/config";
 import { mountMcpRoute } from "../services/mcp";
 import type { PluginResult } from "../services/plugins";
 import { logger } from "../utils/logger";
+import { createBundleFsHandler } from "./bundles";
 import {
   getHealthStatus,
   getMemorySnapshot,
@@ -110,6 +111,11 @@ export async function setupApiRoutes(
   if (!apiConfig) {
     throw new Error("API config is required to start the host");
   }
+
+  // FS-backed bundle serving (plan 043) — first handler on /bundles/*: the
+  // image stages its own artifacts and serves them same-origin. Unset
+  // BOS_BUNDLE_DIR (dev stacks) falls through to the proxy/oRPC routes.
+  app.all("/bundles/*", createBundleFsHandler(process.env.BOS_BUNDLE_DIR));
 
   const isProxyMode = process.argv.includes("--proxy");
 

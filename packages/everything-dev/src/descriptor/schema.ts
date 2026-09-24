@@ -113,6 +113,12 @@ export const AppDescriptorSchema = z
       })
       .strict()
       .optional(),
+    deploy: z
+      .object({
+        cdn: z.enum(["zephyr", "platform"]).optional(),
+      })
+      .strict()
+      .optional(),
     host: HostRefSchema.optional(),
     api: ApiRefSchema.optional(),
     ui: UiRefSchema.optional(),

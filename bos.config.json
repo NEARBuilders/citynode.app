@@ -13,6 +13,9 @@
       "service": "app"
     }
   },
+  "deploy": {
+    "cdn": "platform"
+  },
   "app": {
     "host": {
       "development": "local:host",
@@ -31,7 +34,7 @@
     },
     "api": {
       "development": "local:api",
-      "production": "https://elliot-braem-7857-api-citynode-app-nearbuilders-51aca9f54-ze.zephyrcloud.app",
+      "production": "https://elliot-braem-8579-api-citynode-app-nearbuilders-dceed5498-ze.zephyrcloud.app",
       "variables": {
         "platformAccount": "v1.citynode.near"
       },
@@ -39,7 +42,7 @@
         "API_DATABASE_URL",
         "LUMA_CALENDAR_API_KEYS"
       ],
-      "integrity": "sha384-wfnNaT2NUgnrVOFjjhxZxL58aO9IbQJS9Lp+wVUcYtZC9k5nIAzolZAcbvUQKL83"
+      "integrity": "sha384-Vq8PxZpT5/ApxSVSd9Synf2LAog9DCOPbEtYcFmL59BAiPTb2h1DsTVzsbc6EGEf"
     },
     "auth": {
       "name": "@everything-dev/auth-plugin",
@@ -48,8 +51,8 @@
         "name": "auth-ui",
         "development": "local:plugins/auth/ui"
       },
-      "production": "https://elliot-braem-7935-everything-dev-auth-plugin-city-65ff7220e-ze.zephyrcloud.app",
-      "integrity": "sha384-aUjuPBUbUXcTiMpUOl5sqYT1deA2VAAff3RzwFLddV3GvBqExojjbNcl+6MTtZfZ",
+      "production": "https://elliot-braem-8578-everything-dev-auth-plugin-city-ecf75b086-ze.zephyrcloud.app",
+      "integrity": "sha384-KLZ9Bt4mrVwOpuD4l7bDcMb0H2nLuXLZ59vUJ3RT4hsg7eNVsJcFEgNQhWlO37nq",
       "secrets": [
         "AUTH_DATABASE_URL",
         "BETTER_AUTH_SECRET",
