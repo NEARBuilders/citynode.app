@@ -82,7 +82,12 @@ async function authFetch(
   sessionToken?: string,
 ): Promise<{ status: number; json: unknown }> {
   const headers: Record<string, string> = { "content-type": "application/json" };
-  if (sessionToken) headers.cookie = `${sessionCookieName(siteUrl)}=${sessionToken}`;
+  if (sessionToken) {
+    // Better Auth's origin check demands an Origin on cookie-bearing
+    // requests — present the site's own origin, exactly as a browser would.
+    headers.cookie = `${sessionCookieName(siteUrl)}=${sessionToken}`;
+    headers.origin = new URL(siteUrl).origin;
+  }
   const response = await fetch(`${siteUrl.replace(/\/$/, "")}/api/auth${path}`, {
     method: "POST",
     headers,

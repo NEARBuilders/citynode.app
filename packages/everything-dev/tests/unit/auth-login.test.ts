@@ -89,8 +89,9 @@ describe("device login client", () => {
     expect(approval.accountId).toBe("alice.near");
 
     const keyCreate = calls.find((call) => call.url.includes("/api-key/create"));
-    const cookieHeader = new Headers(keyCreate?.init.headers).get("cookie") ?? "";
-    expect(cookieHeader).toBe("better-auth.session_token=session-token-1");
+    const keyHeaders = new Headers(keyCreate?.init.headers);
+    expect(keyHeaders.get("cookie")).toBe("better-auth.session_token=session-token-1");
+    expect(keyHeaders.get("origin")).toBe(SITE);
 
     const keyBody = JSON.parse(String(keyCreate?.init.body ?? "{}")) as {
       configId: string;
@@ -129,8 +130,9 @@ describe("device login client", () => {
     await login.waitForApproval();
 
     const keyCreate = calls.find((call) => call.url.includes("/api-key/create"));
-    const cookieHeader = new Headers(keyCreate?.init.headers).get("cookie") ?? "";
-    expect(cookieHeader).toBe("__Secure-better-auth.session_token=session-token-1");
+    const keyHeaders = new Headers(keyCreate?.init.headers);
+    expect(keyHeaders.get("cookie")).toBe("__Secure-better-auth.session_token=session-token-1");
+    expect(keyHeaders.get("origin")).toBe("https://citynode.app");
   });
 
   it("carries delegate params on the verification URL without minting a key in delegate-less completion", async () => {
