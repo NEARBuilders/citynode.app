@@ -219,7 +219,17 @@ export class EveryPluginBuild implements RspackPluginInstance {
       compiler.options.resolve = {};
     }
     compiler.options.resolve.extensions = ["...", ".tsx", ".ts"];
+    // Source-first for local flows: resolve framework packages through the
+    // `development` export condition (TS source) unless this is a deploy
+    // build — publish/deploy set DEPLOY=true and keep the dist-first
+    // snapshot that ships. (NODE_ENV is unusable as the gate here: the
+    // rspack CLI defaults it to "production" for every `build` invocation,
+    // including local dev watch.) byDependency entries inherit the root
+    // conditions via "...", so dropping the strip lets esm/cjs deps pick up
+    // `development` too.
+    const sourceFirst = process.env.DEPLOY !== "true";
     compiler.options.resolve.conditionNames = [
+      ...(sourceFirst ? ["development"] : []),
       "webpack",
       "import",
       "module",
@@ -227,7 +237,18 @@ export class EveryPluginBuild implements RspackPluginInstance {
       "node",
       "default",
     ];
-    if (compiler.options.resolve.byDependency) {
+    if (sourceFirst) {
+      // Source-resolved TS packages (e.g. better-near-auth) use node-style
+      // `.js` specifiers for their own relative imports; map them to the
+      // on-disk `.ts` sources. `.js` stays first in the expansion: the alias
+      // picks the first target that exists on disk, and .ts-first made
+      // packages that also ship index.ts (e.g. @scure/base) resolve their
+      // TypeScript over their real JavaScript entry.
+      compiler.options.resolve.extensionAlias = {
+        ".js": [".js", ".ts", ".tsx"],
+      };
+    }
+    if (!sourceFirst && compiler.options.resolve.byDependency) {
       for (const depType of Object.keys(compiler.options.resolve.byDependency)) {
         const depConfig = (
           compiler.options.resolve.byDependency as Record<string, { conditionNames?: string[] }>
@@ -251,6 +272,25 @@ export class EveryPluginBuild implements RspackPluginInstance {
 
     if (!compiler.options.module.rules) {
       compiler.options.module.rules = [];
+    }
+
+    // Source-first resolution pulls every-plugin src into the graph, which
+    // imports package.json (runtime/mf-config.ts). The MF shared chunks
+    // must emit it as a json module, not parse it as JavaScript.
+    const hasJsonRule = compiler.options.module.rules.some(
+      (rule: any) =>
+        typeof rule === "object" &&
+        rule !== null &&
+        "test" in rule &&
+        rule.test instanceof RegExp &&
+        rule.test.test(".json"),
+    );
+
+    if (!hasJsonRule) {
+      compiler.options.module.rules.push({
+        test: /\.json$/,
+        type: "json",
+      } as any);
     }
 
     const hasTsLoader = compiler.options.module.rules.some(

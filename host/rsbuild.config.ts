@@ -132,6 +132,12 @@ export default defineConfig({
         level: "error",
       },
       stats: "errors-warnings",
+      ignoreWarnings: [
+        {
+          module: /node_modules[\\/]@module-federation/,
+          message: /Critical dependency/,
+        },
+      ],
       plugins: [
         new ModuleFederationPlugin({
           name: "host",

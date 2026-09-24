@@ -86,6 +86,13 @@ const SERVICE_CONFIGS: Record<
   host: {
     command: "bun",
     args: ["run", "dev"],
+    // The host dev server runs on tsx (TS-capable node), so it can consume
+    // framework package sources directly — NODE_OPTIONS makes node's
+    // resolver pick the `development` export condition. bun's --conditions
+    // flag (added in orchestrator.spawnDevProcess) does not reach this node
+    // child, so the env var is the seam here. rsbuild/rspack config loaders
+    // must NOT receive it: their .mjs config evaluation is not TS-capable.
+    env: { NODE_OPTIONS: "--conditions=development" },
     readyPatterns: [/Host (dev|production) server running at/i, /Server running at/i],
     errorPatterns: [/error:/i, /failed/i, /exception/i],
     defaultPort: 3000,

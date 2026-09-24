@@ -225,7 +225,7 @@ async function registerAppSharedDeps(
   for (const [name, config] of Object.entries(appShared)) {
     try {
       // Import from host scope — this is where app-specific deps are installed
-      const mod = await import(name);
+      const mod = await import(/* webpackIgnore: true */ name);
       sharedEntries[name] = {
         version: config.version,
         shareScope: config.shareScope ?? "default",
