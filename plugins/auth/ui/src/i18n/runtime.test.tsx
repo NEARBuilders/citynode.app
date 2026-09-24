@@ -79,14 +79,14 @@ describe("login language selector", () => {
       </LoginI18nProvider>,
     );
 
-    expect(screen.getByRole("heading").textContent).toBe("Sign in");
+    expect(screen.getByRole("heading").textContent).toBe("Sign in to CityNode");
     expect(document.documentElement.lang).toBe("en");
 
     fireEvent.change(screen.getByTestId("login.language-select"), {
       target: { value: "es" },
     });
 
-    expect(screen.getByRole("heading").textContent).toBe("Iniciar sesión");
+    expect(screen.getByRole("heading").textContent).toBe("Inicia sesión en CityNode");
     expect(screen.getByText("Continuar como maaz.near")).toBeTruthy();
     expect(document.cookie).toContain(`${LOGIN_LOCALE_COOKIE}=es`);
     expect(document.documentElement.lang).toBe("es");
@@ -103,6 +103,6 @@ describe("login language selector", () => {
       </LoginI18nProvider>,
     );
 
-    expect(screen.getByRole("heading").textContent).toBe("Iniciar sesión");
+    expect(screen.getByRole("heading").textContent).toBe("Inicia sesión en CityNode");
   });
 });
