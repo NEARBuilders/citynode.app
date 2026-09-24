@@ -69,31 +69,27 @@ interface NearAccountsResponse {
   activeAccount: { accountId: string } | null;
 }
 
-function sessionCookieName(siteUrl: string): string {
-  return siteUrl.startsWith("https://")
-    ? "__Secure-better-auth.session_token"
-    : "better-auth.session_token";
-}
-
 async function authFetch(
   siteUrl: string,
   path: string,
   body: unknown,
-  sessionToken?: string,
-): Promise<{ status: number; json: unknown }> {
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (sessionToken) {
-    // Better Auth's origin check demands an Origin on cookie-bearing
-    // requests — present the site's own origin, exactly as a browser would.
-    headers.cookie = `${sessionCookieName(siteUrl)}=${sessionToken}`;
-    headers.origin = new URL(siteUrl).origin;
-  }
+  cookiePair?: string,
+): Promise<{ status: number; json: unknown; setCookie: string | null }> {
+  // Better Auth's origin check demands an Origin on cookie-bearing
+  // requests — present the site's own origin, exactly as a browser would.
+  const origin = new URL(siteUrl).origin;
+  const headers: Record<string, string> = { "content-type": "application/json", origin };
+  if (cookiePair) headers.cookie = cookiePair;
   const response = await fetch(`${siteUrl.replace(/\/$/, "")}/api/auth${path}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
   });
-  return { status: response.status, json: await response.json().catch(() => ({})) };
+  return {
+    status: response.status,
+    json: await response.json().catch(() => ({})),
+    setCookie: response.headers.get("set-cookie"),
+  };
 }
 
 /**
@@ -204,14 +200,29 @@ async function completeLogin(
   sessionToken: string,
   opts: DeviceLoginOptions,
 ): Promise<DeviceApproval> {
-  const apiKey = await mintApiKey(siteUrl, sessionToken, opts);
-  const accountId = await resolveNearAccount(siteUrl, sessionToken);
+  // The token endpoint returns the raw session token; Better Auth session
+  // cookies carry an HMAC signature, so exchange the token for a signed
+  // session cookie via the device-link claim endpoint (the QR pairing path).
+  const claim = await authFetch(siteUrl, "/device-link/claim", { token: sessionToken });
+  if (claim.status !== 200) {
+    const detail = (claim.json as { message?: string }).message;
+    throw new Error(
+      `Approved session could not be claimed${detail ? `: ${detail}` : ` (${claim.status})`}`,
+    );
+  }
+  const cookiePair = claim.setCookie?.split(";")[0];
+  if (!cookiePair || !cookiePair.includes("=")) {
+    throw new Error("Session claim returned no session cookie");
+  }
+
+  const apiKey = await mintApiKey(siteUrl, cookiePair, opts);
+  const accountId = await resolveNearAccount(siteUrl, cookiePair);
   return { sessionToken, accountId, apiKey };
 }
 
 async function mintApiKey(
   siteUrl: string,
-  sessionToken: string,
+  cookiePair: string,
   opts: DeviceLoginOptions,
 ): Promise<DeviceApproval["apiKey"]> {
   const { status, json } = await authFetch(
@@ -222,7 +233,7 @@ async function mintApiKey(
       name: `bos login — ${opts.device ?? "cli"} — ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
       ...(opts.expiresIn ? { expiresIn: opts.expiresIn } : {}),
     },
-    sessionToken,
+    cookiePair,
   );
   if (status !== 200) {
     const detail = (json as { message?: string }).message;
@@ -235,10 +246,10 @@ async function mintApiKey(
   return { key: created.key, id: created.id };
 }
 
-async function resolveNearAccount(siteUrl: string, sessionToken: string): Promise<string | null> {
+async function resolveNearAccount(siteUrl: string, cookiePair: string): Promise<string | null> {
   try {
     const response = await fetch(`${siteUrl.replace(/\/$/, "")}/api/auth/near/list-accounts`, {
-      headers: { cookie: `${sessionCookieName(siteUrl)}=${sessionToken}` },
+      headers: { cookie: cookiePair },
     });
     if (!response.ok) return null;
     const data = (await response.json()) as NearAccountsResponse;

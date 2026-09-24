@@ -17,14 +17,25 @@ function deviceCodeResponse(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function jsonResponse(status: number, body: unknown): Response {
+function jsonResponse(
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
 }
 
-function stubFetchSequence(responses: Array<{ match: string; status: number; body: unknown }>) {
+function stubFetchSequence(
+  responses: Array<{
+    match: string;
+    status: number;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }>,
+) {
   const calls: FetchCall[] = [];
   let index = 0;
   const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit): Promise<Response> => {
@@ -35,11 +46,13 @@ function stubFetchSequence(responses: Array<{ match: string; status: number; bod
       return jsonResponse(404, { error: "unexpected fetch" });
     }
     index += 1;
-    return jsonResponse(spec.status, spec.body);
+    return jsonResponse(spec.status, spec.body ?? {}, spec.headers);
   });
   vi.stubGlobal("fetch", fetchMock);
   return { calls, fetchMock };
 }
+
+const CLAIMED_COOKIE = "better-auth.session_token=signed.token.abc=.sig";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -55,6 +68,12 @@ describe("device login client", () => {
         match: "/api/auth/device/token",
         status: 200,
         body: { access_token: "session-token-1", token_type: "Bearer" },
+      },
+      {
+        match: "/api/auth/device-link/claim",
+        status: 200,
+        body: { success: true },
+        headers: { "set-cookie": `${CLAIMED_COOKIE}; Path=/; HttpOnly; SameSite=Lax` },
       },
       {
         match: "/api/auth/api-key/create",
@@ -88,9 +107,14 @@ describe("device login client", () => {
     expect(approval.apiKey).toEqual({ key: "edk_test_key", id: "key-1" });
     expect(approval.accountId).toBe("alice.near");
 
+    const claim = calls.find((call) => call.url.includes("/device-link/claim"));
+    expect(JSON.parse(String(claim?.init.body ?? "{}"))).toMatchObject({
+      token: "session-token-1",
+    });
+
     const keyCreate = calls.find((call) => call.url.includes("/api-key/create"));
     const keyHeaders = new Headers(keyCreate?.init.headers);
-    expect(keyHeaders.get("cookie")).toBe("better-auth.session_token=session-token-1");
+    expect(keyHeaders.get("cookie")).toBe(CLAIMED_COOKIE);
     expect(keyHeaders.get("origin")).toBe(SITE);
 
     const keyBody = JSON.parse(String(keyCreate?.init.body ?? "{}")) as {
@@ -103,7 +127,7 @@ describe("device login client", () => {
     expect(keyBody.expiresIn).toBe(3600);
   });
 
-  it("uses the __Secure- cookie prefix for https sites", async () => {
+  it("reuses the claimed session cookie for https sites too", async () => {
     const { calls } = stubFetchSequence([
       {
         match: "/api/auth/device/code",
@@ -118,6 +142,14 @@ describe("device login client", () => {
         status: 200,
         body: { access_token: "session-token-1", token_type: "Bearer" },
       },
+      {
+        match: "/api/auth/device-link/claim",
+        status: 200,
+        body: { success: true },
+        headers: {
+          "set-cookie": "__Secure-better-auth.session_token=signed.value; Path=/; Secure; HttpOnly",
+        },
+      },
       { match: "/api/auth/api-key/create", status: 200, body: { id: "key-1", key: "edk_k" } },
       {
         match: "/api/auth/near/list-accounts",
@@ -131,17 +163,23 @@ describe("device login client", () => {
 
     const keyCreate = calls.find((call) => call.url.includes("/api-key/create"));
     const keyHeaders = new Headers(keyCreate?.init.headers);
-    expect(keyHeaders.get("cookie")).toBe("__Secure-better-auth.session_token=session-token-1");
+    expect(keyHeaders.get("cookie")).toBe("__Secure-better-auth.session_token=signed.value");
     expect(keyHeaders.get("origin")).toBe("https://citynode.app");
   });
 
-  it("carries delegate params on the verification URL without minting a key in delegate-less completion", async () => {
+  it("carries delegate params on the verification URL and completes through the claim", async () => {
     const { calls } = stubFetchSequence([
       { match: "/api/auth/device/code", status: 200, body: deviceCodeResponse() },
       {
         match: "/api/auth/device/token",
         status: 200,
         body: { access_token: "session-token-1", token_type: "Bearer" },
+      },
+      {
+        match: "/api/auth/device-link/claim",
+        status: 200,
+        body: { success: true },
+        headers: { "set-cookie": `${CLAIMED_COOKIE}; Path=/; HttpOnly` },
       },
       { match: "/api/auth/api-key/create", status: 200, body: { id: "key-1", key: "edk_k" } },
       {
