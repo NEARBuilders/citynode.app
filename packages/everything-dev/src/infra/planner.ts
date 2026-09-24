@@ -120,15 +120,20 @@ function allocateServices(
     let pluginSlot = 0;
     for (const pluginId of pluginKeys) {
       const pluginCfg = plugins[pluginId];
-      if (isAuthMirrorFor(pluginId, pluginCfg)) continue;
       const slotBase = pluginStartPinned ? pluginStartPreferred : base + PLUGIN_START_OFFSET;
-      addEntry(
-        `plugin:${pluginId}`,
-        cliPorts.plugins?.[pluginId]?.api,
-        undefined,
-        slotBase + pluginSlot,
-      );
-      pluginSlot += 1;
+      // The auth mirror's backend is owned by the `auth` app slot — no api
+      // port. Its ui surface is still real: without a port the runtime config
+      // advertises an empty ui.url and the browser can never load the remote
+      // (the /login page never renders).
+      if (!isAuthMirrorFor(pluginId, pluginCfg)) {
+        addEntry(
+          `plugin:${pluginId}`,
+          cliPorts.plugins?.[pluginId]?.api,
+          undefined,
+          slotBase + pluginSlot,
+        );
+        pluginSlot += 1;
+      }
       if (
         pluginCfg?.source === "local" &&
         pluginCfg?.localPath &&
