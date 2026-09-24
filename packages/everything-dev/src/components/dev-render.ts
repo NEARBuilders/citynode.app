@@ -283,7 +283,14 @@ export function createDevRenderer(
   let lastLogKey: string | null = null;
   const listeners: Array<() => void> = [];
 
+  let mounted = true;
+  const stopListeners = () => {
+    mounted = false;
+    listeners.length = 0;
+  };
+
   const setState = (mutate: () => void) => {
+    if (!mounted) return;
     mutate();
     for (const listener of listeners) listener();
   };
@@ -303,7 +310,9 @@ export function createDevRenderer(
         state.logs = [...state.logs, { source, line, isError }];
         if (state.logs.length > 100) state.logs = state.logs.slice(-100);
       }),
-    unmount: () => {},
+    unmount: () => {
+      stopListeners();
+    },
   };
 
   if (!isInteractive) {
@@ -408,7 +417,7 @@ export function createDevRenderer(
     const maxRows = viewportRows() - 1;
     const lines = renderDevLines(state).slice(0, maxRows);
     const cols = viewportCols();
-    const frame = lines.map((line) => clipLine(line, cols)).join("\n");
+    const frame = lines.map((line) => `${clipLine(line, cols)}\x1b[K`).join("\n");
     output.write(`\x1b[H${frame}\x1b[J`);
   };
 
@@ -440,7 +449,11 @@ export function createDevRenderer(
   rawCapable.setRawMode?.(true);
   rawCapable.on("data", onKey);
 
+  let restored = false;
   handle.unmount = () => {
+    stopListeners();
+    if (restored) return;
+    restored = true;
     rawCapable.removeListener("data", onKey);
     ttyOutput.removeListener?.("resize", onResize);
     rawCapable.setRawMode?.(false);

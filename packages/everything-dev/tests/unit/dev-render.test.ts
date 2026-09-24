@@ -357,6 +357,55 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     expect(listeners.has("resize")).toBe(false);
   });
 
+  it("erases to end of line on every repaint so shrinking rows leave no residue", () => {
+    const { stdin, chunks } = makeTty();
+    const renderer = createDevRenderer(
+      baseState.processes,
+      "dev session",
+      {},
+      undefined,
+      undefined,
+      {
+        output: { write: (s: string) => chunks.push(s) },
+        interactive: true,
+        stdin,
+      },
+    );
+
+    renderer.updateProcess("host", "ready");
+    const frames = chunks.filter((c) => c.startsWith("\x1b[H"));
+    expect(frames.length).toBeGreaterThanOrEqual(2);
+    for (const frame of frames) {
+      const lines = frame.split("\n");
+      expect(lines.length).toBeGreaterThan(1);
+      for (const line of lines.slice(0, -1)) expect(line.endsWith("\x1b[K")).toBe(true);
+    }
+    expect(chunks.join("")).not.toContain("\x1b[2J");
+  });
+
+  it("stops painting entirely after unmount", () => {
+    const { stdin, chunks } = makeTty();
+    const renderer = createDevRenderer(
+      baseState.processes,
+      "dev session",
+      {},
+      undefined,
+      undefined,
+      {
+        output: { write: (s: string) => chunks.push(s) },
+        interactive: true,
+        stdin,
+      },
+    );
+
+    renderer.unmount();
+    const writesAfterUnmount = chunks.length;
+    renderer.updateProcess("host", "ready");
+    renderer.addLog("host", "late log after unmount", true);
+    renderer.unmount();
+    expect(chunks.length).toBe(writesAfterUnmount);
+  });
+
   it("q triggers exit; unmount restores the terminal and raw mode", () => {
     const { stdin, chunks, output } = makeTty();
     const onExit = vi.fn();

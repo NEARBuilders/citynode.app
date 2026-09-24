@@ -159,7 +159,9 @@ export const runDevSession = (
       },
       { interactive: useInteractive, onForceExit: () => controls.forceExit() },
     );
-    controls.restoreView = () => view?.unmount();
+    controls.restoreView = () => {
+      if (useInteractive) view?.unmount();
+    };
 
     const callbacks: ProcessCallbacks = {
       onStatus: (name, status, message) => {
@@ -266,8 +268,6 @@ export const runDevSession = (
 
         yield* Effect.sleep("200 millis");
 
-        view?.unmount();
-
         if (!isWorkspaceChild) {
           try {
             unregisterPid(process.pid);
@@ -277,6 +277,8 @@ export const runDevSession = (
         }
 
         pipeline.flush();
+
+        view?.unmount();
 
         if (shouldExportLogs) {
           console.log("\n");
@@ -313,8 +315,8 @@ const runApp = (
   let forceExitTimer: ReturnType<typeof setTimeout> | null = null;
 
   const forceExit = () => {
-    console.log("\n[Dev] Force exit");
     controls?.restoreView();
+    console.log("\n[Dev] Force exit");
     controls?.emergencyKill();
     process.exit(0);
   };
@@ -343,6 +345,7 @@ const runApp = (
           forceExit();
           return;
         }
+        sessionControls.restoreView();
         console.log("\n[Dev] Shutting down...");
         forceExitTimer = setTimeout(forceExit, 5000);
         sessionControls.requestShutdown();
@@ -367,6 +370,7 @@ const runApp = (
       forceExit();
       return;
     }
+    controls?.restoreView();
     console.log("\n[Dev] Shutting down...");
     forceExitTimer = setTimeout(forceExit, 5000);
     controls?.requestShutdown();
