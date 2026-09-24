@@ -21,6 +21,19 @@
 > SSR execution is governed by ADR 0007 (runtime composition, source manifests
 > in dev).
 
+## 2026-09-23 amendment — Phase 0 demo shipped (flat files, import-extends ratified)
+
+The descriptor demo executed on `feat/platform-cdn` (the branch carrying plan 029), before 034 — a deliberately thin slice:
+
+- **The `descriptor/` module is production code** (`src/descriptor/{constructors,schema,resolve}.ts`, landed `3e21334fb`): `App`/`API`/`UI`/`Plugin(name).path()/.extends()`, zod-validated pure data, `toConfigInput` (authored shape — pipeline fields never authored), `resolveApp`/`resolveApps` (registry + depth-1 extends + deploy-map injection).
+- **`extends` now also accepts an imported App descriptor value** — an imported parent is an inlined parent: identical materialization to a fetched one, no FastKV call. Cross-repo stays `bos://` (the composable.md invariant stands: a child publish never builds the extends target; the host never executes a tenant's app.ts). Depth-1 guard applies to both forms.
+- **`applyDevOverlay`** — the `bos.dev.ts` surface: child-wins overlay merged over a resolved config at dev time; never published.
+- **`Plugin(name)` extra may override the attachment `name`** — the registry key and the plugin's package name differ (`auth` vs `@everything-dev/auth-plugin`); the authored shape keeps them distinct, and resolve strips a redundant name (identical to the registry key) to match today's file.
+- **The repo demo (flat, no directories moved)**: root `bos.app.ts` (the everything.dev runtime — this fork's workspaces under dev.everything.near, the post-merge shape), `bos.citynode.app.ts` (extends the base **by import**, porting every authored field of today's `bos.config.json`), `bos.dev.ts` (overlay example). Zero new workspaces; `path()` resolves relative to the declaring file.
+- **Golden fixture test** (`app-descriptor-golden.test.ts`): flatten(citynode) deep-equals today's hand-maintained `bos.config.json` after (a) stripping pipeline fields (production/integrity/ssr/ssrIntegrity) and (b) mirroring `cleanNullSentinels` on the top-level `plugins` record only (the merge drops empty-object fields there — today's hand-written `variables: {}` entries are noise the generator omits; the 028 Step 3 upgrade codemod cleans the file). Two latent findings fixed en route: the Plugin name clobber, and secret-array union semantics (the base declares composition; the deploying child owns its secret surface).
+- **Demo simplification**: the base declares no workspace secrets/variables detail (the deploying runtime owns them); the real everything.dev published config (fetched from FastKV at bos://dev.everything.near/everything.dev) carries the old release train (effect 3 / orpc 1.x) and extra fields (`shared` map, `sidebar`) the schema absorbs post-034.
+- The full 028 execution (CLI reads the descriptor, publish writes generated config, sync deletion) remains gated on 034 — unchanged.
+
 ## Status
 
 - **Priority**: P1

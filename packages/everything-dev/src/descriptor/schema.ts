@@ -74,8 +74,15 @@ export type HostInput = HostRef;
 export const AppDescriptorSchema = z
   .object({
     name: z.string(),
-    /** name of the base App this App inherits (child-wins) */
-    extends: z.string().optional(),
+    /**
+     * The base App this App inherits (child-wins): a registry name
+     * (`"everything.dev"`) or an imported App descriptor value — an imported
+     * parent is an inlined parent (same-repo composition; the resolved shape
+     * is identical to a fetched one). The value is validated and depth-guarded
+     * at resolution (flattenParent re-parses it); chains deeper than one
+     * level are deferred (wayfinder ticket 08).
+     */
+    extends: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
     account: z.string().optional(),
     domain: z.string().optional(),
     title: z.string().optional(),

@@ -118,7 +118,7 @@ export async function startDeviceLogin(opts: DeviceLoginOptions): Promise<Device
 
   let abortReason: string | null = null;
   let rejectPending!: (reason?: Error) => void;
-  let pendingReject = new Promise<never>((_, reject) => {
+  const pendingReject = new Promise<never>((_, reject) => {
     rejectPending = reject;
   });
 
