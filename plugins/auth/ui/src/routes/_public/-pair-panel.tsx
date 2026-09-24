@@ -5,6 +5,8 @@ import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import type { LoginMessageId } from "@/i18n/catalogs";
+import { useLoginTranslation } from "@/i18n/runtime";
 
 const DEVICE_LINK_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
@@ -21,9 +23,10 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
   const auth = useAuthClient();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const t = useLoginTranslation();
   const [link, setLink] = useState<DeviceLink | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<LoginMessageId | null>(null);
   const [claimed, setClaimed] = useState(false);
   const canceledRef = useRef(false);
 
@@ -35,7 +38,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
       .then(({ data, error }: { data: Record<string, unknown> | null; error: unknown }) => {
         if (!active) return;
         if (error || !data) {
-          setFailed("Could not start device pairing");
+          setFailed("auth.login.pair.startFailed");
           return;
         }
         const record = data as {
@@ -83,21 +86,21 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
           body: { token },
         });
         if (claim.error) {
-          setFailed("Failed to complete sign-in");
+          setFailed("auth.login.pair.completeFailed");
           return;
         }
         await refreshSessionCache(auth, queryClient);
-        toast.success("Signed in");
+        toast.success(t("auth.login.pair.success"));
         await navigate({ to: redirect, replace: true });
         return;
       }
       const err = (error as TokenError)?.error;
       if (err === "expired_token") {
-        setFailed("This code expired. Start again to get a new one.");
+        setFailed("auth.login.pair.expired");
         return;
       }
       if (err === "access_denied") {
-        setFailed("Sign-in was denied on your phone.");
+        setFailed("auth.login.pair.denied");
         return;
       }
       if (err === "slow_down") {
@@ -109,7 +112,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
     return () => {
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [auth, link, claimed, navigate, queryClient, redirect]);
+  }, [auth, link, claimed, navigate, queryClient, redirect, t]);
 
   return (
     <div className="space-y-4 text-center">
@@ -118,14 +121,12 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         data-testid="device.qr"
       >
         {qrDataUrl ? (
-          <img src={qrDataUrl} alt="Scan with your phone to sign in" className="size-[220px]" />
+          <img src={qrDataUrl} alt={t("auth.login.pair.imageAlt")} className="size-[220px]" />
         ) : (
           <div className="size-[220px] animate-pulse rounded bg-muted" />
         )}
       </div>
-      <p className="text-sm text-muted-foreground">
-        Scan with your phone, or enter this code on your phone
-      </p>
+      <p className="text-sm text-muted-foreground">{t("auth.login.pair.instructions")}</p>
       <p
         className="font-mono text-lg tracking-widest text-foreground"
         data-testid="device.user-code"
@@ -133,11 +134,11 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         {link?.userCode ?? "····-····"}
       </p>
       <p className="text-sm text-muted-foreground" data-testid="device.status">
-        {claimed ? "Signing in…" : "Waiting for approval…"}
+        {claimed ? t("auth.login.pair.signingIn") : t("auth.login.pair.waiting")}
       </p>
       {failed && (
         <p className="text-sm text-destructive" data-testid="device.error">
-          {failed}
+          {t(failed)}
         </p>
       )}
       <Button
@@ -147,7 +148,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         onClick={onClose}
         data-testid="device.cancel-button"
       >
-        Cancel
+        {t("auth.login.pair.cancel")}
       </Button>
     </div>
   );
