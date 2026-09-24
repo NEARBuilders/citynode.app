@@ -269,7 +269,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
     return {
       name: descriptor.key,
-      pid: process.pid,
+      pid: undefined,
       kill: Effect.gen(function* () {
         callbacks.onLog(descriptor.key, "Shutting down remote host...");
         restoreConsole();

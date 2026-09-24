@@ -54,6 +54,7 @@ export interface DevSessionControls {
   requestShutdownEscalating: () => void;
   forceExit: () => void;
   restoreView: () => void;
+  suspendForceExitTimer: () => void;
 }
 
 export const runDevSession = (
@@ -95,6 +96,7 @@ export const runDevSession = (
       requestShutdownEscalating: () => {},
       forceExit: () => {},
       restoreView: () => {},
+      suspendForceExitTimer: () => {},
     };
 
     onShutdownReady?.(controls);
@@ -172,9 +174,70 @@ export const runDevSession = (
       },
     };
 
+    const spawned: ProcessHandle[] = [];
+
+    controls.emergencyKill = () => {
+      for (const handle of spawned) {
+        const pid = Number(handle.pid);
+        if (!Number.isFinite(pid) || pid <= 1 || pid === process.pid) continue;
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // already gone
+          }
+        }
+      }
+    };
+
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        controls.suspendForceExitTimer();
+
+        yield* Effect.forEach(spawned, (h) => h.kill.pipe(Effect.ignore), {
+          concurrency: "unbounded",
+        });
+
+        yield* Effect.sleep("200 millis");
+
+        if (!isWorkspaceChild) {
+          try {
+            unregisterPid(process.pid);
+          } catch {
+            // best-effort; pruneDead cleans stale entries on next ps/kill
+          }
+        }
+
+        pipeline.flush();
+
+        view?.unmount();
+
+        if (shouldExportLogs) {
+          console.log("\n");
+          console.log("═".repeat(70));
+          console.log(`  SESSION LOGS: ${orchestrator.description}`);
+          console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
+          console.log(`  Filtered entries: ${allLogs.length} (level: ${logLevel})`);
+          console.log("═".repeat(70));
+          console.log("");
+          for (const event of allLogs) {
+            console.log(formatLogLine(event));
+          }
+          console.log("");
+          console.log("═".repeat(70));
+          console.log(`  Full logs saved to: ${logger.logFile}`);
+          console.log("═".repeat(70));
+          console.log("");
+        }
+      }),
+    );
+
     const startProcess = (pkg: string) => {
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
       return makeDevProcess(pkg, callbacks, portOverride).pipe(
+        Effect.tap((handle) => Effect.sync(() => spawned.push(handle))),
         Effect.tapError((err) =>
           Effect.sync(() => {
             callbacks.onLog(pkg, `Failed to start: ${err}`, true);
@@ -213,44 +276,44 @@ export const runDevSession = (
     const nonHostPackages = orderedPackages.filter((pkg) => pkg !== "host");
     const hostPackages = orderedPackages.filter((pkg) => pkg === "host");
 
-    const nonHostHandles = yield* startGroup(nonHostPackages);
+    const startupPhase = Effect.gen(function* () {
+      const nonHostHandles = yield* startGroup(nonHostPackages);
 
-    yield* Effect.forEach(
-      nonHostHandles.map((handle, index) => ({
-        handle,
-        pkg: nonHostPackages[index] ?? handle.name,
-      })),
-      ({ handle, pkg }) => awaitReady(pkg, handle),
-      { concurrency: "unbounded" },
+      yield* Effect.forEach(
+        nonHostHandles.map((handle, index) => ({
+          handle,
+          pkg: nonHostPackages[index] ?? handle.name,
+        })),
+        ({ handle, pkg }) => awaitReady(pkg, handle),
+        { concurrency: "unbounded" },
+      );
+
+      const hostHandles = yield* startGroup(hostPackages);
+
+      yield* Effect.forEach(
+        hostHandles.map((handle, index) => ({
+          handle,
+          pkg: hostPackages[index] ?? handle.name,
+        })),
+        ({ handle, pkg }) => awaitReady(pkg, handle),
+        { concurrency: "unbounded" },
+      );
+
+      return { nonHostHandles, hostHandles };
+    });
+
+    const startup = yield* Effect.raceFirst(
+      startupPhase,
+      Deferred.await(shutdown).pipe(Effect.as(null)),
     );
 
-    const hostHandles = yield* startGroup(hostPackages);
+    if (startup === null) return;
 
-    yield* Effect.forEach(
-      hostHandles.map((handle, index) => ({ handle, pkg: hostPackages[index] ?? handle.name })),
-      ({ handle, pkg }) => awaitReady(pkg, handle),
-      { concurrency: "unbounded" },
-    );
-
-    const allHandles = [...nonHostHandles, ...hostHandles];
+    const allHandles = [...startup.nonHostHandles, ...startup.hostHandles];
 
     const childPids = allHandles
       .map((handle) => Number(handle.pid))
-      .filter((pid) => Number.isFinite(pid) && pid > 1);
-
-    controls.emergencyKill = () => {
-      for (const pid of childPids) {
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          try {
-            process.kill(pid, "SIGKILL");
-          } catch {
-            // already gone
-          }
-        }
-      }
-    };
+      .filter((pid) => Number.isFinite(pid) && pid > 1 && pid !== process.pid);
 
     if (!isWorkspaceChild && childPids.length > 0) {
       try {
@@ -259,46 +322,6 @@ export const runDevSession = (
         // best-effort; registry hygiene is non-critical for the running session
       }
     }
-
-    yield* Effect.addFinalizer(() =>
-      Effect.gen(function* () {
-        yield* Effect.forEach(allHandles, (h) => h.kill.pipe(Effect.ignore), {
-          concurrency: "unbounded",
-        });
-
-        yield* Effect.sleep("200 millis");
-
-        if (!isWorkspaceChild) {
-          try {
-            unregisterPid(process.pid);
-          } catch {
-            // best-effort; pruneDead cleans stale entries on next ps/kill
-          }
-        }
-
-        pipeline.flush();
-
-        view?.unmount();
-
-        if (shouldExportLogs) {
-          console.log("\n");
-          console.log("═".repeat(70));
-          console.log(`  SESSION LOGS: ${orchestrator.description}`);
-          console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
-          console.log(`  Filtered entries: ${allLogs.length} (level: ${logLevel})`);
-          console.log("═".repeat(70));
-          console.log("");
-          for (const event of allLogs) {
-            console.log(formatLogLine(event));
-          }
-          console.log("");
-          console.log("═".repeat(70));
-          console.log(`  Full logs saved to: ${logger.logFile}`);
-          console.log("═".repeat(70));
-          console.log("");
-        }
-      }),
-    );
 
     yield* Deferred.await(shutdown);
   });
@@ -350,6 +373,11 @@ const runApp = (
         forceExitTimer = setTimeout(forceExit, 5000);
         sessionControls.requestShutdown();
       };
+      sessionControls.suspendForceExitTimer = () => {
+        if (forceExitTimer) clearTimeout(forceExitTimer);
+        forceExitTimer = setTimeout(forceExit, 5000);
+        forceExitTimer.unref?.();
+      };
       sessionControls.forceExit = forceExit;
     }),
   ).pipe(
@@ -360,7 +388,7 @@ const runApp = (
     Effect.catchDefect((defect) =>
       Effect.sync(() => {
         console.error("[Dev] Unhandled defect in orchestrator:", defect);
-      }),
+      }).pipe(Effect.andThen(Effect.die(defect))),
     ),
   );
 
@@ -382,7 +410,7 @@ const runApp = (
   Effect.runPromiseExit(program).then((exit) => {
     clearInterval(orphanWatch);
     if (forceExitTimer) clearTimeout(forceExitTimer);
-    process.exit(Exit.isSuccess(exit) ? 0 : 0);
+    process.exit(Exit.isSuccess(exit) ? 0 : 1);
   });
 };
 
