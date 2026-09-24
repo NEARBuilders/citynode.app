@@ -163,9 +163,7 @@ export function buildRuntimeClientConfig(
         ([key, plugin]) => {
           const slot = clientUiSlot(key);
           const base = clientBundleBase(plugin.url, slot, config);
-          const pluginUiBase = plugin.ui
-            ? clientBundleBase(plugin.ui.url, slot, config)
-            : null;
+          const pluginUiBase = plugin.ui ? clientBundleBase(plugin.ui.url, slot, config) : null;
           return [
             key,
             {
@@ -179,9 +177,7 @@ export function buildRuntimeClientConfig(
                     ui: {
                       name: plugin.ui.name,
                       url: pluginUiBase ?? plugin.ui.url,
-                      entry: pluginUiBase
-                        ? `${pluginUiBase}/mf-manifest.json`
-                        : plugin.ui.entry,
+                      entry: pluginUiBase ? `${pluginUiBase}/mf-manifest.json` : plugin.ui.entry,
                       source: plugin.ui.source,
                       integrity: plugin.ui.integrity,
                       ssrUrl: plugin.ui.ssrUrl,
