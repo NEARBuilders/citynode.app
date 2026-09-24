@@ -2,6 +2,8 @@ import type {
   DualNetworkConfig,
   RelayerConfig,
   RelayerDualNetworkConfig,
+  SessionGasKeyConfig,
+  SessionGasKeyDualNetworkConfig,
   SubAccountConfig,
 } from "better-near-auth";
 import { DEFAULT_DEVICE_LINK_CLIENT_ID } from "better-near-auth";
@@ -113,6 +115,17 @@ export function buildSubAccountConfig(
   } as DualNetworkConfig<SubAccountConfig>;
 }
 
+export function buildSessionGasKeyConfig(
+  siwn: AuthPluginVariables["siwn"],
+): SessionGasKeyDualNetworkConfig | undefined {
+  if (!siwn.sessionGasKey) return undefined;
+
+  return {
+    mainnet: pickDefined(siwn.sessionGasKey.mainnet) as SessionGasKeyConfig | undefined,
+    testnet: pickDefined(siwn.sessionGasKey.testnet) as SessionGasKeyConfig | undefined,
+  };
+}
+
 export function buildSecrets(secrets: AuthPluginSecrets): AuthConfig["siwn"]["secrets"] {
   const parentKey = {
     mainnet: secrets.NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET,
@@ -131,12 +144,14 @@ export function normalizeAuthConfig(
   );
 
   const relayer = buildRelayerConfig(variables.siwn, secrets);
+  const sessionGasKey = buildSessionGasKeyConfig(variables.siwn);
   const subAccount = buildSubAccountConfig(variables.siwn);
   const secretsConfig = buildSecrets(secrets);
   const commonSiwn = {
     apiKey: variables.siwn.apiKey,
     rpcUrl: variables.siwn.rpcUrl,
     relayer,
+    sessionGasKey,
     subAccount,
     secrets: secretsConfig,
   };

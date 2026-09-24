@@ -1,5 +1,5 @@
 import type { WalletManifest } from "@fastnear/near-connect";
-import type { EventMap } from "@fastnear/near-connect/build/types";
+import type { EventMap } from "@fastnear/near-connect/build/types/index.js";
 import { hex } from "@scure/base";
 import type {
   BetterFetch,
@@ -8,8 +8,23 @@ import type {
   ClientStore,
 } from "better-auth/client";
 import { atom } from "nanostores";
-import type { Near as NearType, SignedMessage } from "near-kit";
-import { fromNearConnect, generateNonce, Near, type TransactionBuilder } from "near-kit";
+import type { Near as NearType, PrivateKey, SignedMessage } from "near-kit";
+import {
+  fromNearConnect,
+  generateKey,
+  generateNonce,
+  Near,
+  type TransactionBuilder,
+} from "near-kit";
+import {
+  type GasKeyScope,
+  type GasKeyState,
+  gasKeyState,
+  isGasKeyWallet,
+  loadSessionGasKey,
+  nextLane,
+  saveSessionGasKey,
+} from "./gas-key-client.js";
 import { linkPasskeyWallet } from "./passkey-client.js";
 import {
   type NearClientAtoms,
@@ -113,6 +128,17 @@ export interface SIWNClientActions {
     checkSubAccountAvailability: (
       params: CheckSubAccountAvailabilityRequestT,
     ) => Promise<BetterFetchResponse<CheckSubAccountAvailabilityResponseT>>;
+    getGasKeyScope: () => Promise<BetterFetchResponse<GasKeyScope>>;
+    addSessionGasKey: (callbacks?: AuthCallbacks) => Promise<void>;
+    sendWithGasKey: (params: {
+      receiverId: string;
+      methodName: string;
+      args?: object | Uint8Array;
+      gas?: `${number} Tgas` | `${number}`;
+    }) => Promise<{ txHash: string }>;
+    refreshGasKeyInfo: () => Promise<GasKeyState>;
+    ensureGasKeyFunded: (callbacks?: AuthCallbacks) => Promise<boolean>;
+    getGasKeyState: () => GasKeyState;
     setNetwork: (network: "mainnet" | "testnet") => void;
     getNetwork: () => "mainnet" | "testnet";
     getSupportedNetworks: () => ("mainnet" | "testnet")[];
@@ -499,6 +525,183 @@ export const siwnClient = (config: SIWNClientConfig) => {
     return payload;
   };
 
+  const fetchGasKeyScope = async ($fetch: BetterFetch): Promise<GasKeyScope> => {
+    const response = await $fetch<GasKeyScope>("/near/gas-key/scope", { method: "GET" });
+    if (response.error || !response.data) {
+      throw new Error("Failed to fetch session gas key scope");
+    }
+    return response.data;
+  };
+
+  const currentGasKeyAccountId = (): string | null => {
+    return nearState.get()?.accountId ?? null;
+  };
+
+  const requireGasKeySession = async (): Promise<{
+    net: NearNetwork;
+    accountId: string;
+    privateKey: PrivateKey;
+    publicKey: string;
+  }> => {
+    const net = activeNetwork.get();
+    const accountId = currentGasKeyAccountId();
+    if (!accountId) {
+      throw new Error("No NEAR account found — please sign in with your NEAR wallet");
+    }
+    const stored = await loadSessionGasKey(net, accountId);
+    if (!stored) {
+      throw new Error(
+        "No session gas key for this account — enable gasless writes first with addSessionGasKey()",
+      );
+    }
+    return { net, accountId, privateKey: stored.privateKey, publicKey: stored.publicKey };
+  };
+
+  const addSessionGasKeyInternal = async (
+    $fetch: BetterFetch,
+    callbacks?: AuthCallbacks,
+  ): Promise<void> => {
+    try {
+      const net = activeNetwork.get();
+      const conn = await requireConnector(net);
+      if (!walletConnected.get()) {
+        const reconnected = await ensureWalletConnected(net);
+        if (!reconnected) {
+          throw new Error("Wallet connection required — please approve the connection to continue");
+        }
+      }
+      const { wallet, accounts } = await conn.getConnectedWallet();
+      if (!isGasKeyWallet(wallet.manifest?.features)) {
+        throw new Error(
+          "Wallet does not support gas keys — session gas keys need a wallet with gas-key support (e.g. Meteor)",
+        );
+      }
+      const scope = await fetchGasKeyScope($fetch);
+      if (!scope.enabled || !scope.receiverId) {
+        throw new Error("Session gas keys are not enabled on this deployment");
+      }
+      const accountId = nearState.get()?.accountId ?? accounts[0]?.accountId ?? null;
+      if (!accountId) {
+        throw new Error("No NEAR account found — please sign in with your NEAR wallet");
+      }
+
+      const keyPair = generateKey();
+      const publicKey = keyPair.publicKey.toString();
+      await wallet.signAndSendTransaction({
+        receiverId: accountId,
+        actions: [
+          {
+            type: "AddKey",
+            params: {
+              publicKey,
+              accessKey: {
+                permission: {
+                  receiverId: scope.receiverId,
+                  methodNames: scope.methodNames ?? [],
+                },
+              },
+              gasKeyInfo: { balance: "0", numNonces: scope.numNonces ?? 4 },
+            },
+          },
+        ],
+      });
+
+      await saveSessionGasKey(net, accountId, {
+        privateKey: keyPair.secretKey as PrivateKey,
+        publicKey,
+      });
+      gasKeyState.set({
+        accountId,
+        publicKey,
+        networkId: net,
+        balance: null,
+        numNonces: scope.numNonces ?? 4,
+      });
+      callbacks?.onSuccess?.();
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      callbacks?.onError?.(err);
+      throw err;
+    }
+  };
+
+  const refreshGasKeyInfoInternal = async ($fetch: BetterFetch): Promise<GasKeyState> => {
+    const net = activeNetwork.get();
+    const accountId = currentGasKeyAccountId();
+    if (!accountId) return null;
+    const stored = await loadSessionGasKey(net, accountId);
+    if (!stored) return null;
+
+    const response = await $fetch<{
+      balance: string;
+      numNonces: number;
+    }>("/near/gas-key/info", {
+      method: "POST",
+      body: { accountId, publicKey: stored.publicKey },
+    });
+    if (response.error || !response.data) return null;
+
+    const state: GasKeyState = {
+      accountId,
+      publicKey: stored.publicKey,
+      networkId: net,
+      balance: response.data.balance,
+      numNonces: response.data.numNonces,
+    };
+    gasKeyState.set(state);
+    return state;
+  };
+
+  const ensureGasKeyFundedInternal = async (
+    $fetch: BetterFetch,
+    callbacks?: AuthCallbacks,
+  ): Promise<boolean> => {
+    try {
+      const state = await refreshGasKeyInfoInternal($fetch);
+      if (!state?.balance) return false;
+      const scope = await fetchGasKeyScope($fetch);
+      if (!scope.enabled || !scope.topUpThresholdYocto) return false;
+      if (BigInt(state.balance) >= BigInt(scope.topUpThresholdYocto)) return true;
+
+      const accountId = state.accountId;
+      const response = await $fetch<{ txHash: string; amountFunded: string }>(
+        "/near/gas-key/fund",
+        {
+          method: "POST",
+          body: { accountId, publicKey: state.publicKey },
+        },
+      );
+      if (response.error) {
+        throw new Error(response.error.message || "Gas key funding failed");
+      }
+      await refreshGasKeyInfoInternal($fetch);
+      return true;
+    } catch (error) {
+      callbacks?.onError?.(error instanceof Error ? error : new Error(String(error)));
+      return false;
+    }
+  };
+
+  const sendWithGasKeyInternal = async (params: {
+    receiverId: string;
+    methodName: string;
+    args?: object | Uint8Array;
+    gas?: `${number} Tgas` | `${number}`;
+  }): Promise<{ txHash: string }> => {
+    const session = await requireGasKeySession();
+    const lane = nextLane(session.net, session.accountId, gasKeyState.get()?.numNonces ?? 4);
+    const near = new Near({ network: session.net });
+    const result = await near
+      .transaction(session.accountId)
+      .signWith(session.privateKey)
+      .useGasKey(lane)
+      .functionCall(params.receiverId, params.methodName, params.args ?? {}, {
+        gas: params.gas ?? "30 Tgas",
+      })
+      .send({ waitUntil: "EXECUTED" });
+    return { txHash: result.transaction.hash };
+  };
+
   const plugin = {
     id: "siwn" as const,
     $InferServerPlugin: {},
@@ -507,6 +710,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
       nearState,
       walletConnected,
       activeNetwork,
+      gasKeyState,
     }),
 
     getActions: (
@@ -526,6 +730,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
             }
             walletConnected.set(false);
             nearState.set(null);
+            gasKeyState.set(null);
             sessionRestored = false;
           }
         });
@@ -627,6 +832,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
             }
             walletConnected.set(false);
             nearState.set(null);
+            gasKeyState.set(null);
             sessionRestored = false;
           },
           link: async (callbacks?: AuthCallbacks) => {
@@ -789,6 +995,22 @@ export const siwnClient = (config: SIWNClientConfig) => {
               body: { ...params, network: params.network ?? activeNetwork.get() },
             });
           },
+          getGasKeyScope: async () => {
+            return await $fetch("/near/gas-key/scope", { method: "GET" });
+          },
+          addSessionGasKey: async (callbacks?: AuthCallbacks) => {
+            await addSessionGasKeyInternal($fetch, callbacks);
+          },
+          sendWithGasKey: async (params) => {
+            return await sendWithGasKeyInternal(params);
+          },
+          refreshGasKeyInfo: async () => {
+            return await refreshGasKeyInfoInternal($fetch);
+          },
+          ensureGasKeyFunded: async (callbacks?: AuthCallbacks) => {
+            return await ensureGasKeyFundedInternal($fetch, callbacks);
+          },
+          getGasKeyState: () => gasKeyState.get(),
           setNetwork: (network: "mainnet" | "testnet") => {
             const prev = activeNetwork.get();
             if (prev !== network) {
@@ -798,6 +1020,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
               }
               walletConnected.set(false);
               nearState.set(null);
+              gasKeyState.set(null);
             }
             activeNetwork.set(network);
             void initClientForNetwork(network);

@@ -8,10 +8,19 @@ export type NearState = {
   networkId: string;
 } | null;
 
+export type GasKeyState = {
+  accountId: string;
+  publicKey: string;
+  networkId: NearNetwork;
+  balance: string | null;
+  numNonces: number | null;
+} | null;
+
 export type NearClientAtoms = {
   nearState: WritableAtom<NearState>;
   walletConnected: WritableAtom<boolean>;
   activeNetwork: WritableAtom<NearNetwork>;
+  gasKeyState: WritableAtom<GasKeyState>;
 };
 
 export type NearAtomsSource = {
@@ -20,7 +29,7 @@ export type NearAtomsSource = {
 
 export function getNearAtoms(client: NearAtomsSource): NearClientAtoms {
   const atoms = client?.$store?.atoms;
-  if (!atoms?.nearState || !atoms.walletConnected || !atoms.activeNetwork) {
+  if (!atoms?.nearState || !atoms.walletConnected || !atoms.activeNetwork || !atoms.gasKeyState) {
     throw new Error("Missing near atoms — add siwnClient() to your createAuthClient plugins");
   }
   // The store record erases atom value types — siwnClient() guarantees these shapes.

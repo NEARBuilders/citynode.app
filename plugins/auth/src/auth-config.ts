@@ -1,6 +1,7 @@
 import type {
   DualNetworkConfig,
   RelayerDualNetworkConfig,
+  SessionGasKeyDualNetworkConfig,
   SubAccountConfig,
 } from "better-near-auth";
 
@@ -14,6 +15,7 @@ export interface AuthSiwnBaseConfig {
   apiKey?: string;
   rpcUrl?: string;
   relayer?: RelayerDualNetworkConfig;
+  sessionGasKey?: SessionGasKeyDualNetworkConfig;
   subAccount?: SubAccountConfig | DualNetworkConfig<SubAccountConfig>;
   secrets?: {
     parentKey?: string | DualNetworkConfig<string>;

@@ -1,6 +1,11 @@
 import { atom, type WritableAtom } from "nanostores";
 import { describe, expect, it } from "vitest";
-import { getNearAtoms, type NearState, readSessionNearAccountId } from "./store.js";
+import {
+  type GasKeyState,
+  getNearAtoms,
+  type NearState,
+  readSessionNearAccountId,
+} from "./store.js";
 
 function createClient(atoms: Record<string, WritableAtom<unknown>>) {
   return { $store: { atoms } };
@@ -11,18 +16,27 @@ describe("getNearAtoms", () => {
     const nearState = atom<NearState>(null);
     const walletConnected = atom<boolean>(false);
     const activeNetwork = atom<"mainnet" | "testnet">("mainnet");
+    const gasKeyState = atom<GasKeyState>(null);
 
-    const atoms = getNearAtoms(createClient({ nearState, walletConnected, activeNetwork }));
+    const atoms = getNearAtoms(
+      createClient({ nearState, walletConnected, activeNetwork, gasKeyState }),
+    );
 
     expect(atoms.nearState).toBe(nearState);
     expect(atoms.walletConnected).toBe(walletConnected);
     expect(atoms.activeNetwork).toBe(activeNetwork);
+    expect(atoms.gasKeyState).toBe(gasKeyState);
   });
 
   it("reads and writes through the same atom instances", () => {
     const nearState = atom<NearState>(null);
     const { nearState: typed } = getNearAtoms(
-      createClient({ nearState, walletConnected: atom(false), activeNetwork: atom("testnet") }),
+      createClient({
+        nearState,
+        walletConnected: atom(false),
+        activeNetwork: atom("testnet"),
+        gasKeyState: atom(null),
+      }),
     );
 
     typed.set({ accountId: "alice.near", publicKey: "pk", networkId: "mainnet" });

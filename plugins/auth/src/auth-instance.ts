@@ -112,6 +112,7 @@ export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0]
     apiKey: config.siwn.apiKey,
     rpcUrl: config.siwn.rpcUrl,
     relayer: config.siwn.relayer,
+    sessionGasKey: config.siwn.sessionGasKey,
     subAccount: config.siwn.subAccount,
     secrets: config.siwn.secrets,
   };

@@ -15,13 +15,14 @@ import {
 import { setSessionCookie } from "better-auth/cookies";
 import type { Account, DBAdapter, User } from "better-auth/types";
 import type {} from "better-call";
-import type { AccountState, PrivateKey, SignedDelegateAction } from "near-kit";
+import type { AccountState, PrivateKey, SignedDelegateAction, TransactionBuilder } from "near-kit";
 import {
   decodeSignedDelegateAction,
   generateKey,
   generateNonce,
   InMemoryKeyStore,
   Near,
+  parseAmount,
   parseKey,
   verifyNep413Signature,
 } from "near-kit";
@@ -42,6 +43,11 @@ import {
   CreateSubAccountRequest,
   CreateSubAccountResponse,
   type DualNetworkConfig,
+  GasKeyFundRequest,
+  GasKeyFundResponse,
+  GasKeyInfoRequest,
+  GasKeyInfoResponse,
+  GasKeyScopeResponse,
   GetRelayerInfoRequest,
   LinkAccountRequest,
   type ListAccountsResponseT,
@@ -61,10 +67,14 @@ import {
   RelayStatusResponse,
   relayerConfigSchema,
   relayerDualNetworkConfigSchema,
+  type SessionGasKeyConfig,
+  type SessionGasKeyDualNetworkConfig,
   SetPrimaryAccountRequest,
   type SubAccountConfig,
   type SubAccountLifecycleCtx,
   type SubAccountTxCtx,
+  sessionGasKeyConfigSchema,
+  sessionGasKeyDualNetworkConfigSchema,
   VerifyRequest,
   VerifyResponse,
   ViewContractRequest,
@@ -209,6 +219,42 @@ export function parseRelayerConfig(
     return { kind: "dual", config: result.data as RelayerDualNetworkConfig };
   }
   return { kind: "flat", config: result.data as RelayerConfig };
+}
+
+type ParsedSessionGasKeyConfig =
+  | { kind: "flat"; config: SessionGasKeyConfig }
+  | { kind: "dual"; config: SessionGasKeyDualNetworkConfig };
+
+export function parseSessionGasKeyConfig(
+  input: SessionGasKeyConfig | SessionGasKeyDualNetworkConfig | undefined,
+): ParsedSessionGasKeyConfig | undefined {
+  if (input == null) return undefined;
+  if (typeof input !== "object") {
+    throw new BetterAuthError(
+      "Invalid sessionGasKey config: expected an object with 'mainnet'/'testnet' keys or top-level session gas key fields.",
+    );
+  }
+  const keys = Object.keys(input);
+  const flatKeys = Object.keys(sessionGasKeyConfigSchema.shape) as (keyof SessionGasKeyConfig)[];
+  const hasNetworkKey = keys.includes("mainnet") || keys.includes("testnet");
+  const hasFlatKey = flatKeys.some((k) => keys.includes(k));
+  if (hasNetworkKey && hasFlatKey) {
+    throw new BetterAuthError(
+      `Invalid sessionGasKey config: cannot mix per-network keys (mainnet/testnet) with top-level fields (${flatKeys.join(", ")}). Use either a flat SessionGasKeyConfig or a dual-network config.`,
+    );
+  }
+  const schema = hasNetworkKey ? sessionGasKeyDualNetworkConfigSchema : sessionGasKeyConfigSchema;
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    const detail = result.error.issues
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .join("; ");
+    throw new BetterAuthError(`Invalid sessionGasKey config: ${detail}`);
+  }
+  if (hasNetworkKey) {
+    return { kind: "dual", config: result.data as SessionGasKeyDualNetworkConfig };
+  }
+  return { kind: "flat", config: result.data as SessionGasKeyConfig };
 }
 
 function createNear(
@@ -390,6 +436,55 @@ async function relayOnChain(
   return { txHash: result.transaction.hash };
 }
 
+/**
+ * Sponsor-side `TransferToGasKey`: the Sponsor signs, the receiving account is
+ * the gas key's owner. near-kit's builder defaults the receiver to the signer,
+ * and 0.20.2 has no public receiver setter, so the receiver is set directly
+ * (a TS-private plain property, stable across the pinned minor).
+ */
+function sponsorTransferToGasKey(
+  builder: TransactionBuilder,
+  receiverId: string,
+  publicKey: string,
+  amountYocto: string,
+): TransactionBuilder {
+  (builder as unknown as { receiverId?: string }).receiverId = receiverId;
+  return builder.transferToGasKey(publicKey, BigInt(amountYocto));
+}
+
+function toYocto(amount: string): string {
+  return parseAmount(amount as Parameters<typeof parseAmount>[0]);
+}
+
+interface GasKeyPermissionView {
+  balance: string;
+  num_nonces: number;
+  receiver_id: string;
+  method_names: string[];
+}
+
+function extractGasKeyPermission(view: { permission: unknown }): GasKeyPermissionView | null {
+  if (typeof view.permission === "string") return null;
+  const permission = view.permission as Record<string, unknown> | null;
+  if (!permission) return null;
+  const details = permission.GasKeyFunctionCall;
+  if (!details || typeof details !== "object") return null;
+  const d = details as Partial<GasKeyPermissionView>;
+  if (typeof d.balance !== "string" || typeof d.num_nonces !== "number") return null;
+  if (typeof d.receiver_id !== "string" || !Array.isArray(d.method_names)) return null;
+  return {
+    balance: d.balance,
+    num_nonces: d.num_nonces,
+    receiver_id: d.receiver_id,
+    method_names: d.method_names,
+  };
+}
+
+function matchesSessionGasKeyScope(key: GasKeyPermissionView, cfg: SessionGasKeyConfig): boolean {
+  if (key.receiver_id !== cfg.receiverId) return false;
+  return cfg.methodNames.every((method) => key.method_names.includes(method));
+}
+
 async function defaultValidateLimitedAccessKey(
   accountId: string,
   publicKey: string,
@@ -544,6 +639,7 @@ export interface SIWNPluginOptions {
   apiKey?: string;
   rpcUrl?: string | DualNetworkConfig<string>;
   relayer?: RelayerConfig | RelayerDualNetworkConfig;
+  sessionGasKey?: SessionGasKeyConfig | SessionGasKeyDualNetworkConfig;
   secrets?: {
     parentKey?: string | DualNetworkConfig<string>;
   };
@@ -556,6 +652,7 @@ export const siwn = (options: SIWNPluginOptions) => {
   }
 
   const relayerConfig = parseRelayerConfig(options.relayer);
+  const sessionGasKeyConfig = parseSessionGasKeyConfig(options.sessionGasKey);
 
   const apiKey = options.apiKey;
 
@@ -573,6 +670,15 @@ export const siwn = (options: SIWNPluginOptions) => {
   const getRelayerConfig = (network: "mainnet" | "testnet"): RelayerConfig | undefined => {
     if (!relayerConfig) return undefined;
     return relayerConfig.kind === "dual" ? relayerConfig.config[network] : relayerConfig.config;
+  };
+
+  const getSessionGasKeyConfig = (
+    network: "mainnet" | "testnet",
+  ): SessionGasKeyConfig | undefined => {
+    if (!sessionGasKeyConfig) return undefined;
+    return sessionGasKeyConfig.kind === "dual"
+      ? sessionGasKeyConfig.config[network]
+      : sessionGasKeyConfig.config;
   };
 
   const getRpcUrl = (network: "mainnet" | "testnet"): string | undefined => {
@@ -1826,6 +1932,275 @@ export const siwn = (options: SIWNPluginOptions) => {
                     : undefined,
             })),
           });
+        },
+      ),
+      getGasKeyScope: createAuthEndpoint(
+        "/near/gas-key/scope",
+        {
+          method: "GET",
+          use: [sessionMiddleware],
+        },
+        async (ctx) => {
+          const session = ctx.context.session;
+          const nearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [
+              { field: "userId", operator: "eq", value: session.user.id },
+              { field: "isPrimary", operator: "eq", value: true },
+            ],
+          });
+          const network = (nearAccount?.network ?? primaryNetwork) as "mainnet" | "testnet";
+          const cfg = getSessionGasKeyConfig(network);
+          if (!cfg) {
+            return ctx.json(GasKeyScopeResponse.parse({ enabled: false }));
+          }
+          return ctx.json(
+            GasKeyScopeResponse.parse({
+              enabled: true,
+              receiverId: cfg.receiverId,
+              methodNames: cfg.methodNames,
+              numNonces: cfg.numNonces,
+              fundAmount: cfg.fundAmount,
+              fundAmountYocto: toYocto(cfg.fundAmount),
+              topUpThreshold: cfg.topUpThreshold,
+              topUpThresholdYocto: toYocto(cfg.topUpThreshold),
+              maxFundPerUser: cfg.maxFundPerUser,
+            }),
+          );
+        },
+      ),
+      fundGasKey: createAuthEndpoint(
+        "/near/gas-key/fund",
+        {
+          method: "POST",
+          body: GasKeyFundRequest,
+          use: [sessionMiddleware],
+        },
+        async (ctx) => {
+          const session = ctx.context.session;
+          const { accountId, publicKey } = ctx.body;
+
+          const nearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [
+              { field: "userId", operator: "eq", value: session.user.id },
+              { field: "isPrimary", operator: "eq", value: true },
+            ],
+          });
+
+          if (!nearAccount) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "No NEAR account linked to session",
+              status: 401,
+            });
+          }
+          if (nearAccount.accountId !== accountId) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Account does not match session account",
+              status: 401,
+            });
+          }
+
+          const network = nearAccount.network as "mainnet" | "testnet";
+          const cfg = getSessionGasKeyConfig(network);
+          if (!cfg) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "Session gas keys are not configured",
+              status: 503,
+            });
+          }
+
+          const rState = await ensureRelayer(ctx.context.adapter, ctx.context.secret, network);
+          if (!rState) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "Sponsor account not configured",
+              status: 503,
+            });
+          }
+
+          try {
+            if (!publicKey.startsWith("ed25519:")) {
+              throw new APIError("BAD_REQUEST", {
+                message: "Unsupported public key type",
+                status: 400,
+              });
+            }
+
+            const view = await rState.near.getAccessKey(accountId, publicKey);
+            const key = view ? extractGasKeyPermission(view) : null;
+            if (!key) {
+              throw new APIError("NOT_FOUND", {
+                message: "Gas key not found on account",
+                status: 404,
+              });
+            }
+            if (!matchesSessionGasKeyScope(key, cfg)) {
+              throw new APIError("FORBIDDEN", {
+                message: `Gas key scope (${key.receiver_id}) does not match the configured scope (${cfg.receiverId})`,
+                status: 403,
+              });
+            }
+
+            const amountYocto = toYocto(cfg.fundAmount);
+            const thresholdYocto = toYocto(cfg.topUpThreshold);
+            if (BigInt(key.balance) >= BigInt(thresholdYocto)) {
+              throw new APIError("BAD_REQUEST", {
+                message: `Gas key balance (${key.balance}) is above the top-up threshold (${thresholdYocto})`,
+                status: 400,
+              });
+            }
+
+            const capYocto = toYocto(cfg.maxFundPerUser);
+            const funded = await ctx.context.adapter.findMany<{ amount: string }>({
+              model: "fundedGasKey",
+              where: [
+                { field: "userId", operator: "eq", value: session.user.id },
+                { field: "network", operator: "eq", value: network },
+              ],
+            });
+            const fundedTotal = (funded ?? []).reduce(
+              (sum, row) => sum + BigInt(row.amount || "0"),
+              0n,
+            );
+            if (fundedTotal + BigInt(amountYocto) > BigInt(capYocto)) {
+              throw new APIError("FORBIDDEN", {
+                message: `Per-user funding cap exceeded (${fundedTotal}/${capYocto} yoctoNEAR)`,
+                status: 403,
+              });
+            }
+
+            const result = await sponsorTransferToGasKey(
+              rState.near.transaction(rState.accountId),
+              accountId,
+              publicKey,
+              amountYocto,
+            ).send({ waitUntil: "EXECUTED" });
+
+            await ctx.context.adapter.create({
+              model: "fundedGasKey",
+              data: {
+                userId: session.user.id,
+                accountId,
+                publicKey,
+                network,
+                amount: amountYocto,
+                txHash: result.transaction.hash,
+                createdAt: new Date(),
+              },
+            });
+
+            if (rState.mode === "ephemeral") {
+              await ctx.context.adapter.update({
+                model: "relayerKey",
+                where: [{ field: "network", operator: "eq", value: network }],
+                update: { lastUsedAt: new Date() },
+              });
+            }
+
+            return ctx.json(
+              GasKeyFundResponse.parse({
+                txHash: result.transaction.hash,
+                amountFunded: amountYocto,
+              }),
+            );
+          } catch (error: unknown) {
+            if (error instanceof APIError) throw error;
+            throw new APIError("INTERNAL_SERVER_ERROR", {
+              message: error instanceof Error ? error.message : "Gas key funding failed",
+              status: 500,
+            });
+          }
+        },
+      ),
+      getGasKeyInfo: createAuthEndpoint(
+        "/near/gas-key/info",
+        {
+          method: "POST",
+          body: GasKeyInfoRequest,
+          use: [sessionMiddleware],
+        },
+        async (ctx) => {
+          const session = ctx.context.session;
+          const { accountId, publicKey } = ctx.body;
+
+          const nearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [
+              { field: "userId", operator: "eq", value: session.user.id },
+              { field: "isPrimary", operator: "eq", value: true },
+            ],
+          });
+
+          if (!nearAccount) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "No NEAR account linked to session",
+              status: 401,
+            });
+          }
+          if (nearAccount.accountId !== accountId) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Account does not match session account",
+              status: 401,
+            });
+          }
+
+          const network = nearAccount.network as "mainnet" | "testnet";
+          const cfg = getSessionGasKeyConfig(network);
+          if (!cfg) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "Session gas keys are not configured",
+              status: 503,
+            });
+          }
+
+          try {
+            const near = getNear(network);
+            const view = await near.getAccessKey(accountId, publicKey, { blockId: "final" });
+            const key = view ? extractGasKeyPermission(view) : null;
+            if (!key) {
+              throw new APIError("NOT_FOUND", {
+                message: "Gas key not found on account",
+                status: 404,
+              });
+            }
+
+            const capYocto = toYocto(cfg.maxFundPerUser);
+            let fundedTotal = 0n;
+            try {
+              const funded = await ctx.context.adapter.findMany<{ amount: string }>({
+                model: "fundedGasKey",
+                where: [
+                  { field: "userId", operator: "eq", value: session.user.id },
+                  { field: "network", operator: "eq", value: network },
+                ],
+              });
+              fundedTotal = (funded ?? []).reduce(
+                (sum, row) => sum + BigInt(row.amount || "0"),
+                0n,
+              );
+            } catch (err) {
+              console.error("gas-key info findMany error:", err);
+            }
+
+            return ctx.json(
+              GasKeyInfoResponse.parse({
+                accountId,
+                publicKey,
+                balance: key.balance,
+                numNonces: key.num_nonces,
+                receiverId: key.receiver_id,
+                methodNames: key.method_names,
+                fundedTotal: fundedTotal.toString(),
+                capRemaining: (BigInt(capYocto) - fundedTotal).toString(),
+              }),
+            );
+          } catch (error: unknown) {
+            if (error instanceof APIError) throw error;
+            throw new APIError("INTERNAL_SERVER_ERROR", {
+              message: error instanceof Error ? error.message : "Gas key info lookup failed",
+              status: 500,
+            });
+          }
         },
       ),
       viewContract: createAuthEndpoint(
