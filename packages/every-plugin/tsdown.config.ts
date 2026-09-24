@@ -24,7 +24,7 @@ export default defineConfig({
     "src/cli.ts",
   ],
   format: ["cjs", "esm"],
-  dts: true,
+  dts: { tsconfig: "./tsconfig.dts.json" },
   clean: true,
   outDir: "dist",
   treeshake: true,

@@ -57,6 +57,7 @@ test-results
 api/tests
 host/tests
 packages/every-plugin/tests
+!packages/every-plugin/tests/types.d.ts
 packages/everything-dev/tests
 
 # Docs
