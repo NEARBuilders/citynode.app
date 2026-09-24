@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/page-ready";
+import { injectCookies } from "../helpers/seeded";
 
 test.describe("Auth redirect", () => {
   let pageErrors: string[];
@@ -35,6 +36,34 @@ test.describe("Auth redirect", () => {
     const signInHeading = page.getByTestId("login.heading");
     await expect(signInHeading).toBeVisible({ timeout: 10000 });
 
+    expectNoHydrationFailure(pageErrors);
+  });
+
+  // Regression: the login route redirected authed visitors to the redirect
+  // target while the authed guard, reading a stale (signed-out) session cache
+  // via ensureQueryData, bounced them straight back — ping-ponging past the
+  // router's redirect limit into "Too many redirects" on the root boundary.
+  test("authenticated /login lands on the redirect target without a redirect loop", async ({
+    page,
+  }) => {
+    const consoleErrors: string[] = [];
+    page.on("pageerror", (error) => consoleErrors.push(error.message));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    await injectCookies(page);
+
+    await page.goto("/login?redirect=%2Fdashboard", { waitUntil: "domcontentloaded" });
+    await page.waitForURL(/\/dashboard/, { timeout: 15000, waitUntil: "commit" });
+    await waitForApp(page);
+
+    await expect(page.getByText("Application error")).toHaveCount(0);
+    await expect(
+      page.getByText("Something went wrong before the app layout could render."),
+    ).toHaveCount(0);
+    expect(consoleErrors.join("\n")).not.toContain("Too many redirects");
+    expect(consoleErrors.join("\n")).not.toContain("Error in route match");
     expectNoHydrationFailure(pageErrors);
   });
 });

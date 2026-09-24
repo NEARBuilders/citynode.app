@@ -13,14 +13,27 @@ export interface AuthContext {
   isBanned: boolean;
 }
 
+/**
+ * The router's context carries the session as `SessionData | null | undefined`
+ * (the root route resolves it to null for signed-out visitors), so guards
+ * accept the widened session instead of the narrower `RouterContext`.
+ */
+interface GuardContext extends Omit<RouterContext, "session"> {
+  session: RouterContext["session"] | null;
+}
+
 interface GuardArgs {
-  context: RouterContext;
+  context: GuardContext;
   location: { href: string };
 }
 
-async function ensureSession(context: RouterContext): Promise<SessionData | null> {
+async function ensureSession(context: GuardContext): Promise<SessionData | null> {
   const { queryClient, authClient } = context;
-  return queryClient.ensureQueryData(sessionQueryOptions(authClient, context.session));
+  // query() awaits a refetch when the cached session is stale (e.g. right after
+  // sign-in invalidation). ensureQueryData would return the stale signed-out
+  // value immediately and redirect, bouncing authed users back to /login until
+  // the router trips its redirect limit ("Too many redirects").
+  return queryClient.query(sessionQueryOptions(authClient, context.session));
 }
 
 function buildAuthContext(session: SessionData | null | undefined): AuthContext {
