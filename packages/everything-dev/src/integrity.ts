@@ -73,6 +73,16 @@ export async function computeSriHashForUrl(
   url: string,
   options?: SriUrlOptions,
 ): Promise<string | null> {
+  const attempts = 3;
+  for (let attempt = 1; attempt < attempts; attempt++) {
+    const hash = await computeSriHashOnce(url, options);
+    if (hash) return hash;
+    await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+  }
+  return computeSriHashOnce(url, options);
+}
+
+async function computeSriHashOnce(url: string, options?: SriUrlOptions): Promise<string | null> {
   try {
     const entryUrl = resolveSriTargetUrl(url, options);
 
@@ -98,6 +108,13 @@ export function resolveEntryUrl(url: string): string {
   return `${url.replace(/\/$/, "")}/remoteEntry.js`;
 }
 
+export class SriVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SriVerificationError";
+  }
+}
+
 export async function verifySriForUrl(
   url: string,
   expectedIntegrity: string,
@@ -107,8 +124,9 @@ export async function verifySriForUrl(
 
   const response = await fetchResponse(entryUrl, { timeout: "30 seconds" });
   if (!response.ok) {
-    console.warn(`[SRI] Failed to fetch ${entryUrl} for verification: ${response.status}`);
-    return;
+    throw new SriVerificationError(
+      `Failed to fetch ${entryUrl} for verification: ${response.status}`,
+    );
   }
 
   const computed = await computeSriHashFromResponse(response, entryUrl, options);
@@ -226,7 +244,7 @@ function setNestedPath(obj: Record<string, unknown>, dottedPath: string, value: 
   current[keys[keys.length - 1]!] = value;
 }
 
-function deleteNestedPath(obj: Record<string, unknown>, dottedPath: string): void {
+export function deleteNestedPath(obj: Record<string, unknown>, dottedPath: string): void {
   const keys = dottedPath.split(".");
   let current = obj;
   for (let i = 0; i < keys.length - 1; i += 1) {
@@ -255,7 +273,9 @@ export function reportDeployResult(opts: {
       if (opts.integrity) {
         setNestedPath(config, opts.integrityField, opts.integrity);
       } else {
-        deleteNestedPath(config, opts.integrityField);
+        console.warn(
+          `[SRI] integrity could not be computed for ${opts.url} — keeping the previous ${opts.integrityField} (fail-closed)`,
+        );
       }
     }
     writeFileSync(opts.bosConfigPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -297,12 +317,8 @@ export function applyDeployResults(
   const merged = structuredClone(config);
   for (const result of results) {
     setNestedPath(merged, result.urlField, result.url);
-    if (result.integrityField) {
-      if (result.integrity) {
-        setNestedPath(merged, result.integrityField, result.integrity);
-      } else {
-        deleteNestedPath(merged, result.integrityField);
-      }
+    if (result.integrityField && result.integrity) {
+      setNestedPath(merged, result.integrityField, result.integrity);
     }
   }
   return merged;

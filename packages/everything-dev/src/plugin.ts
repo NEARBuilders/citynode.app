@@ -313,6 +313,21 @@ async function exportPublishKey(
   const { FileKeyStore } = await import("near-kit/keys/file");
   const keyStore = new FileKeyStore("~/.near-credentials", network);
   await keyStore.add(account, parseNearPrivateKey(keyPair.privateKey));
+  try {
+    const { statSync, chmodSync } = await import("node:fs");
+    const { homedir } = await import("node:os");
+    const credentialPath = join(
+      homedir(),
+      ".near-credentials",
+      network === "mainnet" ? "mainnet" : network,
+      `${account}.json`,
+    );
+    if (statSync(credentialPath).mode & 0o077) {
+      chmodSync(credentialPath, 0o600);
+    }
+  } catch {
+    // best-effort tightening; near-kit owns the write path
+  }
 
   return {
     publicKey: keyPair.publicKey,

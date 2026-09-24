@@ -1047,6 +1047,11 @@ async function main() {
       process.stdout.write(`  Allowance: ${result.allowance}\n`);
       process.stdout.write(`\n`);
       const secretName = result.env === "staging" ? "NEAR_TESTNET_PRIVATE_KEY" : "NEAR_PRIVATE_KEY";
+      if (!process.stdout.isTTY) {
+        process.stderr.write(
+          `  ⚠ Non-interactive stdout: this private key will be captured in any log or pipe (GitHub Actions logs persist stdout).\n`,
+        );
+      }
       process.stdout.write(
         `  Set this as ${secretName} in GitHub Actions or before calling publish:\n`,
       );

@@ -299,6 +299,13 @@ export const DeployConfigSchema = z.object({
 });
 export type DeployConfig = z.infer<typeof DeployConfigSchema>;
 
+const PluginKeySchema = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9._-]+$/,
+    "plugin key must match [a-zA-Z0-9._-] — keys from remote/extended configs are interpolated into shells and generated code",
+  );
+
 export const BosConfigSchema = z.object({
   account: z.string(),
   extends: ExtendsSchema.optional(),
@@ -311,7 +318,7 @@ export const BosConfigSchema = z.object({
   publish: PublishConfigSchema.optional(),
   deploy: DeployConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
-  plugins: z.record(z.string(), z.union([z.string(), BosPluginRefSchema])).optional(),
+  plugins: z.record(PluginKeySchema, z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
     host: HostConfigSchema,
     ui: UiConfigSchema,
@@ -361,7 +368,7 @@ export const RuntimeConfigSchema = z.object({
     shared: SharedDepMapSchema.optional(),
     dependsOn: z.array(z.string()).optional(),
   }).optional(),
-  plugins: z.record(z.string(), RuntimePluginConfigSchema).optional(),
+  plugins: z.record(PluginKeySchema, RuntimePluginConfigSchema).optional(),
   nodes: z.record(z.string(), RuntimeDependencyNodeSchema).optional(),
 });
 export type RuntimeConfig = z.infer<typeof RuntimeConfigSchema>;

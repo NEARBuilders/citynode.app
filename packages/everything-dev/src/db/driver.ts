@@ -61,7 +61,7 @@ function buildPoolConfig(url: string, namespace: string | undefined) {
     connectionString: url,
     ssl: isLocal
       ? false
-      : { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === "true" },
+      : { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false" },
     max: Number(process.env.DB_POOL_MAX) || 10,
     connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 30_000,
     idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS) || 30_000,
