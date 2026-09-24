@@ -67,3 +67,21 @@ jobs:
         # the deployment artifact (plan 043). railway redeploy would re-run
         # the previous build and never ship the new artifacts.
         run: railway up --service app --ci --verbose
+
+      - name: Verify release-train identity (mf check)
+        timeout-minutes: 5
+        run: |
+          # Gate the release train: all host/plugin bundles must agree on shared-dep
+          # versions (exact for effect-critical deps) and pluginVersion. Runs AFTER
+          # the deploy — image-native deploys serve /bundles/* from the new image,
+          # so the check can only pass once it's live.
+          attempts=10
+          until bun run bos mf check; do
+            attempts=$((attempts - 1))
+            if [ "$attempts" -le 0 ]; then
+              echo "::error::Release-train identity check failed — bundles are inconsistent (deployment did not come up healthy or skew). See bos mf check output."
+              exit 1
+            fi
+            echo "mf check failed; retrying in 20s ($attempts attempt(s) left)…"
+            sleep 20
+          done

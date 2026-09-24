@@ -198,65 +198,9 @@ export const NodeListSummarySchema = z.object({
   validatorCount: z.number().int().nonnegative(),
 });
 
-export const BundleObjectSchema = z.object({
-  key: z.string(),
-  sha256: z.string(),
-  integrity: z.string(),
-});
-
 export const contract = oc.router({
   ...discoveryContract,
 
-  uploadBundles: oc
-    .route({
-      method: "POST",
-      path: "/storage/bundles",
-      summary: "Upload Module Federation bundle artifacts",
-      description:
-        "Stores bundle files under bundles/<account>/<gateway>/<workspace>/<path> and returns server-computed SHA-256 and SRI hashes over the stored bytes. Authenticated via session or API key (x-api-key).",
-      tags: ["Storage"],
-    })
-    .input(
-      z.object({
-        account: z.string().min(1),
-        gateway: z.string().min(1),
-        workspace: z.string().min(1),
-        paths: z.record(
-          z.string(),
-          z.object({
-            content: z.string().describe("Base64-encoded file bytes"),
-            contentType: z.string().optional(),
-          }),
-        ),
-      }),
-    )
-    .output(
-      z.object({
-        base: z.string(),
-        objects: z.array(BundleObjectSchema),
-      }),
-    )
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
-
-  serveBundle: oc
-    .route({
-      method: "GET",
-      path: "/bundles/{account}/{gateway}/{workspace}/{+path}",
-      summary: "Serve a stored bundle artifact",
-      description:
-        "Public. Serves bundle bytes with the stored content type. Mounted at /bundles/* by the host.",
-      tags: ["Storage"],
-    })
-    .input(
-      z.object({
-        account: z.string(),
-        gateway: z.string(),
-        workspace: z.string(),
-        path: z.string(),
-      }),
-    )
-    .output(z.instanceof(File))
-    .errors({ NOT_FOUND }),
   ping: oc.route({ method: "GET", path: "/ping" }).output(
     z.object({
       status: z.literal("ok"),

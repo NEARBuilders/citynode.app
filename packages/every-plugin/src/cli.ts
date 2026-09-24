@@ -32,16 +32,16 @@ export async function emitContractTypes(): Promise<void> {
   }
 }
 
-async function runRspack(deploy: boolean): Promise<void> {
+async function runRspack(): Promise<void> {
   const generatedConfig = ensureGeneratedRspackConfig();
 
   const args = generatedConfig ? ["build", "--config", generatedConfig] : ["build"];
-  await run("rspack", args, deploy ? { DEPLOY: "true" } : {});
+  await run("rspack", args, {});
 
   const uiConfig = ensureGeneratedUiRsbuildConfig(process.cwd());
   if (uiConfig) {
     console.log("[every-plugin] Building folder-form ui source…");
-    await run("rsbuild", ["build", "--config", uiConfig], deploy ? { DEPLOY: "true" } : {});
+    await run("rsbuild", ["build", "--config", uiConfig], {});
   }
 }
 
@@ -51,9 +51,8 @@ export function runCliCommand(raw: string): Promise<void> {
     case "types":
       return emitContractTypes();
     case "build":
-      return runRspack(false);
     case "deploy":
-      return runRspack(true);
+      return runRspack();
     case "dev":
       return (async () => {
         const { startPluginDevServer } = await import("./dev/serve");

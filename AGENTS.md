@@ -395,16 +395,9 @@ bun run dev    # hot reload, all services local
 5. **Publish your config on-chain:**
    ```bash
    bos publish --deploy
-   # builds workspaces → deploys to Zephyr CDN → publishes bos.config.json to FastKV at bos://<your-account>/citynode.app
+   # builds workspaces → writes deterministic bundle URLs (https://<domain>/bundles/<account>/<gateway>/<workspace>/) → publishes bos.config.json to FastKV at bos://<your-account>/citynode.app
    ```
-
-   **No Zephyr account?** Opt into the platform CDN — bundles upload to the platform storage and the host serves them from `/bundles/*`:
-   ```bash
-   bos publish --deploy --cdn platform   # or set deploy.cdn: "platform" in bos.config.json
-   # requires bos login (session credential; uploads are pinned to the session's NEAR account)
-   # bundles land at https://<site>/bundles/<account>/<gateway>/<workspace>/ with server-computed SRI
-   ```
-   `deploy.cdn` defaults to `"zephyr"`; `"platform"` needs no external account. See ADR 0007 for the storage/composition design.
+   No CLI session, no uploads, no CDN provider — the runtime image stages its own workspace dists and serves them same-origin from `/bundles/*` (`BOS_BUNDLE_DIR`). See ADR 0011 for the image-native artifacts design.
 
 6. **Deploy to Railway** — use the one-click template (button in `README.md`) or `railway up` with the committed `railway.toml`. The image is built from the committed root `Dockerfile`, so the same container works unchanged on Railway today and on any other provider (Fly Machines, Hetzner, …) later — the provider surface is declared in code as Infrastructure-as-Effects via [alchemy](https://github.com/alchemy-run/alchemy), which makes providers swappable and self-hostable for sovereign tenants. Set these environment variables on your Railway service:
    | Variable | Value |
@@ -528,7 +521,7 @@ This repo is the parent platform, not a generated child project.
 **Release flow:**
 - CI is the validation workflow. On successful push to `main`, the Deploy workflow triggers automatically via `workflow_run` and checks out the exact SHA CI validated.
 - `release.yml` is manual (`workflow_dispatch`): it consumes changesets, creates the `chore: version packages` PR when pending, and publishes to npm when no changesets remain.
-- `deploy.yml` runs `bos publish --deploy`, publishes `bos.config.json` to FastKV, and redeploys Railway. Nothing is committed back — the runtime fetches the published config from FastKV.
+- `deploy.yml` runs `bos publish --deploy` (writes deterministic bundle URLs + publishes `bos.config.json` to FastKV) and ships the Railway image with `railway up`. Nothing is committed back — the runtime fetches the published config from FastKV.
 - Generated child repos use a simpler flow: both Release and Deploy trigger directly from CI success via `workflow_run` (no npm publish, no Docker).
 
 **Create changeset:**
@@ -715,7 +708,7 @@ See `tests/regression/browser/specs/admin.spec.ts` and `settings-api-keys.spec.t
 
 **Plugin fails to load with `ModuleFederationError` / `__webpack_modules__[e].call`:**
 - The plugin's deployed `mf-manifest.json` reports a `metaData.pluginVersion` older than the host's. Each plugin bundle is built against a specific `@module-federation/runtime`; the host and each plugin must agree on that version, and the plugin's bundle must provide every `shared[]` dependency the host requires (`requiredVersion: ^X.Y.Z`).
-- Run `bos mf check` to see which plugin is behind. Redeploy it via `cd plugins/<key> && bun run deploy` and `bos publish --deploy --packages local` from the repo root, then re-run `bos mf check`.
+- Run `bos mf check` to see which plugin is behind. Redeploy it via `cd plugins/<key> && bos plugin publish <key>` (or `bos publish --deploy --packages local` from the repo root), then re-run `bos mf check`.
 - See `packages/everything-dev/skills/publish-sync` (Federation runtime compatibility section) for the full failure mode and recovery workflow.
 
 **Database issues:**

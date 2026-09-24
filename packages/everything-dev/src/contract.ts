@@ -155,11 +155,8 @@ export const WorkspaceDeployResultSchema = z.object({
   key: z.string(),
   kind: z.enum(["app", "plugin"]),
   success: z.boolean(),
-  url: z.string().optional(),
   error: z.string().optional(),
-  warnings: z.array(z.string()).optional(),
   durationMs: z.number().optional(),
-  retried: z.boolean().optional(),
 });
 
 export const PublishOptionsSchema = z.object({
@@ -177,7 +174,6 @@ export const PublishOptionsSchema = z.object({
   wallet: z.boolean().default(false),
   env: z.enum(["production", "staging"]).default("production"),
   registry: z.string().optional(),
-  cdn: z.enum(["zephyr", "platform"]).optional(),
 });
 
 export const PublishResultSchema = z.object({

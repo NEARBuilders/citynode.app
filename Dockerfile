@@ -3,9 +3,18 @@
 FROM oven/bun:1.3.14-alpine AS builder
 WORKDIR /app
 
+# NOTE: do NOT split this into a manifests-first COPY + install. Bun's frozen
+# install resolves a different tree on a manifests-only context than on a full
+# checkout (and skips workspace bin links whose targets are absent), which
+# breaks the lockfile check and the workspace build scripts. Full source + a
+# cache mount keeps re-downloads free when the layer busts.
 COPY . .
 
-RUN bun install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --ignore-scripts
+
+RUN test -e node_modules/.bin/every-plugin \
+    || { echo "workspace bin not linked — bun skips bin links whose targets are absent at install time"; exit 1; }
 RUN bun run --cwd packages/every-plugin build
 RUN bun run --cwd packages/everything-dev build
 RUN bun run scripts/resolve-workspace-refs.ts

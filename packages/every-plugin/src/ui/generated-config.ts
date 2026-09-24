@@ -21,31 +21,24 @@ export function hasFolderFormUi(cwd: string): boolean {
   );
 }
 
-function generatedUiConfig(pluginId: string, bosConfigPath: string | null): string {
-  const bosConfigDir = bosConfigPath ? path.dirname(bosConfigPath) : null;
+function generatedUiConfig(pluginId: string): string {
   return `import path from "node:path";
-import { createUiRsbuildConfig, pluginUiDeployFields } from "every-plugin/ui/mf-build";
-import { uiDeployPlugins } from "everything-dev/ui/deploy";
+import { createUiRsbuildConfig } from "every-plugin/ui/mf-build";
 import pkg from "../package.json";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "..", "ui");
-const bosConfigDir = ${JSON.stringify(bosConfigDir)};
 
 export default createUiRsbuildConfig({
   workspaceRoot,
   pkg,
   role: "consumer",
   manifestName: ${JSON.stringify(pluginId)},
-  configDir: bosConfigDir ?? process.cwd(),
-  deployFields: pluginUiDeployFields(${JSON.stringify(pluginId)}),
-  deployLabel: ${JSON.stringify(`${pluginId} UI`)},
   devPort: Number(process.env.BOS_UI_PORT) || 0,
   webEntry: "./ui/src/routeConfig.gen.ts",
   webExposes: { "./routeConfig": "./ui/src/routeConfig.gen.ts" },
   nodeEntry: "./ui/src/routeConfig.gen.ts",
   nodeExposes: { "./routeConfig": "./ui/src/routeConfig.gen.ts" },
   routesDirectory: "./ui/src/routes",
-  deployPlugins: uiDeployPlugins,
 });
 `;
 }
@@ -70,7 +63,7 @@ export function ensureGeneratedUiRsbuildConfig(cwd: string): string | null {
       ? path.relative(path.dirname(bosConfigPath), cwd).split(path.sep)[1]?.split(path.sep)[0]
       : undefined;
   const pluginId = layoutKey ?? getPluginInfo(cwd).normalizedName;
-  const next = generatedUiConfig(pluginId, bosConfigPath);
+  const next = generatedUiConfig(pluginId);
   if (!fs.existsSync(outPath) || fs.readFileSync(outPath, "utf8") !== next) {
     fs.writeFileSync(outPath, next);
   }

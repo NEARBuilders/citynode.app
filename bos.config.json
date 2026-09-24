@@ -13,9 +13,6 @@
       "service": "app"
     }
   },
-  "deploy": {
-    "cdn": "platform"
-  },
   "app": {
     "host": {
       "development": "local:host",

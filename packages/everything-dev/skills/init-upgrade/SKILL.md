@@ -146,7 +146,7 @@ Framework-owned files (from `FRAMEWORK_OWNED_SYNC_FILES`) are always updated whe
 ### What gets synced
 
 From parent template → local:
-- `app.*.production` — Zephyr URLs
+- `app.*.production` — bundle URLs
 - `app.api.shared`, `app.auth.shared`, `plugins.*.shared` — dependency versions
 - Framework-owned files (rsbuild configs, routers, etc.)
 
@@ -189,7 +189,7 @@ bos publish                  # Publish config to FastKV
 bos publish --deploy         # Build, deploy to CDN, then publish
 ```
 
-`bos publish --deploy` builds, deploys to Zephyr, auto-updates `bos.config.json` with production URLs + integrity hashes, then publishes the config to FastKV.
+`bos publish --deploy` builds, auto-updates `bos.config.json` with deterministic bundle URLs, then publishes the config to FastKV.
 
 ## Canonical Ordering
 

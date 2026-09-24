@@ -41,12 +41,10 @@
     "dotenv": "^17.2.3",
     "everything-dev": "catalog:",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "catalog:",
-    "zephyr-rspack-plugin": "catalog:"
+    "vitest": "catalog:"
   },
   "scripts": {
     "build": "every-plugin build",
-    "deploy": "every-plugin deploy",
     "dev": "every-plugin dev",
     "test": "vitest run --root . --pool=forks",
     "test:watch": "vitest --root .",

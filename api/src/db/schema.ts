@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
-  customType,
   index,
   integer,
   jsonb,
@@ -13,12 +12,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType() {
-    return "bytea";
-  },
-});
 
 export const tenantStatus = pgEnum("tenant_status", [
   "active",
@@ -206,13 +199,4 @@ export const discoveryLumaConnections = pgTable("discovery_luma_connections", {
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull(),
   error: text("error"),
-});
-
-export const bundleObjects = pgTable("bundle_objects", {
-  key: text("key").primaryKey(),
-  sha256: text("sha256").notNull(),
-  size: integer("size").notNull(),
-  contentType: text("content_type").notNull(),
-  bytes: bytea("bytes").notNull(),
-  uploadedAt: timestamp("uploaded_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
 });

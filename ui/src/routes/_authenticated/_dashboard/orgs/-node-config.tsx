@@ -537,7 +537,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                         uiProduction: normalizeBundleBaseUrl(prev.uiProduction),
                       }))
                     }
-                    placeholder="https://…zephyrcloud.app"
+                    placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
                     disabled={!editable}
                   />
                   <button
@@ -573,7 +573,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                             ssrUrl: normalizeBundleBaseUrl(prev.ssrUrl),
                           }))
                         }
-                        placeholder="https://…zephyrcloud.app"
+                        placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
                         disabled={!editable}
                       />
                       <button

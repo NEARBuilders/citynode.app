@@ -13,12 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { uiDeployPlugins } from "everything-dev/ui/deploy";
-import {
-  CORE_UI_DEPLOY_FIELDS,
-  CORE_UI_PLUGIN_KEY,
-  createUiRsbuildConfig,
-} from "everything-dev/ui/mf-build";
+import { CORE_UI_PLUGIN_KEY, createUiRsbuildConfig } from "everything-dev/ui/mf-build";
 import pkg from "./package.json";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,9 +37,6 @@ export default createUiRsbuildConfig({
   pkg,
   role: "provider",
   manifestName: CORE_UI_PLUGIN_KEY,
-  configDir: repoRoot,
-  deployFields: CORE_UI_DEPLOY_FIELDS,
-  deployLabel: "UI",
   devPort: 3003,
   webEntry: "./src/entry.ts",
   webExposes: {
@@ -64,5 +56,4 @@ export default createUiRsbuildConfig({
     "import.meta.env.APP_NAME": JSON.stringify(bosConfig.domain),
     "import.meta.env.APP_ACCOUNT": JSON.stringify(bosConfig.account),
   },
-  deployPlugins: uiDeployPlugins,
 });

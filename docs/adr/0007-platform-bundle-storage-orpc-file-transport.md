@@ -1,7 +1,7 @@
 # ADR 0007: Platform bundle storage — file transport is an oRPC contract concern, not a host route
 
 Date: 2026-09-19
-Status: Accepted
+Status: Superseded by [ADR 0011](0011-image-native-artifacts.md) (image-native artifacts; the DB-backed bundle storage shipped in #133 but was never released and was deleted pre-release by plan 043 Phase B)
 Supersedes: the storage half of PR #58 (Cloudflare-R2-via-alchemy provider, closed as superseded)
 
 ## Context
