@@ -641,7 +641,13 @@ export const siwnClient = (config: SIWNClientConfig) => {
       method: "POST",
       body: { accountId, publicKey: stored.publicKey },
     });
-    if (response.error || !response.data) return null;
+    if (response.error || !response.data) {
+      if (response.error?.status === 404) {
+        gasKeyState.set(null);
+        return null;
+      }
+      throw new Error(response.error?.message || "Gas key info lookup failed");
+    }
 
     const state: GasKeyState = {
       accountId,

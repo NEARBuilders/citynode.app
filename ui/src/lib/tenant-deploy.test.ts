@@ -266,6 +266,48 @@ describe("publishTenantConfigForMode", () => {
     expect(result).toEqual({ data: { txHash: "relayed-tx" }, error: null });
   });
 
+  it("falls back to the relayer when the gas-key send fails mid-flight", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
+      data: {
+        contractId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: {},
+        gas: "300 Tgas",
+        attachedDeposit: "0 yocto",
+      },
+    });
+    const signed = vi.fn().mockResolvedValue("signed-payload");
+    const relay = vi.fn().mockResolvedValue({ data: { txHash: "relayed-tx" }, error: null });
+    const auth = {
+      near: {
+        ensureConnected: vi.fn().mockResolvedValue(true),
+        refreshGasKeyInfo: vi.fn().mockResolvedValue({
+          accountId: "chicago.sputnik-dao.near",
+          publicKey: "ed25519:gaskey",
+          networkId: "mainnet",
+          balance: "500000000000000000000000",
+          numNonces: 4,
+        }),
+        sendWithGasKey: vi.fn().mockRejectedValue(new Error("nonce conflict")),
+        buildSignedDelegateAction: signed,
+        relayTransaction: relay,
+        getRelayerInfo: vi.fn().mockResolvedValue({ data: { enabled: true } }),
+        getAccountId: vi.fn().mockReturnValue("chicago.sputnik-dao.near"),
+        getNetwork: vi.fn().mockReturnValue("mainnet"),
+      },
+    } as unknown as ReturnType<typeof useAuthClient>;
+
+    const result = await publishTenantConfigForMode(makeClient(prepareRegistryConfigWrite), auth, {
+      ...baseInput,
+      mode: "platform",
+    });
+
+    expect(auth.near.sendWithGasKey).toHaveBeenCalledTimes(1);
+    expect(signed).toHaveBeenCalled();
+    expect(relay).toHaveBeenCalledWith({ payload: "signed-payload" });
+    expect(result).toEqual({ data: { txHash: "relayed-tx" }, error: null });
+  });
+
   it("requires a wallet for platform mode without a relayer", async () => {
     const prepareRegistryConfigWrite = vi.fn().mockResolvedValue({
       data: {

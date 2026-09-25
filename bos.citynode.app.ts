@@ -66,6 +66,16 @@ export default App({
             maxDepositPerTransaction: "0",
           },
         },
+        sessionGasKey: {
+          mainnet: {
+            receiverId: "dev.everything.near",
+            methodNames: ["__fastdata_kv"],
+          },
+          testnet: {
+            receiverId: "dev.allthethings.testnet",
+            methodNames: ["__fastdata_kv"],
+          },
+        },
       },
     },
   }),

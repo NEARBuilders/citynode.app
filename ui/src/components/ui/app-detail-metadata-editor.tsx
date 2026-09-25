@@ -4,6 +4,7 @@ import { formatAmount } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
+import { trySendWithGasKey } from "@/lib/gas-key";
 import { useSessionGasKey } from "@/lib/use-gas-key";
 import { useNearAccount } from "@/lib/use-near-account";
 import { AppDetailMetadataActions } from "./app-detail-metadata-actions";
@@ -66,15 +67,15 @@ export function AppDetailMetadataEditor({
   const publishMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
-      if (gasKey.isReady) {
-        const result = await auth.near.sendWithGasKey({
-          receiverId: prepared.data.contractId,
-          methodName: prepared.data.methodName,
-          args: prepared.data.args,
-          gas: prepared.data.gas,
-        });
+      const gasKeySend = await trySendWithGasKey(auth, {
+        contractId: prepared.data.contractId,
+        methodName: prepared.data.methodName,
+        args: prepared.data.args,
+        gas: prepared.data.gas,
+      });
+      if (gasKeySend) {
         await gasKey.refresh();
-        return { ...result, viaGasKey: true };
+        return { ...gasKeySend, viaGasKey: true };
       }
       const signed = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,

@@ -271,6 +271,34 @@ describe("session gas key routes", () => {
     expect(res.status).toBe(403);
   });
 
+  it("shares the per-user cap across a second device's key", async () => {
+    const { customFetchImpl } = await setup();
+    const cookie = await verifyWithCookie(customFetchImpl);
+    const SECOND_DEVICE_KEY =
+      "ed25519:zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
+
+    for (let i = 0; i < 3; i++) {
+      const res = await fundWithCookie(customFetchImpl, cookie, {
+        accountId: MOCK_ACCOUNT_ID,
+        publicKey: MOCK_PUBLIC_KEY,
+      });
+      expect(res.status).toBe(200);
+    }
+    const fourth = await fundWithCookie(customFetchImpl, cookie, {
+      accountId: MOCK_ACCOUNT_ID,
+      publicKey: SECOND_DEVICE_KEY,
+    });
+    expect(fourth.status).toBe(200);
+
+    const res = await fundWithCookie(customFetchImpl, cookie, {
+      accountId: MOCK_ACCOUNT_ID,
+      publicKey: SECOND_DEVICE_KEY,
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.message).toMatch(/funding cap exceeded/);
+  });
+
   it("info returns balance, lanes, and remaining cap at finality", async () => {
     const { customFetchImpl } = await setup();
     const cookie = await verifyWithCookie(customFetchImpl);

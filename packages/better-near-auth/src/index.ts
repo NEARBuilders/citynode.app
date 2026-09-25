@@ -185,76 +185,72 @@ interface RelayerState {
   lastUsedAt?: Date;
 }
 
-type ParsedRelayerConfig =
-  | { kind: "flat"; config: RelayerConfig }
-  | { kind: "dual"; config: RelayerDualNetworkConfig };
+type ParsedDualNetworkConfig<T> =
+  | { kind: "flat"; config: T }
+  | { kind: "dual"; config: { mainnet?: T; testnet?: T } };
+
+function parseDualNetworkConfig<T extends object>(
+  input: T | { mainnet?: T; testnet?: T } | undefined,
+  opts: {
+    flatKeys: (keyof T)[];
+    flatSchema: { safeParse: (v: unknown) => unknown };
+    dualSchema: { safeParse: (v: unknown) => unknown };
+    label: string;
+  },
+): ParsedDualNetworkConfig<T> | undefined {
+  if (input == null) return undefined;
+  if (typeof input !== "object") {
+    throw new BetterAuthError(
+      `Invalid ${opts.label} config: expected an object with 'mainnet'/'testnet' keys or top-level fields.`,
+    );
+  }
+  const keys = Object.keys(input);
+  const hasNetworkKey = keys.includes("mainnet") || keys.includes("testnet");
+  const hasFlatKey = opts.flatKeys.some((k) => keys.includes(k as string));
+  if (hasNetworkKey && hasFlatKey) {
+    throw new BetterAuthError(
+      `Invalid ${opts.label} config: cannot mix per-network keys (mainnet/testnet) with top-level fields (${opts.flatKeys.join(", ")}). Use either a flat config or a dual-network config.`,
+    );
+  }
+  const schema = hasNetworkKey ? opts.dualSchema : opts.flatSchema;
+  const result = schema.safeParse(input) as {
+    success: boolean;
+    data?: unknown;
+    error?: { issues: Array<{ path: PropertyKey[]; message: string }> };
+  };
+  if (!result.success || !result.data) {
+    const detail =
+      result.error?.issues
+        .map((issue) => `${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`)
+        .join("; ") ?? "invalid config";
+    throw new BetterAuthError(`Invalid ${opts.label} config: ${detail}`);
+  }
+  if (hasNetworkKey) {
+    return { kind: "dual", config: result.data as { mainnet?: T; testnet?: T } };
+  }
+  return { kind: "flat", config: result.data as T };
+}
 
 export function parseRelayerConfig(
   input: RelayerConfig | RelayerDualNetworkConfig | undefined,
-): ParsedRelayerConfig | undefined {
-  if (input == null) return undefined;
-  if (typeof input !== "object") {
-    throw new BetterAuthError(
-      "Invalid relayer config: expected an object with 'mainnet'/'testnet' keys or top-level relayer fields.",
-    );
-  }
-  const keys = Object.keys(input);
-  const flatKeys = Object.keys(relayerConfigSchema.shape) as (keyof RelayerConfig)[];
-  const hasNetworkKey = keys.includes("mainnet") || keys.includes("testnet");
-  const hasFlatKey = flatKeys.some((k) => keys.includes(k));
-  if (hasNetworkKey && hasFlatKey) {
-    throw new BetterAuthError(
-      `Invalid relayer config: cannot mix per-network keys (mainnet/testnet) with top-level fields (${flatKeys.join(", ")}). Use either a flat RelayerConfig or a RelayerDualNetworkConfig.`,
-    );
-  }
-  const schema = hasNetworkKey ? relayerDualNetworkConfigSchema : relayerConfigSchema;
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    const detail = result.error.issues
-      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-      .join("; ");
-    throw new BetterAuthError(`Invalid relayer config: ${detail}`);
-  }
-  if (hasNetworkKey) {
-    return { kind: "dual", config: result.data as RelayerDualNetworkConfig };
-  }
-  return { kind: "flat", config: result.data as RelayerConfig };
+): ParsedDualNetworkConfig<RelayerConfig> | undefined {
+  return parseDualNetworkConfig(input, {
+    flatKeys: Object.keys(relayerConfigSchema.shape) as (keyof RelayerConfig)[],
+    flatSchema: relayerConfigSchema,
+    dualSchema: relayerDualNetworkConfigSchema,
+    label: "relayer",
+  });
 }
-
-type ParsedSessionGasKeyConfig =
-  | { kind: "flat"; config: SessionGasKeyConfig }
-  | { kind: "dual"; config: SessionGasKeyDualNetworkConfig };
 
 export function parseSessionGasKeyConfig(
   input: SessionGasKeyConfig | SessionGasKeyDualNetworkConfig | undefined,
-): ParsedSessionGasKeyConfig | undefined {
-  if (input == null) return undefined;
-  if (typeof input !== "object") {
-    throw new BetterAuthError(
-      "Invalid sessionGasKey config: expected an object with 'mainnet'/'testnet' keys or top-level session gas key fields.",
-    );
-  }
-  const keys = Object.keys(input);
-  const flatKeys = Object.keys(sessionGasKeyConfigSchema.shape) as (keyof SessionGasKeyConfig)[];
-  const hasNetworkKey = keys.includes("mainnet") || keys.includes("testnet");
-  const hasFlatKey = flatKeys.some((k) => keys.includes(k));
-  if (hasNetworkKey && hasFlatKey) {
-    throw new BetterAuthError(
-      `Invalid sessionGasKey config: cannot mix per-network keys (mainnet/testnet) with top-level fields (${flatKeys.join(", ")}). Use either a flat SessionGasKeyConfig or a dual-network config.`,
-    );
-  }
-  const schema = hasNetworkKey ? sessionGasKeyDualNetworkConfigSchema : sessionGasKeyConfigSchema;
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    const detail = result.error.issues
-      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-      .join("; ");
-    throw new BetterAuthError(`Invalid sessionGasKey config: ${detail}`);
-  }
-  if (hasNetworkKey) {
-    return { kind: "dual", config: result.data as SessionGasKeyDualNetworkConfig };
-  }
-  return { kind: "flat", config: result.data as SessionGasKeyConfig };
+): ParsedDualNetworkConfig<SessionGasKeyConfig> | undefined {
+  return parseDualNetworkConfig(input, {
+    flatKeys: Object.keys(sessionGasKeyConfigSchema.shape) as (keyof SessionGasKeyConfig)[],
+    flatSchema: sessionGasKeyConfigSchema,
+    dualSchema: sessionGasKeyDualNetworkConfigSchema,
+    label: "sessionGasKey",
+  });
 }
 
 function createNear(
@@ -436,24 +432,18 @@ async function relayOnChain(
   return { txHash: result.transaction.hash };
 }
 
-/**
- * Sponsor-side `TransferToGasKey`: the Sponsor signs, the receiving account is
- * the gas key's owner. near-kit's builder defaults the receiver to the signer,
- * and 0.20.2 has no public receiver setter, so the receiver is set directly
- * (a TS-private plain property, stable across the pinned minor).
- */
 function sponsorTransferToGasKey(
   builder: TransactionBuilder,
   receiverId: string,
   publicKey: string,
-  amountYocto: string,
+  amountYocto: bigint,
 ): TransactionBuilder {
   (builder as unknown as { receiverId?: string }).receiverId = receiverId;
-  return builder.transferToGasKey(publicKey, BigInt(amountYocto));
+  return builder.transferToGasKey(publicKey, amountYocto);
 }
 
-function toYocto(amount: string): string {
-  return parseAmount(amount as Parameters<typeof parseAmount>[0]);
+function toYocto(amount: string): bigint {
+  return BigInt(parseAmount(amount as Parameters<typeof parseAmount>[0]));
 }
 
 interface GasKeyPermissionView {
@@ -721,6 +711,24 @@ export const siwn = (options: SIWNPluginOptions) => {
 
   const primaryNetwork = getSupportedNetworks()[0];
   const relayerStates = new Map<"mainnet" | "testnet", RelayerState | null>();
+  const gasKeyFundLocks = new Map<string, Promise<unknown>>();
+
+  const withGasKeyFundLock = async <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+    const pending = gasKeyFundLocks.get(key) ?? Promise.resolve();
+    const run = pending.then(fn, fn);
+    gasKeyFundLocks.set(
+      key,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    try {
+      return await run;
+    } finally {
+      if (gasKeyFundLocks.get(key) === run) gasKeyFundLocks.delete(key);
+    }
+  };
   const relayerInitPromises = new Map<"mainnet" | "testnet", Promise<RelayerState | null>>();
 
   const headers: Record<string, string> = {};
@@ -1961,9 +1969,9 @@ export const siwn = (options: SIWNPluginOptions) => {
               methodNames: cfg.methodNames,
               numNonces: cfg.numNonces,
               fundAmount: cfg.fundAmount,
-              fundAmountYocto: toYocto(cfg.fundAmount),
+              fundAmountYocto: toYocto(cfg.fundAmount).toString(),
               topUpThreshold: cfg.topUpThreshold,
-              topUpThresholdYocto: toYocto(cfg.topUpThreshold),
+              topUpThresholdYocto: toYocto(cfg.topUpThreshold).toString(),
               maxFundPerUser: cfg.maxFundPerUser,
             }),
           );
@@ -2018,98 +2026,100 @@ export const siwn = (options: SIWNPluginOptions) => {
             });
           }
 
-          try {
-            if (!publicKey.startsWith("ed25519:")) {
-              throw new APIError("BAD_REQUEST", {
-                message: "Unsupported public key type",
-                status: 400,
-              });
-            }
+          return withGasKeyFundLock(`${session.user.id}:${network}`, async () => {
+            try {
+              if (!publicKey.startsWith("ed25519:")) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Unsupported public key type",
+                  status: 400,
+                });
+              }
 
-            const view = await rState.near.getAccessKey(accountId, publicKey);
-            const key = view ? extractGasKeyPermission(view) : null;
-            if (!key) {
-              throw new APIError("NOT_FOUND", {
-                message: "Gas key not found on account",
-                status: 404,
-              });
-            }
-            if (!matchesSessionGasKeyScope(key, cfg)) {
-              throw new APIError("FORBIDDEN", {
-                message: `Gas key scope (${key.receiver_id}) does not match the configured scope (${cfg.receiverId})`,
-                status: 403,
-              });
-            }
+              const view = await rState.near.getAccessKey(accountId, publicKey);
+              const key = view ? extractGasKeyPermission(view) : null;
+              if (!key) {
+                throw new APIError("NOT_FOUND", {
+                  message: "Gas key not found on account",
+                  status: 404,
+                });
+              }
+              if (!matchesSessionGasKeyScope(key, cfg)) {
+                throw new APIError("FORBIDDEN", {
+                  message: `Gas key scope (${key.receiver_id}) does not match the configured scope (${cfg.receiverId})`,
+                  status: 403,
+                });
+              }
 
-            const amountYocto = toYocto(cfg.fundAmount);
-            const thresholdYocto = toYocto(cfg.topUpThreshold);
-            if (BigInt(key.balance) >= BigInt(thresholdYocto)) {
-              throw new APIError("BAD_REQUEST", {
-                message: `Gas key balance (${key.balance}) is above the top-up threshold (${thresholdYocto})`,
-                status: 400,
+              const amountYocto = toYocto(cfg.fundAmount);
+              const thresholdYocto = toYocto(cfg.topUpThreshold);
+              if (BigInt(key.balance) >= thresholdYocto) {
+                throw new APIError("BAD_REQUEST", {
+                  message: `Gas key balance (${key.balance}) is above the top-up threshold (${thresholdYocto})`,
+                  status: 400,
+                });
+              }
+
+              const capYocto = toYocto(cfg.maxFundPerUser);
+              const funded = await ctx.context.adapter.findMany<{ amount: string }>({
+                model: "fundedGasKey",
+                where: [
+                  { field: "userId", operator: "eq", value: session.user.id },
+                  { field: "network", operator: "eq", value: network },
+                ],
               });
-            }
+              const fundedTotal = (funded ?? []).reduce(
+                (sum, row) => sum + BigInt(row.amount || "0"),
+                0n,
+              );
+              if (fundedTotal + amountYocto > capYocto) {
+                throw new APIError("FORBIDDEN", {
+                  message: `Per-user funding cap exceeded (${fundedTotal}/${capYocto} yoctoNEAR)`,
+                  status: 403,
+                });
+              }
 
-            const capYocto = toYocto(cfg.maxFundPerUser);
-            const funded = await ctx.context.adapter.findMany<{ amount: string }>({
-              model: "fundedGasKey",
-              where: [
-                { field: "userId", operator: "eq", value: session.user.id },
-                { field: "network", operator: "eq", value: network },
-              ],
-            });
-            const fundedTotal = (funded ?? []).reduce(
-              (sum, row) => sum + BigInt(row.amount || "0"),
-              0n,
-            );
-            if (fundedTotal + BigInt(amountYocto) > BigInt(capYocto)) {
-              throw new APIError("FORBIDDEN", {
-                message: `Per-user funding cap exceeded (${fundedTotal}/${capYocto} yoctoNEAR)`,
-                status: 403,
-              });
-            }
-
-            const result = await sponsorTransferToGasKey(
-              rState.near.transaction(rState.accountId),
-              accountId,
-              publicKey,
-              amountYocto,
-            ).send({ waitUntil: "EXECUTED" });
-
-            await ctx.context.adapter.create({
-              model: "fundedGasKey",
-              data: {
-                userId: session.user.id,
+              const result = await sponsorTransferToGasKey(
+                rState.near.transaction(rState.accountId),
                 accountId,
                 publicKey,
-                network,
-                amount: amountYocto,
-                txHash: result.transaction.hash,
-                createdAt: new Date(),
-              },
-            });
+                amountYocto,
+              ).send({ waitUntil: "EXECUTED" });
 
-            if (rState.mode === "ephemeral") {
-              await ctx.context.adapter.update({
-                model: "relayerKey",
-                where: [{ field: "network", operator: "eq", value: network }],
-                update: { lastUsedAt: new Date() },
+              await ctx.context.adapter.create({
+                model: "fundedGasKey",
+                data: {
+                  userId: session.user.id,
+                  accountId,
+                  publicKey,
+                  network,
+                  amount: amountYocto.toString(),
+                  txHash: result.transaction.hash,
+                  createdAt: new Date(),
+                },
+              });
+
+              if (rState.mode === "ephemeral") {
+                await ctx.context.adapter.update({
+                  model: "relayerKey",
+                  where: [{ field: "network", operator: "eq", value: network }],
+                  update: { lastUsedAt: new Date() },
+                });
+              }
+
+              return ctx.json(
+                GasKeyFundResponse.parse({
+                  txHash: result.transaction.hash,
+                  amountFunded: amountYocto.toString(),
+                }),
+              );
+            } catch (error: unknown) {
+              if (error instanceof APIError) throw error;
+              throw new APIError("INTERNAL_SERVER_ERROR", {
+                message: error instanceof Error ? error.message : "Gas key funding failed",
+                status: 500,
               });
             }
-
-            return ctx.json(
-              GasKeyFundResponse.parse({
-                txHash: result.transaction.hash,
-                amountFunded: amountYocto,
-              }),
-            );
-          } catch (error: unknown) {
-            if (error instanceof APIError) throw error;
-            throw new APIError("INTERNAL_SERVER_ERROR", {
-              message: error instanceof Error ? error.message : "Gas key funding failed",
-              status: 500,
-            });
-          }
+          });
         },
       ),
       getGasKeyInfo: createAuthEndpoint(
@@ -2191,7 +2201,7 @@ export const siwn = (options: SIWNPluginOptions) => {
                 receiverId: key.receiver_id,
                 methodNames: key.method_names,
                 fundedTotal: fundedTotal.toString(),
-                capRemaining: (BigInt(capYocto) - fundedTotal).toString(),
+                capRemaining: (capYocto - fundedTotal).toString(),
               }),
             );
           } catch (error: unknown) {

@@ -7,7 +7,7 @@ import {
   type TenantPublishConfigInput,
   type TenantUiOverride,
 } from "./dao-connect";
-import { hasFundedGasKey } from "./use-gas-key";
+import { trySendWithGasKey } from "./gas-key";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -129,14 +129,14 @@ export async function publishTenantConfigForMode(
     ...passthrough,
   });
 
-  const gasState = await auth.near.refreshGasKeyInfo();
-  if (hasFundedGasKey(gasState)) {
-    return auth.near.sendWithGasKey({
-      receiverId: prepared.data.contractId,
-      methodName: prepared.data.methodName,
-      args: prepared.data.args,
-      gas: prepared.data.gas,
-    });
+  const gasKeySend = await trySendWithGasKey(auth, {
+    contractId: prepared.data.contractId,
+    methodName: prepared.data.methodName,
+    args: prepared.data.args,
+    gas: prepared.data.gas,
+  });
+  if (gasKeySend) {
+    return gasKeySend;
   }
 
   const relayerInfo = await auth.near.getRelayerInfo();

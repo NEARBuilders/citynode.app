@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { formatAmount } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
@@ -32,7 +33,11 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
   if (state) {
     return (
       <p data-testid="gasless-writes-status" className="text-xs text-muted-foreground">
-        Gasless writes enabled{state.balance ? " — key funded and ready" : ""}.
+        Gasless writes enabled
+        {state.balance && /^\d+$/.test(state.balance)
+          ? ` — session gas key balance ${formatAmount(BigInt(state.balance), { precision: 4, trimZeros: true })}`
+          : ""}
+        .
       </p>
     );
   }

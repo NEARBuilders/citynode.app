@@ -123,6 +123,13 @@ describe("app detail metadata editor with a session gas key", () => {
       balance: "50000000000000000000000",
       numNonces: 4,
     });
+    wallet.refreshGasKeyInfo.mockResolvedValue({
+      accountId: "owner.near",
+      publicKey: "ed25519:gaskey",
+      networkId: "mainnet",
+      balance: "50000000000000000000000",
+      numNonces: 4,
+    });
     wallet.sendWithGasKey.mockResolvedValue({ txHash: "gas-key-tx" });
     renderEditor();
     await screen.findByTestId("metadata-gas-key-balance");
@@ -160,6 +167,36 @@ describe("app detail metadata editor with a session gas key", () => {
     expect(wallet.sign).toHaveBeenCalled();
     expect(wallet.relay).toHaveBeenCalledWith({ payload: "signed-payload" });
     expect(wallet.sendWithGasKey).not.toHaveBeenCalled();
+  });
+
+  it("falls back to delegate + relay when the gas-key send fails mid-flight", async () => {
+    atoms.gasKeyState.set({
+      accountId: "owner.near",
+      publicKey: "ed25519:gaskey",
+      networkId: "mainnet",
+      balance: "50000000000000000000000",
+      numNonces: 4,
+    });
+    wallet.refreshGasKeyInfo.mockResolvedValue({
+      accountId: "owner.near",
+      publicKey: "ed25519:gaskey",
+      networkId: "mainnet",
+      balance: "50000000000000000000000",
+      numNonces: 4,
+    });
+    wallet.sendWithGasKey.mockRejectedValue(new Error("nonce conflict"));
+    renderEditor();
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish now" }));
+
+    await waitFor(() =>
+      expect(wallet.success).toHaveBeenCalledWith("Metadata submitted", {
+        description: "tx: confirmed-hash",
+      }),
+    );
+    expect(wallet.sendWithGasKey).toHaveBeenCalledTimes(1);
+    expect(wallet.sign).toHaveBeenCalled();
+    expect(wallet.relay).toHaveBeenCalledWith({ payload: "signed-payload" });
   });
 
   it("hides the balance line when no key is bootstrapped and does not fund", async () => {

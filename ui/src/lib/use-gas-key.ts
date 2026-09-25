@@ -2,10 +2,7 @@ import type { GasKeyState } from "better-near-auth/react";
 import { useGasKeyState } from "better-near-auth/react";
 import { useCallback, useEffect } from "react";
 import { useAuthClient } from "@/app";
-
-export function hasFundedGasKey(state: GasKeyState): boolean {
-  return !!(state?.balance && /^\d+$/.test(state.balance) && BigInt(state.balance) > 0n);
-}
+import { hasFundedGasKey } from "./gas-key";
 
 export function useSessionGasKey(): {
   state: GasKeyState;
