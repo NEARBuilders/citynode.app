@@ -38,6 +38,8 @@ export function useCanCurate(enabled: boolean) {
     enabled,
     retry: false,
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
   return studio.isSuccess;
 }
