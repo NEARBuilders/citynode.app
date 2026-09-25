@@ -1,6 +1,7 @@
 import { PencilSimpleIcon, SignOutIcon, TrashIcon } from "@phosphor-icons/react";
 import type { Organization } from "@/app";
 import { Button, Card, Chip, InfoRow } from "@/components";
+import { useClientValue } from "@/hooks";
 
 export function OrganizationOverview({
   canDelete,
@@ -34,7 +35,7 @@ export function OrganizationOverview({
   org: Organization;
 }) {
   return (
-    <Card className="p-6 space-y-4 hover:shadow-md">
+    <Card className="flex flex-col gap-4 p-6">
       <div className="flex flex-wrap items-center gap-2">
         <Chip>organization</Chip>
         {isActive && <Chip accent>active</Chip>}
@@ -44,9 +45,7 @@ export function OrganizationOverview({
         <InfoRow label="members" value={String(memberCount)} />
         <InfoRow label="invites" value={String(pendingInvitationsCount)} />
         <InfoRow label="api keys" value={String(apiKeysCount)} />
-        {org.createdAt && (
-          <InfoRow label="created" value={new Date(org.createdAt).toLocaleDateString()} />
-        )}
+        {org.createdAt && <CreatedRow createdAt={org.createdAt} />}
       </div>
       <div className="flex flex-wrap gap-2">
         {!isActive && (
@@ -75,4 +74,9 @@ export function OrganizationOverview({
       </div>
     </Card>
   );
+}
+
+function CreatedRow({ createdAt }: { createdAt: string | Date }) {
+  const value = useClientValue(() => new Date(createdAt).toLocaleDateString(), "");
+  return <InfoRow label="created" value={value} />;
 }

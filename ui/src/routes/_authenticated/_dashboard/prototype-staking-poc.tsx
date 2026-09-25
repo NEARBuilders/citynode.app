@@ -1203,8 +1203,8 @@ function NodeLifecyclePocPage() {
           }
         />
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
             <Card>
               <CardContent className="space-y-4 p-4">
                 <SectionHeader title="Who does what" sectionTestId="poc-actors" />
@@ -1282,7 +1282,7 @@ function NodeLifecyclePocPage() {
                 </div>
 
                 {!connection.daoAccountId && (
-                  <div className="flex items-center gap-4 rounded-[10px] border border-border bg-muted p-3">
+                  <div className="flex items-center gap-4 rounded-xl border border-border bg-muted p-3">
                     <UnderConstruction
                       className="w-20 shrink-0"
                       url={TREZU_CREATE_URL}
@@ -1290,7 +1290,7 @@ function NodeLifecyclePocPage() {
                       runtimeConfig={runtimeConfig}
                     />
                     <div className="space-y-1">
-                      <p className="text-[13px] text-foreground">No treasury connected.</p>
+                      <p className="text-sm text-foreground">No treasury connected.</p>
                       <p className="text-xs text-muted-foreground">
                         Only one treasury connects at a time — the page switches as stations need
                         it.
@@ -1308,7 +1308,7 @@ function NodeLifecyclePocPage() {
                 )}
 
                 {connection.daoAccountId && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-border bg-muted px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted px-3 py-2">
                     <span className="min-w-0 text-xs text-muted-foreground">
                       Trezu connected as{" "}
                       <code className="font-mono text-foreground">{connection.daoAccountId}</code>
@@ -1382,7 +1382,7 @@ function NodeLifecyclePocPage() {
                     <button
                       type="button"
                       onClick={() => form.setFieldValue("endowmentLinked", !values.endowmentLinked)}
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground"
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground"
                       data-testid="poc-link-treasuries"
                     >
                       {values.endowmentLinked ? (
@@ -1426,7 +1426,6 @@ function NodeLifecyclePocPage() {
                   <ToggleGroupItem
                     key={option.id}
                     value={option.id}
-                    className="px-4 py-2 text-sm"
                     data-testid={`poc-lens-${option.id}`}
                   >
                     {option.label}
@@ -1530,9 +1529,7 @@ function NodeLifecyclePocPage() {
                                   >
                                     {facts.configPublished ? (
                                       <>
-                                        <Badge variant="success" className="text-[10px]">
-                                          config live
-                                        </Badge>
+                                        <Badge variant="success">config live</Badge>
                                         {tenantUrl && (
                                           <a
                                             href={tenantUrl}
@@ -1882,15 +1879,11 @@ function NodeLifecyclePocPage() {
                           className="inline-flex flex-wrap items-center gap-2"
                           data-testid="poc-tenant-record"
                         >
-                          <Badge variant="success" className="text-[10px]">
-                            {tenantRecord.status}
-                          </Badge>
+                          <Badge variant="success">{tenantRecord.status}</Badge>
                           <span className="truncate">{tenantRecord.name}</span>
                         </span>
                       ) : (
-                        <Badge variant="outline" className="text-[10px]">
-                          not created
-                        </Badge>
+                        <Badge variant="outline">not created</Badge>
                       )
                     }
                   />
@@ -1903,21 +1896,11 @@ function NodeLifecyclePocPage() {
                           data-testid="poc-tenant-binding"
                         >
                           <span className="truncate">{tenantBinding.hostname}</span>
-                          {tenantBinding.isPrimary && (
-                            <Badge variant="outline" className="text-[10px]">
-                              primary
-                            </Badge>
-                          )}
-                          {tenantBinding.isVerified && (
-                            <Badge variant="outline" className="text-[10px]">
-                              verified
-                            </Badge>
-                          )}
+                          {tenantBinding.isPrimary && <Badge variant="outline">primary</Badge>}
+                          {tenantBinding.isVerified && <Badge variant="outline">verified</Badge>}
                         </span>
                       ) : (
-                        <Badge variant="outline" className="text-[10px]">
-                          not created
-                        </Badge>
+                        <Badge variant="outline">not created</Badge>
                       )
                     }
                     mono
@@ -1930,17 +1913,13 @@ function NodeLifecyclePocPage() {
                         data-testid="poc-tenant-config"
                       >
                         {facts.configPublished ? (
-                          <Badge variant="success" className="text-[10px]">
-                            live
-                          </Badge>
+                          <Badge variant="success">live</Badge>
                         ) : publishPendingProposal ? (
-                          <Badge variant="warning" className="text-[10px]">
+                          <Badge variant="warning">
                             awaiting votes #{publishPendingProposal.id}
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px]">
-                            not published
-                          </Badge>
+                          <Badge variant="outline">not published</Badge>
                         )}
                         {fastKvUrl && (
                           <a
@@ -2051,7 +2030,6 @@ function PocField({
         placeholder={placeholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="font-mono text-xs"
         data-testid={id}
       />
     </Field>
@@ -2087,7 +2065,6 @@ function PocFormField({
             placeholder={placeholder}
             disabled={disabled}
             onChange={(event) => field.handleChange(event.target.value)}
-            className="font-mono text-xs"
             data-testid={`poc-${name}`}
           />
         </Field>
@@ -2119,7 +2096,7 @@ function PocConnectField({
         id={id}
         variant="outline"
         size="sm"
-        className="w-full justify-start font-mono text-xs"
+        className="w-full justify-start"
         onClick={onClick}
         disabled={connecting}
         data-testid={testId}
@@ -2146,15 +2123,15 @@ function ActorTile({
   popover: { title: string; body: string; links: InfoPopoverLink[] };
 }) {
   return (
-    <div className="space-y-1.5 rounded-[10px] border border-border bg-muted p-3">
+    <div className="space-y-1.5 rounded-xl border border-border bg-muted p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium text-muted-foreground">
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{label}</span>
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {connected ? (
-            <CheckCircleIcon className="h-3.5 w-3.5 text-status-success-foreground" />
+            <CheckCircleIcon className="h-3.5 w-3.5 text-success-muted-foreground" />
           ) : (
             <CircleIcon className="h-3.5 w-3.5 text-border" />
           )}
@@ -2162,7 +2139,7 @@ function ActorTile({
         </div>
       </div>
       <p className="break-all font-mono text-xs text-foreground">{account ?? "not set"}</p>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">{caption}</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{caption}</p>
     </div>
   );
 }
@@ -2212,7 +2189,7 @@ function StationStatusBadge({
     }
   })();
   return (
-    <Badge variant={variant} className="text-[10px]" data-testid={`poc-status-${id}`}>
+    <Badge variant={variant} data-testid={`poc-status-${id}`}>
       {label}
     </Badge>
   );
@@ -2222,11 +2199,15 @@ function StationIcon({ status }: { status: StationState["status"] }) {
   const className = "h-4 w-4 shrink-0";
   switch (status) {
     case "done":
-      return <CheckCircleIcon className={`${className} text-status-success-foreground`} />;
+      return <CheckCircleIcon className={`${className} text-success-muted-foreground`} />;
     case "running":
-      return <Spinner className={`${className} text-muted-foreground`} />;
+      return (
+        <span className="inline-flex shrink-0 text-muted-foreground">
+          <Spinner className={className} />
+        </span>
+      );
     case "staged":
-      return <CircleDashedIcon className={`${className} text-brand-accent-border`} />;
+      return <CircleDashedIcon className={`${className} text-brand`} />;
     case "failed":
       return <XCircleIcon className={`${className} text-destructive`} />;
     case "skipped":
@@ -2265,7 +2246,7 @@ function StationRow({
 
   return (
     <div
-      className={`space-y-2 rounded-[10px] border border-border bg-card p-3 transition-opacity ${
+      className={`space-y-2 rounded-xl border border-border bg-card p-3 transition-opacity ${
         dimmed ? "opacity-45" : ""
       }`}
       data-testid={`poc-station-${def.id}`}
@@ -2283,7 +2264,7 @@ function StationRow({
             >
               {def.title}
             </span>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline">
               {def.signer === "session" ? "you" : SIGNER_LABEL[def.signer]}
             </Badge>
             <StationStatusBadge
@@ -2292,8 +2273,7 @@ function StationRow({
             />
             {warning && (
               <InfoPopover
-                icon={<WarningIcon className="h-3.5 w-3.5" />}
-                className="text-status-warning-foreground hover:text-status-warning-foreground"
+                icon={<WarningIcon className="h-3.5 w-3.5 text-warning-muted-foreground" />}
                 title="platform audit seat"
                 body={warning}
                 links={membersHref ? [{ label: "add members on trezu", href: membersHref }] : []}
@@ -2310,7 +2290,7 @@ function StationRow({
                     {station.signerAccountId ? ` (${station.signerAccountId})` : ""}
                   </p>
                   {def.steps.some((step) => step.plan) && (
-                    <ul className="space-y-0.5 font-mono text-[11px] text-muted-foreground">
+                    <ul className="space-y-0.5 font-mono text-xs text-muted-foreground">
                       {def.steps.map((step) => (
                         <li key={step.id}>
                           {step.plan ? describePlan(step.plan) : `${step.label} (off-chain)`}
@@ -2373,7 +2353,7 @@ function StationRow({
                 className="flex flex-wrap items-center justify-between gap-2"
                 data-testid={`poc-staged-${def.id}-${step.id}`}
               >
-                <span className="min-w-0 font-mono text-[11px] text-muted-foreground">
+                <span className="min-w-0 font-mono text-xs text-muted-foreground">
                   #{proposal.id} {step.label} · {threshold.approved}
                   {threshold.required == null ? "" : `/${threshold.required}`} approvals
                 </span>

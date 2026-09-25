@@ -18,10 +18,8 @@ export function OrganizationEditForm({
   onSlugChange: (value: string) => void;
 }) {
   return (
-    <Card className="p-6 space-y-4 hover:shadow-md">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        Edit Organization
-      </div>
+    <Card className="flex flex-col gap-4 p-6">
+      <div className="text-sm font-medium text-muted-foreground">Edit organization</div>
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           type="text"

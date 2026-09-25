@@ -31,16 +31,12 @@ export function MemberCard({
   const user = member.user;
 
   return (
-    <Card className="hover:shadow-md">
+    <Card>
       <CardContent className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {user?.image ? (
-              <img
-                src={user.image}
-                alt=""
-                className="w-9 h-9 rounded-full object-cover border-2 border-outset border-border-strong"
-              />
+              <img src={user.image} alt="" className="w-9 h-9 rounded-full object-cover" />
             ) : (
               <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
                 <UserIcon className="h-4 w-4 text-muted-foreground" />
@@ -98,13 +94,7 @@ export function MemberCard({
         )}
 
         {canManage && onRemove && (
-          <Button
-            onClick={onRemove}
-            disabled={isRemoving}
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-          >
+          <Button onClick={onRemove} disabled={isRemoving} variant="destructive" size="sm">
             <TrashIcon className="h-3 w-3 mr-1" />
             {isRemoving ? "removing..." : "remove"}
           </Button>

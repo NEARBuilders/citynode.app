@@ -35,7 +35,7 @@ export function InvitationCard({
 }) {
   const needsReissue = !!invitation.nearAccountId && !invitation.nearNetwork;
   return (
-    <Card className="hover:shadow-md">
+    <Card>
       <CardContent className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
@@ -78,12 +78,7 @@ export function InvitationCard({
               </Button>
             )}
             {onCancel && (
-              <Button
-                onClick={onCancel}
-                disabled={isCancelling}
-                variant="outline"
-                className="text-destructive hover:text-destructive"
-              >
+              <Button onClick={onCancel} disabled={isCancelling} variant="destructive">
                 <TrashIcon className="h-3 w-3 mr-1" />
                 cancel
               </Button>

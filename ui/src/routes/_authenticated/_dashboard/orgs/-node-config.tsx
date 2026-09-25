@@ -377,17 +377,11 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                 data-testid="orgs-node-config-config"
               >
                 {configPublished ? (
-                  <Badge variant="success" className="text-[10px]">
-                    live
-                  </Badge>
+                  <Badge variant="success">live</Badge>
                 ) : pendingConfigProposal ? (
-                  <Badge variant="warning" className="text-[10px]">
-                    awaiting votes #{pendingConfigProposal.id}
-                  </Badge>
+                  <Badge variant="warning">awaiting votes #{pendingConfigProposal.id}</Badge>
                 ) : (
-                  <Badge variant="outline" className="text-[10px]">
-                    not published
-                  </Badge>
+                  <Badge variant="outline">not published</Badge>
                 )}
                 {fastKvUrl && (
                   <a
@@ -453,10 +447,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
           <InfoRow
             label="ui overrides"
             value={
-              <Badge
-                variant={tenant.allowUiOverrides ? "default" : "outline"}
-                className="text-[10px]"
-              >
+              <Badge variant={tenant.allowUiOverrides ? "default" : "outline"}>
                 {tenant.allowUiOverrides ? "allowed" : "disabled"}
               </Badge>
             }
@@ -464,7 +455,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
           <InfoRow
             label="ssr"
             value={
-              <Badge variant={tenant.allowSsr ? "default" : "outline"} className="text-[10px]">
+              <Badge variant={tenant.allowSsr ? "default" : "outline"}>
                 {tenant.allowSsr ? "allowed" : "off"}
               </Badge>
             }
@@ -547,7 +538,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                     type="button"
                     onClick={() => void onVerifyUiBundle()}
                     disabled={!editable || computing || !draft.uiProduction}
-                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
                     data-testid="orgs-node-config-verify"
                   >
                     {computing ? "hashing…" : "verify · fill integrity from the bundle"}
@@ -559,7 +550,6 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                   value={draft.uiIntegrity}
                   onChange={(value) => setDraft((prev) => ({ ...prev, uiIntegrity: value }))}
                   placeholder="sha384-…"
-                  mono
                   disabled={!editable}
                 />
                 {tenant.allowSsr && (
@@ -583,7 +573,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                         type="button"
                         onClick={() => void onVerifySsrBundle()}
                         disabled={!editable || computing || !draft.ssrUrl}
-                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
                         data-testid="orgs-node-config-verify-ssr"
                       >
                         {computing ? "hashing…" : "verify · fill integrity from the bundle"}
@@ -595,7 +585,6 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                       value={draft.ssrIntegrity}
                       onChange={(value) => setDraft((prev) => ({ ...prev, ssrIntegrity: value }))}
                       placeholder="sha384-…"
-                      mono
                       disabled={!editable}
                     />
                   </>
@@ -615,10 +604,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
             >
               <p className="text-xs font-semibold text-foreground">changes</p>
               {diff.map((entry) => (
-                <p
-                  key={entry.field}
-                  className="truncate font-mono text-[11px] text-muted-foreground"
-                >
+                <p key={entry.field} className="truncate font-mono text-xs text-muted-foreground">
                   {entry.field}: <span className="text-foreground">{entry.from || "—"}</span> →{" "}
                   <span className="text-foreground">{entry.to || "—"}</span>
                 </p>
@@ -664,7 +650,6 @@ function ConfigField({
   onBlur,
   placeholder,
   disabled,
-  mono,
 }: {
   id: string;
   label: string;
@@ -673,7 +658,6 @@ function ConfigField({
   onBlur?: () => void;
   placeholder?: string;
   disabled?: boolean;
-  mono?: boolean;
 }) {
   return (
     <Field>
@@ -686,7 +670,6 @@ function ConfigField({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
-        className={mono ? "font-mono text-xs" : undefined}
         data-testid={id}
       />
     </Field>

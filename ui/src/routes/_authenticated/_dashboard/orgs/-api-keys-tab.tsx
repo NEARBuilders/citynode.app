@@ -46,7 +46,7 @@ export function ApiKeysTab({
   return (
     <TabsContent value="apikeys" className="space-y-6 pt-4">
       {canManageMembers && (
-        <Card className="p-6 hover:shadow-md">
+        <Card className="p-6">
           <ApiKeyForm onCreate={onCreate} isPending={isCreating} />
         </Card>
       )}
@@ -56,7 +56,7 @@ export function ApiKeysTab({
       {apiKeys.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           {apiKeys.map((key) => (
-            <Card key={key.id} className="p-5 space-y-3 hover:shadow-md">
+            <Card key={key.id} className="flex flex-col gap-3 p-5">
               <div className="space-y-1 min-w-0">
                 <div className="font-medium text-foreground break-all">{key.name ?? "unnamed"}</div>
                 <div className="text-xs text-muted-foreground font-mono">

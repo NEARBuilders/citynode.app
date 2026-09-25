@@ -57,7 +57,7 @@ function AcceptInvitation() {
   if (isLoading) {
     return (
       <PageContainer variant="wide">
-        <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="flex items-center justify-center min-h-96">
           <p className="text-sm text-muted-foreground">Loading invitation...</p>
         </div>
       </PageContainer>
@@ -104,7 +104,7 @@ function AcceptInvitation() {
               </p>
             </div>
 
-            <div className="border-2 border-outset border-border bg-muted/10 p-4 space-y-2 text-xs font-mono">
+            <div className="flex flex-col gap-2 rounded-xl bg-muted p-4 font-mono text-xs">
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">organization</span>
                 <span className="text-right break-all">

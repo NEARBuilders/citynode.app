@@ -232,9 +232,7 @@ function NewOrganization() {
         </form>
 
         <section className="space-y-4">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            What Happens Next
-          </h2>
+          <h2 className="text-sm font-medium text-muted-foreground">What happens next</h2>
           <Card>
             <CardContent className="p-4">
               <ul className="space-y-2 text-xs text-muted-foreground">

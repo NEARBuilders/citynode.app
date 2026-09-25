@@ -35,7 +35,7 @@ export function detectInviteIdentifier(
 }
 
 const selectClassName =
-  "w-full px-3 py-2 text-sm bg-card text-foreground border-2 border-inset border-border-strong rounded-[8px] outline-none focus:ring-2 focus:ring-ring";
+  "h-11 w-full rounded-4xl border border-input bg-input/30 px-4 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function InviteMemberForm({
   isPending,
@@ -53,12 +53,10 @@ export function InviteMemberForm({
   const detectedIdentifier = detectInviteIdentifier(identifier);
 
   return (
-    <Card className="p-6 space-y-4 hover:shadow-md">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        Invite member
-      </div>
+    <Card className="flex flex-col gap-4 p-6">
+      <div className="text-sm font-medium text-muted-foreground">Invite member</div>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
           if (!detectedIdentifier) return;
@@ -75,12 +73,13 @@ export function InviteMemberForm({
           } catch {}
         }}
       >
-        <div className="grid gap-4 md:grid-cols-[1fr_160px_200px]">
+        <div className="grid gap-4 md:grid-cols-4">
           <Input
             type="text"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             placeholder="email@example.com or alice.near"
+            className="md:col-span-2"
             aria-label="Email or NEAR account"
             data-testid="invite-identifier-input"
           />

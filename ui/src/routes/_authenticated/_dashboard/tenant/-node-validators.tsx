@@ -35,7 +35,7 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
 
   if (isLoading) {
     return (
-      <span className="text-[10px] text-muted-foreground" title="reading owner_id() on-chain">
+      <span className="text-xs text-muted-foreground" title="reading owner_id() on-chain">
         owner: …
       </span>
     );
@@ -44,7 +44,7 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
   if (!owner) {
     return (
       <span
-        className="text-[10px] text-muted-foreground"
+        className="text-xs text-muted-foreground"
         title="account is not a staking pool contract"
       >
         owner: unknown
@@ -54,10 +54,10 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
 
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
       title="verified via owner_id() on-chain"
     >
-      <ShieldCheckIcon className="h-3 w-3 text-green-500" />
+      <ShieldCheckIcon className="h-3 w-3 text-success" />
       owner: <code className="font-mono">{owner}</code>
     </span>
   );
@@ -127,7 +127,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
 
   return (
     <Card>
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="flex flex-col gap-3 p-4">
         {validators.length === 0 ? (
           <p className="text-sm text-muted-foreground">No validators attached to this node yet.</p>
         ) : (
@@ -154,16 +154,14 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                             role: e.target.value as ValidatorRow["role"],
                           })
                         }
-                        className="h-7 rounded-[10px] border-2 border-outset border-border-strong bg-card px-2 text-xs text-foreground"
+                        className="h-9 rounded-4xl border border-input bg-input/30 px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                         aria-label="validator role"
                       >
                         <option value="official">official</option>
                         <option value="community">community</option>
                       </select>
                     ) : (
-                      <Badge variant="secondary" className="capitalize">
-                        {validator.role}
-                      </Badge>
+                      <Badge variant="secondary">{validator.role}</Badge>
                     )}
                   </td>
                   <td className="py-2 pr-3 text-right">
@@ -213,13 +211,13 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
               value={newAccountId}
               onChange={(e) => setNewAccountId(e.target.value)}
               placeholder="everything.pool.near"
-              className="max-w-xs font-mono text-xs"
+              className="max-w-xs"
               required
             />
             <select
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as "official" | "community")}
-              className="h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-2 text-xs text-foreground"
+              className="h-9 rounded-4xl border border-input bg-input/30 px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="new validator role"
             >
               <option value="official">official</option>
@@ -284,9 +282,7 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
         {nodes.map((node) => (
           <div key={node.id} className="space-y-2">
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="capitalize">
-                {node.kind}
-              </Badge>
+              <Badge variant="secondary">{node.kind}</Badge>
               {renamingNodeId === node.id ? (
                 <form
                   onSubmit={(e) => {
