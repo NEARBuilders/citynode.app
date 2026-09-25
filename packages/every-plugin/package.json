@@ -10,6 +10,10 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
+      "bun": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
       "development": {
         "types": "./src/index.ts",
         "import": "./src/index.ts"
@@ -19,6 +23,10 @@
       "require": "./dist/index.cjs"
     },
     "./runtime": {
+      "bun": {
+        "types": "./src/runtime/index.ts",
+        "import": "./src/runtime/index.ts"
+      },
       "development": {
         "types": "./src/runtime/index.ts",
         "import": "./src/runtime/index.ts"
@@ -28,6 +36,10 @@
       "require": "./dist/runtime/index.cjs"
     },
     "./testing": {
+      "bun": {
+        "types": "./src/testing/index.ts",
+        "import": "./src/testing/index.ts"
+      },
       "development": {
         "types": "./src/testing/index.ts",
         "import": "./src/testing/index.ts"
@@ -37,6 +49,10 @@
       "require": "./dist/testing/index.cjs"
     },
     "./normalize": {
+      "bun": {
+        "types": "./src/runtime/services/normalize.ts",
+        "import": "./src/runtime/services/normalize.ts"
+      },
       "development": {
         "types": "./src/runtime/services/normalize.ts",
         "import": "./src/runtime/services/normalize.ts"
@@ -46,6 +62,10 @@
       "require": "./dist/runtime/services/normalize.cjs"
     },
     "./errors": {
+      "bun": {
+        "types": "./src/errors.ts",
+        "import": "./src/errors.ts"
+      },
       "development": {
         "types": "./src/errors.ts",
         "import": "./src/errors.ts"
@@ -55,6 +75,10 @@
       "require": "./dist/errors.cjs"
     },
     "./remote-entry": {
+      "bun": {
+        "types": "./src/remote-entry.ts",
+        "import": "./src/remote-entry.ts"
+      },
       "development": {
         "types": "./src/remote-entry.ts",
         "import": "./src/remote-entry.ts"
@@ -64,6 +88,10 @@
       "require": "./dist/remote-entry.cjs"
     },
     "./types": {
+      "bun": {
+        "types": "./src/types.ts",
+        "import": "./src/types.ts"
+      },
       "development": {
         "types": "./src/types.ts",
         "import": "./src/types.ts"
@@ -73,11 +101,23 @@
       "require": "./dist/types.cjs"
     },
     "./build/rspack": {
-      "types": "./src/build/rspack/index.ts",
-      "import": "./src/build/rspack/index.ts",
+      "bun": {
+        "types": "./src/build/rspack/index.ts",
+        "import": "./src/build/rspack/index.ts"
+      },
+      "development": {
+        "types": "./src/build/rspack/index.ts",
+        "import": "./src/build/rspack/index.ts"
+      },
+      "types": "./dist/build/rspack/index.d.mts",
+      "import": "./dist/build/rspack/index.mjs",
       "require": "./dist/build/rspack/index.cjs"
     },
     "./ui/manifest": {
+      "bun": {
+        "types": "./src/ui/manifest/index.ts",
+        "import": "./src/ui/manifest/index.ts"
+      },
       "development": {
         "types": "./src/ui/manifest/index.ts",
         "import": "./src/ui/manifest/index.ts"
@@ -90,6 +130,10 @@
       "require": "./dist/ui/manifest/index.cjs"
     },
     "./ui/manifest-generator": {
+      "bun": {
+        "types": "./src/ui/manifest/generator.ts",
+        "import": "./src/ui/manifest/generator.ts"
+      },
       "development": {
         "types": "./src/ui/manifest/generator.ts",
         "import": "./src/ui/manifest/generator.ts"
@@ -102,6 +146,10 @@
       "require": "./dist/ui/manifest/generator.cjs"
     },
     "./ui/manifest/contract": {
+      "bun": {
+        "types": "./src/ui/manifest/contract.ts",
+        "import": "./src/ui/manifest/contract.ts"
+      },
       "development": {
         "types": "./src/ui/manifest/contract.ts",
         "import": "./src/ui/manifest/contract.ts"
@@ -114,11 +162,23 @@
       "require": "./dist/ui/manifest/contract.cjs"
     },
     "./ui/mf-build": {
-      "types": "./src/ui/mf-build/index.ts",
-      "import": "./src/ui/mf-build/index.ts",
+      "bun": {
+        "types": "./src/ui/mf-build/index.ts",
+        "import": "./src/ui/mf-build/index.ts"
+      },
+      "development": {
+        "types": "./src/ui/mf-build/index.ts",
+        "import": "./src/ui/mf-build/index.ts"
+      },
+      "types": "./dist/ui/mf-build/index.d.mts",
+      "import": "./dist/ui/mf-build/index.mjs",
       "require": "./dist/ui/mf-build/index.cjs"
     },
     "./dev-serve": {
+      "bun": {
+        "types": "./src/dev/serve.ts",
+        "import": "./src/dev/serve.ts"
+      },
       "development": {
         "types": "./src/dev/serve.ts",
         "import": "./src/dev/serve.ts"

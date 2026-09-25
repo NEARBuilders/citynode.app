@@ -70,17 +70,22 @@ across two remotes owned pieces of one concern.
 
 **Two resolution rules** (the structural exit from the staleness class):
 
-1. **Bundler-configuration code resolves from source.** The config factories
-   (`every-plugin/ui/mf-build`, `every-plugin/build/rspack`) resolve `src` in
-   every condition (both packages ship `src` in their tarballs; the
-   `everything-dev/ui/mf-build` re-export shim is deleted — `ui/rsbuild.config.ts`
-   imports `every-plugin/ui/mf-build` directly, matching the generated plugin
-   configs). Config code only ever runs at build time from the working tree,
-   so a stale dist cannot silently drop shared entries from the emitted
-   manifest — verified: a ui build succeeds with every-plugin's dist deleted
-   outright. This is the normalization the app descriptor (ADR 0005, plan 028)
-   completes: unit-specific build data lives in the unit, machinery stays
-   generic, and the config surfaces resolve current source.
+1. **Bundler-configuration code resolves from source under the workspace
+   runtime.** The config factories (`every-plugin/ui/mf-build`,
+   `every-plugin/build/rspack`) resolve `src` via bun's always-on `"bun"`
+   export condition (plus `"development"`) — bun is the workspace runtime, so
+   config code only ever runs at build time from the working tree and a stale
+   dist cannot silently drop shared entries from the emitted manifest
+   (verified: a ui build succeeds with every-plugin's dist deleted outright).
+   Node consumers — scaffolded children running `node node_modules/.bin/bos`
+   — resolve the immutable published dist: node refuses to type-strip .ts
+   under node_modules, and npm artifacts cannot drift. The
+   `everything-dev/ui/mf-build` re-export shim is deleted —
+   `ui/rsbuild.config.ts` imports `every-plugin/ui/mf-build` directly,
+   matching the generated plugin configs. This is the normalization the app
+   descriptor (ADR 0005, plan 028) completes: unit-specific build data lives
+   in the unit, machinery stays generic, and the config surfaces resolve
+   current source.
 2. **Shipped code resolves dist, and the train guarantees freshness.** Runtime
    subpaths (`everything-dev/ui/auth`, `db`, every-plugin's shared runtime)
    resolve built dists; `buildWorkspaceTargets` unconditionally staleness-checks
