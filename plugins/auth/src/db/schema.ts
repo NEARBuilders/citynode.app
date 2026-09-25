@@ -275,6 +275,19 @@ export const deviceCode = pgTable(
   ],
 );
 
+export const deviceLinkClaim = pgTable(
+  "device_link_claim",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    clientId: text("client_id").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("deviceLinkClaim_tokenHash_uidx").on(table.tokenHash)],
+);
+
 export const onboardingCode = pgTable(
   "onboarding_code",
   {

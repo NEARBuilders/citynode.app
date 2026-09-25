@@ -16,13 +16,18 @@ type SearchParams = {
   redirect?: string;
 };
 
+const DEVICE_APPROVAL_PATH = /^\/login\/device(\/approve)?(\?|$)/;
+
 function sanitizeRedirect(url: unknown): string {
   if (
     typeof url !== "string" ||
     !url.startsWith("/") ||
     url.startsWith("//") ||
-    url.startsWith("/login")
+    url.startsWith("/\\")
   ) {
+    return "/dashboard";
+  }
+  if (url.startsWith("/login") && !DEVICE_APPROVAL_PATH.test(url)) {
     return "/dashboard";
   }
   return url;
@@ -37,7 +42,7 @@ export const Route = createFileRoute("/_public/login/")({
     const { queryClient, authClient } = context;
     const session = await queryClient.query(sessionQueryOptions(authClient));
     if (session?.user && !session.user.banned) {
-      throw redirect({ to: search.redirect });
+      throw redirect({ href: sanitizeRedirect(search.redirect) });
     }
   },
   component: LoginPage,
@@ -60,7 +65,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { redirect } = Route.useSearch();
+  const redirect = sanitizeRedirect(Route.useSearch().redirect);
   const { runtimeConfig } = Route.useRouteContext();
 
   const [nearPending, setNearPending] = useState(false);
@@ -79,7 +84,7 @@ function LoginPage() {
   const handleSuccess = async (message: string) => {
     toast.success(message);
     await refreshSessionCache(auth, queryClient);
-    await navigate({ to: redirect, replace: true });
+    await navigate({ href: redirect, replace: true });
   };
 
   const handleNear = async () => {

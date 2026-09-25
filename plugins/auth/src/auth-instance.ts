@@ -17,9 +17,9 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
-import { type SIWNPluginOptions, siwn } from "better-near-auth";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
-import { deviceLink } from "./device-link";
+import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
 
 const orgStatements = {
   ...defaultStatements,
@@ -265,6 +265,10 @@ export function createAuthInstance(
   const googleConfig = config.socialProviders?.google;
   const siwnOptions = buildSiwnOptions(config);
   const membershipPolicy = createOrganizationMembershipPolicy(config.organizationMembershipLimit);
+  const deviceClientIds = new Set([
+    config.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID,
+    BOS_CLI_CLIENT_ID,
+  ]);
   const mainnetRecipient = isRecipientsConfig(siwnOptions)
     ? siwnOptions.recipients.mainnet
     : siwnOptions.recipient;
@@ -423,13 +427,8 @@ export function createAuthInstance(
       }),
       nearInvitations(db, membershipPolicy),
       deviceAuthorization({
-        // Public-client device flow (RFC 8628): the CLI cannot know the
-        // tenant's configured clientId, and client secrets don't exist for
-        // public clients — user approval is the trust boundary. Any non-empty
-        // client id may start a flow; the code↔client binding is still
-        // enforced at the token endpoint.
         verificationUri: "/login/device",
-        validateClient: (clientId) => typeof clientId === "string" && clientId.trim().length > 0,
+        validateClient: (clientId) => deviceClientIds.has(clientId),
       }),
       deviceLink(db),
       apiKey([

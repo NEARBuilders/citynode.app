@@ -36,6 +36,13 @@
       "when": 1790123373979,
       "tag": "0005_blushing_george_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790362420849,
+      "tag": "0006_device_link_claim",
+      "breakpoints": true
     }
   ]
 }
