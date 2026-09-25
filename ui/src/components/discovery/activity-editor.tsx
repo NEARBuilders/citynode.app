@@ -3,7 +3,16 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight, CalendarDays, Clock, MapPin, MessageCircle, QrCode } from "lucide-react";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
-import { Button, Input, Textarea } from "@/components";
+import {
+  Badge,
+  Button,
+  Input,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+} from "@/components";
 import {
   Sheet,
   SheetContent,
@@ -11,7 +20,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { buildEventTimeline } from "@/lib/event-timeline";
 import { cn } from "@/lib/utils";
+import { EventTimeline } from "./event-timeline";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
@@ -50,6 +61,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   });
   const navigate = useNavigate();
   const [maxJoins, setMaxJoins] = useState("");
+  const [when, setWhen] = useState<"upcoming" | "past">("upcoming");
+  const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const startOnboarding = useMutation({
     mutationFn: (eventId: string) => {
       const maxUses = Number.parseInt(maxJoins, 10);
@@ -76,6 +89,49 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         Unable to load events and updates. Try again in a moment.
       </p>
     );
+  const events = list.data?.filter((a) => a.kind === "event") ?? [];
+  const posts = list.data?.filter((a) => a.kind !== "event") ?? [];
+  const timeline =
+    events.length > 0
+      ? buildEventTimeline(events, { now: new Date(), timeZone: viewerTimeZone })
+      : null;
+  const rowActions = (a: Activity) => (
+    <>
+      {a.kind === "event" && a.status !== "cancelled" && (
+        <Button
+          data-testid={`discovery-start-onboarding-${a.id}`}
+          variant="outline"
+          size="sm"
+          disabled={startOnboarding.isPending}
+          onClick={() => startOnboarding.mutate(a.id)}
+        >
+          <QrCode /> Start onboarding
+        </Button>
+      )}
+      {a.luma ? (
+        <a
+          href={a.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-medium underline-offset-4 hover:underline"
+        >
+          Manage in Luma
+        </a>
+      ) : (
+        <Button
+          data-testid={`discovery-edit-activity-${a.id}`}
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            save.reset();
+            setDraft(a);
+          }}
+        >
+          Edit {a.title}
+        </Button>
+      )}
+    </>
+  );
   const imported = list.data?.find((activity) => activity.id === draft?.id)?.luma;
   const update = (key: keyof Draft, value: string | null) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d));
@@ -140,9 +196,60 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           Nothing here yet. Add your first event or share a post above.
         </p>
       )}
-      {list.data && list.data.length > 0 && (
+      {timeline && (
+        <Tabs
+          value={when}
+          onValueChange={(value) => setWhen(value === "past" ? "past" : "upcoming")}
+        >
+          <TabsList className="justify-start">
+            <TabsTrigger
+              value="upcoming"
+              className="gap-1.5"
+              data-testid="activity-editor.tab-upcoming"
+            >
+              Upcoming
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+                {timeline.upcomingCount}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="past" className="gap-1.5" data-testid="activity-editor.tab-past">
+              Past
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+                {timeline.pastCount}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+          {(["upcoming", "past"] as const).map((tab) => (
+            <TabsContent key={tab} value={tab} className="pt-4">
+              {timeline[tab].length === 0 ? (
+                <p className="rounded-xl bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
+                  {tab === "upcoming" ? "No upcoming events." : "No past events yet."}
+                </p>
+              ) : (
+                <EventTimeline
+                  groups={timeline[tab]}
+                  timeZone={viewerTimeZone}
+                  badges={(a) => (
+                    <>
+                      <Badge variant={a.status === "published" ? "success" : "secondary"}>
+                        {statusLabel(a)}
+                      </Badge>
+                      {a.luma && <Badge variant="outline">From Luma</Badge>}
+                    </>
+                  )}
+                  actions={rowActions}
+                />
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
+      {posts.length > 0 && timeline && (
+        <h3 className="text-sm font-medium text-muted-foreground">Posts</h3>
+      )}
+      {posts.length > 0 && (
         <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-border-strong bg-card">
-          {list.data.map((a) => {
+          {posts.map((a) => {
             const tile = eventDateTile(a);
             return (
               <div
@@ -152,13 +259,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{a.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {a.status === "draft"
-                      ? "Draft"
-                      : a.status === "cancelled"
-                        ? "Cancelled"
-                        : "Published"}
+                    {statusLabel(a)}
                     {a.luma ? " · From Luma — updates automatically" : ""}
-                    {a.kind === "event" && a.venue ? ` · ${a.venue}` : ""}
                   </p>
                 </div>
                 {tile && (
@@ -171,39 +273,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                     </span>
                   </div>
                 )}
-                {a.kind === "event" && a.status !== "cancelled" && (
-                  <Button
-                    data-testid={`discovery-start-onboarding-${a.id}`}
-                    variant="outline"
-                    size="sm"
-                    disabled={startOnboarding.isPending}
-                    onClick={() => startOnboarding.mutate(a.id)}
-                  >
-                    <QrCode /> Start onboarding
-                  </Button>
-                )}
-                {a.luma ? (
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium underline-offset-4 hover:underline"
-                  >
-                    Manage in Luma
-                  </a>
-                ) : (
-                  <Button
-                    data-testid={`discovery-edit-activity-${a.id}`}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      save.reset();
-                      setDraft(a);
-                    }}
-                  >
-                    Edit {a.title}
-                  </Button>
-                )}
+                {rowActions(a)}
               </div>
             );
           })}
@@ -415,6 +485,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       {save.isSuccess && <p role="status">Saved.</p>}
     </section>
   );
+}
+function statusLabel(activity: Activity) {
+  if (activity.status === "draft") return "Draft";
+  if (activity.status === "cancelled") return "Cancelled";
+  return "Published";
 }
 function localTime(value: string | null) {
   if (!value) return "";
