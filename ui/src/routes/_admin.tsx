@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireAdmin } from "@/app";
 
 export const Route = createFileRoute("/_admin")({
   beforeLoad: requireAdmin,

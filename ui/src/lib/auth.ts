@@ -9,6 +9,7 @@
 
 export type {
   AuthClient,
+  AuthContext,
   CreateAuthClientOptions,
   Organization,
   Passkey,
@@ -16,7 +17,14 @@ export type {
 } from "everything-dev/ui/auth";
 
 export {
+  clearAuthenticatedQueries,
   createAuthClient,
+  pluginHref,
+  pluginPath,
+  pluginSearch,
+  refreshSessionCache,
+  requireAdmin,
+  requireSession,
   sessionQueryKey,
   sessionQueryOptions,
   useAuthClient,

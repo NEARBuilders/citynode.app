@@ -1,9 +1,9 @@
 import { ClientOnly, Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
+import { pluginPath } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { pluginPath } from "@/lib/plugin-path";
 import { NetworkToggle } from "./network-toggle";
 import { OrgSwitcher } from "./org-switcher";
 import { ThemeToggle } from "./theme-toggle";

@@ -126,6 +126,14 @@ export function createAuthClient(options: CreateAuthClientOptions = {}) {
   });
 }
 
+export type { AuthContext } from "./auth-guards";
+export {
+  clearAuthenticatedQueries,
+  requireAdmin,
+  requireSession,
+} from "./auth-guards";
+export { pluginHref, pluginPath, pluginSearch } from "./plugin-path";
+
 export type AuthClient = ReturnType<typeof createAuthClient>;
 type OrganizationListResult = Awaited<ReturnType<AuthClient["organization"]["list"]>>;
 type PasskeyListResult = Awaited<ReturnType<AuthClient["passkey"]["listUserPasskeys"]>>;

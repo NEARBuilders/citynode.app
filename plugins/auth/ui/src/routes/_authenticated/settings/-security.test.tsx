@@ -17,6 +17,11 @@ const harness = vi.hoisted(() => ({
 
 vi.mock("everything-dev/ui/auth", () => ({
   sessionQueryKey: ["session"],
+  clearAuthenticatedQueries: async (queryClient: QueryClient) => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    queryClient.setQueryData(["session"], null);
+  },
   useAuthClient: () => ({
     changePassword: harness.changePassword,
     revokeOtherSessions: harness.revokeOtherSessions,

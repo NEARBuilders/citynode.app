@@ -64,6 +64,7 @@ vi.mock("@/app", () => ({
   getAccount: () => "v1.citynode.near",
   getActiveRuntime: () => ({ accountId: "v1.citynode.near" }),
   getAppName: () => "City Nodes",
+  pluginPath: (path: string) => path,
 }));
 
 vi.mock("@tanstack/react-router", () => ({

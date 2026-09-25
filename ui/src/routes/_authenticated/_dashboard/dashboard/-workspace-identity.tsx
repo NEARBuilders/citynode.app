@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Home as HomeIcon, Settings } from "lucide-react";
+import { pluginPath } from "@/app";
 import { Button, PageHeader } from "@/components";
-import { pluginPath } from "@/lib/plugin-path";
 import { IdentityStatus } from "./-identity-status";
 import { WorkspaceCard } from "./-workspace-card";
 import type { WorkspaceIdentityProps } from "./-workspace-identity-types";
