@@ -1,13 +1,13 @@
-import { WalletIcon } from "@phosphor-icons/react";
+import { SpinnerIcon, WalletIcon } from "@phosphor-icons/react";
 import { PingpayOnramp, PingpayOnrampError } from "@pingpay/onramp-sdk";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
 import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
+import { Button } from "@/components";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNearAccount } from "@/lib/use-near-account";
-import { cn } from "@/lib/utils";
 
 export function StakeOnramp() {
   const nearAccountId = useNearAccount();
@@ -35,28 +35,23 @@ export function StakeOnramp() {
   const onBuy = () => onrampMutation.mutate();
 
   const button = (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onBuy}
       disabled={disabled || pending}
       aria-label={pending ? "Opening PingPay" : "Buy NEAR with PingPay"}
-      className={cn(
-        "group inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border-2 px-5 text-sm font-semibold transition-colors",
-        "border-[#AF9EF9] bg-white/80 text-[#3D315E] hover:bg-white",
-        "dark:border-[#6D5BD0] dark:bg-[#2B2444] dark:text-[#F3EEFF] dark:hover:bg-[#332B54]",
-        "shadow-sm hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AF9EF9]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        disabled || pending ? "cursor-not-allowed opacity-50 hover:shadow-sm" : "cursor-pointer",
-      )}
+      className="shrink-0"
     >
       {pending ? (
         <>
-          <span className="size-4 animate-spin rounded-full border-2 border-[#AF9EF9] border-t-[#3D315E] dark:border-t-[#F3EEFF]" />
+          <SpinnerIcon className="size-4 animate-spin" />
           Opening…
         </>
       ) : (
         <>
           <span>Buy with</span>
-          <span className="relative inline-block h-4 w-[52px]">
+          <span className="relative inline-block h-4 w-13">
             <img
               src={pingpayLogoDark}
               alt="PingPay"
@@ -70,21 +65,19 @@ export function StakeOnramp() {
           </span>
         </>
       )}
-    </button>
+    </Button>
   );
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border-2 border-[#AF9EF9]/50 bg-gradient-to-br from-[#F9F7FF] to-[#EFE9FF] p-5 dark:border-[#6D5BD0]/40 dark:from-[#211C33] dark:to-[#2B2444]">
+    <div className="rounded-2xl bg-muted p-5">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-white/5">
-            <WalletIcon className="h-4 w-4 text-[#6D5BD0] dark:text-[#C9BBFF]" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background">
+            <WalletIcon className="h-4 w-4 text-muted-foreground" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-[#3D315E] dark:text-[#EDE8FF]">
-              Need NEAR to stake?
-            </p>
-            <p className="text-xs text-[#6B5F94] dark:text-[#B9AEDE]">
+            <p className="text-sm font-semibold text-foreground">Need NEAR to stake?</p>
+            <p className="text-sm text-muted-foreground">
               Buy instantly with card, Apple Pay, or bank transfer.
             </p>
           </div>

@@ -19,9 +19,7 @@ export function StakeValidatorList({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        Validators
-      </p>
+      <p className="text-sm font-medium text-muted-foreground">Validators</p>
       {validators.map((validator) => {
         const isSelected = selectedValidatorId === validator.id;
         const isCommunity = validator.role === "community";
@@ -31,14 +29,14 @@ export function StakeValidatorList({
             type="button"
             onClick={() => onSelect(validator.id)}
             className={cn(
-              "flex w-full items-center gap-3 rounded-[10px] border-2 p-4 text-left transition-colors",
+              "flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors",
               isSelected ? "border-foreground bg-card" : "border-border bg-card hover:bg-muted",
               isCommunity && !isSelected && "opacity-80",
             )}
           >
             <div
               className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]",
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
                 isCommunity ? "bg-muted text-muted-foreground" : "bg-foreground text-background",
               )}
             >
@@ -49,22 +47,15 @@ export function StakeValidatorList({
                 <span className="text-sm font-semibold text-foreground truncate">
                   {validator.accountId}
                 </span>
-                {validator.isDefault && (
-                  <Badge variant="default" className="text-[10px]">
-                    default
-                  </Badge>
-                )}
+                {validator.isDefault && <Badge variant="default">default</Badge>}
               </div>
               <div className="mt-1 flex items-center gap-2">
-                <Badge
-                  variant={isCommunity ? "outline" : "secondary"}
-                  className="capitalize text-[10px]"
-                >
-                  {validator.role}
+                <Badge variant={isCommunity ? "outline" : "secondary"}>
+                  <span className="capitalize">{validator.role}</span>
                 </Badge>
                 {validator.protocol && validator.protocol !== "near" && (
-                  <Badge variant="outline" className="text-[10px] font-mono">
-                    {validator.protocol}
+                  <Badge variant="outline">
+                    <span className="font-mono">{validator.protocol}</span>
                   </Badge>
                 )}
               </div>

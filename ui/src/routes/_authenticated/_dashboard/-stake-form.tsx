@@ -30,9 +30,7 @@ export function StakeForm({
   if (!validator) return null;
   return (
     <Card className="p-6 space-y-4">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        Stake
-      </div>
+      <div className="text-sm font-medium text-muted-foreground">Stake</div>
       {!nearAccountId ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -57,7 +55,6 @@ export function StakeForm({
               step="any"
               value={amount}
               onChange={(event) => onAmountChange(event.target.value)}
-              className="h-9 text-sm"
             />
           </Field>
           <Button
