@@ -150,16 +150,14 @@ const patchConsole = (name: string, callbacks: ProcessCallbacks): (() => void) =
 };
 
 export class HostRemoteUrlMissing extends Data.TaggedError("HostRemoteUrlMissing")<
-  Record<string, never>
+  Record<never, never>
 > {
   get message() {
     return "remoteUrl not provided on host descriptor";
   }
 }
 
-export class HostModuleInvalid extends Data.TaggedError("HostModuleInvalid")<
-  Record<string, never>
-> {
+export class HostModuleInvalid extends Data.TaggedError("HostModuleInvalid")<Record<never, never>> {
   get message() {
     return "Host module does not export runServer function";
   }
@@ -176,7 +174,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     const runtimeConfig = yield* DevRuntimeConfig;
     const remoteUrl = descriptor.remoteUrl;
     if (!remoteUrl) {
-      return yield* new HostRemoteUrlMissing({});
+      return yield* new HostRemoteUrlMissing();
     }
 
     callbacks.onStatus(descriptor.key, "starting");
@@ -252,7 +250,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
     });
 
     if (!hostModule?.runServer) {
-      return yield* new HostModuleInvalid({});
+      return yield* new HostModuleInvalid();
     }
 
     callbacks.onLog(descriptor.key, "Starting server...");

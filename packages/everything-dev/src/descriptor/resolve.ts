@@ -77,7 +77,6 @@ export function toConfigInput(descriptor: AppDescriptor): BosConfigInput {
       "staging",
       "ci",
       "publish",
-      "deploy",
     ]),
   };
 
