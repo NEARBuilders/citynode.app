@@ -1,6 +1,6 @@
+import { KeyIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Passkey, useAuthClient } from "everything-dev/ui/auth";
-import { KeyRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Chip, ConfirmDialog, Input } from "@/components";
@@ -57,7 +57,7 @@ export function PasskeysMethod() {
       <Card className="p-6 space-y-4">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-[10px] border-2 border-outset border-border-strong bg-muted flex items-center justify-center shrink-0">
-            <KeyRound className="h-4 w-4 text-muted-foreground" />
+            <KeyIcon className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">

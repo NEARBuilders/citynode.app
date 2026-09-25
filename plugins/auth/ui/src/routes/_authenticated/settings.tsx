@@ -1,6 +1,6 @@
+import { GearIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { sessionQueryOptions } from "everything-dev/ui/auth";
-import { Settings } from "lucide-react";
 import { PageContainer, PageHeader, Tabs, TabsList, TabsTrigger } from "@/components";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -32,7 +32,7 @@ function SettingsLayout() {
   return (
     <PageContainer variant="wide">
       <div className="space-y-6">
-        <PageHeader icon={Settings} label="Account" title="Settings" />
+        <PageHeader icon={GearIcon} label="Account" title="Settings" />
 
         <Tabs value={activeTab} className="w-full min-w-0">
           <TabsList className="w-full justify-start overflow-x-auto">
@@ -40,11 +40,12 @@ function SettingsLayout() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                asChild
+                nativeButton={false}
+                render={<Link to={tab.to} />}
                 data-testid={`settings-tab-${tab.value}`}
                 className="shrink-0"
               >
-                <Link to={tab.to}>{tab.label}</Link>
+                {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>

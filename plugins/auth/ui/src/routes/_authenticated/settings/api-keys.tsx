@@ -1,7 +1,7 @@
+import { KeyIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
-import { Key, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -121,7 +121,7 @@ function ApiKeysSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Key} label="Account" title="API Keys" headerTestId="api-keys.heading" />
+      <PageHeader icon={KeyIcon} label="Account" title="API Keys" headerTestId="api-keys.heading" />
 
       <Card className="p-6 space-y-3">
         <div className="text-sm text-muted-foreground leading-relaxed">
@@ -170,7 +170,7 @@ function ApiKeysSettings() {
                   variant="outline"
                   size="sm"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <TrashIcon className="h-3.5 w-3.5" />
                   delete
                 </Button>
               </div>

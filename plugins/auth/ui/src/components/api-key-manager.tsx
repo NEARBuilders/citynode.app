@@ -1,4 +1,4 @@
-import { Copy } from "lucide-react";
+import { CopyIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -132,7 +132,7 @@ export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
             onClick={(e) => e.currentTarget.select()}
           />
           <Button onClick={handleCopy} variant="outline" size="sm">
-            <Copy className="h-3.5 w-3.5 mr-1" />
+            <CopyIcon className="h-3.5 w-3.5 mr-1" />
             copy
           </Button>
         </div>

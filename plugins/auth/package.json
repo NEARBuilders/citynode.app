@@ -31,15 +31,10 @@
     "zod": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/tanstack-query": "catalog:",
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-slot": "^1.2.4",
-    "@radix-ui/react-tabs": "^1.1.13",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "everything-dev": "catalog:",
     "framer-motion": "^12.37.0",
-    "lucide-react": "^1.14.0",
-    "radix-ui": "^1.4.3",
     "react": "catalog:",
     "react-dom": "catalog:",
     "sonner": "^2.0.7",
@@ -47,7 +42,9 @@
     "tw-animate-css": "^1.4.0",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "@base-ui/react": "^1.8.0",
+    "@phosphor-icons/react": "^2.1.10"
   },
   "devDependencies": {
     "@module-federation/node": "catalog:",
@@ -80,7 +77,8 @@
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.17",
     "typescript": "catalog:",
-    "@types/qrcode": "^1.5.6"
+    "@types/qrcode": "^1.5.6",
+    "shadcn": "^4.21.0"
   },
   "scripts": {
     "build": "every-plugin build",

@@ -90,8 +90,13 @@ function OnboardPage() {
               on your laptop, choose "Sign in with phone", and scan the code with this phone.
             </p>
           </div>
-          <Button asChild variant="outline" className="w-full">
-            <Link to="/dashboard">Go to dashboard</Link>
+          <Button
+            variant="outline"
+            className="w-full"
+            nativeButton={false}
+            render={<Link to="/dashboard" />}
+          >
+            Go to dashboard
           </Button>
         </div>
       </div>
