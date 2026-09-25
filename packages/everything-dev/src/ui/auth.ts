@@ -11,7 +11,7 @@ import {
   phoneNumberClient,
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
-import type { RelayedTransactionT } from "better-near-auth";
+import type { PasskeyWalletLink, RelayedTransactionT } from "better-near-auth";
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "../types";
 import { getRuntimeConfig } from "./runtime";
@@ -202,9 +202,7 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
   });
 }
 
-export type PasskeyWalletStatus =
-  | { status: "linked"; accountId: string; network: "mainnet" | "testnet"; isPrimary: boolean }
-  | { status: "unavailable"; network: "mainnet" | "testnet" };
+export type PasskeyWalletStatus = PasskeyWalletLink;
 
 export type PasskeyCeremonyError = Error & { code?: string };
 

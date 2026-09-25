@@ -27,14 +27,15 @@ import {
   verifyNep413Signature,
 } from "near-kit";
 import z from "zod";
+import { PASSKEY_WALLET_UNAVAILABLE } from "./constants.js";
 import {
   isDeterministicAccountId,
   isPasskeyWalletAvailable,
+  type PasskeyWalletNetwork,
   verifyPasskeyNep413Signature,
 } from "./passkey.js";
 import {
   linkPasskeyWalletFromCredential,
-  PASSKEY_WALLET_UNAVAILABLE,
   passkeyWalletFromCredential,
 } from "./passkey-wallet-link.js";
 import { defaultGetProfile, getImageUrl, getNetworkFromAccountId } from "./profile.js";
@@ -648,7 +649,7 @@ export interface SIWNPluginOptions {
     parentKey?: string | DualNetworkConfig<string>;
   };
   subAccount?: SubAccountConfig | DualNetworkConfig<SubAccountConfig>;
-  passkeyWalletNetwork?: "mainnet" | "testnet";
+  passkeyWalletNetwork?: PasskeyWalletNetwork;
 }
 
 export const siwn = (options: SIWNPluginOptions) => {
@@ -1019,9 +1020,9 @@ export const siwn = (options: SIWNPluginOptions) => {
           }
 
           const network = passkeyWalletNetwork;
-          if (!isPasskeyWalletAvailable(network)) {
-            return ctx.json({ success: false, network, reason: PASSKEY_WALLET_UNAVAILABLE });
-          }
+          const unavailable = () =>
+            ctx.json({ success: false, network, reason: PASSKEY_WALLET_UNAVAILABLE });
+          if (!isPasskeyWalletAvailable(network)) return unavailable();
           const recipient = getRecipient(network);
           const message = `Sign in to ${recipient}`;
           let nonceBytes: Uint8Array;
@@ -1079,9 +1080,7 @@ export const siwn = (options: SIWNPluginOptions) => {
             credentialPublicKey: signer.publicKey,
             network,
           });
-          if (link.status === "unavailable") {
-            return ctx.json({ success: false, network, reason: PASSKEY_WALLET_UNAVAILABLE });
-          }
+          if (link.status === "unavailable") return unavailable();
 
           await ensureRelayer(ctx.context.adapter, ctx.context.secret, network);
 

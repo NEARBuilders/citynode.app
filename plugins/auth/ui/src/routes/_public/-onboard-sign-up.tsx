@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { isPasskeyWalletAvailable } from "better-near-auth/client";
+import { isPasskeyWalletAvailable, type PasskeyWalletNetwork } from "better-near-auth/client";
 import {
   createAccountWithPasskey,
   isUnsupportedAuthenticatorError,
@@ -17,7 +17,7 @@ export function OnboardSignUp({
   networkId,
   onAccountCreated,
 }: {
-  networkId: "mainnet" | "testnet";
+  networkId: PasskeyWalletNetwork;
   onAccountCreated: () => void;
 }) {
   const auth = useAuthClient();
@@ -135,7 +135,7 @@ export function OnboardSignUp({
             className="rounded-[8px] border border-border bg-muted p-3 text-sm text-muted-foreground"
             data-testid="onboard.no-passkey-hint"
           >
-            No passkey on this device? Sign in with your NEAR wallet, or create an account.
+            No passkey on this device? Sign in with your phone, or connect your NEAR wallet.
           </p>
         ) : null}
         {nearButtons}

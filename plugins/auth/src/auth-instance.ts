@@ -21,6 +21,7 @@ import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "bet
 import { gt } from "drizzle-orm";
 import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
 import {
+  createPasskeySignUpUser,
   passkeyAuthenticatorSelection,
   passkeySignUp,
   requireUserVerifiedSignIn,
@@ -334,19 +335,7 @@ export function createAuthInstance(
         registration: {
           requireSession: false,
           afterVerification: requireWalletCapablePasskey,
-          resolveUser: async ({ ctx }) => {
-            const recipient = mainnetRecipient;
-            const email = `passkey-${crypto.randomUUID().slice(0, 8)}@${recipient}`;
-            const created = await ctx.context.internalAdapter.createUser({
-              email,
-              name: "Passkey user",
-              emailVerified: true,
-            });
-            if (!created) {
-              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to create user" });
-            }
-            return { id: created.id, name: created.name, displayName: created.name };
-          },
+          resolveUser: (args) => createPasskeySignUpUser(args, mainnetRecipient),
         },
       }),
       passkeySignUp({ network }),

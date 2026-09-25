@@ -249,4 +249,31 @@ describe("passkey sign-up", () => {
     const accounts = await getJson<{ accounts: unknown[] }>(services, "/near/list-accounts", jar);
     expect(accounts.accounts).toEqual([]);
   });
+
+  it("mints no session when a registration begun while signed in is verified without the session", async () => {
+    const member = await createTestUser(services);
+    const jar = new CookieJar(member.cookie);
+    const authenticator = createSoftwareAuthenticator();
+    const optionsRes = await services.handler(
+      authRequest("/passkey/generate-register-options", { method: "GET", jar }),
+    );
+    const challengeOnly = new CookieJar();
+    challengeOnly.absorb(optionsRes);
+
+    const verifyRes = await services.handler(
+      authRequest("/passkey/verify-registration", {
+        method: "POST",
+        jar: challengeOnly,
+        body: {
+          response: authenticator.register((await optionsRes.json()) as RegistrationOptionsJSON, {
+            origin: ORIGIN,
+          }),
+        },
+      }),
+    );
+
+    expect(verifyRes.status).toBe(200);
+    expect(setsSessionCookie(verifyRes)).toBe(false);
+    expect(await verifyRes.json()).not.toHaveProperty("passkeyWallet");
+  });
 });

@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { linkPasskeyWalletFromCredential, parseCosePublicKey } from "better-near-auth";
@@ -49,6 +49,30 @@ export function requireUserVerifiedSignIn({
   }
 }
 
+function signUpMarker(userId: string) {
+  return `passkey-sign-up:${userId}`;
+}
+
+export async function createPasskeySignUpUser(
+  { ctx }: { ctx: GenericEndpointContext },
+  emailDomain: string | undefined,
+) {
+  const created = await ctx.context.internalAdapter.createUser({
+    email: `passkey-${crypto.randomUUID().slice(0, 8)}@${emailDomain}`,
+    name: "Passkey user",
+    emailVerified: true,
+  });
+  if (!created) {
+    throw new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to create user" });
+  }
+  await ctx.context.internalAdapter.createVerificationValue({
+    identifier: signUpMarker(created.id),
+    value: created.id,
+    expiresAt: new Date(Date.now() + PASSKEY_CHALLENGE_WINDOW_MS),
+  });
+  return { id: created.id, name: created.name, displayName: created.name };
+}
+
 function withWalletAlgorithms(options: unknown) {
   if (!options || typeof options !== "object" || !("pubKeyCredParams" in options)) return null;
   const params = (options as { pubKeyCredParams: Array<{ alg: number }> }).pubKeyCredParams;
@@ -93,26 +117,28 @@ export function passkeySignUp(options: { network: AuthNetwork }) {
             if (!isRegisteredPasskey(passkey)) return;
             if (await getSessionFromCtx(ctx)) return;
 
+            const marker = await ctx.context.internalAdapter.consumeVerificationValue(
+              signUpMarker(passkey.userId),
+            );
+            if (!marker || marker.expiresAt.getTime() < Date.now()) return;
             const user = await ctx.context.internalAdapter.findUserById(passkey.userId);
-            if (!user || Date.now() - user.createdAt.getTime() > PASSKEY_CHALLENGE_WINDOW_MS) {
-              return;
-            }
+            if (!user) return;
             const passkeys = await ctx.context.adapter.findMany<{ id: string }>({
               model: "passkey",
               where: [{ field: "userId", operator: "eq", value: user.id }],
             });
             if (passkeys.length !== 1 || passkeys[0]?.id !== passkey.id) return;
 
-            const session = await ctx.context.internalAdapter.createSession(user.id);
-            if (!session) {
-              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Unable to create session" });
-            }
-            await setSessionCookie(ctx, { session, user });
             const passkeyWallet = await linkPasskeyWalletFromCredential(ctx.context, {
               userId: user.id,
               credentialPublicKey: passkey.publicKey,
               network: options.network,
             });
+            const session = await ctx.context.internalAdapter.createSession(user.id);
+            if (!session) {
+              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Unable to create session" });
+            }
+            await setSessionCookie(ctx, { session, user });
             return ctx.json({ ...passkey, passkeyWallet });
           }),
         },

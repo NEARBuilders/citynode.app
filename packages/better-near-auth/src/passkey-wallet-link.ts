@@ -9,7 +9,7 @@ import {
 } from "./passkey.js";
 import type { NearAccount } from "./types.js";
 
-export const PASSKEY_WALLET_UNAVAILABLE = "PASSKEY_WALLET_UNAVAILABLE";
+export { PASSKEY_WALLET_UNAVAILABLE } from "./constants.js";
 
 export type PasskeyWalletLink =
   | { status: "linked"; accountId: string; network: PasskeyWalletNetwork; isPrimary: boolean }

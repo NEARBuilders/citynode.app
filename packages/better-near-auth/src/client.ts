@@ -16,6 +16,7 @@ import {
   Near,
   type TransactionBuilder,
 } from "near-kit";
+import { PASSKEY_WALLET_UNAVAILABLE } from "./constants.js";
 import {
   type GasKeyScope,
   type GasKeyState,
@@ -153,7 +154,7 @@ export interface SIWNClientActions {
 }
 
 export { DEFAULT_DEVICE_LINK_CLIENT_ID } from "./constants.js";
-export { isPasskeyWalletAvailable } from "./passkey.js";
+export { isPasskeyWalletAvailable, type PasskeyWalletNetwork } from "./passkey.js";
 
 /**
  * Executor build of NEAR-DevHub/near-connect-passkey (mainnet only). Bump the
@@ -918,7 +919,11 @@ export const siwnClient = (config: SIWNClientConfig) => {
                     throw new Error(response.error?.message || "Failed to link passkey wallet");
                   }
                   if (!response.data.success) {
-                    throw new Error("A passkey wallet is not available on this network");
+                    throw new Error(
+                      response.data.reason === PASSKEY_WALLET_UNAVAILABLE
+                        ? "A passkey wallet is not available on this network"
+                        : "Failed to link passkey wallet",
+                    );
                   }
                   return { accountId: response.data.accountId };
                 },
