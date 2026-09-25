@@ -182,6 +182,7 @@ describe("passkey sign-up", () => {
 
     expect(verifyRes.status).toBe(400);
     expect(setsSessionCookie(verifyRes)).toBe(false);
+    expect(await verifyRes.json()).toMatchObject({ code: "PASSKEY_UNSUPPORTED_AUTHENTICATOR" });
   });
 
   it("refuses a passkey sign-in without user verification", async () => {

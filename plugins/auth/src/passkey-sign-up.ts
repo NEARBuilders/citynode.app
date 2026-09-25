@@ -6,6 +6,7 @@ import type { AuthNetwork } from "./auth-config";
 
 export const PASSKEY_CHALLENGE_WINDOW_MS = 5 * 60 * 1000;
 const PASSKEY_WALLET_ALGORITHMS = [-8, -7];
+const UNSUPPORTED_AUTHENTICATOR = "PASSKEY_UNSUPPORTED_AUTHENTICATOR";
 
 export const passkeyAuthenticatorSelection = {
   residentKey: "required",
@@ -22,10 +23,16 @@ export function requireWalletCapablePasskey({
 }) {
   const info = verification.registrationInfo;
   if (!info?.userVerified) {
-    throw new APIError("BAD_REQUEST", { message: "Passkey must verify the user" });
+    throw new APIError("BAD_REQUEST", {
+      message: "Passkey must verify the user",
+      code: UNSUPPORTED_AUTHENTICATOR,
+    });
   }
   if (!parseCosePublicKey(info.credential.publicKey)) {
-    throw new APIError("BAD_REQUEST", { message: "Passkey must use an ES256 or EdDSA key" });
+    throw new APIError("BAD_REQUEST", {
+      message: "Passkey must use an ES256 or EdDSA key",
+      code: UNSUPPORTED_AUTHENTICATOR,
+    });
   }
 }
 
@@ -35,7 +42,10 @@ export function requireUserVerifiedSignIn({
   verification: { authenticationInfo: { userVerified: boolean } };
 }) {
   if (!verification.authenticationInfo.userVerified) {
-    throw new APIError("BAD_REQUEST", { message: "Passkey must verify the user" });
+    throw new APIError("BAD_REQUEST", {
+      message: "Passkey must verify the user",
+      code: "PASSKEY_USER_VERIFICATION_REQUIRED",
+    });
   }
 }
 
