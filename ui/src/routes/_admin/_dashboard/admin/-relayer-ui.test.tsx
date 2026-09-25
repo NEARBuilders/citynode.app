@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { RelayHistoryResponseT } from "better-near-auth";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RelayerHistory } from "./-relayer-history";
+import { relayerStatus } from "./-relayer-status";
 import { RelayerStatusBody } from "./-relayer-status-body";
 import { RelayerTopUp } from "./-relayer-top-up";
 
@@ -25,7 +26,7 @@ describe("relayer UI seams", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "connect wallet" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect wallet" }));
     expect(onConnect).toHaveBeenCalledOnce();
 
     rerender(
@@ -41,7 +42,7 @@ describe("relayer UI seams", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "fund relayer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fund relayer" }));
     expect(onFund).toHaveBeenCalledOnce();
   });
 
@@ -60,7 +61,7 @@ describe("relayer UI seams", () => {
       />,
     );
 
-    const fundButton = screen.getByRole("button", { name: "fund relayer" });
+    const fundButton = screen.getByRole("button", { name: "Fund relayer" });
     expect(fundButton).toHaveProperty("disabled", true);
     expect(onFund).not.toHaveBeenCalled();
   });
@@ -83,9 +84,23 @@ describe("relayer UI seams", () => {
 
     render(<RelayerHistory history={history} isLoading={false} />);
     expect(screen.getByText("abcdef123456…")).toBeTruthy();
-    expect(screen.getByText("failed")).toBeTruthy();
+    expect(screen.getByText("Failed")).toBeTruthy();
 
     render(<RelayerStatusBody info={null} isLoading={false} />);
     expect(screen.getByText(/No relayer configured/)).toBeTruthy();
+  });
+});
+
+describe("relayer status", () => {
+  it("names each relayer state for the status badge", () => {
+    expect(relayerStatus(null).label).toBe("Not configured");
+    expect(
+      relayerStatus({ enabled: true, accountId: "r.near" } as Parameters<typeof relayerStatus>[0])
+        .variant,
+    ).toBe("success");
+    expect(
+      relayerStatus({ enabled: false, accountId: "r.near" } as Parameters<typeof relayerStatus>[0])
+        .label,
+    ).toBe("Needs funding");
   });
 });

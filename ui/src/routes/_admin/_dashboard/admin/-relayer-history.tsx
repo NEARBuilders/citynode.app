@@ -1,5 +1,20 @@
 import type { RelayHistoryResponseT } from "better-near-auth";
-import { Badge, CardContent } from "@/components";
+import { Badge, LocalDate } from "@/components";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
+import { humanize, ListSkeleton } from "./-admin-ui";
+
+function statusVariant(status: string) {
+  if (status === "completed") return "success" as const;
+  if (status === "failed") return "destructive" as const;
+  return "warning" as const;
+}
 
 export function RelayerHistory({
   history,
@@ -9,38 +24,34 @@ export function RelayerHistory({
   isLoading: boolean;
 }) {
   return (
-    <CardContent className="p-6 space-y-3">
-      <h2 className="text-sm font-semibold text-foreground">Recent relays</h2>
+    <section className="flex flex-col gap-6">
+      <h2 className="text-xl font-semibold">Recent relays</h2>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <ListSkeleton rows={3} />
       ) : !history?.transactions.length ? (
         <p className="text-sm text-muted-foreground">
-          No relayed transactions yet. Tenant republish + app metadata writes will appear here.
+          No relayed transactions yet. Tenant and app metadata writes appear here.
         </p>
       ) : (
-        <ul className="space-y-2 text-xs font-mono">
+        <ItemGroup data-testid="admin-relayer-history">
           {history.transactions.slice(0, 8).map((tx) => (
-            <li
-              key={tx.id}
-              className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-1 last:border-b-0"
-            >
-              <span>{tx.txHash.slice(0, 12)}…</span>
-              <span className="text-muted-foreground">{tx.senderId}</span>
-              <Badge
-                variant={
-                  tx.status === "completed"
-                    ? "default"
-                    : tx.status === "failed"
-                      ? "destructive"
-                      : "secondary"
-                }
-              >
-                {tx.status}
-              </Badge>
-            </li>
+            <Item key={tx.id} variant="outline" size="sm">
+              <ItemContent className="min-w-0">
+                <ItemTitle>
+                  <span className="font-mono">{tx.txHash.slice(0, 12)}…</span>
+                </ItemTitle>
+                <ItemDescription>
+                  <span className="font-mono">{tx.senderId}</span> ·{" "}
+                  <LocalDate value={tx.createdAt} format="relative" />
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Badge variant={statusVariant(tx.status)}>{humanize(tx.status)}</Badge>
+              </ItemActions>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       )}
-    </CardContent>
+    </section>
   );
 }

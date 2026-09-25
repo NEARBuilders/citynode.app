@@ -1,5 +1,14 @@
-import { CoinsIcon, GasPumpIcon, WalletIcon } from "@phosphor-icons/react";
-import { Button, Field, FieldLabel, Input } from "@/components";
+import { WalletIcon } from "@phosphor-icons/react";
+import { Button, Field, FieldLabel } from "@/components";
+import { FieldDescription } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
+
+const PRESETS = ["1", "5", "10"];
 
 export function RelayerTopUp({
   nearAccountId,
@@ -21,45 +30,46 @@ export function RelayerTopUp({
   onFund: () => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <GasPumpIcon className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold text-foreground">Top up</h2>
-      </div>
+    <section className="flex flex-col gap-6">
+      <h2 className="text-xl font-semibold">Add funds</h2>
 
       {!nearAccountId ? (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Connect a NEAR wallet to fund the relayer.
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={onConnect}>
-            <WalletIcon className="h-3.5 w-3.5" />
-            connect wallet
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted-foreground">Connect a NEAR wallet to send funds.</p>
+          <Button type="button" variant="outline" onClick={onConnect}>
+            <WalletIcon />
+            Connect wallet
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Sending from <span className="font-mono">{nearAccountId}</span>
-          </p>
+        <div className="flex max-w-md flex-col gap-4">
           <Field>
-            <FieldLabel htmlFor="fund-amount">amount (NEAR)</FieldLabel>
-            <Input
-              id="fund-amount"
-              type="number"
-              min="0"
-              step="0.1"
-              value={amount}
-              onChange={(event) => onAmountChange(event.target.value)}
-              disabled={sending}
-            />
+            <FieldLabel htmlFor="fund-amount">Amount</FieldLabel>
+            <InputGroup>
+              <InputGroupInput
+                id="fund-amount"
+                type="number"
+                min="0"
+                step="0.1"
+                inputMode="decimal"
+                value={amount}
+                onChange={(event) => onAmountChange(event.target.value)}
+                disabled={sending}
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupText>NEAR</InputGroupText>
+              </InputGroupAddon>
+            </InputGroup>
+            <FieldDescription>
+              From <span className="font-mono">{nearAccountId}</span>
+            </FieldDescription>
           </Field>
-          <div className="flex flex-wrap gap-1">
-            {["1", "5", "10"].map((preset) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {PRESETS.map((preset) => (
               <Button
                 key={preset}
                 type="button"
-                variant="outline"
+                variant={amount === preset ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => onPreset(preset)}
                 disabled={sending}
@@ -70,15 +80,14 @@ export function RelayerTopUp({
           </div>
           <Button
             type="button"
-            size="sm"
+            className="self-start"
             onClick={onFund}
             disabled={sending || parsedAmount === null}
           >
-            <CoinsIcon className="h-3.5 w-3.5" />
-            {sending ? "sending…" : "fund relayer"}
+            {sending ? "Sending…" : "Fund relayer"}
           </Button>
         </div>
       )}
-    </div>
+    </section>
   );
 }
