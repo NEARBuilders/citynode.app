@@ -73,7 +73,10 @@ everywhere.
 
 Use `ui/src/components/ui/*` as-is. Change appearance through variants and sizes;
 `className` on a design-system component is for **layout only** (margin, width,
-flex/grid placement). `@shadcn/lint`'s `no-restyle` enforces this.
+flex/grid placement). `@shadcn/lint`'s `no-restyle` enforces this. Two allowances:
+containers (`Card*`, `TabsContent`, dialog/sheet header/footer, `SidebarGroup`) also
+take spacing; `Input`, `Textarea` and `Badge` take `font-mono` for identifiers, hashes
+and JSON.
 
 | Component | Sizes | Notes |
 |---|---|---|
