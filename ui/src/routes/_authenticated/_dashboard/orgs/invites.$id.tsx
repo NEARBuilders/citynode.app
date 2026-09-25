@@ -1,6 +1,6 @@
+import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getAppName, useApiClient, useAuthClient } from "@/app";
 import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
@@ -69,12 +69,12 @@ function AcceptInvitation() {
       <PageContainer variant="wide">
         <Card className="mt-12">
           <CardContent className="p-8 text-center space-y-4">
-            <XCircle className="h-8 w-8 mx-auto text-muted-foreground" />
+            <XCircleIcon className="h-8 w-8 mx-auto text-muted-foreground" />
             <p className="text-sm">
               This invitation does not exist, has expired, or is not addressed to your account.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/orgs">go to organizations</Link>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
+              go to organizations
             </Button>
           </CardContent>
         </Card>
@@ -92,7 +92,7 @@ function AcceptInvitation() {
           <CardContent className="p-8 space-y-6">
             <div className="space-y-2 text-center">
               <div className="flex justify-center">
-                <CheckCircle className="h-8 w-8 text-muted-foreground" />
+                <CheckCircleIcon className="h-8 w-8 text-muted-foreground" />
               </div>
               <h1 className="text-xl font-semibold tracking-tight">You've been invited</h1>
               <p className="text-sm text-muted-foreground">
@@ -166,8 +166,8 @@ function AcceptInvitation() {
         </Card>
 
         <div className="text-center">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/orgs">back to organizations</Link>
+          <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
+            back to organizations
           </Button>
         </div>
       </div>

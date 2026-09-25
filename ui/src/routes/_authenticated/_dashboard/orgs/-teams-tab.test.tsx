@@ -52,7 +52,7 @@ describe("TeamsTab", () => {
     expect(screen.queryByTestId("teams-tab-add-member-team-ops")).toBeNull();
     expect(screen.queryByTestId("teams-tab-remove-member-team-ops-u-ops")).toBeNull();
     expect(
-      (screen.getByTestId("teams-tab-area-team-ops-node-operations") as HTMLButtonElement).disabled,
+      screen.getByTestId("teams-tab-area-team-ops-node-operations").hasAttribute("data-disabled"),
     ).toBe(true);
     expect(screen.getByText("Node operations")).toBeTruthy();
   });
@@ -138,7 +138,7 @@ describe("TeamsTab", () => {
       false,
     );
     expect(
-      (screen.getByTestId("teams-tab-area-team-ops-node-operations") as HTMLButtonElement).disabled,
+      screen.getByTestId("teams-tab-area-team-ops-node-operations").hasAttribute("data-disabled"),
     ).toBe(false);
   });
 

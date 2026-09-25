@@ -1,7 +1,7 @@
+import { UsersIcon } from "@phosphor-icons/react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Users } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useApiClient, useAuthClient } from "@/app";
@@ -101,12 +101,12 @@ function NewOrganization() {
     <PageContainer variant="wide">
       <div className="space-y-6">
         <PageHeader
-          icon={Users}
+          icon={UsersIcon}
           label="Teams"
           title="New Organization"
           actions={
-            <Button asChild variant="outline">
-              <Link to="/orgs">back to organizations</Link>
+            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              back to organizations
             </Button>
           }
           headerTestId="orgs.new.heading"
@@ -209,8 +209,8 @@ function NewOrganization() {
           </Card>
 
           <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link to="/orgs">cancel</Link>
+            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              cancel
             </Button>
             <form.Subscribe
               selector={(state) =>

@@ -1,5 +1,5 @@
+import { PencilIcon } from "@phosphor-icons/react";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import { Pencil } from "lucide-react";
 import { Button, Card, CardContent, InfoRow, Input, SectionHeader } from "@/components";
 import type { TenantRecord } from "./-tenant-types";
 
@@ -40,7 +40,7 @@ export function TenantDetails({
                 editor.onEdit();
               }}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <PencilIcon className="h-3.5 w-3.5" />
               edit
             </Button>
           ) : undefined

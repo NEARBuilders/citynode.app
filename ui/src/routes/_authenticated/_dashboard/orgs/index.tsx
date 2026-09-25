@@ -1,6 +1,13 @@
+import {
+  ArrowsClockwiseIcon,
+  BankIcon,
+  EnvelopeIcon,
+  PlusIcon,
+  UsersIcon,
+  WalletIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Mail, Plus, RefreshCw, Users, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   type Organization,
@@ -112,16 +119,14 @@ function OrganizationsList() {
     <PageContainer variant="wide">
       <div className="space-y-8">
         <PageHeader
-          icon={Users}
+          icon={UsersIcon}
           label="Teams"
           title="Organizations"
           headerTestId="orgs.heading"
           actions={
-            <Button asChild>
-              <Link to="/orgs/new">
-                <Plus />
-                new
-              </Link>
+            <Button nativeButton={false} render={<Link to="/orgs/new" />}>
+              <PlusIcon />
+              new
             </Button>
           }
         />
@@ -138,9 +143,9 @@ function OrganizationsList() {
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-[10px] border border-border bg-muted flex items-center justify-center shrink-0">
                         {invitation.nearAccountId ? (
-                          <Wallet className="h-5 w-5 text-muted-foreground" />
+                          <WalletIcon className="h-5 w-5 text-muted-foreground" />
                         ) : (
-                          <Mail className="h-5 w-5 text-muted-foreground" />
+                          <EnvelopeIcon className="h-5 w-5 text-muted-foreground" />
                         )}
                       </div>
                       <div className="space-y-1 min-w-0 flex-1">
@@ -220,10 +225,10 @@ function OrganizationsList() {
             </div>
           ) : orgs.length === 0 ? (
             <Card className="p-10 text-center space-y-4 items-center">
-              <Building2 className="h-10 w-10 mx-auto text-muted-foreground" />
+              <BankIcon className="h-10 w-10 mx-auto text-muted-foreground" />
               <p className="text-base font-semibold text-foreground">No organizations yet.</p>
-              <Button asChild>
-                <Link to="/orgs/new">create your first org</Link>
+              <Button nativeButton={false} render={<Link to="/orgs/new" />}>
+                create your first org
               </Button>
             </Card>
           ) : (
@@ -269,10 +274,11 @@ function OrganizationsList() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <Button asChild>
-                        <Link to="/orgs/$slug" params={{ slug: org.slug }}>
-                          open org
-                        </Link>
+                      <Button
+                        nativeButton={false}
+                        render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                      >
+                        open org
                       </Button>
                       {!isActive && (
                         <Button
@@ -280,7 +286,7 @@ function OrganizationsList() {
                           disabled={switchOrgMutation.isPending}
                           variant="outline"
                         >
-                          <RefreshCw className="h-4 w-4" />
+                          <ArrowsClockwiseIcon className="h-4 w-4" />
                           switch
                         </Button>
                       )}

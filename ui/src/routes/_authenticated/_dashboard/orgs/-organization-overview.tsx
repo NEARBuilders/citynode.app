@@ -1,4 +1,4 @@
-import { Edit2, LogOut, Trash2 } from "lucide-react";
+import { PencilSimpleIcon, SignOutIcon, TrashIcon } from "@phosphor-icons/react";
 import type { Organization } from "@/app";
 import { Button, Card, Chip, InfoRow } from "@/components";
 
@@ -56,19 +56,19 @@ export function OrganizationOverview({
         )}
         {canDelete && !isPersonal && (
           <Button variant="outline" onClick={onEdit}>
-            <Edit2 className="h-3.5 w-3.5" />
+            <PencilSimpleIcon className="h-3.5 w-3.5" />
             edit
           </Button>
         )}
         {!isPersonal && !canDelete && (
           <Button variant="outline" onClick={onLeave} disabled={isLeaving}>
-            <LogOut className="h-3.5 w-3.5" />
+            <SignOutIcon className="h-3.5 w-3.5" />
             leave
           </Button>
         )}
         {canDelete && !isPersonal && (
           <Button variant="outline" onClick={onDelete} disabled={isDeleting}>
-            <Trash2 className="h-3.5 w-3.5" />
+            <TrashIcon className="h-3.5 w-3.5" />
             delete org
           </Button>
         )}

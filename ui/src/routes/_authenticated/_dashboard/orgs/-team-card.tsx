@@ -1,4 +1,4 @@
-import { Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
+import { PencilIcon, TrashIcon, UserMinusIcon, UserPlusIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Button, Card, CardContent, Input } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -114,7 +114,7 @@ export function TeamCard({
                 disabled={isMutating}
                 data-testid={`teams-tab-rename-${team.id}`}
               >
-                <Pencil className="h-3 w-3 mr-1" />
+                <PencilIcon className="h-3 w-3 mr-1" />
                 rename
               </Button>
               <Button
@@ -124,7 +124,7 @@ export function TeamCard({
                 disabled={isMutating}
                 data-testid={`teams-tab-delete-${team.id}`}
               >
-                <Trash2 className="h-3 w-3 mr-1" />
+                <TrashIcon className="h-3 w-3 mr-1" />
                 delete
               </Button>
             </div>
@@ -198,7 +198,7 @@ export function TeamCard({
                       aria-label={`Remove ${memberLabel(membersByUserId.get(userId), userId)}`}
                       data-testid={`teams-tab-remove-member-${team.id}-${userId}`}
                     >
-                      <UserMinus className="h-3.5 w-3.5" />
+                      <UserMinusIcon className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </li>
@@ -239,7 +239,7 @@ export function TeamCard({
                 }}
                 data-testid={`teams-tab-add-member-button-${team.id}`}
               >
-                <UserPlus className="h-3.5 w-3.5 mr-1" />
+                <UserPlusIcon className="h-3.5 w-3.5 mr-1" />
                 add
               </Button>
             </div>

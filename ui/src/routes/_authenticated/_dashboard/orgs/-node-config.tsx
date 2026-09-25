@@ -1,7 +1,7 @@
+import { ArrowSquareOutIcon, FlaskIcon, ShieldCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import { ExternalLink, FlaskConical, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useApiClient, useAuthClient } from "@/app";
@@ -324,11 +324,14 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                 This organization has no node yet. Run the node lifecycle to apply, get approved,
                 and publish a tenant config first.
               </p>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/prototype-staking-poc">
-                  <FlaskConical className="h-3.5 w-3.5" />
-                  open the node lifecycle
-                </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link to="/prototype-staking-poc" />}
+              >
+                <FlaskIcon className="h-3.5 w-3.5" />
+                open the node lifecycle
               </Button>
             </>
           )}
@@ -411,7 +414,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                   data-testid="orgs-node-config-open-tenant"
                 >
                   {tenantUrl.replace(/^https?:\/\//, "")}
-                  <ExternalLink className="h-3 w-3 shrink-0" />
+                  <ArrowSquareOutIcon className="h-3 w-3 shrink-0" />
                 </a>
               ) : (
                 (hostname ?? "—")
@@ -631,7 +634,11 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
               title={proposeBlockReason ?? undefined}
               data-testid="orgs-node-config-propose"
             >
-              {busy ? <Spinner className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+              {busy ? (
+                <Spinner className="h-3.5 w-3.5" />
+              ) : (
+                <ShieldCheckIcon className="h-3.5 w-3.5" />
+              )}
               {daoOwned ? "propose config" : "publish config"}
             </Button>
             {proposeBlockReason && !editable ? null : (

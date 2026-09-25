@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { TrashIcon } from "@phosphor-icons/react";
 import {
   ApiKeyForm,
   type ApiKeyFormValues,
@@ -76,7 +76,7 @@ export function ApiKeysTab({
                 </Button>
                 {canManageMembers && (
                   <Button onClick={() => onDelete(key.id)} disabled={isDeleting} variant="outline">
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <TrashIcon className="h-3.5 w-3.5" />
                     delete
                   </Button>
                 )}

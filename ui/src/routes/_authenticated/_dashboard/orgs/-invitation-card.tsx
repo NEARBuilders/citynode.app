@@ -1,4 +1,10 @@
-import { Mail, RefreshCw, Trash2, UsersRound, Wallet } from "lucide-react";
+import {
+  ArrowsClockwiseIcon,
+  EnvelopeIcon,
+  TrashIcon,
+  UsersThreeIcon,
+  WalletIcon,
+} from "@phosphor-icons/react";
 import { Button, Card, CardContent } from "@/components";
 
 export interface InvitationCardInvitation {
@@ -35,9 +41,9 @@ export function InvitationCard({
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
               {invitation.nearAccountId ? (
-                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+                <WalletIcon className="h-3.5 w-3.5 text-muted-foreground" />
               ) : (
-                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                <EnvelopeIcon className="h-3.5 w-3.5 text-muted-foreground" />
               )}
               <div className="font-medium text-sm break-all">
                 {invitation.nearAccountId ?? invitation.email}
@@ -59,7 +65,7 @@ export function InvitationCard({
                 className="flex items-center gap-1.5 text-xs text-muted-foreground"
                 data-testid={`invitation-team-${invitation.id}`}
               >
-                <UsersRound className="h-3 w-3" />
+                <UsersThreeIcon className="h-3 w-3" />
                 team {teamName}
               </div>
             )}
@@ -67,7 +73,7 @@ export function InvitationCard({
           <div className="flex gap-1 shrink-0">
             {onResend && !needsReissue && (
               <Button onClick={onResend} disabled={isResending} variant="outline">
-                <RefreshCw className="h-3 w-3 mr-1" />
+                <ArrowsClockwiseIcon className="h-3 w-3 mr-1" />
                 resend
               </Button>
             )}
@@ -78,7 +84,7 @@ export function InvitationCard({
                 variant="outline"
                 className="text-destructive hover:text-destructive"
               >
-                <Trash2 className="h-3 w-3 mr-1" />
+                <TrashIcon className="h-3 w-3 mr-1" />
                 cancel
               </Button>
             )}

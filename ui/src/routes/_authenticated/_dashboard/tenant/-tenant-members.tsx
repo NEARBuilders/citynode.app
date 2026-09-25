@@ -1,5 +1,5 @@
+import { UsersIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Users } from "lucide-react";
 import { Button, Card, SectionHeader } from "@/components";
 
 export function TenantMembers({ orgSlug }: { orgSlug: string | null }) {
@@ -11,11 +11,14 @@ export function TenantMembers({ orgSlug }: { orgSlug: string | null }) {
           This tenant is backed by an organization. Manage members, roles, and invitations there.
         </p>
         {orgSlug && (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/orgs/$slug" params={{ slug: orgSlug }}>
-              <Users className="h-3.5 w-3.5" />
-              open organization
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/orgs/$slug" params={{ slug: orgSlug }} />}
+          >
+            <UsersIcon className="h-3.5 w-3.5" />
+            open organization
           </Button>
         )}
       </Card>

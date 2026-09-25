@@ -1,4 +1,4 @@
-import { Shield, Trash2, User, UserCog } from "lucide-react";
+import { ShieldIcon, TrashIcon, UserGearIcon, UserIcon } from "@phosphor-icons/react";
 import { Badge, Button, Card, CardContent } from "@/components";
 
 export interface MemberCardMember {
@@ -43,7 +43,7 @@ export function MemberCard({
               />
             ) : (
               <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                <User className="h-4 w-4 text-muted-foreground" />
+                <UserIcon className="h-4 w-4 text-muted-foreground" />
               </div>
             )}
             <div className="min-w-0 space-y-0.5">
@@ -69,7 +69,7 @@ export function MemberCard({
                 variant="outline"
                 size="sm"
               >
-                <Shield className="h-3 w-3 mr-1" />
+                <ShieldIcon className="h-3 w-3 mr-1" />
                 make owner
               </Button>
             )}
@@ -80,7 +80,7 @@ export function MemberCard({
                 variant="outline"
                 size="sm"
               >
-                <UserCog className="h-3 w-3 mr-1" />
+                <UserGearIcon className="h-3 w-3 mr-1" />
                 make admin
               </Button>
             )}
@@ -105,7 +105,7 @@ export function MemberCard({
             size="sm"
             className="text-destructive hover:text-destructive"
           >
-            <Trash2 className="h-3 w-3 mr-1" />
+            <TrashIcon className="h-3 w-3 mr-1" />
             {isRemoving ? "removing..." : "remove"}
           </Button>
         )}

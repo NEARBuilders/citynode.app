@@ -1,6 +1,14 @@
+import {
+  BankIcon,
+  EnvelopeIcon,
+  KeyIcon,
+  QrCodeIcon,
+  StackIcon,
+  UsersIcon,
+  UsersThreeIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Key, Layers, Mail, QrCode, Users, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -184,12 +192,12 @@ function OrganizationDetail() {
     return (
       <PageContainer variant="wide">
         <SharedEmptyState
-          icon={Building2}
+          icon={BankIcon}
           title="Organization not found"
           description="This organization does not exist or you do not have access."
           action={
-            <Button asChild variant="outline">
-              <Link to="/orgs">back to organizations</Link>
+            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              back to organizations
             </Button>
           }
         />
@@ -201,7 +209,7 @@ function OrganizationDetail() {
     <PageContainer variant="wide">
       <div className="space-y-6">
         <PageHeader
-          icon={Users}
+          icon={UsersIcon}
           label={
             <>
               <Link to="/orgs" className="hover:text-foreground transition-colors">
@@ -251,25 +259,25 @@ function OrganizationDetail() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="members" className="shrink-0">
-              <Users className="h-4 w-4 mr-1.5" />
+              <UsersIcon className="h-4 w-4 mr-1.5" />
               Members ({members.length})
             </TabsTrigger>
             <TabsTrigger value="teams" className="shrink-0" data-testid="orgs-tab-teams">
-              <UsersRound className="h-4 w-4 mr-1.5" />
+              <UsersThreeIcon className="h-4 w-4 mr-1.5" />
               Teams ({teamsState.teams.length})
             </TabsTrigger>
             <TabsTrigger value="invitations" className="shrink-0">
-              <Mail className="h-4 w-4 mr-1.5" />
+              <EnvelopeIcon className="h-4 w-4 mr-1.5" />
               Invitations ({pendingInvitationsCount})
             </TabsTrigger>
             {canOrganize && (
               <TabsTrigger value="onboard" className="shrink-0" data-testid="orgs-tab-onboard">
-                <QrCode className="h-4 w-4 mr-1.5" />
+                <QrCodeIcon className="h-4 w-4 mr-1.5" />
                 Onboard
               </TabsTrigger>
             )}
             <TabsTrigger value="apikeys" className="shrink-0">
-              <Key className="h-4 w-4 mr-1.5" />
+              <KeyIcon className="h-4 w-4 mr-1.5" />
               API Keys ({apiKeys.length})
             </TabsTrigger>
             <TabsTrigger
@@ -277,7 +285,7 @@ function OrganizationDetail() {
               className="shrink-0"
               data-testid="orgs-tab-node-config"
             >
-              <Layers className="h-4 w-4 mr-1.5" />
+              <StackIcon className="h-4 w-4 mr-1.5" />
               Node config
             </TabsTrigger>
           </TabsList>

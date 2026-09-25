@@ -1,5 +1,5 @@
+import { CheckCircleIcon, PlusIcon, ShieldCheckIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
@@ -57,7 +57,7 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
       className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
       title="verified via owner_id() on-chain"
     >
-      <ShieldCheck className="h-3 w-3 text-green-500" />
+      <ShieldCheckIcon className="h-3 w-3 text-green-500" />
       owner: <code className="font-mono">{owner}</code>
     </span>
   );
@@ -188,7 +188,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                             disabled={deleteMutation.isPending}
                             aria-label="remove validator"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <TrashIcon className="h-3.5 w-3.5" />
                           </Button>
                         </>
                       )}
@@ -230,7 +230,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
               size="sm"
               disabled={createMutation.isPending || !newAccountId.trim()}
             >
-              <Plus className="h-3.5 w-3.5" />
+              <PlusIcon className="h-3.5 w-3.5" />
               add validator
             </Button>
           </form>
@@ -303,7 +303,7 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
                     autoFocus
                   />
                   <Button type="submit" size="sm" disabled={renameMutation.isPending}>
-                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <CheckCircleIcon className="h-3.5 w-3.5" />
                     save
                   </Button>
                   <Button

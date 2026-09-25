@@ -1,25 +1,25 @@
+import {
+  ArrowDownIcon,
+  ArrowSquareOutIcon,
+  ArrowsClockwiseIcon,
+  BankIcon,
+  CheckCircleIcon,
+  CircleDashedIcon,
+  CircleIcon,
+  FlaskIcon,
+  GavelIcon,
+  LinkBreakIcon,
+  LinkIcon,
+  PlayIcon,
+  ProhibitIcon,
+  StackIcon,
+  WalletIcon,
+  WarningIcon,
+  XCircleIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import {
-  AlertTriangle,
-  ArrowDown,
-  Building2,
-  CheckCircle2,
-  Circle,
-  CircleDashed,
-  CircleSlash,
-  ExternalLink,
-  FlaskConical,
-  Gavel,
-  Layers,
-  Link2,
-  Link2Off,
-  Play,
-  RefreshCw,
-  Wallet,
-  XCircle,
-} from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
@@ -100,7 +100,6 @@ import {
   VOTE_OPTIONS,
   VOTE_STORAGE_FEE_FALLBACK,
   VOTING_ACCOUNT,
-  type VoteOption,
   WHITELIST_ACCOUNT,
   waitFor,
   yoctoArg,
@@ -117,7 +116,6 @@ import {
   type ChainFacts,
   deriveStations,
   LENS_OPTIONS,
-  type LensId,
   nextStation,
   PHASES,
   pendingProposalCount,
@@ -1136,11 +1134,11 @@ function NodeLifecyclePocPage() {
 
   const orgSwitcher = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" data-testid="poc-org-switcher">
-          <Building2 className="h-3.5 w-3.5" />
-          {activeOrg?.name ?? "select an organization"}
-        </Button>
+      <DropdownMenuTrigger
+        render={<Button variant="outline" size="sm" data-testid="poc-org-switcher" />}
+      >
+        <BankIcon className="h-3.5 w-3.5" />
+        {activeOrg?.name ?? "select an organization"}
       </DropdownMenuTrigger>
       <OrgSwitcherMenuContent
         organizations={organizations}
@@ -1155,7 +1153,7 @@ function NodeLifecyclePocPage() {
       <PageContainer variant="wide">
         <div className="space-y-6">
           <PageHeader
-            icon={FlaskConical}
+            icon={FlaskIcon}
             label="Prototype"
             headerTestId="prototype-staking-poc.heading"
             title="Node lifecycle"
@@ -1163,7 +1161,7 @@ function NodeLifecyclePocPage() {
             description="Your wallet applies, an admin approves and funds the team treasury, the team stakes its pool and locks veNEAR, and an endowment sponsors the stake and delegates its voting power to the team."
             actions={
               <Button variant="outline" size="sm" onClick={refresh} data-testid="poc-refresh">
-                <RefreshCw className="h-3.5 w-3.5" />
+                <ArrowsClockwiseIcon className="h-3.5 w-3.5" />
                 refresh
               </Button>
             }
@@ -1191,7 +1189,7 @@ function NodeLifecyclePocPage() {
     <PageContainer variant="wide">
       <div className="space-y-6">
         <PageHeader
-          icon={FlaskConical}
+          icon={FlaskIcon}
           label="Prototype"
           headerTestId="prototype-staking-poc.heading"
           title="Node lifecycle"
@@ -1199,7 +1197,7 @@ function NodeLifecyclePocPage() {
           description="Your wallet applies, an admin approves and funds the team treasury, the team stakes its pool and locks veNEAR, and an endowment sponsors the stake and delegates its voting power to the team. Treasury calls are staged as proposals you can pass by vote."
           actions={
             <Button variant="outline" size="sm" onClick={refresh} data-testid="poc-refresh">
-              <RefreshCw className="h-3.5 w-3.5" />
+              <ArrowsClockwiseIcon className="h-3.5 w-3.5" />
               refresh
             </Button>
           }
@@ -1220,7 +1218,7 @@ function NodeLifecyclePocPage() {
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   <ActorTile
-                    icon={Wallet}
+                    icon={WalletIcon}
                     label="you"
                     account={sessionAccount}
                     caption="applies; as admin — approves, assigns the pool, funds the treasury; votes on treasury proposals"
@@ -1239,7 +1237,7 @@ function NodeLifecyclePocPage() {
                     }}
                   />
                   <ActorTile
-                    icon={Gavel}
+                    icon={GavelIcon}
                     label="team"
                     account={team || null}
                     caption="the node's account — owns the pool and the tenant, locks veNEAR, votes in House of Stake"
@@ -1256,7 +1254,7 @@ function NodeLifecyclePocPage() {
                     }}
                   />
                   <ActorTile
-                    icon={Layers}
+                    icon={StackIcon}
                     label="endowment"
                     account={endowment || null}
                     caption="the sponsor — you connect as a member (Requestor); your wallet stages the proposals, approvers vote on trezu.app"
@@ -1389,11 +1387,11 @@ function NodeLifecyclePocPage() {
                     >
                       {values.endowmentLinked ? (
                         <>
-                          <Link2 className="h-3 w-3" /> same as team wallet
+                          <LinkIcon className="h-3 w-3" /> same as team wallet
                         </>
                       ) : (
                         <>
-                          <Link2Off className="h-3 w-3" /> separate treasuries
+                          <LinkBreakIcon className="h-3 w-3" /> separate treasuries
                         </>
                       )}
                     </button>
@@ -1417,10 +1415,10 @@ function NodeLifecyclePocPage() {
             <div className="flex items-center justify-end gap-2.5 pt-1">
               <span className="text-xs text-muted-foreground">act as</span>
               <ToggleGroup
-                type="single"
-                value={values.lens}
+                value={[values.lens]}
                 onValueChange={(value) => {
-                  if (value) form.setFieldValue("lens", value as LensId);
+                  const next = LENS_OPTIONS.find((option) => value.includes(option.id));
+                  if (next) form.setFieldValue("lens", next.id);
                 }}
                 data-testid="poc-lens"
               >
@@ -1460,7 +1458,7 @@ function NodeLifecyclePocPage() {
                         {busy ? (
                           <Spinner className="h-3.5 w-3.5" />
                         ) : (
-                          <Play className="h-3.5 w-3.5" />
+                          <PlayIcon className="h-3.5 w-3.5" />
                         )}
                         run what I can sign
                       </Button>
@@ -1544,7 +1542,7 @@ function NodeLifecyclePocPage() {
                                             data-testid="poc-open-tenant"
                                           >
                                             open {tenantUrl.replace(/^https?:\/\//, "")}
-                                            <ExternalLink className="h-3 w-3 shrink-0" />
+                                            <ArrowSquareOutIcon className="h-3 w-3 shrink-0" />
                                           </a>
                                         )}
                                       </>
@@ -1577,9 +1575,14 @@ function NodeLifecyclePocPage() {
                                         values.govProposalId ||
                                         (govProposal ? String(govProposal.id) : "")
                                       }
-                                      onValueChange={(value) =>
-                                        form.setFieldValue("govProposalId", value)
-                                      }
+                                      items={govProposals.map((proposal) => ({
+                                        value: String(proposal.id),
+                                        label: `#${proposal.id} ${proposal.title ?? "untitled"}`,
+                                      }))}
+                                      onValueChange={(value) => {
+                                        if (value !== null)
+                                          form.setFieldValue("govProposalId", value);
+                                      }}
                                     >
                                       <SelectTrigger size="sm" className="w-56">
                                         <SelectValue />
@@ -1594,9 +1597,9 @@ function NodeLifecyclePocPage() {
                                     </Select>
                                     <Select
                                       value={values.voteOption}
-                                      onValueChange={(value) =>
-                                        form.setFieldValue("voteOption", value as VoteOption)
-                                      }
+                                      onValueChange={(value) => {
+                                        if (value !== null) form.setFieldValue("voteOption", value);
+                                      }}
                                     >
                                       <SelectTrigger size="sm" className="w-28">
                                         <SelectValue />
@@ -1636,7 +1639,7 @@ function NodeLifecyclePocPage() {
                 </div>
 
                 <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                  <ArrowDown className="h-3.5 w-3.5 shrink-0" />
+                  <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
                   rewards accrue to the pool's stakers and owner — the cycle starts again for the
                   next node.
                 </div>
@@ -1978,12 +1981,18 @@ function NodeLifecyclePocPage() {
                     mono
                   />
                   {tenantUrl && facts.configPublished && (
-                    <Button variant="outline" size="sm" asChild className="w-full">
-                      <a href={tenantUrl} target="_blank" rel="noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        open {tenantUrl.replace(/^https?:\/\//, "")}
-                      </a>
-                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      nativeButton={false}
+                      render={
+                        <a href={tenantUrl} target="_blank" rel="noreferrer">
+                          <ArrowSquareOutIcon className="h-3.5 w-3.5" />
+                          open {tenantUrl.replace(/^https?:\/\//, "")}
+                        </a>
+                      }
+                    />
                   )}
                 </CardContent>
               </Card>
@@ -2145,9 +2154,9 @@ function ActorTile({
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {connected ? (
-            <CheckCircle2 className="h-3.5 w-3.5 text-status-success-foreground" />
+            <CheckCircleIcon className="h-3.5 w-3.5 text-status-success-foreground" />
           ) : (
-            <Circle className="h-3.5 w-3.5 text-border" />
+            <CircleIcon className="h-3.5 w-3.5 text-border" />
           )}
           <InfoPopover title={popover.title} body={popover.body} links={popover.links} />
         </div>
@@ -2213,17 +2222,17 @@ function StationIcon({ status }: { status: StationState["status"] }) {
   const className = "h-4 w-4 shrink-0";
   switch (status) {
     case "done":
-      return <CheckCircle2 className={`${className} text-status-success-foreground`} />;
+      return <CheckCircleIcon className={`${className} text-status-success-foreground`} />;
     case "running":
       return <Spinner className={`${className} text-muted-foreground`} />;
     case "staged":
-      return <CircleDashed className={`${className} text-brand-accent-border`} />;
+      return <CircleDashedIcon className={`${className} text-brand-accent-border`} />;
     case "failed":
-      return <XCircle className={`${className} text-destructive`} />;
+      return <XCircleIcon className={`${className} text-destructive`} />;
     case "skipped":
-      return <CircleSlash className={`${className} text-border`} />;
+      return <ProhibitIcon className={`${className} text-border`} />;
     default:
-      return <Circle className={`${className} text-border`} />;
+      return <CircleIcon className={`${className} text-border`} />;
   }
 }
 
@@ -2283,7 +2292,7 @@ function StationRow({
             />
             {warning && (
               <InfoPopover
-                icon={<AlertTriangle className="h-3.5 w-3.5" />}
+                icon={<WarningIcon className="h-3.5 w-3.5" />}
                 className="text-status-warning-foreground hover:text-status-warning-foreground"
                 title="platform audit seat"
                 body={warning}

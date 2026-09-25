@@ -1,5 +1,5 @@
+import { BankIcon, TrashIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Building2, Trash2 } from "lucide-react";
 import {
   Badge,
   Breadcrumb,
@@ -46,9 +46,7 @@ export function TenantHeader({
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link to="/dashboard">dashboard</Link>
-            </BreadcrumbLink>
+            <BreadcrumbLink render={<Link to="/dashboard" />}>dashboard</BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
@@ -58,7 +56,7 @@ export function TenantHeader({
       </Breadcrumb>
 
       <PageHeader
-        icon={Building2}
+        icon={BankIcon}
         label="Tenant"
         title={tenant.name}
         subtitle={`${hostname ?? "no binding yet"} · ${tenant.accountId}`}
@@ -91,7 +89,7 @@ export function TenantHeader({
             )}
             {isOwner && tenant.status === "active" && (
               <Button variant="destructive" size="sm" onClick={onDelete} disabled={deleting}>
-                <Trash2 className="h-3.5 w-3.5" />
+                <TrashIcon className="h-3.5 w-3.5" />
                 delete
               </Button>
             )}

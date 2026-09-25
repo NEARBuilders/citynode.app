@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { Button, Card, SectionHeader } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
 import { buildTenantUrl } from "@/lib/tenant-url";
@@ -43,16 +43,21 @@ export function TenantLiveSite({
           gateway's host.
         </p>
         {hostname && (
-          <Button asChild variant="outline" size="sm">
-            <a
-              href={buildTenantUrl(hostname, gatewayId ?? "") ?? `https://${hostname}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              open {hostname}
-            </a>
-          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={
+              <a
+                href={buildTenantUrl(hostname, gatewayId ?? "") ?? `https://${hostname}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ArrowSquareOutIcon className="h-3.5 w-3.5" />
+                open {hostname}
+              </a>
+            }
+          />
         )}
         <Button
           variant="outline"

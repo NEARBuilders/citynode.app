@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { TrashIcon } from "@phosphor-icons/react";
 import { Button, Card, ConfirmDialog, SectionHeader } from "@/components";
 
 export function TenantDangerZone({
@@ -27,7 +27,7 @@ export function TenantDangerZone({
               grace period.
             </p>
             <Button variant="destructive" size="sm" onClick={onOpen} disabled={isPending}>
-              <Trash2 className="h-3.5 w-3.5" />
+              <TrashIcon className="h-3.5 w-3.5" />
               delete tenant
             </Button>
           </Card>
