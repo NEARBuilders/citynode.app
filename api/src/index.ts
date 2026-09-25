@@ -4,7 +4,7 @@ import { Context, Effect, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { z } from "zod";
-import { contract } from "./contract";
+import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
@@ -297,10 +297,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
             }),
           );
         }
-        const auth = plugins.auth.client({
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
+          );
+        }
+        const auth = authPlugin.client({
           reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
         });
-        return yield* Effect.tryPromise({
+        return yield* Effect.tryPromise<
+          z.infer<typeof EventOnboardingCodeSchema>,
+          ORPCError<string, unknown>
+        >({
           try: () =>
             auth.createOnboardingCode({
               organizationId,
