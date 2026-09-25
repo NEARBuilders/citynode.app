@@ -1,11 +1,3 @@
-/**
- * HTML shell — head/scripts/styles, runtime config handoff.
- * Root boundary between the host-rendered document and the UI application.
- *
- * BE CAREFUL MODIFYING THIS FILE — changes will be overwritten by `bos sync` / `bos upgrade`.
- * Prefer upstream changes at https://github.com/nearbuilders/everything-dev
- */
-
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import {
   ClientOnly,
@@ -106,12 +98,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         {
           rel: "stylesheet",
           href: `${assetsUrl ?? ""}/static/css/style.css${runtimeConfig?.ui?.integrity ? `?v=${encodeURIComponent(runtimeConfig.ui.integrity)}` : ""}`,
-        },
-        { rel: "preconnect", href: "https://fonts.googleapis.com" },
-        {
-          rel: "preconnect",
-          href: "https://fonts.gstatic.com",
-          crossOrigin: "anonymous",
         },
         { rel: "shortcut icon", href: "/favicon.ico" },
         { rel: "icon", href: "/favicon.ico" },

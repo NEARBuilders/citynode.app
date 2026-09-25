@@ -1,21 +1,20 @@
-import * as TogglePrimitive from "@radix-ui/react-toggle";
+import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { cva, type VariantProps } from "class-variance-authority";
-import type * as React from "react";
-
 import { cn } from "@/lib/utils";
 
 const toggleVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 border-2 border-outset border-border-strong bg-card text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground hover:shadow-md data-[state=on]:border-inset data-[state=on]:shadow-none data-[state=on]:bg-secondary data-[state=on]:text-foreground",
+  "group/toggle inline-flex items-center justify-center gap-1 rounded-4xl text-sm font-medium whitespace-nowrap transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-pressed:bg-muted dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "",
-        outline: "bg-background",
+        default: "bg-transparent",
+        outline: "border border-input bg-transparent hover:bg-muted",
       },
       size: {
-        default: "h-9 px-3 rounded-[10px]",
-        sm: "h-8 px-2.5 text-xs rounded-[8px]",
-        lg: "h-10 px-4 rounded-[10px]",
+        default:
+          "h-9 min-w-9 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
+        sm: "h-8 min-w-8 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        lg: "h-10 min-w-10 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
       },
     },
     defaultVariants: {
@@ -27,12 +26,12 @@ const toggleVariants = cva(
 
 function Toggle({
   className,
-  variant,
-  size,
+  variant = "default",
+  size = "default",
   ...props
-}: React.ComponentProps<typeof TogglePrimitive.Root> & VariantProps<typeof toggleVariants>) {
+}: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
   return (
-    <TogglePrimitive.Root
+    <TogglePrimitive
       data-slot="toggle"
       className={cn(toggleVariants({ variant, size, className }))}
       {...props}

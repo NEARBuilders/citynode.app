@@ -1,21 +1,18 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
-
 @import "tailwindcss";
-
 @import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 body {
-  @apply m-0;
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  font-weight: 500;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  @apply m-0 font-sans antialiased;
 }
 
 code {
-  font-family: "IBM Plex Mono", Monaco, monospace;
+  @apply font-mono;
 }
 
 :root {
@@ -44,7 +41,7 @@ code {
   --chart-3: #d97706;
   --chart-4: #16a34a;
   --chart-5: #7c3aed;
-  --radius: 0.25rem;
+  --radius: 0.45rem;
   --link: #1D2B36;
   --link-visited: #6b21a8;
   --brand-accent: #00D9A3;
@@ -136,6 +133,9 @@ code {
 }
 
 @theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -178,10 +178,13 @@ code {
   --color-status-success-foreground: var(--status-success-foreground);
   --color-disabled: var(--disabled);
   --color-tooltip-classic: var(--tooltip-classic);
-  --radius-sm: calc(var(--radius) - 0.0625rem);
-  --radius-md: calc(var(--radius) - 0.03125rem);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 0.0625rem);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
