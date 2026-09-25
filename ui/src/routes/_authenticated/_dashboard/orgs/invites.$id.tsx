@@ -1,14 +1,24 @@
-import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
+import { EnvelopeSimpleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { getAppName, useApiClient, useAuthClient } from "@/app";
-import { Badge, Button, Card, CardContent, PageContainer, PageHeader } from "@/components";
+import {
+  Avatar,
+  AvatarFallback,
+  Badge,
+  Button,
+  EmptyState,
+  LocalDate,
+  PageContainer,
+  Skeleton,
+} from "@/components";
+import { roleLabel } from "./-org-avatar";
 import { useInvitationActions } from "./-use-invitation-actions";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/invites/$id")({
   head: ({ match }) => ({
-    meta: [{ title: `Accept Invitation | ${getAppName(match.context.runtimeConfig)}` }],
+    meta: [{ title: `Invitation | ${getAppName(match.context.runtimeConfig)}` }],
   }),
   loader: async ({ context, params }) => {
     await context.queryClient.ensureQueryData({
@@ -56,9 +66,11 @@ function AcceptInvitation() {
 
   if (isLoading) {
     return (
-      <PageContainer variant="wide">
-        <div className="flex items-center justify-center min-h-96">
-          <p className="text-sm text-muted-foreground">Loading invitation...</p>
+      <PageContainer variant="narrow">
+        <div className="flex flex-col items-center gap-4 py-12">
+          <Skeleton className="size-16 rounded-full" />
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-5 w-48" />
         </div>
       </PageContainer>
     );
@@ -66,110 +78,71 @@ function AcceptInvitation() {
 
   if (!invitation) {
     return (
-      <PageContainer variant="wide">
-        <Card className="mt-12">
-          <CardContent className="p-8 text-center space-y-4">
-            <XCircleIcon className="h-8 w-8 mx-auto text-muted-foreground" />
-            <p className="text-sm">
-              This invitation does not exist, has expired, or is not addressed to your account.
-            </p>
-            <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
-              go to organizations
+      <PageContainer variant="narrow">
+        <EmptyState
+          icon={EnvelopeSimpleIcon}
+          title="Invitation not available"
+          description="It has expired, was cancelled, or is addressed to another account."
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              Go to Organizations
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       </PageContainer>
     );
   }
 
-  const isPending_ = acceptMutation.isPending || rejectMutation.isPending;
+  const busy = acceptMutation.isPending || rejectMutation.isPending;
+  const orgName = invitation.organizationName ?? invitation.organizationSlug ?? "an organization";
+  const isPending = invitation.status === "pending";
 
   return (
-    <PageContainer variant="wide">
-      <div className="space-y-6">
-        <PageHeader title="You've been invited" />
-        <Card>
-          <CardContent className="p-8 space-y-6">
-            <div className="space-y-2 text-center">
-              <div className="flex justify-center">
-                <CheckCircleIcon className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h1 className="text-xl font-semibold tracking-tight">You've been invited</h1>
-              <p className="text-sm text-muted-foreground">
-                You have been invited to join{" "}
-                <span className="font-medium text-foreground">
-                  {invitation.organizationName ?? invitation.organizationSlug}
-                </span>{" "}
-                as <span className="font-mono">{invitation.role ?? "member"}</span>.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 rounded-xl bg-muted p-4 font-mono text-xs">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">organization</span>
-                <span className="text-right break-all">
-                  {invitation.organizationName ?? invitation.organizationSlug}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">role</span>
-                <span>{invitation.role ?? "member"}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">
-                  {invitation.nearAccountId ? "NEAR account" : "email"}
-                </span>
-                <span className="text-right break-all">
-                  {invitation.nearAccountId ?? invitation.email}
-                </span>
-              </div>
-              {invitation.nearAccountId && invitation.nearNetwork && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">network</span>
-                  <span className="text-right break-all">{invitation.nearNetwork}</span>
-                </div>
-              )}
-              {invitation.teamId && (
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">team</span>
-                  <span className="text-right break-all">{invitation.teamId}</span>
-                </div>
-              )}
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">expires</span>
-                <span>{new Date(invitation.expiresAt).toLocaleDateString()}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">status</span>
-                <Badge variant="outline">{invitation.status}</Badge>
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-center">
-              <Button
-                onClick={() => acceptMutation.mutate(invitation)}
-                disabled={isPending_}
-                size="sm"
-              >
-                {acceptMutation.isPending ? "accepting..." : "accept"}
-              </Button>
-              <Button
-                onClick={() => rejectMutation.mutate(invitation)}
-                disabled={isPending_}
-                variant="outline"
-                size="sm"
-              >
-                {rejectMutation.isPending ? "declining..." : "decline"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="text-center">
-          <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
-            back to organizations
-          </Button>
+    <PageContainer variant="narrow">
+      <div
+        className="flex flex-col items-center gap-8 py-8 text-center sm:py-16"
+        data-testid="invite.accept"
+      >
+        <Avatar className="size-16">
+          <AvatarFallback>{orgName.charAt(0).toUpperCase()}</AvatarFallback>
+        </Avatar>
+        <div className="flex flex-col gap-3">
+          <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">Join {orgName}</h1>
+          <p className="text-base text-muted-foreground">
+            You're invited as {roleLabel(invitation.role).toLowerCase()}
+            {invitation.teamId ? " on one of its teams" : ""}.
+          </p>
         </div>
+        {isPending ? (
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button
+              size="lg"
+              onClick={() => acceptMutation.mutate(invitation)}
+              disabled={busy}
+              data-testid="invite.accept-button"
+            >
+              {acceptMutation.isPending ? "Joining…" : `Join ${orgName}`}
+            </Button>
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={() => rejectMutation.mutate(invitation)}
+              disabled={busy}
+              data-testid="invite.decline-button"
+            >
+              {rejectMutation.isPending ? "Declining…" : "Decline"}
+            </Button>
+          </div>
+        ) : (
+          <Badge variant="outline">This invitation is {invitation.status}</Badge>
+        )}
+        <p className="text-sm text-muted-foreground">
+          For {invitation.nearAccountId ?? invitation.email}
+          {invitation.nearAccountId && invitation.nearNetwork
+            ? ` on ${invitation.nearNetwork}`
+            : ""}{" "}
+          · expires <LocalDate value={invitation.expiresAt} format="relative" />
+        </p>
       </div>
     </PageContainer>
   );
