@@ -1,15 +1,17 @@
 import type { InferClientOutputs } from "@orpc/client";
+import { HardDrivesIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import type { ApiClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 
 type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][number];
 
@@ -21,41 +23,27 @@ export function NodeValidatorTable({
   renderActions?: (validator: Validator) => ReactNode;
 }) {
   return (
-    <Table className="min-w-180">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Account</TableHead>
-          <TableHead>Network</TableHead>
-          <TableHead>Protocol</TableHead>
-          <TableHead>Role</TableHead>
-          <TableHead>Default</TableHead>
-          {renderActions && <TableHead>Actions</TableHead>}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {validators.map((validator) => (
-          <TableRow key={validator.id}>
-            <TableCell>
-              <span className="font-mono text-xs">{validator.accountId}</span>
-            </TableCell>
-            <TableCell>
-              <span className="text-muted-foreground">{validator.network}</span>
-            </TableCell>
-            <TableCell>
-              <span className="text-muted-foreground">{validator.protocol}</span>
-            </TableCell>
-            <TableCell>
-              <Badge variant="outline">{validator.role}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={validator.isDefault ? "default" : "outline"}>
-                {validator.isDefault ? "default" : "no"}
-              </Badge>
-            </TableCell>
-            {renderActions && <TableCell>{renderActions(validator)}</TableCell>}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <ItemGroup data-testid="node-validators">
+      {validators.map((validator) => (
+        <Item key={validator.id} variant="outline" size="sm">
+          <ItemMedia variant="icon">
+            <HardDrivesIcon />
+          </ItemMedia>
+          <ItemContent className="min-w-0">
+            <ItemTitle className="max-w-full">
+              <span className="truncate font-mono">{validator.accountId}</span>
+            </ItemTitle>
+            <ItemDescription>
+              {validator.network} · {validator.protocol}
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions className="flex-wrap">
+            {validator.isDefault && <Badge variant="success">Default</Badge>}
+            <Badge variant="outline">{validator.role}</Badge>
+            {renderActions?.(validator)}
+          </ItemActions>
+        </Item>
+      ))}
+    </ItemGroup>
   );
 }

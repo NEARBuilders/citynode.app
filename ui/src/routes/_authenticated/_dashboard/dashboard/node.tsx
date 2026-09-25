@@ -1,13 +1,7 @@
-import {
-  ArrowSquareOutIcon,
-  BrowserIcon,
-  CalendarDotsIcon,
-  NetworkIcon,
-  SealCheckIcon,
-} from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, NetworkIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { getActiveRuntime } from "@/app";
-import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
+import { Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import {
   Select,
   SelectContent,
@@ -16,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { buildTenantUrl } from "@/lib/tenant-url";
+import { CommunityNav } from "./node/-community-nav";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
@@ -35,6 +30,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         summary: null,
         stakingSourceNode: null,
         canReview: false,
+        canManage: false,
         emptyReason: "no-org" as const,
       };
     }
@@ -50,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         summary: null,
         stakingSourceNode: null,
         canReview: false,
+        canManage: false,
         emptyReason: "no-tenant" as const,
       };
     }
@@ -66,6 +63,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         summary: null,
         stakingSourceNode: null,
         canReview: false,
+        canManage: false,
         emptyReason: "no-node" as const,
       };
     }
@@ -79,6 +77,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
           });
 
     const canReview = hasNodeProposalReviewPermission(context.auth.user?.role);
+    const authContext = await context.apiClient.auth.getContext().catch(() => null);
+    const orgRole = authContext?.organization?.member?.role;
+    const canManage = canReview || orgRole === "owner" || orgRole === "admin";
 
     return {
       tenant,
@@ -87,13 +88,14 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       summary,
       stakingSourceNode,
       canReview,
+      canManage,
       emptyReason: null,
     };
   },
   head: () => ({
     meta: [
-      { title: "My Node | app" },
-      { name: "description", content: "Manage your organization's City Node." },
+      { title: "My community | app" },
+      { name: "description", content: "Run your community." },
     ],
   }),
   component: NodeDashboardLayout,
@@ -103,7 +105,7 @@ function NodeDashboardLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const context = Route.useRouteContext();
-  const { runtimeConfig, nodes, selectedNode, summary, emptyReason } = context;
+  const { runtimeConfig, nodes, selectedNode, summary, emptyReason, tenant, canManage } = context;
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
 
   if (!selectedNode || !summary) {
@@ -112,10 +114,10 @@ function NodeDashboardLayout() {
       context.auth.user?.role === "admin",
     );
     return (
-      <PageContainer variant="wide">
+      <PageContainer>
         <EmptyState
           icon={NetworkIcon}
-          title="No node available"
+          title={emptyState.title}
           description={emptyState.description}
           action={
             <Button nativeButton={false} render={<Link to={emptyState.actionTo} />}>
@@ -128,92 +130,63 @@ function NodeDashboardLayout() {
   }
 
   const gatewayUrl = gateway ? buildTenantUrl(selectedNode.slug, gateway) : null;
-  const isSummary = pathname === "/dashboard/node" || pathname === "/dashboard/node/";
+  const active = pathname.startsWith("/dashboard/node/proposals") ? "proposals" : "overview";
 
   return (
     <PageContainer variant="wide">
-      <div className="space-y-8">
+      <header className="flex flex-col gap-6">
         <PageHeader
-          icon={NetworkIcon}
-          label="My Node"
+          headerTestId="dashboard-node.heading"
           title={selectedNode.name}
-          subtitle={selectedNode.slug}
-          actions={
-            <>
-              {nodes.length > 1 && (
-                <Select
-                  value={selectedNode.id}
-                  items={nodes.map((node) => ({ label: node.name, value: node.id }))}
-                  onValueChange={(value) => {
-                    if (!value) return;
-                    navigate({
-                      to: "/dashboard/node",
-                      search: { nodeId: value },
-                    });
-                  }}
-                >
-                  <SelectTrigger id="managed-node" aria-label="Managed node">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nodes.map((node) => (
-                      <SelectItem key={node.id} value={node.id}>
-                        {node.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+          description={
+            <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
+              <span className="capitalize">{selectedNode.kind}</span>
               {gatewayUrl && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  nativeButton={false}
-                  render={(props) => (
-                    <a {...props} href={gatewayUrl} target="_blank" rel="noopener noreferrer" />
-                  )}
+                <a
+                  href={gatewayUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                  data-testid="dashboard-node.site-link"
                 >
                   {selectedNode.slug}.{gateway}
-                  <ArrowSquareOutIcon />
-                </Button>
+                  <ArrowSquareOutIcon className="size-4" />
+                </a>
               )}
-            </>
+            </span>
+          }
+          actions={
+            nodes.length > 1 ? (
+              <Select
+                value={selectedNode.id}
+                items={nodes.map((node) => ({ label: node.name, value: node.id }))}
+                onValueChange={(value) => {
+                  if (!value) return;
+                  navigate({ to: "/dashboard/node", search: { nodeId: value } });
+                }}
+              >
+                <SelectTrigger id="managed-node" aria-label="Switch community">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {nodes.map((node) => (
+                    <SelectItem key={node.id} value={node.id}>
+                      {node.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null
           }
         />
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{selectedNode.kind}</Badge>
-          <span className="font-mono text-xs text-muted-foreground">{selectedNode.id}</span>
-        </div>
-
-        <nav className="flex flex-wrap gap-2">
-          <Button
-            nativeButton={false}
-            render={<Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} />}
-          >
-            <CalendarDotsIcon />
-            Events & community profile
-          </Button>
-          <Button
-            variant={isSummary ? "secondary" : "outline"}
-            nativeButton={false}
-            render={<Link to="/dashboard/node" search={{ nodeId: selectedNode.id }} />}
-          >
-            <BrowserIcon />
-            overview
-          </Button>
-          <Button
-            variant={pathname.startsWith("/dashboard/node/proposals") ? "secondary" : "outline"}
-            nativeButton={false}
-            render={<Link to="/dashboard/node/proposals" search={{ nodeId: selectedNode.id }} />}
-          >
-            <SealCheckIcon />
-            proposals
-          </Button>
-        </nav>
-
-        <Outlet />
-      </div>
+        <CommunityNav
+          active={active}
+          nodeId={selectedNode.id}
+          tenantId={tenant?.id}
+          canManage={canManage}
+        />
+      </header>
+      <Outlet />
     </PageContainer>
   );
 }

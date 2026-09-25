@@ -91,9 +91,7 @@ describe("TeamStakeCard", () => {
   it("explains when the team account or staking pool is missing", () => {
     renderCard({ target: null });
     expect(screen.getByTestId("dashboard-node.team-stake")).toBeTruthy();
-    expect(
-      screen.getByText("Team stake appears once a team DAO and staking pool are linked."),
-    ).toBeTruthy();
+    expect(screen.getByText("Link a team treasury to see its stake here.")).toBeTruthy();
     expect(screen.queryByTestId("dashboard-node.team-stake-amount")).toBeNull();
     expect(screen.queryByTestId("dashboard-node.team-stake-unstake")).toBeNull();
   });
@@ -120,7 +118,7 @@ describe("TeamStakeCard", () => {
     renderCard();
     const unstake = await screen.findByTestId("dashboard-node.team-stake-unstake");
     await waitFor(() => expect((unstake as HTMLButtonElement).disabled).toBe(false));
-    expect(unstake.textContent).toBe("propose unstake");
+    expect(unstake.textContent).toBe("Propose unstake");
     fireEvent.click(unstake);
     const amount = await screen.findByTestId("dashboard-node.team-stake-unstake-amount");
     fireEvent.change(amount, { target: { value: "1" } });
@@ -162,7 +160,7 @@ describe("TeamStakeCard", () => {
     renderCard();
     const withdraw = await screen.findByTestId("dashboard-node.team-stake-unstake");
     await waitFor(() => expect((withdraw as HTMLButtonElement).disabled).toBe(false));
-    expect(withdraw.textContent).toBe("propose withdraw");
+    expect(withdraw.textContent).toBe("Propose withdraw");
     fireEvent.click(withdraw);
     await screen.findByTestId("dashboard-node.team-stake-unstake-confirm");
     fireEvent.click(screen.getByTestId("dashboard-node.team-stake-unstake-confirm"));
