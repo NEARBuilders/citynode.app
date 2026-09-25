@@ -29,7 +29,11 @@ export function RelayerStatus({
         <h2 className="text-sm font-semibold text-foreground">Status</h2>
         <div className="flex items-center gap-2">
           <Badge variant={statusVariant}>{statusLabel}</Badge>
-          {info?.mode && <Badge variant="outline">{info.mode}</Badge>}
+          {info?.mode && (
+            <Badge variant="outline" className="font-mono">
+              {info.mode}
+            </Badge>
+          )}
         </div>
       </div>
 

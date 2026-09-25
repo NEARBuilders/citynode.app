@@ -14,12 +14,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
+  FieldDescription,
+  FieldLabel,
   Input,
-  Label,
   SectionHeader,
   Skeleton,
   UnderConstruction,
 } from "@/components";
+import { FieldGroup } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -235,44 +238,48 @@ function AddBindingForm({
           mutation.mutate();
         }}
       >
-        <div className="space-y-2">
-          <Label htmlFor="binding-kind">Domain type</Label>
-          <Select
-            value={kind}
-            items={BINDING_KIND_ITEMS}
-            onValueChange={(value) => {
-              if (value === null) return;
-              setKind(value);
-              setHostname("");
-              mutation.reset();
-            }}
-          >
-            <SelectTrigger id="binding-kind" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="alias">Platform alias</SelectItem>
-              <SelectItem value="custom">Custom domain</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="binding-hostname">{kind === "alias" ? "Alias" : "Domain"}</Label>
-          <Input
-            id="binding-hostname"
-            value={hostname}
-            onChange={(event) => setHostname(event.target.value)}
-            placeholder={kind === "alias" ? "chicago" : "nyc.gov"}
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-          />
-        </div>
-        <p className="break-all text-sm text-muted-foreground">
-          {kind === "alias"
-            ? `${normalized || "alias"}.${gateway} — no verification needed.`
-            : `${normalized || "Your domain"} — DNS TXT verification required.`}
-        </p>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="binding-kind">Domain type</FieldLabel>
+            <Select
+              value={kind}
+              items={BINDING_KIND_ITEMS}
+              onValueChange={(value) => {
+                if (value === null) return;
+                setKind(value);
+                setHostname("");
+                mutation.reset();
+              }}
+            >
+              <SelectTrigger id="binding-kind" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alias">Platform alias</SelectItem>
+                <SelectItem value="custom">Custom domain</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="binding-hostname">
+              {kind === "alias" ? "Alias" : "Domain"}
+            </FieldLabel>
+            <Input
+              id="binding-hostname"
+              value={hostname}
+              onChange={(event) => setHostname(event.target.value)}
+              placeholder={kind === "alias" ? "chicago" : "nyc.gov"}
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+            />
+            <FieldDescription className="break-all">
+              {kind === "alias"
+                ? `${normalized || "alias"}.${gateway} — no verification needed.`
+                : `${normalized || "Your domain"} — DNS TXT verification required.`}
+            </FieldDescription>
+          </Field>
+        </FieldGroup>
         {mutation.isError && (
           <p role="alert" className="text-sm text-destructive">
             {mutation.error.message}

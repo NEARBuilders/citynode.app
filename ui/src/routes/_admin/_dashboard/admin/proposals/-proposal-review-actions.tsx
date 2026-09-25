@@ -1,6 +1,6 @@
 import { CheckIcon, XIcon } from "@phosphor-icons/react";
 import type { ChangeEvent } from "react";
-import { Button, Card, Label, Textarea } from "@/components";
+import { Button, Card, Field, FieldLabel, Textarea } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 
 interface ProposalReviewActionsProps {
@@ -51,8 +51,8 @@ export function ProposalReviewActions({
               Approve to publish this thing, or add required notes before rejecting it.
             </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="rejection-reason">Review notes</Label>
+          <Field>
+            <FieldLabel htmlFor="rejection-reason">Review notes</FieldLabel>
             <Textarea
               id="rejection-reason"
               value={rejectionReason}
@@ -60,7 +60,7 @@ export function ProposalReviewActions({
               placeholder="Required when rejecting"
               rows={4}
             />
-          </div>
+          </Field>
           <div className="flex flex-wrap gap-2">
             <Button onClick={onApprove} disabled={isReviewing || !daoIsVerified}>
               <CheckIcon />

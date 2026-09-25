@@ -13,12 +13,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
+  FieldLabel,
   Input,
-  Label,
   NodeValidatorTable,
   SectionHeader,
 } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldGroup } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -167,60 +169,65 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
           mutation.mutate();
         }}
       >
-        <div className="space-y-2">
-          <Label htmlFor="validator-account">Account ID</Label>
-          <Input
-            id="validator-account"
-            value={accountId}
-            onChange={(event) => setAccountId(event.target.value)}
-            placeholder="everything.pool.near"
-            required
-          />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="validator-network">Network</Label>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="validator-account">Account ID</FieldLabel>
             <Input
-              id="validator-network"
-              value={network}
-              onChange={(event) => setNetwork(event.target.value)}
+              id="validator-account"
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
+              placeholder="everything.pool.near"
               required
+              className="font-mono"
             />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="validator-network">Network</FieldLabel>
+              <Input
+                id="validator-network"
+                value={network}
+                onChange={(event) => setNetwork(event.target.value)}
+                required
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="validator-protocol">Protocol</FieldLabel>
+              <Input
+                id="validator-protocol"
+                value={protocol}
+                onChange={(event) => setProtocol(event.target.value)}
+                required
+              />
+            </Field>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="validator-protocol">Protocol</Label>
-            <Input
-              id="validator-protocol"
-              value={protocol}
-              onChange={(event) => setProtocol(event.target.value)}
-              required
+          <Field>
+            <FieldLabel htmlFor="validator-role">Role</FieldLabel>
+            <Select
+              value={role}
+              items={VALIDATOR_ROLE_ITEMS}
+              onValueChange={(value) => setRole(value === "official" ? "official" : "community")}
+            >
+              <SelectTrigger id="validator-role" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="community">Community</SelectItem>
+                <SelectItem value="official">Official</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field orientation="horizontal">
+            <Checkbox
+              id="validator-default"
+              checked={isDefault}
+              onCheckedChange={(checked) => setIsDefault(checked === true)}
             />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="validator-role">Role</Label>
-          <Select
-            value={role}
-            items={VALIDATOR_ROLE_ITEMS}
-            onValueChange={(value) => setRole(value === "official" ? "official" : "community")}
-          >
-            <SelectTrigger id="validator-role" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="community">Community</SelectItem>
-              <SelectItem value="official">Official</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="validator-default"
-            checked={isDefault}
-            onCheckedChange={(checked) => setIsDefault(checked === true)}
-          />
-          <Label htmlFor="validator-default">Set as this node's default validator</Label>
-        </div>
+            <FieldLabel htmlFor="validator-default">
+              Set as this node's default validator
+            </FieldLabel>
+          </Field>
+        </FieldGroup>
         {mutation.isError && (
           <p role="alert" className="text-sm text-destructive">
             {mutation.error.message}

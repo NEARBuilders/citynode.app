@@ -11,10 +11,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
+  FieldDescription,
+  FieldLabel,
   Input,
-  Label,
   Textarea,
 } from "@/components";
+import { FieldGroup } from "@/components/ui/field";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { parseNodeMetadata } from "./-node-management";
 
@@ -73,35 +76,38 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
           if (name.trim()) saveMutation.mutate();
         }}
       >
-        <div className="space-y-2">
-          <Label htmlFor="node-name">Name</Label>
-          <Input
-            id="node-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="node-description">Description</Label>
-          <Textarea
-            id="node-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={3}
-          />
-          <p className="text-xs text-muted-foreground">Stored in metadata.description.</p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="node-metadata">Additional metadata (JSON)</Label>
-          <Textarea
-            id="node-metadata"
-            value={metadata}
-            onChange={(event) => setMetadata(event.target.value)}
-            rows={7}
-            spellCheck={false}
-          />
-        </div>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="node-name">Name</FieldLabel>
+            <Input
+              id="node-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="node-description">Description</FieldLabel>
+            <Textarea
+              id="node-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+            />
+            <FieldDescription>Stored in metadata.description.</FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="node-metadata">Additional metadata (JSON)</FieldLabel>
+            <Textarea
+              id="node-metadata"
+              value={metadata}
+              onChange={(event) => setMetadata(event.target.value)}
+              rows={7}
+              spellCheck={false}
+              className="font-mono"
+            />
+          </Field>
+        </FieldGroup>
         {saveMutation.isError && (
           <p role="alert" className="text-sm text-destructive">
             {saveMutation.error.message}
