@@ -60,6 +60,36 @@ _Avoid_: blockchain event, transaction
 A node-associated public post with an attributed source, original publication time, and a link to the original content.
 _Avoid_: social account, imported activity
 
+## Event onboarding
+
+**Onboarding Code**:
+A revocable, expiring, use-capped invitation tied to one Node Event that makes whoever redeems it a member of the node's organization and of that event's Event Team; shown as a QR code.
+_Avoid_: join link, invite code, referral code, QR code (that's only its rendering)
+
+**Event Team**:
+A Team created for one Node Event whose members are the people who redeemed its Onboarding Codes; it is granted no Feature Areas unless an organizer adds them.
+_Avoid_: event cohort, attendee list
+
+**Organizer**:
+A member who can create and revoke Onboarding Codes for a node's events, by belonging to a Team granted the events Feature Area, or by being an organization owner or admin.
+_Avoid_: event admin, host
+
+**Passkey Wallet**:
+The deterministic NEAR account derived from a member's passkey public key, linked to their user at onboarding; it exists as an address before it is activated on-chain.
+_Avoid_: passkey account, embedded wallet, smart wallet
+
+**Activation**:
+The first sponsored on-chain deployment that makes a Passkey Wallet a live account able to hold keys and sign writes.
+_Avoid_: funding (that's the Sponsor topping up a key), creation
+
+**Gateway Origin**:
+The canonical citynode.app origin for a network, where every passkey ceremony takes place regardless of which tenant domain the member arrived from.
+_Avoid_: base URL, main domain, tenant domain
+
+**Device Link**:
+Signing a desktop browser into an existing session by approving the desktop's QR code from a phone that is already signed in.
+_Avoid_: device pairing, sync, cross-device passkey (the browser-native hybrid flow is a different mechanism)
+
 ## Regression stacks
 
 **Stack**:
