@@ -70,13 +70,21 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
     ).toThrow('Invalid passkey origin value: "https://"');
   });
 
-  it("throws a descriptive error for invalid passkey RP ID", () => {
+  it("throws a descriptive error for invalid passkey RP ID on a production origin", () => {
     expect(() =>
       resolvePasskeyRelyingPartyOptions({
-        baseUrl: "http://localhost:3000",
+        baseUrl: "https://example.app",
         passkey: { rpID: "https://" },
       }),
     ).toThrow('Invalid passkey RP ID value: "https://"');
+  });
+
+  it("skips a custom rpID on localhost dev origins", () => {
+    const options = resolvePasskeyRelyingPartyOptions({
+      baseUrl: "http://localhost:3000",
+      passkey: { rpID: "https://" },
+    });
+    expect(options.rpID).toBe("localhost");
   });
 });
 

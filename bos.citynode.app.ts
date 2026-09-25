@@ -26,7 +26,10 @@ export default App({
   ui: UI({ path: "ui" }),
   api: API({
     path: "api",
-    variables: { platformAccount: "v1.citynode.near" },
+    variables: {
+      platformAccount: "v1.citynode.near",
+      gatewayDomains: "citynode.app,testnet.citynode.app",
+    },
     secrets: ["API_DATABASE_URL", "LUMA_CALENDAR_API_KEYS"],
   }),
   auth: Plugin("auth").path("plugins/auth", {

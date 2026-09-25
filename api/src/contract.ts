@@ -80,6 +80,7 @@ export const TenantSchema = z.object({
   id: z.string(),
   accountId: z.string(),
   orgId: z.string().nullable(),
+  ownerUserId: z.string().nullable(),
   name: z.string(),
   status: TenantStatusSchema,
   ownerKind: z.string(),
@@ -109,7 +110,9 @@ export const TenantAppSchema = z.object({
   accountId: z.string().describe("NEAR account that owns the tenant runtime"),
   name: z.string(),
   status: TenantStatusSchema,
-  ownerKind: z.string().describe("'dao' for DAO-owned tenants, 'platform' otherwise"),
+  ownerKind: z
+    .string()
+    .describe("'dao' for DAO-owned tenants, 'user' for personal spawns, 'platform' otherwise"),
   hostname: z
     .string()
     .nullable()
@@ -235,6 +238,57 @@ export const contract = oc.router({
         message: "Tenant with this accountId already exists",
       },
     }),
+
+  spawnTenant: oc
+    .route({
+      method: "POST",
+      path: "/tenants/spawn",
+      summary: "Spawn a user-owned tenant with a primary binding",
+      description:
+        "Session-gated — creates a tenant owned by the signed-in user's linked NEAR account " +
+        "(wallet or passkey-derived), with the hostname as its primary binding. Hostnames under " +
+        "a configured gateway zone are verified automatically.",
+    })
+    .input(
+      z.object({
+        name: z.string().min(1),
+        hostname: z.string().min(1),
+      }),
+    )
+    .output(
+      z.object({
+        tenant: TenantSchema,
+        binding: TenantBindingRecordSchema,
+        ownerAccountId: z.string(),
+        publishStatus: z.enum(["pending_funding", "ready"]),
+      }),
+    )
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      CONFLICT: { status: 409, message: "Tenant or hostname already exists" },
+    }),
+
+  getSpawnStatus: oc
+    .route({
+      method: "GET",
+      path: "/tenants/spawn/{tenantId}",
+      summary: "Spawn status for a user-owned tenant",
+      description:
+        "Returns the tenant, its bindings, and whether the owner account still needs on-chain " +
+        "funding before the tenant config can be published.",
+    })
+    .input(z.object({ tenantId: z.string() }))
+    .output(
+      z.object({
+        tenant: TenantSchema,
+        bindings: z.array(TenantBindingRecordSchema),
+        ownerAccountId: z.string(),
+        publishStatus: z.enum(["pending_funding", "ready"]),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   updateTenant: oc
     .route({ method: "PATCH", path: "/tenants/{tenantId}" })
