@@ -1,9 +1,13 @@
+import { CheckCircleIcon, DevicesIcon, KeyIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AuthPanel } from "@/components/auth-panel";
+import { InfoPopover } from "@/components/info-popover";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { sanitizeUserCode } from "./-user-code";
 
 type SearchParams = {
@@ -117,101 +121,105 @@ function DeviceApprovePage() {
 
   if (approved) {
     return (
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-2 text-center">
-          <h1
-            className="text-lg font-semibold text-foreground"
-            data-testid="device.approved-heading"
-          >
-            Connected — return to your terminal
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            The CLI received the credential. You can close this window.
-          </p>
-        </div>
-      </div>
+      <AuthPanel
+        icon={<CheckCircleIcon />}
+        title="Return to your terminal"
+        titleTestId="device.approved-heading"
+        description="The CLI received the credential. You can close this window."
+      />
     );
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
-        <div className="space-y-1 text-center">
-          <h1
-            className="text-xl font-semibold text-foreground"
-            data-testid="device.approve-heading"
+    <AuthPanel
+      icon={isDelegateMode ? <KeyIcon /> : <DevicesIcon />}
+      title={isDelegateMode ? "Approve publish key" : "Approve sign-in"}
+      titleTestId="device.approve-heading"
+      description={
+        isDelegateMode
+          ? "Adds a publish-only key to your NEAR account so the CLI can publish without gas."
+          : "Your other device will be signed in to this account."
+      }
+    >
+      {user_code ? (
+        <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
+          <span className="text-sm text-muted-foreground">Check it matches your other screen</span>
+          <span
+            className="font-mono text-3xl font-semibold tracking-widest text-foreground"
+            data-testid="device.approve-code"
           >
-            {isDelegateMode ? "Approve gasless publish key" : "Approve device"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isDelegateMode
-              ? "Approving adds the scoped key to your account — your wallet handles the approval. The CLI keeps the private key locally so publishes stay gasless and headless."
-              : "Approving will sign in this account on the other device."}
-          </p>
+            {user_code}
+          </span>
         </div>
+      ) : (
+        <p
+          className="text-center text-sm text-muted-foreground"
+          data-testid="device.approve-missing-code"
+        >
+          No code provided. Start again from the other device.
+        </p>
+      )}
 
-        {isDelegateMode && (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground font-mono break-all">{pubKey}</p>
-            {configAccount && signedInAccountId && signedInAccountId !== configAccount && (
-              <p
-                className="text-xs text-warning-muted-foreground"
-                data-testid="device.account-mismatch"
-              >
-                Your signed-in NEAR account differs from the configured account — the delegate key
-                can only sign for your signed-in account.
-              </p>
-            )}
+      {isDelegateMode && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Public key</span>
+            <InfoPopover
+              title="Publish key"
+              body="Only allowed to call __fastdata_kv on the registry, with a 1 NEAR gas allowance. The private key stays on your computer."
+            />
           </div>
-        )}
-
-        {user_code ? (
-          <div className="rounded-lg border border-border bg-muted/40 p-4 text-center space-y-1">
-            <p className="text-xs text-muted-foreground">
-              Make sure this code matches the one on the device
-            </p>
-            <p
-              className="font-mono text-lg tracking-widest text-foreground"
-              data-testid="device.approve-code"
-            >
-              {user_code}
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-center text-muted-foreground">No code provided.</p>
-        )}
-
-        {error && (
-          <p className="text-sm text-destructive text-center" data-testid="device.approve-error">
-            {error}
+          <p
+            className="break-all font-mono text-xs text-foreground"
+            data-testid="device.approve-pubkey"
+          >
+            {pubKey}
           </p>
-        )}
+          {configAccount && signedInAccountId && signedInAccountId !== configAccount && (
+            <p
+              className="text-sm text-warning-muted-foreground"
+              data-testid="device.account-mismatch"
+            >
+              You're signed in as {signedInAccountId}, not {configAccount}. The key will be added to{" "}
+              {signedInAccountId}.
+            </p>
+          )}
+        </div>
+      )}
 
-        {user_code && (
-          <div className="space-y-3">
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleApprove}
-              disabled={pending}
-              data-testid="device.approve-button"
-            >
-              {pending ? "working…" : isDelegateMode ? "Approve delegate key" : "Approve"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={handleDeny}
-              disabled={pending}
-              data-testid="device.deny-button"
-            >
-              Deny
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+      {error && (
+        <p className="text-center text-sm text-destructive" data-testid="device.approve-error">
+          {error}
+        </p>
+      )}
+
+      {user_code && (
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            size="lg"
+            className="w-full"
+            onClick={handleApprove}
+            disabled={pending}
+            data-testid="device.approve-button"
+          >
+            {pending && <Spinner data-icon="inline-start" />}
+            {isDelegateMode ? "Approve key" : "Approve"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            className="w-full"
+            onClick={handleDeny}
+            disabled={pending}
+            data-testid="device.deny-button"
+          >
+            Deny
+          </Button>
+        </div>
+      )}
+    </AuthPanel>
   );
 }
 
@@ -219,23 +227,21 @@ function NavigateToLogin({ userCode }: { userCode?: string }) {
   const navigate = useNavigate();
   const target = userCode ? `/login/device?user_code=${userCode}` : "/login/device";
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
-        <h1 className="text-xl font-semibold text-foreground" data-testid="device.approve-heading">
-          Sign in required
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Sign in on this device to approve the request.
-        </p>
-        <Button
-          type="button"
-          className="w-full"
-          onClick={() => void navigate({ to: "/login", search: { redirect: target } })}
-          data-testid="device.approve-signin-button"
-        >
-          Sign in to continue
-        </Button>
-      </div>
-    </div>
+    <AuthPanel
+      icon={<DevicesIcon />}
+      title="Sign in to approve"
+      titleTestId="device.approve-heading"
+      description="Sign in on this device first, then approve the request."
+    >
+      <Button
+        type="button"
+        size="lg"
+        className="w-full"
+        onClick={() => void navigate({ to: "/login", search: { redirect: target } })}
+        data-testid="device.approve-signin-button"
+      >
+        Sign in to continue
+      </Button>
+    </AuthPanel>
   );
 }
