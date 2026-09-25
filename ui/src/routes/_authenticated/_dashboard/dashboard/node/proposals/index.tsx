@@ -74,17 +74,21 @@ function NodeProposals() {
       </div>
 
       {proposalsQuery.isLoading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading proposals…</Card>
+        <Card className="p-8">
+          <p className="text-center text-sm text-muted-foreground">Loading proposals…</p>
+        </Card>
       ) : proposalsQuery.isError ? (
-        <Card className="p-8 text-center text-sm text-destructive">
-          Unable to load this node&apos;s proposals.
+        <Card className="p-8">
+          <p className="text-center text-sm text-destructive">
+            Unable to load this node&apos;s proposals.
+          </p>
         </Card>
       ) : proposals.length === 0 ? (
         <EmptyState
           icon={SealCheckIcon}
           title="No node proposals"
           description={`No proposals currently target ${selectedNode.name}.`}
-          className="min-h-[40vh]"
+          className="min-h-96"
         />
       ) : (
         <div className="space-y-3">
@@ -107,7 +111,7 @@ function NodeProposals() {
                   </div>
                 </div>
 
-                <pre className="max-h-72 overflow-auto rounded-[8px] border border-border bg-muted/40 p-4 text-xs text-foreground">
+                <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/40 p-4 text-xs text-foreground">
                   {JSON.stringify(proposal.payload, null, 2)}
                 </pre>
 

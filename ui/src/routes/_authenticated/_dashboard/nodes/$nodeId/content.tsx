@@ -27,9 +27,7 @@ function CommunityContent() {
         </Link>
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Community editor
-            </p>
+            <p className="mb-2 text-sm font-medium text-muted-foreground">Community editor</p>
             <h1 className="text-3xl font-semibold tracking-tight">
               {node.data?.name ?? "Your community"}
             </h1>

@@ -89,9 +89,7 @@ export function OnboardingStation({
       </div>
       <div className="flex w-full max-w-md flex-col gap-6">
         <div className="space-y-2">
-          <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            Scan to join
-          </p>
+          <p className="text-sm font-medium text-muted-foreground">Scan to join</p>
           <h1 className="text-4xl font-semibold tracking-tight" data-testid="station.event-name">
             {station.data.eventName}
           </h1>

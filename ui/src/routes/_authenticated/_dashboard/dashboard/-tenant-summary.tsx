@@ -9,9 +9,7 @@ type Tenant = Awaited<ReturnType<ApiClient["resolveTenant"]>>;
 export function TenantSummary({ tenant }: { tenant: NonNullable<Tenant> }) {
   return (
     <Card className="p-6 space-y-4">
-      <div className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-        Tenant
-      </div>
+      <div className="text-muted-foreground text-sm font-medium">Tenant</div>
       <div className="flex flex-col gap-2">
         <InfoRow label="name" value={tenant.name} />
         <InfoRow label="id" value={tenant.id} mono />

@@ -45,7 +45,7 @@ function NodeOverview() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-border-strong bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-muted p-5">
         <div>
           <h2 className="font-semibold">What’s happening in your community?</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -75,8 +75,8 @@ function NodeOverview() {
       <section className="space-y-3">
         <SectionHeader title="Direct children" />
         {summary.children.length === 0 ? (
-          <Card className="p-6 text-sm text-muted-foreground">
-            This node has no direct children.
+          <Card className="p-6">
+            <p className="text-sm text-muted-foreground">This node has no direct children.</p>
           </Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

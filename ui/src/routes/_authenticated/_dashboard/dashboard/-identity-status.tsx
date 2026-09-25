@@ -16,9 +16,7 @@ export function IdentityStatus({
 }) {
   return (
     <Card className="space-y-4 p-6">
-      <div className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-        Identity Status
-      </div>
+      <div className="text-muted-foreground text-sm font-medium">Identity Status</div>
       <div className="flex flex-col gap-2">
         <InfoRow label="email" value={profile.hasEmail ? (user.email ?? "linked") : "not linked"} />
         <InfoRow
@@ -36,7 +34,7 @@ export function IdentityStatus({
         />
       </div>
       {profile.isAnonymous && (
-        <div className="mt-2 rounded-[10px] border border-brand-accent-border bg-brand-accent-light px-4 py-3 text-[13px] leading-relaxed text-foreground">
+        <div className="mt-2 rounded-xl bg-brand-muted px-4 py-3 text-sm leading-relaxed text-foreground">
           Link an email or NEAR wallet before signing out to keep your data.
         </div>
       )}

@@ -9,7 +9,6 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tan
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { buildTenantUrl } from "@/lib/tenant-url";
-import { cn } from "@/lib/utils";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
@@ -149,7 +148,7 @@ function NodeDashboardLayout() {
                       search: { nodeId: event.target.value },
                     })
                   }
-                  className="h-9 rounded-[8px] border-2 border-border bg-card px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                  className="h-11 rounded-4xl border border-input bg-input/30 px-4 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                   {nodes.map((node) => (
                     <option key={node.id} value={node.id}>
@@ -188,30 +187,22 @@ function NodeDashboardLayout() {
             <CalendarDotsIcon />
             Events & community profile
           </Button>
-          <Link
-            to="/dashboard/node"
-            search={{ nodeId: selectedNode.id }}
-            className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-[10px] border-2 border-border-strong px-3.5 text-sm font-medium shadow-sm transition-all hover:shadow-md",
-              isSummary ? "bg-foreground text-background" : "bg-card text-foreground",
-            )}
+          <Button
+            variant={isSummary ? "secondary" : "outline"}
+            nativeButton={false}
+            render={<Link to="/dashboard/node" search={{ nodeId: selectedNode.id }} />}
           >
-            <BrowserIcon className="h-3.5 w-3.5" />
+            <BrowserIcon />
             overview
-          </Link>
-          <Link
-            to="/dashboard/node/proposals"
-            search={{ nodeId: selectedNode.id }}
-            className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-[10px] border-2 border-border-strong px-3.5 text-sm font-medium shadow-sm transition-all hover:shadow-md",
-              pathname.startsWith("/dashboard/node/proposals")
-                ? "bg-foreground text-background"
-                : "bg-card text-foreground",
-            )}
+          </Button>
+          <Button
+            variant={pathname.startsWith("/dashboard/node/proposals") ? "secondary" : "outline"}
+            nativeButton={false}
+            render={<Link to="/dashboard/node/proposals" search={{ nodeId: selectedNode.id }} />}
           >
-            <SealCheckIcon className="h-3.5 w-3.5" />
+            <SealCheckIcon />
             proposals
-          </Link>
+          </Button>
         </nav>
 
         <Outlet />
