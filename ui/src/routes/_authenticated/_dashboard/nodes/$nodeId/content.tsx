@@ -1,50 +1,75 @@
-import { ArrowLeftIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useApiClient } from "@/app";
+import { Button, PageContainer, PageHeader, Skeleton } from "@/components";
+import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { ProfileEditor } from "@/components/discovery/profile-editor";
-import { PageContainer } from "@/components/layout/page-container";
+import { CommunityNav } from "../../dashboard/node/-community-nav";
+
+type ContentTab = "events" | "profile" | "onboarding";
+
+const TABS: readonly ContentTab[] = ["events", "profile", "onboarding"];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
+  validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
+    TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
+  head: () => ({ meta: [{ title: "Events & profile | app" }] }),
   component: CommunityContent,
 });
+
 function CommunityContent() {
   const { nodeId } = Route.useParams();
+  const { tab = "events" } = Route.useSearch();
+  const { auth } = Route.useRouteContext();
+  const navigate = useNavigate({ from: Route.fullPath });
   const api = useApiClient();
   const node = useQuery({
     queryKey: ["content-node", nodeId],
     queryFn: () => api.getNode({ nodeId }),
   });
+  const authContext = useQuery({
+    queryKey: ["home-auth-context", auth.activeOrganizationId ?? ""],
+    queryFn: () => api.auth.getContext().catch(() => null),
+    staleTime: 30 * 1000,
+  });
+  const orgRole = authContext.data?.organization?.member?.role;
+  const canManage = auth.isAdmin || orgRole === "owner" || orgRole === "admin";
+  const selectTab = (next: ContentTab) =>
+    navigate({ search: { tab: next }, replace: true, resetScroll: false });
+
   return (
     <PageContainer variant="wide">
-      <div className="mx-auto flex max-w-3xl flex-col gap-7">
-        <Link
-          to="/dashboard/node"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeftIcon className="size-4" />
-          My community
-        </Link>
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-2 text-sm font-medium text-muted-foreground">Community editor</p>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {node.data?.name ?? "Your community"}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Tell people who you are and what’s coming up.
-            </p>
-          </div>
-          <Link
-            to="/explore"
-            search={{ node: nodeId }}
-            className="inline-flex items-center gap-1 text-sm font-medium"
-          >
-            View on Explore <ArrowUpRightIcon className="size-4" />
-          </Link>
-        </header>
-        <ProfileEditor nodeId={nodeId} defaultTab="events" />
-      </div>
+      <header className="flex flex-col gap-6">
+        <PageHeader
+          headerTestId="content.heading"
+          title={node.data?.name ?? <Skeleton className="h-10 w-64" />}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/explore" search={{ node: nodeId }} />}
+            >
+              View on Explore
+              <ArrowUpRightIcon />
+            </Button>
+          }
+        />
+        <CommunityNav
+          active={tab === "onboarding" ? "onboarding" : "content"}
+          nodeId={nodeId}
+          tenantId={node.data?.tenantId}
+          canManage={canManage}
+          replace
+          testIds={{ onboarding: "content-tab-onboarding" }}
+        />
+      </header>
+      {tab === "onboarding" ? (
+        <EventOnboardingPanel nodeId={nodeId} organizationId={auth.activeOrganizationId} />
+      ) : (
+        <ProfileEditor nodeId={nodeId} tab={tab} onTabChange={selectTab} />
+      )}
     </PageContainer>
   );
 }

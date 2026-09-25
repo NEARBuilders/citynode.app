@@ -1,27 +1,53 @@
 import {
+  ArrowsClockwiseIcon,
   ArrowUpRightIcon,
   CalendarDotsIcon,
   ChatCircleIcon,
   ClockIcon,
+  DotsThreeIcon,
   MapPinIcon,
   QrCodeIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
-import {
-  Badge,
-  Button,
-  Input,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Textarea,
-} from "@/components";
+import { EmptyState } from "@/components/empty-state";
+import { LocalDate } from "@/components/local-date";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
 import {
   Select,
   SelectContent,
@@ -36,8 +62,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useClientValue } from "@/hooks";
 import { buildEventTimeline } from "@/lib/event-timeline";
 import { cn } from "@/lib/utils";
+import { useStartOnboarding } from "./event-onboarding";
 import { EventTimeline } from "./event-timeline";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
@@ -65,11 +96,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const api = useApiClient();
   const client = useQueryClient();
   const [draft, setDraft] = useState<Draft | null>(null);
-  const statusItems = [
-    { label: "Keep as draft", value: "draft" },
-    { label: "Publish on Explore", value: "published" },
-    { label: "Mark as cancelled", value: "cancelled" },
-  ];
+  const [lumaOpen, setLumaOpen] = useState(false);
   const list = useQuery({
     queryKey: ["discovery-activities", nodeId],
     queryFn: () => api.listDiscoveryActivities({ nodeId }),
@@ -80,30 +107,23 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     queryKey: ["discovery-editor-nodes"],
     queryFn: () => api.listNodes({}),
   });
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [maxJoins, setMaxJoins] = useState("");
-  const [when, setWhen] = useState<"upcoming" | "past">("upcoming");
-  const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const startOnboarding = useMutation({
-    mutationFn: (eventId: string) => {
-      const maxUses = Number.parseInt(maxJoins, 10);
-      return api.createEventOnboardingCode({
-        eventId,
-        ...(Number.isInteger(maxUses) && maxUses > 0 ? { maxUses: Math.min(maxUses, 500) } : {}),
-      });
-    },
-    onSuccess: (code) =>
-      navigate({
-        to: "/onboarding/station/$codeId",
-        params: { codeId: code.id },
-        search: { from: location.href },
-      }),
+  const luma = useQuery({
+    queryKey: ["discovery-luma-calendars", nodeId],
+    queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
+    retry: false,
+    staleTime: 60_000,
   });
+  const [when, setWhen] = useState<"upcoming" | "past">("upcoming");
+  const viewerTimeZone = useClientValue(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    "UTC",
+  );
+  const startOnboarding = useStartOnboarding();
   const save = useMutation({
     mutationFn: (input: Draft) => api.saveDiscoveryActivity(input),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setDraft(null);
+      toast.success(saved.status === "published" ? "Published on Explore" : "Saved");
       return client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
@@ -111,8 +131,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   });
   if (list.isError)
     return (
-      <p role="alert" className="rounded-xl border border-border p-4 text-sm">
-        Unable to load events and updates. Try again in a moment.
+      <p role="alert" className="text-sm text-muted-foreground">
+        Couldn't load events and updates. Try again in a moment.
       </p>
     );
   const events = list.data?.filter((a) => a.kind === "event") ?? [];
@@ -121,133 +141,117 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     events.length > 0
       ? buildEventTimeline(events, { now: new Date(), timeZone: viewerTimeZone })
       : null;
+  const openDraft = (next: Draft) => {
+    save.reset();
+    setDraft(next);
+  };
   const rowActions = (a: Activity) => (
-    <>
-      {a.kind === "event" && a.status !== "cancelled" && (
-        <Button
-          data-testid={`discovery-start-onboarding-${a.id}`}
-          variant="outline"
-          size="sm"
-          disabled={startOnboarding.isPending}
-          onClick={() => startOnboarding.mutate(a.id)}
-        >
-          <QrCodeIcon /> Start onboarding
-        </Button>
-      )}
+    <div className="flex items-center gap-1">
       {a.luma ? (
-        <a
-          href={a.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-medium underline-offset-4 hover:underline"
+        <Button
+          size="sm"
+          variant="ghost"
+          nativeButton={false}
+          render={(props) => (
+            <a {...props} href={a.url} target="_blank" rel="noopener noreferrer" />
+          )}
         >
-          Manage in Luma
-        </a>
+          Edit in Luma
+          <ArrowUpRightIcon />
+        </Button>
       ) : (
         <Button
           data-testid={`discovery-edit-activity-${a.id}`}
-          variant="outline"
+          variant="ghost"
           size="sm"
-          onClick={() => {
-            save.reset();
-            setDraft(a);
-          }}
+          aria-label={`Edit ${a.title}`}
+          onClick={() => openDraft(a)}
         >
-          Edit {a.title}
+          Edit
         </Button>
       )}
-    </>
+      {a.kind === "event" && a.status !== "cancelled" && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon-sm" aria-label={`More for ${a.title}`} />}
+          >
+            <DotsThreeIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              data-testid={`activity-editor.start-onboarding-${a.id}`}
+              disabled={startOnboarding.isPending}
+              onClick={() => startOnboarding.mutate({ eventId: a.id })}
+            >
+              <QrCodeIcon />
+              Start onboarding
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
   const imported = list.data?.find((activity) => activity.id === draft?.id)?.luma;
   const update = (key: keyof Draft, value: string | null) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d));
+  const connection = luma.data?.connection;
   return (
-    <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-xl">
-          <h2 className="text-lg font-semibold tracking-tight">Events & updates</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Add a meetup or share a post. Save a draft, or publish when you’re ready.
-          </p>
-        </div>
+    <section className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <Button
             data-testid="discovery-new-event"
-            onClick={() => {
-              save.reset();
-              setDraft(blank(nodeId, "event"));
-            }}
+            onClick={() => openDraft(blank(nodeId, "event"))}
           >
-            <CalendarDotsIcon /> Add an event
+            <CalendarDotsIcon /> Add event
           </Button>
           <Button
             data-testid="discovery-new-social"
             variant="outline"
-            onClick={() => {
-              save.reset();
-              setDraft(blank(nodeId, "social"));
-            }}
+            onClick={() => openDraft(blank(nodeId, "social"))}
           >
             <ChatCircleIcon /> Share a post
           </Button>
         </div>
-      </div>
-      <LumaImport nodeId={nodeId} />
-      {list.data?.some((a) => a.kind === "event" && a.status !== "cancelled") && (
-        <Field orientation="horizontal" className="flex-wrap">
-          <FieldLabel htmlFor="discovery-onboarding-max-joins">
-            Max joins per onboarding code
-          </FieldLabel>
-          <Input
-            id="discovery-onboarding-max-joins"
-            data-testid="discovery-onboarding-max-joins"
-            className="w-24"
-            inputMode="numeric"
-            placeholder="50"
-            value={maxJoins}
-            onChange={(event) => setMaxJoins(event.target.value)}
-          />
-        </Field>
-      )}
-      {startOnboarding.isError && (
-        <p
-          role="alert"
-          className="rounded-xl border border-border p-4 text-sm"
-          data-testid="discovery-start-onboarding-error"
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="activity-editor.luma-open"
+          onClick={() => setLumaOpen(true)}
         >
-          {startOnboarding.error.message || "Could not start onboarding for this event."}
-        </p>
-      )}
-      {list.isPending && <p className="text-sm text-muted-foreground">Loading events…</p>}
+          <ArrowsClockwiseIcon />
+          {connection ? `Luma · ${connection.calendarName}` : "Import from Luma"}
+          {connection?.error && <Badge variant="destructive">Sync failed</Badge>}
+        </Button>
+      </div>
+      {list.isPending && <Skeleton className="h-40 w-full" />}
       {list.data?.length === 0 && (
-        <p className="rounded-xl bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
-          Nothing here yet. Add your first event or share a post above.
-        </p>
+        <EmptyState
+          icon={CalendarDotsIcon}
+          title="No events yet"
+          description="Add your first meetup or share a post so people know what's on."
+        />
       )}
       {timeline && (
         <Tabs
           value={when}
           onValueChange={(value) => setWhen(value === "past" ? "past" : "upcoming")}
         >
-          <TabsList className="justify-start">
+          <TabsList variant="line">
             <TabsTrigger value="upcoming" data-testid="activity-editor.tab-upcoming">
               Upcoming
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
-                {timeline.upcomingCount}
-              </span>
+              <Badge variant="secondary">{timeline.upcomingCount}</Badge>
             </TabsTrigger>
             <TabsTrigger value="past" data-testid="activity-editor.tab-past">
               Past
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
-                {timeline.pastCount}
-              </span>
+              <Badge variant="secondary">{timeline.pastCount}</Badge>
             </TabsTrigger>
           </TabsList>
           {(["upcoming", "past"] as const).map((tab) => (
-            <TabsContent key={tab} value={tab} className="pt-4">
+            <TabsContent key={tab} value={tab} className="pt-6">
               {timeline[tab].length === 0 ? (
-                <p className="rounded-xl bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
-                  {tab === "upcoming" ? "No upcoming events." : "No past events yet."}
+                <p className="py-6 text-sm text-muted-foreground">
+                  {tab === "upcoming" ? "Nothing scheduled." : "No past events yet."}
                 </p>
               ) : (
                 <EventTimeline
@@ -255,10 +259,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                   timeZone={viewerTimeZone}
                   badges={(a) => (
                     <>
-                      <Badge variant={a.status === "published" ? "success" : "secondary"}>
-                        {statusLabel(a)}
-                      </Badge>
-                      {a.luma && <Badge variant="outline">From Luma</Badge>}
+                      <Badge variant={statusVariant(a)}>{statusLabel(a)}</Badge>
+                      {a.luma && <Badge variant="outline">Luma</Badge>}
                     </>
                   )}
                   actions={rowActions}
@@ -268,188 +270,205 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           ))}
         </Tabs>
       )}
-      {posts.length > 0 && timeline && (
-        <h3 className="text-sm font-medium text-muted-foreground">Posts</h3>
-      )}
       {posts.length > 0 && (
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
-          {posts.map((a) => {
-            const tile = eventDateTile(a);
-            return (
-              <div
-                key={a.id}
-                className="flex items-center gap-4 border-b border-border px-4 py-3.5 last:border-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{a.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {statusLabel(a)}
-                    {a.luma ? " · From Luma — updates automatically" : ""}
-                  </p>
-                </div>
-                {tile && (
-                  <div className="flex size-12 shrink-0 flex-col items-center justify-center rounded-lg bg-muted">
-                    <span className="text-sm font-medium text-muted-foreground">{tile.month}</span>
-                    <span className="text-base font-semibold tabular-nums leading-none">
-                      {tile.day}
-                    </span>
-                  </div>
-                )}
-                {rowActions(a)}
-              </div>
-            );
-          })}
+        <div className="flex flex-col gap-4">
+          <h3 className="text-lg font-medium">Posts</h3>
+          <ItemGroup>
+            {posts.map((a) => (
+              <Item key={a.id} variant="outline" size="sm">
+                <ItemContent>
+                  <ItemTitle>
+                    {a.title}
+                    <Badge variant={statusVariant(a)}>{statusLabel(a)}</Badge>
+                  </ItemTitle>
+                  <ItemDescription>
+                    <LocalDate value={a.publishedAt} format="relative" />
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>{rowActions(a)}</ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
         </div>
       )}
+      <Dialog open={lumaOpen} onOpenChange={setLumaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import from Luma</DialogTitle>
+            <DialogDescription>
+              Public events from a Luma calendar appear here and stay in sync.
+            </DialogDescription>
+          </DialogHeader>
+          <LumaImport nodeId={nodeId} />
+        </DialogContent>
+      </Dialog>
       <Sheet
         open={!!draft}
         onOpenChange={(open) => {
           if (!open) setDraft(null);
         }}
       >
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader className="px-6 pb-4 pt-8 pr-16">
+        <SheetContent
+          side="right"
+          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        >
+          <SheetHeader className="px-6 pt-8 pr-16">
             <SheetTitle>
-              {draft?.id ? "Edit" : "Add"}{" "}
-              {draft?.kind === "event" ? "an event" : "a community post"}
+              {draft?.id ? "Edit" : "New"} {draft?.kind === "event" ? "event" : "post"}
             </SheetTitle>
             <SheetDescription>
-              {draft?.kind === "event"
-                ? "Let people know when, where, and how to join."
-                : "Share a post and add a short note."}
+              {imported ? (
+                <>
+                  Synced from Luma <LocalDate value={imported.syncedAt} format="relative" />. Edit
+                  details on Luma.
+                  {!imported.available && " This event is no longer public there."}
+                </>
+              ) : draft?.kind === "event" ? (
+                "When, where, and how to join."
+              ) : (
+                "Link to a post and add a short note."
+              )}
             </SheetDescription>
           </SheetHeader>
           {draft && (
             <form
-              className="flex flex-col gap-5 px-6 pb-8 [&_label]:text-sm [&_label]:font-medium [&_input]:mt-1.5 [&_textarea]:mt-1.5"
+              className="flex flex-col gap-8 px-6 pb-8"
               onSubmit={(e) => {
                 e.preventDefault();
                 save.mutate(draft);
               }}
             >
-              {imported && (
-                <p className="text-sm text-muted-foreground">
-                  Edit details on{" "}
-                  <a
-                    href={draft.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    Luma
-                  </a>
-                  . Changes appear automatically. Last updated{" "}
-                  {new Date(imported.syncedAt).toLocaleString()}.
-                  {!imported.available && " This event is no longer public on Luma."}
-                </p>
-              )}
-              {(
-                [
-                  ["title", "Title"],
-                  ["source", "Organizer"],
-                  ["url", "Link"],
-                ] as const
-              ).map(([key, label]) => (
-                <Field key={key}>
-                  <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="activity-title">Title</FieldLabel>
                   <Input
-                    id={`activity-${key}`}
+                    id="activity-title"
                     readOnly={Boolean(imported)}
                     required
-                    type={key === "url" ? "url" : "text"}
-                    maxLength={key === "url" ? 2000 : 160}
-                    value={draft[key]}
-                    onChange={(e) => update(key, e.target.value)}
+                    maxLength={160}
+                    value={draft.title}
+                    onChange={(e) => update("title", e.target.value)}
                   />
                 </Field>
-              ))}
-              <Field>
-                <FieldLabel htmlFor="activity-summary">Summary</FieldLabel>
-                <Textarea
-                  readOnly={Boolean(imported)}
-                  id="activity-summary"
-                  maxLength={2000}
-                  value={draft.summary}
-                  onChange={(e) => update("summary", e.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="activity-published">Posted on</FieldLabel>
-                <Input
-                  readOnly={Boolean(imported)}
-                  id="activity-published"
-                  type="datetime-local"
-                  required
-                  value={localTime(draft.publishedAt)}
-                  onChange={(e) =>
-                    update(
-                      "publishedAt",
-                      e.target.value ? new Date(e.target.value).toISOString() : "",
-                    )
-                  }
-                />
-              </Field>
-              {draft.kind === "event" && (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Enter times in your timezone. Visitors will see them in the event timezone you
-                    pick below.
-                  </p>
-                  {(
-                    [
-                      ["startsAt", "Starts"],
-                      ["endsAt", "Ends"],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <Field key={key}>
-                      <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
+                <Field>
+                  <FieldLabel htmlFor="activity-summary">Summary</FieldLabel>
+                  <Textarea
+                    readOnly={Boolean(imported)}
+                    id="activity-summary"
+                    maxLength={2000}
+                    value={draft.summary}
+                    onChange={(e) => update("summary", e.target.value)}
+                  />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="activity-url">Link</FieldLabel>
+                    <Input
+                      id="activity-url"
+                      readOnly={Boolean(imported)}
+                      required
+                      type="url"
+                      maxLength={2000}
+                      placeholder="https://"
+                      value={draft.url}
+                      onChange={(e) => update("url", e.target.value)}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="activity-source">Organizer</FieldLabel>
+                    <Input
+                      id="activity-source"
+                      readOnly={Boolean(imported)}
+                      required
+                      maxLength={160}
+                      value={draft.source}
+                      onChange={(e) => update("source", e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </FieldGroup>
+              {draft.kind === "event" ? (
+                <FieldSet>
+                  <FieldLegend>When and where</FieldLegend>
+                  <FieldGroup>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {(
+                        [
+                          ["startsAt", "Starts"],
+                          ["endsAt", "Ends"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <Field key={key}>
+                          <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
+                          <Input
+                            id={`activity-${key}`}
+                            readOnly={Boolean(imported)}
+                            type="datetime-local"
+                            required
+                            value={localTime(draft[key])}
+                            onChange={(e) =>
+                              update(
+                                key,
+                                e.target.value ? new Date(e.target.value).toISOString() : null,
+                              )
+                            }
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="activity-timezone">Event timezone</FieldLabel>
                       <Input
-                        id={`activity-${key}`}
                         readOnly={Boolean(imported)}
-                        type="datetime-local"
+                        id="activity-timezone"
                         required
-                        value={localTime(draft[key])}
-                        onChange={(e) =>
-                          update(
-                            key,
-                            e.target.value ? new Date(e.target.value).toISOString() : null,
-                          )
-                        }
+                        value={draft.timezone}
+                        onChange={(e) => update("timezone", e.target.value)}
+                      />
+                      <FieldDescription>
+                        Enter times in your own timezone; visitors see them in this one.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="activity-venue">Venue or meeting link</FieldLabel>
+                      <Input
+                        readOnly={Boolean(imported)}
+                        id="activity-venue"
+                        required
+                        value={draft.venue}
+                        onChange={(e) => update("venue", e.target.value)}
                       />
                     </Field>
-                  ))}
-                  <Field>
-                    <FieldLabel htmlFor="activity-timezone">Timezone</FieldLabel>
-                    <Input
-                      readOnly={Boolean(imported)}
-                      id="activity-timezone"
-                      required
-                      value={draft.timezone}
-                      onChange={(e) => update("timezone", e.target.value)}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="activity-venue">
-                      Venue or online meeting location
-                    </FieldLabel>
-                    <Input
-                      readOnly={Boolean(imported)}
-                      id="activity-venue"
-                      required
-                      value={draft.venue}
-                      onChange={(e) => update("venue", e.target.value)}
-                    />
-                  </Field>
-                  <FieldSet>
-                    <FieldLegend variant="label">
-                      Also show this event in these communities
-                    </FieldLegend>
-                    <FieldGroup>
-                      {nodes.data?.map((n) => (
+                  </FieldGroup>
+                </FieldSet>
+              ) : (
+                <Field>
+                  <FieldLabel htmlFor="activity-published">Posted on</FieldLabel>
+                  <Input
+                    readOnly={Boolean(imported)}
+                    id="activity-published"
+                    type="datetime-local"
+                    required
+                    value={localTime(draft.publishedAt)}
+                    onChange={(e) =>
+                      update(
+                        "publishedAt",
+                        e.target.value ? new Date(e.target.value).toISOString() : "",
+                      )
+                    }
+                  />
+                </Field>
+              )}
+              {draft.kind === "event" && (nodes.data?.length ?? 0) > 1 && (
+                <FieldSet>
+                  <FieldLegend variant="label">Also show in</FieldLegend>
+                  <FieldGroup>
+                    {nodes.data
+                      ?.filter((n) => n.id !== nodeId)
+                      .map((n) => (
                         <Field orientation="horizontal" key={n.id}>
                           <Checkbox
                             id={`activity-node-${n.id}`}
-                            disabled={n.id === nodeId}
                             checked={draft.nodeIds.includes(n.id)}
                             onCheckedChange={(checked) =>
                               setDraft({
@@ -463,14 +482,17 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                           <FieldLabel htmlFor={`activity-node-${n.id}`}>{n.name}</FieldLabel>
                         </Field>
                       ))}
-                    </FieldGroup>
-                  </FieldSet>
-                </>
+                  </FieldGroup>
+                </FieldSet>
               )}
               <Field>
-                <FieldLabel htmlFor="activity-status">Who can see this</FieldLabel>
+                <FieldLabel htmlFor="activity-status">Visibility</FieldLabel>
                 <Select
-                  items={statusItems}
+                  items={[
+                    { label: "Draft", value: "draft" },
+                    { label: "Published on Explore", value: "published" },
+                    { label: "Cancelled", value: "cancelled" },
+                  ]}
                   value={draft.status}
                   onValueChange={(value) => {
                     if (value === "draft" || value === "published" || value === "cancelled")
@@ -481,13 +503,13 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="draft">Keep as draft</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="published" disabled={imported?.available === false}>
-                      Publish on Explore
+                      Published on Explore
                     </SelectItem>
                     {draft.kind === "event" && (
                       <SelectItem value="cancelled" disabled={imported?.available === false}>
-                        Mark as cancelled
+                        Cancelled
                       </SelectItem>
                     )}
                   </SelectContent>
@@ -500,20 +522,23 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               )}
               <div className="flex gap-3">
                 <Button data-testid="discovery-activity-save" disabled={save.isPending}>
-                  Save changes
+                  {save.isPending ? "Saving…" : "Save"}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setDraft(null)}>
-                  Discard edits
+                <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+                  Cancel
                 </Button>
               </div>
             </form>
           )}
         </SheetContent>
       </Sheet>
-      {save.isError && <p role="alert">{save.error.message}</p>}
-      {save.isSuccess && <p role="status">Saved.</p>}
     </section>
   );
+}
+function statusVariant(activity: Activity) {
+  if (activity.status === "published") return "success" as const;
+  if (activity.status === "cancelled") return "destructive" as const;
+  return "secondary" as const;
 }
 function statusLabel(activity: Activity) {
   if (activity.status === "draft") return "Draft";

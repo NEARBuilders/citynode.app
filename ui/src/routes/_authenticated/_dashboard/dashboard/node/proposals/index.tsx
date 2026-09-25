@@ -229,7 +229,10 @@ function NodeProposals() {
           if (!open) setDetailsId(null);
         }}
       >
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetContent
+          side="right"
+          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-lg"
+        >
           <SheetHeader className="px-6 pt-8 pr-16">
             <SheetTitle>
               {details ? proposalTitle(details.payload, "Proposal") : "Proposal"}

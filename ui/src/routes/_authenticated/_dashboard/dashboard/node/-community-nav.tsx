@@ -9,11 +9,15 @@ export function CommunityNav({
   nodeId,
   tenantId,
   canManage,
+  replace = false,
+  testIds = {},
 }: {
   active: CommunitySection;
   nodeId: string;
   tenantId?: string | null;
   canManage?: boolean;
+  replace?: boolean;
+  testIds?: Partial<Record<CommunitySection | "settings", string>>;
 }) {
   const items: { value: CommunitySection | "settings"; label: string; link: ReactElement }[] = [
     {
@@ -24,12 +28,26 @@ export function CommunityNav({
     {
       value: "content",
       label: "Events & profile",
-      link: <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "events" }} />,
+      link: (
+        <Link
+          to="/nodes/$nodeId/content"
+          params={{ nodeId }}
+          search={{ tab: "events" }}
+          replace={replace}
+        />
+      ),
     },
     {
       value: "onboarding",
       label: "Onboarding",
-      link: <Link to="/nodes/$nodeId/content" params={{ nodeId }} search={{ tab: "onboarding" }} />,
+      link: (
+        <Link
+          to="/nodes/$nodeId/content"
+          params={{ nodeId }}
+          search={{ tab: "onboarding" }}
+          replace={replace}
+        />
+      ),
     },
     {
       value: "proposals",
@@ -57,7 +75,7 @@ export function CommunityNav({
               value={item.value}
               nativeButton={false}
               render={item.link}
-              data-testid={`community-nav-${item.value}`}
+              data-testid={testIds[item.value] ?? `community-nav-${item.value}`}
             >
               {item.label}
             </TabsTrigger>
