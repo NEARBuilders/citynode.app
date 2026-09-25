@@ -1,4 +1,4 @@
-import { Copy } from "lucide-react";
+import { CopyIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -52,7 +52,7 @@ export function AppDetailMetadataActions({
                 toast.success("Payload copied");
               }}
             >
-              <Copy size={10} />
+              <CopyIcon size={10} />
               copy
             </Button>
           </div>

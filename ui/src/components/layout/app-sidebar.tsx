@@ -1,6 +1,6 @@
+import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
+import { CaretRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight } from "lucide-react";
-import { Collapsible as CollapsiblePrimitive } from "radix-ui";
 import { useEffect, useState } from "react";
 import {
   Sidebar,
@@ -87,11 +87,13 @@ function SidebarNavLeaf({ item, pathname }: { item: SidebarItem; pathname: strin
   const slug = toSlug(item.label);
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
-        <Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`}>
-          <Icon />
-          <span className="capitalize">{item.label}</span>
-        </Link>
+      <SidebarMenuButton
+        isActive={active}
+        tooltip={item.label}
+        render={<Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`} />}
+      >
+        <Icon />
+        <span className="capitalize">{item.label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -103,11 +105,12 @@ function SidebarNavSubItem({ item, pathname }: { item: SidebarItem; pathname: st
   const slug = toSlug(item.label);
   return (
     <SidebarMenuSubItem>
-      <SidebarMenuSubButton asChild isActive={active}>
-        <Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`}>
-          <Icon />
-          <span className="capitalize">{item.label}</span>
-        </Link>
+      <SidebarMenuSubButton
+        isActive={active}
+        render={<Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`} />}
+      >
+        <Icon />
+        <span className="capitalize">{item.label}</span>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
   );
@@ -129,39 +132,43 @@ function SidebarNavGroup({ item, pathname }: { item: SidebarItem; pathname: stri
 
   return (
     <CollapsiblePrimitive.Root
-      asChild
       className="group/collapsible"
       open={open}
       onOpenChange={setOpen}
+      render={<SidebarMenuItem />}
     >
-      <SidebarMenuItem>
-        <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+      <SidebarMenuButton
+        isActive={active}
+        tooltip={item.label}
+        render={
           <Link
             to={item.to}
             preload="intent"
             onClick={() => setOpen(true)}
             data-testid={`sidebar-nav-${slug}`}
-          >
-            <Icon />
-            <span className="capitalize">{item.label}</span>
-          </Link>
-        </SidebarMenuButton>
-        <CollapsiblePrimitive.Trigger asChild>
+          />
+        }
+      >
+        <Icon />
+        <span className="capitalize">{item.label}</span>
+      </SidebarMenuButton>
+      <CollapsiblePrimitive.Trigger
+        render={
           <SidebarMenuAction
             aria-label={`Toggle ${item.label}`}
             data-testid={`sidebar-nav-${slug}-toggle`}
-          >
-            <ChevronRight className="transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-          </SidebarMenuAction>
-        </CollapsiblePrimitive.Trigger>
-        <CollapsiblePrimitive.Content className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
-          <SidebarMenuSub>
-            {children.map((child) => (
-              <SidebarNavSubItem key={child.label} item={child} pathname={pathname} />
-            ))}
-          </SidebarMenuSub>
-        </CollapsiblePrimitive.Content>
-      </SidebarMenuItem>
+          />
+        }
+      >
+        <CaretRightIcon className="transition-transform duration-200 group-data-open/collapsible:rotate-90" />
+      </CollapsiblePrimitive.Trigger>
+      <CollapsiblePrimitive.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
+        <SidebarMenuSub>
+          {children.map((child) => (
+            <SidebarNavSubItem key={child.label} item={child} pathname={pathname} />
+          ))}
+        </SidebarMenuSub>
+      </CollapsiblePrimitive.Panel>
     </CollapsiblePrimitive.Root>
   );
 }

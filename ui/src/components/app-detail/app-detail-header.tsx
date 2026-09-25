@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -56,9 +56,9 @@ export function AppDetailHeader({
       >
         <code className="font-mono text-xs">{bosUri}</code>
         {copiedUri ? (
-          <Check size={11} className="shrink-0 text-green-500" />
+          <CheckIcon size={11} className="shrink-0 text-green-500" />
         ) : (
-          <Copy size={11} className="shrink-0 transition-opacity" />
+          <CopyIcon size={11} className="shrink-0 transition-opacity" />
         )}
       </button>
 

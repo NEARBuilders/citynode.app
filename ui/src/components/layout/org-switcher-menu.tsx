@@ -1,12 +1,14 @@
+import { BankIcon, CheckIcon, PlusIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Building2, Check, Plus } from "lucide-react";
 import type { Organization } from "@/app";
 import {
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { useSwitchOrganization } from "./use-switch-organization";
 
 interface OrgSwitcherMenuContentProps {
@@ -37,7 +39,11 @@ export function OrgSwitcherMenuContent({
 
   return (
     <DropdownMenuContent className={className} align={align} side={side} sideOffset={sideOffset}>
-      <DropdownMenuLabel className="text-xs text-muted-foreground">organizations</DropdownMenuLabel>
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          organizations
+        </DropdownMenuLabel>
+      </DropdownMenuGroup>
       <DropdownMenuSeparator />
       {organizations.map((org) =>
         itemVariant === "iconTile" ? (
@@ -48,10 +54,10 @@ export function OrgSwitcherMenuContent({
             disabled={switchOrg.isPending}
           >
             <div className="flex size-6 items-center justify-center rounded-sm border border-border">
-              <Building2 className="size-3.5 shrink-0" />
+              <BankIcon className="size-3.5 shrink-0" />
             </div>
             <span className="truncate min-w-0 flex-1">{org.name}</span>
-            {org.id === activeOrgId && <Check className="size-3.5 text-muted-foreground" />}
+            {org.id === activeOrgId && <CheckIcon className="size-3.5 text-muted-foreground" />}
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
@@ -61,7 +67,7 @@ export function OrgSwitcherMenuContent({
             disabled={switchOrg.isPending}
           >
             <span className="truncate min-w-0 flex-1">{org.name}</span>
-            {org.id === activeOrgId && <Check className="h-3.5 w-3.5 text-muted-foreground" />}
+            {org.id === activeOrgId && <CheckIcon className="h-3.5 w-3.5 text-muted-foreground" />}
           </DropdownMenuItem>
         ),
       )}
@@ -71,22 +77,26 @@ export function OrgSwitcherMenuContent({
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />
-      <DropdownMenuItem asChild className={itemVariant === "iconTile" ? "gap-2 p-2" : undefined}>
-        <Link to="/orgs/new" className="flex items-center gap-2 cursor-pointer">
-          {itemVariant === "iconTile" ? (
-            <>
-              <div className="flex size-6 items-center justify-center rounded-md border border-border bg-background">
-                <Plus className="size-4" />
-              </div>
-              <span className="font-medium text-muted-foreground">new organization</span>
-            </>
-          ) : (
-            <>
-              <Plus className="h-3.5 w-3.5" />
-              new organization
-            </>
-          )}
-        </Link>
+      <DropdownMenuItem
+        className={cn(
+          "flex items-center gap-2 cursor-pointer",
+          itemVariant === "iconTile" && "gap-2 p-2",
+        )}
+        render={<Link to="/orgs/new" />}
+      >
+        {itemVariant === "iconTile" ? (
+          <>
+            <div className="flex size-6 items-center justify-center rounded-md border border-border bg-background">
+              <PlusIcon className="size-4" />
+            </div>
+            <span className="font-medium text-muted-foreground">new organization</span>
+          </>
+        ) : (
+          <>
+            <PlusIcon className="h-3.5 w-3.5" />
+            new organization
+          </>
+        )}
       </DropdownMenuItem>
     </DropdownMenuContent>
   );

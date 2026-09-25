@@ -1,6 +1,5 @@
-import { ExternalLink, Info } from "lucide-react";
+import { ArrowSquareOutIcon, InfoIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +38,7 @@ export function InfoPopover({
         aria-label={label ?? `about ${title}`}
         data-testid={testId}
       >
-        {icon ?? <Info className="h-3.5 w-3.5" />}
+        {icon ?? <InfoIcon className="h-3.5 w-3.5" />}
         {label ? <span className="text-xs">{label}</span> : null}
       </PopoverTrigger>
       <PopoverContent className="space-y-2">
@@ -58,7 +57,7 @@ export function InfoPopover({
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground"
               >
                 {link.label}
-                <ExternalLink className="h-3 w-3 shrink-0" />
+                <ArrowSquareOutIcon className="h-3 w-3 shrink-0" />
               </a>
             ))}
           </div>

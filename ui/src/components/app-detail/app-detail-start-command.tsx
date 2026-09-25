@@ -1,4 +1,4 @@
-import { Copy } from "lucide-react";
+import { CopyIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -24,7 +24,7 @@ export function AppDetailStartCommand({ command }: { command: string }) {
       <span
         className={`shrink-0 transition-colors duration-150 ${copied ? "text-brand-accent" : "text-background/50 group-hover:text-background/80"}`}
       >
-        <Copy size={14} />
+        <CopyIcon size={14} />
       </span>
     </button>
   );

@@ -1,4 +1,10 @@
 import {
+  CaretDoubleLeftIcon,
+  CaretDoubleRightIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+} from "@phosphor-icons/react";
+import {
   type ColumnDef,
   createPaginatedRowModel,
   createSortedRowModel,
@@ -10,9 +16,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -112,7 +116,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
           <Select
             value={`${table.state.pagination.pageSize}`}
             onValueChange={(value) => {
-              table.setPageSize(Number(value));
+              if (value) table.setPageSize(Number(value));
             }}
           >
             <SelectTrigger className="h-8 w-[70px]">
@@ -139,7 +143,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               disabled={!table.getCanPreviousPage()}
             >
               <span className="sr-only">Go to first page</span>
-              <ChevronsLeft className="h-4 w-4" />
+              <CaretDoubleLeftIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
@@ -148,7 +152,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               disabled={!table.getCanPreviousPage()}
             >
               <span className="sr-only">Go to previous page</span>
-              <ChevronLeft className="h-4 w-4" />
+              <CaretLeftIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
@@ -157,7 +161,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               disabled={!table.getCanNextPage()}
             >
               <span className="sr-only">Go to next page</span>
-              <ChevronRight className="h-4 w-4" />
+              <CaretRightIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
@@ -166,7 +170,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               disabled={!table.getCanNextPage()}
             >
               <span className="sr-only">Go to last page</span>
-              <ChevronsRight className="h-4 w-4" />
+              <CaretDoubleRightIcon className="h-4 w-4" />
             </Button>
           </div>
         </div>

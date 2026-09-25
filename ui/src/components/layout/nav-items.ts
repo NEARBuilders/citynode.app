@@ -1,14 +1,14 @@
 import {
-  Boxes,
-  Building2,
-  CirclePlus,
-  Compass,
-  Home,
-  Landmark,
-  Network,
-  Shield,
-  Sparkles,
-} from "lucide-react";
+  BankIcon,
+  BuildingsIcon,
+  CompassIcon,
+  CubeIcon,
+  HouseIcon,
+  NetworkIcon,
+  PlusCircleIcon,
+  ShieldIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import type { FeatureArea } from "@/lib/feature-areas";
 
 export type SidebarRole = "anon" | "member" | "admin";
@@ -36,17 +36,17 @@ export interface SidebarItem {
 }
 
 export const NAV_ITEMS: SidebarItem[] = [
-  { icon: Compass, label: "explore", to: "/explore", roleRequired: "anon" },
-  { icon: Sparkles, label: "discover", to: "/discover", roleRequired: "member" },
+  { icon: CompassIcon, label: "explore", to: "/explore", roleRequired: "anon" },
+  { icon: SparkleIcon, label: "discover", to: "/discover", roleRequired: "member" },
   {
-    icon: Home,
+    icon: HouseIcon,
     label: "dashboard",
     to: "/dashboard",
     roleRequired: "anon",
     children: [
-      { icon: Home, label: "overview", to: "/dashboard", roleRequired: "anon" },
+      { icon: HouseIcon, label: "overview", to: "/dashboard", roleRequired: "anon" },
       {
-        icon: Network,
+        icon: NetworkIcon,
         label: "my node",
         to: "/dashboard/node",
         roleRequired: "member",
@@ -55,19 +55,19 @@ export const NAV_ITEMS: SidebarItem[] = [
     ],
   },
   {
-    icon: Boxes,
+    icon: CubeIcon,
     label: "things",
     to: "/things",
     roleRequired: "member",
     area: "things",
     children: [
-      { icon: Boxes, label: "all things", to: "/things", roleRequired: "member" },
-      { icon: CirclePlus, label: "new thing", to: "/things/new", roleRequired: "member" },
+      { icon: CubeIcon, label: "all things", to: "/things", roleRequired: "member" },
+      { icon: PlusCircleIcon, label: "new thing", to: "/things/new", roleRequired: "member" },
     ],
   },
-  { icon: Landmark, label: "stake", to: "/stake", roleRequired: "anon", area: "stake" },
-  { icon: Building2, label: "orgs", to: "/orgs", roleRequired: "anon" },
-  { icon: Shield, label: "admin", to: "/admin", roleRequired: "admin" },
+  { icon: BankIcon, label: "stake", to: "/stake", roleRequired: "anon", area: "stake" },
+  { icon: BuildingsIcon, label: "orgs", to: "/orgs", roleRequired: "anon" },
+  { icon: ShieldIcon, label: "admin", to: "/admin", roleRequired: "admin" },
 ];
 
 export function getUserRole(isAuthenticated: boolean, isAdmin: boolean): SidebarRole {
@@ -114,22 +114,22 @@ export function filterSidebarByArea(
 }
 
 const PLUGIN_ICON_MAP: Record<string, SidebarItem["icon"]> = {
-  compass: Compass,
-  sparkles: Sparkles,
-  boxes: Boxes,
-  home: Home,
-  network: Network,
-  landmark: Landmark,
-  building2: Building2,
-  shield: Shield,
-  "circle-plus": CirclePlus,
+  compass: CompassIcon,
+  sparkles: SparkleIcon,
+  boxes: CubeIcon,
+  home: HouseIcon,
+  network: NetworkIcon,
+  landmark: BankIcon,
+  building2: BuildingsIcon,
+  shield: ShieldIcon,
+  "circle-plus": PlusCircleIcon,
 };
 
 export function pluginNavToSidebar(items: NavManifestItem[]): SidebarItem[] {
   return items
     .filter((item) => Boolean(item.label))
     .map((item, index) => ({
-      icon: PLUGIN_ICON_MAP[item.icon ?? "boxes"] ?? Boxes,
+      icon: PLUGIN_ICON_MAP[item.icon ?? "boxes"] ?? CubeIcon,
       label: item.label,
       to: item.to,
       roleRequired: (item.mount === "public" || item.mount === "anon"

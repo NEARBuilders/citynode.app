@@ -1,6 +1,6 @@
 import type { InferClientOutputs } from "@orpc/client";
+import { ArrowSquareOutIcon, CheckIcon, CopyIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { ApiClient } from "@/app";
 import { Button } from "@/components/ui/button";
@@ -60,18 +60,23 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
             aria-label={copyState === "copied" ? "Copied pool account" : "Copy pool account"}
             onClick={copyAccount}
           >
-            {copyState === "copied" ? <Check /> : <Copy />}
+            {copyState === "copied" ? <CheckIcon /> : <CopyIcon />}
           </Button>
           {supported && (
-            <Button variant="ghost" size="icon" asChild>
-              <a
-                href={explorerUrl(validator.accountId, network)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="View account on Nearblocks"
-              >
-                <ExternalLink />
-              </a>
+            <Button
+              variant="ghost"
+              size="icon"
+              nativeButton={false}
+              render={
+                <a
+                  href={explorerUrl(validator.accountId, network)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="View account on Nearblocks"
+                />
+              }
+            >
+              <ArrowSquareOutIcon />
             </Button>
           )}
         </div>
@@ -102,7 +107,7 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
             className="inline-flex items-center gap-1 text-sm underline underline-offset-4"
           >
             View pool on explorer
-            <ExternalLink className="h-3 w-3" />
+            <ArrowSquareOutIcon className="h-3 w-3" />
           </a>
         )}
       </CardContent>

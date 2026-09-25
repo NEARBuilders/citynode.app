@@ -1,9 +1,10 @@
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { useApiClient } from "@/app";
 import { ActivityCard } from "./activity-editor";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
+
 export function ActivityDetail({
   activityId,
   node,
@@ -29,7 +30,7 @@ export function ActivityDetail({
         search={{ node: selectedNode, campaign }}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-4" />
+        <ArrowLeftIcon className="size-4" />
         Back to Explore
       </Link>
       {activity.isPending ? (

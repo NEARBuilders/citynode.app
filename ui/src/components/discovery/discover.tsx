@@ -1,15 +1,15 @@
+import {
+  ArrowUpRightIcon,
+  CaretRightIcon,
+  CheckIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  ShieldCheckIcon,
+  SparkleIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronRight,
-  CircleAlert,
-  MapPin,
-  Search,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
 import { useState } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, Input, Textarea } from "@/components";
@@ -46,7 +46,7 @@ export function Discover() {
         role="alert"
         className="mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border border-border p-8 text-center"
       >
-        <ShieldCheck className="size-8 text-muted-foreground" />
+        <ShieldCheckIcon className="size-8 text-muted-foreground" />
         <h1 className="text-xl font-semibold">
           This page is for people who help look after Explore
         </h1>
@@ -81,10 +81,8 @@ export function Discover() {
             Help people find a community, review a report, or see what’s drawing interest.
           </p>
         </div>
-        <Button variant="outline" asChild>
-          <Link to="/explore">
-            View public map <ArrowUpRight />
-          </Link>
+        <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
+          View public map <ArrowUpRightIcon />
         </Button>
       </header>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-secondary/60 px-5 py-4">
@@ -132,7 +130,7 @@ export function Discover() {
         <TabsContent value="communities" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative w-full sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 aria-label="Search communities"
                 className="pl-10"
@@ -170,7 +168,7 @@ export function Discover() {
                 <div className="min-w-0">
                   <h2 className="truncate text-sm font-semibold">{node.name}</h2>
                   <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="size-3" />
+                    <MapPinIcon className="size-3" />
                     {node.location || "Location not provided"}
                     {node.region ? ` · ${node.region}` : ""}
                   </p>
@@ -181,7 +179,7 @@ export function Discover() {
                   />
                   {node.active ? "Active" : "Quiet lately"}
                   {needsAttention(node) && (
-                    <CircleAlert
+                    <WarningCircleIcon
                       aria-label="Needs attention"
                       className="size-3.5 text-muted-foreground"
                     />
@@ -190,7 +188,7 @@ export function Discover() {
                 <div className="text-xs text-muted-foreground">
                   {node.featured ? (
                     <Badge variant="secondary">
-                      <Sparkles />
+                      <SparkleIcon />
                       Featured
                     </Badge>
                   ) : (
@@ -204,7 +202,7 @@ export function Discover() {
                   data-testid={`studio-manage-${node.nodeId}`}
                   onClick={() => setSelectedId(node.nodeId)}
                 >
-                  Manage <ChevronRight />
+                  Manage <CaretRightIcon />
                 </Button>
               </div>
             ))}
@@ -306,7 +304,7 @@ export function Discover() {
               ))}
               {!studio.data.reports.length && (
                 <div className="flex flex-col items-center gap-2 rounded-2xl bg-muted/40 p-12 text-center">
-                  <ShieldCheck className="size-8 text-muted-foreground" />
+                  <ShieldCheckIcon className="size-8 text-muted-foreground" />
                   <p className="font-medium">You’re all caught up</p>
                   <p className="text-sm text-muted-foreground">
                     New visitor reports will appear here.
@@ -371,10 +369,11 @@ export function Discover() {
           {selected && (
             <div className="flex flex-col gap-7 px-6 pb-8">
               {studio.data.isAdmin && (
-                <Button asChild>
-                  <Link to="/nodes/$nodeId/content" params={{ nodeId: selected.nodeId }}>
-                    Manage events, posts & profile <ArrowUpRight />
-                  </Link>
+                <Button
+                  nativeButton={false}
+                  render={<Link to="/nodes/$nodeId/content" params={{ nodeId: selected.nodeId }} />}
+                >
+                  Manage events, posts & profile <ArrowUpRightIcon />
                 </Button>
               )}
               <div className="flex flex-col gap-3">
@@ -402,9 +401,9 @@ export function Discover() {
                 ].map(({ ready, label }) => (
                   <p key={label} className="flex items-center gap-2.5 text-sm">
                     {ready ? (
-                      <Check className="size-4 text-primary" />
+                      <CheckIcon className="size-4 text-primary" />
                     ) : (
-                      <CircleAlert className="size-4 text-muted-foreground" />
+                      <WarningCircleIcon className="size-4 text-muted-foreground" />
                     )}
                     {label}
                   </p>
@@ -413,7 +412,7 @@ export function Discover() {
               <div className="flex flex-col gap-4 rounded-xl bg-muted/40 p-4">
                 <div>
                   <h2 className="flex items-center gap-2 font-semibold">
-                    <Sparkles className="size-4" />
+                    <SparkleIcon className="size-4" />
                     Highlight this community
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">

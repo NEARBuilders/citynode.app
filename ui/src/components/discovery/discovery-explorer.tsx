@@ -1,15 +1,15 @@
+import {
+  ArrowUpRightIcon,
+  BroadcastIcon,
+  CalendarDotsIcon,
+  CopyIcon,
+  GlobeIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  ArrowUpRight,
-  CalendarDays,
-  Copy,
-  Globe2,
-  MapPin,
-  Radio,
-  Search,
-  Sparkles,
-} from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Badge, Button, Input } from "@/components";
@@ -106,7 +106,7 @@ export function DiscoveryExplorer({
       </header>
       <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-border-strong bg-card p-2">
         <div className="relative min-w-48 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label className="sr-only" htmlFor="discovery-search">
             Search communities
           </label>
@@ -119,7 +119,7 @@ export function DiscoveryExplorer({
           />
         </div>
         <label className="flex items-center gap-2 px-2 text-sm" htmlFor="discovery-region">
-          <Globe2 className="size-4 text-muted-foreground" />
+          <GlobeIcon className="size-4 text-muted-foreground" />
           <span className="sr-only">Region</span>
           <select
             id="discovery-region"
@@ -140,8 +140,8 @@ export function DiscoveryExplorer({
           </select>
         </label>
         {[
-          { key: "active", label: "Recently active", icon: Radio },
-          { key: "upcoming", label: "Upcoming events", icon: CalendarDays },
+          { key: "active", label: "Recently active", icon: BroadcastIcon },
+          { key: "upcoming", label: "Upcoming events", icon: CalendarDotsIcon },
         ].map(({ key, label, icon: Icon }) => (
           <label key={key} className="cursor-pointer">
             <input
@@ -211,13 +211,13 @@ export function DiscoveryExplorer({
                       <span className="truncate text-sm font-medium">{node.name}</span>
                       {node.featured && (
                         <Badge variant="secondary">
-                          <Sparkles />
+                          <SparkleIcon />
                           {node.featured}
                         </Badge>
                       )}
                     </span>
                     <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="size-3" />
+                      <MapPinIcon className="size-3" />
                       {node.location || "Location not provided"}
                       {node.region ? ` · ${node.region}` : ""}
                     </span>
@@ -269,14 +269,14 @@ export function DiscoveryExplorer({
         <SheetContent
           side={mobile ? "bottom" : "right"}
           className="w-full overflow-y-auto sm:max-w-lg"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
+          finalFocus={() => {
             const restore = origin.current;
             const id = lastNode.current;
             queueMicrotask(() => {
               if (restore?.isConnected) restore.focus();
               else document.querySelector<HTMLButtonElement>(`[data-node-id="${id}"]`)?.focus();
             });
+            return false;
           }}
         >
           <SheetHeader className="px-6 pb-4 pt-8 pr-16">
@@ -284,7 +284,7 @@ export function DiscoveryExplorer({
               {selected?.name ?? "Community"}
             </SheetTitle>
             <SheetDescription className="flex items-center gap-1.5">
-              <MapPin className="size-3.5" />
+              <MapPinIcon className="size-3.5" />
               {selected?.location || "Location coming soon"}
             </SheetDescription>
           </SheetHeader>
@@ -303,12 +303,12 @@ export function DiscoveryExplorer({
               <div className="flex flex-wrap gap-2">
                 {selected.featured && (
                   <Badge>
-                    <Sparkles />
+                    <SparkleIcon />
                     {selected.featured}
                   </Badge>
                 )}
                 <Badge variant={selected.active ? "success" : "secondary"}>
-                  <Radio />
+                  <BroadcastIcon />
                   {selected.activityReason}
                 </Badge>
               </div>
@@ -322,16 +322,22 @@ export function DiscoveryExplorer({
               {selected.channels.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {selected.channels.map((channel) => (
-                    <Button key={channel.url} variant="outline" size="sm" asChild>
-                      <a
-                        onClick={() => measurement.track("channel", selected.nodeId, channel.url)}
-                        href={channel.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {channel.label}
-                        <ArrowUpRight />
-                      </a>
+                    <Button
+                      key={channel.url}
+                      variant="outline"
+                      size="sm"
+                      nativeButton={false}
+                      render={
+                        <a
+                          onClick={() => measurement.track("channel", selected.nodeId, channel.url)}
+                          href={channel.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        />
+                      }
+                    >
+                      {channel.label}
+                      <ArrowUpRightIcon />
                     </Button>
                   ))}
                 </div>
@@ -375,15 +381,20 @@ export function DiscoveryExplorer({
                 )}
               </section>
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
-                <Button variant="outline" size="sm" asChild>
-                  <Link
-                    to="/n/$slug"
-                    params={{ slug: selected.slug }}
-                    search={{ parentId: selected.parentId ?? undefined }}
-                  >
-                    Community page
-                    <ArrowUpRight />
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/n/$slug"
+                      params={{ slug: selected.slug }}
+                      search={{ parentId: selected.parentId ?? undefined }}
+                    />
+                  }
+                >
+                  Community page
+                  <ArrowUpRightIcon />
                 </Button>
                 <Button
                   variant="ghost"
@@ -398,7 +409,7 @@ export function DiscoveryExplorer({
                     }
                   }}
                 >
-                  <Copy /> Copy link
+                  <CopyIcon /> Copy link
                 </Button>
               </div>
               <p role="status" className="text-xs text-muted-foreground">

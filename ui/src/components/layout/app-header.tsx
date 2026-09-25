@@ -1,5 +1,5 @@
+import { UsersIcon } from "@phosphor-icons/react";
 import { useRouterState } from "@tanstack/react-router";
-import { UsersRound } from "lucide-react";
 import { Fragment } from "react";
 import type { ClientRuntimeConfig } from "@/app";
 import { getAccount, getActiveRuntime } from "@/app";
@@ -73,7 +73,7 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
             className="ml-auto flex min-w-0 shrink items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-xs text-muted-foreground"
             data-testid="workspace-active-team"
           >
-            <UsersRound className="size-3.5 shrink-0" />
+            <UsersIcon className="size-3.5 shrink-0" />
             <span className="truncate">
               operating as <span className="font-medium text-foreground">{activeTeamName}</span>
             </span>

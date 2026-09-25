@@ -1,5 +1,5 @@
+import { BankIcon, GearIcon, HouseIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Building2, Home, LogOut, Settings, User } from "lucide-react";
 import type { Organization } from "@/app";
 import { pluginPath } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -44,7 +44,7 @@ export function UserNavMenuContent({
       <Avatar className="size-9 shrink-0 ring-1 ring-border">
         {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
         <AvatarFallback className="text-xs font-semibold">
-          {initials || <User className="size-4" />}
+          {initials || <UserIcon className="size-4" />}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
@@ -56,47 +56,41 @@ export function UserNavMenuContent({
 
   return (
     <DropdownMenuContent className={className} align={align}>
-      <DropdownMenuItem asChild>
-        {nearAccountId ? (
-          <Link to="/$accountId" params={{ accountId: nearAccountId }}>
-            {identityContent}
-          </Link>
-        ) : (
-          <Link to={pluginPath("/settings/profile")}>{identityContent}</Link>
-        )}
+      <DropdownMenuItem
+        render={
+          nearAccountId ? (
+            <Link to="/$accountId" params={{ accountId: nearAccountId }} />
+          ) : (
+            <Link to={pluginPath("/settings/profile")} />
+          )
+        }
+      >
+        {identityContent}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem asChild>
-        <Link to="/dashboard">
-          <Home />
-          workspace
-        </Link>
+      <DropdownMenuItem render={<Link to="/dashboard" />}>
+        <HouseIcon />
+        workspace
       </DropdownMenuItem>
       {activeOrg && (
-        <DropdownMenuItem asChild>
-          <Link to="/orgs/$slug" params={{ slug: activeOrg.slug }}>
-            <Building2 />
-            {activeOrg.name}
-          </Link>
+        <DropdownMenuItem render={<Link to="/orgs/$slug" params={{ slug: activeOrg.slug }} />}>
+          <BankIcon />
+          {activeOrg.name}
         </DropdownMenuItem>
       )}
-      <DropdownMenuItem asChild>
-        <Link to={pluginPath("/settings")}>
-          <Settings />
-          settings
-        </Link>
+      <DropdownMenuItem render={<Link to={pluginPath("/settings")} />}>
+        <GearIcon />
+        settings
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"
-        onSelect={(event) => {
-          event.preventDefault();
-          signOutMutation.mutate();
-        }}
+        closeOnClick={false}
+        onClick={() => signOutMutation.mutate()}
         disabled={signOutMutation.isPending}
         data-testid="account.signout-menuitem"
       >
-        <LogOut />
+        <SignOutIcon />
         {signOutMutation.isPending ? "signing out..." : "sign out"}
       </DropdownMenuItem>
     </DropdownMenuContent>

@@ -1,5 +1,5 @@
+import { UserIcon } from "@phosphor-icons/react";
 import { ClientOnly, Link } from "@tanstack/react-router";
-import { User } from "lucide-react";
 import { pluginPath } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -47,8 +47,12 @@ function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavP
         <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
         <NetworkToggle />
         {showConnect && (
-          <Button asChild variant="outline">
-            <Link to={pluginPath("/login")}>connect</Link>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link to={pluginPath("/login")} />}
+          >
+            connect
           </Button>
         )}
       </div>
@@ -63,21 +67,23 @@ function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavP
       )}
 
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={displayName}
-            data-testid="account-menu"
-            className="rounded-full! ring-1 ring-border transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:scale-105"
-            title="account menu"
-          >
-            <Avatar className="size-8">
-              {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
-              <AvatarFallback className="text-xs font-semibold">
-                {initials || <User className="size-4" />}
-              </AvatarFallback>
-            </Avatar>
-          </button>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              aria-label={displayName}
+              data-testid="account-menu"
+              className="rounded-full! ring-1 ring-border transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:scale-105"
+              title="account menu"
+            />
+          }
+        >
+          <Avatar className="size-8">
+            {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
+            <AvatarFallback className="text-xs font-semibold">
+              {initials || <UserIcon className="size-4" />}
+            </AvatarFallback>
+          </Avatar>
         </DropdownMenuTrigger>
         <UserNavMenuContent
           nearAccountId={nearAccountId}

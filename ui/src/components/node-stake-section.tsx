@@ -1,6 +1,6 @@
 import type { InferClientOutputs } from "@orpc/client";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
 import type { ApiClient } from "@/app";
 import { StakePoolCard } from "@/components/stake-pool-card";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ export function NodeStakeSection({
                     <span className="capitalize text-base font-semibold text-foreground group-hover:underline">
                       {child.name}
                     </span>
-                    <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRightIcon className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                   </a>
                 ))}
               </div>
@@ -109,11 +109,14 @@ function StakeLink({
   gateway: string;
 }) {
   return (
-    <Button asChild>
-      <a href={`https://${node.slug}.${gateway}/stake?nodeId=${encodeURIComponent(node.id)}`}>
-        Stake to {node.name}
-        <ArrowRight />
-      </a>
+    <Button
+      nativeButton={false}
+      render={
+        <a href={`https://${node.slug}.${gateway}/stake?nodeId=${encodeURIComponent(node.id)}`} />
+      }
+    >
+      Stake to {node.name}
+      <ArrowRightIcon />
     </Button>
   );
 }

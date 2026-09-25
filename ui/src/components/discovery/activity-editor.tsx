@@ -1,6 +1,13 @@
+import {
+  ArrowUpRightIcon,
+  CalendarDotsIcon,
+  ChatCircleIcon,
+  ClockIcon,
+  MapPinIcon,
+  QrCodeIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { ArrowUpRight, CalendarDays, Clock, MapPin, MessageCircle, QrCode } from "lucide-react";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import {
@@ -110,7 +117,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           disabled={startOnboarding.isPending}
           onClick={() => startOnboarding.mutate(a.id)}
         >
-          <QrCode /> Start onboarding
+          <QrCodeIcon /> Start onboarding
         </Button>
       )}
       {a.luma ? (
@@ -157,7 +164,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               setDraft(blank(nodeId, "event"));
             }}
           >
-            <CalendarDays /> Add an event
+            <CalendarDotsIcon /> Add an event
           </Button>
           <Button
             data-testid="discovery-new-social"
@@ -167,7 +174,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
               setDraft(blank(nodeId, "social"));
             }}
           >
-            <MessageCircle /> Share a post
+            <ChatCircleIcon /> Share a post
           </Button>
         </div>
       </div>
@@ -623,13 +630,13 @@ export function ActivityCard({
           {cancelled && <p className="mt-1 text-xs font-medium">Cancelled</p>}
           {time && (
             <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="size-3.5 shrink-0" />
+              <ClockIcon className="size-3.5 shrink-0" />
               {time}
             </p>
           )}
           {activity.kind === "event" && activity.venue && (
             <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="size-3.5 shrink-0" />
+              <MapPinIcon className="size-3.5 shrink-0" />
               {activity.venue}
             </p>
           )}
@@ -643,7 +650,7 @@ export function ActivityCard({
               onClick={onOutbound}
             >
               Read original post
-              <ArrowUpRight className="size-3.5" />
+              <ArrowUpRightIcon className="size-3.5" />
             </a>
           )}
         </div>

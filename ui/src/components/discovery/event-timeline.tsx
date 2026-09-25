@@ -1,4 +1,4 @@
-import { MapPin } from "lucide-react";
+import { MapPinIcon } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type EventDateGroup, eventStartTime, type TimelineEvent } from "@/lib/event-timeline";
 import { cn } from "@/lib/utils";
@@ -117,7 +117,7 @@ export function EventTimeline<T extends TimelineItem>({
                   )}
                   {event.venue && (
                     <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="size-3.5 shrink-0" />
+                      <MapPinIcon className="size-3.5 shrink-0" />
                       <span className="truncate">{event.venue}</span>
                     </p>
                   )}

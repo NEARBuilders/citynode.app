@@ -1,5 +1,5 @@
+import { CompassIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Compass } from "lucide-react";
 import { UserNav } from "./user-nav";
 
 interface PublicHeaderProps {
@@ -18,7 +18,7 @@ export function PublicHeader({ showConnect = true }: PublicHeaderProps) {
             to="/explore"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
-            <Compass className="size-4" />
+            <CompassIcon className="size-4" />
             Explore
           </Link>
           <Link

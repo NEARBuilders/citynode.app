@@ -1,4 +1,4 @@
-import { Building2 } from "lucide-react";
+import { BankIcon } from "@phosphor-icons/react";
 
 interface LogoProps {
   appName: string;
@@ -16,7 +16,7 @@ export function Logo({ appName, showText = false, className = "", size = "md" }:
       <div
         className={`${boxSize} flex items-center justify-center border-2 border-outset border-border-strong bg-card shadow-sm`}
       >
-        <Building2 className={`${iconSize} text-foreground`} aria-hidden />
+        <BankIcon className={`${iconSize} text-foreground`} aria-hidden />
       </div>
       {showText && <span className="text-sm font-semibold text-foreground">{appName}</span>}
     </div>

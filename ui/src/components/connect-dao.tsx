@@ -1,4 +1,4 @@
-import { Link2, ShieldCheck, ShieldOff, Wallet } from "lucide-react";
+import { LinkIcon, ShieldCheckIcon, ShieldSlashIcon, WalletIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Button, Card, CardContent } from "@/components";
 import { Spinner } from "@/components/ui/spinner";
@@ -80,7 +80,7 @@ export function ConnectDao({ onVerified }: ConnectDaoProps) {
       <Card>
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <WalletIcon className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold text-foreground">connected DAO account</h2>
           </div>
           <div className="flex items-center justify-between gap-4">
@@ -104,7 +104,7 @@ export function ConnectDao({ onVerified }: ConnectDaoProps) {
     <Card>
       <CardContent className="p-6 space-y-4">
         <div className="flex items-center gap-2">
-          <Link2 className="h-4 w-4 text-muted-foreground" />
+          <LinkIcon className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">connect your DAO</h2>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -154,7 +154,7 @@ function MembershipBadge({ state, primaryAccountId }: MembershipBadgeProps) {
   if (state.kind === "ok") {
     return (
       <p className="text-xs text-muted-foreground flex items-center gap-2">
-        <ShieldCheck className="h-3 w-3 text-green-500" />
+        <ShieldCheckIcon className="h-3 w-3 text-green-500" />
         {primaryAccountId
           ? `${primaryAccountId} is listed in a DAO policy group`
           : "connected account listed in a DAO policy group"}
@@ -165,7 +165,7 @@ function MembershipBadge({ state, primaryAccountId }: MembershipBadgeProps) {
   if (state.kind === "not-member") {
     return (
       <p className="text-xs text-destructive flex items-center gap-2">
-        <ShieldOff className="h-3 w-3" />
+        <ShieldSlashIcon className="h-3 w-3" />
         your primary NEAR account is not listed in any DAO policy group
       </p>
     );
@@ -174,7 +174,7 @@ function MembershipBadge({ state, primaryAccountId }: MembershipBadgeProps) {
   if (state.kind === "not-sputnik") {
     return (
       <p className="text-xs text-destructive flex items-center gap-2">
-        <ShieldOff className="h-3 w-3" />
+        <ShieldSlashIcon className="h-3 w-3" />
         target is not a sputnik-dao contract
       </p>
     );
