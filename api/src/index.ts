@@ -30,6 +30,8 @@ class ApiServices extends Context.Service<
   }
 >()("api/ApiServices") {}
 
+const ONBOARDING_GRACE_MS = 48 * 3_600_000;
+
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
 
@@ -248,6 +250,65 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getDiscoveryActivity: builder.getDiscoveryActivity.handler(async ({ input, context }) =>
         Context.get(context["effect/context"], ApiServices).discovery.activity(input.id),
       ),
+      createEventOnboardingCode: builder.createEventOnboardingCode.effect(function* ({
+        input,
+        context,
+      }) {
+        if (!context.userId) {
+          return yield* Effect.fail(
+            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+          );
+        }
+        const { discovery } = yield* ApiServices;
+        const record = yield* Effect.promise(() => discovery.eventOrganization(input.eventId));
+        if (!record) {
+          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Event not found" }));
+        }
+        const { event, organizationId } = record;
+        const endsAt = event.endsAt;
+        if (event.kind !== "event" || !endsAt) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", { message: "Only events can have onboarding codes" }),
+          );
+        }
+        if (!organizationId) {
+          return yield* Effect.fail(
+            new ORPCError("BAD_REQUEST", {
+              message:
+                "This event's node has no organization, so there is nothing for attendees to join",
+            }),
+          );
+        }
+        if (context.organization?.activeOrganizationId !== organizationId) {
+          return yield* Effect.fail(
+            new ORPCError("FORBIDDEN", {
+              message:
+                "This event belongs to another organization than your active one — switch organizations to onboard for it",
+            }),
+          );
+        }
+        const auth = plugins.auth.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+        });
+        return yield* Effect.tryPromise({
+          try: () =>
+            auth.createOnboardingCode({
+              organizationId,
+              eventId: event.id,
+              eventName: event.title,
+              ...(input.maxUses ? { maxUses: input.maxUses } : {}),
+              expiresAt: input.expiresAt
+                ? new Date(input.expiresAt)
+                : new Date(Date.parse(endsAt) + ONBOARDING_GRACE_MS),
+            }),
+          catch: (error) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not create the onboarding code",
+                }),
+        });
+      }),
       listDiscovery: builder.listDiscovery.handler(async ({ input, context }) =>
         Context.get(context["effect/context"], ApiServices).discovery.list(input),
       ),
