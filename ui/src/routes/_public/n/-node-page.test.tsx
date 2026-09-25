@@ -102,6 +102,8 @@ function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
             json: { sourceNodeId, validators: [{ ...validator, nodeId: sourceNodeId }] },
           });
         }
+        case "getDiscoveryNode":
+          return Response.json({ json: null });
         case "getNode":
           return Response.json({ json: nodes.find((entry) => entry.id === args.nodeId) ?? null });
         case "getSubtree":
@@ -199,7 +201,7 @@ it("opens a child node directly and renders its inherited pool and live metrics"
 it("preserves the selected node when returning from sign-in", async () => {
   mockApi([parent, child], child.id);
   await showNode(`/login?redirect=${encodeURIComponent(`/stake?nodeId=${child.id}`)}`, true);
-  expect(await screen.findByRole("heading", { name: "Stake NEAR to Chicago" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago/ })).toBeTruthy();
 });
 
 it("carries a duplicate city's identity from its overview into the staking page", async () => {
@@ -225,7 +227,7 @@ it("carries a duplicate city's identity from its overview into the staking page"
     await router.load();
   });
   expect(
-    await screen.findByRole("heading", { name: "Stake NEAR to Chicago, Missouri" }),
+    await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago, Missouri/ }),
   ).toBeTruthy();
   expect(screen.queryByText("Node not found.")).toBeNull();
 });
@@ -267,4 +269,18 @@ it("keeps same-slug cities under different parents separate when navigating", as
   expect(await screen.findByRole("heading", { name: "Chicago", level: 1 })).toBeTruthy();
   expect(await screen.findByText("Stake inherited from Illinois.")).toBeTruthy();
   expect(screen.queryByText("Stake inherited from Missouri.")).toBeNull();
+});
+
+it("links the header stake action to the same-origin stake page", async () => {
+  mockApi([parent, child], child.id);
+  await showNode("/n/chicago");
+  const stake = await screen.findByTestId("node-page.stake-button");
+  expect(stake.getAttribute("href")).toBe(`/stake?nodeId=${child.id}`);
+});
+
+it("offers a way back to Explore when the community does not exist", async () => {
+  mockApi();
+  await showNode("/n/atlantis");
+  expect(await screen.findByRole("heading", { name: "Community not found" })).toBeTruthy();
+  expect(screen.getByTestId("node-page.back-to-explore").getAttribute("href")).toBe("/explore");
 });
