@@ -13,7 +13,7 @@ plans/
 ├── infra/            # infrastructure & migration plans
 ├── offline/          # offline support (SW caching + data sync queue)
 ├── v1-current/       # plans about the current v1 system
-├── prototypes/         # runnable prototype source code (3 prototypes)
+├── prototypes/         # runnable prototype source code (4 prototypes)
 └── wayfinder/        # decision map + open question tickets for beta-v2
 ```
 
@@ -36,8 +36,8 @@ is verifiable on-chain via FastKV.
 
 | Document | Covers | Status |
 |---|---|---|
-| [ui-route-grafting-migration.md](./extensions/ui-route-grafting-migration.md) | In-repo migration to grafting ui plugins — SSR corrections (session-forwarded, not exclusion), digest-cached composition, shell/nav mounts, `plugins.<id>.ui` schema extension, phases 1–3 | **DECIDED** — Phases 1–3 approved; supersedes route-level composition; see map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) |
-| [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) | UI-to-UI composition through `extends` — child UI inherits routes/components from parent UI via MF | **SUPERSEDED** — route-level composition rejected; see [ui-route-grafting-migration.md](./extensions/ui-route-grafting-migration.md) |
+| ui route-grafting migration (never filed as a doc) | In-repo migration to grafting ui plugins — SSR corrections (session-forwarded, not exclusion), digest-cached composition, shell/nav mounts, `plugins.<id>.ui` schema extension, phases 1–3 | **DECIDED** — Phases 1–3 approved; supersedes route-level composition; see map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) |
+| [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) | UI-to-UI composition through `extends` — child UI inherits routes/components from parent UI via MF | **SUPERSEDED** — route-level composition rejected; see map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) and [ADR 0008](../docs/adr/0008-manifest-composition.md) |
 | [client-runtime-plugins.md](./extensions/client-runtime-plugins.md) | Browser-executed plugins — `runtime: "client"` field, wasm-git + OPFS storage, BunInBrowser proxy | Independent |
 
 ## infra — infrastructure & migration
@@ -60,7 +60,7 @@ is verifiable on-chain via FastKV.
 | Document | Covers | Status |
 |---|---|---|
 | [tenant-feature-completeness.md](./v1-current/tenant-feature-completeness.md) | Tenant lifecycle hardening — edit/delete flows, soft-delete, status gating, auth consistency | Independent |
-| [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) | Per-plugin database boilerplate absorption — `everything-dev/db` runtime exports (`createDatabaseDriver`/`databaseLayer`/`runMigrations`), namespace-per-engine isolation, tiered migration timing (ticket #89) | DECIDED (amended 2026-09-15) — prototype at [prototypes/db-auth-absorption/](./prototypes/db-auth-absorption/), build plan 017 in [advisor-plans/](../../advisor-plans/) |
+| [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) | Per-plugin database boilerplate absorption — `everything-dev/db` runtime exports (`createDatabaseDriver`/`databaseLayer`/`runMigrations`), namespace-per-engine isolation, tiered migration timing (ticket #89) | DECIDED (amended 2026-09-15) — prototype at [prototypes/db-auth-absorption/](./prototypes/db-auth-absorption/), build plan 017 in [advisor-plans/](../advisor-plans/) |
 
 ## prototypes — validated architecture
 
@@ -76,7 +76,7 @@ is verifiable on-chain via FastKV.
 | Document | Covers |
 |---|---|
 | [beta-v2-map.md](./wayfinder/beta-v2-map.md) | Decision map — registry & FastKV architecture, namespace model, caching layers, gateway services, platform services (decisions 11–17: deploy service, provider-as-alchemy-program, OTA runtime, sandboxes, upstream strategy) |
-| [tickets/](./wayfinder/tickets/) | 11 decision tickets (6 resolved, 1 partially resolved, 4 open) |
+| [tickets/](./wayfinder/tickets/) | 12 decision tickets (6 resolved, 1 partially resolved, 5 open) |
 
 ### Ticket status
 
@@ -84,7 +84,7 @@ is verifiable on-chain via FastKV.
 |---|---|---|
 | [01-route-grafting.md](./wayfinder/tickets/01-route-grafting.md) | Web plugin grafting strategy | **RESOLVED** — proven by [beta-v2 prototype](./prototypes/beta-v2/) |
 | [02-typed-api-client.md](./wayfinder/tickets/02-typed-api-client.md) | Typed `apiClient` for MF remotes | **RESOLVED** — proven by [override prototype](./prototypes/beta-v2-override/) |
-| [03-plugin-type-deeps.md](./wayfinder/tickets/03-plugin-type-deps.md) | Plugin-to-plugin type dependencies | Open |
+| [03-plugin-type-deps.md](./wayfinder/tickets/03-plugin-type-deps.md) | Plugin-to-plugin type dependencies | Open |
 | [04-app-ts-evaluation.md](./wayfinder/tickets/04-app-ts-evaluation.md) | `app.ts` evaluation to deployable config | Open — sharpened by the deploy service (URL write-back may dissolve) |
 | [05-backwards-compat.md](./wayfinder/tickets/05-backwards-compat.md) | Host supports both `app.ts` and `bos.config.json` | Open |
 | [06-ssr-per-request.md](./wayfinder/tickets/06-ssr-per-request.md) | Per-request SSR route tree composition | **PARTIALLY RESOLVED** — SSR-by-exclusion proven; now also gates member subdomains |
@@ -93,6 +93,7 @@ is verifiable on-chain via FastKV.
 | [09-stitching-order.md](./wayfinder/tickets/09-stitching-order.md) | Grafting vs UI-extends-UI sequencing | **RESOLVED** — grafting first (validated); inheritance is a layer on top, prototype-gated |
 | [10-hot-swap-lifecycle.md](./wayfinder/tickets/10-hot-swap-lifecycle.md) | OTA hot-swap lifecycle (in-flight requests, teardown, ESM disposal) | Open — prototype required |
 | [11-sandbox-db.md](./wayfinder/tickets/11-sandbox-db.md) | Sandbox database engine | **RESOLVED** — tiered PGlite (workshop) / Neon via alchemy (production) |
+| [12-build-tooling-absorption.md](./wayfinder/tickets/12-build-tooling-absorption.md) | Root `app.ts` / build-tooling absorption | Open — phase 1 executed (ADRs 0002–0004); phase 2 drafted in ADR 0005 |
 
 ## Completed plans (removed)
 

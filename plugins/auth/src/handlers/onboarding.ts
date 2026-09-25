@@ -7,11 +7,12 @@ import {
   createOrganizationMembershipPolicy,
   type OrganizationMembershipPolicy,
 } from "../organization-membership-policy";
-import { AuthServicesTag } from "../service-types";
-import { createHeaders, getActiveOrganizationId, safeAuthApi } from "../utils";
+import { AuthServicesTag, type PluginServices } from "../service-types";
+import { createHeaders, getActiveOrganizationId, parseTeamAreas, safeAuthApi } from "../utils";
 
 const DEFAULT_MAX_USES = 50;
 const DEFAULT_EXPIRES_IN_HOURS = 24;
+const EVENTS_AREA = "events";
 
 function generateCode(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
@@ -31,7 +32,7 @@ function membershipPolicyOf(services: {
   return services.membershipPolicy ?? createOrganizationMembershipPolicy();
 }
 
-async function requireOrgAdminContext(
+async function requireOrganizerContext(
   services: any,
   context: any,
   inputOrganizationId?: string,
@@ -55,17 +56,84 @@ async function requireOrgAdminContext(
     }),
   );
   const role = typeof result === "string" ? result : ((result as any)?.role ?? null);
-  if (role !== "owner" && role !== "admin") {
+  const isOrganizer =
+    role === "owner" ||
+    role === "admin" ||
+    (role !== null && (await belongsToEventsTeam(services.db, userId, organizationId)));
+  if (!isOrganizer) {
     throw new ORPCError("FORBIDDEN", {
-      message: "Only organization owners and admins can manage onboarding codes",
+      message:
+        "Only organizers — organization owners, admins, or members of a team with the events area — can manage onboarding codes",
     });
   }
   return { userId, organizationId, headers };
 }
 
+async function belongsToEventsTeam(
+  db: PluginServices["db"],
+  userId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const teams = await db
+    .select({ metadata: schema.team.metadata })
+    .from(schema.teamMember)
+    .innerJoin(schema.team, eq(schema.teamMember.teamId, schema.team.id))
+    .where(
+      and(eq(schema.teamMember.userId, userId), eq(schema.team.organizationId, organizationId)),
+    );
+  return teams.some((team) => parseTeamAreas(team.metadata).includes(EVENTS_AREA));
+}
+
+async function resolveEventTeamId(
+  db: PluginServices["db"],
+  organizationId: string,
+  eventId: string,
+  eventName: string,
+): Promise<string> {
+  const [prior] = await db
+    .select({ teamId: schema.onboardingCode.teamId })
+    .from(schema.onboardingCode)
+    .where(
+      and(
+        eq(schema.onboardingCode.organizationId, organizationId),
+        eq(schema.onboardingCode.eventId, eventId),
+      ),
+    )
+    .orderBy(desc(schema.onboardingCode.createdAt))
+    .limit(1);
+  if (prior) return prior.teamId;
+
+  const now = new Date();
+  const [team] = await db
+    .insert(schema.team)
+    .values({
+      id: crypto.randomUUID(),
+      name: eventName,
+      organizationId,
+      metadata: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+  if (!team) {
+    throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create event team" });
+  }
+  return team.id;
+}
+
+function codeState(
+  row: typeof schema.onboardingCode.$inferSelect,
+): "active" | "revoked" | "expired" | "used-up" {
+  if (row.revokedAt) return "revoked";
+  if (toDate(row.expiresAt) < new Date()) return "expired";
+  if (row.usedCount >= row.maxUses) return "used-up";
+  return "active";
+}
+
 function toSummary(row: typeof schema.onboardingCode.$inferSelect) {
   return {
     id: row.id,
+    eventId: row.eventId,
     eventName: row.eventName,
     teamId: row.teamId,
     role: row.role,
@@ -83,57 +151,40 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { userId, organizationId } = await requireOrgAdminContext(
+        const { userId, organizationId } = await requireOrganizerContext(
           services,
           context,
           input.organizationId,
         );
 
         const eventName = String(input.eventName).trim();
-        if (!eventName) {
-          throw new ORPCError("BAD_REQUEST", { message: "Event name is required" });
-        }
-
-        let team = await services.db.query.team.findFirst({
-          where: and(
-            eq(schema.team.organizationId, organizationId),
-            eq(schema.team.name, eventName),
-          ),
-        });
-        if (!team) {
-          const now = new Date();
-          [team] = await services.db
-            .insert(schema.team)
-            .values({
-              id: crypto.randomUUID(),
-              name: eventName,
-              organizationId,
-              metadata: null,
-              createdAt: now,
-              updatedAt: now,
-            })
-            .returning();
-        }
-        if (!team) {
-          throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create event team" });
-        }
-
-        const code = generateCode();
+        const eventId = String(input.eventId);
         const now = new Date();
+        const expiresAt = input.expiresAt
+          ? toDate(input.expiresAt)
+          : new Date(now.getTime() + DEFAULT_EXPIRES_IN_HOURS * 3_600_000);
+        if (expiresAt <= now) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "This event has ended, so its onboarding code would already be expired",
+          });
+        }
+
+        const teamId = await resolveEventTeamId(services.db, organizationId, eventId, eventName);
+        const code = generateCode();
         const [row] = await services.db
           .insert(schema.onboardingCode)
           .values({
             id: crypto.randomUUID(),
             codeHash: hashCode(code),
+            encryptedCode: await services.onboardingCodeCipher.encrypt(code),
             organizationId,
+            eventId,
             eventName,
-            teamId: team.id,
+            teamId,
             role: "member",
             maxUses: input.maxUses ?? DEFAULT_MAX_USES,
             usedCount: 0,
-            expiresAt: new Date(
-              now.getTime() + (input.expiresInHours ?? DEFAULT_EXPIRES_IN_HOURS) * 3_600_000,
-            ),
+            expiresAt,
             createdBy: userId,
             createdAt: now,
             updatedAt: now,
@@ -150,7 +201,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { organizationId } = await requireOrgAdminContext(
+        const { organizationId } = await requireOrganizerContext(
           services,
           context,
           input.organizationId,
@@ -169,7 +220,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { organizationId } = await requireOrgAdminContext(
+        const { organizationId } = await requireOrganizerContext(
           services,
           context,
           input.organizationId,
@@ -192,11 +243,42 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
         return { success: true };
       }),
 
+    getOnboardingStation: builder.getOnboardingStation
+      .use(requireAuth)
+      .handler(async ({ input, context }: { input: any; context: any }) => {
+        const services = Context.get(context["effect/context"], AuthServicesTag);
+        const { organizationId } = await requireOrganizerContext(
+          services,
+          context,
+          input.organizationId,
+        );
+
+        const row = await services.db.query.onboardingCode.findFirst({
+          where: and(
+            eq(schema.onboardingCode.id, input.codeId),
+            eq(schema.onboardingCode.organizationId, organizationId),
+          ),
+        });
+        if (!row) {
+          throw new ORPCError("NOT_FOUND", { message: "Onboarding code not found" });
+        }
+        if (!row.encryptedCode || codeState(row) !== "active") {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "This onboarding code is no longer active",
+          });
+        }
+
+        return {
+          ...toSummary(row),
+          code: await services.onboardingCodeCipher.decrypt(row.encryptedCode),
+        };
+      }),
+
     getOnboardingStatus: builder.getOnboardingStatus
       .use(requireAuth)
       .handler(async ({ input, context }: { input: any; context: any }) => {
         const services = Context.get(context["effect/context"], AuthServicesTag);
-        const { organizationId } = await requireOrgAdminContext(
+        const { organizationId } = await requireOrganizerContext(
           services,
           context,
           input.organizationId,
@@ -257,13 +339,15 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           where: eq(schema.user.id, codeRow.createdBy),
         });
 
+        const state = codeState(codeRow);
         return {
           organizationName: organization?.name ?? "",
           eventName: codeRow.eventName,
           inviterName: inviter?.name ?? null,
           role: codeRow.role,
-          expired: toDate(codeRow.expiresAt) < new Date(),
-          revoked: codeRow.revokedAt !== null,
+          expired: state === "expired",
+          revoked: state === "revoked",
+          usedUp: state === "used-up",
         };
       },
     ),
@@ -319,7 +403,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           };
         }
 
-        const teamId = await services.db.transaction(async (tx) => {
+        await services.db.transaction(async (tx) => {
           const [orgRow] = await tx
             .select({ id: schema.organization.id })
             .from(schema.organization)
@@ -342,7 +426,7 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
               .where(eq(schema.member.organizationId, codeRow.organizationId));
             if (!membershipPolicyOf(services).hasCapacity(memberCount)) {
               throw new ORPCError("FORBIDDEN", {
-                message: "Organization membership limit reached",
+                message: "This organization is full, so no more members can join",
               });
             }
             await tx.insert(schema.member).values({
@@ -402,13 +486,11 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
             userId,
             createdAt: new Date(),
           });
-
-          return codeRow.teamId;
         });
 
         await services.db
           .update(schema.session)
-          .set({ activeOrganizationId: codeRow.organizationId, activeTeamId: teamId })
+          .set({ activeOrganizationId: codeRow.organizationId })
           .where(eq(schema.session.id, sessionData.session.id));
 
         return {

@@ -75,9 +75,8 @@ export function writePermissiveTypeStubs(projectDir: string) {
   mkdirSync(apiLibDir, { recursive: true });
   writeFileSync(
     join(apiLibDir, "plugins-types.gen.ts"),
-    `import type { ContractRouterClient, AnyContractRouter } from "@orpc/contract";
-type ClientFactory<C extends AnyContractRouter> = (context?: Record<string, unknown>) => ContractRouterClient<C>;
-export type PluginsClient = Record<string, ClientFactory<AnyContractRouter>>;
+    `type PermissivePluginEntry = { client: (context?: Record<string, unknown>) => any; router: any };
+export type PluginsClient = Record<string, PermissivePluginEntry>;
 `,
   );
 
