@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight, CalendarDays, Clock, MapPin, MessageCircle, QrCode } from "lucide-react";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
@@ -60,6 +60,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     queryFn: () => api.listNodes({}),
   });
   const navigate = useNavigate();
+  const location = useLocation();
   const [maxJoins, setMaxJoins] = useState("");
   const [when, setWhen] = useState<"upcoming" | "past">("upcoming");
   const [viewerTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -72,7 +73,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       });
     },
     onSuccess: (code) =>
-      navigate({ to: "/onboarding/station/$codeId", params: { codeId: code.id } }),
+      navigate({
+        to: "/onboarding/station/$codeId",
+        params: { codeId: code.id },
+        search: { from: location.href },
+      }),
   });
   const save = useMutation({
     mutationFn: (input: Draft) => api.saveDiscoveryActivity(input),

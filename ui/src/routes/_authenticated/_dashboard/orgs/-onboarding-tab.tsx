@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ApiClient } from "@/app";
@@ -29,6 +29,7 @@ export function OnboardingTab({
   orgId: string;
 }) {
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [selectedCodeId, setSelectedCodeId] = useState<string | null>(null);
 
   const codes =
@@ -151,7 +152,7 @@ export function OnboardingTab({
                         <Link
                           to="/onboarding/station/$codeId"
                           params={{ codeId: code.id }}
-                          search={{ org: orgId }}
+                          search={{ org: orgId, from: location.href }}
                           className="text-sm font-medium underline-offset-4 hover:underline"
                           data-testid={`onboard.open-station-${code.id}`}
                         >

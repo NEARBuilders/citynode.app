@@ -7,6 +7,7 @@ import { Tabs } from "@/components";
 import { OnboardingTab } from "./-onboarding-tab";
 
 vi.mock("@tanstack/react-router", () => ({
+  useLocation: () => ({ href: "/orgs/acme?tab=onboard" }),
   Link: ({
     to,
     params,
@@ -112,7 +113,7 @@ describe("OnboardingTab", () => {
       expect(screen.getByTestId("onboard.open-station-code-active")).toBeTruthy(),
     );
     expect(screen.getByTestId("onboard.open-station-code-active").getAttribute("href")).toBe(
-      "/onboarding/station/code-active?org=org-1",
+      "/onboarding/station/code-active?org=org-1&from=%2Forgs%2Facme%3Ftab%3Donboard",
     );
     expect(screen.queryByTestId("onboard.open-station-code-expired")).toBeNull();
     expect(screen.queryByTestId("onboard.open-station-code-revoked")).toBeNull();
