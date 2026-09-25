@@ -17,6 +17,14 @@ function renderForm() {
 
 afterEach(cleanup);
 
+async function pickOption(testId: string, label: string) {
+  fireEvent.click(screen.getByTestId(testId));
+  const option = await screen.findByRole("option", { name: label });
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
+  await waitFor(() => expect(screen.getByTestId(testId).textContent).toContain(label));
+}
+
 describe("InviteMemberForm team targeting", () => {
   it("detects email, named NEAR, and implicit NEAR identifiers", () => {
     expect(detectInviteIdentifier("hire@example.com")).toEqual({
@@ -34,12 +42,14 @@ describe("InviteMemberForm team targeting", () => {
     expect(detectInviteIdentifier("not an identifier")).toBeNull();
   });
 
-  it("offers the organization's teams with no team selected by default", () => {
+  it("offers the organization's teams with no team selected by default", async () => {
     renderForm();
-    const picker = screen.getByTestId("invite-team-select") as HTMLSelectElement;
+    const picker = screen.getByTestId("invite-team-select");
 
-    expect(picker.value).toBe("");
-    expect(Array.from(picker.options).map((option) => option.textContent)).toEqual([
+    expect(picker.textContent).toContain("No team");
+    fireEvent.click(picker);
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
       "No team",
       "Finance",
       "Node Operator",
@@ -64,8 +74,8 @@ describe("InviteMemberForm team targeting", () => {
     const input = screen.getByTestId("invite-identifier-input") as HTMLInputElement;
 
     fireEvent.change(input, { target: { value: "ops@example.com" } });
-    fireEvent.change(screen.getByTestId("invite-role-select"), { target: { value: "admin" } });
-    fireEvent.change(screen.getByTestId("invite-team-select"), { target: { value: "team-ops" } });
+    await pickOption("invite-role-select", "Admin");
+    await pickOption("invite-team-select", "Node Operator");
     fireEvent.click(screen.getByTestId("invite-submit-button"));
 
     await waitFor(() =>
@@ -102,7 +112,7 @@ describe("InviteMemberForm team targeting", () => {
     fireEvent.change(screen.getByTestId("invite-identifier-input"), {
       target: { value: "operator.testnet" },
     });
-    fireEvent.change(screen.getByLabelText("NEAR network"), { target: { value: "testnet" } });
+    await pickOption("invite-network-select", "Testnet");
     expect(screen.getByTestId("invite-identifier-feedback").textContent).toContain("testnet");
     fireEvent.click(screen.getByTestId("invite-submit-button"));
     await waitFor(() =>

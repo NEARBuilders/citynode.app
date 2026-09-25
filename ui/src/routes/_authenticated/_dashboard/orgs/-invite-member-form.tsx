@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Button, Card, Input } from "@/components";
+import { Button, Card, Field, FieldLabel, Input } from "@/components";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type InviteRole = "admin" | "member";
 
@@ -34,8 +41,17 @@ export function detectInviteIdentifier(
   return null;
 }
 
-const selectClassName =
-  "h-11 w-full rounded-4xl border border-input bg-input/30 px-4 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+const ROLE_ITEMS = [
+  { label: "Member", value: "member" },
+  { label: "Admin", value: "admin" },
+];
+
+const NETWORK_ITEMS = [
+  { label: "Mainnet", value: "mainnet" },
+  { label: "Testnet", value: "testnet" },
+];
+
+const NO_TEAM = "";
 
 export function InviteMemberForm({
   isPending,
@@ -48,9 +64,13 @@ export function InviteMemberForm({
 }) {
   const [identifier, setIdentifier] = useState("");
   const [role, setRole] = useState<InviteRole>("member");
-  const [teamId, setTeamId] = useState("");
+  const [teamId, setTeamId] = useState(NO_TEAM);
   const [nearNetwork, setNearNetwork] = useState<"mainnet" | "testnet">("mainnet");
   const detectedIdentifier = detectInviteIdentifier(identifier);
+  const teamItems = [
+    { label: "No team", value: NO_TEAM },
+    ...teams.map((team) => ({ label: team.name, value: team.id })),
+  ];
 
   return (
     <Card className="flex flex-col gap-4 p-6">
@@ -69,59 +89,109 @@ export function InviteMemberForm({
               ...(teamId ? { teamId } : {}),
             });
             setIdentifier("");
-            setTeamId("");
+            setTeamId(NO_TEAM);
           } catch {}
         }}
       >
         <div className="grid gap-4 md:grid-cols-4">
-          <Input
-            type="text"
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            placeholder="email@example.com or alice.near"
-            className="md:col-span-2"
-            aria-label="Email or NEAR account"
-            data-testid="invite-identifier-input"
-          />
-          <select
-            aria-label="Role"
-            value={role}
-            onChange={(event) => setRole(event.target.value as InviteRole)}
-            className={selectClassName}
-            data-testid="invite-role-select"
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
-          <select
-            aria-label="Team"
-            value={teamId}
-            onChange={(event) => setTeamId(event.target.value)}
-            className={selectClassName}
-            data-testid="invite-team-select"
-          >
-            <option value="">No team</option>
-            {teams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </select>
+          <Field className="md:col-span-2">
+            <FieldLabel htmlFor="invite-identifier" className="sr-only">
+              Email or NEAR account
+            </FieldLabel>
+            <Input
+              id="invite-identifier"
+              type="text"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+              placeholder="email@example.com or alice.near"
+              aria-label="Email or NEAR account"
+              data-testid="invite-identifier-input"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="invite-role" className="sr-only">
+              Role
+            </FieldLabel>
+            <Select
+              value={role}
+              items={ROLE_ITEMS}
+              onValueChange={(value) => {
+                if (value === "admin" || value === "member") setRole(value);
+              }}
+            >
+              <SelectTrigger
+                id="invite-role"
+                aria-label="Role"
+                className="w-full"
+                data-testid="invite-role-select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="invite-team" className="sr-only">
+              Team
+            </FieldLabel>
+            <Select
+              value={teamId}
+              items={teamItems}
+              onValueChange={(value) => setTeamId(value ?? NO_TEAM)}
+            >
+              <SelectTrigger
+                id="invite-team"
+                aria-label="Team"
+                className="w-full"
+                data-testid="invite-team-select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {teamItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
         </div>
         {detectedIdentifier?.kind === "near" && (
-          <select
-            aria-label="NEAR network"
-            data-testid="invite-network-select"
-            className={selectClassName}
-            value={nearNetwork}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (value === "mainnet" || value === "testnet") setNearNetwork(value);
-            }}
-          >
-            <option value="mainnet">Mainnet</option>
-            <option value="testnet">Testnet</option>
-          </select>
+          <Field>
+            <FieldLabel htmlFor="invite-network" className="sr-only">
+              NEAR network
+            </FieldLabel>
+            <Select
+              value={nearNetwork}
+              items={NETWORK_ITEMS}
+              onValueChange={(value) => {
+                if (value === "mainnet" || value === "testnet") setNearNetwork(value);
+              }}
+            >
+              <SelectTrigger
+                id="invite-network"
+                aria-label="NEAR network"
+                className="w-full"
+                data-testid="invite-network-select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {NETWORK_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
         )}
         <div
           className="text-xs text-muted-foreground"

@@ -3,7 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, CardContent, Input, SectionHeader } from "@/components";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Field,
+  FieldLabel,
+  Input,
+  SectionHeader,
+} from "@/components";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { fetchPoolOwner } from "@/lib/pool-owner";
 import {
   invalidateNodeQueries,
@@ -14,6 +31,49 @@ import {
 interface TenantNodeValidatorsProps {
   tenantId: string;
   canManage: boolean;
+}
+
+const VALIDATOR_ROLE_ITEMS = [
+  { label: "official", value: "official" },
+  { label: "community", value: "community" },
+];
+
+function toValidatorRole(value: string | null): ValidatorRow["role"] | null {
+  return value === "official" || value === "community" ? value : null;
+}
+
+function ValidatorRoleSelect({
+  value,
+  onChange,
+  id,
+  ariaLabel,
+}: {
+  value: ValidatorRow["role"];
+  onChange: (role: ValidatorRow["role"]) => void;
+  id?: string;
+  ariaLabel: string;
+}) {
+  return (
+    <Select
+      value={value}
+      items={VALIDATOR_ROLE_ITEMS}
+      onValueChange={(next) => {
+        const role = toValidatorRole(next);
+        if (role) onChange(role);
+      }}
+    >
+      <SelectTrigger id={id} size="sm" aria-label={ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {VALIDATOR_ROLE_ITEMS.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 interface ValidatorRow {
@@ -131,40 +191,33 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
         {validators.length === 0 ? (
           <p className="text-sm text-muted-foreground">No validators attached to this node yet.</p>
         ) : (
-          <table className="w-full text-sm">
-            <tbody>
+          <Table>
+            <TableBody>
               {validators.map((validator) => (
-                <tr key={validator.id} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-3">
+                <TableRow key={validator.id}>
+                  <TableCell>
                     <code className="font-mono text-xs text-foreground">{validator.accountId}</code>
-                  </td>
-                  <td className="py-2 pr-3">
+                  </TableCell>
+                  <TableCell>
                     <PoolOwnerBadge
                       poolAccountId={validator.accountId}
                       network={validator.network}
                     />
-                  </td>
-                  <td className="py-2 pr-3">
+                  </TableCell>
+                  <TableCell>
                     {canManage ? (
-                      <select
+                      <ValidatorRoleSelect
                         value={validator.role}
-                        onChange={(e) =>
-                          updateRoleMutation.mutate({
-                            validatorId: validator.id,
-                            role: e.target.value as ValidatorRow["role"],
-                          })
+                        ariaLabel="validator role"
+                        onChange={(role) =>
+                          updateRoleMutation.mutate({ validatorId: validator.id, role })
                         }
-                        className="h-9 rounded-4xl border border-input bg-input/30 px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                        aria-label="validator role"
-                      >
-                        <option value="official">official</option>
-                        <option value="community">community</option>
-                      </select>
+                      />
                     ) : (
                       <Badge variant="secondary">{validator.role}</Badge>
                     )}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {validator.isDefault && <Badge variant="outline">default</Badge>}
                       {canManage && (
@@ -191,11 +244,11 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                         </>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
 
         {canManage && (
@@ -207,22 +260,30 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
             }}
             className="flex items-center gap-2"
           >
-            <Input
-              value={newAccountId}
-              onChange={(e) => setNewAccountId(e.target.value)}
-              placeholder="everything.pool.near"
-              className="max-w-xs"
-              required
-            />
-            <select
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value as "official" | "community")}
-              className="h-9 rounded-4xl border border-input bg-input/30 px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              aria-label="new validator role"
-            >
-              <option value="official">official</option>
-              <option value="community">community</option>
-            </select>
+            <Field className="max-w-xs">
+              <FieldLabel htmlFor="new-validator-account" className="sr-only">
+                Validator account
+              </FieldLabel>
+              <Input
+                id="new-validator-account"
+                value={newAccountId}
+                onChange={(e) => setNewAccountId(e.target.value)}
+                placeholder="everything.pool.near"
+                className="font-mono"
+                required
+              />
+            </Field>
+            <Field className="w-auto">
+              <FieldLabel htmlFor="new-validator-role" className="sr-only">
+                Role
+              </FieldLabel>
+              <ValidatorRoleSelect
+                id="new-validator-role"
+                value={newRole}
+                ariaLabel="new validator role"
+                onChange={setNewRole}
+              />
+            </Field>
             <Button
               type="submit"
               size="sm"
@@ -292,12 +353,17 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
                   }}
                   className="flex items-center gap-2"
                 >
-                  <Input
-                    value={nodeName}
-                    onChange={(e) => setNodeName(e.target.value)}
-                    className="max-w-xs"
-                    autoFocus
-                  />
+                  <Field className="max-w-xs">
+                    <FieldLabel htmlFor={`node-name-${node.id}`} className="sr-only">
+                      Node name
+                    </FieldLabel>
+                    <Input
+                      id={`node-name-${node.id}`}
+                      value={nodeName}
+                      onChange={(e) => setNodeName(e.target.value)}
+                      autoFocus
+                    />
+                  </Field>
                   <Button type="submit" size="sm" disabled={renameMutation.isPending}>
                     <CheckCircleIcon className="h-3.5 w-3.5" />
                     save

@@ -1,4 +1,10 @@
-import { Button, Card, Input } from "@/components";
+import { Button, Card, Field, FieldLabel, Input } from "@/components";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 
 export function OrganizationEditForm({
   editName,
@@ -21,22 +27,33 @@ export function OrganizationEditForm({
     <Card className="flex flex-col gap-4 p-6">
       <div className="text-sm font-medium text-muted-foreground">Edit organization</div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Input
-          type="text"
-          value={editName}
-          onChange={(event) => onNameChange(event.target.value)}
-          placeholder="Organization name"
-        />
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-sm">@</span>
+        <Field>
+          <FieldLabel htmlFor="organization-edit-name">Name</FieldLabel>
           <Input
+            id="organization-edit-name"
             type="text"
-            value={editSlug}
-            onChange={(event) => onSlugChange(event.target.value.replace(/[^a-z0-9-]/g, ""))}
-            placeholder="slug"
-            pattern="[a-z0-9-]+"
+            value={editName}
+            onChange={(event) => onNameChange(event.target.value)}
+            placeholder="Organization name"
           />
-        </div>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="organization-edit-slug">Slug</FieldLabel>
+          <InputGroup>
+            <InputGroupAddon>
+              <InputGroupText>@</InputGroupText>
+            </InputGroupAddon>
+            <InputGroupInput
+              id="organization-edit-slug"
+              type="text"
+              value={editSlug}
+              onChange={(event) => onSlugChange(event.target.value.replace(/[^a-z0-9-]/g, ""))}
+              placeholder="slug"
+              pattern="[a-z0-9-]+"
+              className="font-mono"
+            />
+          </InputGroup>
+        </Field>
       </div>
       <div className="flex gap-2">
         <Button onClick={onSave} disabled={isPending || !editName || !editSlug}>

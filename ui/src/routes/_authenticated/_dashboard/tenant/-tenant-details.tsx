@@ -1,6 +1,15 @@
 import { PencilIcon } from "@phosphor-icons/react";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import { Button, Card, CardContent, InfoRow, Input, SectionHeader } from "@/components";
+import {
+  Button,
+  Card,
+  CardContent,
+  Field,
+  FieldLabel,
+  InfoRow,
+  Input,
+  SectionHeader,
+} from "@/components";
 import type { TenantRecord } from "./-tenant-types";
 
 export function TenantDetails({
@@ -56,16 +65,14 @@ export function TenantDetails({
               }}
               className="space-y-4"
             >
-              <InfoRow
-                label="name"
-                value={
-                  <Input
-                    value={editor.name}
-                    onChange={(e) => editor.onNameChange(e.target.value)}
-                    className="max-w-xs"
-                  />
-                }
-              />
+              <Field className="max-w-xs">
+                <FieldLabel htmlFor="tenant-edit-name">name</FieldLabel>
+                <Input
+                  id="tenant-edit-name"
+                  value={editor.name}
+                  onChange={(e) => editor.onNameChange(e.target.value)}
+                />
+              </Field>
               <div className="flex gap-2 pt-1">
                 <Button type="submit" size="sm" disabled={editor.isPending}>
                   save

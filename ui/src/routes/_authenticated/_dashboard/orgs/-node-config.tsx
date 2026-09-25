@@ -534,15 +534,16 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                     placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
                     disabled={!editable}
                   />
-                  <button
+                  <Button
                     type="button"
                     onClick={() => void onVerifyUiBundle()}
                     disabled={!editable || computing || !draft.uiProduction}
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                    variant="link"
+                    size="xs"
                     data-testid="orgs-node-config-verify"
                   >
                     {computing ? "hashing…" : "verify · fill integrity from the bundle"}
-                  </button>
+                  </Button>
                 </div>
                 <ConfigField
                   id="orgs-node-config-ui-integrity"
@@ -569,15 +570,16 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                         placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
                         disabled={!editable}
                       />
-                      <button
+                      <Button
                         type="button"
                         onClick={() => void onVerifySsrBundle()}
                         disabled={!editable || computing || !draft.ssrUrl}
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                        variant="link"
+                        size="xs"
                         data-testid="orgs-node-config-verify-ssr"
                       >
                         {computing ? "hashing…" : "verify · fill integrity from the bundle"}
-                      </button>
+                      </Button>
                     </div>
                     <ConfigField
                       id="orgs-node-config-ssr-integrity"
@@ -670,6 +672,7 @@ function ConfigField({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
+        className="font-mono"
         data-testid={id}
       />
     </Field>

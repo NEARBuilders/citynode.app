@@ -133,14 +133,16 @@ export function OnboardingTab({
               <ul className="divide-y divide-border">
                 {codes.map((code) => (
                   <li key={code.id} className="flex items-center justify-between py-2 gap-2">
-                    <button
+                    <Button
                       type="button"
-                      className="text-sm text-foreground truncate text-left hover:underline"
+                      variant="link"
+                      size="xs"
+                      className="min-w-0 justify-start"
                       onClick={() => setSelectedCodeId(code.id)}
                       data-testid={`onboard.code-${code.id}`}
                     >
-                      {code.eventName}
-                    </button>
+                      <span className="truncate">{code.eventName}</span>
+                    </Button>
                     <div className="flex shrink-0 items-center gap-3">
                       <span
                         className="text-xs text-muted-foreground"

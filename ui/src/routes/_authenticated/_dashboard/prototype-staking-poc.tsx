@@ -1377,12 +1377,13 @@ function NodeLifecyclePocPage() {
                         connect endowment via Trezu
                       </PocConnectField>
                     ) : (
-                      <PocFormField form={form} name="endowment" label="Endowment treasury" />
+                      <PocFormField form={form} name="endowment" label="Endowment treasury" mono />
                     )}
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
+                      size="xs"
                       onClick={() => form.setFieldValue("endowmentLinked", !values.endowmentLinked)}
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground"
                       data-testid="poc-link-treasuries"
                     >
                       {values.endowmentLinked ? (
@@ -1394,13 +1395,14 @@ function NodeLifecyclePocPage() {
                           <LinkBreakIcon className="h-3 w-3" /> separate treasuries
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                   <PocFormField
                     form={form}
                     name="pool"
                     label="Staking pool"
                     placeholder={POOL_PLACEHOLDER}
+                    mono
                   />
                   <PocFormField
                     form={form}
@@ -2030,6 +2032,7 @@ function PocField({
         placeholder={placeholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        className="font-mono"
         data-testid={id}
       />
     </Field>
@@ -2045,6 +2048,7 @@ function PocFormField({
   type,
   placeholder,
   disabled,
+  mono,
 }: {
   form: PocForm;
   name: PocFormFieldName;
@@ -2052,6 +2056,7 @@ function PocFormField({
   type?: string;
   placeholder?: string;
   disabled?: boolean;
+  mono?: boolean;
 }) {
   return (
     <form.Field name={name}>
@@ -2065,6 +2070,7 @@ function PocFormField({
             placeholder={placeholder}
             disabled={disabled}
             onChange={(event) => field.handleChange(event.target.value)}
+            className={mono ? "font-mono" : undefined}
             data-testid={`poc-${name}`}
           />
         </Field>
