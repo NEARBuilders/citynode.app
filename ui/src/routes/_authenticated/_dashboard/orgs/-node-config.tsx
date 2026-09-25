@@ -465,7 +465,7 @@ export function NodeConfigTab({
         </div>
       </section>
 
-      {daoOwned && <ConnectDao />}
+      {daoOwned && <ConnectDao purpose="community-settings" />}
 
       <section className="flex flex-col gap-6">
         <SectionHeader
