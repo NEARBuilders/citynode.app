@@ -1,5 +1,6 @@
-import { ArrowLeftIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, ArrowsInIcon, ArrowsOutIcon } from "@phosphor-icons/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Button } from "@/components";
 import { useClientValue } from "@/hooks";
@@ -29,9 +30,23 @@ function OnboardingStationPage() {
     null,
   );
 
+  const [fullscreen, setFullscreen] = useState(false);
+  const canFullscreen = useClientValue(() => document.fullscreenEnabled === true, false);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement !== null);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void document.documentElement.requestFullscreen().catch(() => {});
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center px-6 py-4">
+      <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <Button
           type="button"
           variant="ghost"
@@ -42,6 +57,22 @@ function OnboardingStationPage() {
           <ArrowLeftIcon data-icon="inline-start" />
           Exit station
         </Button>
+        {canFullscreen && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleFullscreen}
+            data-testid="station.fullscreen"
+          >
+            {fullscreen ? (
+              <ArrowsInIcon data-icon="inline-start" />
+            ) : (
+              <ArrowsOutIcon data-icon="inline-start" />
+            )}
+            {fullscreen ? "Exit full screen" : "Full screen"}
+          </Button>
+        )}
       </header>
       {gatewayOrigin && (
         <OnboardingStation
