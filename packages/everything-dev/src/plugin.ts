@@ -850,7 +850,6 @@ export default createPlugin({
         privateKey: input.privateKey,
         wallet: input.wallet,
         registry: input.registry,
-        cdn: input.cdn,
       });
 
       if (result.publishConfig) {

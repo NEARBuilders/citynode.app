@@ -83,7 +83,13 @@ const PLUGIN_ERROR_PATTERNS = [
   /Cannot find module/i,
 ];
 
-const SERVICE_CONFIGS = {
+const SERVICE_CONFIGS: Record<
+  string,
+  Pick<
+    ServiceDescriptor,
+    "command" | "args" | "env" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
+  >
+> = {
   host: {
     command: "bun",
     args: ["run", "dev"],
