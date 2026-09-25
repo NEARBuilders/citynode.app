@@ -203,7 +203,10 @@ async function completeLogin(
   // The token endpoint returns the raw session token; Better Auth session
   // cookies carry an HMAC signature, so exchange the token for a signed
   // session cookie via the device-link claim endpoint (the QR pairing path).
-  const claim = await authFetch(siteUrl, "/device-link/claim", { token: sessionToken });
+  const claim = await authFetch(siteUrl, "/device-link/claim", {
+    token: sessionToken,
+    client_id: DEFAULT_CLIENT_ID,
+  });
   if (claim.status !== 200) {
     const detail = (claim.json as { message?: string }).message;
     throw new Error(

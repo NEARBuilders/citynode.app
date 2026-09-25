@@ -81,7 +81,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         setClaimed(true);
         const claim = await auth.$fetch("/device-link/claim", {
           method: "POST",
-          body: { token },
+          body: { token, client_id: getDeviceLinkClientId() },
         });
         if (claim.error) {
           setFailed("Failed to complete sign-in");

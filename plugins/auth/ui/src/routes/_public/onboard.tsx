@@ -34,7 +34,6 @@ function OnboardPage() {
   const queryClient = useQueryClient();
   const { code } = Route.useSearch();
   const { apiClient, runtimeConfig } = Route.useRouteContext();
-  const gatewayHost = new URL(getGatewayOrigin(runtimeConfig)).host;
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const { data: info } = useQuery({
     queryKey: ["onboarding-info", code],
@@ -106,6 +105,7 @@ function OnboardPage() {
   };
 
   if (redeemed) {
+    const gatewayHost = new URL(getGatewayOrigin(runtimeConfig)).host;
     return (
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
