@@ -1,6 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEVICE_LINK_CLAIM_TTL_MS } from "../../src/device-link";
 import type { PluginServices } from "../../src/service-types";
-import { createTestServices, createTestUser, type TestUser } from "../helpers";
+import {
+  addTestMember,
+  createTestOrg,
+  createTestServices,
+  createTestUser,
+  type TestUser,
+} from "../helpers";
 
 const CLIENT_ID = "citynode-web";
 const GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
@@ -13,6 +20,31 @@ function authRequest(path: string, init: { method: string; body?: unknown; cooki
     headers,
     ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
   });
+}
+
+async function exchangeApprovedDeviceCode(services: PluginServices, user: TestUser) {
+  const codeRes = await services.handler(
+    authRequest("/device/code", { method: "POST", body: { client_id: CLIENT_ID } }),
+  );
+  const code = (await codeRes.json()) as { device_code: string; user_code: string };
+  await services.handler(
+    authRequest(`/device?user_code=${code.user_code}`, { method: "GET", cookie: user.cookie }),
+  );
+  await services.handler(
+    authRequest("/device/approve", {
+      method: "POST",
+      body: { userCode: code.user_code },
+      cookie: user.cookie,
+    }),
+  );
+  const tokenRes = await services.handler(
+    authRequest("/device/token", {
+      method: "POST",
+      body: { grant_type: GRANT_TYPE, device_code: code.device_code, client_id: CLIENT_ID },
+    }),
+  );
+  expect(tokenRes.status).toBe(200);
+  return ((await tokenRes.json()) as { access_token: string }).access_token;
 }
 
 describe("device link", () => {
@@ -65,7 +97,10 @@ describe("device link", () => {
     expect(token.token_type).toBe("Bearer");
 
     const claimRes = await services.handler(
-      authRequest("/device-link/claim", { method: "POST", body: { token: token.access_token } }),
+      authRequest("/device-link/claim", {
+        method: "POST",
+        body: { token: token.access_token, client_id: CLIENT_ID },
+      }),
     );
     expect(claimRes.status).toBe(200);
     const setCookie = claimRes.headers.get("set-cookie") ?? "";
@@ -96,26 +131,20 @@ describe("device link", () => {
     expect(body.error).toBe("invalid_grant");
   });
 
-  it("rejects empty client ids on the code endpoint but accepts any non-empty one (public-client device flow)", async () => {
-    const empty = await services.handler(
-      authRequest("/device/code", { method: "POST", body: { client_id: "" } }),
-    );
-    expect(empty.status).toBe(400);
+  it("rejects device code requests from any client id other than the configured Device Link client and the bos CLI", async () => {
+    for (const clientId of ["", "everything-dev", "evil-client"]) {
+      const res = await services.handler(
+        authRequest("/device/code", { method: "POST", body: { client_id: clientId } }),
+      );
+      expect(res.status).toBe(400);
+    }
 
-    const unknown = await services.handler(
-      authRequest("/device/code", { method: "POST", body: { client_id: "everything-dev" } }),
-    );
-    expect(unknown.status).toBe(200);
-
-    const tokenRes = await services.handler(
-      authRequest("/device/token", {
-        method: "POST",
-        body: { grant_type: GRANT_TYPE, device_code: "any", client_id: "everything-dev" },
-      }),
-    );
-    expect(tokenRes.status).toBe(400);
-    const body = (await tokenRes.json()) as { error?: string };
-    expect(body.error).toBe("invalid_grant");
+    for (const clientId of [CLIENT_ID, "bos-cli"]) {
+      const res = await services.handler(
+        authRequest("/device/code", { method: "POST", body: { client_id: clientId } }),
+      );
+      expect(res.status).toBe(200);
+    }
   });
 
   it("returns authorization_pending before approval", async () => {
@@ -135,9 +164,114 @@ describe("device link", () => {
     expect(body.error).toBe("authorization_pending");
   });
 
+  it("refuses to claim a valid session token that was not issued by a device-code exchange", async () => {
+    const claimRes = await services.handler(
+      authRequest("/device-link/claim", {
+        method: "POST",
+        body: { token: user.token, client_id: CLIENT_ID },
+      }),
+    );
+    expect(claimRes.status).toBe(401);
+    expect(claimRes.headers.get("set-cookie") ?? "").not.toContain("better-auth.session_token=");
+  });
+
+  it("signs the desktop into the organization the member most recently joined", async () => {
+    const organizer = await createTestUser(services);
+    const nodeOrg = await createTestOrg(services, organizer.userId, { name: "Node Org" });
+    await addTestMember(services, nodeOrg.id, user.userId);
+
+    const token = await exchangeApprovedDeviceCode(services, user);
+    const claimRes = await services.handler(
+      authRequest("/device-link/claim", { method: "POST", body: { token, client_id: CLIENT_ID } }),
+    );
+    const desktopCookie = (claimRes.headers.get("set-cookie") ?? "").split(";")[0];
+
+    const sessionRes = await services.handler(
+      authRequest("/get-session", { method: "GET", cookie: desktopCookie }),
+    );
+    const session = (await sessionRes.json()) as {
+      session?: { activeOrganizationId?: string | null };
+    };
+    expect(session?.session?.activeOrganizationId).toBe(nodeOrg.id);
+  });
+
+  it("refuses to claim a device-code token for a different client id", async () => {
+    const token = await exchangeApprovedDeviceCode(services, user);
+
+    const wrongClient = await services.handler(
+      authRequest("/device-link/claim", {
+        method: "POST",
+        body: { token, client_id: "bos-cli" },
+      }),
+    );
+    expect(wrongClient.status).toBe(401);
+
+    const rightClient = await services.handler(
+      authRequest("/device-link/claim", {
+        method: "POST",
+        body: { token, client_id: CLIENT_ID },
+      }),
+    );
+    expect(rightClient.status).toBe(200);
+  });
+
+  it("claims a device-code token only once", async () => {
+    const token = await exchangeApprovedDeviceCode(services, user);
+
+    const first = await services.handler(
+      authRequest("/device-link/claim", { method: "POST", body: { token, client_id: CLIENT_ID } }),
+    );
+    expect(first.status).toBe(200);
+
+    const second = await services.handler(
+      authRequest("/device-link/claim", { method: "POST", body: { token, client_id: CLIENT_ID } }),
+    );
+    expect(second.status).toBe(401);
+    expect(second.headers.get("set-cookie") ?? "").not.toContain("better-auth.session_token=");
+  });
+
+  describe("claim window", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("refuses a claim made after the window closes", async () => {
+      const token = await exchangeApprovedDeviceCode(services, user);
+
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + DEVICE_LINK_CLAIM_TTL_MS + 1_000);
+
+      const claimRes = await services.handler(
+        authRequest("/device-link/claim", {
+          method: "POST",
+          body: { token, client_id: CLIENT_ID },
+        }),
+      );
+      expect(claimRes.status).toBe(401);
+    });
+
+    it("accepts a claim made inside the window", async () => {
+      const token = await exchangeApprovedDeviceCode(services, user);
+
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + DEVICE_LINK_CLAIM_TTL_MS - 10_000);
+
+      const claimRes = await services.handler(
+        authRequest("/device-link/claim", {
+          method: "POST",
+          body: { token, client_id: CLIENT_ID },
+        }),
+      );
+      expect(claimRes.status).toBe(200);
+    });
+  });
+
   it("rejects unknown tokens on the claim endpoint", async () => {
     const claimRes = await services.handler(
-      authRequest("/device-link/claim", { method: "POST", body: { token: "not-a-real-token" } }),
+      authRequest("/device-link/claim", {
+        method: "POST",
+        body: { token: "not-a-real-token", client_id: CLIENT_ID },
+      }),
     );
     expect(claimRes.status).toBe(401);
   });
@@ -177,7 +311,10 @@ describe("device link", () => {
     expect(second.status).toBe(400);
 
     const claimRes = await services.handler(
-      authRequest("/device-link/claim", { method: "POST", body: { token: token.access_token } }),
+      authRequest("/device-link/claim", {
+        method: "POST",
+        body: { token: token.access_token, client_id: CLIENT_ID },
+      }),
     );
     expect(claimRes.status).toBe(200);
     const setCookie = claimRes.headers.get("set-cookie") ?? "";

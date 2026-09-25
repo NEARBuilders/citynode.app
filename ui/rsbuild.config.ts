@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CORE_UI_PLUGIN_KEY, createUiRsbuildConfig } from "everything-dev/ui/mf-build";
+import { CORE_UI_PLUGIN_KEY, createUiRsbuildConfig } from "every-plugin/ui/mf-build";
 import pkg from "./package.json";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -77,7 +77,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
   const normalizedName = sanitizeContainerName(pkg.name);
   const manifestGen = () =>
     uiManifestGenPlugin({ workspaceRoot: workspaceRootAbsolute, pluginName: manifestName });
-  const uiSharedDeps = createUiSharedDeps(pkg, { role });
+  const uiSharedDeps = createUiSharedDeps(pkg, { role, workspaceRoot: workspaceRootAbsolute });
 
   const webEnvironment: EnvironmentConfig = {
     plugins: [

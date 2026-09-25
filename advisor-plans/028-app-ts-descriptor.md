@@ -39,7 +39,7 @@ The descriptor demo executed on `feat/platform-cdn` (the branch carrying plan 02
 - **Priority**: P1
 - **Effort**: L
 - **Risk**: MED
-- **Depends on**: 025-landing-carve-out.md, 026-shell-into-host.md
+- **Depends on**: done/025-landing-carve-out.md, done/026-shell-into-host.md (superseded by the manifest-first rework — ADR 0007/0008; see 034)
 - **Category**: architecture / dx / migration
 - **Planned at**: commit `00d162cb`, 2026-09-18
 

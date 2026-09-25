@@ -30,7 +30,6 @@ export default defineConfig({
     "src/ui/auth.ts",
     "src/ui/manifest/index.ts",
     "src/ui/manifest-generator.ts",
-    "src/ui/mf-build/index.ts",
   ],
   format: ["cjs", "esm"],
   dts: { tsconfig: "./tsconfig.dts.json" },

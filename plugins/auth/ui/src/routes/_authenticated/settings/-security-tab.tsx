@@ -1,10 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useAuthClient } from "everything-dev/ui/auth";
+import { clearAuthenticatedQueries, useAuthClient } from "everything-dev/ui/auth";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Field, FieldLabel, Input } from "@/components";
-import { clearAuthenticatedQueries } from "@/lib/session-cache";
 import { ActionCard } from "./-action-card";
 
 export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: boolean | null } }) {

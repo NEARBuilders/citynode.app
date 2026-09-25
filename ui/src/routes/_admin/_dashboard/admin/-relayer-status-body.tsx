@@ -1,4 +1,4 @@
-import { InfoRow } from "@/components/ui/info-row";
+import { InfoRow } from "@/components/info-row";
 import type { RelayerInfoData } from "@/lib/use-relayer";
 
 export function RelayerStatusBody({

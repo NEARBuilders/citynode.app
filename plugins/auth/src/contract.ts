@@ -214,6 +214,7 @@ const teamMemberSchema = z.object({
 
 const onboardingCodeSummarySchema = z.object({
   id: z.string(),
+  eventId: z.string().nullable(),
   eventName: z.string(),
   teamId: z.string(),
   role: z.string(),
@@ -718,10 +719,11 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/v1/auth/onboarding/codes" })
     .input(
       z.object({
-        eventName: z.string().min(1).max(64),
+        eventId: z.string().min(1).max(200),
+        eventName: z.string().trim().min(1).max(160),
         organizationId: z.string().optional(),
         maxUses: z.number().int().min(1).max(500).optional(),
-        expiresInHours: z.number().int().min(1).max(168).optional(),
+        expiresAt: z.date().optional(),
       }),
     )
     .output(onboardingCodeSummarySchema.extend({ code: z.string() }))
@@ -746,6 +748,17 @@ export const contract = oc.router({
       }),
     )
     .output(z.object({ success: z.boolean() }))
+    .errors(Errors),
+
+  getOnboardingStation: oc
+    .route({ method: "GET", path: "/v1/auth/onboarding/codes/station" })
+    .input(
+      z.object({
+        codeId: z.string(),
+        organizationId: z.string().optional(),
+      }),
+    )
+    .output(onboardingCodeSummarySchema.extend({ code: z.string() }))
     .errors(Errors),
 
   getOnboardingStatus: oc
@@ -782,6 +795,7 @@ export const contract = oc.router({
           role: z.string(),
           expired: z.boolean(),
           revoked: z.boolean(),
+          usedUp: z.boolean(),
         })
         .nullable(),
     )

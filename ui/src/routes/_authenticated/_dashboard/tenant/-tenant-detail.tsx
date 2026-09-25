@@ -11,7 +11,7 @@ import {
 } from "@/app";
 import { PageContainer, SectionHeader } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
-import { EnableGaslessWrites } from "@/components/ui/enable-gasless-writes";
+import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";

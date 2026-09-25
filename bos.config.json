@@ -65,12 +65,21 @@
         "NEAR_RELAYER_PRIVATE_KEY_TESTNET"
       ],
       "variables": {
+        "organizationMembershipLimit": 1000,
         "deviceLink": {
           "clientId": "citynode-web"
         },
         "passkey": {
           "rpID": "citynode.app",
-          "rpName": "City Nodes"
+          "rpName": "City Nodes",
+          "gatewayOrigins": {
+            "mainnet": [
+              "https://citynode.app"
+            ],
+            "testnet": [
+              "https://testnet.citynode.app"
+            ]
+          }
         },
         "socialProviders": {
           "github": {},

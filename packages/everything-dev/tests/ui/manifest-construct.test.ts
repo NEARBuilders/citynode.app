@@ -1,4 +1,4 @@
-import { isRedirect } from "@tanstack/react-router";
+import { createRouter, isRedirect } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
 import {
   constructTree,
@@ -101,6 +101,101 @@ describe("constructTree", () => {
     expect(wizard.options.beforeLoad).toBe(beforeLoad);
     expect(wizard.options.head).toBeTypeOf("function");
     expect(wizard.options.staticData).toEqual({ nav: { label: "Wizard" } });
+  });
+
+  it("validates a composed plugin route's search before the route sees it", async () => {
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [mountLayout("public"), route("_public/dashboard", "/dashboard")],
+    };
+    const auth: TestPlugin = {
+      key: "auth",
+      routes: [route("_public/login", "/login")],
+      optionsById: {
+        "_public/login": {
+          validateSearch: (search: Record<string, unknown>) => ({
+            redirect:
+              typeof search.redirect === "string" && search.redirect.startsWith("/")
+                ? search.redirect
+                : "/dashboard",
+          }),
+        },
+      },
+    };
+
+    const tree = await construct([core, auth]);
+    const router = createRouter({ routeTree: tree.rootRoute });
+    const login = router.matchRoutes("/login", { redirect: "https://example.com/" }).at(-1);
+
+    expect(login?.search).toEqual({ redirect: "/dashboard" });
+  });
+
+  it("keeps a composed plugin route's ssr, loaderDeps, search middlewares, context, params and caching options", async () => {
+    const loaderDeps = ({ search }: { search: { page: number } }) => ({ page: search.page });
+    const middleware = ({ search, next }: { search: unknown; next: (s: unknown) => unknown }) =>
+      next(search);
+    const context = () => ({ fromContext: true });
+    const params = { parse: (raw: Record<string, string>) => raw };
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [mountLayout("public")],
+      optionsById: { _public: { ssr: "data-only" } },
+    };
+    const auth: TestPlugin = {
+      key: "auth",
+      routes: [route("_public/login", "/login")],
+      optionsById: {
+        "_public/login": {
+          ssr: false,
+          loaderDeps,
+          search: { middlewares: [middleware] },
+          context,
+          params,
+          staleTime: 1000,
+          gcTime: 2000,
+          preloadStaleTime: 3000,
+          pendingMs: 100,
+          pendingMinMs: 200,
+          shouldReload: false,
+        },
+      },
+    };
+
+    const tree = await construct([core, auth]);
+    const mount = (tree.rootRoute as unknown as { children: Array<Record<string, any>> })
+      .children[0]!;
+    const login = mount.children[0]!;
+    expect(mount.options.ssr).toBe("data-only");
+    expect(login.options).toMatchObject({
+      ssr: false,
+      loaderDeps,
+      search: { middlewares: [middleware] },
+      context,
+      params,
+      staleTime: 1000,
+      gcTime: 2000,
+      preloadStaleTime: 3000,
+      pendingMs: 100,
+      pendingMinMs: 200,
+      shouldReload: false,
+    });
+  });
+
+  it("carries the core's root search validation and ssr onto the root route", async () => {
+    const validateSearch = (search: Record<string, unknown>) => ({
+      theme: search.theme === "dark" ? "dark" : "light",
+    });
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [mountLayout("public"), route("_public/home", "/home")],
+    };
+
+    const tree = await construct([core], { validateSearch, ssr: true });
+    const router = createRouter({ routeTree: tree.rootRoute });
+    const [root] = router.matchRoutes("/home", { theme: "neon" });
+
+    expect(root?.search).toEqual({ theme: "light" });
+    expect((tree.rootRoute as unknown as { options: { ssr: unknown } }).options.ssr).toBe(true);
   });
 
   it("rejects cross-plugin path collisions under the same mount parent", async () => {

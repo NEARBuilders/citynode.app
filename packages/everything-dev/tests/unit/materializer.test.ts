@@ -48,13 +48,6 @@ async function materializeAll(configDir: string, runtimeConfig: RuntimeConfig): 
       const m = yield* InfraMaterializer;
       yield* m.materializeTemplate(configDir, runtimeConfig);
       yield* m.materializeTestInfra(configDir, runtimeConfig);
-      yield* m.materializeCompose(configDir, runtimeConfig);
-      yield* m.persistPortState(
-        configDir,
-        // computation-only helper: just write the empty state so we can verify
-        // the materialize-driven path produces the expected file shape
-        { postgresPorts: {}, redisPorts: {} },
-      );
     }).pipe(Effect.provide(InfraMaterializerLive)),
   );
 }
@@ -75,8 +68,6 @@ describe("InfraMaterializer Tag + Layer", () => {
         const m = yield* InfraMaterializer;
         expect(typeof m.materializeTemplate).toBe("function");
         expect(typeof m.materializeTestInfra).toBe("function");
-        expect(typeof m.materializeCompose).toBe("function");
-        expect(typeof m.persistPortState).toBe("function");
       }).pipe(Effect.provide(InfraMaterializerLive)),
     );
   });
@@ -88,7 +79,7 @@ describe("InfraMaterializer Tag + Layer", () => {
     expect(Layer.isLayer(InfraMaterializerLive)).toBe(true);
   });
 
-  it("writes .env.example, .env.test, and docker-compose.yml — and never touches .env", async () => {
+  it("writes .env.example and .env.test — and never touches .env or docker-compose.yml", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-materializer-"));
     tempDirs.push(dir);
 
@@ -97,7 +88,7 @@ describe("InfraMaterializer Tag + Layer", () => {
     expect(existsSync(join(dir, ".env.example"))).toBe(true);
     expect(existsSync(join(dir, ".env"))).toBe(false);
     expect(existsSync(join(dir, ".env.test"))).toBe(true);
-    expect(existsSync(join(dir, "docker-compose.yml"))).toBe(true);
+    expect(existsSync(join(dir, "docker-compose.yml"))).toBe(false);
   });
 
   it(".env is syncEnvFile's domain — the materializer must not clobber user keys", async () => {
@@ -118,34 +109,11 @@ describe("InfraMaterializer Tag + Layer", () => {
     const first = {
       example: statSync(join(dir, ".env.example")).mtimeMs,
       test: statSync(join(dir, ".env.test")).mtimeMs,
-      compose: statSync(join(dir, "docker-compose.yml")).mtimeMs,
     };
     await new Promise((r) => setTimeout(r, 1100));
     await materializeAll(dir, buildRuntimeConfig());
     expect(statSync(join(dir, ".env.example")).mtimeMs).toBe(first.example);
     expect(statSync(join(dir, ".env.test")).mtimeMs).toBe(first.test);
-    expect(statSync(join(dir, "docker-compose.yml")).mtimeMs).toBe(first.compose);
-  });
-
-  it("persistPortState writes .bos/infra-state.json with the given state", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-materializer-"));
-    tempDirs.push(dir);
-
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const m = yield* InfraMaterializer;
-        yield* m.persistPortState(dir, {
-          postgresPorts: { api: 5432, auth: 5433 },
-          redisPorts: {},
-          devPorts: { host: 3000, api: 3001 },
-        });
-      }).pipe(Effect.provide(InfraMaterializerLive)),
-    );
-
-    expect(existsSync(join(dir, ".bos", "infra-state.json"))).toBe(true);
-    const state = JSON.parse(readFileSync(join(dir, ".bos", "infra-state.json"), "utf-8"));
-    expect(state.postgresPorts).toEqual({ api: 5432, auth: 5433 });
-    expect(state.devPorts).toEqual({ host: 3000, api: 3001 });
   });
 });
 
@@ -220,9 +188,9 @@ describe("materializeViaLayer orchestration", () => {
     expect(readFileSync(join(dir, ".env.example"), "utf-8")).toBe(committedTemplate);
     expect(statSync(join(dir, ".env.example")).mtimeMs).toBe(mtimeBefore);
 
-    // ephemeral runs still need test infra and compose for the stack
+    // ephemeral runs still materialize test infra
     expect(existsSync(join(dir, ".env.test"))).toBe(true);
-    expect(existsSync(join(dir, "docker-compose.yml"))).toBe(true);
+    expect(existsSync(join(dir, "docker-compose.yml"))).toBe(false);
   });
 
   it("defaults to env-var detection (BOS_NO_PERSIST_PORTS=1 → ephemeral)", async () => {
@@ -238,7 +206,7 @@ describe("materializeViaLayer orchestration", () => {
       await materializeViaLayer(dir, buildRuntimeConfigForPort(4100));
       expect(readFileSync(join(dir, ".env.example"), "utf-8")).toBe(committedTemplate);
       expect(existsSync(join(dir, ".env.test"))).toBe(true);
-      expect(existsSync(join(dir, "docker-compose.yml"))).toBe(true);
+      expect(existsSync(join(dir, "docker-compose.yml"))).toBe(false);
     } finally {
       if (previous === undefined) delete process.env.BOS_NO_PERSIST_PORTS;
       else process.env.BOS_NO_PERSIST_PORTS = previous;

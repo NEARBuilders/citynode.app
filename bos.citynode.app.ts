@@ -49,6 +49,7 @@ export default App({
       "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
     ],
     variables: {
+      organizationMembershipLimit: 1000,
       deviceLink: { clientId: "citynode-web" },
       passkey: { rpID: "citynode.app", rpName: "City Nodes" },
       socialProviders: { github: {}, google: {} },

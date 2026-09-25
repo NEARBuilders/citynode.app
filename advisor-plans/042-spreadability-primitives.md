@@ -11,7 +11,7 @@
 - **Priority**: P1 (Phase A); Phase B/C are direction, not scope
 - **Effort**: M (Phase A — about a day incl. tests)
 - **Risk**: MED — touches the publish credential path and the storage route's authz
-- **Depends on**: 029-platform-cdn (merged), plan 021's session credential model
+- **Depends on**: done/029-platform-cdn (merged), plan 021's session credential model
 - **Category**: architecture / direction
 - **Planned at**: `a7fff4671` (feat/platform-cdn, 2026-09-23); executes after the platform-CDN PR merges
 
