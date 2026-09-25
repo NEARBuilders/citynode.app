@@ -1,12 +1,37 @@
-import { BankIcon, PlusIcon } from "@phosphor-icons/react";
+import {
+  BuildingsIcon,
+  CaretRightIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  LocalDate,
+  PageHeader,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/data-table";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
+import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
+import { filterTenants } from "./-tenant-wizard";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
@@ -19,26 +44,28 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/")({
     ]);
   },
   head: () => ({
-    meta: [{ title: "Tenants | app" }],
+    meta: [{ title: "Tenants | Admin | app" }],
   }),
   component: AdminTenants,
 });
 
-const STATUS_VARIANT: Record<Tenant["status"], "default" | "destructive" | "secondary"> = {
-  active: "default",
-  pending: "secondary",
-  suspended: "destructive",
-  pending_deletion: "secondary",
+const STATUS_FILTERS = ["all", "active", "pending", "suspended"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All",
+  active: "Active",
+  pending: "Pending",
+  suspended: "Suspended",
 };
 
 function AdminTenants() {
   const apiClient = useApiClient();
-
   const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
   const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
-  const tenants = tenantsQuery.data ?? [];
   const isLoading = tenantsQuery.isLoading || nodesQuery.isLoading;
   const error = tenantsQuery.error ?? nodesQuery.error;
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [query, setQuery] = useState("");
 
   const slugByTenantId = useMemo(() => {
     const map = new Map<string, string>();
@@ -48,34 +75,37 @@ function AdminTenants() {
     return map;
   }, [nodesQuery.data]);
 
+  const tenants = useMemo(
+    () => filterTenants(tenantsQuery.data ?? [], { status, query, slugByTenantId }),
+    [tenantsQuery.data, status, query, slugByTenantId],
+  );
+
   const columns = useMemo<DataTableColumnDef<Tenant>[]>(
     () => [
       {
         accessorKey: "name",
         header: "Name",
         cell: ({ row }) => (
-          <Link
-            to="/tenant/$tenantId"
-            params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
-            className="font-medium text-foreground hover:underline"
-          >
-            {row.original.name}
-          </Link>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Link
+              to="/tenant/$tenantId"
+              params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
+              className="font-medium text-foreground hover:underline"
+            >
+              {row.original.name}
+            </Link>
+            <span className="font-mono text-xs text-muted-foreground">
+              {slugByTenantId.get(row.original.id) ?? row.original.id.slice(0, 8)}
+            </span>
+          </div>
         ),
       },
       {
         accessorKey: "accountId",
-        header: "Account",
+        header: "DAO account",
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">{row.original.accountId}</span>
-        ),
-      },
-      {
-        accessorKey: "slug",
-        header: "Slug",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            {slugByTenantId.get(row.original.id) ?? row.original.id.slice(0, 8)}
+          <span className="block max-w-64 truncate font-mono text-xs text-muted-foreground">
+            {row.original.accountId}
           </span>
         ),
       },
@@ -83,85 +113,152 @@ function AdminTenants() {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge variant={STATUS_VARIANT[row.original.status]}>{row.original.status}</Badge>
+          <Badge variant={tenantStatusTone(row.original.status)}>
+            {humanize(row.original.status)}
+          </Badge>
         ),
       },
       {
         accessorKey: "createdAt",
         header: "Created",
-        cell: ({ row }) =>
-          row.original.createdAt ? new Date(row.original.createdAt).toLocaleDateString() : "—",
-      },
-      {
-        id: "actions",
-        header: "",
         cell: ({ row }) => (
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={
-              <Link
-                to="/tenant/$tenantId"
-                params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
-              />
-            }
-          >
-            open
-          </Button>
+          <span className="text-muted-foreground">
+            <LocalDate value={row.original.createdAt} fallback="—" />
+          </span>
         ),
       },
     ],
     [slugByTenantId],
   );
 
+  const total = tenantsQuery.data?.length ?? 0;
+
   return (
-    <div className="space-y-6">
-      <SectionHeader
+    <>
+      <PageHeader
         title="Tenants"
-        action={
-          <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
-            <PlusIcon size={14} />
-            new tenant
-          </Button>
+        description="Each tenant is a community deployment owned by a DAO."
+        actions={
+          total > 0 ? (
+            <Button
+              nativeButton={false}
+              render={<Link to="/admin/tenants/new" />}
+              data-testid="admin-tenants-create"
+            >
+              <PlusIcon />
+              Create tenant
+            </Button>
+          ) : undefined
         }
+        headerTestId="admin-tenants.heading"
       />
 
-      {isLoading ? (
-        <Card className="p-6 space-y-3">
-          {[1, 2, 3].map((n) => (
-            <Skeleton key={n} className="h-10 w-full" />
-          ))}
-        </Card>
-      ) : error ? (
-        <EmptyState
-          icon={BankIcon}
-          title="Failed to load tenants"
-          description={error.message || "Something went wrong while loading tenants."}
-          action={
-            <Button
-              variant="outline"
-              onClick={() => Promise.all([tenantsQuery.refetch(), nodesQuery.refetch()])}
+      <section className="flex flex-col gap-6">
+        {total > 0 && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Tabs
+              value={status}
+              onValueChange={(value) => {
+                const next = STATUS_FILTERS.find((filter) => filter === value);
+                if (next) setStatus(next);
+              }}
             >
-              retry
-            </Button>
-          }
-        />
-      ) : tenants.length === 0 ? (
-        <EmptyState
-          icon={BankIcon}
-          title="No tenants yet"
-          description="Create your first tenant deployment to get started."
-          action={
-            <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
-              <PlusIcon size={14} />
-              create tenant
-            </Button>
-          }
-        />
-      ) : (
-        <DataTable columns={columns} data={tenants} />
-      )}
-    </div>
+              <TabsList className="max-w-full justify-start overflow-x-auto">
+                {STATUS_FILTERS.map((filter) => (
+                  <TabsTrigger
+                    key={filter}
+                    value={filter}
+                    data-testid={`admin-tenants-filter-${filter}`}
+                  >
+                    {STATUS_FILTER_LABELS[filter]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <InputGroup className="sm:ml-auto sm:max-w-xs">
+              <InputGroupAddon>
+                <MagnifyingGlassIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search name, slug or DAO"
+                aria-label="Search tenants"
+                data-testid="admin-tenants-search"
+              />
+            </InputGroup>
+          </div>
+        )}
+
+        {isLoading ? (
+          <ListSkeleton />
+        ) : error ? (
+          <EmptyState
+            icon={BuildingsIcon}
+            title="Couldn't load tenants"
+            description={error.message || "Something went wrong while loading tenants."}
+            action={
+              <Button
+                variant="outline"
+                onClick={() => Promise.all([tenantsQuery.refetch(), nodesQuery.refetch()])}
+              >
+                Retry
+              </Button>
+            }
+          />
+        ) : total === 0 ? (
+          <EmptyState
+            icon={BuildingsIcon}
+            title="No tenants yet"
+            description="Create the first community deployment."
+            action={
+              <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
+                <PlusIcon />
+                Create tenant
+              </Button>
+            }
+          />
+        ) : tenants.length === 0 ? (
+          <EmptyState
+            icon={BuildingsIcon}
+            title="No matching tenants"
+            description="Try another status or search."
+          />
+        ) : (
+          <>
+            <div className="hidden sm:block" data-testid="admin-tenants-table">
+              <DataTable columns={columns} data={tenants} />
+            </div>
+            <ItemGroup className="sm:hidden" data-testid="admin-tenants-rows">
+              {tenants.map((tenant) => (
+                <Item
+                  key={tenant.id}
+                  variant="outline"
+                  render={
+                    <Link
+                      to="/tenant/$tenantId"
+                      params={{ tenantId: slugByTenantId.get(tenant.id) ?? tenant.id }}
+                    />
+                  }
+                >
+                  <ItemContent className="min-w-0">
+                    <ItemTitle>{tenant.name}</ItemTitle>
+                    <ItemDescription>
+                      <span className="font-mono">{tenant.accountId}</span>
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant={tenantStatusTone(tenant.status)}>
+                      {humanize(tenant.status)}
+                    </Badge>
+                    <CaretRightIcon className="size-4 text-muted-foreground" />
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </>
+        )}
+      </section>
+    </>
   );
 }
