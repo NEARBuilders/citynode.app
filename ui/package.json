@@ -19,7 +19,7 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/core": "catalog:",
     "@better-auth/passkey": "catalog:",
-    "@hot-labs/near-connect": "catalog:",
+    "@fastnear/near-connect": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/tanstack-query": "catalog:",

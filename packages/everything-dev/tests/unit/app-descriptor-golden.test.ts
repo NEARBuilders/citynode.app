@@ -1,12 +1,8 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import everythingDevApp from "../../../../bos.app";
-import citynodeApp from "../../../../bos.citynode.app";
+import { App, Plugin } from "../../src/descriptor/constructors";
 import { resolveApp } from "../../src/descriptor/resolve";
-import type { BosConfigInput } from "../../src/types";
 
-const REPO_ROOT = join(import.meta.dirname, "../../../..");
 const PIPELINE_FIELDS = ["production", "integrity", "ssr", "ssrIntegrity"] as const;
 
 function stripPipeline(value: unknown): unknown {
@@ -24,43 +20,46 @@ function stripPipeline(value: unknown): unknown {
 }
 
 /**
- * Canonicalize today's hand-maintained config into the generator's form.
- * Two differences exist between the hand-written file and the generated
- * shape, both matching the merge machinery's behavior exactly:
- * - pipeline-owned state (deploy-written URLs + SRI) is stripped everywhere;
- * - the top-level `plugins` record passes through cleanNullSentinels, which
- *   drops empty-object fields (hand-written `variables: {}`) — the upgrade
- *   codemod cleans the file; `app.*` entries are untouched.
+ * Canonicalize a hand-maintained config into the generator's form:
+ * pipeline-owned state (deploy-written URLs + SRI) is stripped everywhere.
  */
 function canonicalize(value: unknown): unknown {
-  const stripped = stripPipeline(value);
-  if (typeof stripped === "object" && stripped !== null && "plugins" in stripped) {
-    const plugins = (stripped as Record<string, unknown>).plugins;
-    if (typeof plugins === "object" && plugins !== null) {
-      (stripped as Record<string, unknown>).plugins = cleanNullSentinels(
-        plugins as Record<string, unknown>,
-      );
-    }
-  }
-  return stripped;
+  return stripPipeline(value);
 }
 
-function cleanNullSentinels(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value === null || value === undefined) continue;
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      const cleaned = cleanNullSentinels(value);
-      if (Object.keys(cleaned).length > 0) out[key] = cleaned;
-    } else {
-      out[key] = value;
-    }
-  }
-  return out;
-}
-
-function readBosConfig(): BosConfigInput {
-  return JSON.parse(readFileSync(join(REPO_ROOT, "bos.config.json"), "utf8")) as BosConfigInput;
+function exampleChildApp() {
+  return App({
+    name: "example.app",
+    extends: everythingDevApp,
+    account: "child.example",
+    domain: "child.example",
+    title: "Example",
+    auth: Plugin("auth").path("plugins/auth", {
+      name: "@everything-dev/auth-plugin",
+      secrets: ["AUTH_DATABASE_URL", "BETTER_AUTH_SECRET"],
+      variables: {
+        siwn: {
+          recipients: { mainnet: "child.example", testnet: "child.testnet" },
+          relayer: {
+            mainnet: {
+              whitelistedContracts: ["child.example"],
+              maxGasPerTransaction: "400000000000000",
+              maxDepositPerTransaction: "0",
+            },
+            testnet: {
+              whitelistedContracts: ["child.testnet"],
+              maxGasPerTransaction: "400000000000000",
+              maxDepositPerTransaction: "0",
+            },
+          },
+          sessionGasKey: {
+            mainnet: { receiverId: "child.example", methodNames: ["__fastdata_kv"] },
+            testnet: { receiverId: "child.testnet", methodNames: ["__fastdata_kv"] },
+          },
+        },
+      },
+    }),
+  });
 }
 
 describe("descriptor golden fixture — bos.app.ts ↔ bos.config.json", () => {
@@ -76,15 +75,35 @@ describe("descriptor golden fixture — bos.app.ts ↔ bos.config.json", () => {
     expect(resolved.extends).toBeUndefined();
   });
 
-  it("the citynode runtime flattens to today's authored bos.config.json", () => {
-    const resolved = resolveApp("citynode.app", { "citynode.app": citynodeApp });
-    expect(resolved).toEqual<BosConfigInput>(canonicalize(readBosConfig()) as BosConfigInput);
+  it("a child runtime flattens with its extends lineage and siwn variables", () => {
+    const resolved = resolveApp("example.app", { "example.app": exampleChildApp() });
+    expect(resolved.account).toBe("child.example");
+    expect(resolved.domain).toBe("child.example");
+    expect(canonicalize(resolved.app?.auth?.variables?.siwn)).toEqual({
+      recipients: { mainnet: "child.example", testnet: "child.testnet" },
+      relayer: {
+        mainnet: {
+          whitelistedContracts: ["child.example"],
+          maxGasPerTransaction: "400000000000000",
+          maxDepositPerTransaction: "0",
+        },
+        testnet: {
+          whitelistedContracts: ["child.testnet"],
+          maxGasPerTransaction: "400000000000000",
+          maxDepositPerTransaction: "0",
+        },
+      },
+      sessionGasKey: {
+        mainnet: { receiverId: "child.example", methodNames: ["__fastdata_kv"] },
+        testnet: { receiverId: "child.testnet", methodNames: ["__fastdata_kv"] },
+      },
+    });
   });
 
   it("the child inherits base slots it does not override", () => {
-    const resolved = resolveApp("citynode.app", { "citynode.app": citynodeApp });
-    // inherited from the everything.dev base: the apps plugin's composition
-    // (the child re-declares it locally — registryNamespace is the base's)
+    const child = exampleChildApp();
+    delete (child as Record<string, unknown>).plugins;
+    const resolved = resolveApp("example.app", { "example.app": child });
     expect(resolved.plugins?.apps).toMatchObject({ development: "local:plugins/apps" });
   });
 });

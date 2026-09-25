@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TransactionBuilder } from "near-kit";
+import { formatAmount } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
+import { trySendWithGasKey } from "@/lib/gas-key";
+import { useSessionGasKey } from "@/lib/use-gas-key";
 import { useNearAccount } from "@/lib/use-near-account";
 import { AppDetailMetadataActions } from "./app-detail-metadata-actions";
 import { AppDetailSectionLabel } from "./app-detail-section-label";
@@ -27,6 +30,7 @@ export function AppDetailMetadataEditor({
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const nearAccountId = useNearAccount();
+  const gasKey = useSessionGasKey();
   const user = session?.user;
 
   const [title, setTitle] = useState(app.metadata?.title ?? "");
@@ -63,6 +67,16 @@ export function AppDetailMetadataEditor({
   const publishMutation = useMutation({
     mutationFn: async () => {
       const prepared = await prepareMetadataMutation.mutateAsync();
+      const gasKeySend = await trySendWithGasKey(auth, {
+        contractId: prepared.data.contractId,
+        methodName: prepared.data.methodName,
+        args: prepared.data.args,
+        gas: prepared.data.gas,
+      });
+      if (gasKeySend) {
+        await gasKey.refresh();
+        return { ...gasKeySend, viaGasKey: true };
+      }
       const signed = await auth.near.buildSignedDelegateAction(
         prepared.data.contractId,
         (builder: TransactionBuilder, receiverId: string) =>
@@ -73,12 +87,14 @@ export function AppDetailMetadataEditor({
       );
       const result = await auth.near.relayTransaction({ payload: signed });
       if (result.error) throw new Error(result.error.message || "Relay failed");
-      return result.data;
+      return { ...result.data, viaGasKey: false };
     },
     onSuccess: async (result) => {
       setDelegatePayload(null);
       toast.success("Metadata submitted", {
-        description: result?.txHash ? `tx: ${result.txHash}` : "Indexing may take a moment.",
+        description: result?.txHash
+          ? `tx: ${result.txHash}${result.viaGasKey ? " (session gas key)" : ""}`
+          : "Indexing may take a moment.",
       });
       await refreshQueries();
     },
@@ -194,6 +210,15 @@ export function AppDetailMetadataEditor({
             relayEnabled={statusQuery.data?.relayEnabled}
             delegatePayload={delegatePayload}
           />
+
+          {gasKey.state?.balance !== null && gasKey.state?.balance !== undefined && (
+            <p data-testid="metadata-gas-key-balance" className="text-xs text-muted-foreground">
+              Session gas key balance:{" "}
+              <span className="font-mono text-foreground">
+                {formatAmount(BigInt(gasKey.state.balance), { precision: 4, trimZeros: true })}
+              </span>
+            </p>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Direct publish uses <code className="font-mono">waitUntil: NONE</code>. The wallet may

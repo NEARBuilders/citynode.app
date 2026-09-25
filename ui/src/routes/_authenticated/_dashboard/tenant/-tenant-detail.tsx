@@ -11,9 +11,11 @@ import {
 } from "@/app";
 import { PageContainer, SectionHeader } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
+import { EnableGaslessWrites } from "@/components/ui/enable-gasless-writes";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantBindingsQueryOptions, tenantByKeyQueryOptions } from "@/lib/queries/tenants";
 import { publishTenantConfigForMode, type TenantConfigPublishMode } from "@/lib/tenant-deploy";
+import { useNearAccount } from "@/lib/use-near-account";
 import {
   resolveOrgSlug,
   resolvePrimaryHostname,
@@ -44,6 +46,7 @@ export function TenantDetailContent({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const nearAccountId = useNearAccount();
   const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId;
   const parentAccount = getAccount(runtimeConfig);
 
@@ -265,6 +268,7 @@ export function TenantDetailContent({
             <ConnectDao />
           </section>
         )}
+        {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
 
         <TenantDetails
           tenant={tenant}

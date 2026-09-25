@@ -10,14 +10,45 @@ const wallet = vi.hoisted(() => ({
   prepare: vi.fn(),
   sign: vi.fn(),
   relay: vi.fn(),
+  sendWithGasKey: vi.fn(),
+  refreshGasKeyInfo: vi.fn(),
+  ensureGasKeyFunded: vi.fn(),
+  getGasKeyState: vi.fn(() => null),
   success: vi.fn(),
   error: vi.fn(),
 }));
 
+const atoms = vi.hoisted(() => {
+  function makeAtom(initial: unknown) {
+    let value = initial;
+    return {
+      get: () => value,
+      set: (next: unknown) => {
+        value = next;
+      },
+      subscribe: () => () => {},
+    };
+  }
+  return {
+    nearState: makeAtom(null),
+    walletConnected: makeAtom(false),
+    activeNetwork: makeAtom("mainnet"),
+    gasKeyState: makeAtom(null),
+  };
+});
+
 vi.mock("@/app", () => ({
   useApiClient: () => ({ apps: { prepareRegistryMetadataWrite: wallet.prepare } }),
   useAuthClient: () => ({
-    near: { buildSignedDelegateAction: wallet.sign, relayTransaction: wallet.relay },
+    near: {
+      buildSignedDelegateAction: wallet.sign,
+      relayTransaction: wallet.relay,
+      sendWithGasKey: wallet.sendWithGasKey,
+      refreshGasKeyInfo: wallet.refreshGasKeyInfo,
+      ensureGasKeyFunded: wallet.ensureGasKeyFunded,
+      getGasKeyState: wallet.getGasKeyState,
+    },
+    $store: { atoms },
   }),
   sessionQueryOptions: () => ({
     queryKey: ["session"],
@@ -68,6 +99,8 @@ const clients: QueryClient[] = [];
 
 beforeEach(() => {
   vi.resetAllMocks();
+  atoms.gasKeyState.set(null);
+  atoms.nearState.set(null);
   wallet.prepare.mockResolvedValue({
     data: { contractId: "registry.near", methodName: "set", args: { data: "metadata" } },
   });

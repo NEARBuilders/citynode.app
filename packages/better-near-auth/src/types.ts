@@ -193,6 +193,74 @@ export const relayerDualNetworkConfigSchema = z
 export type RelayerConfig = z.infer<typeof relayerConfigSchema>;
 export type RelayerDualNetworkConfig = z.infer<typeof relayerDualNetworkConfigSchema>;
 
+const amountStringSchema = z
+  .string()
+  .regex(/^[\d.]+\s+(NEAR|yocto)$/i, 'must be like "0.05 NEAR" or "1000 yocto"');
+
+export const sessionGasKeyConfigSchema = z
+  .object({
+    receiverId: z.string().min(1),
+    methodNames: z.array(z.string().min(1)).default(["__fastdata_kv"]),
+    fundAmount: amountStringSchema.default("0.05 NEAR"),
+    topUpThreshold: amountStringSchema.default("0.01 NEAR"),
+    maxFundPerUser: amountStringSchema.default("0.2 NEAR"),
+    numNonces: z.number().int().min(1).max(1024).default(4),
+  })
+  .strict();
+
+export const sessionGasKeyDualNetworkConfigSchema = z
+  .object({
+    mainnet: sessionGasKeyConfigSchema.optional(),
+    testnet: sessionGasKeyConfigSchema.optional(),
+  })
+  .strict();
+
+export type SessionGasKeyConfig = z.infer<typeof sessionGasKeyConfigSchema>;
+export type SessionGasKeyDualNetworkConfig = z.infer<typeof sessionGasKeyDualNetworkConfigSchema>;
+
+export const GasKeyScopeResponse = z.object({
+  enabled: z.boolean(),
+  receiverId: z.string().optional(),
+  methodNames: z.array(z.string()).optional(),
+  numNonces: z.number().optional(),
+  fundAmount: z.string().optional(),
+  fundAmountYocto: z.string().optional(),
+  topUpThreshold: z.string().optional(),
+  topUpThresholdYocto: z.string().optional(),
+  maxFundPerUser: z.string().optional(),
+});
+export type GasKeyScopeResponseT = z.infer<typeof GasKeyScopeResponse>;
+
+export const GasKeyFundRequest = z.object({
+  accountId: z.string(),
+  publicKey: z.string(),
+});
+export type GasKeyFundRequestT = z.infer<typeof GasKeyFundRequest>;
+
+export const GasKeyFundResponse = z.object({
+  txHash: z.string(),
+  amountFunded: z.string(),
+});
+export type GasKeyFundResponseT = z.infer<typeof GasKeyFundResponse>;
+
+export const GasKeyInfoRequest = z.object({
+  accountId: z.string(),
+  publicKey: z.string(),
+});
+export type GasKeyInfoRequestT = z.infer<typeof GasKeyInfoRequest>;
+
+export const GasKeyInfoResponse = z.object({
+  accountId: z.string(),
+  publicKey: z.string(),
+  balance: z.string(),
+  numNonces: z.number(),
+  receiverId: z.string(),
+  methodNames: z.array(z.string()),
+  fundedTotal: z.string(),
+  capRemaining: z.string(),
+});
+export type GasKeyInfoResponseT = z.infer<typeof GasKeyInfoResponse>;
+
 export interface RelayerInfo extends AccountState {
   accountId: string;
   mode: "ephemeral" | "explicit";
@@ -215,12 +283,6 @@ export const GetRelayerInfoRequest = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
 });
 export type GetRelayerInfoRequestT = z.infer<typeof GetRelayerInfoRequest>;
-
-export interface SubAccountRelayerFCAKConfig {
-  receiverId: string;
-  methodNames?: string[];
-  allowance?: string;
-}
 
 export interface SubAccountTxCtx {
   newAccountId: string;
@@ -247,8 +309,6 @@ export interface SubAccountConfig {
   extendTx?: (tx: TransactionBuilder, ctx: SubAccountTxCtx) => TransactionBuilder;
   onCreated?: (ctx: SubAccountLifecycleCtx) => Promise<void>;
   onRollback?: (ctx: SubAccountLifecycleCtx) => Promise<void>;
-  addRelayerFCAK?: boolean;
-  relayerFCAK?: SubAccountRelayerFCAKConfig;
 }
 
 export const SUB_ACCOUNT_LABEL_REGEX = /^([a-z\d]+[-_])*[a-z\d]+$/;

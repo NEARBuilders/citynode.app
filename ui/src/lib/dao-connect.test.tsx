@@ -38,9 +38,9 @@ vi.mock("near-kit", async () => {
   };
 });
 
-vi.mock("@hot-labs/near-connect", async () => {
+vi.mock("@fastnear/near-connect", async () => {
   const actual =
-    await vi.importActual<typeof import("@hot-labs/near-connect")>("@hot-labs/near-connect");
+    await vi.importActual<typeof import("@fastnear/near-connect")>("@fastnear/near-connect");
   return {
     ...actual,
     NearConnector: class {

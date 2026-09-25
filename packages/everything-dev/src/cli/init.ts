@@ -774,6 +774,7 @@ export async function personalizeConfig(
     pkg.type = "module";
     delete pkg.module;
     delete pkg.peerDependencies;
+    delete pkg.patchedDependencies;
 
     if (pkg.workspaces && typeof pkg.workspaces === "object") {
       const ws = pkg.workspaces as { packages?: string[] };

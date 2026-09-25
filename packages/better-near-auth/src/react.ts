@@ -1,6 +1,7 @@
 import type { WritableAtom } from "nanostores";
 import { useSyncExternalStore } from "react";
 import {
+  type GasKeyState,
   getNearAtoms,
   type NearAtomsSource,
   type NearNetwork,
@@ -9,6 +10,7 @@ import {
 } from "./store.js";
 
 export {
+  type GasKeyState,
   getNearAtoms,
   type NearAtomsSource,
   type NearClientAtoms,
@@ -61,6 +63,10 @@ export function useNearAccountId(client: NearAtomsSource): string | null {
   const state = useNearState(client);
   const linkedAccountId = useSessionAccountId(client);
   return state?.accountId ?? linkedAccountId;
+}
+
+export function useGasKeyState(client: NearAtomsSource): GasKeyState {
+  return useAtomValue(getNearAtoms(client).gasKeyState);
 }
 
 export function useNearConnection(client: NearAtomsSource): NearConnection {

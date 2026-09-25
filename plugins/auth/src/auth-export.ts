@@ -1,46 +1,13 @@
 import type { Auth as BetterAuthResult } from "better-auth";
-import type {
-  DualNetworkConfig,
-  RelayerDualNetworkConfig,
-  SubAccountConfig,
-} from "better-near-auth";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import type { AuthPasskeyConfig, AuthSiwnConfig } from "./auth-config";
 import type { InferInput, InferOutput } from "./contract";
 import type { OrganizationMembershipPolicy } from "./organization-membership-policy";
 
 export type Auth = BetterAuthResult;
 export type { Auth as BaseAuth } from "better-auth";
 
-export interface AuthPasskeyConfig {
-  rpID?: string;
-  rpName?: string;
-  origin?: string;
-}
-
-export interface AuthSiwnBaseConfig {
-  apiKey?: string;
-  rpcUrl?: string;
-  relayer?: RelayerDualNetworkConfig;
-  subAccount?: SubAccountConfig | DualNetworkConfig<SubAccountConfig>;
-  secrets?: {
-    parentKey?: string | DualNetworkConfig<string>;
-  };
-}
-
-export interface AuthSiwnRecipientConfig extends AuthSiwnBaseConfig {
-  recipient: string;
-  recipients?: never;
-}
-
-export interface AuthSiwnRecipientsConfig extends AuthSiwnBaseConfig {
-  recipient?: never;
-  recipients: {
-    mainnet: string;
-    testnet: string;
-  };
-}
-
-export type AuthSiwnConfig = AuthSiwnRecipientConfig | AuthSiwnRecipientsConfig;
+export type { AuthPasskeyConfig, AuthSiwnConfig };
 
 export interface AuthConfig {
   secret: string;
