@@ -3,8 +3,8 @@ import { refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export function DisplayNameStep({ initialName }: { initialName: string }) {
   const auth = useAuthClient();
@@ -36,8 +36,8 @@ export function DisplayNameStep({ initialName }: { initialName: string }) {
       className="space-y-3 text-left"
       data-testid="onboard.display-name"
     >
-      <div className="space-y-2">
-        <Label htmlFor="onboard-display-name">What should organizers call you?</Label>
+      <Field>
+        <FieldLabel htmlFor="onboard-display-name">What should organizers call you?</FieldLabel>
         <Input
           id="onboard-display-name"
           value={name}
@@ -47,7 +47,7 @@ export function DisplayNameStep({ initialName }: { initialName: string }) {
           maxLength={64}
           data-testid="onboard.display-name-input"
         />
-      </div>
+      </Field>
       <div className="flex gap-2">
         <Button
           type="submit"

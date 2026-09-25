@@ -10,8 +10,8 @@ import {
 import { useEffect, useEffectEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { UnderConstruction } from "@/components/under-construction";
 import { PairPanel } from "../-pair-panel";
 
@@ -153,8 +153,8 @@ function LoginPage() {
           ) : (
             <>
               {passkeyAutofill ? (
-                <div className="space-y-2">
-                  <Label htmlFor="login-passkey-autofill">Passkey</Label>
+                <Field>
+                  <FieldLabel htmlFor="login-passkey-autofill">Passkey</FieldLabel>
                   <Input
                     id="login-passkey-autofill"
                     type="text"
@@ -163,7 +163,7 @@ function LoginPage() {
                     placeholder="Choose a saved passkey"
                     data-testid="login.passkey-autofill"
                   />
-                </div>
+                </Field>
               ) : null}
               <Button
                 type="button"

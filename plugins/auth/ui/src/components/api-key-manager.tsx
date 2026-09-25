@@ -3,9 +3,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
 import { InfoRow } from "./ui/info-row";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 
 export interface ApiKeyFormValues {
   name: string;
@@ -40,20 +40,21 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Name</Label>
+    <FieldGroup>
+      <Field>
+        <FieldLabel htmlFor="api-key-name">Name</FieldLabel>
         <Input
+          id="api-key-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={64}
           placeholder="API key name"
         />
-      </div>
+      </Field>
 
-      <div className="space-y-2">
-        <Label>Expiration</Label>
+      <FieldSet>
+        <FieldLegend variant="label">Expiration</FieldLegend>
         <div className="flex flex-wrap gap-2">
           {EXPIRATION_PRESETS.map((preset) => (
             <Button
@@ -67,7 +68,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
             </Button>
           ))}
         </div>
-      </div>
+      </FieldSet>
 
       <p className="text-xs text-muted-foreground leading-relaxed">
         Permissions, rate limits, and refill configuration are server-only and cannot be set from
@@ -84,7 +85,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
           {isPending ? "creating..." : "create key"}
         </Button>
       </div>
-    </div>
+    </FieldGroup>
   );
 }
 

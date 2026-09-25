@@ -3,6 +3,7 @@ import type { ClientRuntimeConfig } from "everything-dev/types";
 import { getRuntimeConfig } from "everything-dev/ui/runtime";
 import { domAnimation, LazyMotion, m } from "framer-motion";
 import underConstructionImage from "@/assets/under-construction.gif";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type RuntimeConfigInput = Partial<import("everything-dev/types").ClientRuntimeConfig> | undefined;
@@ -63,9 +64,10 @@ export function UnderConstruction({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger render={<div className={cn("perspective-midrange", className)} />}>
-          <button
+          <Button
             type="button"
-            className="bg-transparent border-0 transition-transform p-4 -m-4 cursor-pointer"
+            variant="ghost"
+            className="h-auto cursor-pointer"
             onClick={handleClick}
             aria-label={
               skipNavigation || !hasOutlink
@@ -113,7 +115,7 @@ export function UnderConstruction({
                 />
               </m.div>
             </LazyMotion>
-          </button>
+          </Button>
         </TooltipTrigger>
         {!skipNavigation && hasOutlink && (
           <TooltipContent side="top">

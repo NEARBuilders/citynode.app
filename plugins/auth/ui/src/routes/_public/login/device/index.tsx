@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { sanitizeUserCode } from "./-user-code";
 
@@ -93,15 +94,21 @@ function DeviceVerifyPage() {
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
-            <Input
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-              placeholder="XXXX-XXXX"
-              maxLength={12}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              data-testid="device.user-code-input"
-            />
+            <Field>
+              <FieldLabel htmlFor="device-user-code" className="sr-only">
+                Device code
+              </FieldLabel>
+              <Input
+                id="device-user-code"
+                value={code}
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+                placeholder="XXXX-XXXX"
+                maxLength={12}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                data-testid="device.user-code-input"
+              />
+            </Field>
             <Button type="submit" className="w-full" data-testid="device.verify-button">
               Continue
             </Button>
