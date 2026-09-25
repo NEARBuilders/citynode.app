@@ -1,13 +1,4 @@
-/*
- * Utilities-only Tailwind layer for the auth ui plugin.
- *
- * The token layer (`:root { --background, ... }` definitions) is host-owned —
- * defined once in the core shell CSS and shared by all remotes via the
- * document. This file emits only the utility classes the plugin's markup
- * uses, mapped inline onto the host's token variables, so the plugin bundle
- * ships zero token CSS.
- */
-@import "tailwindcss/utilities" layer(utilities);
+@import "tailwindcss/utilities" layer(utilities.auth);
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 

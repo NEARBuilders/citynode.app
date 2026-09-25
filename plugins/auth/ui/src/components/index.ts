@@ -15,4 +15,3 @@ export { Field, FieldLabel } from "./ui/field";
 export { InfoRow } from "./ui/info-row";
 export { Input } from "./ui/input";
 export { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-export { UnderConstruction } from "./under-construction";

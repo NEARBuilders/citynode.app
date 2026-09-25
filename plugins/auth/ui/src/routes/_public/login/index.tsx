@@ -1,7 +1,11 @@
+import { DeviceMobileIcon, FingerprintIcon, UserPlusIcon, WalletIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
+import { isPasskeyWalletAvailable, type PasskeyWalletNetwork } from "better-near-auth/client";
 import {
+  createAccountWithPasskey,
   isPasskeyAutofillAvailable,
+  isUnsupportedAuthenticatorError,
   refreshSessionCache,
   sessionQueryOptions,
   signInWithPasskey,
@@ -9,15 +13,18 @@ import {
 } from "everything-dev/ui/auth";
 import { useEffect, useEffectEvent, useState } from "react";
 import { toast } from "sonner";
+import { AuthPanel } from "@/components/auth-panel";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { UnderConstruction } from "@/components/under-construction";
+import { Spinner } from "@/components/ui/spinner";
 import { PairPanel } from "../-pair-panel";
 
 type SearchParams = {
   redirect?: string;
 };
+
+type View = "sign-in" | "create" | "phone";
 
 const DEVICE_APPROVAL_PATH = /^\/login\/device(\/approve)?(\?|$)/;
 
@@ -68,28 +75,28 @@ function LoginPage() {
   const navigate = useNavigate();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const redirect = sanitizeRedirect(Route.useSearch().redirect);
+  const redirectTo = sanitizeRedirect(Route.useSearch().redirect);
   const { runtimeConfig } = Route.useRouteContext();
+  const banned = useRouterState({ select: (state) => state.location.hash === "banned" });
+  const networkId = (runtimeConfig?.networkId ?? "mainnet") as PasskeyWalletNetwork;
 
-  const [nearPending, setNearPending] = useState(false);
+  const [view, setView] = useState<View>("sign-in");
+  const [pending, setPending] = useState<"passkey" | "near" | "create" | null>(null);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
-  const [passkeyPending, setPasskeyPending] = useState(false);
   const [passkeyMissing, setPasskeyMissing] = useState(false);
   const [passkeyAutofill, setPasskeyAutofill] = useState(false);
-  const [showPair, setShowPair] = useState(false);
+  const [unsupported, setUnsupported] = useState(false);
 
   useEffect(() => {
     void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
-      if (result?.accountId) {
-        setDetectedAccount(result.accountId);
-      }
+      if (result?.accountId) setDetectedAccount(result.accountId);
     });
   }, [auth.near]);
 
   const handleSuccess = async (message: string) => {
     toast.success(message);
     await refreshSessionCache(auth, queryClient);
-    await navigate({ href: redirect, replace: true });
+    await navigate({ href: redirectTo, replace: true });
   };
   const onAutofillSignIn = useEffectEvent(() => void handleSuccess("Signed in with passkey"));
 
@@ -98,161 +105,246 @@ function LoginPage() {
     void isPasskeyAutofillAvailable().then((available) => {
       if (!available || cancelled) return;
       setPasskeyAutofill(true);
-      void signInWithPasskey(auth, {
-        autoFill: true,
-        onSuccess: onAutofillSignIn,
-      });
+      void signInWithPasskey(auth, { autoFill: true, onSuccess: onAutofillSignIn });
     });
     return () => {
       cancelled = true;
     };
   }, [auth]);
 
-  const handleNear = async () => {
-    setNearPending(true);
-    await auth.signIn.near({
-      onSuccess: async () => {
-        setNearPending(false);
-        await handleSuccess("Signed in with NEAR");
-      },
-      onError: (error: { code?: string; message?: string }) => {
-        setNearPending(false);
-        handleError(error);
-      },
-    });
+  const handleNear = async (switchWallet = false) => {
+    setPending("near");
+    try {
+      if (switchWallet) await auth.near.disconnect();
+      await auth.signIn.near({
+        onSuccess: async () => {
+          setPending(null);
+          await handleSuccess("Signed in with NEAR");
+        },
+        onError: (error: { code?: string; message?: string }) => {
+          setPending(null);
+          handleError(error);
+        },
+      });
+    } catch {
+      setPending(null);
+      toast.error("Failed to connect your NEAR wallet");
+    }
   };
 
   const handlePasskey = async () => {
-    setPasskeyPending(true);
+    setPending("passkey");
     setPasskeyMissing(false);
     await signInWithPasskey(auth, {
       onSuccess: async () => {
-        setPasskeyPending(false);
+        setPending(null);
         await handleSuccess("Signed in with passkey");
       },
       onError: () => {
-        setPasskeyPending(false);
+        setPending(null);
         setPasskeyMissing(true);
       },
     });
   };
 
-  return (
-    <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm flex flex-col items-center gap-5">
-        <div className="w-full rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
-          <div className="space-y-1 text-center">
-            <h1 className="text-xl font-semibold text-foreground" data-testid="login.heading">
-              Sign in
-            </h1>
-            <p className="text-sm text-muted-foreground">Connect your NEAR wallet to continue.</p>
-          </div>
+  const handleCreate = async () => {
+    setPending("create");
+    setUnsupported(false);
+    await createAccountWithPasskey(auth, {
+      onSuccess: async () => {
+        setPending(null);
+        await handleSuccess("Welcome to CityNode");
+      },
+      onError: (error) => {
+        setPending(null);
+        if (isUnsupportedAuthenticatorError(error)) setUnsupported(true);
+        else toast.error(error.message);
+      },
+    });
+  };
 
-          {showPair ? (
-            <PairPanel redirect={redirect} onClose={() => setShowPair(false)} />
-          ) : (
-            <>
-              {passkeyAutofill ? (
-                <Field>
-                  <FieldLabel htmlFor="login-passkey-autofill">Passkey</FieldLabel>
-                  <Input
-                    id="login-passkey-autofill"
-                    type="text"
-                    name="username"
-                    autoComplete="username webauthn"
-                    placeholder="Choose a saved passkey"
-                    data-testid="login.passkey-autofill"
-                  />
-                </Field>
-              ) : null}
-              <Button
-                type="button"
-                variant="default"
-                onClick={handlePasskey}
-                disabled={passkeyPending || nearPending}
-                className="w-full"
-                data-testid="login.passkey-button"
-              >
-                {passkeyPending ? "waiting for passkey..." : "sign in with passkey"}
-              </Button>
-              {passkeyMissing ? (
-                <p
-                  className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground"
-                  data-testid="login.no-passkey-hint"
-                >
-                  No passkey on this device? Sign in with your phone, or connect your NEAR wallet.
-                </p>
-              ) : null}
-              {detectedAccount ? (
-                <div className="space-y-3">
-                  <Button
-                    type="button"
-                    variant="default"
-                    onClick={handleNear}
-                    disabled={nearPending}
-                    className="w-full"
-                    data-testid="near.signin-button"
-                  >
-                    {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={async () => {
-                      setNearPending(true);
-                      try {
-                        await auth.near.disconnect();
-                        await auth.signIn.near({
-                          onSuccess: async () => {
-                            setNearPending(false);
-                            await handleSuccess("Signed in with NEAR");
-                          },
-                          onError: (error: { code?: string; message?: string }) => {
-                            setNearPending(false);
-                            handleError(error);
-                          },
-                        });
-                      } catch {
-                        setNearPending(false);
-                        toast.error("Failed to disconnect wallet");
-                      }
-                    }}
-                    disabled={nearPending}
-                    className="w-full"
-                  >
-                    Use another wallet
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="default"
-                  onClick={handleNear}
-                  disabled={nearPending}
-                  className="w-full"
-                  data-testid="near.signin-button"
-                >
-                  {nearPending ? "connecting..." : "connect with NEAR"}
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowPair(true)}
-                data-testid="login.device-button"
-              >
-                sign in with phone
-              </Button>
-            </>
+  const nearButton = (
+    <div className="flex flex-col items-center gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="w-full"
+        onClick={() => void handleNear()}
+        disabled={pending !== null}
+        data-testid="near.signin-button"
+      >
+        {pending === "near" ? (
+          <Spinner data-icon="inline-start" />
+        ) : (
+          <WalletIcon data-icon="inline-start" />
+        )}
+        {detectedAccount ? `Continue as ${detectedAccount}` : "Continue with NEAR"}
+      </Button>
+      {detectedAccount && (
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={() => void handleNear(true)}
+          disabled={pending !== null}
+          data-testid="login.switch-wallet-button"
+        >
+          Use another wallet
+        </Button>
+      )}
+    </div>
+  );
+
+  if (view === "phone") {
+    return (
+      <AuthPanel
+        icon={<DeviceMobileIcon />}
+        title="Sign in with your phone"
+        titleTestId="login.heading"
+        description="Scan with a phone that's signed in to CityNode."
+      >
+        <PairPanel redirect={redirectTo} onClose={() => setView("sign-in")} />
+      </AuthPanel>
+    );
+  }
+
+  if (view === "create") {
+    return (
+      <AuthPanel
+        icon={<UserPlusIcon />}
+        title="Create your account"
+        titleTestId="login.heading"
+        description={
+          isPasskeyWalletAvailable(networkId)
+            ? "One passkey on this device. We set up a NEAR wallet for you — no seed phrase."
+            : "One passkey on this device. No password to remember."
+        }
+        footer={
+          <>
+            <span>Already have an account?</span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={() => setView("sign-in")}
+              data-testid="login.signin-link"
+            >
+              Sign in
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Button
+            type="button"
+            size="lg"
+            className="w-full"
+            onClick={() => void handleCreate()}
+            disabled={pending !== null}
+            data-testid="login.create-account-button"
+          >
+            {pending === "create" ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <FingerprintIcon data-icon="inline-start" />
+            )}
+            Create account with passkey
+          </Button>
+          {unsupported && (
+            <div className="flex flex-col gap-4" data-testid="login.unsupported-authenticator">
+              <p className="text-center text-sm text-muted-foreground">
+                This device can't create a supported passkey. Use a NEAR wallet instead.
+              </p>
+              {nearButton}
+            </div>
           )}
         </div>
+      </AuthPanel>
+    );
+  }
 
-        <UnderConstruction
-          sourceFile="plugins/auth/ui/src/routes/_public/login/index.tsx"
-          runtimeConfig={runtimeConfig}
-        />
+  return (
+    <AuthPanel
+      title="Sign in to CityNode"
+      titleTestId="login.heading"
+      description="Welcome back. Pick how you want to sign in."
+      footer={
+        <>
+          <span>New here?</span>
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            onClick={() => setView("create")}
+            data-testid="login.create-account-link"
+          >
+            Create an account
+          </Button>
+        </>
+      }
+    >
+      {banned && (
+        <p className="text-center text-sm text-destructive" data-testid="login.banned">
+          This account has been suspended.
+        </p>
+      )}
+      <div className="flex flex-col gap-3">
+        {passkeyAutofill && (
+          <Field>
+            <FieldLabel htmlFor="login-passkey-autofill" className="sr-only">
+              Saved passkey
+            </FieldLabel>
+            <Input
+              id="login-passkey-autofill"
+              type="text"
+              name="username"
+              autoComplete="username webauthn"
+              placeholder="Choose a saved passkey"
+              data-testid="login.passkey-autofill"
+            />
+          </Field>
+        )}
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          onClick={() => void handlePasskey()}
+          disabled={pending !== null}
+          data-testid="login.passkey-button"
+        >
+          {pending === "passkey" ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <FingerprintIcon data-icon="inline-start" />
+          )}
+          {pending === "passkey" ? "Waiting for passkey…" : "Sign in with passkey"}
+        </Button>
+        {passkeyMissing && (
+          <p
+            className="text-center text-sm text-muted-foreground"
+            data-testid="login.no-passkey-hint"
+          >
+            No passkey on this device? Use your phone or a NEAR wallet.
+          </p>
+        )}
       </div>
-    </div>
+      <FieldSeparator>or</FieldSeparator>
+      <div className="flex flex-col gap-3">
+        {nearButton}
+        <Button
+          type="button"
+          variant="ghost"
+          size="lg"
+          className="w-full"
+          onClick={() => setView("phone")}
+          disabled={pending !== null}
+          data-testid="login.device-button"
+        >
+          <DeviceMobileIcon data-icon="inline-start" />
+          Sign in with your phone
+        </Button>
+      </div>
+    </AuthPanel>
   );
 }

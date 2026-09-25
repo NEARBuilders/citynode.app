@@ -1,3 +1,4 @@
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { getDeviceLinkClientId, refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
@@ -5,6 +6,8 @@ import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { offerPasskeyOnThisDevice } from "@/lib/passkey-offer";
 
 const DEVICE_LINK_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
@@ -114,42 +117,39 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
   }, [auth, link, claimed, navigate, queryClient, redirect]);
 
   return (
-    <div className="space-y-4 text-center">
-      <div
-        className="mx-auto w-fit rounded-lg border border-border bg-card p-4"
-        data-testid="device.qr"
-      >
+    <div className="flex flex-col items-center gap-6">
+      <div className="rounded-3xl border border-border bg-card p-4" data-testid="device.qr">
         {qrDataUrl ? (
-          <img src={qrDataUrl} alt="Scan with your phone to sign in" className="size-55" />
+          <img src={qrDataUrl} alt="Scan with your phone to sign in" className="size-56" />
         ) : (
-          <div className="size-55 animate-pulse rounded bg-muted" />
+          <Skeleton className="size-56" />
         )}
       </div>
-      <p className="text-sm text-muted-foreground">
-        Scan with your phone, or enter this code on your phone
-      </p>
-      <p
-        className="font-mono text-lg tracking-widest text-foreground"
-        data-testid="device.user-code"
-      >
-        {link?.userCode ?? "····-····"}
-      </p>
-      <p className="text-sm text-muted-foreground" data-testid="device.status">
-        {claimed ? "Signing in…" : "Waiting for approval…"}
-      </p>
-      {failed && (
-        <p className="text-sm text-destructive" data-testid="device.error">
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-sm text-muted-foreground">Or enter this code on your phone</span>
+        <span
+          className="font-mono text-2xl font-semibold tracking-widest text-foreground"
+          data-testid="device.user-code"
+        >
+          {link?.userCode ?? "········"}
+        </span>
+      </div>
+      {failed ? (
+        <p className="text-center text-sm text-destructive" data-testid="device.error">
           {failed}
         </p>
+      ) : (
+        <p
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          data-testid="device.status"
+        >
+          <Spinner />
+          {claimed ? "Signing in…" : "Waiting for your phone…"}
+        </p>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={onClose}
-        data-testid="device.cancel-button"
-      >
-        Cancel
+      <Button type="button" variant="ghost" onClick={onClose} data-testid="device.cancel-button">
+        <ArrowLeftIcon data-icon="inline-start" />
+        Other ways to sign in
       </Button>
     </div>
   );
