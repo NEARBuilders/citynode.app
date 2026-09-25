@@ -1,14 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
-import { Card } from "@/components";
-import { InfoRow } from "@/components/info-row";
+import { Badge, InfoRow, PageHeader, SectionHeader } from "@/components";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/system")({
   loader: async ({ context }) => ({
     runtimeConfig: context.runtimeConfig,
   }),
   head: () => ({
-    meta: [{ title: "Admin System | app" }],
+    meta: [{ title: "System | Admin | app" }],
   }),
   component: AdminSystem,
 });
@@ -29,43 +28,58 @@ function AdminSystem() {
   const runtimeBasePath = runtime?.runtimeBasePath;
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-foreground" data-testid="admin.heading.runtime">
-            Runtime
-          </h2>
-          <InfoRow label="account" value={runtime?.accountId ?? account} mono />
-          <InfoRow label="name" value={appName} />
-          <InfoRow label="base path" value={runtimeBasePath ?? "/"} mono />
-          <InfoRow label="gateway" value={runtime?.gatewayId} mono />
-        </Card>
+    <>
+      <PageHeader
+        title="System"
+        description="Runtime configuration for this deployment."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {env && (
+              <Badge
+                variant={env === "production" ? "success" : "warning"}
+                data-testid="admin-system-env"
+              >
+                {env}
+              </Badge>
+            )}
+            {networkId && (
+              <Badge variant="outline" data-testid="admin-system-network">
+                {networkId}
+              </Badge>
+            )}
+          </div>
+        }
+        headerTestId="admin-system.heading"
+      />
 
-        <Card className="p-6 space-y-4">
-          <h2
-            className="text-sm font-semibold text-foreground"
-            data-testid="admin.heading.deployment"
-          >
-            Deployment
-          </h2>
-          <InfoRow label="env" value={env ?? "—"} mono />
-          <InfoRow label="network" value={networkId ?? "—"} mono />
-          <InfoRow label="host" value={hostUrl ?? "—"} mono />
-          <InfoRow label="repository" value={repository} mono />
-        </Card>
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Runtime" sectionTestId="admin.heading.runtime" />
+        <div className="flex flex-col">
+          <InfoRow label="Account" value={runtime?.accountId ?? account} mono />
+          <InfoRow label="Name" value={appName} />
+          <InfoRow label="Gateway" value={runtime?.gatewayId} mono />
+          <InfoRow label="Base path" value={runtimeBasePath ?? "/"} mono />
+        </div>
+      </section>
 
-        <Card className="p-6 space-y-4">
-          <h2
-            className="text-sm font-semibold text-foreground"
-            data-testid="admin.heading.endpoints"
-          >
-            Endpoints
-          </h2>
-          <InfoRow label="api" value={apiBase} mono />
-          <InfoRow label="rpc" value={rpcBase} mono />
-          <InfoRow label="assets" value={assetsUrl} mono />
-        </Card>
-      </div>
-    </div>
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Deployment" sectionTestId="admin.heading.deployment" />
+        <div className="flex flex-col">
+          <InfoRow label="Environment" value={env ?? "—"} mono />
+          <InfoRow label="Network" value={networkId ?? "—"} mono />
+          <InfoRow label="Host" value={hostUrl ?? "—"} mono />
+          <InfoRow label="Repository" value={repository} mono />
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Endpoints" sectionTestId="admin.heading.endpoints" />
+        <div className="flex flex-col">
+          <InfoRow label="API" value={apiBase} mono />
+          <InfoRow label="RPC" value={rpcBase} mono />
+          <InfoRow label="Assets" value={assetsUrl} mono />
+        </div>
+      </section>
+    </>
   );
 }
