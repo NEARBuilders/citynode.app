@@ -369,7 +369,10 @@ export const startBootstrap = (
     yield* emitProgress({ phase: "config", status: "running" });
 
     const bosEnv = input.env ?? (process.env.BOS_ENV === "staging" ? "staging" : "production");
-    const explicitConfig = resolveStartConfigSource(input, process.env);
+    const explicitConfig = resolveStartConfigSource(input, {
+      BOS_ACCOUNT: process.env.BOS_ACCOUNT,
+      BOS_GATEWAY: process.env.BOS_GATEWAY,
+    });
 
     let config: BosConfig | null = null;
     let remoteConfig: BosConfig | null = null;
