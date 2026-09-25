@@ -1,15 +1,32 @@
-import { ArrowUpIcon } from "@phosphor-icons/react";
+import {
+  ArrowUpIcon,
+  BroadcastIcon,
+  CaretRightIcon,
+  CubeIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
-import { Button, PageContainer, PageHeader } from "@/components";
-import { DataTable, type DataTableColumnDef } from "@/components/data-table";
+import { Badge, Button, EmptyState, LocalDate, PageContainer, PageHeader } from "@/components";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { thingQueryKeys } from "./-thing-cache";
+import { filterThings } from "./-thing-list";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Thing = Awaited<ReturnType<ApiClient["template"]["listThings"]>>["data"][number];
-type UpvoteCounts = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCounts"]>>;
 
 const EMPTY_THINGS: Thing[] = [];
 
@@ -26,133 +43,148 @@ export const Route = createFileRoute("/_authenticated/_dashboard/things/")({
   component: ThingsIndexPage,
 });
 
-function createColumns(
-  upvoteCounts: UpvoteCounts | undefined,
-  isLoadingUpvotes: boolean,
-): DataTableColumnDef<Thing>[] {
-  return [
-    {
-      accessorKey: "thingId",
-      header: "ID",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs truncate max-w-40 block text-foreground">
-          {row.original.thingId}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "type",
-      header: "Type",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">{row.original.type}</span>
-      ),
-    },
-    {
-      id: "upvotes",
-      header: "Upvotes",
-      cell: ({ row }) => (
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <ArrowUpIcon className="h-3.5 w-3.5" />
-          {isLoadingUpvotes ? "—" : (upvoteCounts?.[row.original.thingId]?.totalCount ?? 0)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "createdAt",
-      header: "Created",
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
-          {new Date(row.original.createdAt).toLocaleDateString()}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "updatedAt",
-      header: "Updated",
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
-          {new Date(row.original.updatedAt).toLocaleDateString()}
-        </span>
-      ),
-    },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/things/$thingId" params={{ thingId: row.original.thingId }} />}
-        >
-          View
-        </Button>
-      ),
-    },
-  ];
-}
-
 function ThingsIndexPage() {
   const apiClient = useApiClient();
+  const [query, setQuery] = useState("");
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["things-list"],
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: thingQueryKeys.list,
     queryFn: () => apiClient.template.listThings({ limit: 50 }),
     staleTime: 30 * 1000,
   });
 
   const things = data?.data ?? EMPTY_THINGS;
   const thingIds = useMemo(() => things.map((thing) => thing.thingId), [things]);
+  const visibleThings = useMemo(() => filterThings(things, query), [things, query]);
 
   const upvoteCountsQuery = useQuery({
-    queryKey: ["thing-upvote-counts", thingIds],
+    queryKey: [...thingQueryKeys.upvoteCounts, thingIds],
     queryFn: () => apiClient.votes.getUpvoteCounts({ entityIds: thingIds }),
     enabled: thingIds.length > 0,
     staleTime: 30 * 1000,
   });
 
-  const columns = useMemo(
-    () => createColumns(upvoteCountsQuery.data, upvoteCountsQuery.isLoading),
-    [upvoteCountsQuery.data, upvoteCountsQuery.isLoading],
+  const newThingButton = (
+    <Button nativeButton={false} render={<Link to="/things/new" />} data-testid="things-new">
+      <PlusIcon />
+      New thing
+    </Button>
   );
 
   return (
     <PageContainer variant="default">
-      <div className="space-y-4">
-        <PageHeader
-          title="Things"
-          actions={
-            <div className="flex items-center gap-2">
-              <Link
-                to="/things/live"
-                className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
-              >
-                Live stream
-              </Link>
-              <Link
-                to="/things/new"
-                className="h-9 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground inline-flex items-center no-underline transition-colors duration-150 hover:opacity-90"
-              >
-                New thing
-              </Link>
-            </div>
+      <PageHeader
+        title="Things"
+        description="Approved things in the registry."
+        headerTestId="things.heading"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/things/live" />}
+              data-testid="things-live"
+            >
+              <BroadcastIcon />
+              Live
+            </Button>
+            {newThingButton}
+          </>
+        }
+      />
+
+      {isLoading ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-11 w-full max-w-sm" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      ) : error ? (
+        <EmptyState
+          icon={CubeIcon}
+          title="Couldn't load things"
+          description={error.message}
+          action={
+            <Button variant="outline" onClick={() => void refetch()}>
+              Try again
+            </Button>
           }
         />
+      ) : things.length === 0 ? (
+        <EmptyState
+          icon={CubeIcon}
+          title="No things yet"
+          description="Propose the first one. An admin reviews it before it goes live."
+          action={newThingButton}
+        />
+      ) : (
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <InputGroup className="w-full sm:max-w-sm">
+              <InputGroupAddon>
+                <MagnifyingGlassIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label="Search things"
+                placeholder="Search by id or type"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                data-testid="things-search"
+              />
+            </InputGroup>
+            <span className="text-sm text-muted-foreground">
+              {visibleThings.length === things.length
+                ? `${things.length} ${things.length === 1 ? "thing" : "things"}`
+                : `${visibleThings.length} of ${things.length}`}
+            </span>
+          </div>
 
-        {isLoading ? (
-          <div className="rounded-md border border-border p-4 space-y-3">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : error ? (
-          <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
-            Couldn't load things: <span className="font-mono">{String(error.message)}</span>
-          </div>
-        ) : (
-          <DataTable columns={columns} data={things} />
-        )}
-      </div>
+          {visibleThings.length === 0 ? (
+            <p className="py-12 text-center text-sm text-muted-foreground">
+              No things match “{query.trim()}”.
+            </p>
+          ) : (
+            <ItemGroup data-testid="things-list">
+              {visibleThings.map((thing) => (
+                <Item
+                  key={thing.thingId}
+                  variant="outline"
+                  size="sm"
+                  role="listitem"
+                  render={<Link to="/things/$thingId" params={{ thingId: thing.thingId }} />}
+                  data-testid={`things-row-${thing.thingId}`}
+                >
+                  <ItemMedia variant="icon">
+                    <CubeIcon />
+                  </ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="max-w-full">
+                      <span className="truncate font-mono">{thing.thingId}</span>
+                    </ItemTitle>
+                    <ItemDescription>
+                      Updated <LocalDate value={thing.updatedAt} format="relative" />
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant="outline" className="hidden font-mono sm:inline-flex">
+                      {thing.type}
+                    </Badge>
+                    <span className="inline-flex min-w-10 items-center justify-end gap-1 text-sm text-muted-foreground tabular-nums">
+                      <ArrowUpIcon />
+                      {upvoteCountsQuery.isLoading
+                        ? "—"
+                        : (upvoteCountsQuery.data?.[thing.thingId]?.totalCount ?? 0)}
+                      <span className="sr-only">upvotes</span>
+                    </span>
+                    <CaretRightIcon className="text-muted-foreground" />
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          )}
+        </div>
+      )}
     </PageContainer>
   );
 }
