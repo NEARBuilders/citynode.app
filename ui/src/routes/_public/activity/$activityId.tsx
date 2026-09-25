@@ -12,13 +12,14 @@ export const Route = createFileRoute("/_public/activity/$activityId")({
       .optional()
       .catch(undefined),
   }),
+  head: () => ({ meta: [{ title: "Event | CityNode" }] }),
   component: ActivityPage,
 });
 function ActivityPage() {
   const { activityId } = Route.useParams();
   const search = Route.useSearch();
   return (
-    <PageContainer>
+    <PageContainer variant="narrow">
       <ActivityDetail activityId={activityId} {...search} />
     </PageContainer>
   );
