@@ -13,11 +13,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadPortState, savePortState } from "../../src/cli/infra";
 import { makeProjectEnv } from "../../src/env/project-env";
-import {
-  buildGeneratedInfraSpec,
-  InfraMaterializer,
-  InfraMaterializerLive,
-} from "../../src/infra/materializer";
+import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
 import type { RuntimeConfig } from "../../src/types";
 
 const projectEnv = makeProjectEnv();
@@ -28,23 +24,6 @@ async function materialize(configDir: string, runtimeConfig: RuntimeConfig): Pro
       const m = yield* InfraMaterializer;
       yield* m.materializeTemplate(configDir, runtimeConfig);
       yield* m.materializeTestInfra(configDir, runtimeConfig);
-      yield* m.materializeCompose(configDir, runtimeConfig);
-    }).pipe(Effect.provide(InfraMaterializerLive)),
-  );
-}
-
-async function materializeWithPortState(
-  configDir: string,
-  runtimeConfig: RuntimeConfig,
-): Promise<void> {
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      const m = yield* InfraMaterializer;
-      yield* m.materializeTemplate(configDir, runtimeConfig);
-      yield* m.materializeTestInfra(configDir, runtimeConfig);
-      yield* m.materializeCompose(configDir, runtimeConfig);
-      const { portState } = buildGeneratedInfraSpec(runtimeConfig, configDir);
-      yield* m.persistPortState(configDir, portState);
     }).pipe(Effect.provide(InfraMaterializerLive)),
   );
 }
@@ -81,7 +60,7 @@ function buildRuntimeConfig(overrides?: Partial<RuntimeConfig>): RuntimeConfig {
   } as RuntimeConfig;
 }
 
-describe("generated infra", () => {
+describe("generated env templates", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -91,13 +70,12 @@ describe("generated infra", () => {
     }
   });
 
-  it("writes env example and docker compose from runtime secrets", async () => {
+  it("writes env example with conventional database URLs from runtime secrets", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-infra-"));
     tempDirs.push(dir);
 
     await materialize(dir, buildRuntimeConfig());
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
-    const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
 
     expect(envExample).toContain("API_DATABASE_URL");
     expect(envExample).toContain("AUTH_DATABASE_URL");
@@ -121,54 +99,9 @@ describe("generated infra", () => {
     );
     expect(envExample).toContain("PAYMENT_API_URL=");
 
-    expect(dockerCompose).toContain("name: dev.everything.near");
-    expect(dockerCompose).toContain("postgres-api:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-api");
-    expect(dockerCompose).toContain("POSTGRES_DB: api_db");
-    expect(dockerCompose).toContain('"5432:5432"');
-    expect(dockerCompose).toContain("postgres-auth:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-auth");
-    expect(dockerCompose).toContain("POSTGRES_DB: auth_db");
-    expect(dockerCompose).toContain('"5433:5432"');
-    expect(dockerCompose).not.toContain("postgres-example:");
-    expect(dockerCompose).not.toContain("container_name: dev.everything.near-postgres-example");
-    expect(dockerCompose).not.toContain("POSTGRES_DB: example_db");
-    expect(dockerCompose).toContain("postgres-api-test:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-api-test");
-    expect(dockerCompose).toContain("POSTGRES_DB: api_test_db");
-    expect(dockerCompose).toContain('"5434:5432"');
-    expect(dockerCompose).toContain("postgres-auth-test:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-postgres-auth-test");
-    expect(dockerCompose).toContain("POSTGRES_DB: auth_test_db");
-    expect(dockerCompose).toContain('"5435:5432"');
-    expect(dockerCompose).not.toContain("postgres-example-test:");
-    expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_data");
-    expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_data");
-    expect(dockerCompose).toContain("name: dev_everything_near_postgres_api_test_data");
-    expect(dockerCompose).toContain("name: dev_everything_near_postgres_auth_test_data");
-    expect(dockerCompose).not.toContain("name: dev_everything_near_postgres_example_data");
-    expect(dockerCompose).not.toContain("payment");
-  });
-
-  it("emits a per-service pg_isready -d <db> healthcheck on every postgres service", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-healthcheck-"));
-    tempDirs.push(dir);
-
-    await materialize(dir, buildRuntimeConfig());
-    const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
-
-    expect(dockerCompose).not.toMatch(/pg_isready -U everythingdev"\]/);
-
-    const expectedPairs: Array<[string, string]> = [
-      ["postgres-api", "api_db"],
-      ["postgres-auth", "auth_db"],
-      ["postgres-api-test", "api_test_db"],
-      ["postgres-auth-test", "auth_test_db"],
-    ];
-    for (const [service, db] of expectedPairs) {
-      expect(dockerCompose).toContain(`  ${service}:`);
-      expect(dockerCompose).toContain(`["CMD-SHELL", "pg_isready -U everythingdev -d ${db}"]`);
-    }
+    // docker-compose.yml is a static committed file — the materializer
+    // must never generate or rewrite it.
+    expect(existsSync(join(dir, "docker-compose.yml"))).toBe(false);
   });
 
   it("writes a committed .env.test with isolated test database URLs", async () => {
@@ -195,7 +128,7 @@ describe("generated infra", () => {
     expect(envTest).not.toContain("PAYMENT_API_URL=");
   });
 
-  it("generates Redis docker compose and env for _REDIS_URL secrets", async () => {
+  it("maps redis secrets to the conventional local redis URL in env templates", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-redis-"));
     tempDirs.push(dir);
 
@@ -214,162 +147,9 @@ describe("generated infra", () => {
       }),
     );
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
-    const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
-
-    expect(envExample).toContain("CACHE_REDIS_URL");
 
     expect(envExample).toContain("# plugins.cache");
     expect(envExample).toContain("CACHE_REDIS_URL=redis://localhost:6379");
-
-    expect(dockerCompose).toContain("x-redis-common: &redis-common");
-    expect(dockerCompose).toContain("image: redis:7-alpine");
-    expect(dockerCompose).toContain("command: redis-server --appendonly yes");
-    expect(dockerCompose).toContain('test: ["CMD", "redis-cli", "ping"]');
-    expect(dockerCompose).toContain("redis-cache:");
-    expect(dockerCompose).toContain("container_name: dev.everything.near-redis-cache");
-    expect(dockerCompose).toContain('"6379:6379"');
-    expect(dockerCompose).toContain("dev_everything_near_redis_cache_data:/data");
-    expect(dockerCompose).toContain("name: dev_everything_near_redis_cache_data");
-  });
-
-  it("generates Redis alongside Postgres in the same compose", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-mixed-"));
-    tempDirs.push(dir);
-
-    await materialize(
-      dir,
-      buildRuntimeConfig({
-        plugins: {
-          cache: {
-            name: "cache",
-            url: "http://localhost:3020",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["CACHE_REDIS_URL"],
-          },
-        },
-      }),
-    );
-    const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
-
-    expect(dockerCompose).toContain("x-pg-common:");
-    expect(dockerCompose).toContain("x-redis-common:");
-    expect(dockerCompose).toContain("postgres-api:");
-    expect(dockerCompose).toContain("redis-cache:");
-  });
-
-  it("persists shared database ports in infra-state.json", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-state-"));
-    tempDirs.push(dir);
-
-    await materializeWithPortState(
-      dir,
-      buildRuntimeConfig({
-        plugins: {
-          example: {
-            name: "example",
-            url: "http://localhost:3010",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["EXAMPLE_DATABASE_URL"],
-          },
-        },
-      }),
-    );
-
-    const statePath = join(dir, ".bos", "infra-state.json");
-    expect(existsSync(statePath)).toBe(true);
-
-    const firstState = JSON.parse(readFileSync(statePath, "utf-8"));
-    expect(firstState.postgresPorts.example).toBe(5432);
-
-    const firstEnv = readFileSync(join(dir, ".env.example"), "utf-8");
-    expect(firstEnv).toContain(
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
-    );
-
-    await materializeWithPortState(
-      dir,
-      buildRuntimeConfig({
-        plugins: {
-          example: {
-            name: "example",
-            url: "http://localhost:3010",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["EXAMPLE_DATABASE_URL"],
-          },
-          registry: {
-            name: "registry",
-            url: "http://localhost:3021",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["REGISTRY_DATABASE_URL"],
-          },
-        },
-      }),
-    );
-
-    const secondState = JSON.parse(readFileSync(statePath, "utf-8"));
-    expect(secondState.postgresPorts.example).toBe(5432);
-    expect(secondState.postgresPorts.registry).toBe(5432);
-
-    const secondEnv = readFileSync(join(dir, ".env.example"), "utf-8");
-    expect(secondEnv).toContain(
-      "EXAMPLE_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
-    );
-    expect(secondEnv).toContain(
-      "REGISTRY_DATABASE_URL=postgres://everythingdev:everythingdev@localhost:5432/api_db",
-    );
-
-    const dockerCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
-    expect(dockerCompose).toContain('"5434:5432"');
-    expect(dockerCompose).toContain('"5435:5432"');
-    expect(dockerCompose).not.toContain('"5436:5432"');
-    expect(dockerCompose).not.toContain("postgres-example-test:");
-    expect(dockerCompose).not.toContain("postgres-registry-test:");
-  });
-
-  it("assigns all non-auth database secrets to the shared API port", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-order-"));
-    tempDirs.push(dir);
-
-    mkdirSync(join(dir, ".bos"), { recursive: true });
-
-    await materializeWithPortState(
-      dir,
-      buildRuntimeConfig({
-        plugins: {
-          zebra: {
-            name: "zebra",
-            url: "http://localhost:3030",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["ZEBRA_DATABASE_URL"],
-          },
-          alpha: {
-            name: "alpha",
-            url: "http://localhost:3040",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["ALPHA_DATABASE_URL"],
-          },
-          beta: {
-            name: "beta",
-            url: "http://localhost:3050",
-            entry: "/mf-manifest.json",
-            source: "local" as const,
-            secrets: ["BETA_DATABASE_URL"],
-          },
-        },
-      }),
-    );
-
-    const state = JSON.parse(readFileSync(join(dir, ".bos", "infra-state.json"), "utf-8"));
-
-    expect(state.postgresPorts.alpha).toBe(5432);
-    expect(state.postgresPorts.beta).toBe(5432);
-    expect(state.postgresPorts.zebra).toBe(5432);
   });
 
   it("creates .env with generated auth secret and preserves other defaults", async () => {
@@ -395,7 +175,7 @@ describe("generated infra", () => {
     expect(env).toMatch(/BETTER_AUTH_SECRET=.+/);
   });
 
-  it("skips rewriting generated infra when nothing changed", async () => {
+  it("skips rewriting generated env templates when nothing changed", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-sync-env-"));
     tempDirs.push(dir);
 
@@ -403,11 +183,9 @@ describe("generated infra", () => {
 
     const firstExample = readFileSync(join(dir, ".env.example"), "utf-8");
     const firstTest = readFileSync(join(dir, ".env.test"), "utf-8");
-    const firstCompose = readFileSync(join(dir, "docker-compose.yml"), "utf-8");
     const firstMtimes = [
       statSync(join(dir, ".env.example")).mtimeMs,
       statSync(join(dir, ".env.test")).mtimeMs,
-      statSync(join(dir, "docker-compose.yml")).mtimeMs,
     ];
 
     // sleep well above filesystem mtime resolution so a re-write is detectable
@@ -417,10 +195,8 @@ describe("generated infra", () => {
 
     expect(readFileSync(join(dir, ".env.example"), "utf-8")).toBe(firstExample);
     expect(readFileSync(join(dir, ".env.test"), "utf-8")).toBe(firstTest);
-    expect(readFileSync(join(dir, "docker-compose.yml"), "utf-8")).toBe(firstCompose);
     expect(statSync(join(dir, ".env.example")).mtimeMs).toBe(firstMtimes[0]!);
     expect(statSync(join(dir, ".env.test")).mtimeMs).toBe(firstMtimes[1]!);
-    expect(statSync(join(dir, "docker-compose.yml")).mtimeMs).toBe(firstMtimes[2]!);
   });
 
   it("loads .env into the bos process without overriding exported values", async () => {
@@ -525,8 +301,6 @@ describe("generated infra", () => {
     tempDirs.push(dir);
 
     savePortState(dir, {
-      postgresPorts: {},
-      redisPorts: {},
       devPorts: { host: 3100, api: 3101, ui: 3103, pluginPortStart: 3110 },
     });
     const loaded = loadPortState(dir);
@@ -540,8 +314,6 @@ describe("generated infra", () => {
     tempDirs.push(dir);
 
     savePortState(dir, {
-      postgresPorts: {},
-      redisPorts: {},
       devPorts: {
         host: 3100,
         api: undefined,
@@ -558,17 +330,21 @@ describe("generated infra", () => {
     expect(loaded.devPorts?.pluginPortStart).toBeUndefined();
   });
 
-  it("loadPortState tolerates missing devPorts on existing state files", () => {
+  it("loadPortState tolerates legacy state files with postgres/redis port maps", () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-devports-legacy-"));
     tempDirs.push(dir);
 
     mkdirSync(join(dir, ".bos"), { recursive: true });
     writeFileSync(
       join(dir, ".bos", "infra-state.json"),
-      JSON.stringify({ postgresPorts: { api: 5432 }, redisPorts: {} }),
+      JSON.stringify({
+        postgresPorts: { api: 5432 },
+        redisPorts: { cache: 6379 },
+        devPorts: { host: 3100 },
+      }),
     );
     const loaded = loadPortState(dir);
-    expect(loaded.devPorts).toBeUndefined();
-    expect(loaded.postgresPorts.api).toBe(5432);
+    expect(loaded.devPorts?.host).toBe(3100);
+    expect("postgresPorts" in loaded).toBe(false);
   });
 });

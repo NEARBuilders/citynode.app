@@ -1,6 +1,6 @@
 import type { Passkey, SessionData } from "@/app";
 import { Card } from "@/components";
-import { InfoRow } from "@/components/ui/info-row";
+import { InfoRow } from "@/components/info-row";
 import type { WorkspaceIdentityProfile } from "./-workspace-identity-types";
 
 export function IdentityStatus({

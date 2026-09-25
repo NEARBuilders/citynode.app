@@ -4,15 +4,15 @@ import { formatAmount } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { trySendWithGasKey } from "@/lib/gas-key";
 import { useSessionGasKey } from "@/lib/use-gas-key";
 import { useNearAccount } from "@/lib/use-near-account";
 import { AppDetailMetadataActions } from "./app-detail-metadata-actions";
 import { AppDetailSectionLabel } from "./app-detail-section-label";
 import type { RegistryAppDetail, RegistryStatus } from "./app-detail-types";
-import { Field, FieldLabel } from "./field";
-import { Input } from "./input";
-import { Textarea } from "./textarea";
 
 export function AppDetailMetadataEditor({
   accountId,

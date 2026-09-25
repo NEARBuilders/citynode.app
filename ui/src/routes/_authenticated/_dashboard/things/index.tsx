@@ -4,7 +4,7 @@ import { ArrowUp } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
-import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type ApiClient = ReturnType<typeof useApiClient>;

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { useApiClient } from "@/app";
 import { Badge, Button } from "@/components";
-import type { DataTableColumnDef } from "@/components/ui/data-table";
+import type { DataTableColumnDef } from "@/components/data-table";
 import { proposalReviewStatusVariant } from "./-proposal-review";
 
 type ApiClient = ReturnType<typeof useApiClient>;

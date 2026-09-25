@@ -5,15 +5,6 @@ import { findBosConfigPath } from "./compose";
 
 export { findBosConfigPath };
 
-function pluginDisplayName(cwd: string): string {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.resolve(cwd, "package.json"), "utf8"));
-    return pkg.name ?? "Plugin";
-  } catch {
-    return "Plugin";
-  }
-}
-
 function generatedRspackConfig(hasOverrides: boolean): string {
   return `import { createPluginBaseConfig } from "every-plugin/build/rspack";
 ${hasOverrides ? `import buildOverrides from "../build.config.ts";\n` : ""}
