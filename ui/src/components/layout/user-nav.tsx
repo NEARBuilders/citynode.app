@@ -73,7 +73,7 @@ function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavP
               type="button"
               aria-label={displayName}
               data-testid="account-menu"
-              className="rounded-full! ring-1 ring-border transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:scale-105"
+              className="rounded-full! ring-1 ring-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               title="account menu"
             />
           }
