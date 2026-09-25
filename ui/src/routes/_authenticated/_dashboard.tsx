@@ -1,5 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { AppShell } from "@/components/layout/app-shell";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { areaForPath, isPathAllowed, teamWorkspaceQueryOptions } from "@/lib/team-workspace";
 
 export const Route = createFileRoute("/_authenticated/_dashboard")({
@@ -13,18 +12,5 @@ export const Route = createFileRoute("/_authenticated/_dashboard")({
       throw redirect({ to: "/dashboard", search: { restricted: area } });
     }
   },
-  component: DashboardLayout,
+  component: Outlet,
 });
-
-function DashboardLayout() {
-  const { runtimeConfig, session, pluginNav } = Route.useRouteContext();
-  const isAdmin = session?.user?.role === "admin";
-  return (
-    <AppShell
-      runtimeConfig={runtimeConfig}
-      session={session}
-      isAdmin={isAdmin}
-      pluginNav={pluginNav}
-    />
-  );
-}

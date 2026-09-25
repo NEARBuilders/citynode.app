@@ -83,7 +83,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         },
         { title },
         { name: "description", content: description },
-        { name: "theme-color", content: "#ffffff" },
+        { name: "theme-color", content: "#ffffff", media: "(prefers-color-scheme: light)" },
+        { name: "theme-color", content: "#0b0d10", media: "(prefers-color-scheme: dark)" },
         { name: "color-scheme", content: "light dark" },
         { name: "application-name", content: title },
         { name: "mobile-web-app-capable", content: "yes" },
@@ -208,7 +209,7 @@ function GlobalChrome() {
       >
         {showBar && (
           <div className="fixed top-0 left-0 right-0 h-0.5 z-50 overflow-hidden pointer-events-none">
-            <div className="h-full w-full bg-foreground" />
+            <div className="h-full w-full bg-brand" />
           </div>
         )}
 
