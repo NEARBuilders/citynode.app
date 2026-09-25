@@ -123,6 +123,29 @@ describe("generateUiManifest", () => {
     });
   });
 
+  it("carries a route's search, loader-dependency, context, params, caching and ssr contract into the generated route config", async () => {
+    await withFixture("route-contract", async (dir) => {
+      await generateUiManifest({ workspaceRoot: dir, pluginName: "auth" });
+      const generated = (await import(path.join(dir, "src/routeConfig.gen.ts"))) as {
+        routeConfigLoaders: Record<string, () => Promise<Record<string, unknown>>>;
+      };
+      const options = await generated.routeConfigLoaders["_public/login"]!();
+
+      const validateSearch = options.validateSearch as (s: Record<string, unknown>) => unknown;
+      expect(validateSearch({ redirect: "/settings" })).toEqual({ redirect: "/settings" });
+      expect(validateSearch({})).toEqual({ redirect: "/" });
+      expect(options.ssr).toBe(false);
+      const loaderDeps = options.loaderDeps as (a: { search: { redirect: string } }) => unknown;
+      expect(loaderDeps({ search: { redirect: "/x" } })).toEqual({ redirect: "/x" });
+      expect((options.search as { middlewares: unknown[] }).middlewares).toHaveLength(1);
+      expect((options.context as () => unknown)()).toEqual({ fromContext: true });
+      expect(options.params).toHaveProperty("parse");
+      expect(options.staleTime).toBe(1000);
+      expect(options.gcTime).toBe(2000);
+      expect(options.shouldReload).toBe(false);
+    });
+  });
+
   it("rejects unknown mounts as a hard generation error", async () => {
     await withFixture("unknown-mount", async (dir) => {
       await expect(generateUiManifest({ workspaceRoot: dir, pluginName: "auth" })).rejects.toThrow(

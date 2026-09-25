@@ -206,6 +206,15 @@ export async function generateUiManifest(
 import type { RouteConfigModule, RouteOptionsBundle } from ${JSON.stringify(typeImport)};
 
 const pick = (o: any): RouteOptionsBundle => ({
+  validateSearch: o?.validateSearch,
+  search: o?.search,
+  params: o?.params,
+  loaderDeps: o?.loaderDeps,
+  context: o?.context,
+  ssr: o?.ssr,
+  staleTime: o?.staleTime,
+  gcTime: o?.gcTime,
+  shouldReload: o?.shouldReload,
   loader: o?.loader,
   beforeLoad: o?.beforeLoad,
   head: o?.head,

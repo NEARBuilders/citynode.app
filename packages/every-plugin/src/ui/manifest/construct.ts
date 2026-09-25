@@ -153,6 +153,40 @@ function layoutBeforeLoad(
   };
 }
 
+/**
+ * The authored route contract carried from a plugin's route file onto the
+ * constructed route — everything except `beforeLoad` (mounts compose it with
+ * their gate) and `component` (defaulted to `Outlet`). Dropping any of these
+ * silently changes route behavior: `validateSearch` and `search` middlewares
+ * guard route input, `loaderDeps`/`context`/caching drive loaders, and `ssr`
+ * keeps client-only routes off the server.
+ */
+const AUTHORED_OPTION_KEYS = [
+  "validateSearch",
+  "search",
+  "params",
+  "loaderDeps",
+  "context",
+  "ssr",
+  "staleTime",
+  "gcTime",
+  "shouldReload",
+  "loader",
+  "head",
+  "staticData",
+  "errorComponent",
+  "pendingComponent",
+  "notFoundComponent",
+] as const satisfies ReadonlyArray<keyof RouteOptionsBundle>;
+
+function authoredOptions(options: RouteOptionsBundle): Partial<RouteOptionsBundle> {
+  const authored: Partial<Record<keyof RouteOptionsBundle, unknown>> = {};
+  for (const key of AUTHORED_OPTION_KEYS) {
+    if (options[key] !== undefined) authored[key] = options[key];
+  }
+  return authored as Partial<RouteOptionsBundle>;
+}
+
 export async function constructTree(input: ConstructInput): Promise<ConstructedTree> {
   const refs = [...input.plugins].sort((a, b) => a.key.localeCompare(b.key));
   const resolved: ResolvedPlugin[] = [];
@@ -228,13 +262,8 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
       ...(gate || options.beforeLoad
         ? { beforeLoad: layoutBeforeLoad(gate, options.beforeLoad) }
         : {}),
-      ...(options.loader ? { loader: options.loader } : {}),
-      ...(options.head ? { head: options.head } : {}),
-      ...(options.staticData ? { staticData: options.staticData } : {}),
+      ...authoredOptions(options),
       component: options.component ?? Outlet,
-      ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
-      ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
-      ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
     });
     mountRoutes.set(mountId, toAnyRoute(route));
   }
@@ -333,27 +362,17 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
           route = createRoute({
             id: `${plugin.key}__${record.id}`,
             getParentRoute: () => parent.route,
-            ...(options.loader ? { loader: options.loader } : {}),
+            ...authoredOptions(options),
             ...(options.beforeLoad ? { beforeLoad: options.beforeLoad } : {}),
-            ...(options.head ? { head: options.head } : {}),
-            ...(options.staticData ? { staticData: options.staticData } : {}),
             component: options.component ?? Outlet,
-            ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
-            ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
-            ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
           });
         } else {
           route = createRoute({
             path: routePath,
             getParentRoute: () => parent.route,
-            ...(options.loader ? { loader: options.loader } : {}),
+            ...authoredOptions(options),
             ...(options.beforeLoad ? { beforeLoad: options.beforeLoad } : {}),
-            ...(options.head ? { head: options.head } : {}),
-            ...(options.staticData ? { staticData: options.staticData } : {}),
             component: options.component ?? Outlet,
-            ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
-            ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
-            ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
           });
         }
 

@@ -18,6 +18,15 @@ export interface RouteHeadData {
 }
 
 export interface RouteOptionsBundle {
+  validateSearch?: any;
+  search?: { middlewares?: Array<(...args: Array<any>) => any> };
+  params?: any;
+  loaderDeps?: (...args: Array<any>) => any;
+  context?: (...args: Array<any>) => any;
+  ssr?: any;
+  staleTime?: number;
+  gcTime?: number;
+  shouldReload?: boolean | ((...args: Array<any>) => any);
   loader?: (...args: Array<any>) => any;
   beforeLoad?: (...args: Array<any>) => any;
   head?: (...args: Array<any>) => RouteHeadData;

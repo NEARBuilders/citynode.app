@@ -39,6 +39,19 @@ test.describe("Auth redirect", () => {
     expectNoHydrationFailure(pageErrors);
   });
 
+  test("authenticated /login refuses an off-site redirect target", async ({ page }) => {
+    await injectCookies(page);
+
+    await page.goto(`/login?redirect=${encodeURIComponent("https://example.com/")}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/dashboard/, { timeout: 15000, waitUntil: "commit" });
+
+    const landed = new URL(page.url());
+    expect(landed.hostname).not.toBe("example.com");
+    expect(landed.pathname).toBe("/dashboard");
+  });
+
   // Regression: the login route redirected authed visitors to the redirect
   // target while the authed guard, reading a stale (signed-out) session cache
   // via ensureQueryData, bounced them straight back — ping-ponging past the
