@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { sessionQueryOptions } from "everything-dev/ui/auth";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
+import "../../styles.css";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({

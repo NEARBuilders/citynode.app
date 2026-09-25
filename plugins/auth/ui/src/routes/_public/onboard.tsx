@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
+import "../../styles.css";
 
 type SearchParams = {
   code?: string;
