@@ -1,4 +1,4 @@
-import { PlusIcon } from "@phosphor-icons/react";
+import { GlobeIcon, PlusIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -6,7 +6,6 @@ import { type ApiClient, useApiClient } from "@/app";
 import {
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   Dialog,
   DialogContent,
@@ -14,15 +13,24 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  EmptyState,
   Field,
   FieldDescription,
   FieldLabel,
   Input,
   SectionHeader,
-  Skeleton,
   UnderConstruction,
 } from "@/components";
 import { FieldGroup } from "@/components/ui/field";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import {
   Select,
   SelectContent,
@@ -31,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { invalidateTenantQueries, tenantBindingsQueryOptions } from "@/lib/queries/tenants";
+import { ListSkeleton, RowMenu } from "../-admin-ui";
 
 type Binding = Awaited<ReturnType<ApiClient["listTenantBindingsForTenant"]>>[number];
 
@@ -53,121 +62,123 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
     onSuccess: async (_, { action }) => {
       await invalidateTenantQueries(queryClient);
       setRemoving(null);
-      toast.success(action === "remove" ? "Domain binding removed" : "Domain ownership verified");
+      toast.success(action === "remove" ? "Domain removed" : "Domain verified");
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
   return (
-    <section className="space-y-3">
+    <section className="flex flex-col gap-6">
       <SectionHeader
-        title="Domain bindings"
+        title="Domains"
+        description="Shared by every node of this tenant. Changes take up to 30 seconds."
         action={
-          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-            <PlusIcon /> add domain
+          <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-domain">
+            <PlusIcon /> Add domain
           </Button>
         }
       />
-      <p className="text-sm text-muted-foreground">
-        These bindings are shared by every node belonging to this tenant. Routing changes can take
-        up to 30 seconds.
-      </p>
       {bindingsQuery.isLoading ? (
-        <Skeleton className="h-24 w-full" />
+        <ListSkeleton rows={2} />
       ) : bindingsQuery.isError ? (
-        <Card className="space-y-3 p-6">
+        <div className="flex flex-wrap items-center gap-3">
           <p role="alert" className="text-sm text-destructive">
             {bindingsQuery.error.message}
           </p>
-          <Button variant="outline" onClick={() => bindingsQuery.refetch()}>
-            retry
+          <Button variant="outline" size="sm" onClick={() => bindingsQuery.refetch()}>
+            Retry
           </Button>
-        </Card>
+        </div>
       ) : !bindingsQuery.data?.length ? (
-        <Card className="p-6">
-          <p className="text-sm text-muted-foreground">No domain bindings.</p>
-        </Card>
+        <EmptyState
+          icon={GlobeIcon}
+          title="No domains yet"
+          description="Add a platform alias or bring your own domain."
+          className="py-10"
+        />
       ) : (
-        bindingsQuery.data.map((binding) => {
-          const isAlias = !binding.hostname.includes(".");
-          const hostname = isAlias ? `${binding.hostname}.${gateway}` : binding.hostname;
-          return (
-            <Card
-              key={binding.id}
-              role="group"
-              aria-label={hostname}
-              className="space-y-4 p-4 sm:p-6"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-2">
-                  <p className="break-all font-mono text-sm text-foreground">{hostname}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{isAlias ? "platform alias" : "custom domain"}</Badge>
-                    {binding.isPrimary && <Badge variant="secondary">primary</Badge>}
-                    <Badge variant={isAlias || binding.isVerified ? "default" : "secondary"}>
-                      {isAlias
-                        ? "no verification needed"
-                        : binding.isVerified
-                          ? "verified"
-                          : "pending verification"}
+        <ItemGroup data-testid="admin-node-domains">
+          {bindingsQuery.data.map((binding) => {
+            const isAlias = !binding.hostname.includes(".");
+            const hostname = isAlias ? `${binding.hostname}.${gateway}` : binding.hostname;
+            const needsVerification = !isAlias && !binding.isVerified;
+            const verifying =
+              mutation.isPending &&
+              mutation.variables?.binding.id === binding.id &&
+              mutation.variables.action === "verify";
+            return (
+              <Item key={binding.id} variant="outline" role="group" aria-label={hostname}>
+                <ItemMedia variant="icon">
+                  <GlobeIcon />
+                </ItemMedia>
+                <ItemContent className="min-w-0">
+                  <ItemTitle>
+                    <span className="truncate font-mono">{hostname}</span>
+                  </ItemTitle>
+                  <ItemDescription>{isAlias ? "Platform alias" : "Custom domain"}</ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  {binding.isPrimary && <Badge variant="secondary">Primary</Badge>}
+                  {!isAlias && (
+                    <Badge variant={binding.isVerified ? "success" : "warning"}>
+                      {binding.isVerified ? "Verified" : "Unverified"}
                     </Badge>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={mutation.isPending}
-                  onClick={() => setRemoving(binding)}
-                >
-                  remove
-                </Button>
-              </div>
-              {!isAlias && !binding.isVerified && (
-                <div className="space-y-3 border-t border-border pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Add this TXT record at your DNS provider, then check verification.
-                  </p>
-                  <dl className="grid gap-2 text-sm sm:grid-cols-4 sm:gap-x-4">
-                    <dt className="text-muted-foreground">Type</dt>
-                    <dd className="font-mono sm:col-span-3">TXT</dd>
-                    <dt className="text-muted-foreground">Name / host</dt>
-                    <dd className="break-all font-mono sm:col-span-3">{binding.hostname}</dd>
-                    <dt className="text-muted-foreground">Value</dt>
-                    <dd className="break-all font-mono sm:col-span-3">
-                      everything-verify={binding.verificationToken}
-                    </dd>
-                  </dl>
-                  <p className="text-xs text-muted-foreground">
-                    DNS records may take time to propagate. Configure DNS routing and HTTPS for this
-                    domain separately.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={mutation.isPending}
-                    onClick={() => mutation.mutate({ binding, action: "verify" })}
-                  >
-                    {mutation.isPending && mutation.variables?.binding.id === binding.id
-                      ? "checking..."
-                      : "check verification"}
-                  </Button>
-                  {mutation.isError &&
-                    mutation.variables?.binding.id === binding.id &&
-                    mutation.variables.action === "verify" && (
-                      <p role="alert" className="text-sm text-destructive">
-                        {mutation.error.message}
-                      </p>
-                    )}
-                  <UnderConstruction
-                    label="domain routing"
-                    url="https://www.reddit.com/r/rust/comments/1qew4ra/near_dns_dns_records_stored_on_blockchain_and/"
-                    tooltip="learn about near-dns and contribute"
+                  )}
+                  <RowMenu
+                    label={`Actions for ${hostname}`}
+                    actions={[
+                      {
+                        label: "Remove",
+                        destructive: true,
+                        disabled: mutation.isPending,
+                        onSelect: () => setRemoving(binding),
+                      },
+                    ]}
                   />
-                </div>
-              )}
-            </Card>
-          );
-        })
+                </ItemActions>
+                {needsVerification && (
+                  <div className="flex basis-full flex-col gap-4 border-t border-border pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Add this TXT record at your DNS provider, then check.
+                    </p>
+                    <dl className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm">
+                      <dt className="text-muted-foreground">Type</dt>
+                      <dd className="col-span-3 font-mono">TXT</dd>
+                      <dt className="text-muted-foreground">Host</dt>
+                      <dd className="col-span-3 font-mono break-all">{binding.hostname}</dd>
+                      <dt className="text-muted-foreground">Value</dt>
+                      <dd className="col-span-3 font-mono break-all">
+                        everything-verify={binding.verificationToken}
+                      </dd>
+                    </dl>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={mutation.isPending}
+                        onClick={() => mutation.mutate({ binding, action: "verify" })}
+                      >
+                        {verifying ? "Checking…" : "Check verification"}
+                      </Button>
+                      <UnderConstruction
+                        label="domain routing"
+                        url="https://www.reddit.com/r/rust/comments/1qew4ra/near_dns_dns_records_stored_on_blockchain_and/"
+                        tooltip="learn about near-dns and contribute"
+                      />
+                    </div>
+                    {mutation.isError &&
+                      mutation.variables?.binding.id === binding.id &&
+                      mutation.variables.action === "verify" && (
+                        <p role="alert" className="text-sm text-destructive">
+                          {mutation.error.message}
+                        </p>
+                      )}
+                  </div>
+                )}
+              </Item>
+            );
+          })}
+        </ItemGroup>
       )}
       <Dialog open={adding} onOpenChange={setAdding}>
         {adding && (
@@ -179,10 +190,11 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title="Remove domain binding?"
-        description={`Remove ${removing?.hostname ?? "this domain"}? It will no longer route to this tenant. Other nodes sharing the tenant are also affected.`}
+        title="Remove domain?"
+        description={`${removing?.hostname ?? "This domain"} will stop routing to this tenant, for every node that shares it.`}
         variant="destructive"
-        confirmLabel="remove domain"
+        confirmLabel="Remove domain"
+        cancelLabel="Cancel"
         isPending={mutation.isPending}
         onConfirm={() => {
           if (removing) mutation.mutate({ binding: removing, action: "remove" });
@@ -228,11 +240,11 @@ function AddBindingForm({
   return (
     <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Add domain binding</DialogTitle>
+        <DialogTitle>Add domain</DialogTitle>
         <DialogDescription>Choose a platform alias or bring your own domain.</DialogDescription>
       </DialogHeader>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate();
@@ -287,10 +299,10 @@ function AddBindingForm({
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
-            cancel
+            Cancel
           </Button>
           <Button type="submit" disabled={mutation.isPending || !normalized}>
-            {mutation.isPending ? "adding..." : "add domain"}
+            {mutation.isPending ? "Adding…" : "Add domain"}
           </Button>
         </DialogFooter>
       </form>

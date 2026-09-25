@@ -1,94 +1,71 @@
-import { ArrowLeftIcon, TreeStructureIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import {
-  Badge,
   Button,
-  Card,
   EmptyState,
   InfoRow,
   NodeValidatorTable,
+  PageHeader,
   SectionHeader,
   Skeleton,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from "@/components";
-import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import { ProfileEditor } from "@/components/discovery/profile-editor";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
+import { BackLink, humanize, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import { NodeBindings } from "./-node-bindings";
+import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
 import { NodeMetadataEditor } from "./-node-metadata-editor";
 import { NodeValidators } from "./-node-validators";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type NodeSummary = Awaited<ReturnType<ApiClient["getNodeSummary"]>>;
-type ChildNode = NodeSummary["children"][number];
+
+const TAB_LABELS: Record<NodeDetailTab, string> = {
+  overview: "Overview",
+  validators: "Validators",
+  domains: "Domains",
+  profile: "Profile",
+};
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab } => ({
+    tab: parseNodeDetailTab(search.tab),
+  }),
   head: () => ({
-    meta: [{ title: "Node details | app" }],
+    meta: [{ title: "Node | Admin | app" }],
   }),
   component: AdminNodeDetail,
 });
 
 function AdminNodeDetail() {
   const { nodeId } = Route.useParams();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const { runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
   const nodeQuery = useQuery(adminNodeDetailQueryOptions(apiClient, nodeId));
-
-  const childColumns = useMemo<DataTableColumnDef<ChildNode>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: "Name",
-        cell: ({ row }) => (
-          <Link
-            to="/admin/nodes/$nodeId"
-            params={{ nodeId: row.original.id }}
-            className="font-medium text-foreground hover:underline"
-          >
-            {row.original.name}
-          </Link>
-        ),
-      },
-      {
-        accessorKey: "kind",
-        header: "Kind",
-        cell: ({ row }) => <Badge variant="outline">{row.original.kind}</Badge>,
-      },
-      {
-        accessorKey: "slug",
-        header: "Slug",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">{row.original.slug}</span>
-        ),
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: row.original.id }} />}
-          >
-            open
-          </Button>
-        ),
-      },
-    ],
-    [],
-  );
+  const activeTab = tab ?? "overview";
 
   if (nodeQuery.isLoading) {
     return (
-      <Card className="space-y-3 p-6">
-        {[1, 2, 3, 4].map((row) => (
-          <Skeleton key={row} className="h-10 w-full" />
-        ))}
-      </Card>
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
@@ -96,11 +73,11 @@ function AdminNodeDetail() {
     return (
       <EmptyState
         icon={TreeStructureIcon}
-        title="Failed to load node"
+        title="Couldn't load this node"
         description={nodeQuery.error?.message || "The requested node could not be loaded."}
         action={
           <Button variant="outline" nativeButton={false} render={<Link to="/admin/nodes" />}>
-            back to nodes
+            Back to nodes
           </Button>
         }
       />
@@ -109,116 +86,143 @@ function AdminNodeDetail() {
 
   const { summary, sourceNode, parent } = nodeQuery.data;
   const { node } = summary;
-  const stakingIsResolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-3">
-        <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin/nodes" />}>
-          <ArrowLeftIcon />
-          all nodes
-        </Button>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold text-foreground">{node.name}</h2>
-            <p className="font-mono text-xs text-muted-foreground">{node.slug}</p>
-            {parent && (
-              <p className="text-sm text-muted-foreground">
-                Parent:{" "}
-                <Link
-                  to="/admin/nodes/$nodeId"
-                  params={{ nodeId: parent.id }}
-                  className="text-foreground hover:underline"
-                >
-                  {parent.name}
-                </Link>
-              </p>
-            )}
-          </div>
-          <Badge variant="outline">{node.kind}</Badge>
-        </div>
-      </div>
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Direct children" value={summary.childrenCount} />
-        <StatCard label="Subtree nodes" value={summary.subtreeNodeCount} />
-        <StatCard label="Validators" value={summary.validators.length} />
-        <StatCard label="Subtree validators" value={summary.subtreeValidatorCount} />
-      </section>
-
-      <section className="space-y-3">
-        <SectionHeader
-          title="Node information"
-          action={<NodeMetadataEditor key={node.id} node={node} />}
-        />
-        <Card className="space-y-3 p-6">
-          <InfoRow label="id" value={node.id} mono />
-          <InfoRow label="tenant" value={node.tenantId} mono />
-          <InfoRow label="parent" value={node.parentId ?? "root node"} mono={!!node.parentId} />
-          <InfoRow label="kind" value={node.kind} />
-          <InfoRow label="slug" value={node.slug} mono />
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">Metadata</p>
-            <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/40 p-4 text-xs text-foreground">
-              {JSON.stringify(node.metadata, null, 2)}
-            </pre>
-          </div>
-        </Card>
-      </section>
-
-      <ProfileEditor nodeId={node.id} />
-      <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
-
-      <NodeBindings
-        key={node.tenantId}
-        tenantId={node.tenantId}
-        gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
+    <>
+      <PageHeader
+        label={<BackLink to="/admin/nodes">Nodes</BackLink>}
+        title={node.name}
+        subtitle={node.slug}
+        description={
+          parent ? (
+            <>
+              {humanize(node.kind)} in{" "}
+              <Link
+                to="/admin/nodes/$nodeId"
+                params={{ nodeId: parent.id }}
+                search={{}}
+                className="text-foreground hover:underline"
+              >
+                {parent.name}
+              </Link>
+            </>
+          ) : (
+            humanize(node.kind)
+          )
+        }
+        actions={<NodeMetadataEditor key={node.id} node={node} />}
+        headerTestId="admin-node.heading"
       />
 
-      <section className="space-y-3">
-        <SectionHeader title="Direct children" />
-        {summary.children.length === 0 ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">No direct children.</p>
-          </Card>
+      <StatGrid>
+        <StatFigure label="Direct children" value={summary.childrenCount} />
+        <StatFigure label="Nodes below" value={summary.subtreeNodeCount} />
+        <StatFigure label="Validators" value={summary.validators.length} />
+        <StatFigure label="Validators below" value={summary.subtreeValidatorCount} />
+      </StatGrid>
+
+      <div className="flex flex-col gap-8">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            const next = parseNodeDetailTab(value);
+            navigate({ search: { tab: next === "overview" ? undefined : next } });
+          }}
+        >
+          <TabsList className="max-w-full justify-start overflow-x-auto">
+            {NODE_DETAIL_TABS.map((value) => (
+              <TabsTrigger key={value} value={value} data-testid={`admin-node-tab-${value}`}>
+                {TAB_LABELS[value]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        {activeTab === "overview" && (
+          <NodeOverview summary={summary} sourceName={sourceNode?.name} />
+        )}
+        {activeTab === "validators" && (
+          <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
+        )}
+        {activeTab === "domains" && (
+          <NodeBindings
+            key={node.tenantId}
+            tenantId={node.tenantId}
+            gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
+          />
+        )}
+        {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
+      </div>
+    </>
+  );
+}
+
+function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceName?: string }) {
+  const { node } = summary;
+  const resolvedElsewhere = summary.stakingValidators.sourceNodeId !== node.id;
+  const description =
+    typeof node.metadata.description === "string" ? node.metadata.description : null;
+
+  return (
+    <div className="flex flex-col gap-12">
+      <section className="flex flex-col gap-6">
+        <SectionHeader
+          title="Staking"
+          description={
+            resolvedElsewhere
+              ? `Stakes go to validators on ${sourceName ?? summary.stakingValidators.sourceNodeId}.`
+              : "Stakes go to validators on this node or below it."
+          }
+        />
+        {summary.stakingValidators.validators.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No validators to stake with yet.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <DataTable columns={childColumns} data={summary.children} />
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <NodeValidatorTable validators={summary.stakingValidators.validators} />
           </div>
         )}
       </section>
 
-      <section className="space-y-3">
-        <SectionHeader title="Staking resolution" />
-        <Card className="space-y-4 p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={stakingIsResolvedElsewhere ? "secondary" : "default"}>
-              {stakingIsResolvedElsewhere ? "resolved from another node" : "this node"}
-            </Badge>
-            <p className="text-sm text-muted-foreground">
-              {stakingIsResolvedElsewhere
-                ? `Staking resolves to ${sourceNode?.name ?? summary.stakingValidators.sourceNodeId}.`
-                : "Staking resolves to validators on this node or its subtree."}
-            </p>
-          </div>
-          {summary.stakingValidators.validators.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No staking validators are available.</p>
-          ) : (
-            <div className="-mx-6 -mb-6 border-t border-border">
-              <NodeValidatorTable validators={summary.stakingValidators.validators} />
-            </div>
-          )}
-        </Card>
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Children" />
+        {summary.children.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No nodes below this one.</p>
+        ) : (
+          <ItemGroup>
+            {summary.children.map((child) => (
+              <Item
+                key={child.id}
+                variant="outline"
+                size="sm"
+                render={
+                  <Link to="/admin/nodes/$nodeId" params={{ nodeId: child.id }} search={{}} />
+                }
+              >
+                <ItemContent className="min-w-0">
+                  <ItemTitle>{child.name}</ItemTitle>
+                  <ItemDescription>
+                    {humanize(child.kind)} · <span className="font-mono">{child.slug}</span>
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <CaretRightIcon className="size-4 text-muted-foreground" />
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Details" />
+        {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
+        <div className="flex flex-col">
+          <InfoRow label="Node ID" value={node.id} mono />
+          <InfoRow label="Tenant ID" value={node.tenantId} mono />
+          <InfoRow label="Parent ID" value={node.parentId ?? "None"} mono={!!node.parentId} />
+        </div>
+        <RawJsonDisclosure value={node.metadata} label="metadata" />
       </section>
     </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card className="space-y-1 p-4">
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold text-foreground">{value}</div>
-    </Card>
   );
 }

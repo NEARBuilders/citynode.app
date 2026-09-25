@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
   Field,
-  FieldDescription,
   FieldLabel,
   Input,
   Textarea,
@@ -27,8 +26,8 @@ export function NodeMetadataEditor({ node }: { node: Node }) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <PencilIcon /> edit metadata
+      <Button variant="outline" onClick={() => setOpen(true)} data-testid="admin-node-edit">
+        <PencilIcon /> Edit details
       </Button>
       {open && <MetadataForm node={node} onClose={() => setOpen(false)} />}
     </Dialog>
@@ -55,7 +54,7 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
       }),
     onSuccess: async () => {
       await invalidateNodeQueries(queryClient);
-      toast.success("Node metadata updated");
+      toast.success("Node updated");
       onClose();
     },
     onError: (error: Error) => toast.error(error.message),
@@ -64,13 +63,11 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
   return (
     <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Edit node metadata</DialogTitle>
-        <DialogDescription>
-          Update the node name, description, and additional JSON fields.
-        </DialogDescription>
+        <DialogTitle>Edit node</DialogTitle>
+        <DialogDescription>Name, description and extra metadata.</DialogDescription>
       </DialogHeader>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim()) saveMutation.mutate();
@@ -94,10 +91,9 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
               onChange={(event) => setDescription(event.target.value)}
               rows={3}
             />
-            <FieldDescription>Stored in metadata.description.</FieldDescription>
           </Field>
           <Field>
-            <FieldLabel htmlFor="node-metadata">Additional metadata (JSON)</FieldLabel>
+            <FieldLabel htmlFor="node-metadata">Extra metadata (JSON)</FieldLabel>
             <Textarea
               id="node-metadata"
               value={metadata}
@@ -120,10 +116,10 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
             onClick={onClose}
             disabled={saveMutation.isPending}
           >
-            cancel
+            Cancel
           </Button>
           <Button type="submit" disabled={!name.trim() || saveMutation.isPending}>
-            {saveMutation.isPending ? "saving..." : "save changes"}
+            {saveMutation.isPending ? "Saving…" : "Save changes"}
           </Button>
         </DialogFooter>
       </form>

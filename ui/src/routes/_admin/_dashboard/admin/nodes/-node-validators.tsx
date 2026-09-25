@@ -1,11 +1,11 @@
-import { PlusIcon } from "@phosphor-icons/react";
+import { PlusIcon, ShieldCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import {
+  Badge,
   Button,
-  Card,
   ConfirmDialog,
   Dialog,
   DialogContent,
@@ -13,14 +13,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  EmptyState,
   Field,
   FieldLabel,
   Input,
-  NodeValidatorTable,
   SectionHeader,
 } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldGroup } from "@/components/ui/field";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import {
   Select,
   SelectContent,
@@ -29,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import { humanize, RowMenu } from "../-admin-ui";
 
 type Validator = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["validators"][number];
 
@@ -68,48 +78,65 @@ export function NodeValidators({
   });
 
   return (
-    <section className="space-y-3">
+    <section className="flex flex-col gap-6">
       <SectionHeader
         title="Validators"
+        description="Staking pools attached to this node."
         action={
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <PlusIcon /> add validator
+          <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-validator">
+            <PlusIcon /> Add validator
           </Button>
         }
       />
-      <Card className="overflow-hidden">
-        {validators.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">
-            No validators are attached to this node.
-          </p>
-        ) : (
-          <NodeValidatorTable
-            validators={validators}
-            renderActions={(validator) => (
-              <div className="flex gap-2">
-                {!validator.isDefault && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={mutation.isPending}
-                    onClick={() => mutation.mutate({ validator, action: "default" })}
-                  >
-                    set default
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={mutation.isPending}
-                  onClick={() => setRemoving(validator)}
-                >
-                  remove
-                </Button>
-              </div>
-            )}
-          />
-        )}
-      </Card>
+      {validators.length === 0 ? (
+        <EmptyState
+          icon={ShieldCheckIcon}
+          title="No validators yet"
+          description="Add a staking pool so people can stake with this node."
+          className="py-10"
+        />
+      ) : (
+        <ItemGroup data-testid="admin-node-validators">
+          {validators.map((validator) => (
+            <Item key={validator.id} variant="outline">
+              <ItemMedia variant="icon">
+                <ShieldCheckIcon />
+              </ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle>
+                  <span className="truncate font-mono">{validator.accountId}</span>
+                </ItemTitle>
+                <ItemDescription>
+                  {humanize(validator.role)} · {validator.network} · {validator.protocol}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                {validator.isDefault && <Badge variant="success">Default</Badge>}
+                <RowMenu
+                  label={`Actions for ${validator.accountId}`}
+                  actions={[
+                    ...(validator.isDefault
+                      ? []
+                      : [
+                          {
+                            label: "Make default",
+                            disabled: mutation.isPending,
+                            onSelect: () => mutation.mutate({ validator, action: "default" }),
+                          },
+                        ]),
+                    {
+                      label: "Remove",
+                      destructive: true,
+                      disabled: mutation.isPending,
+                      onSelect: () => setRemoving(validator),
+                    },
+                  ]}
+                />
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
       <Dialog open={adding} onOpenChange={setAdding}>
         {adding && <AddValidatorForm nodeId={nodeId} onClose={() => setAdding(false)} />}
       </Dialog>
@@ -119,9 +146,10 @@ export function NodeValidators({
           if (!open) setRemoving(null);
         }}
         title="Remove validator?"
-        description={`Remove ${removing?.accountId ?? "this validator"} from this node? Staking resolution may change.`}
+        description={`${removing?.accountId ?? "This validator"} will be detached from this node. Staking may resolve elsewhere.`}
         variant="destructive"
-        confirmLabel="remove validator"
+        confirmLabel="Remove validator"
+        cancelLabel="Cancel"
         isPending={mutation.isPending}
         onConfirm={() => {
           if (removing) mutation.mutate({ validator: removing, action: "remove" });
@@ -139,6 +167,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
   const [protocol, setProtocol] = useState("near");
   const [role, setRole] = useState<Validator["role"]>("community");
   const [isDefault, setIsDefault] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const mutation = useMutation({
     mutationFn: () =>
       apiClient.createValidator({
@@ -160,10 +189,10 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
     <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Add validator</DialogTitle>
-        <DialogDescription>Attach a validator account to this node.</DialogDescription>
+        <DialogDescription>Attach a staking pool to this node.</DialogDescription>
       </DialogHeader>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate();
@@ -171,7 +200,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="validator-account">Account ID</FieldLabel>
+            <FieldLabel htmlFor="validator-account">Pool account</FieldLabel>
             <Input
               id="validator-account"
               value={accountId}
@@ -181,26 +210,38 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               className="font-mono"
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="validator-network">Network</FieldLabel>
-              <Input
-                id="validator-network"
-                value={network}
-                onChange={(event) => setNetwork(event.target.value)}
-                required
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="validator-protocol">Protocol</FieldLabel>
-              <Input
-                id="validator-protocol"
-                value={protocol}
-                onChange={(event) => setProtocol(event.target.value)}
-                required
-              />
-            </Field>
-          </div>
+          {showAdvanced ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="validator-network">Network</FieldLabel>
+                <Input
+                  id="validator-network"
+                  value={network}
+                  onChange={(event) => setNetwork(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="validator-protocol">Protocol</FieldLabel>
+                <Input
+                  id="validator-protocol"
+                  value={protocol}
+                  onChange={(event) => setProtocol(event.target.value)}
+                  required
+                />
+              </Field>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => setShowAdvanced(true)}
+            >
+              Change network ({network}, {protocol})
+            </Button>
+          )}
           <Field>
             <FieldLabel htmlFor="validator-role">Role</FieldLabel>
             <Select
@@ -223,9 +264,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               checked={isDefault}
               onCheckedChange={(checked) => setIsDefault(checked === true)}
             />
-            <FieldLabel htmlFor="validator-default">
-              Set as this node's default validator
-            </FieldLabel>
+            <FieldLabel htmlFor="validator-default">Make this the node's default</FieldLabel>
           </Field>
         </FieldGroup>
         {mutation.isError && (
@@ -235,7 +274,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
-            cancel
+            Cancel
           </Button>
           <Button
             type="submit"
@@ -243,7 +282,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               mutation.isPending || !accountId.trim() || !network.trim() || !protocol.trim()
             }
           >
-            {mutation.isPending ? "adding..." : "add validator"}
+            {mutation.isPending ? "Adding…" : "Add validator"}
           </Button>
         </DialogFooter>
       </form>
