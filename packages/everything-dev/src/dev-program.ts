@@ -30,7 +30,7 @@ import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
-import { resolveStartConfigSource } from "./local-prod-config";
+import { isRegistryStart, resolveStartConfigSource } from "./local-prod-config";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
@@ -477,19 +477,12 @@ export const startBootstrap = (
     const productionEnv: Record<string, string> = {};
     const warnings: string[] = [];
 
-    // A registry start is a real production deployment — a localhost origin
-    // there is a stray dev leftover, so it must not reach the in-process host.
-    // An explicit --config-path start (regression harness, local production
-    // stack) injects BASE_URL/CORS_ORIGIN at docker run as deployment truth:
-    // the host's buildAuthBaseVariables seam reads them from process.env, and
-    // an https fallback would make better-auth issue Secure cookies no http
-    // client can send back.
     const localhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
-    const isLocalhostProductionOrigin =
-      Boolean(process.env.CORS_ORIGIN) && localhostOrigin.test(process.env.CORS_ORIGIN ?? "");
-    if (isLocalhostProductionOrigin && !explicitConfig.configPath) {
+    const corsOrigin = process.env.CORS_ORIGIN;
+    const isLocalhostProductionOrigin = corsOrigin !== undefined && localhostOrigin.test(corsOrigin);
+    if (isLocalhostProductionOrigin && isRegistryStart(explicitConfig)) {
       warnings.push(
-        `CORS_ORIGIN is a localhost origin (${process.env.CORS_ORIGIN}) in a production start — overriding with the configured domain`,
+        `CORS_ORIGIN is a localhost origin (${corsOrigin}) in a registry production start — overriding with the configured domain`,
       );
       delete process.env.CORS_ORIGIN;
       delete process.env.BASE_URL;

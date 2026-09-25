@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isRegistryStart,
   prepareLocalProductionConfig,
   resolveStartConfigSource,
 } from "../../src/local-prod-config";
@@ -230,5 +231,21 @@ describe("resolveStartConfigSource", () => {
 
   it("yields a local discovery source when nothing is set", () => {
     expect(resolveStartConfigSource({}, {})).toEqual({});
+  });
+});
+
+describe("isRegistryStart (localhost-origin purge gate)", () => {
+  it("a registry-fetched start purges stray localhost origins", () => {
+    expect(isRegistryStart({ registry: { account: "a.near", domain: "b.app" } })).toBe(true);
+  });
+
+  it("an explicit config-path start keeps its injected origins", () => {
+    expect(isRegistryStart({ configPath: "/app/.bos/regression/image/config-ssr.json" })).toBe(
+      false,
+    );
+  });
+
+  it("a bare local start keeps its injected origins", () => {
+    expect(isRegistryStart({})).toBe(false);
   });
 });
