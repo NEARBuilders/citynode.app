@@ -64,8 +64,6 @@ export default {
             // minDeposit: "0.1 NEAR",
             // deploy: { fromPublished: { accountId: "myapp.near" } },
             // init: { methodName: "init", args: { owner: "myapp.near" } },
-            // addRelayerFCAK: true,
-            // relayerFCAK: { receiverId: "myapp.near", methodNames: ["*"], allowance: "0.25 NEAR" },
           },
           testnet: {
             parentAccount: process.env.NEAR_SUB_ACCOUNT_PARENT_TESTNET,
@@ -86,8 +84,6 @@ export default {
       RESEND_API_KEY: process.env.RESEND_API_KEY,
       NEAR_RELAYER_PRIVATE_KEY_MAINNET: process.env.NEAR_RELAYER_PRIVATE_KEY_MAINNET,
       NEAR_RELAYER_PRIVATE_KEY_TESTNET: process.env.NEAR_RELAYER_PRIVATE_KEY_TESTNET,
-      NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET: process.env.NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET,
-      NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET: process.env.NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET,
     },
   } satisfies PluginConfigInput<typeof Plugin>,
 };

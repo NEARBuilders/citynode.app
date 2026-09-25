@@ -1,5 +1,5 @@
 /**
- * Regression image build (ADR 0009): runs inside the `regression-builder`
+ * Deployment dist build (ADR 0009): runs inside the `dist-builder`
  * stage. Builds every workspace the start-command stack serves — framework
  * auth provider, core ui (web + ssr, sequential environments), host dist,
  * api, and every local plugin from bos.config.json — then stages a
@@ -138,20 +138,36 @@ const stage = () => {
     readFileSync(path.join(root, "plugins", "auth", "package.json"), "utf8"),
   ).name as string;
 
+  // Browser-facing public urls: the SAME staged slots, addressed same-origin
+  // relative — /bundles/<account>/<gateway>/<slot>/ — so the host serves the
+  // exact bytes the static servers hold, on every origin the container is
+  // reachable at (regression localhost mapping or the public gateway).
+  const nsBase = nsAccount && nsGateway ? `/bundles/${nsAccount}/${nsGateway}` : undefined;
+
   const plan = {
     host: `http://localhost:${ports.hostDist}`,
-    ui: { production: `http://localhost:${ports.ui}` },
+    ui: {
+      production: `http://localhost:${ports.ui}`,
+      ...(nsBase ? { publicUrl: `${nsBase}/ui` } : {}),
+    },
     api: `http://localhost:${ports.api}`,
     auth: `http://localhost:${ports.auth}`,
     authUi: {
       production: `http://localhost:${ports.authUi}`,
       name: sanitizeContainerName(authPkgName),
+      ...(nsBase ? { publicUrl: `${nsBase}/auth-ui` } : {}),
     },
     plugins: Object.fromEntries(
       localPlugins.map(([key]) => {
         const port =
           key === "auth" ? ports.auth : basePort + 10 + localPlugins.findIndex(([k]) => k === key);
-        return [key, { production: `http://localhost:${port}` }];
+        return [
+          key,
+          {
+            production: `http://localhost:${port}`,
+            ...(nsBase ? { uiPublicUrl: `${nsBase}/${key}` } : {}),
+          },
+        ];
       }),
     ),
   };
@@ -165,18 +181,10 @@ const stage = () => {
         ...(variant === "ssr" ? { ssr: `http://localhost:${ports.authUi}/ssr` } : {}),
       },
     });
-    // The container's actual ingress is the bos start port, not the config's
-    // domain (a local fixture can't serve https://<domain>) — and an https
-    // baseURL makes better-auth set Secure cookies no http client can send
-    // back. The auth plugin's own baseUrl variable is the config-driven seam
-    // for the reachable origin; it wins over the host's domain derivation.
-    if (resolved.app.auth) {
-      const authVariables = (resolved.app.auth.variables ?? {}) as Record<string, unknown>;
-      resolved.app.auth = {
-        ...resolved.app.auth,
-        variables: { ...authVariables, baseUrl: `http://localhost:${basePort}` },
-      };
-    }
+    // The auth plugin's reachable origin is environment truth, not fixture
+    // data: the harness injects BASE_URL/CORS_ORIGIN at `docker run`
+    // (start-container.mjs), the deployment image derives it from the bos
+    // config domain — the host's buildAuthBaseVariables owns the precedence.
     writeFileSync(
       path.join(imageDir, `config-${variant}.json`),
       `${JSON.stringify(resolved, null, 2)}\n`,

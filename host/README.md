@@ -66,7 +66,7 @@ For the temporary publish registry, use `bos publish` or `bos publish --deploy`.
       "title": "App Title",
       "description": "Description of the application",
       "development": "local:host",
-      "production": "https://example.zephyrcloud.app",
+      "production": "https://example.com/bundles/<account>/<gateway>/host/",
       "secrets": [
         "CORS_ORIGIN",
         "CSP_STRICT"

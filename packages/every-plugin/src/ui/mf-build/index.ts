@@ -7,8 +7,8 @@
  * workspace's installed version so version mismatches fail the build —
  * the #106 guardrail extended to the react/TanStack/orpc set.
  *
- * `pluginUiDeployFields` / `CORE_UI_DEPLOY_FIELDS` name the bos.config.json
- * fields the Zephyr deploy hook writes back.
+ * `CORE_UI_DEPLOY_FIELDS` names the bos.config.json fields the publish
+ * writes deploy URLs back to.
  *
  * A ui source's rsbuild.config.ts mirrors ui/rsbuild.config.ts with these
  * helpers: the web target is an MF remote exposing `./routeConfig` (the
@@ -42,14 +42,6 @@ export interface UiDeployFields {
   ssrUrlField?: string;
   ssrIntegrityField?: string;
 }
-
-/** bos.config.json field paths a `plugins.<id>.ui` deploy writes back. */
-export const pluginUiDeployFields = (pluginId: string): UiDeployFields => ({
-  urlField: `plugins.${pluginId}.ui.production`,
-  integrityField: `plugins.${pluginId}.ui.integrity`,
-  ssrUrlField: `plugins.${pluginId}.ui.ssr`,
-  ssrIntegrityField: `plugins.${pluginId}.ui.ssrIntegrity`,
-});
 
 /** Core shell field paths — unchanged from the v1 remote. */
 export const CORE_UI_DEPLOY_FIELDS: UiDeployFields = {

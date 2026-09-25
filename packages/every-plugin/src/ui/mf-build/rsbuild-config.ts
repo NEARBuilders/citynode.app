@@ -11,7 +11,6 @@ import {
   restoreManifestPublicPath,
   UI_REMOTE_ENTRY_FILENAME,
   UI_REMOTE_SERVER_ENTRY_FILENAME,
-  type UiDeployFields,
 } from "./index";
 import { uiManifestGenPlugin } from "./manifest-plugin";
 
@@ -36,11 +35,6 @@ export interface UiRsbuildConfigOptions {
   role: "provider" | "consumer";
   /** the composition key written into manifest.gen.json (the config-side key) */
   manifestName: string;
-  /** directory containing bos.config.json (deploy write-back target) */
-  configDir: string;
-  deployFields: UiDeployFields;
-  /** deploy log label, e.g. "UI" or "Auth UI" */
-  deployLabel: string;
   devPort: number;
   webEntry: string;
   webExposes: Record<string, string>;
@@ -51,20 +45,18 @@ export interface UiRsbuildConfigOptions {
   /** routes dir relative to the rsbuild cwd — folder-form ui sources live at
    * `ui/src/routes` while the build runs from the plugin root */
   routesDirectory?: string;
-  /**
-   * Deploy hook factory — called once per environment when the platform CLI
-   * builds for deploy. Returns extra rsbuild plugins (the Zephyr deploy +
-   * SRI write-back wiring owned by the platform). Omit elsewhere.
-   */
-  deployPlugins?: (ctx: {
-    ssr: boolean;
-    deployFields: UiDeployFields;
-    bosConfigPath: string;
-    deployLabel: string;
-  }) => NonNullable<EnvironmentConfig["plugins"]>;
 }
 
 export { sanitizeContainerName };
+
+/**
+ * The node environment never owns the routeTree write: the web env's
+ * generator produces identical content, and both environments resolve the
+ * same on-disk tree. Redirecting the node write to scratch removes the
+ * concurrent-writers race on src/routeTree.gen.ts (the generator's
+ * "Cannot overwrite" retry noise).
+ */
+const NODE_ROUTE_TREE_SCRATCH = "./node_modules/.cache/manifest-compose/routeTree.node.gen.ts";
 
 export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildConfig {
   const {
@@ -72,9 +64,6 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
     pkg,
     role,
     manifestName,
-    configDir,
-    deployFields,
-    deployLabel,
     devPort,
     webEntry,
     webExposes,
@@ -82,18 +71,13 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
     nodeExposes,
     copy = [],
     define,
-    deployPlugins,
     routesDirectory,
   } = options;
   const workspaceRootAbsolute = path.resolve(workspaceRoot);
   const normalizedName = sanitizeContainerName(pkg.name);
-  const bosConfigPath = path.resolve(configDir, "bos.config.json");
   const manifestGen = () =>
     uiManifestGenPlugin({ workspaceRoot: workspaceRootAbsolute, pluginName: manifestName });
   const uiSharedDeps = createUiSharedDeps(pkg, { role });
-
-  const deployFor = (ssr: boolean): NonNullable<EnvironmentConfig["plugins"]> =>
-    deployPlugins?.({ ssr, deployFields, bosConfigPath, deployLabel }) ?? [];
 
   const webEnvironment: EnvironmentConfig = {
     plugins: [
@@ -109,7 +93,6 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
         },
         { environment: "web" },
       ),
-      ...deployFor(false),
     ],
     source: { entry: { index: webEntry }, ...(define ? { define } : {}) },
     resolve: { alias: { "@": path.join(workspaceRootAbsolute, "src") } },
@@ -142,6 +125,7 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
             TanStackRouterRspack({
               target: "react",
               autoCodeSplitting: true,
+              routeFileIgnorePattern: "\\.(test|spec)\\.(ts|tsx)$",
               ...(routesDirectory ? { routesDirectory } : {}),
             }),
             new FixMfDataUriPlugin(),
@@ -189,7 +173,6 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
         { target: "node", environment: "node" },
       ),
       restoreManifestPublicPath(path.resolve(workspaceRootAbsolute, "dist", "ssr")),
-      ...deployFor(true),
     ],
     source: { entry: { index: nodeEntry } },
     resolve: {
@@ -215,6 +198,8 @@ export function createUiRsbuildConfig(options: UiRsbuildConfigOptions): RsbuildC
             TanStackRouterRspack({
               target: "react",
               autoCodeSplitting: false,
+              routeFileIgnorePattern: "\\.(test|spec)\\.(ts|tsx)$",
+              generatedRouteTree: NODE_ROUTE_TREE_SCRATCH,
               ...(routesDirectory ? { routesDirectory } : {}),
             }),
             new FixMfDataUriPlugin(),

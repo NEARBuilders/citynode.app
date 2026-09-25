@@ -94,14 +94,21 @@ function normalizeRpId(value: string): string {
   }
 }
 
+function isLocalOrigin(origin: string): boolean {
+  const hostname = new URL(origin).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
 export function resolvePasskeyRelyingPartyOptions(
   config: Pick<AuthConfig, "baseUrl" | "passkey">,
 ): PasskeyRelyingPartyOptions {
   const passkey = config.passkey;
   const origin = normalizeOrigin(passkey?.origin?.trim() || config.baseUrl);
-  const rpID = passkey?.rpID?.trim()
-    ? normalizeRpId(passkey.rpID.trim())
-    : new URL(origin).hostname;
+  const localDev = isLocalOrigin(origin) && process.env.PASSKEY_RPID === undefined;
+  const rpID =
+    !localDev && passkey?.rpID?.trim()
+      ? normalizeRpId(passkey.rpID.trim())
+      : new URL(origin).hostname;
   const rpName = passkey?.rpName?.trim() || "Everything Dev";
 
   return { rpID, rpName, origin };
@@ -112,8 +119,8 @@ export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0]
     apiKey: config.siwn.apiKey,
     rpcUrl: config.siwn.rpcUrl,
     relayer: config.siwn.relayer,
+    sessionGasKey: config.siwn.sessionGasKey,
     subAccount: config.siwn.subAccount,
-    secrets: config.siwn.secrets,
   };
 
   if (isRecipientsConfig(config.siwn)) {
@@ -502,12 +509,6 @@ export function createAuthInstance(
         trustedProviders: ["siwn", "email-password"],
         allowDifferentEmails: true,
         updateUserInfoOnLink: true,
-      },
-    },
-    session: {
-      cookieCache: {
-        enabled: config.isProduction ?? false,
-        maxAge: 5 * 60,
       },
     },
     advanced: {

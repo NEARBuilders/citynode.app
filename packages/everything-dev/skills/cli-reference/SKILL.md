@@ -52,7 +52,7 @@ bos build                       # build all workspaces
 bos build --packages ui,api     # build specific packages (csv)
 bos build --packages local      # build only workspaces whose development starts with local:
 bos build --force               # rebuild even if up-to-date
-bos build --deploy              # build + deploy to Zephyr
+bos build --deploy              # build + write deploy URLs
 ```
 
 `--packages` accepts a comma-separated key list, `all` (default), or `local`. `local` selects only entries whose `bos.config.json` `development` field starts with `local:`, so the build set auto-tracks whatever apps and plugins live in this repo. CI deploy now invokes `bos publish --deploy --packages local` instead of a hand-maintained CSV.
@@ -226,7 +226,7 @@ Outputs each plugin's key, development source, production URL, local path, versi
 
 ### `bos plugin publish`
 
-Build and publish a single plugin to Zephyr CDN, then update `bos.config.json` with the production URL and SRI integrity hash.
+Build a single plugin, then update `bos.config.json` with its deterministic image-native production URL (`https://<domain>/bundles/<account>/<gateway>/<key>/`).
 
 **Flags:** `<key>` (positional)
 

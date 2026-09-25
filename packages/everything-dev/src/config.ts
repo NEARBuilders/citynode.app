@@ -853,6 +853,7 @@ export async function buildRuntimeConfig(
       name: resolvePluginRuntimeName(uiConfig.name, uiRuntime.localPath, "ui"),
       url: uiRuntime.url,
       entry: uiRuntime.url ? `${uiRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
+      publicUrl: typeof uiConfig.publicUrl === "string" ? uiConfig.publicUrl : undefined,
       localPath: uiRuntime.localPath,
       port: uiRuntime.port,
       ssrUrl: uiIsRemote ? uiConfig.ssr : undefined,
@@ -1175,6 +1176,7 @@ function buildRuntimeUiConfig(
       ? `${uiRuntime.url.replace(/\/$/, "")}/mf-manifest.json`
       : "/mf-manifest.json",
     source: uiRuntime.source,
+    publicUrl: typeof uiConfig?.publicUrl === "string" ? uiConfig.publicUrl : undefined,
     localPath: uiRuntime.localPath,
     port: uiRuntime.port,
     integrity:

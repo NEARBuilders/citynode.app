@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { findBosConfigPath as composeFindBosConfigPath } from "../../src/build/rspack/compose";
 import {
   ensureGeneratedRspackConfig,
   findBosConfigPath,
@@ -22,20 +23,7 @@ afterEach(() => {
 });
 
 describe("ensureGeneratedRspackConfig", () => {
-  it("emits a plain config when no bos.config.json is reachable", () => {
-    const workspace = makeTempWorkspace();
-    fs.writeFileSync(path.join(workspace, "package.json"), JSON.stringify({ name: "test-plugin" }));
-
-    const generated = ensureGeneratedRspackConfig(workspace);
-    expect(generated).toBe(path.join(".every-plugin", "rspack.config.generated.mjs"));
-
-    const source = fs.readFileSync(path.join(workspace, generated!), "utf8");
-    expect(source).toContain("const bosConfigPath = null");
-    expect(source).toContain("export default bosConfigPath");
-    expect(source.trimEnd().endsWith(": config;")).toBe(true);
-  });
-
-  it("wraps withPluginDeploy when a bos.config.json exists above the workspace", () => {
+  it("emits the plain base composition regardless of reachable bos.config.json", () => {
     const root = makeTempWorkspace();
     const workspace = path.join(root, "plugins", "my-plugin");
     fs.mkdirSync(workspace, { recursive: true });
@@ -43,11 +31,22 @@ describe("ensureGeneratedRspackConfig", () => {
     fs.writeFileSync(path.join(workspace, "package.json"), JSON.stringify({ name: "my-plugin" }));
 
     const generated = ensureGeneratedRspackConfig(workspace);
+    expect(generated).toBe(path.join(".every-plugin", "rspack.config.generated.mjs"));
+
     const source = fs.readFileSync(path.join(workspace, generated!), "utf8");
-    expect(source).toContain(
-      `const bosConfigPath = ${JSON.stringify(path.join(root, "bos.config.json"))}`,
-    );
-    expect(source).toContain("withPluginDeploy(config");
+    expect(source).toContain("createPluginBaseConfig({})");
+    expect(source).not.toContain("withPluginDeploy");
+    expect(source).not.toContain("bosConfigPath");
+  });
+
+  it("threads build.config.ts overrides through createPluginBaseConfig", () => {
+    const workspace = makeTempWorkspace();
+    fs.writeFileSync(path.join(workspace, "package.json"), JSON.stringify({ name: "test-plugin" }));
+    fs.writeFileSync(path.join(workspace, "build.config.ts"), "export default {};");
+
+    const generated = ensureGeneratedRspackConfig(workspace);
+    const source = fs.readFileSync(path.join(workspace, generated!), "utf8");
+    expect(source).toContain("createPluginBaseConfig(buildOverrides)");
   });
 });
 
@@ -57,6 +56,7 @@ describe("findBosConfigPath", () => {
     const nested = path.join(root, "a", "b");
     fs.mkdirSync(nested, { recursive: true });
     expect(findBosConfigPath(nested)).toBeNull();
+    expect(findBosConfigPath).toBe(composeFindBosConfigPath);
 
     fs.writeFileSync(path.join(root, "bos.config.json"), "{}");
     expect(findBosConfigPath(nested)).toBe(path.join(root, "bos.config.json"));

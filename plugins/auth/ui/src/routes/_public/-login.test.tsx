@@ -1,13 +1,13 @@
 /**
  * Regression tests for the post-sign-in redirect loop ("Too many redirects").
  *
- * The chain that used to ping-pong: the login route's beforeLoad redirects
- * authed users to the redirect target, while the authed route guard redirects
- * users it cannot see back to /login. The guard used to read the session via
- * `ensureQueryData`, which returns a stale cached value immediately (the
- * pre-sign-in null), and the login page used to navigate before the refreshed
- * session landed in the cache — so the two guards alternated until TanStack
- * Router tripped its 20-redirect limit.
+ * The loop chain: the login route's beforeLoad redirects authed users to the
+ * redirect target, while the authed route guard redirects users it cannot see
+ * back to /login. If the two ever read different session values, they
+ * ping-pong until the router trips its redirect limit. The invariant under
+ * test: every session read in the app goes through one authoritative queryFn
+ * (disableCookieCache) and a post-sign-in refresh overrides even a fresh
+ * signed-out cache entry, so the guard and the login route can never disagree.
  */
 import { QueryClient } from "@tanstack/react-query";
 import {
@@ -60,16 +60,15 @@ interface TestContext {
 /**
  * Stand-in for the core `_authenticated` guard (ui/src/lib/auth-guards.ts,
  * requireSession) — the plugin test tree cannot import core sources, so the
- * fixed guard semantics (queryClient.query, banned redirect) are mirrored.
+ * guard semantics (queryClient.query over sessionQueryOptions, banned
+ * redirect) are mirrored.
  */
 function createAuthedGuard(root: ReturnType<typeof createRootRouteWithContext<TestContext>>) {
   return createRoute({
     getParentRoute: () => root,
     id: "_authenticated",
     beforeLoad: async ({ context }: { context: TestContext }) => {
-      const session = await context.queryClient.query(
-        sessionQueryOptions(context.authClient, context.session),
-      );
+      const session = await context.queryClient.query(sessionQueryOptions(context.authClient));
       if (!session?.user) {
         throw redirect({ href: `/login?redirect=%2Fdashboard` });
       }
@@ -147,7 +146,19 @@ describe("login redirect flow", () => {
     expect(router.state.location.hash).toContain("banned");
   });
 
-  it("refreshSessionCache writes the authoritative session into the cache", async () => {
+  it("never reads the session without disabling the cookie cache", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const authClient = createAuthClientMock([null]);
+
+    await buildRouter("/login", queryClient, authClient).then((router) => router.load());
+    await refreshSessionCache(authClient, queryClient);
+
+    expect(authClient.getSession).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
+  });
+});
+
+describe("refreshSessionCache", () => {
+  it("writes the authoritative session into the cache", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(sessionQueryKey, null);
     const authClient = createAuthClientMock([signedInSession]);
@@ -157,5 +168,33 @@ describe("login redirect flow", () => {
     expect(session?.user.id).toBe("user-1");
     expect(queryClient.getQueryData(sessionQueryKey)).toEqual(signedInSession);
     expect(authClient.getSession).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
+  });
+
+  it("overrides a fresh signed-out cache entry left by the login page's observer", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // Fresh (just-written) signed-out entry: a plain fetchQuery would return
+    // it without fetching and the post-sign-in navigation would bounce.
+    queryClient.setQueryData(sessionQueryKey, null);
+    const authClient = createAuthClientMock([signedInSession]);
+
+    const session = await refreshSessionCache(authClient, queryClient);
+
+    expect(session?.user.id).toBe("user-1");
+    expect(queryClient.getQueryData(sessionQueryKey)).toEqual(signedInSession);
+  });
+
+  it("lets the authed guard through after the post-sign-in refresh without bouncing", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(sessionQueryKey, null);
+    const authClient = createAuthClientMock([signedInSession]);
+
+    const router = await buildRouter("/dashboard", queryClient, authClient);
+    await router.load();
+    expect(router.state.location.pathname).toBe("/login");
+
+    await refreshSessionCache(authClient, queryClient);
+    await router.navigate({ to: "/dashboard" } as never);
+
+    expect(router.state.location.pathname).toBe("/dashboard");
   });
 });

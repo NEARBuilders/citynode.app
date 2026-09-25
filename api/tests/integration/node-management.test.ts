@@ -40,9 +40,7 @@ describe("platform node management", () => {
     );
     const publicClient = await getPluginClient();
     await expect(publicClient.listTenants()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    await expect((await getPluginClient(authedContext())).listTenants()).rejects.toMatchObject({
-      code: "FORBIDDEN",
-    });
+    expect(await (await getPluginClient(authedContext())).listTenants()).toEqual([]);
 
     await expect(outsider.updateNode({ nodeId: node.id, name: "Changed" })).rejects.toMatchObject({
       code: "FORBIDDEN",

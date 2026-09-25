@@ -1,11 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { access, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import { formatDuration } from "./cli/timing";
 import { resolveLocalDevelopmentPath } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
-import { applyDeployResults, type DeployResultEntry, parseDeployLines } from "./integrity";
 import { syncResolvedSharedDeps } from "./shared-deps";
 import type { BosConfig, BosPluginRef, RuntimeConfig } from "./types";
 import { run } from "./utils/run";
@@ -106,221 +105,53 @@ function isLocalTarget(key: string, bosConfig: BosConfig | null): boolean {
   return typeof dev === "string" && dev.startsWith("local:");
 }
 
-export function resolveCdnProvider(
-  bosConfig: BosConfig | null,
-  override?: "zephyr" | "platform",
-): "zephyr" | "platform" {
-  return override ?? bosConfig?.deploy?.cdn ?? "platform";
-}
-
-export function checkCdnProviderDeployable(bosConfig: BosConfig | null): string | null {
-  const provider = resolveCdnProvider(bosConfig);
-  if (provider === "zephyr" || provider === "platform") return null;
-  return `CDN provider "${provider}" is not supported — use "zephyr" or "platform".`;
-}
-
-interface BuildAttemptResult {
+interface WorkspaceBuildOutcome {
+  key: string;
+  kind: "app" | "plugin";
   success: boolean;
-  url?: string;
   error?: string;
-  warnings?: string[];
-  exitCode: number;
-  output: string;
-  deployEntries?: DeployResultEntry[];
+  durationMs: number;
 }
 
-function classifyBuildResult(
-  stdout: string,
-  stderr: string,
-  exitCode: number,
-  expectDeployUrl: boolean,
-  verbose: boolean,
-): BuildAttemptResult {
-  const output = `${stdout}\n${stderr}`;
-  const deployEntries = parseDeployLines(output);
-
-  if (deployEntries.length > 0) {
-    const attemptResult: BuildAttemptResult = {
-      success: true,
-      url: deployEntries[0]?.url,
-      exitCode: 0,
-      output,
-      deployEntries,
-    };
-    if (exitCode !== 0) {
-      const errorLines = output
-        .split("\n")
-        .filter((line) => /\bERROR\b/.test(line) || line.startsWith("Rspack compiled with"))
-        .slice(0, 5);
-      if (errorLines.length > 0) {
-        attemptResult.warnings = errorLines.map((l) => l.trim());
-        if (!verbose) {
-          console.log(
-            `  ${colors.yellow("⚠")} Build completed with errors (exit code ${exitCode}) — Zephyr deployed successfully`,
-          );
-          for (const line of errorLines) {
-            console.log(`    ${colors.dim(line.trim())}`);
-          }
-        }
-      }
-    }
-    return attemptResult;
-  }
-
-  const zeMatch = output.match(/ZE\d{4,}/);
-  if (zeMatch) {
-    const zeLines = output
-      .split("\n")
-      .filter((l) => /ZEPHYR|ZE\d{4,}/.test(l))
-      .slice(0, 5);
-    const detail = zeLines.length > 0 ? `\n${zeLines.join("\n")}` : "";
-    return {
-      success: false,
-      error: `Zephyr upload failed (${zeMatch[0]})${detail}`,
-      exitCode: 0,
-      output,
-    };
-  }
-
-  if (exitCode !== 0) {
-    const lastLines = output.trim().split("\n").slice(-5).join("\n");
-    return {
-      success: false,
-      error: `Build failed (exit code ${exitCode})\n${lastLines}`,
-      exitCode,
-      output,
-    };
-  }
-
-  const deployMatch = output.match(/🚀.*Deployed:\s*(https?:\S+)/);
-  if (deployMatch) {
-    return { success: true, url: deployMatch[1], exitCode: 0, output };
-  }
-
-  if (expectDeployUrl) {
-    return {
-      success: false,
-      error: "No deploy URL found (Zephyr may have failed)",
-      exitCode: 0,
-      output,
-    };
-  }
-  return { success: true, exitCode: 0, output };
-}
-
-async function runBuildAttempt(
-  cmd: string,
-  args: string[],
-  cwd: string,
+async function buildOneWorkspace(
+  ws: WorkspaceTarget,
   env: Record<string, string>,
-  verbose: boolean,
-  deploy: boolean,
-  expectDeployUrl: boolean,
-): Promise<BuildAttemptResult> {
-  const proc = await run(cmd, args, {
-    cwd,
+  opts: { verbose?: boolean },
+): Promise<WorkspaceBuildOutcome> {
+  const buildConfig = buildCommands[ws.key] ?? { cmd: "bun", args: ["run", "build"] };
+  const verbose = opts.verbose ?? false;
+  const startTime = Date.now();
+
+  const proc = await run(buildConfig.cmd, buildConfig.args, {
+    cwd: ws.path,
     env,
     capture: true,
     onChunk: (stream, chunk) => {
       if (stream === "stderr") {
         process.stderr.write(chunk);
-      } else if (verbose || deploy) {
+      } else if (verbose) {
         process.stdout.write(chunk);
       }
     },
   });
-  return classifyBuildResult(
-    proc?.stdout ?? "",
-    proc?.stderr ?? "",
-    proc?.exitCode ?? 0,
-    expectDeployUrl,
-    verbose,
-  );
-}
 
-interface InternalWorkspaceResult extends WorkspaceDeployResult {
-  deployEntries?: DeployResultEntry[];
-}
-
-const MAX_RETRIES = 3;
-const ZEPHYR_BACKOFF_MS = [2000, 5000, 10000];
-
-async function buildOneWorkspace(
-  ws: WorkspaceTarget,
-  env: Record<string, string>,
-  opts: { deploy: boolean; verbose?: boolean; cdnProvider?: "zephyr" | "platform" },
-): Promise<InternalWorkspaceResult> {
-  const pkgJson = await readJsonFile<{
-    scripts?: Record<string, string>;
-  }>(`${ws.path}/package.json`);
-  const platformBuild = opts.cdnProvider === "platform";
-  const shouldDeployScript = opts.deploy && pkgJson.scripts?.deploy && !platformBuild;
-  const buildConfig = shouldDeployScript
-    ? { cmd: "bun", args: ["run", "deploy"] }
-    : (buildCommands[ws.key] ?? { cmd: "bun", args: ["run", "build"] });
-
-  const verbose = opts.verbose ?? false;
-  const expectDeployUrl = opts.deploy && !platformBuild;
-  const startTime = Date.now();
-  let attempt: BuildAttemptResult | undefined;
-  let retried = false;
-  const errors: string[] = [];
-
-  for (let i = 0; i <= MAX_RETRIES; i++) {
-    attempt = await runBuildAttempt(
-      buildConfig.cmd,
-      buildConfig.args,
-      ws.path,
-      env,
-      verbose,
-      opts.deploy,
-      expectDeployUrl,
-    );
-
-    if (attempt.success || attempt.exitCode !== 0 || !opts.deploy) break;
-    if (i === MAX_RETRIES) break;
-
-    errors.push(`Attempt ${i + 1}: ${attempt.error ?? "Failed"}`);
-
-    const isZephyrError = /Zephyr upload failed/.test(attempt.error ?? "");
-    const delayMs = isZephyrError ? (ZEPHYR_BACKOFF_MS[i] ?? ZEPHYR_BACKOFF_MS.at(-1)!) : 1000;
-
-    if (verbose) {
-      console.log(
-        `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} waiting ${delayMs / 1000}s before retry ${i + 2}/${MAX_RETRIES + 1}${isZephyrError ? " (Zephyr edge provider)" : ""}...`,
-      );
-    } else {
-      console.log(
-        `  ${colors.yellow("↻")} ${padRight(ws.key, 28)} retrying... (${i + 2}/${MAX_RETRIES + 1})`,
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    retried = true;
-  }
-
-  if (attempt && !attempt.success && errors.length > 0) {
-    attempt.error = errors.join("\n");
-  }
-
+  const exitCode = proc?.exitCode ?? 0;
   const durationMs = Date.now() - startTime;
-  const result: InternalWorkspaceResult = {
+  const output = `${proc?.stdout ?? ""}\n${proc?.stderr ?? ""}`;
+  const result: WorkspaceBuildOutcome = {
     key: ws.key,
     kind: ws.kind,
-    success: attempt?.success ?? false,
-    url: attempt?.url,
-    error: attempt?.error,
-    warnings: attempt?.warnings,
-    deployEntries: attempt?.deployEntries,
+    success: exitCode === 0,
+    ...(exitCode !== 0 && {
+      error: `Build failed (exit code ${exitCode})\n${output.trim().split("\n").slice(-5).join("\n")}`,
+    }),
     durationMs,
-    retried: retried ? true : undefined,
   };
 
   if (!verbose) {
     const name = padRight(ws.key, 28);
     if (result.success) {
-      const duration = formatDuration(durationMs);
-      const retryTag = retried ? " (retried)" : "";
-      console.log(`  ${colors.green(icons.ok)} ${name} ${colors.dim(duration + retryTag)}`);
+      console.log(`  ${colors.green(icons.ok)} ${name} ${colors.dim(formatDuration(durationMs))}`);
     } else {
       const errorLine = (result.error ?? "Failed").split("\n")[0];
       console.log(`  ${colors.error(icons.err)} ${name} ${errorLine}`);
@@ -337,7 +168,6 @@ export async function buildWorkspaceTargets(opts: {
   targets: string[];
   deploy: boolean;
   verbose?: boolean;
-  cdnProviderOverride?: "zephyr" | "platform";
 }): Promise<{
   built: string[];
   skipped: string[];
@@ -367,14 +197,6 @@ export async function buildWorkspaceTargets(opts: {
     return { built: [], skipped };
   }
 
-  const cdnProvider = resolveCdnProvider(opts.bosConfig, opts.cdnProviderOverride);
-
-  if (opts.deploy && cdnProvider === "platform") {
-    console.log(
-      `  ${colors.cyan("→")} Platform CDN enabled — dist bundles will be uploaded by \`bos publish\` to the platform storage.`,
-    );
-  }
-
   const sharedSync = await syncResolvedSharedDeps({
     configDir: opts.configDir,
     hostMode: "local",
@@ -400,20 +222,7 @@ export async function buildWorkspaceTargets(opts: {
   const env: Record<string, string> = {
     ...process.env,
     NODE_ENV: opts.deploy ? "production" : "development",
-    BOS_CDN_PROVIDER: cdnProvider,
   };
-  if (opts.deploy && cdnProvider !== "platform") {
-    env.DEPLOY = "true";
-    env.FORCE_COLOR = "1";
-  } else {
-    delete env.DEPLOY;
-  }
-
-  const bosConfigPath = join(opts.configDir, "bos.config.json");
-  let configSnapshot: string | undefined;
-  if (opts.deploy && existsSync(bosConfigPath)) {
-    configSnapshot = readFileSync(bosConfigPath, "utf-8");
-  }
 
   const orderedExisting = opts.deploy
     ? [
@@ -438,10 +247,9 @@ export async function buildWorkspaceTargets(opts: {
     console.log();
 
     const results = await Promise.allSettled(
-      parallelGroup.map((ws) => buildOneWorkspace(ws, env, { ...opts, cdnProvider })),
+      parallelGroup.map((ws) => buildOneWorkspace(ws, env, opts)),
     );
 
-    const allDeployEntries: DeployResultEntry[] = [];
     for (let i = 0; i < parallelGroup.length; i++) {
       const ws = parallelGroup[i];
       const result = results[i];
@@ -449,11 +257,7 @@ export async function buildWorkspaceTargets(opts: {
         if (result.value.success) {
           built.push(ws.key);
         }
-        if (result.value.deployEntries) {
-          allDeployEntries.push(...result.value.deployEntries);
-        }
-        const { deployEntries: _deployEntries, ...deployResult } = result.value;
-        deployResults.push(deployResult);
+        deployResults.push(result.value);
       } else {
         deployResults.push({
           key: ws.key,
@@ -464,30 +268,12 @@ export async function buildWorkspaceTargets(opts: {
       }
     }
 
-    if (configSnapshot && allDeployEntries.length > 0) {
-      const config = JSON.parse(configSnapshot) as Record<string, unknown>;
-      const merged = applyDeployResults(config, allDeployEntries);
-      writeFileSync(bosConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
-    }
-
     for (const ws of sequentialGroup) {
-      const result = await buildOneWorkspace(ws, env, { ...opts, cdnProvider });
+      const result = await buildOneWorkspace(ws, env, opts);
       if (result.success) {
         built.push(ws.key);
       }
-      if (result.deployEntries) {
-        const hostEntries = result.deployEntries.filter((r) => r.urlField.startsWith("app.host"));
-        if (hostEntries.length > 0 && existsSync(bosConfigPath)) {
-          const currentConfig = JSON.parse(readFileSync(bosConfigPath, "utf-8")) as Record<
-            string,
-            unknown
-          >;
-          const merged = applyDeployResults(currentConfig, hostEntries);
-          writeFileSync(bosConfigPath, `${JSON.stringify(merged, null, 2)}\n`);
-        }
-      }
-      const { deployEntries: _deployEntries, ...sequentialResult } = result;
-      deployResults.push(sequentialResult);
+      deployResults.push(result);
     }
 
     console.log();

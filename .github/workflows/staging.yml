@@ -25,12 +25,6 @@ jobs:
     timeout-minutes: 30
     env:
       NEAR_PRIVATE_KEY: ${{ secrets.NEAR_TESTNET_PRIVATE_KEY }}
-      # Zephyr server-token auth. Zephyr directly advised us to retain this flow for
-      # our workflow even though server tokens are being deprecated in favor of CI
-      # ZE_SECRET_TOKEN is used directly as the bearer token — no API exchange needed.
-      # We fall back to ZE_CI_TOKEN (below) only if ZEPHYR_AUTH_TOKEN is unset.
-      ZE_SECRET_TOKEN: ${{ secrets.ZEPHYR_AUTH_TOKEN }}
-      ZE_USER_EMAIL: ${{ secrets.ZEPHYR_USER_EMAIL }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
     steps:
       - name: Checkout code
@@ -52,13 +46,6 @@ jobs:
       - name: Build better-near-auth
         run: bun run --cwd packages/better-near-auth build
 
-      - name: Configure Zephyr CI token fallback
-        if: ${{ env.ZE_SECRET_TOKEN == '' }}
-        env:
-          ZEPHYR_CI_TOKEN: ${{ secrets.ZEPHYR_CI_TOKEN }}
-        run: |
-          echo "ZE_CI_TOKEN=$ZEPHYR_CI_TOKEN" >> "$GITHUB_ENV"
-
       - name: Publish with deploy
         timeout-minutes: 20
         run: bun run bos publish --deploy --env staging --packages ui,api,apps,proposals,votes${{ inputs.verbose == true && ' --verbose' || '' }}
@@ -66,5 +53,5 @@ jobs:
       - name: Install Railway CLI
         run: npm i -g @railway/cli@5.47.1
 
-      - name: Redeploy Railway
-        run: railway redeploy --service app --yes
+      - name: Ship the image (railway up builds the deployment artifact)
+        run: railway up --service app --ci

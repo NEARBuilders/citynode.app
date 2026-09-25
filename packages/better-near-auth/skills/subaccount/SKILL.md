@@ -337,30 +337,20 @@ When using the `@everything-dev/auth-plugin`, the following `SubAccountConfig` f
               "parentHasFullAccess": true,
               "minDeposit": "0.1 NEAR",
               "deploy": { "fromPublished": { "accountId": "myapp.near" } },
-              "init": { "methodName": "init", "args": { "owner": "myapp.near" } },
-              "addRelayerFCAK": true,
-              "relayerFCAK": {
-                "receiverId": "myapp.near",
-                "methodNames": ["*"],
-                "allowance": "0.25 NEAR"
-              }
+              "init": { "methodName": "init", "args": { "owner": "myapp.near" } }
             },
             "testnet": {
               "parentAccount": "dev.myapp.testnet"
             }
           }
         }
-      },
-      "secrets": [
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-        "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET"
-      ]
+      }
     }
   }
 }
 ```
 
-The plugin's server code forwards these to the `siwn()` plugin's `subAccount` config automatically. The parent keys go in `secrets` — see `better-near-auth#auth-plugin` for plugin registration details.
+The plugin's server code forwards these to the `siwn()` plugin's `subAccount` config automatically. When the parent account differs from the relayer, provide the parent's private key through `siwn({ secrets: { parentKey } })` directly on the server — see `better-near-auth#auth-plugin` for plugin registration details.
 
 ### Available vs. unavailable fields via plugin config
 
@@ -371,8 +361,6 @@ The plugin's server code forwards these to the `siwn()` plugin's `subAccount` co
 | `minDeposit` | `extendTx` |
 | `deploy.fromPublished` | `onCreated` |
 | `init` (static `args` object) | `onRollback` |
-| `addRelayerFCAK` | |
-| `relayerFCAK` | |
 
 For non-scalar fields, configure `siwn()` directly on the server instead of using the plugin config.
 

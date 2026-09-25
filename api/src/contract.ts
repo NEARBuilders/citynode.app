@@ -80,6 +80,7 @@ export const TenantSchema = z.object({
   id: z.string(),
   accountId: z.string(),
   orgId: z.string().nullable(),
+  ownerUserId: z.string().nullable(),
   name: z.string(),
   status: TenantStatusSchema,
   ownerKind: z.string(),
@@ -109,7 +110,9 @@ export const TenantAppSchema = z.object({
   accountId: z.string().describe("NEAR account that owns the tenant runtime"),
   name: z.string(),
   status: TenantStatusSchema,
-  ownerKind: z.string().describe("'dao' for DAO-owned tenants, 'platform' otherwise"),
+  ownerKind: z
+    .string()
+    .describe("'dao' for DAO-owned tenants, 'user' for personal spawns, 'platform' otherwise"),
   hostname: z
     .string()
     .nullable()
@@ -198,65 +201,9 @@ export const NodeListSummarySchema = z.object({
   validatorCount: z.number().int().nonnegative(),
 });
 
-export const BundleObjectSchema = z.object({
-  key: z.string(),
-  sha256: z.string(),
-  integrity: z.string(),
-});
-
 export const contract = oc.router({
   ...discoveryContract,
 
-  uploadBundles: oc
-    .route({
-      method: "POST",
-      path: "/storage/bundles",
-      summary: "Upload Module Federation bundle artifacts",
-      description:
-        "Stores bundle files under bundles/<account>/<gateway>/<workspace>/<path> and returns server-computed SHA-256 and SRI hashes over the stored bytes. Authenticated via session or API key (x-api-key).",
-      tags: ["Storage"],
-    })
-    .input(
-      z.object({
-        account: z.string().min(1),
-        gateway: z.string().min(1),
-        workspace: z.string().min(1),
-        paths: z.record(
-          z.string(),
-          z.object({
-            content: z.string().describe("Base64-encoded file bytes"),
-            contentType: z.string().optional(),
-          }),
-        ),
-      }),
-    )
-    .output(
-      z.object({
-        base: z.string(),
-        objects: z.array(BundleObjectSchema),
-      }),
-    )
-    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST }),
-
-  serveBundle: oc
-    .route({
-      method: "GET",
-      path: "/bundles/{account}/{gateway}/{workspace}/{+path}",
-      summary: "Serve a stored bundle artifact",
-      description:
-        "Public. Serves bundle bytes with the stored content type. Mounted at /bundles/* by the host.",
-      tags: ["Storage"],
-    })
-    .input(
-      z.object({
-        account: z.string(),
-        gateway: z.string(),
-        workspace: z.string(),
-        path: z.string(),
-      }),
-    )
-    .output(z.instanceof(File))
-    .errors({ NOT_FOUND }),
   ping: oc.route({ method: "GET", path: "/ping" }).output(
     z.object({
       status: z.literal("ok"),
@@ -291,6 +238,57 @@ export const contract = oc.router({
         message: "Tenant with this accountId already exists",
       },
     }),
+
+  spawnTenant: oc
+    .route({
+      method: "POST",
+      path: "/tenants/spawn",
+      summary: "Spawn a user-owned tenant with a primary binding",
+      description:
+        "Session-gated — creates a tenant owned by the signed-in user's linked NEAR account " +
+        "(wallet or passkey-derived), with the hostname as its primary binding. Hostnames under " +
+        "a configured gateway zone are verified automatically.",
+    })
+    .input(
+      z.object({
+        name: z.string().min(1),
+        hostname: z.string().min(1),
+      }),
+    )
+    .output(
+      z.object({
+        tenant: TenantSchema,
+        binding: TenantBindingRecordSchema,
+        ownerAccountId: z.string(),
+        publishStatus: z.enum(["pending_funding", "ready"]),
+      }),
+    )
+    .errors({
+      UNAUTHORIZED,
+      FORBIDDEN,
+      BAD_REQUEST,
+      CONFLICT: { status: 409, message: "Tenant or hostname already exists" },
+    }),
+
+  getSpawnStatus: oc
+    .route({
+      method: "GET",
+      path: "/tenants/spawn/{tenantId}",
+      summary: "Spawn status for a user-owned tenant",
+      description:
+        "Returns the tenant, its bindings, and whether the owner account still needs on-chain " +
+        "funding before the tenant config can be published.",
+    })
+    .input(z.object({ tenantId: z.string() }))
+    .output(
+      z.object({
+        tenant: TenantSchema,
+        bindings: z.array(TenantBindingRecordSchema),
+        ownerAccountId: z.string(),
+        publishStatus: z.enum(["pending_funding", "ready"]),
+      }),
+    )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND }),
 
   updateTenant: oc
     .route({ method: "PATCH", path: "/tenants/{tenantId}" })

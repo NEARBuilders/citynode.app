@@ -16,12 +16,13 @@ import { isUniqueViolation, toOrpcError } from "../lib/errors";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
-export type TenantOwnerKind = "platform" | "dao";
+export type TenantOwnerKind = "platform" | "dao" | "user";
 
 export interface TenantRecord {
   id: string;
   accountId: string;
   orgId: string | null;
+  ownerUserId: string | null;
   name: string;
   status: TenantStatus;
   ownerKind: TenantOwnerKind;
@@ -69,11 +70,24 @@ export interface TenantInput {
   name: string;
   accountId: string;
   orgId: string | null;
+  ownerUserId?: string;
   status?: TenantStatus;
   ownerKind?: TenantOwnerKind;
   allowUiOverrides?: boolean;
   allowBackendOverrides?: boolean;
   allowSsr?: boolean;
+}
+
+export interface SpawnTenantInput {
+  name: string;
+  hostname: string;
+  ownerAccountId: string;
+  ownerUserId: string;
+}
+
+export interface SpawnTenantResult {
+  tenant: TenantRecord;
+  binding: TenantBindingRecord;
 }
 
 export interface CreateBindingInput {
@@ -96,10 +110,12 @@ export interface ApplyNodeProposalInput {
 export interface TenantsService {
   listAllTenants(): Promise<TenantRecord[]>;
   listTenantsByOrgIds(orgIds: string[]): Promise<TenantRecord[]>;
+  listTenantsByOwnerUserId(ownerUserId: string): Promise<TenantRecord[]>;
   listTenantApps(): Promise<TenantAppRecord[]>;
   listBindings(): Promise<TenantBinding[]>;
   listBindingsForTenant(tenantId: string): Promise<TenantBindingRecord[]>;
   createBinding(input: CreateBindingInput): Promise<TenantBindingRecord>;
+  spawnTenant(input: SpawnTenantInput): Promise<SpawnTenantResult>;
   verifyCustomDomain(tenantId: string, bindingId: string): Promise<TenantBindingRecord>;
   deleteBinding(tenantId: string, bindingId: string): Promise<void>;
   setPrimaryBinding(tenantId: string, bindingId: string): Promise<TenantBindingRecord>;
@@ -134,6 +150,7 @@ function toTenantRecord(row: TenantRow): TenantRecord {
     id: row.id,
     accountId: row.accountId,
     orgId: row.orgId,
+    ownerUserId: row.ownerUserId,
     name: row.name,
     status: row.status,
     ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
@@ -164,15 +181,43 @@ function generateVerificationToken(): string {
   return randomBytes(24).toString("hex");
 }
 
+export interface TenantsConfig {
+  gatewayDomains: string[];
+}
+
+export class TenantsConfigTag extends Context.Service<TenantsConfigTag, TenantsConfig>()(
+  "api/TenantsConfig",
+) {}
+
+export const TenantsConfigLive = (gatewayDomains: string[]) =>
+  Layer.succeed(TenantsConfigTag, { gatewayDomains });
+
 export const TenantsLive = Layer.effect(
   TenantsTag,
   Effect.gen(function* () {
     const db = yield* DatabaseTag;
+    const config = yield* Effect.serviceOption(TenantsConfigTag);
+    const gatewayDomains = config._tag === "Some" ? config.value.gatewayDomains : [];
+
+    const isGatewayZoneHostname = (hostname: string) =>
+      gatewayDomains.some((domain) => hostname.endsWith(`.${domain}`));
 
     const service: TenantsService = {
       listAllTenants: async () => {
         try {
           return (await db.select().from(tenantsTable)).map(toTenantRecord);
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      listTenantsByOwnerUserId: async (ownerUserId) => {
+        try {
+          const rows = await db
+            .select()
+            .from(tenantsTable)
+            .where(eq(tenantsTable.ownerUserId, ownerUserId));
+          return rows.map(toTenantRecord);
         } catch (error) {
           throw toOrpcError(error);
         }
@@ -294,14 +339,16 @@ export const TenantsLive = Layer.effect(
           }
 
           try {
+            const autoVerified =
+              !input.hostname.includes(".") || isGatewayZoneHostname(input.hostname);
             const [row] = await db
               .insert(domainBindingsTable)
               .values({
                 tenantId: input.tenantId,
                 hostname: input.hostname,
                 isPrimary: input.isPrimary ?? false,
-                isVerified: !input.hostname.includes("."),
-                verifiedAt: input.hostname.includes(".") ? null : new Date(),
+                isVerified: autoVerified,
+                verifiedAt: autoVerified ? new Date() : null,
                 verificationToken: generateVerificationToken(),
               })
               .returning();
@@ -505,6 +552,73 @@ export const TenantsLive = Layer.effect(
             }
             throw error;
           }
+        } catch (error) {
+          throw toOrpcError(error);
+        }
+      },
+
+      spawnTenant: async (input) => {
+        try {
+          return await db.transaction(async (tx) => {
+            const [existingTenant, existingBinding] = await Promise.all([
+              tx
+                .select({ id: tenantsTable.id })
+                .from(tenantsTable)
+                .where(eq(tenantsTable.accountId, input.ownerAccountId))
+                .limit(1),
+              tx
+                .select({ id: domainBindingsTable.id })
+                .from(domainBindingsTable)
+                .where(eq(domainBindingsTable.hostname, input.hostname))
+                .limit(1),
+            ]);
+
+            if (existingTenant.length > 0) {
+              throw new ORPCError("CONFLICT", {
+                message: "Tenant with this accountId already exists",
+                data: { accountId: input.ownerAccountId },
+              });
+            }
+            if (existingBinding.length > 0) {
+              throw new ORPCError("CONFLICT", {
+                message: "Hostname already in use",
+                data: { hostname: input.hostname },
+              });
+            }
+
+            const [tenant] = await tx
+              .insert(tenantsTable)
+              .values({
+                name: input.name,
+                accountId: input.ownerAccountId,
+                orgId: null,
+                ownerUserId: input.ownerUserId,
+                status: "active",
+                ownerKind: "user",
+              })
+              .returning();
+            if (!tenant) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Tenant creation failed" });
+            }
+
+            const autoVerified = isGatewayZoneHostname(input.hostname);
+            const [binding] = await tx
+              .insert(domainBindingsTable)
+              .values({
+                tenantId: tenant.id,
+                hostname: input.hostname,
+                isPrimary: true,
+                isVerified: autoVerified,
+                verifiedAt: autoVerified ? new Date() : null,
+                verificationToken: generateVerificationToken(),
+              })
+              .returning();
+            if (!binding) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Binding creation failed" });
+            }
+
+            return { tenant: toTenantRecord(tenant), binding: toBindingRecord(binding) };
+          });
         } catch (error) {
           throw toOrpcError(error);
         }

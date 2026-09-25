@@ -66,9 +66,16 @@ interface UiSource {
   remote?: UiRemoteEntry;
   localRoot?: string;
   manifestUrl?: string;
-  /** client-side web entry (browser remoteEntry.js) */
+  /** client-side web entry (browser remoteEntry.js) — the publicUrl base
+   * when the runtime declares one (image-native /bundles), else the url */
   webEntry?: string;
 }
+
+/** Browser-facing base for a ui surface: publicUrl declares the
+ * browser-reachable base (image-native /bundles slots); url is the
+ * server-side loading base and the fallback. */
+const browserUiBase = (ui: { url: string; publicUrl?: string | undefined }): string =>
+  (ui.publicUrl ?? ui.url).replace(/\/$/, "");
 
 /**
  * SSR availability: a production SSR entry, or a local core ui with SSR
@@ -99,7 +106,7 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
         config.ui.source === "local"
           ? undefined
           : `${config.ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      webEntry: `${config.ui.url.replace(/\/$/, "")}/${UI_REMOTE_ENTRY_FILENAME}`,
+      webEntry: `${browserUiBase(config.ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
     },
   ];
   for (const [id, plugin] of Object.entries(config.plugins ?? {})) {
@@ -116,7 +123,7 @@ export function uiSources(config: RuntimeConfig): UiSource[] {
       },
       localRoot: ui.localPath ? resolveLocalRoot(ui.localPath) : undefined,
       manifestUrl: `${ui.url.replace(/\/$/, "")}/${MANIFEST_FILENAME}`,
-      webEntry: `${ui.url.replace(/\/$/, "")}/${UI_REMOTE_ENTRY_FILENAME}`,
+      webEntry: `${browserUiBase(ui)}/${UI_REMOTE_ENTRY_FILENAME}`,
     });
   }
   return sources.sort((a, b) => a.key.localeCompare(b.key));

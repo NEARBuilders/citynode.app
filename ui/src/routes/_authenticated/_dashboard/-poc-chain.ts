@@ -7,8 +7,8 @@
  * the DAO's pending proposals, and to show the exact call in the UI.
  */
 
-import { Amount, type FinalExecutionOutcome, fromNearConnect, Near } from "near-kit";
-import { getDaoConnector } from "@/lib/dao-connect";
+import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
+import { getDaoConnector, toNearKitWallet } from "@/lib/dao-connect";
 import { type DaoPlan, getNear } from "@/lib/sputnik-proposals";
 
 export { parseNearAmount } from "@/lib/near-amount";
@@ -318,7 +318,10 @@ export function describePlan(plan: DaoPlan): string {
 /* -------------------------------------------------------------------- signing */
 
 function daoNear(): Near {
-  return new Near({ network: "mainnet", wallet: fromNearConnect(getDaoConnector()) });
+  return new Near({
+    network: "mainnet",
+    wallet: toNearKitWallet(getDaoConnector()),
+  });
 }
 
 /**

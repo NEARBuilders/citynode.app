@@ -1,7 +1,4 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { join } from "node:path";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchResponse } from "./http-client";
 
@@ -244,7 +241,7 @@ function setNestedPath(obj: Record<string, unknown>, dottedPath: string, value: 
   current[keys[keys.length - 1]!] = value;
 }
 
-export function deleteNestedPath(obj: Record<string, unknown>, dottedPath: string): void {
+function deleteNestedPath(obj: Record<string, unknown>, dottedPath: string): void {
   const keys = dottedPath.split(".");
   let current = obj;
   for (let i = 0; i < keys.length - 1; i += 1) {
@@ -255,61 +252,6 @@ export function deleteNestedPath(obj: Record<string, unknown>, dottedPath: strin
   delete current[keys[keys.length - 1]!];
 }
 
-export function reportDeployResult(opts: {
-  url: string;
-  integrity?: string | null;
-  bosConfigPath: string;
-  urlField: string;
-  integrityField?: string;
-}): void {
-  console.log(
-    `[BOS_DEPLOY] url=${opts.url} urlField=${opts.urlField} integrityField=${opts.integrityField ?? ""} integrity=${opts.integrity ?? ""}`,
-  );
-
-  try {
-    const config = JSON.parse(readFileSync(opts.bosConfigPath, "utf8")) as Record<string, unknown>;
-    setNestedPath(config, opts.urlField, opts.url);
-    if (opts.integrityField) {
-      if (opts.integrity) {
-        setNestedPath(config, opts.integrityField, opts.integrity);
-      } else {
-        console.warn(
-          `[SRI] integrity could not be computed for ${opts.url} — keeping the previous ${opts.integrityField} (fail-closed)`,
-        );
-      }
-    }
-    writeFileSync(opts.bosConfigPath, `${JSON.stringify(config, null, 2)}\n`);
-    console.log(`   ✅ Updated bos.config.json: ${opts.urlField}`);
-    if (opts.integrityField && opts.integrity) {
-      console.log(`   ✅ Updated bos.config.json: ${opts.integrityField}`);
-    }
-  } catch (err) {
-    console.error("   ❌ Failed to update bos.config.json:", (err as Error).message);
-  }
-}
-
-export function parseDeployLines(output: string): DeployResultEntry[] {
-  const results: DeployResultEntry[] = [];
-  for (const line of output.split("\n")) {
-    if (!line.includes("[BOS_DEPLOY]")) continue;
-    const urlMatch = line.match(/url=(\S+)/);
-    const urlFieldMatch = line.match(/urlField=(\S+)/);
-    if (!urlMatch || !urlFieldMatch) continue;
-    const integrityFieldMatch = line.match(/integrityField=(\S+)/);
-    const integrityMatch = line.match(/integrity=(\S+)/);
-    const url = urlMatch[1];
-    const urlField = urlFieldMatch[1];
-    if (url === undefined || urlField === undefined) continue;
-    results.push({
-      url,
-      urlField,
-      integrityField: integrityFieldMatch?.[1] || undefined,
-      integrity: integrityMatch?.[1] || undefined,
-    });
-  }
-  return results;
-}
-
 export function applyDeployResults(
   config: Record<string, unknown>,
   results: DeployResultEntry[],
@@ -317,75 +259,13 @@ export function applyDeployResults(
   const merged = structuredClone(config);
   for (const result of results) {
     setNestedPath(merged, result.urlField, result.url);
-    if (result.integrityField && result.integrity) {
-      setNestedPath(merged, result.integrityField, result.integrity);
+    if (result.integrityField) {
+      if (result.integrity) {
+        setNestedPath(merged, result.integrityField, result.integrity);
+      } else {
+        deleteNestedPath(merged, result.integrityField);
+      }
     }
   }
   return merged;
-}
-
-export function findPluginKey(
-  bosConfigPath: string,
-  pluginDir: string,
-): { key: string; slot: "app" | "plugins" } | null {
-  const config = JSON.parse(readFileSync(bosConfigPath, "utf8")) as Record<string, unknown>;
-  const configRoot = join(bosConfigPath, "..");
-  const normalizedPluginDir = pluginDir.replace(/\\/g, "/").replace(/\/+$/, "");
-  for (const slot of ["plugins", "app"] as const) {
-    const container = config[slot] as Record<string, Record<string, unknown>> | undefined;
-    if (!container) continue;
-    for (const [key, entry] of Object.entries(container)) {
-      const dev = entry?.development;
-      if (typeof dev !== "string" || !dev.startsWith("local:")) continue;
-      const resolved = join(configRoot, dev.slice("local:".length))
-        .replace(/\\/g, "/")
-        .replace(/\/+$/, "");
-      if (resolved === normalizedPluginDir) return { key, slot };
-    }
-  }
-  return null;
-}
-
-export interface PluginDeployOptions {
-  bosConfigPath: string;
-  deployLabel?: string;
-  urlField?: string;
-  integrityField?: string;
-}
-
-export function withPluginDeploy(baseConfig: unknown, options: PluginDeployOptions): unknown {
-  if (process.env.DEPLOY !== "true") return baseConfig;
-  if (process.env.BOS_CDN_PROVIDER === "platform") return baseConfig;
-
-  const { withZephyr } = createRequire(import.meta.url)("zephyr-rspack-plugin");
-
-  return withZephyr({
-    hooks: {
-      onDeployComplete: async (info: { url: string }) => {
-        console.log(`🚀 ${options.deployLabel ?? "Plugin"} Deployed:`, info.url);
-        const integrity = await computeSriHashForUrl(info.url);
-        if (options.urlField) {
-          reportDeployResult({
-            url: info.url,
-            integrity,
-            bosConfigPath: options.bosConfigPath,
-            urlField: options.urlField,
-            integrityField:
-              options.integrityField ?? options.urlField.replace(/\.production$/, ".integrity"),
-          });
-          return;
-        }
-        const found = findPluginKey(options.bosConfigPath, process.cwd());
-        if (found) {
-          reportDeployResult({
-            url: info.url,
-            integrity,
-            bosConfigPath: options.bosConfigPath,
-            urlField: `${found.slot}.${found.key}.production`,
-            integrityField: `${found.slot}.${found.key}.integrity`,
-          });
-        }
-      },
-    },
-  })(baseConfig);
 }

@@ -59,6 +59,10 @@ export const PluginUiConfigSchema = z.object({
   name: z.string(),
   development: z.string().optional(),
   production: z.string().optional(),
+  /** browser-facing base overriding `production` when server-side loading
+   * must stay container-local (image-native runtimes, ADR 0011) — may be
+   * same-origin relative (/bundles/<account>/<gateway>/<slot>) */
+  publicUrl: z.string().optional(),
   integrity: z.string().optional(),
   ssr: z.string().optional(),
   ssrIntegrity: z.string().optional(),
@@ -101,6 +105,9 @@ const PluginRuntimeUiSchema = z.object({
   url: z.string(),
   entry: z.string(),
   source: SourceModeSchema,
+  /** browser-facing base; when set the client config serves this instead of
+   * `url` (server-side loading keeps `url`) */
+  publicUrl: z.string().optional(),
   localPath: z.string().optional(),
   port: z.number().optional(),
   integrity: z.string().optional(),
@@ -161,6 +168,8 @@ export const UiConfigSchema = z
     name: z.string().optional(),
     development: z.string().optional(),
     production: z.string().optional(),
+    /** browser-facing base overriding `production` (see PluginUiConfigSchema) */
+    publicUrl: z.string().optional(),
     integrity: z.string().optional(),
     ssr: z.string().optional(),
     ssrIntegrity: z.string().optional(),
@@ -234,11 +243,6 @@ export const BosConfigInputSchema: z.ZodType<BosConfigInput> = z.lazy(() =>
         auth: z.enum(["session", "key", "custody"]).optional(),
       })
       .optional(),
-    deploy: z
-      .object({
-        cdn: z.enum(["zephyr", "platform"]).optional(),
-      })
-      .optional(),
     ci: CiConfigSchema.optional(),
   }),
 );
@@ -269,7 +273,6 @@ export interface BosConfigInput {
   app?: Record<string, BosConfigInputAppEntry>;
   plugins?: Record<string, string | BosConfigInput>;
   publish?: PublishConfig;
-  deploy?: DeployConfig;
   ci?: CiConfig;
 }
 
@@ -291,14 +294,6 @@ export const PublishConfigSchema = z.object({
 });
 export type PublishConfig = z.infer<typeof PublishConfigSchema>;
 
-export const DeployCdnSchema = z.enum(["zephyr", "platform"]);
-export type DeployCdn = z.infer<typeof DeployCdnSchema>;
-
-export const DeployConfigSchema = z.object({
-  cdn: DeployCdnSchema.optional(),
-});
-export type DeployConfig = z.infer<typeof DeployConfigSchema>;
-
 const PluginKeySchema = z
   .string()
   .regex(
@@ -316,7 +311,6 @@ export const BosConfigSchema = z.object({
   staging: BosStagingSchema.optional(),
   repository: z.string().optional(),
   publish: PublishConfigSchema.optional(),
-  deploy: DeployConfigSchema.optional(),
   ci: CiConfigSchema.optional(),
   plugins: z.record(PluginKeySchema, z.union([z.string(), BosPluginRefSchema])).optional(),
   app: z.object({
@@ -345,6 +339,9 @@ export const RuntimeConfigSchema = z.object({
   ui: FederationEntrySchema.extend({
     localPath: z.string().optional(),
     port: z.number().optional(),
+    /** browser-facing base; when set the client config serves this instead
+     * of `url` (server-side loading keeps `url`) */
+    publicUrl: z.string().optional(),
     ssrUrl: z.string().optional(),
     ssrIntegrity: z.string().optional(),
     dependsOn: z.array(z.string()).optional(),

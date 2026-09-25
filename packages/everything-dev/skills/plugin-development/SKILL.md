@@ -384,7 +384,7 @@ bos plugin publish          # Build and publish just this plugin
 bos publish --deploy        # Build ALL packages + deploy + publish config
 ```
 
-Deploy builds via `rspack.config.js`, uploads to Zephyr CDN, updates `bos.config.json` with production URL + integrity hash, and publishes to FastKV registry. Restart the host after publishing.
+Builds the plugin, updates `bos.config.json` with the deterministic image-native production URL (`https://<domain>/bundles/<account>/<gateway>/<key>/`), and publishes to FastKV registry. Restart the host after publishing.
 
 ### CLI Lifecycle
 

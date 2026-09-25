@@ -122,6 +122,59 @@ describe("prepareLocalProductionConfig", () => {
     expect(result.app.auth?.ui).not.toHaveProperty("ssr");
   });
 
+  it("plans publicUrl alongside container-local production urls", () => {
+    const result = prepareLocalProductionConfig(baseConfig, {
+      ui: {
+        production: "http://localhost:4103",
+        ssr: "http://localhost:4103/ssr",
+        publicUrl: "/bundles/v1.citynode.near/citynode.app/ui",
+      },
+      auth: "http://localhost:4102",
+      authUi: {
+        production: "http://localhost:4112",
+        name: "_everything_dev_auth_plugin",
+        publicUrl: "/bundles/v1.citynode.near/citynode.app/auth-ui",
+      },
+      plugins: {
+        template: {
+          production: "http://localhost:4113",
+          uiPublicUrl: "/bundles/v1.citynode.near/citynode.app/template",
+        },
+      },
+    });
+    expect(result.app.ui).toMatchObject({
+      production: "http://localhost:4103",
+      publicUrl: "/bundles/v1.citynode.near/citynode.app/ui",
+    });
+    expect(result.app.auth?.ui).toMatchObject({
+      production: "http://localhost:4112",
+      publicUrl: "/bundles/v1.citynode.near/citynode.app/auth-ui",
+    });
+    expect(result.plugins?.template).toMatchObject({
+      production: "http://localhost:4113",
+    });
+  });
+
+  it("leaves publicUrl untouched when the plan does not mention it", () => {
+    const withPublic = {
+      ...baseConfig,
+      app: {
+        ...baseConfig.app,
+        ui: {
+          ...baseConfig.app.ui,
+          publicUrl: "https://public.example.com/ui",
+        },
+      },
+    } as unknown as BosConfig;
+    const result = prepareLocalProductionConfig(withPublic, {
+      ui: { production: "http://localhost:4103" },
+    });
+    expect(result.app.ui).toMatchObject({
+      production: "http://localhost:4103",
+      publicUrl: "https://public.example.com/ui",
+    });
+  });
+
   it("leaves unplanned remotes verbatim — origin and integrity", () => {
     const result = prepareLocalProductionConfig(baseConfig, {
       ui: { production: "http://localhost:4103", ssr: "http://localhost:4103/ssr" },

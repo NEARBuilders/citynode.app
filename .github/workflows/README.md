@@ -7,8 +7,8 @@ This is a **downstream child project** — it deploys the app (UI, API, plugins)
 This repository uses the following workflows:
 
 - `CI` — lint, audit, typecheck, framework tests, and regression
-- `Deploy` — app deploy to Zephyr CDN + FastKV config publish (production, triggered directly by CI)
-- `Staging` — app deploy to Zephyr CDN + FastKV config publish (staging/testnet, triggered by push to `staging` branch)
+- `Deploy` — config publish to FastKV + Railway image deploy (production, triggered directly by CI)
+- `Staging` — config publish to FastKV + Railway image deploy (staging/testnet, triggered by push to `staging` branch)
 - `Release` — changeset versioning and npm publish (manual only, for framework packages)
 - `Docker` — Docker build and push (manual or via Release only)
 
@@ -80,17 +80,17 @@ Host is never deployed from this repo — it's loaded from a remote URL at runti
 
 **Trigger:** `workflow_run` (CI completed successfully on `main`), or `workflow_dispatch`.
 
-**Purpose:** Build and deploy app workspaces (UI, API, plugins) to Zephyr CDN, publish `bos.config.json` to FastKV, and redeploy Railway.
+**Purpose:** Build app workspaces, write deterministic bundle URLs into `bos.config.json`, publish it to FastKV, and ship the Railway image (the image stages the artifacts and serves `/bundles/*` itself).
 
 **Behavior:**
-- Runs `bos publish --deploy --packages ui,api,apps,proposals,votes` (excludes host — host is loaded from a remote URL)
+- Runs `bos publish --deploy --packages local` (builds every locally-owned workspace)
 - Checks out the exact commit CI validated (`github.event.workflow_run.head_sha`)
-- Redeploys the Railway service
+- Ships the Railway service with `railway up` (builds the image — the deployment artifact)
 - Does **not** commit anything back — the Railway host fetches the published config from FastKV (`bos start` resolves `BOS_ACCOUNT`/`BOS_GATEWAY`), so the repo copy of `bos.config.json` is the publish *input*, not the deploy output
 
-**Secrets:** `NEAR_PRIVATE_KEY` and `ZEPHYR_CI_TOKEN` come from repository secrets. NEAR for FastKV publish, Zephyr CI token for CDN deploy. If `ZEPHYR_CI_TOKEN` is not set, falls back to `ZEPHYR_AUTH_TOKEN` + `ZEPHYR_USER_EMAIL` (legacy server-token auth).
+**Secrets:** `NEAR_PRIVATE_KEY` comes from repository secrets (FastKV config publish). `RAILWAY_TOKEN` ships the image.
 
-**`cancel-in-progress: false`** — interrupting `bos publish --deploy` mid-flight could leave Zephyr CDN and FastKV in an inconsistent state. Queued deploys pick up the latest main when they run.
+**`cancel-in-progress: false`** — interrupting `bos publish --deploy` mid-flight could leave the FastKV config and the live image on different release trains. Queued deploys pick up the latest main when they run.
 
 ## Downstream Project Flow
 
@@ -98,9 +98,9 @@ This repo is a downstream child project. The flow is simplified — no Release o
 
 ```
 main branch push → CI (lint, typecheck, regression)
-                 → workflow_run (success) → Deploy (Zephyr CDN + FastKV, excludes host)
+                 → workflow_run (success) → Deploy (FastKV config publish + Railway image)
 
-staging branch push → Staging (Zephyr CDN + FastKV on testnet, excludes host)
+staging branch push → Staging (FastKV config publish + Railway image on testnet)
 ```
 
 Release and Docker are manual-only (`workflow_dispatch`). When this repo is merged to the parent `everything.dev`, the parent's own workflows handle framework packages and host deployment.
@@ -112,7 +112,6 @@ The `staging` branch deploys to testnet using `v1.citynode.testnet` as the signi
 **Required GitHub secrets for staging:**
 - `NEAR_TESTNET_PRIVATE_KEY` — NEAR key for `v1.citynode.testnet`
 - `RAILWAY_STAGING_TOKEN` — Railway token scoped to the staging environment
-- `ZEPHYR_AUTH_TOKEN` / `ZEPHYR_CI_TOKEN` — Zephyr auth (shared with production)
 
 ## Docker Image Architecture
 
@@ -120,26 +119,30 @@ Docker images are built in `docker.yml`. The image uses a multi-stage build:
 
 ```
 Builder stage:
+  COPY manifests (package.jsons, bun.lock, bunfig.toml)   # first — deps cache independently
+  RUN --mount=type=cache bun install --frozen-lockfile --ignore-scripts
   COPY . .                                    # Full repo
-  RUN bun install --frozen-lockfile --ignore-scripts
   RUN bun run --cwd packages/every-plugin build
   RUN bun run --cwd packages/everything-dev build
   RUN bun run scripts/resolve-workspace-refs.ts  # normalize workspace refs
-  RUN rm -rf host api ui plugins              # App code loaded remotely at runtime
+
+Regression-builder stage:
+  RUN bun run scripts/regression/container-build.ts  # builds all workspaces,
+                                                     # stages .bos/bundles namespace layout
 
 Final stage:
-  COPY --from=builder node_modules            # Pre-installed deps
-  COPY --from=builder package.json bun.lock bunfig.toml
-  COPY --from=builder bos.config.json         # Runtime config
-  COPY --from=builder packages/everything-dev  # Framework CLI (bos)
-  COPY --from=builder packages/every-plugin    # Plugin runtime
-  # host/ api/ ui/ plugins/ are NOT copied — loaded remotely at runtime
+  COPY --from=prod-builder node_modules       # Pre-installed deps
+  COPY --from=prod-builder package.json bun.lock bunfig.toml
+  COPY --from=prod-builder bos.config.json    # Runtime config
+  COPY --from=prod-builder packages/everything-dev  # Framework CLI (bos)
+  COPY --from=prod-builder packages/every-plugin    # Plugin runtime
+  COPY --from=dist-builder .bos/bundles      # Image-native artifacts (BOS_BUNDLE_DIR)
 ```
 
 **Why this design:**
 - `packages/everything-dev` and `packages/every-plugin` are framework packages needed at runtime for the `bos` CLI and plugin runtime.
 - The normalize script rewrites `workspace:*` references to concrete package versions before install.
-- App code (`host/`, `api/`, `ui/`, `plugins/`) is removed — the host loads UI, API, and plugins from remote URLs at runtime via Module Federation.
+- Workspace dists ship inside the image (`.bos/bundles/<account>/<gateway>/<workspace>/…`) and the host serves them same-origin from `/bundles/*` — the image IS the deployment (ADR 0011).
 - The start command uses `bos` from `node_modules/.bin/bos`.
 
 ## npm Trusted Publishing (OIDC)
@@ -163,9 +166,6 @@ npm packages are published using **Trusted Publishing** (OpenID Connect), which 
 | Variable | Where | Purpose |
 |----------|-------|---------|
 | `NEAR_PRIVATE_KEY` | Deploy | NEAR key for FastKV config publish |
-| `ZEPHYR_CI_TOKEN` | Deploy, Staging (as `ZE_CI_TOKEN`) | Zephyr Cloud CI token for CDN deploy (preferred) |
-| `ZEPHYR_AUTH_TOKEN` | Deploy, Staging (as `ZE_SECRET_TOKEN`) | Zephyr auth used as direct bearer token; `ZE_CI_TOKEN` fallback |
-| `ZEPHYR_USER_EMAIL` | Deploy, Staging (as `ZE_USER_EMAIL`) | Fallback Zephyr user email when `ZEPHYR_CI_TOKEN` is absent |
 | `GITHUB_TOKEN` | Release, Check Skills | Changesets PR creation, GitHub releases, skills review PRs |
 
 `bos publish` signs the FastKV registry transaction in-process via `near-kit` — no near-cli-rs install step is needed in CI. `NEAR_PRIVATE_KEY` (or `BOS_NEAR_PRIVATE_KEY`) is read directly from the environment; locally, `~/.near-credentials` also works.

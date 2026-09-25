@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
-  sessionQueryKey,
+  refreshSessionCache,
   sessionQueryOptions,
   signInWithPasskey,
   useAuthClient,
@@ -33,7 +33,7 @@ function OnboardPage() {
   const queryClient = useQueryClient();
   const { code } = Route.useSearch();
   const { apiClient } = Route.useRouteContext();
-  const { data: session } = useQuery(sessionQueryOptions(auth, undefined));
+  const { data: session } = useQuery(sessionQueryOptions(auth));
   const { data: info } = useQuery({
     queryKey: ["onboarding-info", code],
     queryFn: async () => {
@@ -70,19 +70,19 @@ function OnboardPage() {
       .then((result) => {
         setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
         toast.success(`You've joined ${result.organizationName}`);
-        void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        void refreshSessionCache(auth, queryClient);
       })
       .catch((error: { message?: string }) => {
         setRedeemError(error?.message || "Could not join this organization");
       });
-  }, [session?.user, code, redeemed, redeemError, apiClient, queryClient]);
+  }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient]);
 
   const handleNear = async () => {
     setNearPending(true);
     await auth.signIn.near({
       onSuccess: async () => {
         setNearPending(false);
-        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        await refreshSessionCache(auth, queryClient);
       },
       onError: (error: { code?: string; message?: string }) => {
         setNearPending(false);
@@ -96,7 +96,7 @@ function OnboardPage() {
     await signInWithPasskey(auth, {
       onSuccess: async () => {
         setPasskeyPending(false);
-        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        await refreshSessionCache(auth, queryClient);
       },
       onError: (error) => {
         setPasskeyPending(false);

@@ -67,9 +67,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
     meta: [{ name: "description", content: "Manage organization details and members." }],
   }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      sessionQueryOptions(context.authClient, context.session),
-    );
+    await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
     await context.queryClient.ensureQueryData({
       queryKey: ["organizations"],
       queryFn: async () => {

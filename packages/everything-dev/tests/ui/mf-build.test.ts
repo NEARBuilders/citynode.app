@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CORE_UI_DEPLOY_FIELDS,
-  createUiSharedDeps,
-  pluginUiDeployFields,
-} from "../../src/ui/mf-build";
+import { CORE_UI_DEPLOY_FIELDS, createUiSharedDeps } from "../../src/ui/mf-build";
 
 const pkg = {
   dependencies: {
@@ -53,14 +49,9 @@ describe("createUiSharedDeps", () => {
   });
 });
 
-describe("pluginUiDeployFields", () => {
-  it("names the plugins.<id>.ui.* fields", () => {
-    expect(pluginUiDeployFields("auth")).toEqual({
-      urlField: "plugins.auth.ui.production",
-      integrityField: "plugins.auth.ui.integrity",
-      ssrUrlField: "plugins.auth.ui.ssr",
-      ssrIntegrityField: "plugins.auth.ui.ssrIntegrity",
-    });
+describe("CORE_UI_DEPLOY_FIELDS", () => {
+  it("names the app.ui.* fields", () => {
     expect(CORE_UI_DEPLOY_FIELDS.urlField).toBe("app.ui.production");
+    expect(CORE_UI_DEPLOY_FIELDS.ssrUrlField).toBe("app.ui.ssr");
   });
 });

@@ -774,6 +774,7 @@ export async function personalizeConfig(
     pkg.type = "module";
     delete pkg.module;
     delete pkg.peerDependencies;
+    delete pkg.patchedDependencies;
 
     if (pkg.workspaces && typeof pkg.workspaces === "object") {
       const ws = pkg.workspaces as { packages?: string[] };
@@ -1400,7 +1401,7 @@ You don't need to wait for a PR to merge and run through CI/CD. Publish your own
    \`\`\`
 5. **Publish and deploy:**
    \`\`\`bash
-   bos publish --deploy    # builds → Zephyr CDN → publishes config to FastKV at bos://<your-account>/<gateway>
+   bos publish --deploy    # builds → writes deterministic bundle URLs → publishes config to FastKV at bos://<your-account>/<gateway>
    \`\`\`
 6. **Deploy to Railway** (one-click template or \`railway up\`), set \`BOS_ACCOUNT\`, \`BOS_GATEWAY\` (same gateway as parent), and \`BETTER_AUTH_SECRET\`. Your Railway host fetches your config from FastKV and serves live.
 

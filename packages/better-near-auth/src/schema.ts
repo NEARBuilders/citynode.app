@@ -105,4 +105,40 @@ export const schema = {
       },
     },
   },
+  fundedGasKey: {
+    fields: {
+      userId: {
+        type: "string",
+        references: {
+          model: "user",
+          field: "id",
+        },
+        required: true,
+      },
+      accountId: {
+        type: "string",
+        required: true,
+      },
+      publicKey: {
+        type: "string",
+        required: true,
+      },
+      network: {
+        type: "string",
+        required: true,
+      },
+      amount: {
+        type: "string",
+        required: true,
+      },
+      txHash: {
+        type: "string",
+        required: true,
+      },
+      createdAt: {
+        type: "date",
+        required: true,
+      },
+    },
+  },
 } satisfies BetterAuthPluginDBSchema;

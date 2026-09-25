@@ -24,7 +24,7 @@ export default defineConfig([
     fixedExtension: false,
     deps: {
       neverBundle,
-      alwaysBundle: /@hot-labs\/near-connect/,
+      alwaysBundle: /@fastnear\/near-connect/,
       onlyBundle: false,
     },
     clean: false,

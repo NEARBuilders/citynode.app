@@ -7,7 +7,6 @@
     "dev": "rsbuild dev",
     "dev:built": "rsbuild build && rsbuild preview",
     "build": "rsbuild build",
-    "deploy": "DEPLOY=true FORCE_COLOR=1 bun run build",
     "build:client": "rsbuild build --environment web",
     "build:ssr": "rsbuild build --environment node",
     "generate-metadata": "bun run ./scripts/generate-metadata.ts",
@@ -20,7 +19,7 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/core": "catalog:",
     "@better-auth/passkey": "catalog:",
-    "@hot-labs/near-connect": "catalog:",
+    "@fastnear/near-connect": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/tanstack-query": "catalog:",
@@ -105,7 +104,6 @@
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.17",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "zephyr-rsbuild-plugin": "catalog:"
+    "vitest": "catalog:"
   }
 }

@@ -38,6 +38,16 @@ function getFallbackGatewayId(config: RuntimeConfig) {
   return normalizeUrl(config.host?.url)?.replace(/^https?:\/\//, "") ?? "runtime";
 }
 
+/**
+ * Browser-facing base for a ui surface (ADR 0011): `publicUrl` declares the
+ * base browsers must load a remote from — the image-native runtime serves
+ * /bundles/<account>/<gateway>/<slot>/ same-origin while its server-side MF
+ * loading stays on the container-local `url`. Absent (dev stacks, published
+ * configs, tenant overrides) `url` is directly reachable and wins.
+ */
+const clientUiUrl = (ui: { url: string; publicUrl?: string | undefined }): string =>
+  ui.publicUrl ?? ui.url;
+
 export function resolveActiveRuntime(config: RuntimeConfig, request: Request) {
   const url = new URL(request.url);
   const fallbackGatewayId = getFallbackGatewayId(config);
@@ -65,20 +75,24 @@ export function buildRuntimeClientConfig(
     throw new Error("UI config is required to build the runtime client config");
   }
 
+  const coreUiUrl = clientUiUrl(uiConfig);
+
   return {
     env: config.env,
     account: activeRuntime.accountId,
     networkId: config.account.endsWith(".testnet") ? "testnet" : "mainnet",
     hostUrl: requestUrl.origin,
-    assetsUrl: uiConfig.url,
+    assetsUrl: coreUiUrl,
     apiBase: "/api",
     rpcBase: "/api/rpc",
     authAvailable,
     repository: config.repository,
     ui: {
       name: uiConfig.name,
-      url: uiConfig.url,
-      entry: uiConfig.entry,
+      url: coreUiUrl,
+      entry: uiConfig.publicUrl
+        ? `${uiConfig.publicUrl.replace(/\/$/, "")}/mf-manifest.json`
+        : uiConfig.entry,
       integrity: uiConfig.integrity,
       compose: composePayload,
     },
@@ -114,8 +128,10 @@ export function buildRuntimeClientConfig(
               ? {
                   ui: {
                     name: plugin.ui.name,
-                    url: plugin.ui.url,
-                    entry: plugin.ui.entry,
+                    url: clientUiUrl(plugin.ui),
+                    entry: plugin.ui.publicUrl
+                      ? `${plugin.ui.publicUrl.replace(/\/$/, "")}/mf-manifest.json`
+                      : plugin.ui.entry,
                     source: plugin.ui.source,
                     integrity: plugin.ui.integrity,
                     ssrUrl: plugin.ui.ssrUrl,

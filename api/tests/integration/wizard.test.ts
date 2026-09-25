@@ -63,7 +63,7 @@ describe("Tenant + Node + Binding wizard flow", () => {
         tenantId: tenant.id,
         hostname: "chicago-wiz.citynode.app",
         isPrimary: true,
-        isVerified: false,
+        isVerified: true,
       });
 
       const postPreflight = await c.bindingPreflight({ hostname: "chicago-wiz.citynode.app" });
