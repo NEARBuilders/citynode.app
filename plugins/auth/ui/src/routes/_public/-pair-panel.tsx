@@ -120,9 +120,9 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         data-testid="device.qr"
       >
         {qrDataUrl ? (
-          <img src={qrDataUrl} alt="Scan with your phone to sign in" className="size-[220px]" />
+          <img src={qrDataUrl} alt="Scan with your phone to sign in" className="size-55" />
         ) : (
-          <div className="size-[220px] animate-pulse rounded bg-muted" />
+          <div className="size-55 animate-pulse rounded bg-muted" />
         )}
       </div>
       <p className="text-sm text-muted-foreground">

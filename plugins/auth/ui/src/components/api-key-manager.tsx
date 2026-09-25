@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
+import { InfoRow } from "./ui/info-row";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
@@ -41,7 +42,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wide">name</Label>
+        <Label>Name</Label>
         <Input
           type="text"
           value={name}
@@ -52,7 +53,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wide">expiration</Label>
+        <Label>Expiration</Label>
         <div className="flex flex-wrap gap-2">
           {EXPIRATION_PRESETS.map((preset) => (
             <Button
@@ -123,34 +124,25 @@ export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
             dismiss
           </Button>
         </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="flex flex-col gap-3 md:flex-row">
           <Input
             readOnly
             value={apiKey.key}
-            className="font-mono text-xs"
+            className="flex-1"
             onFocus={(e) => e.target.select()}
             onClick={(e) => e.currentTarget.select()}
           />
           <Button onClick={handleCopy} variant="outline" size="sm">
-            <CopyIcon className="h-3.5 w-3.5 mr-1" />
+            <CopyIcon data-icon="inline-start" />
             copy
           </Button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+        <div className="flex flex-col">
           <InfoRow label="name" value={apiKey.name ?? "unnamed"} />
           <InfoRow label="prefix" value={`${apiKey.prefix ?? "api_"}...`} mono />
           <InfoRow label="created" value={new Date(apiKey.createdAt).toLocaleString()} />
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] bg-muted/30 p-3 grid gap-1 sm:grid-cols-[100px_1fr] sm:gap-4">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={mono ? "text-xs font-mono break-all" : "text-sm break-all"}>{value}</div>
-    </div>
   );
 }

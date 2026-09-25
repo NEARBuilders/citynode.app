@@ -1,4 +1,6 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -20,14 +22,14 @@ const buttonVariants = cva(
       },
       size: {
         default:
-          "h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
-        xs: "h-6 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        lg: "h-10 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        icon: "size-9",
-        "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
+          "h-11 gap-2 px-5 text-base has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
+        xs: "h-7 gap-1 px-3 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-9 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        lg: "h-12 gap-2 px-6 text-base has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5 [&_svg:not([class*='size-'])]:size-5",
+        icon: "size-11",
+        "icon-xs": "size-7 [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-9",
+        "icon-lg": "size-12 [&_svg:not([class*='size-'])]:size-5",
       },
     },
     defaultVariants: {
@@ -37,12 +39,46 @@ const buttonVariants = cva(
   },
 );
 
+function ButtonLink({
+  className,
+  variant = "default",
+  size = "default",
+  render,
+  nativeButton: _nativeButton,
+  focusableWhenDisabled: _focusableWhenDisabled,
+  disabled = false,
+  style,
+  ...props
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const state: { disabled: boolean } = { disabled };
+  const resolvedClassName = typeof className === "function" ? className(state) : className;
+  return useRender({
+    defaultTagName: "a",
+    render,
+    state,
+    props: {
+      ...mergeProps<"button">(
+        {
+          className: cn(buttonVariants({ variant, size, className: resolvedClassName })),
+          style: typeof style === "function" ? style(state) : style,
+          "aria-disabled": disabled || undefined,
+        },
+        props,
+      ),
+      "data-slot": "button",
+    },
+  });
+}
+
 function Button({
   className,
   variant = "default",
   size = "default",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  if (props.nativeButton === false && props.render) {
+    return <ButtonLink className={className} variant={variant} size={size} {...props} />;
+  }
   return (
     <ButtonPrimitive
       data-slot="button"

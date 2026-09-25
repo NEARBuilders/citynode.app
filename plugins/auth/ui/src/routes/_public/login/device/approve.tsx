@@ -118,7 +118,7 @@ function DeviceApprovePage() {
   if (approved) {
     return (
       <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-2 text-center">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-2 text-center">
           <h1
             className="text-lg font-semibold text-foreground"
             data-testid="device.approved-heading"
@@ -135,7 +135,7 @@ function DeviceApprovePage() {
 
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
         <div className="space-y-1 text-center">
           <h1
             className="text-xl font-semibold text-foreground"
@@ -154,7 +154,10 @@ function DeviceApprovePage() {
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground font-mono break-all">{pubKey}</p>
             {configAccount && signedInAccountId && signedInAccountId !== configAccount && (
-              <p className="text-xs text-yellow-600" data-testid="device.account-mismatch">
+              <p
+                className="text-xs text-warning-muted-foreground"
+                data-testid="device.account-mismatch"
+              >
                 Your signed-in NEAR account differs from the configured account — the delegate key
                 can only sign for your signed-in account.
               </p>
@@ -217,7 +220,7 @@ function NavigateToLogin({ userCode }: { userCode?: string }) {
   const target = userCode ? `/login/device?user_code=${userCode}` : "/login/device";
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
         <h1 className="text-xl font-semibold text-foreground" data-testid="device.approve-heading">
           Sign in required
         </h1>

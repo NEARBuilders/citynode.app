@@ -140,7 +140,7 @@ function LoginPage() {
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm flex flex-col items-center gap-5">
-        <div className="w-full rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
+        <div className="w-full rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
           <div className="space-y-1 text-center">
             <h1 className="text-xl font-semibold text-foreground" data-testid="login.heading">
               Sign in
@@ -177,7 +177,7 @@ function LoginPage() {
               </Button>
               {passkeyMissing ? (
                 <p
-                  className="rounded-[8px] border border-border bg-muted p-3 text-sm text-muted-foreground"
+                  className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground"
                   data-testid="login.no-passkey-hint"
                 >
                   No passkey on this device? Sign in with your phone, or connect your NEAR wallet.

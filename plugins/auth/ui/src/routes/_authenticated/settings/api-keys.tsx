@@ -131,7 +131,7 @@ function ApiKeysSettings() {
         </div>
       </Card>
 
-      <Card className="p-6 hover:shadow-md">
+      <Card className="p-6">
         <ApiKeyForm
           onCreate={(values: ApiKeyFormValues) => createApiKeyMutation.mutate(values)}
           isPending={createApiKeyMutation.isPending}
@@ -145,7 +145,7 @@ function ApiKeysSettings() {
       {apiKeys.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           {apiKeys.map((key) => (
-            <Card key={key.id} className="p-5 space-y-3 hover:shadow-md">
+            <Card key={key.id} className="p-5 space-y-3">
               <div className="space-y-1 min-w-0">
                 <div className="font-medium text-foreground break-all">{key.name ?? "unnamed"}</div>
                 <div className="text-xs text-muted-foreground font-mono">

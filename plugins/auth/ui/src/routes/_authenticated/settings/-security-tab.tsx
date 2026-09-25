@@ -58,9 +58,7 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
     <div className="space-y-4">
       {user.email ? (
         <Card className="p-6 space-y-4">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Change password
-          </div>
+          <div className="text-sm font-medium text-muted-foreground">Change password</div>
           <div className="grid gap-4 md:grid-cols-3">
             <Field>
               <FieldLabel>current</FieldLabel>
@@ -104,8 +102,10 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
           </Button>
         </Card>
       ) : (
-        <Card className="p-6 text-sm text-muted-foreground">
-          Password management appears once an email-based login is attached to this account.
+        <Card className="p-6">
+          <p className="text-sm text-muted-foreground">
+            Password management appears once an email-based login is attached to this account.
+          </p>
         </Card>
       )}
 

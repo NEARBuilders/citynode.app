@@ -32,7 +32,7 @@ export function NearMethod({ nearAccountId }: { nearAccountId: string | null }) 
   return (
     <Card className="p-6 space-y-4">
       <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-[10px] border-2 border-outset border-border-strong bg-muted flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
           <WalletIcon className="h-4 w-4 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1 space-y-1">
@@ -41,7 +41,7 @@ export function NearMethod({ nearAccountId }: { nearAccountId: string | null }) 
             <Chip muted={!nearAccountId}>{nearAccountId ? "linked" : "not linked"}</Chip>
           </div>
           {nearAccountId ? (
-            <div className="rounded-[8px] border border-border bg-muted px-3 py-2 font-mono text-xs break-all text-foreground">
+            <div className="rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs break-all text-foreground">
               {nearAccountId}
             </div>
           ) : (

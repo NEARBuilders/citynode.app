@@ -67,7 +67,7 @@ function OnboardPage() {
     const gatewayHost = new URL(getGatewayOrigin(runtimeConfig)).host;
     return (
       <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
           <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
             You're in
           </h1>
@@ -78,7 +78,7 @@ function OnboardPage() {
           </p>
           <DisplayNameStep initialName={accountCreated ? "" : (session?.user.name ?? "")} />
           <div
-            className="space-y-2 rounded-[8px] border border-border bg-muted p-4 text-left"
+            className="space-y-2 rounded-lg border border-border bg-muted p-4 text-left"
             data-testid="onboard.continue-on-computer"
           >
             <p className="text-sm font-medium text-foreground">Continue on your computer</p>
@@ -156,7 +156,7 @@ function OnboardPage() {
   if (session?.user) {
     return (
       <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-3 text-center">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-3 text-center">
           <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
             Joining {info.organizationName}
           </h1>
@@ -170,7 +170,7 @@ function OnboardPage() {
 
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
         <div className="space-y-1 text-center">
           <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
             You're invited
@@ -203,7 +203,7 @@ function StatusCard({
   const navigate = useNavigate();
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
         <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
           {title}
         </h1>

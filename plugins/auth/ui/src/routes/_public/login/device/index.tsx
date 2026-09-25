@@ -66,7 +66,7 @@ function DeviceVerifyPage() {
 
   return (
     <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
         <div className="space-y-1 text-center">
           <h1 className="text-xl font-semibold text-foreground" data-testid="device.verify-heading">
             Device sign-in
@@ -95,12 +95,11 @@ function DeviceVerifyPage() {
           <form onSubmit={handleSubmit} className="space-y-3">
             <Input
               value={code}
-              onChange={(event) => setCode(event.target.value)}
+              onChange={(event) => setCode(event.target.value.toUpperCase())}
               placeholder="XXXX-XXXX"
               maxLength={12}
               autoCapitalize="characters"
               autoCorrect="off"
-              className="text-center font-mono tracking-widest uppercase"
               data-testid="device.user-code-input"
             />
             <Button type="submit" className="w-full" data-testid="device.verify-button">

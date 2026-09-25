@@ -132,7 +132,7 @@ export function OnboardSignUp({
         </Button>
         {passkeyMissing ? (
           <p
-            className="rounded-[8px] border border-border bg-muted p-3 text-sm text-muted-foreground"
+            className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground"
             data-testid="onboard.no-passkey-hint"
           >
             No passkey on this device? Sign in with your phone, or connect your NEAR wallet.
@@ -177,7 +177,7 @@ export function OnboardSignUp({
       </Button>
       {unsupported ? (
         <div className="space-y-3" data-testid="onboard.unsupported-authenticator">
-          <p className="rounded-[8px] border border-border bg-muted p-3 text-sm text-muted-foreground">
+          <p className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
             This device can't create a supported passkey. Sign in with a NEAR wallet instead.
           </p>
           {nearButtons}
