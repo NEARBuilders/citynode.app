@@ -51,21 +51,27 @@ function LandingPage() {
           <p className="max-w-2xl text-base sm:text-lg text-muted-foreground leading-relaxed">
             A City Node is a NEAR Protocol validator tied to a real place — a city, state, or
             country.{" "}
-            <Button asChild variant="link" className="px-0">
-              <a
-                href="https://www.near.org/blog/legion-city-nodes"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Learn about NEAR Legion City Nodes
-              </a>
+            <Button
+              variant="link"
+              className="px-0"
+              nativeButton={false}
+              render={(props) => (
+                <a
+                  {...props}
+                  href="https://www.near.org/blog/legion-city-nodes"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                />
+              )}
+            >
+              Learn about NEAR Legion City Nodes
             </Button>
           </p>
         </section>
 
         <section className="space-y-6">
-          <Button asChild>
-            <Link to="/explore">Find communities</Link>
+          <Button nativeButton={false} render={<Link to="/explore" />}>
+            Find communities
           </Button>
           <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
             How staking works
@@ -101,8 +107,8 @@ function LandingPage() {
             <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
               Directory
             </h2>
-            <Button asChild size="lg">
-              <Link to="/apply">Apply</Link>
+            <Button size="lg" nativeButton={false} render={<Link to="/apply" />}>
+              Apply
             </Button>
           </div>
           <NodeDirectory

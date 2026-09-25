@@ -1,6 +1,6 @@
+import { SparkleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
 import { z } from "zod";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Badge, NodeDirectory } from "@/components";
@@ -93,7 +93,7 @@ function NodePage() {
       <div className="space-y-12">
         <header className="space-y-3 pt-4 sm:pt-8">
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <Sparkles className="h-3 w-3" />
+            <SparkleIcon className="h-3 w-3" />
             {gateway}
           </div>
           <div className="flex items-center gap-3">

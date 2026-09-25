@@ -1,7 +1,7 @@
+import { GlobeIcon, UserIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { getSocialImageMeta } from "everything-dev/ui/metadata";
-import { Globe, User } from "lucide-react";
 import { useAuthClient } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage, PageContainer } from "@/components";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
@@ -86,7 +86,7 @@ function AccountProfileLayout() {
             <Avatar className="-mt-10 size-20 border-4 border-card ring-1 ring-border bg-card">
               {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
               <AvatarFallback className="text-xl font-semibold">
-                {initials || <User className="size-8" />}
+                {initials || <UserIcon className="size-8" />}
               </AvatarFallback>
             </Avatar>
 
@@ -111,7 +111,7 @@ function AccountProfileLayout() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-border"
                   >
-                    <Globe className="size-3" />
+                    <GlobeIcon className="size-3" />
                     {label}
                   </a>
                 ))}
