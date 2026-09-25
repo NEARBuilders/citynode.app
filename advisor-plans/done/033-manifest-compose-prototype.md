@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO. GATES plan 034 (the branch rework). Decisions recorded in [ADR 0007](../docs/adr/0007-runtime-composition-ssr.md) and [ADR 0008](../docs/adr/0008-manifest-composition.md) — read both fully before starting, plus [plan 028](../docs/adr/0005-app-ts-authored-descriptor.md)'s descriptor surface for the `apps.ts` slice.
+TODO. GATES plan 034 (the branch rework). Decisions recorded in [ADR 0007](../../docs/adr/0007-runtime-composition-ssr.md) and [ADR 0008](../../docs/adr/0008-manifest-composition.md) — read both fully before starting, plus [plan 028](../../docs/adr/0005-app-ts-authored-descriptor.md)'s descriptor surface for the `apps.ts` slice.
 
 ## Why this matters
 
@@ -10,7 +10,7 @@ Plan 034 deletes grafting 100% and replaces it with manifest composition — in 
 
 ## Scope
 
-Create `plans/prototypes/manifest-compose/` — a self-contained pnpm workspace (mirror [beta-v2](../plans/prototypes/beta-v2/): own `packageManager`, own catalog pins copied from the repo root's `package.json` — react 19.2.4, `@tanstack/react-router` 1.170.x line, `@rsbuild/core` 2.x, `@module-federation/rsbuild-plugin` 2.9.0). This prototype is throwaway; it exists to produce PASS/FAIL evidence per gate.
+Create `plans/prototypes/manifest-compose/` — a self-contained pnpm workspace (mirror [beta-v2](../../plans/prototypes/beta-v2/): own `packageManager`, own catalog pins copied from the repo root's `package.json` — react 19.2.4, `@tanstack/react-router` 1.170.x line, `@rsbuild/core` 2.x, `@module-federation/rsbuild-plugin` 2.9.0). This prototype is throwaway; it exists to produce PASS/FAIL evidence per gate.
 
 ### Layout
 

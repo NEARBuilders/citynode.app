@@ -3,7 +3,7 @@
 Date: 2026-09-21
 Status: Accepted
 
-Supersedes: nothing (first SSR-model ADR). Related: ADR 0005 (`app.ts` authored descriptor), ADR 0008 (manifest composition + mount registry v2), [plan 034](../../advisor-plans/034-manifest-composition-rework.md). (The ui route-grafting-migration plan was never filed as a doc — its content is superseded by ADR 0008; see map issue citynode.app#108.)
+Supersedes: nothing (first SSR-model ADR). Related: ADR 0005 (`app.ts` authored descriptor), ADR 0008 (manifest composition + mount registry v2), [plan 034](../../advisor-plans/done/034-manifest-composition-rework.md). (The ui route-grafting-migration plan was never filed as a doc — its content is superseded by ADR 0008; see map issue citynode.app#108.)
 
 ## Context
 
