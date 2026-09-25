@@ -477,8 +477,17 @@ export const startBootstrap = (
     const productionEnv: Record<string, string> = {};
     const warnings: string[] = [];
 
+    // A registry start is a real production deployment — a localhost origin
+    // there is a stray dev leftover, so it must not reach the in-process host.
+    // An explicit --config-path start (regression harness, local production
+    // stack) injects BASE_URL/CORS_ORIGIN at docker run as deployment truth:
+    // the host's buildAuthBaseVariables seam reads them from process.env, and
+    // an https fallback would make better-auth issue Secure cookies no http
+    // client can send back.
     const localhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
-    if (process.env.CORS_ORIGIN && localhostOrigin.test(process.env.CORS_ORIGIN)) {
+    const isLocalhostProductionOrigin =
+      Boolean(process.env.CORS_ORIGIN) && localhostOrigin.test(process.env.CORS_ORIGIN ?? "");
+    if (isLocalhostProductionOrigin && !explicitConfig.configPath) {
       warnings.push(
         `CORS_ORIGIN is a localhost origin (${process.env.CORS_ORIGIN}) in a production start — overriding with the configured domain`,
       );
