@@ -7,6 +7,8 @@ export {
 export { ConfirmDialog } from "./confirm-dialog";
 export { DocumentFallback } from "./document-fallback";
 export { EmptyState } from "./empty-state";
+export { InfoPopover, type InfoPopoverLink } from "./info-popover";
+export { InfoRow } from "./info-row";
 export { AppHeader } from "./layout/app-header";
 export { AppShell } from "./layout/app-shell";
 export { AppSidebar } from "./layout/app-sidebar";
@@ -37,6 +39,12 @@ export { RootError } from "./root-error";
 export { RootNotFound } from "./root-not-found";
 export { RouterError } from "./router-error";
 export { StakePoolCard } from "./stake-pool-card";
+export {
+  type Step,
+  StepList,
+  type StepState,
+  useStepper,
+} from "./stepper";
 export { TeamStakeCard } from "./team-stake-card";
 export { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 export { Badge } from "./ui/badge";
@@ -77,19 +85,11 @@ export {
   FieldError,
   FieldLabel,
 } from "./ui/field";
-export { InfoPopover, type InfoPopoverLink } from "./info-popover";
-export { InfoRow } from "./info-row";
 export { Input } from "./ui/input";
 export { Label } from "./ui/label";
 export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./ui/popover";
 export { ScrollArea, ScrollBar } from "./ui/scroll-area";
 export { Skeleton } from "./ui/skeleton";
-export {
-  type Step,
-  StepList,
-  type StepState,
-  useStepper,
-} from "./stepper";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 export { Textarea } from "./ui/textarea";
 export { UnderConstruction } from "./under-construction";

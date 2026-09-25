@@ -3,8 +3,8 @@ import { formatAmount } from "near-kit";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { useSessionGasKey } from "@/lib/use-gas-key";
 import { Button } from "@/components/ui/button";
+import { useSessionGasKey } from "@/lib/use-gas-key";
 
 export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string | null }) {
   const auth = useAuthClient();

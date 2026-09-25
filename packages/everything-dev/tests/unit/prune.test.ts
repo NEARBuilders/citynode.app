@@ -1,6 +1,6 @@
-import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { pruneUnusedUiFiles } from "../../src/cli/prune";
 
@@ -27,18 +27,27 @@ describe("pruneUnusedUiFiles", () => {
     write("entry.ts", `import "./styles.css";\nimport("./hydrate");\n`);
     write("styles.css", "");
     write("app.ts", `export { createApiClient } from "./lib/api";\n`);
-    write("routes/index.tsx", `import { UsedCard } from "@/components";\nimport { usedHelper } from "@/lib/used";\nexport const Route = UsedCard;\nexport const h = usedHelper;\n`);
+    write(
+      "routes/index.tsx",
+      `import { UsedCard } from "@/components";\nimport { usedHelper } from "@/lib/used";\nexport const Route = UsedCard;\nexport const h = usedHelper;\n`,
+    );
     write("lib/used.ts", "export const usedHelper = 1;\n");
     write("lib/unused.ts", "export const unusedHelper = 2;\n");
     write("lib/near-rpc-like.ts", "export const dead = 3;\n");
-    write("components/index.ts", [
-      `export { Badge } from "./ui/badge";`,
-      `export { UsedCard } from "./used-card";`,
-      `export { DeadCard } from "./dead-card";`,
-      "",
-    ].join("\n"));
+    write(
+      "components/index.ts",
+      [
+        `export { Badge } from "./ui/badge";`,
+        `export { UsedCard } from "./used-card";`,
+        `export { DeadCard } from "./dead-card";`,
+        "",
+      ].join("\n"),
+    );
     write("components/ui/badge.tsx", "export const Badge = () => null;\n");
-    write("components/used-card.tsx", `import { Badge } from "./ui/badge";\nexport const UsedCard = Badge;\n`);
+    write(
+      "components/used-card.tsx",
+      `import { Badge } from "./ui/badge";\nexport const UsedCard = Badge;\n`,
+    );
     write("components/dead-card.tsx", "export const DeadCard = () => null;\n");
     write("components/dead-card.test.tsx", "import { DeadCard } from './dead-card';\n");
     write("components/ui/unused-primitive.tsx", "export const UnusedPrimitive = () => null;\n");

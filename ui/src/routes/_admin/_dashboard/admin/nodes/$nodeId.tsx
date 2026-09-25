@@ -13,8 +13,8 @@ import {
   SectionHeader,
   Skeleton,
 } from "@/components";
-import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { DataTable, type DataTableColumnDef } from "@/components/data-table";
+import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { NodeBindings } from "./-node-bindings";
 import { NodeMetadataEditor } from "./-node-metadata-editor";

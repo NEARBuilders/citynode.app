@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { isFrameworkOwnedSyncFile } from "./sync";
 
@@ -43,7 +43,11 @@ function splitNamedImports(clause: string): { names: string[]; wholeModule: bool
   const namedRe = /\{([^}]*)\}/g;
   for (const named of clause.matchAll(namedRe)) {
     for (const piece of named[1].split(",")) {
-      const name = piece.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim();
+      const name = piece
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)[0]
+        ?.trim();
       if (name && name !== "default") names.push(name);
     }
   }
@@ -100,7 +104,11 @@ function parseBarrelExports(content: string, barrelPath: string, srcDir: string)
   const re = /export\s+\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
   for (const match of content.matchAll(re)) {
     for (const piece of match[1].split(",")) {
-      const name = piece.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim();
+      const name = piece
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)[0]
+        ?.trim();
       if (!name || name === "default") continue;
       exports.push({ name, source: resolveSpecifier(match[2], barrelPath, srcDir) });
     }

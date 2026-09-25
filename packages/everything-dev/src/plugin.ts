@@ -25,7 +25,6 @@ import {
   selectWorkspaceTargets,
 } from "./build";
 import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
-import { pruneUnusedUiFiles } from "./cli/prune";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
@@ -43,6 +42,7 @@ import {
   stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
+import { pruneUnusedUiFiles } from "./cli/prune";
 import { getStatus } from "./cli/status";
 import { syncTemplate } from "./cli/sync";
 import { upgradeTemplate } from "./cli/upgrade";
