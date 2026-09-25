@@ -1,16 +1,37 @@
-import { KeyIcon } from "@phosphor-icons/react";
+import { FingerprintIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Passkey, useAuthClient } from "everything-dev/ui/auth";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Chip, ConfirmDialog, Input } from "@/components";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { LocalDate } from "@/components/local-date";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { MethodHeader } from "./-method-header";
 
 const passkeyQueryKey = ["passkeys"] as const;
 
 export function PasskeysMethod() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-
   const { data: passkeys = [] } = useQuery({
     queryKey: passkeyQueryKey,
     queryFn: async () => {
@@ -20,6 +41,7 @@ export function PasskeysMethod() {
     staleTime: 60 * 1000,
   });
 
+  const [adding, setAdding] = useState(false);
   const [passkeyName, setPasskeyName] = useState("");
   const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey | null>(null);
 
@@ -33,6 +55,7 @@ export function PasskeysMethod() {
     },
     onSuccess: () => {
       setPasskeyName("");
+      setAdding(false);
       toast.success("Passkey added");
       void queryClient.invalidateQueries({ queryKey: passkeyQueryKey });
     },
@@ -52,77 +75,108 @@ export function PasskeysMethod() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const handleAdd = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    addPasskeyMutation.mutate();
+  };
+
   return (
-    <>
-      <Card className="p-6 space-y-4">
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-            <KeyIcon className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-semibold text-foreground">Passkeys</span>
-              <Chip muted={passkeys.length === 0}>
-                {passkeys.length > 0 ? `${passkeys.length} registered` : "not linked"}
-              </Chip>
-            </div>
+    <section className="flex flex-col gap-4" data-testid="settings.passkeys">
+      <MethodHeader
+        title="Passkeys"
+        description="Sign in with your fingerprint, face or device PIN."
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAdding(true)}
+            data-testid="settings.add-passkey-button"
+          >
+            <PlusIcon data-icon="inline-start" />
+            Add passkey
+          </Button>
+        }
+      />
+      {passkeys.length > 0 ? (
+        <ItemGroup>
+          {passkeys.map((passkey) => (
+            <Item key={passkey.id} variant="outline" size="sm" role="listitem">
+              <ItemMedia variant="icon">
+                <FingerprintIcon />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>{passkey.name || "Passkey"}</ItemTitle>
+                {passkey.createdAt && (
+                  <ItemDescription>
+                    Added <LocalDate value={passkey.createdAt} />
+                  </ItemDescription>
+                )}
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setPasskeyToDelete(passkey)}
+                  disabled={removePasskeyMutation.isPending}
+                  aria-label={`Remove ${passkey.name || "passkey"}`}
+                >
+                  <TrashIcon />
+                </Button>
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+      ) : (
+        <p className="text-sm text-muted-foreground" data-testid="settings.passkeys-empty">
+          No passkeys yet.
+        </p>
+      )}
 
-            {passkeys.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {passkeys.map((passkey) => (
-                  <div
-                    key={passkey.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted px-3.5 py-2.5"
-                  >
-                    <span className="text-sm text-foreground truncate min-w-0 flex-1">
-                      {passkey.name || "Passkey"}
-                    </span>
-                    <Button
-                      onClick={() => setPasskeyToDelete(passkey)}
-                      disabled={removePasskeyMutation.isPending}
-                      variant="outline"
-                    >
-                      remove
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-2">
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <DialogContent>
+          <form onSubmit={handleAdd} className="flex flex-col gap-6">
+            <DialogHeader>
+              <DialogTitle>Add a passkey</DialogTitle>
+              <DialogDescription>Your device will ask you to confirm.</DialogDescription>
+            </DialogHeader>
+            <Field>
+              <FieldLabel htmlFor="settings-passkey-name">Name</FieldLabel>
               <Input
+                id="settings-passkey-name"
                 type="text"
                 value={passkeyName}
                 onChange={(e) => setPasskeyName(e.target.value)}
-                placeholder="Passkey name, e.g. Work laptop"
-                className="max-w-xs"
+                placeholder="e.g. Work laptop"
+                maxLength={64}
               />
-              <Button
-                onClick={() => addPasskeyMutation.mutate()}
-                disabled={addPasskeyMutation.isPending}
-                variant="outline"
-              >
-                {addPasskeyMutation.isPending ? "adding..." : "add passkey"}
+            </Field>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAdding(false)}>
+                Cancel
               </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
+              <Button type="submit" disabled={addPasskeyMutation.isPending}>
+                {addPasskeyMutation.isPending ? "Waiting for passkey…" : "Create passkey"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!passkeyToDelete}
         onOpenChange={(open: boolean) => {
           if (!open) setPasskeyToDelete(null);
         }}
-        title="Remove passkey"
-        description={`Remove ${passkeyToDelete?.name || "this passkey"} from your account? You will no longer be able to use it to sign in.`}
-        confirmLabel="remove"
+        title="Remove passkey?"
+        description={`You won't be able to sign in with ${passkeyToDelete?.name || "this passkey"} anymore.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
         variant="destructive"
         onConfirm={() => {
           if (passkeyToDelete) removePasskeyMutation.mutate(passkeyToDelete.id);
         }}
         isPending={removePasskeyMutation.isPending}
       />
-    </>
+    </section>
   );
 }

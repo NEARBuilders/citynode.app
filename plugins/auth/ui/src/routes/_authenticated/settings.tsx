@@ -1,13 +1,14 @@
-import { GearIcon } from "@phosphor-icons/react";
+import { KeyIcon, ShieldCheckIcon, UserCircleIcon, UserIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { sessionQueryOptions } from "everything-dev/ui/auth";
-import { PageContainer, PageHeader, Tabs, TabsList, TabsTrigger } from "@/components";
+import { PageContainer, PageHeader } from "@/components";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
-      { title: "Settings | auth.everything.dev" },
-      { name: "description", content: "Manage your account identity and security." },
+      { title: "Settings" },
+      { name: "description", content: "Manage your profile, sign-in methods and API keys." },
     ],
   }),
   loader: async ({ context }) => {
@@ -17,41 +18,52 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 const tabs = [
-  { value: "profile", to: "/settings/profile", label: "Profile" },
-  { value: "auth-methods", to: "/settings/auth-methods", label: "Auth Methods" },
-  { value: "api-keys", to: "/settings/api-keys", label: "API Keys" },
-  { value: "security", to: "/settings/security", label: "Security" },
+  { value: "profile", to: "/settings/profile", label: "Profile", icon: UserIcon },
+  {
+    value: "auth-methods",
+    to: "/settings/auth-methods",
+    label: "Sign-in methods",
+    icon: UserCircleIcon,
+  },
+  { value: "api-keys", to: "/settings/api-keys", label: "API keys", icon: KeyIcon },
+  { value: "security", to: "/settings/security", label: "Security", icon: ShieldCheckIcon },
 ] as const;
 
 function SettingsLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-
   const activeTab =
     tabs.find((t) => pathname === t.to || pathname.startsWith(`${t.to}/`))?.value ?? "profile";
 
   return (
-    <PageContainer variant="wide">
-      <div className="space-y-6">
-        <PageHeader icon={GearIcon} label="Account" title="Settings" />
-
-        <Tabs value={activeTab} className="w-full min-w-0">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            {tabs.map((tab) => (
-              <TabsTrigger
+    <PageContainer>
+      <PageHeader title="Settings" headerTestId="settings.heading" />
+      <div className="flex flex-col gap-8 md:flex-row md:gap-12">
+        <nav
+          aria-label="Settings"
+          className="-mx-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:px-0"
+        >
+          {tabs.map((tab) => {
+            const active = tab.value === activeTab;
+            const Icon = tab.icon;
+            return (
+              <Button
                 key={tab.value}
-                value={tab.value}
+                variant={active ? "secondary" : "ghost"}
                 nativeButton={false}
                 render={<Link to={tab.to} />}
+                aria-current={active ? "page" : undefined}
                 data-testid={`settings-tab-${tab.value}`}
-                className="shrink-0"
+                className="shrink-0 md:w-full md:justify-start"
               >
+                <Icon data-icon="inline-start" />
                 {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <Outlet />
+              </Button>
+            );
+          })}
+        </nav>
+        <div className="flex min-w-0 flex-1 flex-col gap-12">
+          <Outlet />
+        </div>
       </div>
     </PageContainer>
   );

@@ -2,7 +2,17 @@ import { WalletIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { sessionQueryKey, useAuthClient } from "everything-dev/ui/auth";
 import { toast } from "sonner";
-import { Button, Card, Chip } from "@/components";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { MethodHeader } from "./-method-header";
 
 export function NearMethod({ nearAccountId }: { nearAccountId: string | null }) {
   const auth = useAuthClient();
@@ -30,33 +40,38 @@ export function NearMethod({ nearAccountId }: { nearAccountId: string | null }) 
   });
 
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-          <WalletIcon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-semibold text-foreground">NEAR Wallet</span>
-            <Chip muted={!nearAccountId}>{nearAccountId ? "linked" : "not linked"}</Chip>
-          </div>
+    <section className="flex flex-col gap-4" data-testid="settings.near-wallet">
+      <MethodHeader title="NEAR wallet" description="Sign in and sign transactions with NEAR." />
+      <Item variant="outline">
+        <ItemMedia variant="icon">
+          <WalletIcon />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>{nearAccountId ? "Connected" : "No wallet connected"}</ItemTitle>
+          <ItemDescription>
+            {nearAccountId ? (
+              <span className="break-all font-mono">{nearAccountId}</span>
+            ) : (
+              "Connect a wallet to stake and publish."
+            )}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
           {nearAccountId ? (
-            <div className="rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs break-all text-foreground">
-              {nearAccountId}
-            </div>
+            <Badge variant="success">Linked</Badge>
           ) : (
-            <div className="flex items-center gap-3 pt-1">
-              <Button
-                onClick={() => linkNearMutation.mutate()}
-                disabled={linkNearMutation.isPending}
-                variant="outline"
-              >
-                {linkNearMutation.isPending ? "connecting..." : "connect NEAR wallet"}
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => linkNearMutation.mutate()}
+              disabled={linkNearMutation.isPending}
+              data-testid="settings.connect-near-button"
+            >
+              {linkNearMutation.isPending ? "Connecting…" : "Connect wallet"}
+            </Button>
           )}
-        </div>
-      </div>
-    </Card>
+        </ItemActions>
+      </Item>
+    </section>
   );
 }
