@@ -110,6 +110,7 @@ export function NodeStakeSection({
 function StakeLink({ node }: { node: Pick<Node, "id" | "name"> }) {
   return (
     <Button
+      variant="outline"
       nativeButton={false}
       data-testid="node-stake-link"
       render={<Link to="/stake" search={{ nodeId: node.id }} />}
