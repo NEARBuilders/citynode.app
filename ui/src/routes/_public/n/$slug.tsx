@@ -92,7 +92,7 @@ function NodePage() {
     <PageContainer variant="default">
       <div className="space-y-12">
         <header className="space-y-3 pt-4 sm:pt-8">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <SparkleIcon className="h-3 w-3" />
             {gateway}
           </div>
@@ -100,8 +100,8 @@ function NodePage() {
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground capitalize">
               {node.name}
             </h1>
-            <Badge variant="secondary" className="capitalize">
-              {node.kind}
+            <Badge variant="secondary">
+              <span className="capitalize">{node.kind}</span>
             </Badge>
           </div>
           <p className="text-sm font-mono text-muted-foreground">
@@ -151,7 +151,7 @@ function NodeSkeleton() {
         <Skeleton className="h-3 w-24" />
         <div className="flex items-center gap-3">
           <Skeleton className="h-9 w-48" />
-          <Skeleton className="h-5 w-20 rounded-[6px]" />
+          <Skeleton className="h-5 w-20 rounded-md" />
         </div>
         <Skeleton className="h-3 w-40" />
       </header>

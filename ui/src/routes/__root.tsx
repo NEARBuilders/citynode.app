@@ -207,8 +207,8 @@ function GlobalChrome() {
         }}
       >
         {showBar && (
-          <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">
-            <div className="h-full bg-foreground animate-progress-bar" style={{ width: "100%" }} />
+          <div className="fixed top-0 left-0 right-0 h-0.5 z-50 overflow-hidden pointer-events-none">
+            <div className="h-full w-full bg-foreground" />
           </div>
         )}
 

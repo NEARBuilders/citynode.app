@@ -65,10 +65,10 @@ function SkillPage() {
   return (
     <PageContainer variant="default">
       <div className="space-y-4">
-        <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
+        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-foreground text-background">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
                 <FileTextIcon size={18} />
               </div>
               <div className="min-w-0">
@@ -122,18 +122,18 @@ function SkillPage() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-border bg-muted px-3.5 py-3 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border bg-muted px-3.5 py-3 text-sm text-muted-foreground">
             Best entry points: `npx @tanstack/intent@latest load everything-dev`, `/skill.md`, and
             the registry page above.
           </div>
         </div>
 
         {skill ? (
-          <div className="rounded-[12px] border border-border bg-card p-8">
+          <div className="rounded-xl border border-border bg-card p-8">
             <Markdown content={skill} />
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-[12px] border border-border bg-card px-8 py-16 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-8 py-16 text-muted-foreground">
             <FileTextIcon size={32} className="text-border" />
             <p className="text-sm text-muted-foreground">Skill prompt unavailable.</p>
           </div>

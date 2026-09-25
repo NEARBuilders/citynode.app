@@ -69,25 +69,15 @@ function AccountProfileLayout() {
   return (
     <PageContainer variant="default">
       <div className="space-y-6">
-        <div className="overflow-hidden rounded-[12px] border border-border bg-card">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div
-            className="h-32 sm:h-44 w-full bg-muted"
-            style={
-              backgroundUrl
-                ? {
-                    backgroundImage: `url(${backgroundUrl})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }
-                : undefined
-            }
+            className="h-32 sm:h-44 w-full bg-muted bg-cover bg-center"
+            style={backgroundUrl ? { backgroundImage: `url(${backgroundUrl})` } : undefined}
           />
           <div className="px-6 pb-6">
-            <Avatar className="-mt-10 size-20 border-4 border-card ring-1 ring-border bg-card">
+            <Avatar className="-mt-10 size-20">
               {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-              <AvatarFallback className="text-xl font-semibold">
-                {initials || <UserIcon className="size-8" />}
-              </AvatarFallback>
+              <AvatarFallback>{initials || <UserIcon className="size-8" />}</AvatarFallback>
             </Avatar>
 
             <div className="mt-3 space-y-1">
