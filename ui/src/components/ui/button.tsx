@@ -1,4 +1,6 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -37,12 +39,46 @@ const buttonVariants = cva(
   },
 );
 
+function ButtonLink({
+  className,
+  variant = "default",
+  size = "default",
+  render,
+  nativeButton: _nativeButton,
+  focusableWhenDisabled: _focusableWhenDisabled,
+  disabled = false,
+  style,
+  ...props
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const state: { disabled: boolean } = { disabled };
+  const resolvedClassName = typeof className === "function" ? className(state) : className;
+  return useRender({
+    defaultTagName: "a",
+    render,
+    state,
+    props: {
+      ...mergeProps<"button">(
+        {
+          className: cn(buttonVariants({ variant, size, className: resolvedClassName })),
+          style: typeof style === "function" ? style(state) : style,
+          "aria-disabled": disabled || undefined,
+        },
+        props,
+      ),
+      "data-slot": "button",
+    },
+  });
+}
+
 function Button({
   className,
   variant = "default",
   size = "default",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  if (props.nativeButton === false && props.render) {
+    return <ButtonLink className={className} variant={variant} size={size} {...props} />;
+  }
   return (
     <ButtonPrimitive
       data-slot="button"
