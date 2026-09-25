@@ -12,12 +12,12 @@ export function Chip({ children, accent, muted, className }: ChipProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium border text-foreground",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
         accent
-          ? "bg-brand-accent-light border-brand-accent-border"
+          ? "bg-brand-muted text-brand-strong"
           : muted
-            ? "bg-muted border-border text-muted-foreground"
-            : "bg-secondary border-border",
+            ? "bg-muted text-muted-foreground"
+            : "bg-secondary text-secondary-foreground",
         className,
       )}
     >
