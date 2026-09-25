@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { getGatewayOrigin } from "@/lib/gateway-origin";
 
 type SearchParams = {
   code?: string;
@@ -32,7 +33,8 @@ function OnboardPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const { code } = Route.useSearch();
-  const { apiClient } = Route.useRouteContext();
+  const { apiClient, runtimeConfig } = Route.useRouteContext();
+  const gatewayHost = new URL(getGatewayOrigin(runtimeConfig)).host;
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const { data: info } = useQuery({
     queryKey: ["onboarding-info", code],
@@ -44,8 +46,6 @@ function OnboardPage() {
 
   const [nearPending, setNearPending] = useState(false);
   const [passkeyPending, setPasskeyPending] = useState(false);
-  const [walletPending, setWalletPending] = useState(false);
-  const [walletAccountId, setWalletAccountId] = useState<string | null>(null);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<{
     organizationName: string;
@@ -117,38 +117,19 @@ function OnboardPage() {
             <span className="text-foreground font-medium">{redeemed.organizationName}</span> for{" "}
             {redeemed.eventName}.
           </p>
-          {walletAccountId ? (
-            <p
-              className="font-mono text-sm text-foreground break-all"
-              data-testid="onboard.wallet-account"
-            >
-              {walletAccountId}
+          <div
+            className="space-y-2 rounded-[8px] border border-border bg-muted p-4 text-left"
+            data-testid="onboard.continue-on-computer"
+          >
+            <p className="text-sm font-medium text-foreground">Continue on your computer</p>
+            <p className="text-sm text-muted-foreground">
+              Open{" "}
+              <span className="font-mono text-foreground" data-testid="onboard.gateway-origin">
+                {gatewayHost}
+              </span>{" "}
+              on your laptop, choose "Sign in with phone", and scan the code with this phone.
             </p>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={async () => {
-                setWalletPending(true);
-                const result = await auth.near.linkPasskeyWallet({
-                  onSuccess: () => {
-                    setWalletPending(false);
-                    toast.success("NEAR wallet ready");
-                  },
-                  onError: (error) => {
-                    setWalletPending(false);
-                    toast.error(error.message || "Failed to set up wallet");
-                  },
-                });
-                if (result) setWalletAccountId(result.accountId);
-              }}
-              disabled={walletPending}
-              data-testid="onboard.setup-wallet-button"
-            >
-              {walletPending ? "setting up..." : "Set up your NEAR wallet"}
-            </Button>
-          )}
+          </div>
           <Button asChild variant="outline" className="w-full">
             <Link to="/dashboard">Go to dashboard</Link>
           </Button>
