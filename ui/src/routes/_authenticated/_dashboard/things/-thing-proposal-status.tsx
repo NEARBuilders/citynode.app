@@ -18,7 +18,7 @@ function getThingProposalStatusContent(proposal: ThingProposal): ThingProposalSt
     return {
       title: "Pending review",
       description: "An admin must approve this proposal before the thing goes live.",
-      className: "border-status-warning-border bg-status-warning-bg text-status-warning-foreground",
+      className: "bg-warning-muted text-warning-muted-foreground",
     };
   }
   if (proposal.reviewStatus === "approved") {
@@ -31,20 +31,20 @@ function getThingProposalStatusContent(proposal: ThingProposal): ThingProposalSt
     return {
       title: proposal.applyStatus === "applied" ? "Approved" : "Approved · applying",
       description,
-      className: "border-status-success-border bg-status-success-bg text-status-success-foreground",
+      className: "bg-success-muted text-success-muted-foreground",
     };
   }
   if (proposal.reviewStatus === "rejected") {
     return {
       title: "Rejected",
       description: proposal.rejectionReason || "This proposal was not approved.",
-      className: "border-status-danger-border bg-status-danger-bg text-status-danger-fg",
+      className: "bg-destructive-muted text-destructive-muted-foreground",
     };
   }
   return {
     title: "Removed",
     description: "This proposal is no longer active.",
-    className: "border-border bg-muted text-muted-foreground",
+    className: "bg-muted text-muted-foreground",
   };
 }
 
@@ -52,7 +52,7 @@ export function ThingProposalStatus({ proposal }: { proposal: ThingProposal }) {
   const content = getThingProposalStatusContent(proposal);
 
   return (
-    <div className={cn("rounded-[12px] border-2 p-4", content.className)}>
+    <div className={cn("rounded-xl p-4", content.className)}>
       <div className="flex items-start gap-3">
         <ClockIcon className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="space-y-1">

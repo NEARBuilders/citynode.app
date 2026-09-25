@@ -4,7 +4,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { pluginPath, pluginSearch, useApiClient } from "@/app";
-import { Button, PageContainer, PageHeader } from "@/components";
+import { Button, Input, PageContainer, PageHeader, Textarea } from "@/components";
 import { invalidateThingAfterProposal } from "./-thing-cache";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/new")({
@@ -69,36 +69,28 @@ function CreateThingPage() {
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label
-              htmlFor="thing-id"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
+            <label htmlFor="thing-id" className="text-sm font-medium text-muted-foreground">
               Thing ID
             </label>
-            <input
+            <Input
               id="thing-id"
               type="text"
               value={thingId}
               onChange={(e) => setThingId(e.target.value)}
               placeholder="thing-123"
-              className="w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
             />
             <p className="text-xs text-muted-foreground">Unique identifier for the thing.</p>
           </div>
 
           <div className="space-y-2">
-            <label
-              htmlFor="payload-json"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
+            <label htmlFor="payload-json" className="text-sm font-medium text-muted-foreground">
               Payload (JSON)
             </label>
-            <textarea
+            <Textarea
               id="payload-json"
               value={payloadRaw}
               onChange={(e) => setPayloadRaw(e.target.value)}
               rows={8}
-              className="w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-xs font-mono text-foreground outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -110,12 +102,12 @@ function CreateThingPage() {
           </Button>
 
           {submitMutation.isError && (
-            <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-foreground">
+            <div className="rounded-lg bg-destructive-muted p-4 text-sm text-destructive-muted-foreground">
               <p>{submitMutation.error.message || "Unable to submit this proposal."}</p>
               <Link
                 to={pluginPath("/login")}
                 search={pluginSearch({ redirect: "/things/new" })}
-                className="mt-2 inline-flex text-sm font-semibold text-link underline"
+                className="mt-2 inline-flex text-sm font-semibold text-primary underline"
               >
                 Sign in and try again
               </Link>

@@ -31,16 +31,15 @@ export function ThingContent({
 }) {
   return (
     <>
-      <div className="rounded-[12px] border border-border bg-card p-6 space-y-4">
+      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <Badge variant="outline" className="text-xs font-mono">
-            {thing.type}
+          <Badge variant="outline">
+            <span className="font-mono">{thing.type}</span>
           </Badge>
           <Button
             type="button"
             variant={userVote?.hasUpvote ? "default" : "outline"}
             size="sm"
-            className="gap-1.5"
             aria-pressed={userVote?.hasUpvote ?? false}
             onClick={() => onVote(!(userVote?.hasUpvote ?? false))}
             disabled={isVoteLoading || isVotePending}
@@ -62,10 +61,8 @@ export function ThingContent({
           <ThingMetaRow label="updated">{new Date(thing.updatedAt).toLocaleString()}</ThingMetaRow>
         </div>
 
-        <div className="rounded-[8px] border border-border bg-muted/10 p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Payload
-          </div>
+        <div className="rounded-lg bg-muted p-3">
+          <div className="text-sm font-medium text-muted-foreground mb-1.5">Payload</div>
           <pre className="font-mono text-xs text-foreground whitespace-pre-wrap break-all leading-relaxed">
             {JSON.stringify(thing.payload, null, 2)}
           </pre>
@@ -73,13 +70,11 @@ export function ThingContent({
       </div>
 
       {isAdmin && (
-        <div className="rounded-[12px] border border-destructive/30 bg-destructive/5 p-6 space-y-3">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-destructive">
-              Admin
-            </span>
+            <span className="text-sm font-medium text-destructive">Admin</span>
           </div>
-          <Button variant="destructive" size="sm" className="gap-1.5" onClick={onDelete}>
+          <Button variant="destructive" size="sm" onClick={onDelete}>
             <TrashIcon size={12} />
             {isDeletePending ? "Deleting..." : "Delete thing"}
           </Button>

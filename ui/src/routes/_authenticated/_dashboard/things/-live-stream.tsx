@@ -76,7 +76,7 @@ export function ThingsLiveStreamPage() {
               )}
               <span
                 className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                  connected ? "bg-status-success-border" : "bg-destructive"
+                  connected ? "bg-success" : "bg-destructive"
                 }`}
                 title={connected ? "Connected" : "Disconnected"}
               />
@@ -100,18 +100,18 @@ export function ThingsLiveStreamPage() {
           {events.map(({ receiptId, event }) => (
             <div
               key={receiptId}
-              className="flex items-start gap-2 rounded-[6px] border border-border bg-card px-3 py-2"
+              className="flex items-start gap-2 rounded-md border border-border bg-card px-3 py-2"
             >
               <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant="secondary" className="text-[10px] font-mono">
-                    {event.action}
+                  <Badge variant="secondary">
+                    <span className="font-mono">{event.action}</span>
                   </Badge>
-                  <span className="text-[10px] font-mono text-foreground font-semibold">
+                  <span className="text-xs font-mono text-foreground font-semibold">
                     {event.thingId}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="font-mono">{event.type}</span>
                   <span aria-hidden="true">·</span>
                   <span>{new Date(event.timestamp).toLocaleTimeString()}</span>

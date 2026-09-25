@@ -35,7 +35,7 @@ function createColumns(
       accessorKey: "thingId",
       header: "ID",
       cell: ({ row }) => (
-        <span className="font-mono text-xs truncate max-w-[160px] block text-foreground">
+        <span className="font-mono text-xs truncate max-w-40 block text-foreground">
           {row.original.thingId}
         </span>
       ),
@@ -131,7 +131,7 @@ function ThingsIndexPage() {
               </Link>
               <Link
                 to="/things/new"
-                className="h-9 rounded-[12px] bg-primary px-4 text-sm font-bold text-primary-foreground inline-flex items-center no-underline transition-colors duration-150 hover:opacity-90"
+                className="h-9 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground inline-flex items-center no-underline transition-colors duration-150 hover:opacity-90"
               >
                 New thing
               </Link>
@@ -146,7 +146,7 @@ function ThingsIndexPage() {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : error ? (
-          <div className="rounded-[12px] border border-border bg-card p-6 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
             Couldn't load things: <span className="font-mono">{String(error.message)}</span>
           </div>
         ) : (

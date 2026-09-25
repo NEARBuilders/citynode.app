@@ -76,7 +76,7 @@ export function ThingDetailsView({
             onDelete={onDelete}
           />
         ) : (
-          <div className="rounded-[12px] border border-border bg-card p-6 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
             This thing is not live in the registry yet.
           </div>
         )}
