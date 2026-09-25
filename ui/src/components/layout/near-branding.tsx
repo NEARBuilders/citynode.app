@@ -1,5 +1,5 @@
-import builtOn from "@/assets/built_on.png";
-import builtOnRev from "@/assets/built_on_rev.png";
+import builtOn from "@/assets/brands/near/build-on-near-light.png";
+import builtOnRev from "@/assets/brands/near/build-on-near-dark.png";
 
 export function NearBranding() {
   return (
