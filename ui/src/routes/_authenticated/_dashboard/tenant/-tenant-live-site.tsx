@@ -1,8 +1,10 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
-import { Button, Card, SectionHeader } from "@/components";
+import { buildRegistryConfigUrl } from "everything-dev/fastkv";
+import type { ReactNode } from "react";
+import { Button, SectionHeader } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
+import { SettingsRow } from "./-settings-row";
 import type { TenantAction, TenantRecord } from "./-tenant-types";
 
 export function TenantLiveSite({
@@ -10,66 +12,61 @@ export function TenantLiveSite({
   gatewayId,
   hostname,
   republish,
+  children,
 }: {
   tenant: TenantRecord;
   gatewayId: string;
   hostname: string | null;
   republish: TenantAction;
+  children?: ReactNode;
 }) {
   const isDaoOwned = tenant.ownerKind === "dao";
-  const publishMode = isDaoOwned ? "dao" : "platform";
   const daoConnection = useDaoConnection();
   const nearAccountId = useNearAccount();
-  const hasSigningWallet =
-    publishMode === "dao"
-      ? daoConnection.status === "connected" && daoConnection.daoAccountId === tenant.accountId
-      : !!nearAccountId;
-  const republishTooltip = !hostname
-    ? "create a domain binding before republishing"
+  const hasSigningWallet = isDaoOwned
+    ? daoConnection.status === "connected" && daoConnection.daoAccountId === tenant.accountId
+    : !!nearAccountId;
+  const blockedReason = !hostname
+    ? "Add an address before republishing."
     : !hasSigningWallet
       ? isDaoOwned
-        ? "connect the DAO account via Trezu to republish"
-        : "connect your NEAR session wallet to republish"
-      : undefined;
-
-  const canRepublish = !!hostname && hasSigningWallet;
+        ? "Connect the DAO through Trezu to republish."
+        : "Connect your NEAR wallet to republish."
+      : null;
+  const bosUrl = `bos://${tenant.accountId}/${gatewayId}`;
+  const fastKvUrl = buildRegistryConfigUrl(tenant.accountId, gatewayId);
 
   return (
-    <section className="space-y-3">
-      <SectionHeader title="Live site" />
-      <Card className="p-4 space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Your tenant is served at the binding hostname below. The site resolves through the parent
-          gateway's host.
-        </p>
-        {hostname && (
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={
-              <a
-                href={buildTenantUrl(hostname, gatewayId ?? "") ?? `https://${hostname}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ArrowSquareOutIcon className="h-3.5 w-3.5" />
-                open {hostname}
-              </a>
-            }
-          />
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => republish.mutate()}
-          disabled={republish.isPending || !canRepublish}
-          title={republishTooltip}
+    <section className="flex flex-col gap-2">
+      <SectionHeader title="Publishing" sectionTestId="tenant.section.publishing" />
+      <div className="flex flex-col">
+        <SettingsRow
+          label="Published config"
+          description={blockedReason ?? "Push the current settings to the registry again."}
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => republish.mutate()}
+              disabled={republish.isPending || !!blockedReason}
+              data-testid="tenant.republish"
+            >
+              {republish.isPending ? "Republishing…" : "Republish"}
+            </Button>
+          }
         >
-          republish config
-        </Button>
-        {!canRepublish && <p className="text-xs text-muted-foreground">{republishTooltip}</p>}
-      </Card>
+          <a
+            href={fastKvUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-mono break-all underline-offset-2 hover:underline"
+          >
+            {bosUrl}
+            <ArrowSquareOutIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          </a>
+        </SettingsRow>
+        {children}
+      </div>
     </section>
   );
 }

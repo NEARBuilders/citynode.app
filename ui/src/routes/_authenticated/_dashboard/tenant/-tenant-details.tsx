@@ -1,27 +1,19 @@
-import { PencilIcon } from "@phosphor-icons/react";
-import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import {
-  Button,
-  Card,
-  CardContent,
-  Field,
-  FieldLabel,
-  InfoRow,
-  Input,
-  SectionHeader,
-} from "@/components";
+import { ArrowRightIcon } from "@phosphor-icons/react";
+import { Link } from "@tanstack/react-router";
+import { Button, Input, LocalDate, SectionHeader } from "@/components";
+import { SettingsRow } from "./-settings-row";
 import type { TenantRecord } from "./-tenant-types";
 
 export function TenantDetails({
   tenant,
   hostname,
-  gatewayId,
+  orgSlug,
   isOwner,
   editor,
 }: {
   tenant: TenantRecord;
   hostname: string | null;
-  gatewayId: string;
+  orgSlug: string | null;
   isOwner: boolean;
   editor: {
     editing: boolean;
@@ -33,95 +25,83 @@ export function TenantDetails({
     onNameChange: (name: string) => void;
   };
 }) {
-  const isDaoOwned = tenant.ownerKind === "dao";
-  const bosUrl = `bos://${tenant.accountId}/${gatewayId}`;
-  const fastKvUrl = buildRegistryConfigUrl(tenant.accountId, gatewayId);
   return (
-    <section className="space-y-3">
-      <SectionHeader
-        title="Details"
-        action={
-          isOwner && !editor.editing ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                editor.onEdit();
-              }}
-            >
-              <PencilIcon className="h-3.5 w-3.5" />
-              edit
-            </Button>
-          ) : undefined
-        }
-      />
-      <Card>
-        <CardContent className="p-6 space-y-4">
+    <section className="flex flex-col gap-2">
+      <SectionHeader title="General" sectionTestId="tenant.section.general" />
+      <div className="flex flex-col">
+        <SettingsRow
+          label="Name"
+          action={
+            isOwner && !editor.editing ? (
+              <Button variant="ghost" size="sm" onClick={editor.onEdit}>
+                Rename
+              </Button>
+            ) : undefined
+          }
+        >
           {editor.editing ? (
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 editor.onSave();
               }}
-              className="space-y-4"
+              className="flex max-w-md flex-wrap gap-2"
             >
-              <Field className="max-w-xs">
-                <FieldLabel htmlFor="tenant-edit-name">name</FieldLabel>
-                <Input
-                  id="tenant-edit-name"
-                  value={editor.name}
-                  onChange={(e) => editor.onNameChange(e.target.value)}
-                />
-              </Field>
-              <div className="flex gap-2 pt-1">
-                <Button type="submit" size="sm" disabled={editor.isPending}>
-                  save
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={editor.onCancel}>
-                  cancel
-                </Button>
-              </div>
+              <Input
+                id="tenant-edit-name"
+                aria-label="Community name"
+                value={editor.name}
+                autoFocus
+                onChange={(event) => editor.onNameChange(event.target.value)}
+                className="min-w-0 flex-1"
+              />
+              <Button type="submit" disabled={editor.isPending || !editor.name.trim()}>
+                {editor.isPending ? "Saving…" : "Save"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={editor.onCancel}>
+                Cancel
+              </Button>
             </form>
           ) : (
-            <>
-              <InfoRow label="name" value={tenant.name} />
-              <InfoRow label="hostname" value={hostname ?? "—"} mono />
-              <InfoRow label="account" value={tenant.accountId} mono />
-              <InfoRow label="owner kind" value={isDaoOwned ? "dao" : "platform"} />
-              <InfoRow
-                label="registry"
-                value={
-                  bosUrl && fastKvUrl ? (
-                    <span className="flex flex-wrap items-center gap-2">
-                      <code className="font-mono text-xs">{bosUrl}</code>
-                      <a
-                        href={fastKvUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs underline text-muted-foreground hover:text-foreground"
-                      >
-                        view published config on FastKV
-                      </a>
-                    </span>
-                  ) : (
-                    "—"
-                  )
-                }
-              />
-              <InfoRow label="org id" value={tenant.orgId} mono />
-              <InfoRow label="status" value={tenant.status} />
-              <InfoRow
-                label="created"
-                value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-              />
-              <InfoRow
-                label="updated"
-                value={tenant.updatedAt ? new Date(tenant.updatedAt).toLocaleString() : "—"}
-              />
-            </>
+            tenant.name
           )}
-        </CardContent>
-      </Card>
+        </SettingsRow>
+        <SettingsRow label="Address">
+          <span className="font-mono">{hostname ?? "Not bound yet"}</span>
+        </SettingsRow>
+        <SettingsRow label="Account">
+          <span className="font-mono">{tenant.accountId}</span>
+        </SettingsRow>
+        <SettingsRow
+          label="Organization"
+          description="Members, roles and invitations."
+          action={
+            orgSlug ? (
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link to="/orgs/$slug" params={{ slug: orgSlug }} />}
+                data-testid="tenant.open-organization"
+              >
+                Manage
+                <ArrowRightIcon />
+              </Button>
+            ) : undefined
+          }
+        >
+          <span className="font-mono">{orgSlug ? `@${orgSlug}` : tenant.orgId}</span>
+        </SettingsRow>
+        <SettingsRow label="Created">
+          <LocalDate value={tenant.createdAt} fallback="—" />
+          {tenant.updatedAt ? (
+            <span className="text-muted-foreground">
+              {" "}
+              · updated <LocalDate value={tenant.updatedAt} format="relative" />
+            </span>
+          ) : null}
+        </SettingsRow>
+      </div>
     </section>
   );
 }

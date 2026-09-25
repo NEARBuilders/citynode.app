@@ -326,9 +326,15 @@ function renderTenant(current: Harness) {
 }
 
 async function confirmDelete() {
-  fireEvent.click(await screen.findByRole("button", { name: "delete tenant" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Delete community" }));
   const dialog = await screen.findByRole("dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "delete tenant" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete community" }));
+}
+
+async function confirmSuspend() {
+  fireEvent.click(await screen.findByRole("button", { name: "Suspend" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Suspend" }));
 }
 
 afterEach(() => {
@@ -345,25 +351,25 @@ describe("tenant detail mutations", () => {
     expect(await screen.findByRole("heading", { name: "Original tenant" })).toBeTruthy();
     expect(screen.getByText("original-node")).toBeTruthy();
 
-    fireEvent.click(await screen.findByRole("button", { name: "edit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rename" }));
     const nameInput = screen.getByDisplayValue("Original tenant");
     fireEvent.change(nameInput, { target: { value: "Updated tenant" } });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(current.apiClient.updateTenant).toHaveBeenCalledOnce());
     expect(await screen.findByRole("heading", { name: "Updated tenant" })).toBeTruthy();
     expect(screen.getByText("updated-node")).toBeTruthy();
     expect(current.publish).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByRole("button", { name: "suspend" }));
+    await confirmSuspend();
     await waitFor(() => expect(current.apiClient.suspendTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("button", { name: "reactivate" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Reactivate" })).toBeTruthy();
     expect(screen.getByText("suspended-node")).toBeTruthy();
     expect(current.publish).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "reactivate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reactivate" }));
     await waitFor(() => expect(current.apiClient.reactivateTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("button", { name: "suspend" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Suspend" })).toBeTruthy();
     expect(screen.getByText("reactivated-node")).toBeTruthy();
     expect(current.publish).toHaveBeenCalledTimes(2);
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
@@ -380,12 +386,12 @@ describe("tenant detail mutations", () => {
     const { queryClient } = renderTenant(current);
 
     await screen.findByRole("heading", { name: "Original tenant" });
-    fireEvent.click(await screen.findByRole("button", { name: "suspend" }));
+    await confirmSuspend();
 
     await waitFor(() => expect(current.apiClient.suspendTenant).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("button", { name: "reactivate" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Reactivate" })).toBeTruthy();
     expect(current.toast.error).toHaveBeenCalledWith(
-      "Tenant suspended, but config publication failed: publisher unavailable",
+      "Community suspended, but config publication failed: publisher unavailable",
     );
     expect(current.navigate).not.toHaveBeenCalled();
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
@@ -407,7 +413,7 @@ describe("tenant detail mutations", () => {
     expect(queryClient.getQueryData(tenantQueryKeys.byKey(TENANT_ID, GATEWAY_ID))).toMatchObject({
       status: "pending_deletion",
     });
-    expect(current.toast.success).toHaveBeenCalledWith("Tenant queued for deletion");
+    expect(current.toast.success).toHaveBeenCalledWith("Community queued for deletion");
   });
 
   it("keeps a persisted soft delete visible when publication fails", async () => {
@@ -419,7 +425,7 @@ describe("tenant detail mutations", () => {
 
     await waitFor(() => expect(current.apiClient.deleteTenant).toHaveBeenCalledOnce());
     expect(current.toast.error).toHaveBeenCalledWith(
-      "Tenant deletion saved, but config publication failed: registry write failed",
+      "Community deletion saved, but config publication failed: registry write failed",
     );
     expect(current.navigate).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -428,16 +434,29 @@ describe("tenant detail mutations", () => {
     });
   });
 
+  it("asks for confirmation before suspending", async () => {
+    const current = createHarness();
+    renderTenant(current);
+
+    await screen.findByRole("heading", { name: "Original tenant" });
+    fireEvent.click(await screen.findByRole("button", { name: "Suspend" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(current.apiClient.suspendTenant).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(current.apiClient.suspendTenant).not.toHaveBeenCalled();
+  });
+
   it("does not publish when the database update fails", async () => {
     const current = createHarness({ updateError: new Error("database unavailable") });
     renderTenant(current);
 
     await screen.findByRole("heading", { name: "Original tenant" });
-    fireEvent.click(await screen.findByRole("button", { name: "edit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rename" }));
     fireEvent.change(screen.getByDisplayValue("Original tenant"), {
       target: { value: "Unavailable update" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(current.toast.error).toHaveBeenCalledWith("database unavailable"));
     expect(current.publish).not.toHaveBeenCalled();
@@ -450,9 +469,9 @@ describe("tenant detail mutations", () => {
 
     await screen.findByRole("heading", { name: "Original tenant" });
     await waitFor(() => expect(current.auth.organization.listMembers).toHaveBeenCalledOnce());
-    expect(screen.queryByRole("button", { name: "edit" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "delete" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "delete tenant" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "suspend" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete community" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
+    expect(screen.queryByTestId("tenant.danger-zone")).toBeNull();
   });
 });

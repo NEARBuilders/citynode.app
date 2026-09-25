@@ -1,101 +1,75 @@
-import { BankIcon, TrashIcon } from "@phosphor-icons/react";
-import { Link } from "@tanstack/react-router";
-import {
-  Badge,
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-  Button,
-  PageHeader,
-} from "@/components";
-import type { TenantAction, TenantRecord } from "./-tenant-types";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react";
+import { Badge, Button, PageHeader } from "@/components";
+import { buildTenantUrl } from "@/lib/tenant-url";
+import type { TenantRecord } from "./-tenant-types";
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  pending: "Pending",
+  suspended: "Suspended",
+  pending_deletion: "Pending deletion",
+};
+
+const STATUS_BADGE = {
+  active: "success",
+  suspended: "warning",
+  pending_deletion: "destructive",
+} as const;
 
 export function TenantHeader({
   tenant,
   hostname,
+  gatewayId,
   nodeSlug,
-  isOwner,
-  isAdmin,
-  suspend,
-  reactivate,
-  deleting,
-  onDelete,
 }: {
   tenant: TenantRecord;
   hostname: string | null;
+  gatewayId: string;
   nodeSlug?: string;
-  isOwner: boolean;
-  isAdmin: boolean;
-  suspend: TenantAction;
-  reactivate: TenantAction;
-  deleting: boolean;
-  onDelete: () => void;
 }) {
   const isDaoOwned = tenant.ownerKind === "dao";
   const statusVariant =
-    tenant.status === "active"
-      ? "default"
-      : tenant.status === "suspended"
-        ? "destructive"
-        : "secondary";
-  return (
-    <>
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link to="/dashboard" />}>dashboard</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{nodeSlug ?? tenant.name}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+    STATUS_BADGE[tenant.status as keyof typeof STATUS_BADGE] ?? ("secondary" as const);
+  const siteUrl = hostname ? (buildTenantUrl(hostname, gatewayId) ?? `https://${hostname}`) : null;
 
-      <PageHeader
-        icon={BankIcon}
-        label="Tenant"
-        title={tenant.name}
-        subtitle={`${hostname ?? "no binding yet"} · ${tenant.accountId}`}
-        headerTestId="tenant.heading"
-        actions={
-          <div className="flex gap-2">
-            <Badge variant={isDaoOwned ? "default" : "secondary"}>
-              {isDaoOwned ? "DAO-owned" : (tenant.ownerKind ?? "platform")}
-            </Badge>
-            <Badge variant={statusVariant}>{tenant.status}</Badge>
-            {isAdmin && tenant.status === "active" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => suspend.mutate()}
-                disabled={suspend.isPending}
-              >
-                suspend
-              </Button>
-            )}
-            {isAdmin && tenant.status === "suspended" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => reactivate.mutate()}
-                disabled={reactivate.isPending}
-              >
-                reactivate
-              </Button>
-            )}
-            {isOwner && tenant.status === "active" && (
-              <Button variant="destructive" size="sm" onClick={onDelete} disabled={deleting}>
-                <TrashIcon className="h-3.5 w-3.5" />
-                delete
-              </Button>
-            )}
-          </div>
-        }
-      />
-    </>
+  return (
+    <PageHeader
+      label={
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span>Community settings</span>
+          <Badge variant={statusVariant} data-testid="tenant.status">
+            {STATUS_LABEL[tenant.status] ?? tenant.status}
+          </Badge>
+          <Badge variant="outline">{isDaoOwned ? "DAO-owned" : "Platform"}</Badge>
+        </span>
+      }
+      title={tenant.name}
+      description={
+        <span className="text-base">
+          {hostname ?? "No address yet"}
+          {nodeSlug ? (
+            <>
+              {" · "}
+              <span className="font-mono">{nodeSlug}</span>
+            </>
+          ) : null}
+        </span>
+      }
+      headerTestId="tenant.heading"
+      actions={
+        siteUrl ? (
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={
+              <a href={siteUrl} target="_blank" rel="noreferrer" data-testid="tenant.open-site">
+                Open site
+                <ArrowSquareOutIcon />
+              </a>
+            }
+          />
+        ) : null
+      }
+    />
   );
 }
