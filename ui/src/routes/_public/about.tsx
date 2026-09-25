@@ -1,13 +1,15 @@
 import {
-  ArrowSquareOutIcon,
+  ArrowUpRightIcon,
   BookOpenIcon,
+  CaretRightIcon,
   FileTextIcon,
-  GitForkIcon,
+  GitBranchIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
-import { PageContainer } from "@/components";
+import { Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { Markdown } from "@/components/markdown";
 
 function sanitizeMarkdownContent(content: string): string {
@@ -60,24 +62,12 @@ export const Route = createFileRoute("/_public/about")({
   },
   head: () => ({
     meta: [
-      { title: "About | app" },
-      { name: "description", content: "About this runtime-composed app on NEAR." },
+      { title: "About | CityNode" },
+      { name: "description", content: "What CityNode is and how to build on it." },
     ],
   }),
   component: About,
 });
-
-function isGithubUrl(url: string) {
-  return /github\.com/i.test(url);
-}
-
-function GithubIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577v-2.165c-3.338.726-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.083-.729.083-.729 1.205.085 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.492.997.108-.775.418-1.305.76-1.605-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.52 11.52 0 0 1 12 6.803c1.02.005 2.047.138 3.006.404 2.29-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.91 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.218.694.825.576C20.565 21.796 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
-    </svg>
-  );
-}
 
 function parseGithubRepo(url: string): { owner: string; repo: string } | null {
   const match = url.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/i);
@@ -92,134 +82,143 @@ function About() {
   const appName = getAppName(runtimeConfig);
 
   const accountId = runtime?.accountId ?? account;
-  const githubRepo = repository && isGithubUrl(repository) ? parseGithubRepo(repository) : null;
+  const githubRepo = repository ? parseGithubRepo(repository) : null;
 
   return (
-    <PageContainer variant="default">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-foreground flex items-center justify-center shrink-0">
-                <BookOpenIcon size={18} className="text-background" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-muted-foreground font-mono">{accountId}</span>
-                  <span className="text-muted-foreground">/</span>
-                  <span className="text-base font-semibold text-foreground">{appName}</span>
-                </div>
-                {githubRepo && (
-                  <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground font-mono">
-                    <GitForkIcon size={11} />
-                    <span>
-                      {githubRepo.owner}/{githubRepo.repo}
-                    </span>
-                  </div>
+    <PageContainer variant="wide">
+      <PageHeader
+        headerTestId="about.heading"
+        icon={BookOpenIcon}
+        label="Docs"
+        title={`About ${appName}`}
+        description={description ?? "What this runtime is, how it's built, and how to build on it."}
+        actions={
+          <>
+            <Button
+              nativeButton={false}
+              render={<Link to="/skill" preload="intent" data-testid="about.open-skill-link" />}
+            >
+              <SparkleIcon />
+              Open agent skill
+            </Button>
+            {repository && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={(props) => (
+                  <a {...props} href={repository} target="_blank" rel="noopener noreferrer" />
                 )}
-              </div>
-            </div>
-
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Link
-                to="/skill"
-                preload="intent"
-                className="h-9 rounded-xl px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-foreground text-background hover:opacity-90"
               >
-                <SparkleIcon size={14} />
-                Skill
-              </Link>
-              <a
-                href="/skill.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-9 rounded-xl px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
-              >
-                <FileTextIcon size={14} />
-                skill.md
-              </a>
-              {repository && (
-                <a
-                  href={repository}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-9 rounded-xl px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-secondary text-foreground hover:bg-border"
-                >
-                  {isGithubUrl(repository) ? (
-                    <GithubIcon size={14} />
-                  ) : (
-                    <ArrowSquareOutIcon size={14} />
-                  )}
-                  {isGithubUrl(repository) ? "GitHub" : "Repository"}
-                </a>
-              )}
-            </div>
-          </div>
+                <GitBranchIcon />
+                Source code
+              </Button>
+            )}
+          </>
+        }
+      />
 
-          {description && (
-            <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
-          )}
-
-          {repository && (
-            <div className="rounded-lg border border-border bg-muted px-3.5 py-2.5 flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground shrink-0 min-w-16">
-                repo
-              </span>
-              <a
-                href={repository}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-mono text-foreground hover:underline truncate"
-              >
-                {repository}
-              </a>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-border bg-muted px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-medium text-muted-foreground">
-                for agents and builders
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Open the skill page for the essential TanStack Intent, local dev, and publish
-                instructions.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to="/skill"
-                preload="intent"
-                className="h-9 rounded-xl px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
-                data-testid="about.open-skill-link"
-              >
-                <SparkleIcon size={14} />
-                Open skill
-              </Link>
-              <a
-                href="/skill.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-9 rounded-xl px-4 text-sm font-bold inline-flex items-center gap-2 no-underline transition-colors duration-150 bg-card text-foreground border border-border hover:bg-background"
-              >
-                <FileTextIcon size={14} />
-                Raw markdown
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {readme ? (
-          <div className="rounded-xl border border-border bg-card p-8">
+      <div className="grid gap-12 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          {readme ? (
             <Markdown content={readme} />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-3 px-8 py-16 rounded-xl border border-border bg-card text-muted-foreground">
-            <FileTextIcon size={32} className="text-border" />
-            <p className="text-sm text-muted-foreground">No README available.</p>
-          </div>
-        )}
+          ) : (
+            <EmptyState
+              icon={FileTextIcon}
+              title="No README yet"
+              description="This runtime hasn't published a README."
+              className="rounded-3xl border border-dashed border-border"
+            />
+          )}
+        </div>
+        <aside className="flex flex-col gap-8 lg:sticky lg:top-8 lg:self-start">
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-medium text-foreground">Build on it</h2>
+            <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border">
+              <DocLink
+                to="/skill"
+                icon={<SparkleIcon className="size-5" />}
+                title="Agent skill"
+                meta="Run, change and publish with an agent"
+              />
+              <DocLink
+                href="/skill.md"
+                icon={<FileTextIcon className="size-5" />}
+                title="skill.md"
+                meta="Raw markdown prompt"
+              />
+              {repository && (
+                <DocLink
+                  href={repository}
+                  icon={<GitBranchIcon className="size-5" />}
+                  title={githubRepo ? `${githubRepo.owner}/${githubRepo.repo}` : "Repository"}
+                  meta="Source code"
+                />
+              )}
+            </ul>
+          </section>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-medium text-foreground">Runtime</h2>
+            <dl className="flex flex-col gap-3 text-sm">
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-muted-foreground">Account</dt>
+                <dd className="font-mono break-all text-foreground">{accountId}</dd>
+              </div>
+              {runtime?.gatewayId && (
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-muted-foreground">Gateway</dt>
+                  <dd className="font-mono break-all text-foreground">{runtime.gatewayId}</dd>
+                </div>
+              )}
+            </dl>
+          </section>
+        </aside>
       </div>
     </PageContainer>
+  );
+}
+
+function DocLink({
+  to,
+  href,
+  icon,
+  title,
+  meta,
+}: {
+  to?: "/skill";
+  href?: string;
+  icon: ReactNode;
+  title: string;
+  meta: string;
+}) {
+  const className =
+    "group flex min-h-16 items-center gap-3 bg-card px-4 py-3 transition-colors hover:bg-muted";
+  const content = (
+    <>
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground group-hover:bg-background">
+        {icon}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="truncate font-medium text-foreground">{title}</div>
+        <div className="truncate text-sm text-muted-foreground">{meta}</div>
+      </div>
+      {to ? (
+        <CaretRightIcon className="size-4 text-muted-foreground" />
+      ) : (
+        <ArrowUpRightIcon className="size-4 text-muted-foreground" />
+      )}
+    </>
+  );
+  return (
+    <li>
+      {to ? (
+        <Link to={to} preload="intent" className={className}>
+          {content}
+        </Link>
+      ) : (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+          {content}
+        </a>
+      )}
+    </li>
   );
 }
