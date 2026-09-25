@@ -1,6 +1,6 @@
 import { InfoRow } from "@/components/info-row";
 import type { RelayerInfoData } from "@/lib/use-relayer";
-import { StatFigure, StatGrid } from "./-admin-ui";
+import { formatNearFigure, StatFigure, StatGrid } from "./-admin-ui";
 
 export function RelayerStatusBody({
   info,
@@ -50,13 +50,13 @@ export function RelayerStatusBody({
       <StatGrid>
         <StatFigure
           label="Balance"
-          value={info.balance}
+          value={formatNearFigure(info.balance)}
           hint="NEAR"
           testId="admin-relayer-balance"
         />
         <StatFigure
           label="Available"
-          value={info.available}
+          value={formatNearFigure(info.available)}
           hint="NEAR"
           testId="admin-relayer-available"
         />

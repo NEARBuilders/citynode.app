@@ -26,7 +26,7 @@ import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
-import { ListSkeleton, StatFigure, StatGrid } from "./-admin-ui";
+import { formatNearFigure, ListSkeleton, StatFigure, StatGrid } from "./-admin-ui";
 import {
   adminProposalListQueryOptions,
   proposalTitle,
@@ -85,7 +85,7 @@ function AdminOverview() {
         />
         <StatFigure
           label="Relayer balance"
-          value={relayer?.enabled ? relayer.balance : relayer ? "0" : "—"}
+          value={relayer?.enabled ? formatNearFigure(relayer.balance) : relayer ? "0" : "—"}
           hint={relayer ? (relayer.enabled ? "NEAR" : "Needs funding") : "Not configured"}
           tone={relayer && !relayer.enabled ? "attention" : "default"}
           testId="admin.stat.relayer"

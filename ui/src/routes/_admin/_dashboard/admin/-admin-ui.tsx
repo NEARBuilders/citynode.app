@@ -150,3 +150,10 @@ export function RawJsonDisclosure({
     </div>
   );
 }
+
+export function formatNearFigure(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") return "—";
+  const amount = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(amount)) return String(value);
+  return amount.toFixed(2).replace(/\.?0+$/, "") || "0";
+}
