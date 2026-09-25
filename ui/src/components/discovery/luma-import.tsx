@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApiClient } from "@/app";
 import { Button } from "@/components";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function LumaImport({ nodeId }: { nodeId: string }) {
   const api = useApiClient();
@@ -27,8 +35,23 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
       }),
   });
   const connection = calendars.data?.connection;
+  const calendarItems = [
+    ...(connection &&
+    !calendars.data?.calendars.some((calendar) => calendar.id === connection.calendarId)
+      ? [
+          {
+            label: `${connection.calendarName} · unavailable`,
+            value: connection.calendarId,
+          },
+        ]
+      : []),
+    ...(calendars.data?.calendars ?? []).map((calendar) => ({
+      label: calendar.name,
+      value: calendar.id,
+    })),
+  ];
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border-2 border-border-strong bg-card p-5">
+    <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
       <div>
         <h3 className="font-semibold">Luma calendar</h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -49,36 +72,32 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
         </p>
       )}
       {calendars.data && calendars.data.calendars.length > 0 && (
-        <label className="block text-sm font-medium" htmlFor={`luma-calendar-${nodeId}`}>
-          Choose a calendar
-          <select
-            id={`luma-calendar-${nodeId}`}
-            data-testid="discovery-luma-calendar"
-            value={connection?.calendarId ?? ""}
+        <Field>
+          <FieldLabel htmlFor={`luma-calendar-${nodeId}`}>Choose a calendar</FieldLabel>
+          <Select
+            items={calendarItems}
+            value={connection?.calendarId ?? null}
             disabled={refresh.isPending || disconnect.isPending}
-            className="mt-2 block h-10 w-full rounded-[12px] border-2 border-inset border-border-strong bg-card px-3"
-            onChange={(event) => {
-              if (event.target.value) refresh.mutate(event.target.value);
+            onValueChange={(value) => {
+              if (value) refresh.mutate(value);
             }}
           >
-            <option value="" disabled>
-              Select a calendar
-            </option>
-            {connection &&
-              !calendars.data.calendars.some(
-                (calendar) => calendar.id === connection.calendarId,
-              ) && (
-                <option value={connection.calendarId}>
-                  {connection.calendarName} · unavailable
-                </option>
-              )}
-            {calendars.data.calendars.map((calendar) => (
-              <option key={calendar.id} value={calendar.id}>
-                {calendar.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger
+              id={`luma-calendar-${nodeId}`}
+              data-testid="discovery-luma-calendar"
+              className="w-full"
+            >
+              <SelectValue placeholder="Select a calendar" />
+            </SelectTrigger>
+            <SelectContent>
+              {calendarItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
       )}
       {refresh.isPending && <p role="status">Connecting calendar and loading events…</p>}
       {connection && (

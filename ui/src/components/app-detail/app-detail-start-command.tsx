@@ -1,6 +1,7 @@
 import { CopyIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 export function AppDetailStartCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
@@ -13,19 +14,11 @@ export function AppDetailStartCommand({ command }: { command: string }) {
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="w-full group flex items-center justify-between gap-3 rounded-[8px] border border-border bg-foreground px-4 py-3 cursor-pointer transition-opacity duration-150 hover:opacity-90 text-left"
-    >
-      <code className="font-mono text-sm font-semibold text-background break-all leading-snug">
-        {command}
-      </code>
-      <span
-        className={`shrink-0 transition-colors duration-150 ${copied ? "text-brand-accent" : "text-background/50 group-hover:text-background/80"}`}
-      >
+    <Button variant="outline" size="lg" onClick={handleCopy} className="w-full justify-between">
+      <code className="min-w-0 truncate font-mono text-sm">{command}</code>
+      <span className={copied ? "text-brand-strong" : "text-muted-foreground"}>
         <CopyIcon size={14} />
       </span>
-    </button>
+    </Button>
   );
 }

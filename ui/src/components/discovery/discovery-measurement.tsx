@@ -1,6 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { type ApiClient, useApiClient } from "@/app";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Kind = "open" | "event" | "channel" | "share";
 export function useDiscoveryMeasurement(api: ApiClient, campaign = "") {
@@ -87,7 +95,7 @@ export function DiscoveryMetrics({ nodes = [] }: { nodes?: { nodeId: string; nam
             note: "Visits where someone opened a link",
           },
         ].map(({ label, value, note }) => (
-          <div key={label} className="rounded-2xl border-2 border-border-strong bg-card p-5">
+          <div key={label} className="rounded-2xl border border-border bg-card p-5">
             <p className="text-sm text-muted-foreground">{label}</p>
             <p className="my-3 text-3xl font-semibold tracking-tight">{value}</p>
             <p className="text-xs text-muted-foreground">{note}</p>
@@ -99,40 +107,45 @@ export function DiscoveryMetrics({ nodes = [] }: { nodes?: { nodeId: string; nam
         someone attended. Known editors aren’t counted, and we skip people who asked not to be
         tracked.
       </p>
-      <div className="overflow-x-auto rounded-2xl border-2 border-border-strong">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
-            <tr>
-              <th className="px-5 py-3 font-medium">Community</th>
-              <th className="px-5 py-3 font-medium">From</th>
-              <th className="px-5 py-3 font-medium">What they did</th>
-              <th className="px-5 py-3 font-medium">Count</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="overflow-x-auto rounded-2xl border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Community</TableHead>
+              <TableHead>From</TableHead>
+              <TableHead>What they did</TableHead>
+              <TableHead>Count</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {metrics.data.rows.map((row) => (
-              <tr
-                className="border-b border-border last:border-0"
-                key={`${row.nodeId}:${row.campaign}:${row.kind}`}
-              >
-                <td className="px-5 py-3 font-medium">
-                  {nodes.find((node) => node.nodeId === row.nodeId)?.name ??
-                    (row.nodeId ? "Unavailable community" : "Network")}
-                </td>
-                <td className="px-5 py-3 text-muted-foreground">{row.campaign || "Explore"}</td>
-                <td className="px-5 py-3">{metricAction(row.kind)}</td>
-                <td className="px-5 py-3 tabular-nums">{row.count}</td>
-              </tr>
+              <TableRow key={`${row.nodeId}:${row.campaign}:${row.kind}`}>
+                <TableCell>
+                  <span className="font-medium">
+                    {nodes.find((node) => node.nodeId === row.nodeId)?.name ??
+                      (row.nodeId ? "Unavailable community" : "Network")}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-muted-foreground">{row.campaign || "Explore"}</span>
+                </TableCell>
+                <TableCell>{metricAction(row.kind)}</TableCell>
+                <TableCell>
+                  <span className="tabular-nums">{row.count}</span>
+                </TableCell>
+              </TableRow>
             ))}
             {!metrics.data.rows.length && (
-              <tr>
-                <td colSpan={4} className="p-10 text-center text-sm text-muted-foreground">
-                  No interest yet. Share Explore to see what people open.
-                </td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={4} className="h-24 text-center">
+                  <span className="text-muted-foreground">
+                    No interest yet. Share Explore to see what people open.
+                  </span>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </section>
   );

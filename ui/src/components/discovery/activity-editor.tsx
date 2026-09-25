@@ -20,6 +20,15 @@ import {
   TabsTrigger,
   Textarea,
 } from "@/components";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -56,6 +65,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const api = useApiClient();
   const client = useQueryClient();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const statusItems = [
+    { label: "Keep as draft", value: "draft" },
+    { label: "Publish on Explore", value: "published" },
+    { label: "Mark as cancelled", value: "cancelled" },
+  ];
   const list = useQuery({
     queryKey: ["discovery-activities", nodeId],
     queryFn: () => api.listDiscoveryActivities({ nodeId }),
@@ -180,8 +194,10 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       </div>
       <LumaImport nodeId={nodeId} />
       {list.data?.some((a) => a.kind === "event" && a.status !== "cancelled") && (
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <label htmlFor="discovery-onboarding-max-joins">Max joins per onboarding code</label>
+        <Field orientation="horizontal" className="flex-wrap">
+          <FieldLabel htmlFor="discovery-onboarding-max-joins">
+            Max joins per onboarding code
+          </FieldLabel>
           <Input
             id="discovery-onboarding-max-joins"
             data-testid="discovery-onboarding-max-joins"
@@ -191,7 +207,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             value={maxJoins}
             onChange={(event) => setMaxJoins(event.target.value)}
           />
-        </div>
+        </Field>
       )}
       {startOnboarding.isError && (
         <p
@@ -214,17 +230,13 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           onValueChange={(value) => setWhen(value === "past" ? "past" : "upcoming")}
         >
           <TabsList className="justify-start">
-            <TabsTrigger
-              value="upcoming"
-              className="gap-1.5"
-              data-testid="activity-editor.tab-upcoming"
-            >
+            <TabsTrigger value="upcoming" data-testid="activity-editor.tab-upcoming">
               Upcoming
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
                 {timeline.upcomingCount}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="past" className="gap-1.5" data-testid="activity-editor.tab-past">
+            <TabsTrigger value="past" data-testid="activity-editor.tab-past">
               Past
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
                 {timeline.pastCount}
@@ -260,7 +272,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         <h3 className="text-sm font-medium text-muted-foreground">Posts</h3>
       )}
       {posts.length > 0 && (
-        <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-border-strong bg-card">
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
           {posts.map((a) => {
             const tile = eventDateTile(a);
             return (
@@ -277,9 +289,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                 </div>
                 {tile && (
                   <div className="flex size-12 shrink-0 flex-col items-center justify-center rounded-lg bg-muted">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {tile.month}
-                    </span>
+                    <span className="text-sm font-medium text-muted-foreground">{tile.month}</span>
                     <span className="text-base font-semibold tabular-nums leading-none">
                       {tile.day}
                     </span>
@@ -299,7 +309,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       >
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader className="px-6 pb-4 pt-8 pr-16">
-            <SheetTitle className="text-xl">
+            <SheetTitle>
               {draft?.id ? "Edit" : "Add"}{" "}
               {draft?.kind === "event" ? "an event" : "a community post"}
             </SheetTitle>
@@ -340,8 +350,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                   ["url", "Link"],
                 ] as const
               ).map(([key, label]) => (
-                <label key={key} htmlFor={`activity-${key}`} className="block">
-                  {label}
+                <Field key={key}>
+                  <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
                   <Input
                     id={`activity-${key}`}
                     readOnly={Boolean(imported)}
@@ -351,10 +361,10 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                     value={draft[key]}
                     onChange={(e) => update(key, e.target.value)}
                   />
-                </label>
+                </Field>
               ))}
-              <label htmlFor="activity-summary" className="block">
-                Summary
+              <Field>
+                <FieldLabel htmlFor="activity-summary">Summary</FieldLabel>
                 <Textarea
                   readOnly={Boolean(imported)}
                   id="activity-summary"
@@ -362,9 +372,9 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                   value={draft.summary}
                   onChange={(e) => update("summary", e.target.value)}
                 />
-              </label>
-              <label htmlFor="activity-published" className="block">
-                Posted on
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="activity-published">Posted on</FieldLabel>
                 <Input
                   readOnly={Boolean(imported)}
                   id="activity-published"
@@ -378,7 +388,7 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                     )
                   }
                 />
-              </label>
+              </Field>
               {draft.kind === "event" && (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -391,8 +401,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                       ["endsAt", "Ends"],
                     ] as const
                   ).map(([key, label]) => (
-                    <label key={key} htmlFor={`activity-${key}`} className="block">
-                      {label}
+                    <Field key={key}>
+                      <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
                       <Input
                         id={`activity-${key}`}
                         readOnly={Boolean(imported)}
@@ -406,10 +416,10 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                           )
                         }
                       />
-                    </label>
+                    </Field>
                   ))}
-                  <label htmlFor="activity-timezone" className="block">
-                    Timezone
+                  <Field>
+                    <FieldLabel htmlFor="activity-timezone">Timezone</FieldLabel>
                     <Input
                       readOnly={Boolean(imported)}
                       id="activity-timezone"
@@ -417,9 +427,11 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                       value={draft.timezone}
                       onChange={(e) => update("timezone", e.target.value)}
                     />
-                  </label>
-                  <label htmlFor="activity-venue" className="block">
-                    Venue or online meeting location
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="activity-venue">
+                      Venue or online meeting location
+                    </FieldLabel>
                     <Input
                       readOnly={Boolean(imported)}
                       id="activity-venue"
@@ -427,55 +439,60 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                       value={draft.venue}
                       onChange={(e) => update("venue", e.target.value)}
                     />
-                  </label>
-                  <fieldset className="flex flex-col gap-2">
-                    <legend className="text-sm font-medium">
+                  </Field>
+                  <FieldSet>
+                    <FieldLegend variant="label">
                       Also show this event in these communities
-                    </legend>
-                    {nodes.data?.map((n) => (
-                      <label className="flex items-center gap-2 text-sm" key={n.id}>
-                        <input
-                          type="checkbox"
-                          disabled={n.id === nodeId}
-                          checked={draft.nodeIds.includes(n.id)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              nodeIds: e.target.checked
-                                ? [...draft.nodeIds, n.id]
-                                : draft.nodeIds.filter((id) => id !== n.id),
-                            })
-                          }
-                        />
-                        {n.name}
-                      </label>
-                    ))}
-                  </fieldset>
+                    </FieldLegend>
+                    <FieldGroup>
+                      {nodes.data?.map((n) => (
+                        <Field orientation="horizontal" key={n.id}>
+                          <Checkbox
+                            id={`activity-node-${n.id}`}
+                            disabled={n.id === nodeId}
+                            checked={draft.nodeIds.includes(n.id)}
+                            onCheckedChange={(checked) =>
+                              setDraft({
+                                ...draft,
+                                nodeIds: checked
+                                  ? [...draft.nodeIds, n.id]
+                                  : draft.nodeIds.filter((id) => id !== n.id),
+                              })
+                            }
+                          />
+                          <FieldLabel htmlFor={`activity-node-${n.id}`}>{n.name}</FieldLabel>
+                        </Field>
+                      ))}
+                    </FieldGroup>
+                  </FieldSet>
                 </>
               )}
-              <label htmlFor="activity-status" className="block">
-                Who can see this
-                <select
-                  id="activity-status"
-                  className="mt-1.5 h-10 w-full rounded-[12px] border-2 border-inset border-border-strong bg-card px-3"
+              <Field>
+                <FieldLabel htmlFor="activity-status">Who can see this</FieldLabel>
+                <Select
+                  items={statusItems}
                   value={draft.status}
-                  onChange={(e) => {
-                    const value = e.target.value;
+                  onValueChange={(value) => {
                     if (value === "draft" || value === "published" || value === "cancelled")
                       setDraft({ ...draft, status: value });
                   }}
                 >
-                  <option value="draft">Keep as draft</option>
-                  <option value="published" disabled={imported?.available === false}>
-                    Publish on Explore
-                  </option>
-                  {draft.kind === "event" && (
-                    <option value="cancelled" disabled={imported?.available === false}>
-                      Mark as cancelled
-                    </option>
-                  )}
-                </select>
-              </label>
+                  <SelectTrigger id="activity-status" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Keep as draft</SelectItem>
+                    <SelectItem value="published" disabled={imported?.available === false}>
+                      Publish on Explore
+                    </SelectItem>
+                    {draft.kind === "event" && (
+                      <SelectItem value="cancelled" disabled={imported?.available === false}>
+                        Mark as cancelled
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </Field>
               {save.isError && (
                 <p role="alert" className="text-sm text-destructive">
                   {save.error.message}
@@ -664,17 +681,13 @@ export function ActivityCard({
             onClick={onOutbound}
             aria-label="Event details"
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {tile.month}
-            </span>
+            <span className="text-sm font-medium text-muted-foreground">{tile.month}</span>
             <span className="text-xl font-semibold tabular-nums leading-none">{tile.day}</span>
           </a>
         )}
         {tile && activity.kind === "social" && (
           <div className="flex size-16 shrink-0 flex-col items-center justify-center rounded-lg bg-background text-foreground">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {tile.month}
-            </span>
+            <span className="text-sm font-medium text-muted-foreground">{tile.month}</span>
             <span className="text-xl font-semibold tabular-nums leading-none">{tile.day}</span>
           </div>
         )}

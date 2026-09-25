@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
+import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityEditor } from "./activity-editor";
 
@@ -29,8 +31,8 @@ export function ProfileEditor({
       </p>
     );
   return (
-    <Tabs defaultValue={defaultTab} className="gap-6">
-      <TabsList className="justify-start">
+    <Tabs defaultValue={defaultTab}>
+      <TabsList className="mb-4 justify-start">
         <TabsTrigger value="events" data-testid="content-tab-events">
           Events & updates
         </TabsTrigger>
@@ -78,7 +80,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
   });
   return (
     <form
-      className="flex flex-col gap-6 rounded-2xl border-2 border-border-strong bg-card p-5 sm:p-7 [&_label]:text-sm [&_label]:font-medium [&_input]:mt-1.5 [&_textarea]:mt-1.5"
+      className="flex flex-col gap-6 rounded-2xl border border-border bg-card p-5 sm:p-7"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate();
@@ -91,8 +93,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
           pin—not someone’s home. If you meet only online, you can skip the map pin.
         </p>
       </div>
-      <label className="block" htmlFor="profile-summary">
-        About this community
+      <Field>
+        <FieldLabel htmlFor="profile-summary">About this community</FieldLabel>
         <Textarea
           id="profile-summary"
           value={profile.summary}
@@ -100,28 +102,28 @@ function ProfileForm({ initial }: { initial: Profile }) {
           maxLength={1000}
           onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
         />
-      </label>
+      </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <label htmlFor="profile-location">
-          Location
+        <Field>
+          <FieldLabel htmlFor="profile-location">Location</FieldLabel>
           <Input
             id="profile-location"
             value={profile.location}
             maxLength={120}
             onChange={(e) => setProfile({ ...profile, location: e.target.value })}
           />
-        </label>
-        <label htmlFor="profile-region">
-          Region
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="profile-region">Region</FieldLabel>
           <Input
             id="profile-region"
             value={profile.region}
             maxLength={120}
             onChange={(e) => setProfile({ ...profile, region: e.target.value })}
           />
-        </label>
-        <label htmlFor="profile-latitude">
-          Latitude
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="profile-latitude">Latitude</FieldLabel>
           <Input
             id="profile-latitude"
             type="number"
@@ -136,9 +138,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
               })
             }
           />
-        </label>
-        <label htmlFor="profile-longitude">
-          Longitude
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="profile-longitude">Longitude</FieldLabel>
           <Input
             id="profile-longitude"
             type="number"
@@ -153,17 +155,15 @@ function ProfileForm({ initial }: { initial: Profile }) {
               })
             }
           />
-        </label>
+        </Field>
       </div>
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-semibold">Where people can join you</legend>
-        <p className="text-sm text-muted-foreground">
-          Add your website, group chat, or social page.
-        </p>
+      <FieldSet>
+        <FieldLegend>Where people can join you</FieldLegend>
+        <FieldDescription>Add your website, group chat, or social page.</FieldDescription>
         {profile.channels.map((channel, index) => (
           <div key={index} className="flex flex-wrap items-end gap-3 rounded-xl bg-muted/40 p-3">
-            <label htmlFor={`channel-label-${index}`}>
-              Link name
+            <Field>
+              <FieldLabel htmlFor={`channel-label-${index}`}>Link name</FieldLabel>
               <Input
                 id={`channel-label-${index}`}
                 required
@@ -177,9 +177,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
                   })
                 }
               />
-            </label>
-            <label htmlFor={`channel-url-${index}`} className="min-w-48 flex-1">
-              Website or group
+            </Field>
+            <Field className="min-w-48 flex-1">
+              <FieldLabel htmlFor={`channel-url-${index}`}>Website or group</FieldLabel>
               <Input
                 id={`channel-url-${index}`}
                 required
@@ -194,7 +194,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                   })
                 }
               />
-            </label>
+            </Field>
             <Button
               type="button"
               variant="outline"
@@ -217,15 +217,15 @@ function ProfileForm({ initial }: { initial: Profile }) {
         >
           Add a link
         </Button>
-      </fieldset>
-      <label className="flex items-center gap-3 rounded-xl bg-secondary/60 px-4 py-3">
-        <input
-          type="checkbox"
+      </FieldSet>
+      <Field orientation="horizontal">
+        <Switch
+          id="profile-published"
           checked={profile.published}
-          onChange={(e) => setProfile({ ...profile, published: e.target.checked })}
+          onCheckedChange={(checked) => setProfile({ ...profile, published: checked })}
         />
-        Show this community on Explore
-      </label>
+        <FieldLabel htmlFor="profile-published">Show this community on Explore</FieldLabel>
+      </Field>
       <Button data-testid="discovery-profile-save" disabled={save.isPending}>
         Save profile
       </Button>

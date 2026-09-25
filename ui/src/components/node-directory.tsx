@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { buildTenantUrl } from "@/lib/tenant-url";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
+import { Table, TableBody, TableCell, TableRow } from "./ui/table";
 
 export interface NodeDirectoryNode {
   id: string;
@@ -40,12 +41,12 @@ export function NodeDirectory({
   }
 
   return (
-    <table className="w-full text-sm">
-      <tbody>
+    <Table className="table-fixed">
+      <TableBody>
         {nodes.map((node) => {
           const hostname = node.hostname ?? `${node.slug}.${gateway}`;
           const href = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
-          const className = "flex items-center gap-4 px-2 py-4";
+          const className = "flex items-center gap-4";
           const content = (
             <>
               <div className="min-w-0">
@@ -55,23 +56,16 @@ export function NodeDirectory({
                 <div className="truncate font-mono text-xs text-muted-foreground">{hostname}</div>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Badge variant="secondary" className="capitalize">
-                  {node.kind}
+                <Badge variant="secondary">
+                  <span className="capitalize">{node.kind}</span>
                 </Badge>
-                {validatorNodeIds?.has(node.id) && (
-                  <Badge variant="outline" className="text-[10px]">
-                    validator
-                  </Badge>
-                )}
+                {validatorNodeIds?.has(node.id) && <Badge variant="outline">validator</Badge>}
               </div>
             </>
           );
           return (
-            <tr
-              key={node.id}
-              className="group border-b border-border last:border-0 transition-colors hover:bg-muted/50"
-            >
-              <td className="p-0">
+            <TableRow key={node.id} className="group">
+              <TableCell>
                 {linkTo === "/n/$slug" ? (
                   <Link
                     to="/n/$slug"
@@ -90,11 +84,11 @@ export function NodeDirectory({
                     {content}
                   </a>
                 )}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

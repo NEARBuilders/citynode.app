@@ -12,7 +12,15 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
-import { Badge, Button, Input } from "@/components";
+import { Badge, Button } from "@/components";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +28,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Toggle } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 import { ActivityCard, EventCalendar } from "./activity-editor";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
@@ -40,6 +49,8 @@ export type DiscoverySearch = {
   upcoming?: boolean;
   region?: string;
 };
+const ALL_REGIONS = "all";
+
 export function DiscoveryExplorer({
   api,
   search,
@@ -85,6 +96,13 @@ export function DiscoveryExplorer({
     queryFn: () => api.listDiscovery({}),
     staleTime: 30_000,
   });
+  const regionItems = [
+    { label: "All regions", value: ALL_REGIONS },
+    ...[...new Set([...(regions.data ?? []).map((node) => node.region), search.region ?? ""])]
+      .filter(Boolean)
+      .sort()
+      .map((region) => ({ label: region, value: region })),
+  ];
   const detail = useQuery({
     queryKey: ["discovery-node", nodeId],
     queryFn: () => api.getDiscoveryNode({ nodeId: nodeId! }),
@@ -104,57 +122,51 @@ export function DiscoveryExplorer({
           Communities, upcoming events, and where people are gathering.
         </p>
       </header>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-border-strong bg-card p-2">
-        <div className="relative min-w-48 flex-1">
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <label className="sr-only" htmlFor="discovery-search">
-            Search communities
-          </label>
-          <Input
+      <div className="flex flex-wrap items-center gap-2">
+        <InputGroup className="min-w-48 flex-1">
+          <InputGroupAddon>
+            <MagnifyingGlassIcon />
+          </InputGroupAddon>
+          <InputGroupInput
             id="discovery-search"
-            className="h-10 border-0 bg-transparent pl-10 shadow-none"
+            aria-label="Search communities"
             value={search.query ?? ""}
             onChange={(e) => navigate({ ...search, query: e.target.value || undefined })}
             placeholder="Search a community or city"
           />
-        </div>
-        <label className="flex items-center gap-2 px-2 text-sm" htmlFor="discovery-region">
-          <GlobeIcon className="size-4 text-muted-foreground" />
-          <span className="sr-only">Region</span>
-          <select
-            id="discovery-region"
-            aria-label="Region"
-            className="h-10 max-w-40 bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={search.region ?? ""}
-            onChange={(e) => navigate({ ...search, region: e.target.value || undefined })}
-          >
-            <option value="">All regions</option>
-            {[...new Set([...(regions.data ?? []).map((node) => node.region), search.region ?? ""])]
-              .filter(Boolean)
-              .sort()
-              .map((region) => (
-                <option key={region} value={region}>
-                  {region}
-                </option>
-              ))}
-          </select>
-        </label>
+        </InputGroup>
+        <Select
+          items={regionItems}
+          value={search.region ?? ALL_REGIONS}
+          onValueChange={(value) =>
+            navigate({ ...search, region: value && value !== ALL_REGIONS ? value : undefined })
+          }
+        >
+          <SelectTrigger id="discovery-region" aria-label="Region" className="max-w-48">
+            <GlobeIcon />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {regionItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {[
           { key: "active", label: "Recently active", icon: BroadcastIcon },
           { key: "upcoming", label: "Upcoming events", icon: CalendarDotsIcon },
         ].map(({ key, label, icon: Icon }) => (
-          <label key={key} className="cursor-pointer">
-            <input
-              type="checkbox"
-              className="peer sr-only"
-              checked={!!search[key as "active" | "upcoming"]}
-              onChange={(e) => navigate({ ...search, [key]: e.target.checked || undefined })}
-            />
-            <span className="flex h-10 items-center gap-2 rounded-[10px] px-3 text-sm text-muted-foreground hover:bg-muted peer-checked:bg-secondary peer-checked:text-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
-              <Icon className="size-4" />
-              {label}
-            </span>
-          </label>
+          <Toggle
+            key={key}
+            variant="outline"
+            pressed={!!search[key as "active" | "upcoming"]}
+            onPressedChange={(pressed) => navigate({ ...search, [key]: pressed || undefined })}
+          >
+            <Icon />
+            {label}
+          </Toggle>
         ))}
       </div>
       {list.isError ? (
@@ -168,15 +180,15 @@ export function DiscoveryExplorer({
       ) : list.isPending ? (
         <div
           role="status"
-          className="flex h-[28rem] items-center justify-center rounded-2xl bg-muted text-sm text-muted-foreground"
+          className="flex h-112 items-center justify-center rounded-2xl bg-muted text-sm text-muted-foreground"
         >
           Finding communities…
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-stretch">
+        <div className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
           <section
             aria-label="Communities"
-            className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border-strong bg-card lg:order-1 lg:max-h-[640px]"
+            className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card lg:order-1 lg:max-h-160"
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="text-sm font-medium">
@@ -247,10 +259,10 @@ export function DiscoveryExplorer({
               )}
             </div>
           </section>
-          <div className="order-1 min-w-0 overflow-hidden rounded-2xl border-2 border-border-strong bg-card lg:order-2">
+          <div className="order-1 min-w-0 overflow-hidden rounded-2xl border border-border bg-card lg:order-2 lg:col-span-2">
             <Suspense
               fallback={
-                <div className="flex h-[28rem] items-center justify-center text-sm text-muted-foreground lg:h-[640px]">
+                <div className="flex h-112 items-center justify-center text-sm text-muted-foreground lg:h-160">
                   Loading map…
                 </div>
               }
@@ -280,12 +292,12 @@ export function DiscoveryExplorer({
           }}
         >
           <SheetHeader className="px-6 pb-4 pt-8 pr-16">
-            <SheetTitle className="text-2xl tracking-tight">
-              {selected?.name ?? "Community"}
-            </SheetTitle>
-            <SheetDescription className="flex items-center gap-1.5">
-              <MapPinIcon className="size-3.5" />
-              {selected?.location || "Location coming soon"}
+            <SheetTitle>{selected?.name ?? "Community"}</SheetTitle>
+            <SheetDescription>
+              <span className="flex items-center gap-1.5">
+                <MapPinIcon className="size-3.5" />
+                {selected?.location || "Location coming soon"}
+              </span>
             </SheetDescription>
           </SheetHeader>
           {search.node && detail.isPending && !selected ? (

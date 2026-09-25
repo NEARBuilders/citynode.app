@@ -1,5 +1,6 @@
 import { useApiClient } from "@/app";
 import { Textarea } from "@/components";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { DiscoveryAction } from "./discovery-action";
 export function ReportContent({
   targetId,
@@ -35,8 +36,8 @@ export function ReportContent({
             });
           }}
         >
-          <label htmlFor={`report-${targetId}`}>
-            What happened?
+          <Field>
+            <FieldLabel htmlFor={`report-${targetId}`}>What happened?</FieldLabel>
             <Textarea
               id={`report-${targetId}`}
               data-testid={`discovery-report-reason-${targetId}`}
@@ -45,7 +46,7 @@ export function ReportContent({
               minLength={5}
               maxLength={1000}
             />
-          </label>
+          </Field>
           <p className="text-xs text-muted-foreground">
             Only the people who look after CityNode can see your report.
           </p>

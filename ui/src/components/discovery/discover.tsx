@@ -13,6 +13,15 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, Input, Textarea } from "@/components";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -23,6 +32,17 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscoveryAction } from "./discovery-action";
 import { DiscoveryMetrics } from "./discovery-measurement";
+
+const COMMUNITY_FILTERS = [
+  { label: "All communities", value: "all" },
+  { label: "Needs attention", value: "attention" },
+  { label: "Featured", value: "featured" },
+];
+
+const REPORT_ACTIONS = [
+  { label: "Keep content · close report", value: "dismiss" },
+  { label: "Hide content from Explore", value: "unpublish" },
+];
 
 export function Discover() {
   const api = useApiClient();
@@ -100,8 +120,8 @@ export function Discover() {
           Go to My community →
         </Link>
       </div>
-      <Tabs defaultValue="communities" className="gap-6">
-        <TabsList className="justify-start">
+      <Tabs defaultValue="communities">
+        <TabsList className="mb-4 justify-start">
           <TabsTrigger value="communities" data-testid="studio-tab-communities">
             Communities
             <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs">
@@ -129,33 +149,40 @@ export function Discover() {
         </TabsList>
         <TabsContent value="communities" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-full sm:max-w-xs">
-              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+            <InputGroup className="w-full sm:max-w-xs">
+              <InputGroupAddon>
+                <MagnifyingGlassIcon />
+              </InputGroupAddon>
+              <InputGroupInput
                 aria-label="Search communities"
-                className="pl-10"
                 placeholder="Search communities…"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              Show
-              <select
-                aria-label="Community filter"
+            </InputGroup>
+            <Field orientation="horizontal" className="w-auto">
+              <FieldLabel>Show</FieldLabel>
+              <Select
+                items={COMMUNITY_FILTERS}
                 value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                className="h-10 rounded-[12px] border-2 border-inset border-border-strong bg-card px-3 text-foreground"
+                onValueChange={(value) => setFilter(value ?? "all")}
               >
-                <option value="all">All communities</option>
-                <option value="attention">Needs attention</option>
-                <option value="featured">Featured</option>
-              </select>
-            </label>
+                <SelectTrigger aria-label="Community filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COMMUNITY_FILTERS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
-          <div className="overflow-hidden rounded-2xl border-2 border-border-strong bg-card">
-            <div className="hidden grid-cols-[minmax(0,1fr)_140px_140px_88px] gap-4 border-b border-border bg-muted/40 px-5 py-3 text-xs font-medium text-muted-foreground md:grid">
-              <span>Community</span>
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="hidden grid-cols-6 gap-4 border-b border-border bg-muted/40 px-5 py-3 text-xs font-medium text-muted-foreground md:grid">
+              <span className="col-span-3">Community</span>
               <span>Activity</span>
               <span>Placement</span>
               <span className="text-right">Manage</span>
@@ -163,9 +190,9 @@ export function Discover() {
             {rows.map((node) => (
               <div
                 key={node.nodeId}
-                className="grid items-center gap-3 border-b border-border px-4 py-3.5 last:border-0 sm:px-5 md:grid-cols-[minmax(0,1fr)_140px_140px_88px] md:gap-4"
+                className="grid items-center gap-3 border-b border-border px-4 py-3.5 last:border-0 sm:px-5 md:grid-cols-6 md:gap-4"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 md:col-span-3">
                   <h2 className="truncate text-sm font-semibold">{node.name}</h2>
                   <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                     <MapPinIcon className="size-3" />
@@ -236,9 +263,9 @@ export function Discover() {
               {studio.data.reports.map((report) => (
                 <article
                   key={report.id}
-                  className="flex flex-col gap-4 rounded-2xl border-2 border-border-strong bg-card p-5"
+                  className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5"
                 >
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <p className="text-sm font-medium text-muted-foreground">
                     {report.kind === "profile" ? "Community page" : "Event or post"} ·{" "}
                     {new Date(report.createdAt).toLocaleDateString()}
                   </p>
@@ -282,22 +309,31 @@ export function Discover() {
                         })
                       }
                     >
-                      <label htmlFor={`note-${report.id}`}>
-                        Note (only your team sees this)
+                      <Field>
+                        <FieldLabel htmlFor={`note-${report.id}`}>
+                          Note (only your team sees this)
+                        </FieldLabel>
                         <Textarea id={`note-${report.id}`} name="note" required maxLength={1000} />
-                      </label>
-                      <label htmlFor={`action-${report.id}`}>
-                        Action
-                        <select
-                          aria-label="What should we do"
-                          id={`action-${report.id}`}
-                          name="action"
-                          className="mt-1.5 h-10 rounded-[12px] border-2 border-inset border-border-strong bg-card px-3"
-                        >
-                          <option value="dismiss">Keep content · close report</option>
-                          <option value="unpublish">Hide content from Explore</option>
-                        </select>
-                      </label>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`action-${report.id}`}>Action</FieldLabel>
+                        <Select items={REPORT_ACTIONS} name="action" defaultValue="dismiss">
+                          <SelectTrigger
+                            aria-label="What should we do"
+                            id={`action-${report.id}`}
+                            className="w-full"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {REPORT_ACTIONS.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
                     </DiscoveryAction>
                   )}
                 </article>
@@ -315,10 +351,7 @@ export function Discover() {
           </TabsContent>
         )}
         {studio.data.isAdmin && (
-          <TabsContent
-            value="access"
-            className="max-w-2xl rounded-2xl border-2 border-border-strong bg-card p-6"
-          >
+          <TabsContent value="access" className="max-w-2xl">
             <section className="flex flex-col gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Who can highlight communities</h2>
@@ -337,10 +370,10 @@ export function Discover() {
                   api.setDiscoveryCurator({ userId: String(data.get("userId")), enabled: true })
                 }
               >
-                <label htmlFor="curator-user">
-                  Their CityNode account
+                <Field>
+                  <FieldLabel htmlFor="curator-user">Their CityNode account</FieldLabel>
                   <Input id="curator-user" name="userId" required placeholder="Account" />
-                </label>
+                </Field>
               </DiscoveryAction>
               {studio.data.curators.map((userId) => (
                 <DiscoveryAction
@@ -361,7 +394,7 @@ export function Discover() {
       >
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader className="px-6 pb-4 pt-8 pr-16">
-            <SheetTitle className="text-xl">{selected?.name ?? "Manage community"}</SheetTitle>
+            <SheetTitle>{selected?.name ?? "Manage community"}</SheetTitle>
             <SheetDescription>
               Check what visitors see and choose whether to highlight this community.
             </SheetDescription>
@@ -377,9 +410,7 @@ export function Discover() {
                 </Button>
               )}
               <div className="flex flex-col gap-3">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  What visitors can see
-                </h2>
+                <h2 className="text-sm font-medium text-muted-foreground">What visitors can see</h2>
                 {[
                   {
                     ready: !!selected.summary,
@@ -436,24 +467,28 @@ export function Discover() {
                     })
                   }
                 >
-                  <label htmlFor={`feature-label-${selected.nodeId}`}>
-                    Why it’s featured
+                  <Field>
+                    <FieldLabel htmlFor={`feature-label-${selected.nodeId}`}>
+                      Why it’s featured
+                    </FieldLabel>
                     <Input
                       id={`feature-label-${selected.nodeId}`}
                       name="label"
                       required
                       maxLength={80}
                     />
-                  </label>
-                  <label htmlFor={`feature-expires-${selected.nodeId}`}>
-                    Show until
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`feature-expires-${selected.nodeId}`}>
+                      Show until
+                    </FieldLabel>
                     <Input
                       id={`feature-expires-${selected.nodeId}`}
                       name="expires"
                       type="datetime-local"
                       required
                     />
-                  </label>
+                  </Field>
                 </DiscoveryAction>
                 <DiscoveryAction
                   label={`Remove feature for ${selected.name}`}
