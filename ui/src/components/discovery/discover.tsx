@@ -225,7 +225,7 @@ export function Discover() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="justify-start md:justify-end"
+                  className="justify-self-start md:justify-self-end"
                   data-testid={`studio-manage-${node.nodeId}`}
                   onClick={() => setSelectedId(node.nodeId)}
                 >
