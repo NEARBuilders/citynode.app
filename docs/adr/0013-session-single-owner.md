@@ -62,15 +62,37 @@ across two remotes owned pieces of one concern.
 
 - The login route's beforeLoad (auth plugin ui) and the authenticated mounts
   (core ui) import from the same shared module — the redirect graph is owned,
-  and unit-testable, in one place (`tests/ui/auth-guards.test.ts` in
-  everything-dev).
+  and unit-testable as a pair, in one place (`tests/ui/auth-guards.test.ts`
+  in everything-dev).
 - Plugin uis stop bundling better-auth/better-near-auth client code that
   flows through the session module (size redistribution to the provider's
   shared chunk; consumers declare zero assets for it).
-- Production builds resolve `everything-dev` through its built dist, so the
-  deploy train must build `every-plugin` → `everything-dev` → ui/plugin uis
-  in order (the workspace build order the deploy pipeline already
-  establishes).
+
+**Two resolution rules** (the structural exit from the staleness class):
+
+1. **Bundler-configuration code resolves from source.** The config factories
+   (`every-plugin/ui/mf-build`, `every-plugin/build/rspack`) resolve `src` in
+   every condition (both packages ship `src` in their tarballs; the
+   `everything-dev/ui/mf-build` re-export shim is deleted — `ui/rsbuild.config.ts`
+   imports `every-plugin/ui/mf-build` directly, matching the generated plugin
+   configs). Config code only ever runs at build time from the working tree,
+   so a stale dist cannot silently drop shared entries from the emitted
+   manifest — verified: a ui build succeeds with every-plugin's dist deleted
+   outright. This is the normalization the app descriptor (ADR 0005, plan 028)
+   completes: unit-specific build data lives in the unit, machinery stays
+   generic, and the config surfaces resolve current source.
+2. **Shipped code resolves dist, and the train guarantees freshness.** Runtime
+   subpaths (`everything-dev/ui/auth`, `db`, every-plugin's shared runtime)
+   resolve built dists; `buildWorkspaceTargets` unconditionally staleness-checks
+   and rebuilds the framework prerequisites (`every-plugin`, `everything-dev`,
+   `better-near-auth`) before any target. The train (`bun run build`,
+   `bun run deploy`) is the only supported build path; raw per-workspace builds
+   are unsupported.
+
 - `everything-dev/ui/api` remains per-remote-bundled for now (no cross-remote
   invariant depends on it); the server-side auth middleware copies rest at
   advisor-plan 007's convergence point pending the framework-export ticket.
+- The plugin unit shape normalization (`src` → `api/src`, `plugin.dev.ts` →
+  `bos.dev.ts`, per-unit authored descriptors) is ticketed as the
+  plugin-shape slice of the 028 arc (issues 15/16; CI train consumption is
+  issue 17).

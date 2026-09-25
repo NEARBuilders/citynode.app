@@ -73,15 +73,8 @@
       "require": "./dist/types.cjs"
     },
     "./build/rspack": {
-      "development": {
-        "types": "./src/build/rspack/index.ts",
-        "import": "./src/build/rspack/index.ts"
-      },
-      "types": {
-        "import": "./dist/build/rspack/index.d.mts",
-        "require": "./dist/build/rspack/index.d.cts"
-      },
-      "import": "./dist/build/rspack/index.mjs",
+      "types": "./src/build/rspack/index.ts",
+      "import": "./src/build/rspack/index.ts",
       "require": "./dist/build/rspack/index.cjs"
     },
     "./ui/manifest": {
@@ -121,15 +114,8 @@
       "require": "./dist/ui/manifest/contract.cjs"
     },
     "./ui/mf-build": {
-      "development": {
-        "types": "./src/ui/mf-build/index.ts",
-        "import": "./src/ui/mf-build/index.ts"
-      },
-      "types": {
-        "import": "./dist/ui/mf-build/index.d.mts",
-        "require": "./dist/ui/mf-build/index.d.cts"
-      },
-      "import": "./dist/ui/mf-build/index.mjs",
+      "types": "./src/ui/mf-build/index.ts",
+      "import": "./src/ui/mf-build/index.ts",
       "require": "./dist/ui/mf-build/index.cjs"
     },
     "./dev-serve": {
