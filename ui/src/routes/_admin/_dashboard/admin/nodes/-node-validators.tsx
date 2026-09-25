@@ -155,7 +155,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
     onError: (error: Error) => toast.error(error.message),
   });
   return (
-    <DialogContent className="max-h-[90dvh] overflow-y-auto">
+    <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Add validator</DialogTitle>
         <DialogDescription>Attach a validator account to this node.</DialogDescription>

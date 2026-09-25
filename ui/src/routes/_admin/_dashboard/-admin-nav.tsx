@@ -7,8 +7,7 @@ import {
   TreeStructureIcon,
 } from "@phosphor-icons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Badge } from "@/components";
-import { cn } from "@/lib/utils";
+import { Badge, Button } from "@/components";
 
 const NAV_ITEMS = [
   { label: "dashboard", to: "/admin", icon: SquaresFourIcon },
@@ -29,25 +28,21 @@ export function AdminNav({ pendingProposalCount }: { pendingProposalCount?: numb
       {NAV_ITEMS.map(({ label, to, icon: Icon }) => {
         const active = isActive(to);
         return (
-          <Link
+          <Button
             key={to}
-            to={to}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium border-2 border-outset border-border-strong rounded-[10px] shadow-sm transition-shadow duration-200 hover:shadow-md",
-              active ? "bg-foreground text-background" : "bg-card text-foreground",
-            )}
+            variant={active ? "default" : "outline"}
+            size="sm"
+            nativeButton={false}
+            render={<Link to={to} />}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon />
             {label}
             {label === "proposals" && pendingProposalCount !== undefined && (
-              <Badge
-                variant={active ? "outline" : "secondary"}
-                className="ml-1 h-5 min-w-5 px-1.5 text-[10px]"
-              >
+              <Badge variant={active ? "outline" : "secondary"} className="ml-1">
                 {pendingProposalCount}
               </Badge>
             )}
-          </Link>
+          </Button>
         );
       })}
     </nav>

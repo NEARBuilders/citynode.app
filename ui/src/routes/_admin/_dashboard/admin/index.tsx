@@ -48,7 +48,7 @@ function AdminDashboard() {
         <SectionHeader title="Manage" sectionTestId="admin.section.manage" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <TreeStructureIcon className="h-4 w-4" />
             </div>
             <h3
@@ -71,7 +71,7 @@ function AdminDashboard() {
           </Card>
 
           <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <GavelIcon className="h-4 w-4" />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -99,7 +99,7 @@ function AdminDashboard() {
           </Card>
 
           <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <SquaresFourIcon className="h-4 w-4" />
             </div>
             <h3
@@ -123,7 +123,7 @@ function AdminDashboard() {
           </Card>
 
           <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <BankIcon className="h-4 w-4" />
             </div>
             <h3
@@ -142,7 +142,7 @@ function AdminDashboard() {
           </Card>
 
           <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <GearIcon className="h-4 w-4" />
             </div>
             <h3
@@ -170,9 +170,7 @@ function AdminDashboard() {
         <section className="space-y-3">
           <SectionHeader title="Tenant details" />
           <Card className="p-6 space-y-4">
-            <div className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-              Configuration
-            </div>
+            <div className="text-sm font-medium text-muted-foreground">Configuration</div>
             <div className="flex flex-col gap-2">
               <InfoRow label="name" value={tenant.name} />
               <InfoRow label="id" value={tenant.id} mono />
@@ -230,11 +228,11 @@ function StatCard({
   const slug = label.toLowerCase().replace(/\s+/g, "-");
   return (
     <div
-      className="border-2 border-outset border-border-strong bg-card p-4 rounded-[12px] shadow-sm space-y-1"
+      className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4"
       data-testid={`admin.stat.${slug}`}
     >
       <div
-        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+        className="text-sm font-medium text-muted-foreground"
         data-testid={`admin.stat.${slug}.label`}
       >
         {label}

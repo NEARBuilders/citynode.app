@@ -23,7 +23,7 @@ export function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
         </div>
       </div>
       {entry.details !== null && (
-        <pre className="overflow-auto rounded-[8px] border border-border bg-muted/40 p-3 font-mono text-xs text-foreground">
+        <pre className="overflow-auto rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs text-foreground">
           {JSON.stringify(entry.details, null, 2)}
         </pre>
       )}

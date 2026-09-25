@@ -59,7 +59,7 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
   });
 
   return (
-    <DialogContent className="max-h-[90dvh] overflow-y-auto">
+    <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Edit node metadata</DialogTitle>
         <DialogDescription>
@@ -96,7 +96,6 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
           <Label htmlFor="node-metadata">Additional metadata (JSON)</Label>
           <Textarea
             id="node-metadata"
-            className="font-mono text-sm"
             value={metadata}
             onChange={(event) => setMetadata(event.target.value)}
             rows={7}

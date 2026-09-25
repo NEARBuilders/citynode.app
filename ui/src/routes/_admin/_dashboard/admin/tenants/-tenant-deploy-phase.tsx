@@ -101,7 +101,7 @@ export function TenantDeployPhase({
           {verifyState === "verified" && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-foreground">
-                <CheckCircleIcon className="h-4 w-4 text-green-500" />
+                <CheckCircleIcon className="h-4 w-4 text-success" />
                 Tenant deployed at <code className="font-mono text-xs">{hostname}</code>
               </div>
               {createdTenantId && (

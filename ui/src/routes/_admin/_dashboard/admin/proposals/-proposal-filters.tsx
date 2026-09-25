@@ -23,8 +23,8 @@ export function ProposalReviewFilters({
     >
       <TabsList className="justify-start overflow-x-auto">
         {PROPOSAL_REVIEW_FILTERS.map((filter) => (
-          <TabsTrigger key={filter} value={filter} className="capitalize">
-            {filter}
+          <TabsTrigger key={filter} value={filter}>
+            <span className="capitalize">{filter}</span>
           </TabsTrigger>
         ))}
       </TabsList>

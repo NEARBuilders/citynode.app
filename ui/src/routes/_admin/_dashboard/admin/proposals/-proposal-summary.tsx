@@ -30,24 +30,22 @@ export function ProposalSummary({ proposal }: { proposal: Proposal }) {
       </div>
 
       {proposal.rejectionReason && (
-        <div className="rounded-[8px] border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
+        <div className="rounded-lg border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground">
           <p className="font-semibold">Rejection reason</p>
           <p className="mt-1">{proposal.rejectionReason}</p>
         </div>
       )}
 
       {proposal.applyError && (
-        <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-foreground">
+        <div className="rounded-lg bg-destructive-muted p-4 text-sm text-foreground">
           <p className="font-semibold text-destructive">Apply error</p>
           <p className="mt-1">{proposal.applyError}</p>
         </div>
       )}
 
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Payload
-        </p>
-        <pre className="max-h-96 overflow-auto rounded-[8px] border border-border bg-muted/40 p-4 font-mono text-xs text-foreground">
+        <p className="text-sm font-medium text-muted-foreground">Payload</p>
+        <pre className="max-h-96 overflow-auto rounded-lg border border-border bg-muted/40 p-4 font-mono text-xs text-foreground">
           {JSON.stringify(proposal.payload, null, 2)}
         </pre>
       </div>

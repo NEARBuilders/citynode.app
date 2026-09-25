@@ -34,7 +34,6 @@ export function RelayerHistory({
                       ? "destructive"
                       : "secondary"
                 }
-                className="text-[10px]"
               >
                 {tx.status}
               </Badge>

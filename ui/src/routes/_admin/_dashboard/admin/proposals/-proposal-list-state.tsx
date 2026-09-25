@@ -60,7 +60,7 @@ export function ProposalListState({
         icon={FileTextIcon}
         title={activeFilter === "pending" ? "No pending proposals." : "No proposals found."}
         description={`There are no ${activeFilter === "all" ? "" : `${activeFilter} `}proposals to show.`}
-        className="min-h-[40vh]"
+        className="min-h-80"
       />
     );
   }

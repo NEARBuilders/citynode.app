@@ -117,7 +117,7 @@ function AdminPage() {
         {relayerNeedsFunding && (
           <Link
             to="/admin/relayer"
-            className="block border-2 border-outset border-destructive/40 bg-destructive/5 hover:bg-destructive/10 p-4 rounded-[12px] shadow-sm transition-colors duration-200"
+            className="block rounded-xl border border-destructive/40 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-3">

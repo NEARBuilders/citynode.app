@@ -158,10 +158,8 @@ function AdminNodeDetail() {
           <InfoRow label="kind" value={node.kind} />
           <InfoRow label="slug" value={node.slug} mono />
           <div className="space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Metadata
-            </p>
-            <pre className="max-h-72 overflow-auto rounded-[8px] border border-border bg-muted/40 p-4 text-xs text-foreground">
+            <p className="text-sm font-medium text-muted-foreground">Metadata</p>
+            <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/40 p-4 text-xs text-foreground">
               {JSON.stringify(node.metadata, null, 2)}
             </pre>
           </div>
@@ -180,7 +178,9 @@ function AdminNodeDetail() {
       <section className="space-y-3">
         <SectionHeader title="Direct children" />
         {summary.children.length === 0 ? (
-          <Card className="p-6 text-sm text-muted-foreground">No direct children.</Card>
+          <Card className="p-6">
+            <p className="text-sm text-muted-foreground">No direct children.</p>
+          </Card>
         ) : (
           <div className="overflow-x-auto">
             <DataTable columns={childColumns} data={summary.children} />
@@ -217,9 +217,7 @@ function AdminNodeDetail() {
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <Card className="space-y-1 p-4">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-muted-foreground">{label}</div>
       <div className="text-2xl font-semibold text-foreground">{value}</div>
     </Card>
   );

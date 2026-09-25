@@ -294,7 +294,6 @@ export function TenantCreationForm({
               value={daoAccountId ?? ""}
               readOnly
               placeholder="connect a DAO account to set the tenant account id"
-              className="font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">
               Tenant account = the connected DAO. Config publishes under{" "}

@@ -81,7 +81,9 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
           </Button>
         </Card>
       ) : !bindingsQuery.data?.length ? (
-        <Card className="p-6 text-sm text-muted-foreground">No domain bindings.</Card>
+        <Card className="p-6">
+          <p className="text-sm text-muted-foreground">No domain bindings.</p>
+        </Card>
       ) : (
         bindingsQuery.data.map((binding) => {
           const isAlias = !binding.hostname.includes(".");
@@ -122,13 +124,13 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                   <p className="text-sm text-muted-foreground">
                     Add this TXT record at your DNS provider, then check verification.
                   </p>
-                  <dl className="grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
+                  <dl className="grid gap-2 text-sm sm:grid-cols-4 sm:gap-x-4">
                     <dt className="text-muted-foreground">Type</dt>
-                    <dd className="font-mono">TXT</dd>
+                    <dd className="font-mono sm:col-span-3">TXT</dd>
                     <dt className="text-muted-foreground">Name / host</dt>
-                    <dd className="break-all font-mono">{binding.hostname}</dd>
+                    <dd className="break-all font-mono sm:col-span-3">{binding.hostname}</dd>
                     <dt className="text-muted-foreground">Value</dt>
-                    <dd className="break-all font-mono">
+                    <dd className="break-all font-mono sm:col-span-3">
                       everything-verify={binding.verificationToken}
                     </dd>
                   </dl>
@@ -221,7 +223,7 @@ function AddBindingForm({
     onError: (error: Error) => toast.error(error.message),
   });
   return (
-    <DialogContent className="max-h-[90dvh] overflow-y-auto">
+    <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Add domain binding</DialogTitle>
         <DialogDescription>Choose a platform alias or bring your own domain.</DialogDescription>

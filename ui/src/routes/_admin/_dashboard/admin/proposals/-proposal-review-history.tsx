@@ -23,8 +23,10 @@ export function ProposalReviewHistory({
           <Skeleton className="h-16 w-full" />
         </Card>
       ) : query.isError ? (
-        <Card className="p-6 text-sm text-destructive">
-          Review history could not be loaded: {query.error?.message}
+        <Card className="p-6">
+          <p className="text-sm text-destructive">
+            Review history could not be loaded: {query.error?.message}
+          </p>
         </Card>
       ) : history.length === 0 ? (
         <EmptyState

@@ -77,8 +77,8 @@ export function ProposalReviewActions({
           </div>
         </Card>
       ) : (
-        <Card className="p-6 text-sm text-muted-foreground">
-          This proposal has already been reviewed.
+        <Card className="p-6">
+          <p className="text-sm text-muted-foreground">This proposal has already been reviewed.</p>
         </Card>
       )}
     </>
