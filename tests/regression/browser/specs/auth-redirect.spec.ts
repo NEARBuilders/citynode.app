@@ -46,10 +46,12 @@ test.describe("Auth redirect", () => {
       waitUntil: "domcontentloaded",
     });
     await page.waitForURL(/\/dashboard/, { timeout: 15000, waitUntil: "commit" });
+    await waitForApp(page);
 
     const landed = new URL(page.url());
     expect(landed.hostname).not.toBe("example.com");
     expect(landed.pathname).toBe("/dashboard");
+    expectNoHydrationFailure(pageErrors);
   });
 
   // Regression: the login route redirected authed visitors to the redirect

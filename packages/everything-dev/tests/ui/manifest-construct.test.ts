@@ -136,11 +136,15 @@ describe("constructTree", () => {
       next(search);
     const context = () => ({ fromContext: true });
     const params = { parse: (raw: Record<string, string>) => raw };
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [mountLayout("public")],
+      optionsById: { _public: { ssr: "data-only" } },
+    };
     const auth: TestPlugin = {
       key: "auth",
-      routes: [mountLayout("public"), route("_public/login", "/login", { parentId: "_public" })],
+      routes: [route("_public/login", "/login")],
       optionsById: {
-        _public: { ssr: false },
         "_public/login": {
           ssr: false,
           loaderDeps,
@@ -149,16 +153,19 @@ describe("constructTree", () => {
           params,
           staleTime: 1000,
           gcTime: 2000,
+          preloadStaleTime: 3000,
+          pendingMs: 100,
+          pendingMinMs: 200,
           shouldReload: false,
         },
       },
     };
 
-    const tree = await construct([auth]);
+    const tree = await construct([core, auth]);
     const mount = (tree.rootRoute as unknown as { children: Array<Record<string, any>> })
       .children[0]!;
     const login = mount.children[0]!;
-    expect(mount.options.ssr).toBe(false);
+    expect(mount.options.ssr).toBe("data-only");
     expect(login.options).toMatchObject({
       ssr: false,
       loaderDeps,
@@ -167,8 +174,28 @@ describe("constructTree", () => {
       params,
       staleTime: 1000,
       gcTime: 2000,
+      preloadStaleTime: 3000,
+      pendingMs: 100,
+      pendingMinMs: 200,
       shouldReload: false,
     });
+  });
+
+  it("carries the core's root search validation and ssr onto the root route", async () => {
+    const validateSearch = (search: Record<string, unknown>) => ({
+      theme: search.theme === "dark" ? "dark" : "light",
+    });
+    const core: TestPlugin = {
+      key: "ui",
+      routes: [mountLayout("public"), route("_public/home", "/home")],
+    };
+
+    const tree = await construct([core], { validateSearch, ssr: true });
+    const router = createRouter({ routeTree: tree.rootRoute });
+    const [root] = router.matchRoutes("/home", { theme: "neon" });
+
+    expect(root?.search).toEqual({ theme: "light" });
+    expect((tree.rootRoute as unknown as { options: { ssr: unknown } }).options.ssr).toBe(true);
   });
 
   it("rejects cross-plugin path collisions under the same mount parent", async () => {

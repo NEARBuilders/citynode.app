@@ -137,11 +137,20 @@ describe("generateUiManifest", () => {
       expect(options.ssr).toBe(false);
       const loaderDeps = options.loaderDeps as (a: { search: { redirect: string } }) => unknown;
       expect(loaderDeps({ search: { redirect: "/x" } })).toEqual({ redirect: "/x" });
-      expect((options.search as { middlewares: unknown[] }).middlewares).toHaveLength(1);
+      const [middleware] = (
+        options.search as {
+          middlewares: Array<(a: { search: unknown; next: (s: unknown) => unknown }) => unknown>;
+        }
+      ).middlewares;
+      expect(middleware?.({ search: { page: 2 }, next: (next) => next })).toEqual({ page: 2 });
       expect((options.context as () => unknown)()).toEqual({ fromContext: true });
-      expect(options.params).toHaveProperty("parse");
+      const params = options.params as { parse: (raw: Record<string, string>) => unknown };
+      expect(params.parse({ id: "7" })).toEqual({ id: "7" });
       expect(options.staleTime).toBe(1000);
       expect(options.gcTime).toBe(2000);
+      expect(options.preloadStaleTime).toBe(3000);
+      expect(options.pendingMs).toBe(100);
+      expect(options.pendingMinMs).toBe(200);
       expect(options.shouldReload).toBe(false);
     });
   });

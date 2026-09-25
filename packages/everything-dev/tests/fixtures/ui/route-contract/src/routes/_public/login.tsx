@@ -19,6 +19,9 @@ export const Route = {
     params,
     staleTime: 1000,
     gcTime: 2000,
+    preloadStaleTime: 3000,
+    pendingMs: 100,
+    pendingMinMs: 200,
     shouldReload: false,
   },
 };

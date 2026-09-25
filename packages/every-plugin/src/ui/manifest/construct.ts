@@ -4,7 +4,7 @@ import { digestOf } from "./descriptor";
 import type { PluginManifest, RouteRecord } from "./manifest-schema";
 import { MOUNT_REGISTRY, type MountDef, type MountId, resolveMountSegment } from "./mount-registry";
 import { compareNavItems, type NavDeclaration, type NavItem, type NavManifest } from "./nav";
-import type { RouteConfigModule, RouteOptionsBundle } from "./route-config";
+import { ROUTE_OPTION_KEYS, type RouteConfigModule, type RouteOptionsBundle } from "./route-config";
 
 /**
  * Host-side route-graph construction (ADR 0008 §1): manifests + route
@@ -153,31 +153,9 @@ function layoutBeforeLoad(
   };
 }
 
-/**
- * The authored route contract carried from a plugin's route file onto the
- * constructed route — everything except `beforeLoad` (mounts compose it with
- * their gate) and `component` (defaulted to `Outlet`). Dropping any of these
- * silently changes route behavior: `validateSearch` and `search` middlewares
- * guard route input, `loaderDeps`/`context`/caching drive loaders, and `ssr`
- * keeps client-only routes off the server.
- */
-const AUTHORED_OPTION_KEYS = [
-  "validateSearch",
-  "search",
-  "params",
-  "loaderDeps",
-  "context",
-  "ssr",
-  "staleTime",
-  "gcTime",
-  "shouldReload",
-  "loader",
-  "head",
-  "staticData",
-  "errorComponent",
-  "pendingComponent",
-  "notFoundComponent",
-] as const satisfies ReadonlyArray<keyof RouteOptionsBundle>;
+const AUTHORED_OPTION_KEYS = ROUTE_OPTION_KEYS.filter(
+  (key) => key !== "beforeLoad" && key !== "component",
+);
 
 function authoredOptions(options: RouteOptionsBundle): Partial<RouteOptionsBundle> {
   const authored: Partial<Record<keyof RouteOptionsBundle, unknown>> = {};
@@ -185,6 +163,11 @@ function authoredOptions(options: RouteOptionsBundle): Partial<RouteOptionsBundl
     if (options[key] !== undefined) authored[key] = options[key];
   }
   return authored as Partial<RouteOptionsBundle>;
+}
+
+function rootAuthoredOptions(options: RouteOptionsBundle): Partial<RouteOptionsBundle> {
+  const { params: _params, ...authored } = authoredOptions(options);
+  return authored;
 }
 
 export async function constructTree(input: ConstructInput): Promise<ConstructedTree> {
@@ -236,16 +219,9 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
 
   const rootRoute = toAnyRoute(
     createRootRoute({
+      ...(input.rootOptions ? rootAuthoredOptions(input.rootOptions) : {}),
       component: input.rootOptions?.component ?? Outlet,
-      ...(input.rootOptions?.errorComponent
-        ? { errorComponent: input.rootOptions.errorComponent }
-        : {}),
-      ...(input.rootOptions?.notFoundComponent
-        ? { notFoundComponent: input.rootOptions.notFoundComponent }
-        : {}),
-      ...(input.rootOptions?.loader ? { loader: input.rootOptions.loader } : {}),
       ...(input.rootOptions?.beforeLoad ? { beforeLoad: input.rootOptions.beforeLoad } : {}),
-      ...(input.rootOptions?.head ? { head: input.rootOptions.head } : {}),
     }),
   );
 

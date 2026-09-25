@@ -10,6 +10,7 @@ import {
   resolveMountSegment,
 } from "./index";
 import { MOUNT_REGISTRY } from "./mount-registry";
+import { ROUTE_OPTION_KEYS } from "./route-config";
 
 /**
  * The load-bearing generator step (ADR 0008 §2). Rides
@@ -206,23 +207,7 @@ export async function generateUiManifest(
 import type { RouteConfigModule, RouteOptionsBundle } from ${JSON.stringify(typeImport)};
 
 const pick = (o: any): RouteOptionsBundle => ({
-  validateSearch: o?.validateSearch,
-  search: o?.search,
-  params: o?.params,
-  loaderDeps: o?.loaderDeps,
-  context: o?.context,
-  ssr: o?.ssr,
-  staleTime: o?.staleTime,
-  gcTime: o?.gcTime,
-  shouldReload: o?.shouldReload,
-  loader: o?.loader,
-  beforeLoad: o?.beforeLoad,
-  head: o?.head,
-  staticData: o?.staticData,
-  component: o?.component,
-  errorComponent: o?.errorComponent,
-  pendingComponent: o?.pendingComponent,
-  notFoundComponent: o?.notFoundComponent,
+${ROUTE_OPTION_KEYS.map((key) => `  ${key}: o?.${key},`).join("\n")}
 });
 
 ${rootImport}
