@@ -85,7 +85,9 @@ function AccountProfileLayout() {
             <AvatarFallback>{initials || <UserIcon className="size-8" />}</AvatarFallback>
           </Avatar>
           <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="truncate text-3xl font-semibold text-foreground">{displayName}</h1>
+            <h1 className="text-2xl font-semibold break-all text-foreground sm:text-3xl">
+              {displayName}
+            </h1>
             {profile?.name && <p className="truncate text-sm text-muted-foreground">{accountId}</p>}
           </div>
         </div>
