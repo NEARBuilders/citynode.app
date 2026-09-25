@@ -201,6 +201,7 @@ export function ApplyNodeFields({
                 <FieldLabel htmlFor="application-slug">slug</FieldLabel>
                 <Input
                   id="application-slug"
+                  className="font-mono"
                   name={field.name}
                   value={field.state.value}
                   onBlur={field.handleBlur}

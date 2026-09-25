@@ -33,8 +33,8 @@ export function ThingContent({
     <>
       <div className="rounded-xl border border-border bg-card p-6 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <Badge variant="outline">
-            <span className="font-mono">{thing.type}</span>
+          <Badge variant="outline" className="font-mono">
+            {thing.type}
           </Badge>
           <Button
             type="button"

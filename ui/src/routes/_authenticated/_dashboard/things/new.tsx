@@ -4,7 +4,17 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { pluginPath, pluginSearch, useApiClient } from "@/app";
-import { Button, Input, PageContainer, PageHeader, Textarea } from "@/components";
+import {
+  Button,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  PageContainer,
+  PageHeader,
+  Textarea,
+} from "@/components";
+import { FieldGroup } from "@/components/ui/field";
 import { invalidateThingAfterProposal } from "./-thing-cache";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/new")({
@@ -68,31 +78,31 @@ function CreateThingPage() {
         />
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="thing-id" className="text-sm font-medium text-muted-foreground">
-              Thing ID
-            </label>
-            <Input
-              id="thing-id"
-              type="text"
-              value={thingId}
-              onChange={(e) => setThingId(e.target.value)}
-              placeholder="thing-123"
-            />
-            <p className="text-xs text-muted-foreground">Unique identifier for the thing.</p>
-          </div>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="thing-id">Thing ID</FieldLabel>
+              <Input
+                id="thing-id"
+                type="text"
+                className="font-mono"
+                value={thingId}
+                onChange={(e) => setThingId(e.target.value)}
+                placeholder="thing-123"
+              />
+              <FieldDescription>Unique identifier for the thing.</FieldDescription>
+            </Field>
 
-          <div className="space-y-2">
-            <label htmlFor="payload-json" className="text-sm font-medium text-muted-foreground">
-              Payload (JSON)
-            </label>
-            <Textarea
-              id="payload-json"
-              value={payloadRaw}
-              onChange={(e) => setPayloadRaw(e.target.value)}
-              rows={8}
-            />
-          </div>
+            <Field>
+              <FieldLabel htmlFor="payload-json">Payload (JSON)</FieldLabel>
+              <Textarea
+                id="payload-json"
+                className="font-mono"
+                value={payloadRaw}
+                onChange={(e) => setPayloadRaw(e.target.value)}
+                rows={8}
+              />
+            </Field>
+          </FieldGroup>
 
           <Button
             onClick={() => submitMutation.mutate()}

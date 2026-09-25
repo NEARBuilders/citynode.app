@@ -1,6 +1,7 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
+import { Button } from "@/components";
 import { useClientValue } from "@/hooks";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { returnPath } from "@/lib/return-path";
@@ -31,15 +32,16 @@ function OnboardingStationPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="flex items-center px-6 py-4">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => void navigate({ href: from ?? "/dashboard" })}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           data-testid="station.exit"
         >
-          <ArrowLeftIcon className="size-4" />
+          <ArrowLeftIcon data-icon="inline-start" />
           Exit station
-        </button>
+        </Button>
       </header>
       {gatewayOrigin && (
         <OnboardingStation

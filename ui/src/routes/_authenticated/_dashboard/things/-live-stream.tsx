@@ -80,13 +80,9 @@ export function ThingsLiveStreamPage() {
                 }`}
                 title={connected ? "Connected" : "Disconnected"}
               />
-              <button
-                type="button"
-                onClick={clearEvents}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Button type="button" variant="ghost" size="xs" onClick={clearEvents}>
                 Clear ({events.length})
-              </button>
+              </Button>
             </div>
           }
         />
@@ -104,8 +100,8 @@ export function ThingsLiveStreamPage() {
             >
               <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant="secondary">
-                    <span className="font-mono">{event.action}</span>
+                  <Badge variant="secondary" className="font-mono">
+                    {event.action}
                   </Badge>
                   <span className="text-xs font-mono text-foreground font-semibold">
                     {event.thingId}

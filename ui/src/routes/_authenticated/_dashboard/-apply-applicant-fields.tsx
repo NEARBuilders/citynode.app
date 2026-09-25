@@ -27,11 +27,21 @@ export function ApplyApplicantFields({
         </Field>
         <Field>
           <FieldLabel htmlFor="application-account">NEAR account</FieldLabel>
-          <Input id="application-account" value={nearAccountId ?? ""} readOnly />
+          <Input
+            id="application-account"
+            className="font-mono"
+            value={nearAccountId ?? ""}
+            readOnly
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="application-dao-account">tenant DAO account</FieldLabel>
-          <Input id="application-dao-account" value={daoAccountId ?? ""} readOnly />
+          <Input
+            id="application-dao-account"
+            className="font-mono"
+            value={daoAccountId ?? ""}
+            readOnly
+          />
         </Field>
         <form.Field name="motivation">
           {(field) => {

@@ -8,6 +8,13 @@ import {
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { buildTenantUrl } from "@/lib/tenant-url";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
@@ -134,28 +141,28 @@ function NodeDashboardLayout() {
           actions={
             <>
               {nodes.length > 1 && (
-                <label className="sr-only" htmlFor="managed-node">
-                  Managed node
-                </label>
-              )}
-              {nodes.length > 1 && (
-                <select
-                  id="managed-node"
+                <Select
                   value={selectedNode.id}
-                  onChange={(event) =>
+                  items={nodes.map((node) => ({ label: node.name, value: node.id }))}
+                  onValueChange={(value) => {
+                    if (!value) return;
                     navigate({
                       to: "/dashboard/node",
-                      search: { nodeId: event.target.value },
-                    })
-                  }
-                  className="h-11 rounded-4xl border border-input bg-input/30 px-4 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      search: { nodeId: value },
+                    });
+                  }}
                 >
-                  {nodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="managed-node" aria-label="Managed node">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nodes.map((node) => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
               {gatewayUrl && (
                 <Button
