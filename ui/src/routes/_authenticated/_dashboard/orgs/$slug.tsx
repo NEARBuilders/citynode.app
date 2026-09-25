@@ -24,6 +24,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
 import {
@@ -174,6 +175,7 @@ function OrganizationDetail() {
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
 
+  const [pendingTeamDeleteId, setPendingTeamDeleteId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
@@ -302,10 +304,7 @@ function OrganizationDetail() {
           onAddMember={(teamId, userId) => teamsState.addTeamMember.mutate({ teamId, userId })}
           onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
           onCreate={(name) => teamsState.createTeam.mutate(name)}
-          onDelete={(teamId) => {
-            const team = teamsState.teams.find((candidate) => candidate.id === teamId);
-            if (confirm(`Delete team "${team?.name ?? ""}"?`)) teamsState.deleteTeam.mutate(teamId);
-          }}
+          onDelete={(teamId) => setPendingTeamDeleteId(teamId)}
           onRemoveMember={(teamId, userId) =>
             teamsState.removeTeamMember.mutate({ teamId, userId })
           }
@@ -313,6 +312,23 @@ function OrganizationDetail() {
           onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
           orgMembers={members}
           teams={teamsState.teams}
+        />
+        <ConfirmDialog
+          open={pendingTeamDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setPendingTeamDeleteId(null);
+          }}
+          title={`Delete ${teamsState.teams.find((team) => team.id === pendingTeamDeleteId)?.name ?? "team"}?`}
+          description="Members lose the areas this team grants. This can't be undone."
+          confirmLabel="Delete team"
+          variant="destructive"
+          isPending={teamsState.deleteTeam.isPending}
+          onConfirm={() => {
+            if (!pendingTeamDeleteId) return;
+            teamsState.deleteTeam.mutate(pendingTeamDeleteId, {
+              onSettled: () => setPendingTeamDeleteId(null),
+            });
+          }}
         />
         <InvitationsTab
           canManageMembers={canManageMembers}

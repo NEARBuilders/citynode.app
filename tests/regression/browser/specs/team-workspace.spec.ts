@@ -167,8 +167,8 @@ test.describe("team workspace", () => {
     await expect(page.getByTestId("orgs-tab-teams")).toHaveAttribute("aria-selected", "true");
     await expect(page).toHaveURL(/[?&]tab=teams/);
     await addMember();
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByTestId(`teams-tab-delete-${team.id}`).click();
+    await page.getByTestId("confirm-dialog-confirm").click();
     await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
     await expect(page.getByTestId("team-switcher")).toHaveCount(0);
     await expect(page.getByTestId(`teams-tab-team-${team.id}`)).toHaveCount(0);

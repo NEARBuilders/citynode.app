@@ -442,7 +442,7 @@ describe("tenant detail mutations", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Suspend" }));
     const dialog = await screen.findByRole("dialog");
     expect(current.apiClient.suspendTenant).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "cancel" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(current.apiClient.suspendTenant).not.toHaveBeenCalled();
   });
