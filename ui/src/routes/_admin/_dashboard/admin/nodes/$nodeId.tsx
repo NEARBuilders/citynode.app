@@ -1,6 +1,6 @@
+import { ArrowLeftIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Network } from "lucide-react";
 import { useMemo } from "react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import {
@@ -68,10 +68,13 @@ function AdminNodeDetail() {
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/nodes/$nodeId" params={{ nodeId: row.original.id }}>
-              open
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: row.original.id }} />}
+          >
+            open
           </Button>
         ),
       },
@@ -92,12 +95,12 @@ function AdminNodeDetail() {
   if (nodeQuery.isError || !nodeQuery.data) {
     return (
       <EmptyState
-        icon={Network}
+        icon={TreeStructureIcon}
         title="Failed to load node"
         description={nodeQuery.error?.message || "The requested node could not be loaded."}
         action={
-          <Button asChild variant="outline">
-            <Link to="/admin/nodes">back to nodes</Link>
+          <Button variant="outline" nativeButton={false} render={<Link to="/admin/nodes" />}>
+            back to nodes
           </Button>
         }
       />
@@ -111,11 +114,9 @@ function AdminNodeDetail() {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/admin/nodes">
-            <ArrowLeft />
-            all nodes
-          </Link>
+        <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin/nodes" />}>
+          <ArrowLeftIcon />
+          all nodes
         </Button>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">

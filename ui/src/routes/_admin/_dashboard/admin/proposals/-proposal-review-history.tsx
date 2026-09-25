@@ -1,5 +1,5 @@
+import { ClockCounterClockwiseIcon } from "@phosphor-icons/react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { History } from "lucide-react";
 import type { ApiClient } from "@/app";
 import { Card, EmptyState, SectionHeader, Skeleton } from "@/components";
 import { ReviewHistoryCard } from "./-review-history-card";
@@ -28,7 +28,7 @@ export function ProposalReviewHistory({
         </Card>
       ) : history.length === 0 ? (
         <EmptyState
-          icon={History}
+          icon={ClockCounterClockwiseIcon}
           title="No review history"
           description={`No ${pluginId} proposals have been approved or rejected yet.`}
         />

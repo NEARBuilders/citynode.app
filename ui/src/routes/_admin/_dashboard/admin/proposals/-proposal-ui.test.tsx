@@ -45,10 +45,7 @@ describe("proposal review UI seams", () => {
     const onChange = vi.fn();
     render(<ProposalReviewFilters value="all" onChange={onChange} />);
 
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "pending" }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByRole("tab", { name: "pending" }));
 
     expect(onChange).toHaveBeenCalledWith("pending");
     expect(normalizeProposalReviewFilter("all")).toBeUndefined();

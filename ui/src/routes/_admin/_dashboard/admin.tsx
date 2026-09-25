@@ -1,6 +1,6 @@
+import { GasPumpIcon, ShieldIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Fuel, Shield } from "lucide-react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { organizationByIdQueryOptions } from "@/lib/queries/organizations";
@@ -51,7 +51,7 @@ function AdminPage() {
   if (tenant && !authorized) {
     return (
       <EmptyState
-        icon={Shield}
+        icon={ShieldIcon}
         title="Not authorized"
         description={
           <>
@@ -61,11 +61,11 @@ function AdminPage() {
         }
         action={
           <div className="flex justify-center gap-2">
-            <Button asChild variant="outline">
-              <Link to="/">home</Link>
+            <Button variant="outline" nativeButton={false} render={<Link to="/" />}>
+              home
             </Button>
-            <Button asChild variant="outline">
-              <Link to="/orgs">organizations</Link>
+            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              organizations
             </Button>
           </div>
         }
@@ -78,7 +78,7 @@ function AdminPage() {
       <div className="space-y-8">
         {tenant && (
           <PageHeader
-            icon={Shield}
+            icon={ShieldIcon}
             label="Admin"
             title={tenant.name}
             subtitle={`${tenant.id.slice(0, 8)} · ${tenant.accountId}`}
@@ -121,7 +121,7 @@ function AdminPage() {
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-3">
-                <Fuel className="h-5 w-5 text-destructive mt-0.5" />
+                <GasPumpIcon className="h-5 w-5 text-destructive mt-0.5" />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">Relayer needs funding</p>
                   <p className="text-xs text-muted-foreground">

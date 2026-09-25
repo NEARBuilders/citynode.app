@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { SparkleIcon } from "@phosphor-icons/react";
 import type { ComponentProps } from "react";
 import { Card, CardContent, PageHeader } from "@/components";
 import { TenantCreationForm } from "./-tenant-creation-form";
@@ -20,7 +20,7 @@ export function TenantCreationStage({
   return (
     <div className="space-y-8">
       <PageHeader
-        icon={Sparkles}
+        icon={SparkleIcon}
         label="New tenant"
         title="Tenant + node creation"
         description="Create a tenant, a geographic node, and a primary domain binding in one flow."

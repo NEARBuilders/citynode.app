@@ -1,5 +1,5 @@
+import { PlusIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
@@ -31,6 +31,11 @@ import { invalidateTenantQueries, tenantBindingsQueryOptions } from "@/lib/queri
 
 type Binding = Awaited<ReturnType<ApiClient["listTenantBindingsForTenant"]>>[number];
 
+const BINDING_KIND_ITEMS = [
+  { label: "Platform alias", value: "alias" },
+  { label: "Custom domain", value: "custom" },
+];
+
 export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway: string }) {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
@@ -56,7 +61,7 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
         title="Domain bindings"
         action={
           <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-            <Plus /> add domain
+            <PlusIcon /> add domain
           </Button>
         }
       />
@@ -193,7 +198,7 @@ function AddBindingForm({
 }) {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState("alias");
+  const [kind, setKind] = useState<string>("alias");
   const [hostname, setHostname] = useState("");
   const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
   const mutation = useMutation({
@@ -232,7 +237,9 @@ function AddBindingForm({
           <Label htmlFor="binding-kind">Domain type</Label>
           <Select
             value={kind}
+            items={BINDING_KIND_ITEMS}
             onValueChange={(value) => {
+              if (value === null) return;
               setKind(value);
               setHostname("");
               mutation.reset();

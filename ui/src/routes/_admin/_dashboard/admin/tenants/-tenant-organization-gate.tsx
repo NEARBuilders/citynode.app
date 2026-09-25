@@ -1,4 +1,4 @@
-import { Building2 } from "lucide-react";
+import { BankIcon } from "@phosphor-icons/react";
 import type { MutableRefObject } from "react";
 import { Button, Card, CardContent, Field, FieldLabel, Input } from "@/components";
 import { deriveSlug } from "@/lib/slug";
@@ -24,7 +24,7 @@ export function TenantOrganizationGate({
     <Card>
       <CardContent className="p-6 space-y-4">
         <div className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <BankIcon className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Create an organization first</h2>
         </div>
         <p className="text-xs text-muted-foreground">

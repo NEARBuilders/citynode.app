@@ -67,14 +67,19 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button asChild variant="outline" size="sm">
-          <Link
-            to="/admin/proposals/$proposalId"
-            params={{ proposalId: row.original.id }}
-            search={{ pluginId: row.original.pluginId, entityId: row.original.entityId }}
-          >
-            {row.original.reviewStatus === "pending" ? "review" : "view"}
-          </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={
+            <Link
+              to="/admin/proposals/$proposalId"
+              params={{ proposalId: row.original.id }}
+              search={{ pluginId: row.original.pluginId, entityId: row.original.entityId }}
+            />
+          }
+        >
+          {row.original.reviewStatus === "pending" ? "review" : "view"}
         </Button>
       ),
     },

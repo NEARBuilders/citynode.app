@@ -1,5 +1,5 @@
+import { PlusIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
@@ -29,6 +29,11 @@ import {
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 
 type Validator = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["validators"][number];
+
+const VALIDATOR_ROLE_ITEMS = [
+  { label: "Community", value: "community" },
+  { label: "Official", value: "official" },
+];
 
 export function NodeValidators({
   nodeId,
@@ -66,7 +71,7 @@ export function NodeValidators({
         title="Validators"
         action={
           <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Plus /> add validator
+            <PlusIcon /> add validator
           </Button>
         }
       />
@@ -196,6 +201,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
           <Label htmlFor="validator-role">Role</Label>
           <Select
             value={role}
+            items={VALIDATOR_ROLE_ITEMS}
             onValueChange={(value) => setRole(value === "official" ? "official" : "community")}
           >
             <SelectTrigger id="validator-role" className="w-full">

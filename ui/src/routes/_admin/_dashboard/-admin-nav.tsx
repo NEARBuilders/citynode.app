@@ -1,15 +1,22 @@
+import {
+  BuildingsIcon,
+  GasPumpIcon,
+  GavelIcon,
+  GearIcon,
+  SquaresFourIcon,
+  TreeStructureIcon,
+} from "@phosphor-icons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Building2, Fuel, Gavel, LayoutDashboard, Network, Settings } from "lucide-react";
 import { Badge } from "@/components";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { label: "dashboard", to: "/admin", icon: LayoutDashboard },
-  { label: "nodes", to: "/admin/nodes", icon: Network },
-  { label: "proposals", to: "/admin/proposals", icon: Gavel },
-  { label: "tenants", to: "/admin/tenants", icon: Building2 },
-  { label: "relayer", to: "/admin/relayer", icon: Fuel },
-  { label: "system", to: "/admin/system", icon: Settings },
+  { label: "dashboard", to: "/admin", icon: SquaresFourIcon },
+  { label: "nodes", to: "/admin/nodes", icon: TreeStructureIcon },
+  { label: "proposals", to: "/admin/proposals", icon: GavelIcon },
+  { label: "tenants", to: "/admin/tenants", icon: BuildingsIcon },
+  { label: "relayer", to: "/admin/relayer", icon: GasPumpIcon },
+  { label: "system", to: "/admin/system", icon: GearIcon },
 ] as const;
 
 export function AdminNav({ pendingProposalCount }: { pendingProposalCount?: number }) {

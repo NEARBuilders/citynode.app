@@ -1,5 +1,5 @@
+import { ArrowRightIcon, CheckCircleIcon, SparkleIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { Button, Card, CardContent, PageHeader, type Step, StepList } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 
@@ -36,7 +36,7 @@ export function TenantDeployPhase({
   return (
     <div className="space-y-8">
       <PageHeader
-        icon={Sparkles}
+        icon={SparkleIcon}
         label="Deploying"
         title={allDone ? "Deployment complete" : "Deploying tenant…"}
       />
@@ -101,15 +101,22 @@ export function TenantDeployPhase({
           {verifyState === "verified" && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-foreground">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <CheckCircleIcon className="h-4 w-4 text-green-500" />
                 Tenant deployed at <code className="font-mono text-xs">{hostname}</code>
               </div>
               {createdTenantId && (
-                <Button asChild size="sm">
-                  <Link to="/tenant/$tenantId" params={{ tenantId: tenantSlug || createdTenantId }}>
-                    open tenant
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
+                <Button
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/tenant/$tenantId"
+                      params={{ tenantId: tenantSlug || createdTenantId }}
+                    />
+                  }
+                >
+                  open tenant
+                  <ArrowRightIcon className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
@@ -122,10 +129,18 @@ export function TenantDeployPhase({
                 tenant detail page.
               </p>
               {createdTenantId && (
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/tenant/$tenantId" params={{ tenantId: tenantSlug || createdTenantId }}>
-                    go to tenant
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/tenant/$tenantId"
+                      params={{ tenantId: tenantSlug || createdTenantId }}
+                    />
+                  }
+                >
+                  go to tenant
                 </Button>
               )}
             </div>

@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { CheckIcon, XIcon } from "@phosphor-icons/react";
 import type { ChangeEvent } from "react";
 import { Button, Card, Label, Textarea } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
@@ -63,7 +63,7 @@ export function ProposalReviewActions({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={onApprove} disabled={isReviewing || !daoIsVerified}>
-              <Check />
+              <CheckIcon />
               {isReviewing ? "reviewing..." : "approve"}
             </Button>
             <Button
@@ -71,7 +71,7 @@ export function ProposalReviewActions({
               onClick={onReject}
               disabled={!rejectionReason.trim() || isReviewing}
             >
-              <X />
+              <XIcon />
               reject
             </Button>
           </div>

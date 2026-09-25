@@ -1,5 +1,5 @@
+import { PencilIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
@@ -25,7 +25,7 @@ export function NodeMetadataEditor({ node }: { node: Node }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Pencil /> edit metadata
+        <PencilIcon /> edit metadata
       </Button>
       {open && <MetadataForm node={node} onClose={() => setOpen(false)} />}
     </Dialog>

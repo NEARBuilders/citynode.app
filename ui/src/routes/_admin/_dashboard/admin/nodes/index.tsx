@@ -1,6 +1,6 @@
+import { TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Network } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import {
@@ -153,10 +153,13 @@ function AdminNodes() {
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/nodes/$nodeId" params={{ nodeId: row.original.node.id }}>
-              open
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: row.original.node.id }} />}
+          >
+            open
           </Button>
         ),
       },
@@ -189,6 +192,7 @@ function AdminNodes() {
         </Tabs>
         <Select
           value={kind}
+          items={NODE_KIND_VALUES.map((value) => ({ label: NODE_KIND_LABELS[value], value }))}
           onValueChange={(value) => {
             const nextKind = parseKind(value);
             if (!nextKind) return;
@@ -221,7 +225,7 @@ function AdminNodes() {
         </Card>
       ) : nodesQuery.isError ? (
         <EmptyState
-          icon={Network}
+          icon={TreeStructureIcon}
           title="Failed to load nodes"
           description={nodesQuery.error.message || "Something went wrong while loading nodes."}
           action={
@@ -232,7 +236,7 @@ function AdminNodes() {
         />
       ) : !visibleNodes.length ? (
         <EmptyState
-          icon={Network}
+          icon={TreeStructureIcon}
           title="No matching nodes"
           description="No nodes match this view. Try all nodes or a different kind."
         />

@@ -1,4 +1,4 @@
-import { Coins, Fuel, Wallet } from "lucide-react";
+import { CoinsIcon, GasPumpIcon, WalletIcon } from "@phosphor-icons/react";
 import { Button, Field, FieldLabel, Input } from "@/components";
 
 export function RelayerTopUp({
@@ -23,7 +23,7 @@ export function RelayerTopUp({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Fuel className="h-4 w-4 text-muted-foreground" />
+        <GasPumpIcon className="h-4 w-4 text-muted-foreground" />
         <h2 className="text-sm font-semibold text-foreground">Top up</h2>
       </div>
 
@@ -33,7 +33,7 @@ export function RelayerTopUp({
             Connect a NEAR wallet to fund the relayer.
           </p>
           <Button type="button" variant="outline" size="sm" onClick={onConnect}>
-            <Wallet className="h-3.5 w-3.5" />
+            <WalletIcon className="h-3.5 w-3.5" />
             connect wallet
           </Button>
         </div>
@@ -74,7 +74,7 @@ export function RelayerTopUp({
             onClick={onFund}
             disabled={sending || parsedAmount === null}
           >
-            <Coins className="h-3.5 w-3.5" />
+            <CoinsIcon className="h-3.5 w-3.5" />
             {sending ? "sending…" : "fund relayer"}
           </Button>
         </div>

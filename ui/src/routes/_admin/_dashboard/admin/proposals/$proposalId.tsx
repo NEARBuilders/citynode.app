@@ -1,6 +1,6 @@
+import { ArrowLeftIcon, FileTextIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, FileCheck2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient } from "@/app";
@@ -135,12 +135,12 @@ function ProposalDetailPage() {
   if (!pluginId || !entityId) {
     return (
       <EmptyState
-        icon={FileCheck2}
+        icon={FileTextIcon}
         title="Proposal location is missing"
         description="Open this proposal from the review queue so its plugin and entity can be resolved."
         action={
-          <Button asChild variant="outline">
-            <Link to="/admin/proposals">back to proposals</Link>
+          <Button variant="outline" nativeButton={false} render={<Link to="/admin/proposals" />}>
+            back to proposals
           </Button>
         }
       />
@@ -160,12 +160,12 @@ function ProposalDetailPage() {
   if (proposalQuery.isError || !proposalQuery.data) {
     return (
       <EmptyState
-        icon={FileCheck2}
+        icon={FileTextIcon}
         title="Proposal not found"
         description={proposalQuery.error?.message || "This proposal is no longer available."}
         action={
-          <Button asChild variant="outline">
-            <Link to="/admin/proposals">back to proposals</Link>
+          <Button variant="outline" nativeButton={false} render={<Link to="/admin/proposals" />}>
+            back to proposals
           </Button>
         }
       />
@@ -188,11 +188,14 @@ function ProposalDetailPage() {
       <SectionHeader
         title="Review proposal"
         action={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/proposals">
-              <ArrowLeft />
-              back to proposals
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/admin/proposals" />}
+          >
+            <ArrowLeftIcon />
+            back to proposals
           </Button>
         }
       />

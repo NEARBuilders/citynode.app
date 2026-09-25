@@ -1,6 +1,6 @@
+import { BankIcon, PlusIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
@@ -96,13 +96,18 @@ function AdminTenants() {
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <Button asChild variant="outline" size="sm">
-            <Link
-              to="/tenant/$tenantId"
-              params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
-            >
-              open
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={
+              <Link
+                to="/tenant/$tenantId"
+                params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
+              />
+            }
+          >
+            open
           </Button>
         ),
       },
@@ -115,11 +120,9 @@ function AdminTenants() {
       <SectionHeader
         title="Tenants"
         action={
-          <Button asChild>
-            <Link to="/admin/tenants/new">
-              <Plus size={14} />
-              new tenant
-            </Link>
+          <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
+            <PlusIcon size={14} />
+            new tenant
           </Button>
         }
       />
@@ -132,7 +135,7 @@ function AdminTenants() {
         </Card>
       ) : error ? (
         <EmptyState
-          icon={Building2}
+          icon={BankIcon}
           title="Failed to load tenants"
           description={error.message || "Something went wrong while loading tenants."}
           action={
@@ -146,15 +149,13 @@ function AdminTenants() {
         />
       ) : tenants.length === 0 ? (
         <EmptyState
-          icon={Building2}
+          icon={BankIcon}
           title="No tenants yet"
           description="Create your first tenant deployment to get started."
           action={
-            <Button asChild>
-              <Link to="/admin/tenants/new">
-                <Plus size={14} />
-                create tenant
-              </Link>
+            <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
+              <PlusIcon size={14} />
+              create tenant
             </Button>
           }
         />

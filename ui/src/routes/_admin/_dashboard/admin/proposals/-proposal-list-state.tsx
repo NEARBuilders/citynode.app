@@ -1,4 +1,4 @@
-import { FileCheck2 } from "lucide-react";
+import { FileTextIcon } from "@phosphor-icons/react";
 import { Button, Card, EmptyState, Skeleton } from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import type { Proposal } from "./-proposal-columns";
@@ -42,7 +42,7 @@ export function ProposalListState({
   if (isError) {
     return (
       <EmptyState
-        icon={FileCheck2}
+        icon={FileTextIcon}
         title="Failed to load proposals"
         description={errorMessage || "Something went wrong while loading proposals."}
         action={
@@ -57,7 +57,7 @@ export function ProposalListState({
   if (proposals.length === 0) {
     return (
       <EmptyState
-        icon={FileCheck2}
+        icon={FileTextIcon}
         title={activeFilter === "pending" ? "No pending proposals." : "No proposals found."}
         description={`There are no ${activeFilter === "all" ? "" : `${activeFilter} `}proposals to show.`}
         className="min-h-[40vh]"

@@ -1,5 +1,5 @@
+import { GlobeIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Globe } from "lucide-react";
 import type { FormEvent, MutableRefObject } from "react";
 import type { ApiClient } from "@/app";
 import {
@@ -109,7 +109,12 @@ export function TenantCreationForm({
                       <FieldLabel htmlFor="parent-root">parent country</FieldLabel>
                       <Select
                         value={countryValue}
+                        items={rootNodes.map((node) => ({
+                          label: `${node.name} (${node.slug})`,
+                          value: node.id,
+                        }))}
                         onValueChange={(value) => {
+                          if (value === null) return;
                           setRootParentId(value);
                           field.handleChange(value);
                         }}
@@ -142,11 +147,19 @@ export function TenantCreationForm({
                               ? DIRECT_COUNTRY_PARENT
                               : field.state.value
                           }
-                          onValueChange={(value) =>
+                          items={[
+                            { label: "directly under country", value: DIRECT_COUNTRY_PARENT },
+                            ...stateNodes.map((node) => ({
+                              label: `${node.name} (${node.slug})`,
+                              value: node.id,
+                            })),
+                          ]}
+                          onValueChange={(value) => {
+                            if (value === null) return;
                             field.handleChange(
                               value === DIRECT_COUNTRY_PARENT ? rootParentId : value,
-                            )
-                          }
+                            );
+                          }}
                         >
                           <SelectTrigger id="parent-state" className="w-full">
                             <SelectValue />
@@ -293,7 +306,7 @@ export function TenantCreationForm({
           <Field>
             <FieldLabel>hostname</FieldLabel>
             <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-muted-foreground" />
+              <GlobeIcon className="h-4 w-4 text-muted-foreground" />
               <code className="font-mono text-sm text-foreground">{hostname || "—"}</code>
               {preflight?.hostname.available === true && (
                 <Badge variant="secondary">available</Badge>
@@ -307,8 +320,8 @@ export function TenantCreationForm({
       </Card>
 
       <div className="flex gap-2">
-        <Button asChild variant="outline">
-          <Link to="/admin/tenants">cancel</Link>
+        <Button variant="outline" nativeButton={false} render={<Link to="/admin/tenants" />}>
+          cancel
         </Button>
         <form.Subscribe selector={(state) => state.canSubmit}>
           {(canSubmit) => (

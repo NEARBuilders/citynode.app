@@ -1,6 +1,13 @@
+import {
+  BankIcon,
+  GavelIcon,
+  GearIcon,
+  SquaresFourIcon,
+  TreeStructureIcon,
+  UsersIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Gavel, LayoutDashboard, Network, Settings, Users } from "lucide-react";
 import { getAccount, pluginPath, useApiClient } from "@/app";
 import { Badge, Button, Card, SectionHeader } from "@/components";
 import { InfoRow } from "@/components/info-row";
@@ -42,7 +49,7 @@ function AdminDashboard() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Network className="h-4 w-4" />
+              <TreeStructureIcon className="h-4 w-4" />
             </div>
             <h3
               className="text-base font-semibold text-foreground"
@@ -53,14 +60,19 @@ function AdminDashboard() {
             <p className="text-sm text-muted-foreground">
               Inspect the node tree, validator health, and staking resolution.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/nodes">open nodes</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/admin/nodes" />}
+            >
+              open nodes
             </Button>
           </Card>
 
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Gavel className="h-4 w-4" />
+              <GavelIcon className="h-4 w-4" />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3
@@ -76,14 +88,19 @@ function AdminDashboard() {
             <p className="text-sm text-muted-foreground">
               Review and approve thing submissions from the community.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/proposals">review proposals</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/admin/proposals" />}
+            >
+              review proposals
             </Button>
           </Card>
 
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <LayoutDashboard className="h-4 w-4" />
+              <SquaresFourIcon className="h-4 w-4" />
             </div>
             <h3
               className="text-base font-semibold text-foreground"
@@ -94,17 +111,20 @@ function AdminDashboard() {
             <p className="text-sm text-muted-foreground">
               Create and manage tenant deployments for your organization.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/tenants">
-                <Building2 className="h-3.5 w-3.5" />
-                open tenants
-              </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/admin/tenants" />}
+            >
+              <BankIcon className="h-3.5 w-3.5" />
+              open tenants
             </Button>
           </Card>
 
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Building2 className="h-4 w-4" />
+              <BankIcon className="h-4 w-4" />
             </div>
             <h3
               className="text-base font-semibold text-foreground"
@@ -115,17 +135,15 @@ function AdminDashboard() {
             <p className="text-sm text-muted-foreground">
               Manage organizations, members, roles, and invitations.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/orgs">
-                <Users className="h-3.5 w-3.5" />
-                open organizations
-              </Link>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
+              <UsersIcon className="h-3.5 w-3.5" />
+              open organizations
             </Button>
           </Card>
 
           <Card className="p-6 space-y-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Settings className="h-4 w-4" />
+              <GearIcon className="h-4 w-4" />
             </div>
             <h3
               className="text-base font-semibold text-foreground"
@@ -136,8 +154,13 @@ function AdminDashboard() {
             <p className="text-sm text-muted-foreground">
               Update your profile, auth methods, and security preferences.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to={pluginPath("/settings")}>open settings</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to={pluginPath("/settings")} />}
+            >
+              open settings
             </Button>
           </Card>
         </div>
@@ -172,19 +195,22 @@ function AdminDashboard() {
               This tenant is backed by an organization. Manage members, roles, and invitations
               there.
             </p>
-            <Button asChild variant="outline" size="sm">
-              {tenantOrganizationSlug ? (
-                <Link to="/orgs/$slug" params={{ slug: tenantOrganizationSlug }}>
-                  <Users className="h-3.5 w-3.5" />
-                  open organization
-                </Link>
-              ) : (
-                <Link to="/orgs">
-                  <Users className="h-3.5 w-3.5" />
-                  open organizations
-                </Link>
-              )}
-            </Button>
+            {tenantOrganizationSlug ? (
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link to="/orgs/$slug" params={{ slug: tenantOrganizationSlug }} />}
+              >
+                <UsersIcon className="h-3.5 w-3.5" />
+                open organization
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
+                <UsersIcon className="h-3.5 w-3.5" />
+                open organizations
+              </Button>
+            )}
           </Card>
         </section>
       )}
