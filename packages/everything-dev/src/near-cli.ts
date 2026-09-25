@@ -101,18 +101,6 @@ export function generateNearKeyPair(): NearKeyPair {
   };
 }
 
-const checkNearCliInstalled = Effect.tryPromise({
-  try: async () => {
-    try {
-      await execa("near", ["--version"], { stdio: "pipe" });
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  catch: () => new Error("Failed to check NEAR CLI"),
-});
-
 export async function isNearCliInstalled(): Promise<boolean> {
   try {
     await execa("near", ["--version"], { stdio: "pipe" });
@@ -194,7 +182,7 @@ async function runNearCommand(args: string[]): Promise<void> {
 }
 
 export const ensureNearCli = Effect.gen(function* () {
-  const isInstalled = yield* checkNearCliInstalled;
+  const isInstalled = yield* Effect.promise(() => isNearCliInstalled());
   if (isInstalled) return;
 
   console.log();

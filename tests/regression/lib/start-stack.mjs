@@ -81,6 +81,8 @@ log(`starting ${mode} stack on port ${regressionEnv.basePort} with test database
 // teardown "stall"). `tail -f` the log for live output.
 const logsDir = join(root, ".bos", "logs");
 mkdirSync(logsDir, { recursive: true });
+// Colons are invalid in upload-artifact paths (NTFS-safe charset) — the mode
+// names (`dev:ssr`) must never leak into the log filename.
 const stackLogPath = join(logsDir, `regression-${mode.replace(/:/g, "-")}.log`);
 const stackLog = openSync(stackLogPath, "w");
 log(`stack output: ${stackLogPath}`);

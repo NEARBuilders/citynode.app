@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect, Layer } from "effect";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { PortAllocatorLive } from "../../../src/app";
 import {
   buildComposeModel,
   buildEnvGenerated,
   buildLaunchSpec,
   buildServiceDescriptors,
+  planInfra,
   workspaceKey,
 } from "../../../src/infra/planner";
 import type { ResolvedPorts } from "../../../src/infra/types";
@@ -99,6 +105,75 @@ describe("buildServiceDescriptors", () => {
     expect(api?.url).toBe("https://api.example.com/mf-manifest.json");
     expect(api?.port).toBeUndefined();
   });
+
+  it("skips a local plugins.auth mirror (the auth slot owns the backend)", () => {
+    const rc = stubRuntimeConfig({
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "",
+          entry: "",
+          source: "local",
+          localPath: "/tmp/auth",
+          ui: {
+            name: "auth-ui",
+            url: "http://localhost:3011",
+            entry: "",
+            source: "local",
+            localPath: "/tmp/auth-ui",
+            port: 3011,
+          },
+        },
+      },
+    } as Partial<RuntimeConfig>);
+    const ports = stubResolvedPorts({
+      plugins: { auth: { api: 3010, ui: 3011 } },
+    });
+    const descs = buildServiceDescriptors(rc, ports);
+    expect(descs.find((d) => d.key === "plugin:auth")).toBeUndefined();
+    expect(descs.find((d) => d.key === "plugin-ui:auth")?.port).toBe(3011);
+  });
+
+  it("skips a remote plugins.auth mirror", () => {
+    const rc = stubRuntimeConfig({
+      auth: {
+        name: "auth",
+        url: "https://auth.example.com",
+        entry: "",
+        source: "remote",
+      },
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "https://auth.example.com",
+          entry: "",
+          source: "remote",
+        },
+      },
+    } as Partial<RuntimeConfig>);
+    const ports = stubResolvedPorts();
+    const descs = buildServiceDescriptors(rc, ports);
+    expect(descs.find((d) => d.key === "plugin:auth")).toBeUndefined();
+  });
+
+  it("keeps plugins.auth as its own descriptor when it is not a mirror", () => {
+    const rc = stubRuntimeConfig({
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "",
+          entry: "",
+          source: "local",
+          localPath: "/tmp/other-auth",
+        },
+      },
+    } as Partial<RuntimeConfig>);
+    const ports = stubResolvedPorts({
+      plugins: { auth: { api: 3010, ui: undefined } },
+    });
+    const descs = buildServiceDescriptors(rc, ports);
+    expect(descs.find((d) => d.key === "plugin:auth")?.port).toBe(3010);
+  });
 });
 
 describe("buildLaunchSpec", () => {
@@ -163,5 +238,82 @@ describe("buildEnvGenerated", () => {
     expect(env.CORS_ORIGIN).toBe("http://localhost:8080");
     expect(env.API_DATABASE_URL).toBe("postgres://u:p@localhost:5432/api");
     expect(env.REDIS_URL).toBe("redis://localhost:6379/0");
+  });
+});
+
+describe("planInfra", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "plan-infra-"));
+    process.env.BO_PID_REGISTRY_PATH = join(tempDir, "pids.json");
+    process.env.BOS_NO_PERSIST_PORTS = "1";
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("allocates the auth mirror's ui port and patches its runtime ui url", async () => {
+    const bosConfig = stubRuntimeConfig({
+      auth: {
+        name: "auth",
+        url: "",
+        entry: "",
+        source: "local",
+        localPath: "/tmp/auth",
+      },
+      plugins: {
+        auth: {
+          name: "auth",
+          url: "",
+          entry: "",
+          source: "local",
+          localPath: "/tmp/auth",
+          ui: {
+            name: "auth-ui",
+            url: "",
+            entry: "",
+            source: "local",
+            localPath: "/tmp/auth-ui",
+          },
+        },
+        template: {
+          name: "template",
+          url: "",
+          entry: "",
+          source: "local",
+          localPath: "/tmp/template",
+        },
+      },
+    } as Partial<RuntimeConfig>);
+
+    const plan = await Effect.runPromise(
+      planInfra({
+        configDir: tempDir,
+        bosConfig,
+        cli: {
+          port: 25300,
+          apiPort: 25301,
+          authPort: 25302,
+          uiPort: 25303,
+          pluginPortStart: 25310,
+        },
+      }).pipe(Effect.provide(Layer.mergeAll(PortAllocatorLive))),
+    );
+
+    expect(plan.resolvedPorts.plugins.auth).toEqual({ api: undefined, ui: 25310 });
+    expect(plan.resolvedPorts.plugins.template).toEqual({ api: 25311, ui: undefined });
+
+    const mirror = plan.runtimeConfig.plugins?.auth;
+    expect(mirror?.ui?.port).toBe(25310);
+    expect(mirror?.ui?.url).toBe("http://localhost:25310");
+
+    const descriptorKeys = [...plan.serviceDescriptors.keys()];
+    expect(descriptorKeys).not.toContain("plugin:auth");
+    expect(plan.serviceDescriptors.get("plugin-ui:auth")?.port).toBe(25310);
+
+    expect(plan.claims[0]?.ports["plugin-ui:auth"]).toBe(25310);
+    expect(plan.claims[0]?.ports["plugin:auth"]).toBeUndefined();
   });
 });

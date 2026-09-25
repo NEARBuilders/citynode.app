@@ -47,7 +47,6 @@ async function materializeAll(configDir: string, runtimeConfig: RuntimeConfig): 
     Effect.gen(function* () {
       const m = yield* InfraMaterializer;
       yield* m.materializeTemplate(configDir, runtimeConfig);
-      yield* m.materializeLocalDevEnv(configDir, runtimeConfig, { devHostPort: 4100 });
       yield* m.materializeTestInfra(configDir, runtimeConfig);
       yield* m.materializeCompose(configDir, runtimeConfig);
       yield* m.persistPortState(
@@ -75,7 +74,6 @@ describe("InfraMaterializer Tag + Layer", () => {
       Effect.gen(function* () {
         const m = yield* InfraMaterializer;
         expect(typeof m.materializeTemplate).toBe("function");
-        expect(typeof m.materializeLocalDevEnv).toBe("function");
         expect(typeof m.materializeTestInfra).toBe("function");
         expect(typeof m.materializeCompose).toBe("function");
         expect(typeof m.persistPortState).toBe("function");
@@ -90,27 +88,25 @@ describe("InfraMaterializer Tag + Layer", () => {
     expect(Layer.isLayer(InfraMaterializerLive)).toBe(true);
   });
 
-  it("writes .env.example, .env, .env.test, and docker-compose.yml", async () => {
+  it("writes .env.example, .env.test, and docker-compose.yml — and never touches .env", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-materializer-"));
     tempDirs.push(dir);
 
     await materializeAll(dir, buildRuntimeConfig());
 
     expect(existsSync(join(dir, ".env.example"))).toBe(true);
-    expect(existsSync(join(dir, ".env"))).toBe(true);
+    expect(existsSync(join(dir, ".env"))).toBe(false);
     expect(existsSync(join(dir, ".env.test"))).toBe(true);
     expect(existsSync(join(dir, "docker-compose.yml"))).toBe(true);
   });
 
-  it(".env has dev host port baked in; .env.example does not", async () => {
+  it(".env is syncEnvFile's domain — the materializer must not clobber user keys", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bos-materializer-"));
     tempDirs.push(dir);
 
     await materializeAll(dir, buildRuntimeConfig());
 
-    const env = readFileSync(join(dir, ".env"), "utf-8");
     const envExample = readFileSync(join(dir, ".env.example"), "utf-8");
-    expect(env).toContain("CORS_ORIGIN=http://localhost:4100");
     expect(envExample).toContain("CORS_ORIGIN=http://localhost:3000");
   });
 

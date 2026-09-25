@@ -70,6 +70,16 @@ export async function computeSriHashForUrl(
   url: string,
   options?: SriUrlOptions,
 ): Promise<string | null> {
+  const attempts = 3;
+  for (let attempt = 1; attempt < attempts; attempt++) {
+    const hash = await computeSriHashOnce(url, options);
+    if (hash) return hash;
+    await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+  }
+  return computeSriHashOnce(url, options);
+}
+
+async function computeSriHashOnce(url: string, options?: SriUrlOptions): Promise<string | null> {
   try {
     const entryUrl = resolveSriTargetUrl(url, options);
 
@@ -95,6 +105,13 @@ export function resolveEntryUrl(url: string): string {
   return `${url.replace(/\/$/, "")}/remoteEntry.js`;
 }
 
+export class SriVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SriVerificationError";
+  }
+}
+
 export async function verifySriForUrl(
   url: string,
   expectedIntegrity: string,
@@ -104,8 +121,9 @@ export async function verifySriForUrl(
 
   const response = await fetchResponse(entryUrl, { timeout: "30 seconds" });
   if (!response.ok) {
-    console.warn(`[SRI] Failed to fetch ${entryUrl} for verification: ${response.status}`);
-    return;
+    throw new SriVerificationError(
+      `Failed to fetch ${entryUrl} for verification: ${response.status}`,
+    );
   }
 
   const computed = await computeSriHashFromResponse(response, entryUrl, options);

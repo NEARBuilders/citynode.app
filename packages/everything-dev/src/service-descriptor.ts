@@ -1,27 +1,34 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { Context, Layer } from "effect";
-import type { JsonObject, RuntimeConfig, RuntimePluginConfig, SourceMode } from "./types";
+import type { JsonObject, RuntimeConfig, SourceMode } from "./types";
+
+export interface AuthSlotShape {
+  source: string;
+  localPath?: string;
+  url?: string;
+}
 
 /**
  * True when a `plugins.<id>` entry is the runtime-config mirror of the
  * app-slot auth plugin (same backend target) — the `auth` service already
  * spawns that backend, so the mirror contributes only its `ui` surface.
+ * The single implementation; consumed by the service descriptors, the DAG,
+ * the infra planner, and the dev session.
  */
 export function isAuthMirrorPluginEntry(
-  runtimeConfig: RuntimeConfig,
+  authEntry: AuthSlotShape | undefined,
   pluginId: string,
-  pluginConfig: RuntimePluginConfig,
+  pluginConfig: AuthSlotShape,
 ): boolean {
-  if (pluginId !== "auth" || !runtimeConfig.auth) return false;
-  const auth = runtimeConfig.auth;
-  if (pluginConfig === auth) return true;
-  if (pluginConfig.localPath && pluginConfig.localPath === auth.localPath) return true;
+  if (pluginId !== "auth" || !authEntry) return false;
+  if (pluginConfig === authEntry) return true;
+  if (pluginConfig.localPath && pluginConfig.localPath === authEntry.localPath) return true;
   if (
     !pluginConfig.localPath &&
     pluginConfig.source === "remote" &&
     pluginConfig.url &&
-    pluginConfig.url === auth.url
+    pluginConfig.url === authEntry.url
   ) {
     return true;
   }
@@ -49,6 +56,8 @@ export interface ServiceDescriptor {
   env?: Record<string, string>;
   readyPatterns?: RegExp[];
   errorPatterns?: RegExp[];
+  /** folder-form plugin UI port — the UI build is a child of this dev process (BOS_UI_PORT) */
+  uiPort?: number;
 }
 
 export class ServiceDescriptorMap extends Context.Service<
@@ -76,13 +85,7 @@ const PLUGIN_ERROR_PATTERNS = [
   /Cannot find module/i,
 ];
 
-const SERVICE_CONFIGS: Record<
-  string,
-  Pick<
-    ServiceDescriptor,
-    "command" | "args" | "env" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
-  >
-> = {
+const SERVICE_CONFIGS = {
   host: {
     command: "bun",
     args: ["run", "dev"],
@@ -94,7 +97,7 @@ const SERVICE_CONFIGS: Record<
     // must NOT receive it: their .mjs config evaluation is not TS-capable.
     env: { NODE_OPTIONS: "--conditions=development" },
     readyPatterns: [/Host (dev|production) server running at/i, /Server running at/i],
-    errorPatterns: [/error:/i, /failed/i, /exception/i],
+    errorPatterns: [/\berror\b(?!s)/i, /\bfailed to\b/i, /\bbuild failed\b/i, /exception/i],
     defaultPort: 3000,
     readinessPath: "/health",
   },
@@ -110,7 +113,7 @@ const SERVICE_CONFIGS: Record<
     command: "bun",
     args: ["run", "dev"],
     readyPatterns: [/\bready\s+built in\b/i, /\bLocal:\b/i, /\bcompiled\b.*successfully/i],
-    errorPatterns: [/error/i, /failed to compile/i],
+    errorPatterns: [/\berror\b(?!s)/i, /\bfailed to\b/i, /\bbuild failed\b/i],
     defaultPort: 3003,
     readinessPath: "/remoteEntry.js",
   },
@@ -122,7 +125,13 @@ const SERVICE_CONFIGS: Record<
     defaultPort: 3001,
     readinessPath: "/remoteEntry.js",
   },
-};
+} as const satisfies Record<
+  string,
+  Pick<
+    ServiceDescriptor,
+    "command" | "args" | "env" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
+  >
+>;
 
 export function buildServiceDescriptorMap(
   runtimeConfig: RuntimeConfig,
@@ -207,7 +216,7 @@ export function buildServiceDescriptorMap(
   if (runtimeConfig.plugins) {
     let pluginBasePort = 3010;
     for (const [pluginId, pluginConfig] of Object.entries(runtimeConfig.plugins)) {
-      const isAuthMirror = isAuthMirrorPluginEntry(runtimeConfig, pluginId, pluginConfig);
+      const isAuthMirror = isAuthMirrorPluginEntry(runtimeConfig.auth, pluginId, pluginConfig);
       const pluginKey = `plugin:${pluginId}`;
       const resolvedPort = pluginConfig.port ?? pluginBasePort;
       pluginBasePort = resolvedPort + 1;
@@ -242,6 +251,7 @@ export function buildServiceDescriptorMap(
           command: "bun",
           args: ["run", "dev"],
           env: isFolderFormUi ? { BOS_UI_PORT: String(folderUiPort) } : undefined,
+          uiPort: isFolderFormUi ? folderUiPort : undefined,
           readyPatterns: PLUGIN_READY_PATTERNS,
           errorPatterns: PLUGIN_ERROR_PATTERNS,
           defaultPort: resolvedPort,
@@ -254,7 +264,11 @@ export function buildServiceDescriptorMap(
         // config wired into the mirror's ui.url (withLocalRuntimeUrl).
         const authDescriptor = map.get("auth");
         if (authDescriptor) {
-          map.set("auth", { ...authDescriptor, env: { BOS_UI_PORT: String(folderUiPort) } });
+          map.set("auth", {
+            ...authDescriptor,
+            env: { BOS_UI_PORT: String(folderUiPort) },
+            uiPort: folderUiPort,
+          });
         }
       }
 

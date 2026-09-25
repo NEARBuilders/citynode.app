@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { buildAuthExportStub, buildAuthTypesGenContent } from "./auth-types-gen";
 import { fetchJsonOrNull, fetchResponse } from "./http-client";
+import { isAuthMirrorPluginEntry } from "./service-descriptor";
 import type { JsonObject, RuntimeConfig, RuntimePluginConfig } from "./types";
 
 export interface ApiPluginManifest {
@@ -520,14 +521,8 @@ export async function syncApiContractBridge(opts: {
   status: ContractBridgeStatus[];
 }> {
   const runtimeDir = join(opts.configDir, ".bos", "generated");
-  const authRuntime = opts.runtimeConfig.auth;
   const isAuthMirrorEntry = (key: string, plugin: RuntimePluginConfig) =>
-    Boolean(
-      authRuntime &&
-        key === "auth" &&
-        ((plugin.localPath && plugin.localPath === authRuntime.localPath) ||
-          (!plugin.localPath && plugin.source === "remote" && plugin.url === authRuntime.url)),
-    );
+    isAuthMirrorPluginEntry(opts.runtimeConfig.auth, key, plugin);
   const pluginEntries = Object.entries(opts.runtimeConfig.plugins ?? {})
     .filter(([key, plugin]) => !isAuthMirrorEntry(key, plugin))
     .sort(([a], [b]) => a.localeCompare(b));

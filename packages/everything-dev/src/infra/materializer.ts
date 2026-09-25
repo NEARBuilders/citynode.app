@@ -16,19 +16,10 @@ import {
 import type { RuntimeConfig } from "../types";
 import { InfraError, type InfraPhase } from "./types";
 
-export interface DevRuntimeEnv {
-  readonly devHostPort?: number;
-}
-
 export interface InfraMaterializerShape {
   readonly materializeTemplate: (
     configDir: string,
     runtimeConfig: RuntimeConfig,
-  ) => Effect.Effect<void, InfraError>;
-  readonly materializeLocalDevEnv: (
-    configDir: string,
-    runtimeConfig: RuntimeConfig,
-    dev: DevRuntimeEnv,
   ) => Effect.Effect<void, InfraError>;
   readonly materializeTestInfra: (
     configDir: string,
@@ -96,17 +87,6 @@ const makeMaterializer = (): InfraMaterializerShape => ({
       const filePath = join(configDir, ".env.example");
       const content = renderEnvFile(spec.groups, spec.databases, spec.redis, {
         forExample: true,
-      });
-      yield* writeContentEffect(filePath, content, "materialize-env");
-    }),
-
-  materializeLocalDevEnv: (configDir, runtimeConfig, dev) =>
-    Effect.gen(function* () {
-      const { spec } = yield* buildSpecSafe(configDir, runtimeConfig);
-      const filePath = join(configDir, ".env");
-      const content = renderEnvFile(spec.groups, spec.databases, spec.redis, {
-        forExample: false,
-        ...(typeof dev.devHostPort === "number" ? { devHostPort: dev.devHostPort } : {}),
       });
       yield* writeContentEffect(filePath, content, "materialize-env");
     }),

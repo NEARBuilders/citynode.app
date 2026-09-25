@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { Data, Deferred, Effect, Option, Ref, Stream } from "effect";
+import { stripAnsi } from "./dev-log-pipeline";
 import { ShellEnv } from "./env/project-env";
 import { patchManifestFetchForSsrPublicPath } from "./mf";
 import {
@@ -40,15 +41,8 @@ export interface ProcessState {
   port: number;
   message?: string;
   source?: "local" | "remote";
+  uiPort?: number;
 }
-
-const stripAnsi = (input: string): string => {
-  const ESC = String.fromCharCode(27);
-  const BEL = String.fromCharCode(7);
-  return input
-    .replace(new RegExp(`${ESC}\\][^${BEL}]*${BEL}`, "g"), "")
-    .replace(new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g"), "");
-};
 
 const probeHttpOk = (url: string, timeoutMs = 400) =>
   Effect.tryPromise({
@@ -70,6 +64,8 @@ const probeHttpOk = (url: string, timeoutMs = 400) =>
 const LOCAL_PROBE_DEADLINE_MS = 90_000;
 const LOCAL_PROBE_INTERVAL_MS = 200;
 
+const cleanExitSignals: Record<string, true> = { SIGTERM: true, SIGINT: true };
+
 const REMOTE_PROBE_TIMEOUT_MS = 5000;
 const REMOTE_PROBE_DEADLINE_MS = 60_000;
 const REMOTE_PROBE_BACKOFF_INITIAL_MS = 1000;
@@ -82,14 +78,14 @@ export const detectStatus = (
   const cleanLine = stripAnsi(line);
   const errorPatterns = descriptor.errorPatterns ?? [];
   const readyPatterns = descriptor.readyPatterns ?? [];
-  for (const pattern of errorPatterns) {
-    if (pattern.test(cleanLine)) {
-      return { status: "error", isError: true };
-    }
-  }
   for (const pattern of readyPatterns) {
     if (pattern.test(cleanLine)) {
       return { status: "ready", isError: false };
+    }
+  }
+  for (const pattern of errorPatterns) {
+    if (pattern.test(cleanLine)) {
+      return { status: "error", isError: true };
     }
   }
   return null;
@@ -272,7 +268,7 @@ const spawnRemoteHost = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
 
     return {
       name: descriptor.key,
-      pid: process.pid,
+      pid: undefined,
       kill: Effect.gen(function* () {
         callbacks.onLog(descriptor.key, "Shutting down remote host...");
         restoreConsole();
@@ -311,7 +307,13 @@ export function composeSpawnEnv(
  * Overlay the generated infra env (ports drift, so stale `.env` values must
  * lose) while keeping every explicitly exported key from `shellEnv` intact.
  * Keys absent from both are untouched.
+ *
+ * Exception (ADR 0012 / plan 038): the origin keys BASE_URL and CORS_ORIGIN
+ * are always generated-owned — a wrapper that sourced a stale `.env` must not
+ * win over the resolved host port, in the child env or on disk.
  */
+const GENERATED_OWNED_KEYS = new Set(["BASE_URL", "CORS_ORIGIN"]);
+
 export function mergeGeneratedOverFileEnv(
   generatedEnv: Record<string, string>,
   processEnv: Record<string, string>,
@@ -319,7 +321,7 @@ export function mergeGeneratedOverFileEnv(
 ): Record<string, string> {
   const result: Record<string, string> = { ...processEnv };
   for (const [key, value] of Object.entries(generatedEnv)) {
-    if (key in shellEnv) {
+    if (!GENERATED_OWNED_KEYS.has(key) && key in shellEnv) {
       result[key] = shellEnv[key]!;
     } else {
       result[key] = value;
@@ -373,10 +375,17 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
       detached: true,
     });
 
+    let lastExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
     const exitCode = Effect.callback<number, Error>((resume) => {
-      const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        lastExit = { code, signal };
         resume(Effect.succeed(code ?? (signal ? 1 : 0)));
-      const onError = (err: Error) => resume(Effect.fail(err));
+      };
+      const onError = (err: Error) => {
+        callbacks.onLog(name, `Spawn failed: ${err.message}`, true);
+        callbacks.onStatus(name, "error", `spawn failed: ${err.message}`);
+        resume(Effect.fail(err));
+      };
       cmd.once("exit", onExit);
       cmd.once("error", onError);
       return Effect.sync(() => {
@@ -384,6 +393,13 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         cmd.off("error", onError);
       });
     });
+
+    const describeExit = (exitCodeValue: number): string => {
+      if (lastExit?.code === null && lastExit.signal) return `signal: ${lastExit.signal}`;
+      return `exit code: ${exitCodeValue}`;
+    };
+    const isCleanSignalExit = (): boolean =>
+      lastExit?.code === null && lastExit.signal != null && lastExit.signal in cleanExitSignals;
 
     const markReady = Effect.gen(function* () {
       const currentStatus = yield* Ref.get(statusRef);
@@ -444,13 +460,23 @@ const spawnDevProcess = (descriptor: ServiceDescriptor, callbacks: ProcessCallba
         if (currentStatus === "ready" || currentStatus === "error") {
           // Post-ready exits must stay visible — a silently dead child (OOM
           // kill included) used to leave the stack answering with nothing.
+          // A SIGTERM/SIGINT-signalled exit is the polite-quit path, not a
+          // crash, so it logs as a plain shutdown line.
           if (currentStatus === "ready") {
-            callbacks.onLog(name, `Process exited after ready (exit code: ${exitCodeValue})`, true);
+            const detail = describeExit(exitCodeValue);
+            callbacks.onLog(name, `Process exited after ready (${detail})`, !isCleanSignalExit());
+            if (!isCleanSignalExit()) {
+              callbacks.onStatus(name, "error", `exited after ready (${detail})`);
+            }
             yield* markError(`Process exited after ready: ${name}`);
           }
           return;
         }
-        callbacks.onLog(name, `Process exited before ready (exit code: ${exitCodeValue})`, true);
+        callbacks.onLog(
+          name,
+          `Process exited before ready (${describeExit(exitCodeValue)})`,
+          !isCleanSignalExit(),
+        );
         yield* markError(`Process exited before ready: ${name}`);
       }),
     );
@@ -659,6 +685,7 @@ export function getProcessStates(
           ? portOverride
           : (descriptor?.port ?? descriptor?.defaultPort ?? 0),
       source: descriptor?.source,
+      uiPort: descriptor?.uiPort,
     };
   });
 }

@@ -43,11 +43,10 @@ function spawnDrizzleKit(spec: SpawnSpec): Effect.Effect<void, DrizzleKitError> 
       resume(effect);
     };
 
-    const child = spawn("npx", [...spec.args], {
+    const child = spawn(process.platform === "win32" ? "npx.cmd" : "npx", [...spec.args], {
       cwd: spec.cwd,
       env: spec.env,
       stdio: spec.stdio,
-      shell: true,
     });
 
     if (spec.stdio === "pipe") {

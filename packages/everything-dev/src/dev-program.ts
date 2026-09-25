@@ -30,7 +30,7 @@ import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
 import type { InfraPlan } from "./infra/types";
-import { resolveStartConfigSource } from "./local-prod-config";
+import { isRegistryStart, resolveStartConfigSource } from "./local-prod-config";
 import { mergeGeneratedOverFileEnv } from "./orchestrator";
 import { type ProgressEvent, pluginEvents, timePhase } from "./progress";
 import {
@@ -190,6 +190,12 @@ export const devBootstrap = (
     const ssr = input.ssr ?? false;
     const proxy = input.proxy ?? false;
 
+    if (input.logLevel) {
+      yield* Effect.sync(() => {
+        process.env.BOS_LOG_LEVEL = input.logLevel;
+      });
+    }
+
     if (ssr) {
       yield* Effect.sync(() => {
         process.env.BOS_SSR = "1";
@@ -316,6 +322,11 @@ export const devBootstrap = (
     const mergedEnv = yield* Effect.sync(() =>
       mergeGeneratedOverFileEnv(plan.envGenerated, process.env as Record<string, string>, shell),
     );
+    yield* Effect.sync(() => {
+      for (const [key, value] of Object.entries(mergedEnv)) {
+        if (key === "BASE_URL" || key === "CORS_ORIGIN") process.env[key] = value;
+      }
+    });
     const preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
     if (preflightFailures.length > 0) {
       return yield* new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) });
@@ -469,12 +480,25 @@ export const startBootstrap = (
     const productionEnv: Record<string, string> = {};
     const warnings: string[] = [];
 
+    const localhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+    const corsOrigin = process.env.CORS_ORIGIN;
+    const isLocalhostProductionOrigin =
+      corsOrigin !== undefined && localhostOrigin.test(corsOrigin);
+    if (isLocalhostProductionOrigin && isRegistryStart(explicitConfig)) {
+      warnings.push(
+        `CORS_ORIGIN is a localhost origin (${corsOrigin}) in a registry production start — overriding with the configured domain`,
+      );
+      delete process.env.CORS_ORIGIN;
+      delete process.env.BASE_URL;
+    }
+
     if (!process.env.CORS_ORIGIN && baseConfig.domain) {
       const effectiveDomain = isStaging
         ? (baseConfig.staging?.domain ?? baseConfig.domain)
         : baseConfig.domain;
       const defaultOrigin = `https://${effectiveDomain}`;
       productionEnv.CORS_ORIGIN = defaultOrigin;
+      productionEnv.BASE_URL = defaultOrigin;
       warnings.push(`CORS_ORIGIN defaulting to ${defaultOrigin}`);
     }
 

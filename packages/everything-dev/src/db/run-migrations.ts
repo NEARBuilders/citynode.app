@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { sql } from "drizzle-orm";
 import { Effect, Option, Schedule } from "effect";
 import {
+  DUPLICATE_OBJECT_SQLSTATES,
   extractExpectedTables,
   getMigrationStorage,
   isRetryableMigrationError,
@@ -56,7 +57,7 @@ export interface RunMigrationsOptions {
   duplicateSqlStates?: readonly string[];
 }
 
-const DEFAULT_DUPLICATE_SQLSTATES: readonly string[] = ["42710", "42701", "42P07"];
+const DEFAULT_DUPLICATE_SQLSTATES: readonly string[] = DUPLICATE_OBJECT_SQLSTATES;
 
 function normalizeRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];

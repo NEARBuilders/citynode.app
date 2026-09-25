@@ -49,6 +49,14 @@ export function resolveStartConfigSource(
   return {};
 }
 
+/** A registry-fetched start is a real deployment — a localhost origin there is
+ * a stray dev leftover. Local starts (explicit --config-path, bare `bos start`)
+ * keep the operator's environment: their localhost origin IS the reachable
+ * deployment context the in-process host's auth seam reads. */
+export function isRegistryStart(source: StartConfigSource): boolean {
+  return source.registry !== undefined;
+}
+
 function stripIntegrity<T extends object>(section: T): T {
   const next = { ...section } as T & { integrity?: string; ssrIntegrity?: string };
   delete next.integrity;
