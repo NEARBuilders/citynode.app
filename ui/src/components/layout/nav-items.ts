@@ -1,17 +1,29 @@
 import {
   BankIcon,
   BuildingsIcon,
+  CalendarDotsIcon,
+  ChartBarIcon,
+  CoinsIcon,
   CompassIcon,
   CubeIcon,
+  GearSixIcon,
   HouseIcon,
+  LightningIcon,
   NetworkIcon,
   PlusCircleIcon,
+  QrCodeIcon,
+  ScrollIcon,
   ShieldIcon,
   SparkleIcon,
+  SquaresFourIcon,
+  TreeStructureIcon,
+  WrenchIcon,
 } from "@phosphor-icons/react";
 import type { FeatureArea } from "@/lib/feature-areas";
 
 export type SidebarRole = "anon" | "member" | "admin";
+
+export type SidebarSection = "main" | "organization" | "manage";
 
 interface NavManifestItem {
   label: string;
@@ -27,48 +39,262 @@ export interface SidebarItem {
   label: string;
   to: string;
   roleRequired: SidebarRole;
+  slug?: string;
+  search?: Record<string, string>;
+  exact?: boolean;
+  activePrefixes?: string[];
   area?: FeatureArea;
   children?: SidebarItem[];
-  /** group the item belongs to (plugin nav manifest groups) */
+  section?: SidebarSection;
   group?: string;
-  /** ascending sort order inside the group */
   order?: number;
 }
 
-export const NAV_ITEMS: SidebarItem[] = [
-  { icon: CompassIcon, label: "explore", to: "/explore", roleRequired: "anon" },
-  { icon: SparkleIcon, label: "discover", to: "/discover", roleRequired: "member" },
+export interface MyCommunityNav {
+  nodeId: string | null;
+  tenantId: string | null;
+}
+
+export interface NavContext {
+  activeOrgSlug?: string | null;
+  community?: MyCommunityNav | null;
+  canManageOrganization?: boolean;
+  canCurate?: boolean;
+  isAdmin?: boolean;
+}
+
+function myCommunityChildren(
+  community: MyCommunityNav | null | undefined,
+  canManage: boolean,
+): SidebarItem[] {
+  const nodeId = community?.nodeId ?? null;
+  const tenantId = community?.tenantId ?? null;
+  const contentPath = nodeId ? `/nodes/${nodeId}/content` : null;
+  return [
+    {
+      icon: SquaresFourIcon,
+      label: "Overview",
+      slug: "my-node-overview",
+      to: "/dashboard/node",
+      exact: true,
+      roleRequired: "member",
+    },
+    ...(contentPath
+      ? [
+          {
+            icon: CalendarDotsIcon,
+            label: "Events & profile",
+            slug: "my-node-content",
+            to: contentPath,
+            search: { tab: "events" },
+            roleRequired: "member" as const,
+          },
+          {
+            icon: QrCodeIcon,
+            label: "Onboarding",
+            slug: "my-node-onboarding",
+            to: contentPath,
+            search: { tab: "onboarding" },
+            roleRequired: "member" as const,
+          },
+        ]
+      : []),
+    {
+      icon: ScrollIcon,
+      label: "Proposals",
+      slug: "my-node-proposals",
+      to: "/dashboard/node/proposals",
+      roleRequired: "member",
+    },
+    ...(tenantId && canManage
+      ? [
+          {
+            icon: GearSixIcon,
+            label: "Community settings",
+            slug: "my-node-settings",
+            to: `/tenant/${tenantId}`,
+            roleRequired: "member" as const,
+          },
+        ]
+      : []),
+  ];
+}
+
+const ADMIN_CHILDREN: SidebarItem[] = [
   {
-    icon: HouseIcon,
-    label: "dashboard",
-    to: "/dashboard",
-    roleRequired: "anon",
-    children: [
-      { icon: HouseIcon, label: "overview", to: "/dashboard", roleRequired: "anon" },
-      {
-        icon: NetworkIcon,
-        label: "my node",
-        to: "/dashboard/node",
-        roleRequired: "member",
-        area: "node-operations",
-      },
-    ],
+    icon: ChartBarIcon,
+    label: "Overview",
+    slug: "admin-overview",
+    to: "/admin",
+    exact: true,
+    roleRequired: "admin",
   },
   {
-    icon: CubeIcon,
-    label: "things",
-    to: "/things",
-    roleRequired: "member",
-    area: "things",
-    children: [
-      { icon: CubeIcon, label: "all things", to: "/things", roleRequired: "member" },
-      { icon: PlusCircleIcon, label: "new thing", to: "/things/new", roleRequired: "member" },
-    ],
+    icon: NetworkIcon,
+    label: "Nodes",
+    slug: "admin-nodes",
+    to: "/admin/nodes",
+    roleRequired: "admin",
   },
-  { icon: BankIcon, label: "stake", to: "/stake", roleRequired: "anon", area: "stake" },
-  { icon: BuildingsIcon, label: "orgs", to: "/orgs", roleRequired: "anon" },
-  { icon: ShieldIcon, label: "admin", to: "/admin", roleRequired: "admin" },
+  {
+    icon: ScrollIcon,
+    label: "Proposals",
+    slug: "admin-proposals",
+    to: "/admin/proposals",
+    roleRequired: "admin",
+  },
+  {
+    icon: TreeStructureIcon,
+    label: "Tenants",
+    slug: "admin-tenants",
+    to: "/admin/tenants",
+    roleRequired: "admin",
+  },
+  {
+    icon: LightningIcon,
+    label: "Relayer",
+    slug: "admin-relayer",
+    to: "/admin/relayer",
+    roleRequired: "admin",
+  },
+  {
+    icon: WrenchIcon,
+    label: "System",
+    slug: "admin-system",
+    to: "/admin/system",
+    roleRequired: "admin",
+  },
 ];
+
+export function buildNavItems(context: NavContext = {}): SidebarItem[] {
+  const canManage = Boolean(context.canManageOrganization || context.isAdmin);
+  const orgPath = context.activeOrgSlug ? `/orgs/${context.activeOrgSlug}` : "/orgs";
+  return [
+    {
+      icon: HouseIcon,
+      label: "Home",
+      slug: "dashboard",
+      to: "/dashboard",
+      exact: true,
+      roleRequired: "member",
+      section: "main",
+    },
+    {
+      icon: CompassIcon,
+      label: "Explore",
+      slug: "explore",
+      to: "/explore",
+      activePrefixes: ["/explore", "/n/", "/activity/"],
+      roleRequired: "anon",
+      section: "main",
+    },
+    {
+      icon: CoinsIcon,
+      label: "Stake",
+      slug: "stake",
+      to: "/stake",
+      roleRequired: "anon",
+      area: "stake",
+      section: "main",
+    },
+    {
+      icon: NetworkIcon,
+      label: "My community",
+      slug: "my-node",
+      to: "/dashboard/node",
+      activePrefixes: ["/dashboard/node", "/nodes/", "/tenant/"],
+      roleRequired: "member",
+      area: "node-operations",
+      section: "organization",
+      children: myCommunityChildren(context.community, canManage),
+    },
+    {
+      icon: BuildingsIcon,
+      label: "Organization",
+      slug: "orgs",
+      to: orgPath,
+      activePrefixes: ["/orgs"],
+      roleRequired: "member",
+      section: "organization",
+    },
+    {
+      icon: CubeIcon,
+      label: "Things",
+      slug: "things",
+      to: "/things",
+      roleRequired: "member",
+      area: "things",
+      section: "organization",
+      children: [
+        {
+          icon: CubeIcon,
+          label: "All things",
+          slug: "things-all",
+          to: "/things",
+          exact: true,
+          roleRequired: "member",
+        },
+        {
+          icon: PlusCircleIcon,
+          label: "New thing",
+          slug: "things-new",
+          to: "/things/new",
+          roleRequired: "member",
+        },
+      ],
+    },
+    ...(context.canCurate || context.isAdmin
+      ? [
+          {
+            icon: SparkleIcon,
+            label: "Curate",
+            slug: "discover",
+            to: "/discover",
+            roleRequired: "member" as const,
+            section: "manage" as const,
+          },
+        ]
+      : []),
+    {
+      icon: ShieldIcon,
+      label: "Admin",
+      slug: "admin",
+      to: "/admin",
+      roleRequired: "admin",
+      section: "manage",
+      children: ADMIN_CHILDREN,
+    },
+  ];
+}
+
+export const NAV_ITEMS: SidebarItem[] = buildNavItems({ canCurate: true });
+
+export function navSlug(item: Pick<SidebarItem, "slug" | "label">) {
+  return item.slug ?? item.label.toLowerCase().replace(/\s+/g, "-");
+}
+
+export function isNavItemActive(
+  item: Pick<SidebarItem, "to" | "exact" | "activePrefixes" | "search">,
+  pathname: string,
+  search: Record<string, unknown> = {},
+): boolean {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+  if (item.search) {
+    if (normalized !== item.to) return false;
+    const current = typeof search.tab === "string" ? search.tab : undefined;
+    const wanted = item.search.tab;
+    return current === wanted || (current === undefined && wanted === "events");
+  }
+  if (normalized === item.to) return true;
+  if (item.exact) return false;
+  const prefixes = item.activePrefixes ?? [item.to];
+  return prefixes.some(
+    (prefix) =>
+      prefix !== "/" &&
+      (normalized === prefix ||
+        normalized.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`)),
+  );
+}
 
 export function getUserRole(isAuthenticated: boolean, isAdmin: boolean): SidebarRole {
   if (isAdmin) return "admin";
@@ -146,4 +372,23 @@ export function appendPluginSidebarItems(
 ): SidebarItem[] {
   const builtinTos = new Set(builtin.map((item) => item.to));
   return [...builtin, ...plugin.filter((item) => !builtinTos.has(item.to))];
+}
+
+export const SECTION_LABELS: Record<SidebarSection, string | null> = {
+  main: null,
+  organization: "Your organization",
+  manage: "Manage",
+};
+
+export function groupSidebarItems(items: SidebarItem[]) {
+  const sections: Array<{ key: string; label: string | null; items: SidebarItem[] }> = [];
+  for (const item of items) {
+    const key = item.section ?? item.group ?? "more";
+    const label =
+      item.section !== undefined ? SECTION_LABELS[item.section] : (item.group ?? "More");
+    const existing = sections.find((section) => section.key === key);
+    if (existing) existing.items.push(item);
+    else sections.push({ key, label, items: [item] });
+  }
+  return sections;
 }

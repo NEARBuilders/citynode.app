@@ -39,12 +39,12 @@ export function SidebarTeamSwitcher({
           <DropdownMenuTrigger
             render={<SidebarMenuButton data-testid="team-switcher" disabled={isPending} />}
           >
-            <UsersIcon className="size-4" />
-            <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{activeTeam?.name ?? "All areas"}</span>
-              <span className="truncate text-xs text-muted-foreground">team workspace</span>
-            </div>
-            <CaretUpDownIcon className="ml-auto size-4" />
+            <UsersIcon />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="text-muted-foreground">Team: </span>
+              {activeTeam?.name ?? "All areas"}
+            </span>
+            <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-(--anchor-width) min-w-56"
@@ -53,7 +53,7 @@ export function SidebarTeamSwitcher({
             sideOffset={4}
           >
             <DropdownMenuGroup>
-              <DropdownMenuLabel>operate as team</DropdownMenuLabel>
+              <DropdownMenuLabel>Work as a team</DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {teams.map((team) => (
@@ -76,7 +76,7 @@ export function SidebarTeamSwitcher({
               onClick={() => select(null)}
               data-testid="team-switcher-item-all"
             >
-              <StackIcon className="size-3.5 mr-2" />
+              <StackIcon />
               All areas
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>

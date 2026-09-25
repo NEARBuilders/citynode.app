@@ -7,6 +7,8 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 
+const routerPath = vi.hoisted(() => ({ current: "/dashboard" }));
+
 const workspace = vi.hoisted(() => ({
   teams: [] as Array<{ id: string; name: string; areas: string[] }>,
   activeTeam: null as { id: string; name: string; areas: string[] } | null,
@@ -85,8 +87,8 @@ vi.mock("@tanstack/react-router", () => ({
   useRouterState: ({
     select,
   }: {
-    select: (state: { location: { pathname: string } }) => unknown;
-  }) => select({ location: { pathname: "/dashboard" } }),
+    select: (state: { location: { pathname: string; search: Record<string, unknown> } }) => unknown;
+  }) => select({ location: { pathname: routerPath.current, search: {} } }),
 }));
 
 beforeEach(() => {
@@ -107,6 +109,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  routerPath.current = "/dashboard";
   vi.clearAllMocks();
 });
 
@@ -139,14 +142,29 @@ describe("app shell chrome", () => {
     expect(screen.queryByTestId("workspace-active-team")).toBeNull();
   });
 
-  it("does not place the account menu in the sidebar footer", () => {
+  it("names the current page in the breadcrumb", () => {
+    routerPath.current = "/dashboard/node/proposals";
+    render(
+      <SidebarProvider>
+        <AppHeader />
+      </SidebarProvider>,
+    );
+    const crumbs = screen.getByTestId("app-header-breadcrumb");
+    expect(crumbs.textContent).toContain("My community");
+    expect(crumbs.textContent).toContain("Proposals");
+    expect(crumbs.textContent).not.toContain("v1.citynode.near");
+  });
+
+  it("puts Settings, Docs and the theme toggle in the sidebar footer, not the account menu", () => {
     render(
       <SidebarProvider>
         <AppSidebar items={[]} appName="City Nodes" pathname="/dashboard" />
       </SidebarProvider>,
     );
 
+    expect(screen.getByTestId("sidebar-nav-settings").getAttribute("href")).toBe("/settings");
+    expect(screen.getByTestId("sidebar-nav-docs").getAttribute("href")).toBe("/about");
+    expect(screen.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeTruthy();
     expect(screen.queryByTestId("account-menu")).toBeNull();
-    expect(screen.queryByRole("button", { name: "elliot" })).toBeNull();
   });
 });

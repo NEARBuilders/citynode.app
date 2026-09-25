@@ -1,11 +1,15 @@
 import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
-import { CaretRightIcon } from "@phosphor-icons/react";
-import { Link } from "@tanstack/react-router";
+import { BookOpenIcon, CaretRightIcon, GearIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
+import { ClientOnly, Link, useRouterState } from "@tanstack/react-router";
+import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { pluginPath } from "@/app";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
@@ -16,7 +20,7 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import type { SidebarItem } from "./nav-items";
+import { groupSidebarItems, isNavItemActive, navSlug, type SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
 import { SidebarTeamSwitcher } from "./sidebar-team-switcher";
 import { useIdentity } from "./use-identity";
@@ -33,11 +37,19 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const { user, organizations, activeOrgId } = useIdentity();
   const { data: workspace } = useTeamWorkspace(!!user);
   const switchTeam = useSwitchTeam();
+  const tab = useRouterState({
+    select: (s) => {
+      const value = (s.location.search as { tab?: unknown }).tab;
+      return typeof value === "string" ? value : undefined;
+    },
+  });
+  const search = { tab };
   const teams = workspace?.teams ?? [];
   const activeTeamId = workspace?.activeTeam?.id ?? null;
+  const sections = groupSidebarItems(items);
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <SidebarOrgSwitcher
           appName={appName}
@@ -53,82 +65,151 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarMenu>
-            {items.map((item) => (
-              <SidebarNavItem key={item.label} item={item} pathname={pathname} />
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        {sections.map((section) => (
+          <SidebarGroup key={section.key}>
+            {section.label && <SidebarGroupLabel>{section.label}</SidebarGroupLabel>}
+            <SidebarMenu>
+              {section.items.map((item) => (
+                <SidebarNavItem
+                  key={`${item.label}-${item.to}`}
+                  item={item}
+                  pathname={pathname}
+                  search={search}
+                />
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname.startsWith("/settings")}
+              tooltip="Settings"
+              render={<Link to={pluginPath("/settings")} data-testid="sidebar-nav-settings" />}
+            >
+              <GearIcon />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname === "/about" || pathname === "/skill"}
+              tooltip="Docs"
+              render={<Link to="/about" data-testid="sidebar-nav-docs" />}
+            >
+              <BookOpenIcon />
+              <span>Docs</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <ClientOnly fallback={<SidebarThemeTogglePlaceholder />}>
+            <SidebarThemeToggle />
+          </ClientOnly>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
 }
 
-function toSlug(label: string) {
-  return label.toLowerCase().replace(/\s+/g, "-");
-}
-
-function isPathActive(pathname: string, to: string) {
-  return pathname === to || (to !== "/" && pathname.startsWith(`${to}/`));
-}
-
-function SidebarNavItem({ item, pathname }: { item: SidebarItem; pathname: string }) {
-  if (item.children && item.children.length > 0) {
-    return <SidebarNavGroup item={item} pathname={pathname} />;
-  }
-  return <SidebarNavLeaf item={item} pathname={pathname} />;
-}
-
-function SidebarNavLeaf({ item, pathname }: { item: SidebarItem; pathname: string }) {
-  const Icon = item.icon;
-  const active = isPathActive(pathname, item.to);
-  const slug = toSlug(item.label);
+function SidebarThemeTogglePlaceholder() {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton
-        isActive={active}
-        tooltip={item.label}
-        render={<Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`} />}
-      >
-        <Icon />
-        <span className="capitalize">{item.label}</span>
+      <SidebarMenuButton disabled aria-hidden>
+        <SunIcon />
+        <span>Theme</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
 }
 
-function SidebarNavSubItem({ item, pathname }: { item: SidebarItem; pathname: string }) {
+function SidebarThemeToggle() {
+  const { setTheme, resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const label = isDark ? "Light mode" : "Dark mode";
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={label}
+        aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
+        onClick={() => setTheme(isDark ? "light" : "dark")}
+        data-testid="sidebar-theme-toggle"
+      >
+        {isDark ? <SunIcon /> : <MoonIcon />}
+        <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+interface NavItemProps {
+  item: SidebarItem;
+  pathname: string;
+  search: Record<string, unknown>;
+}
+
+function SidebarNavItem(props: NavItemProps) {
+  if (props.item.children && props.item.children.length > 0) {
+    return <SidebarNavGroup {...props} />;
+  }
+  return <SidebarNavLeaf {...props} />;
+}
+
+function SidebarNavLeaf({ item, pathname, search }: NavItemProps) {
   const Icon = item.icon;
-  const active = isPathActive(pathname, item.to);
-  const slug = toSlug(item.label);
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isNavItemActive(item, pathname, search)}
+        tooltip={item.label}
+        render={
+          <Link
+            to={item.to}
+            search={item.search}
+            preload="intent"
+            data-testid={`sidebar-nav-${navSlug(item)}`}
+          />
+        }
+      >
+        <Icon />
+        <span>{item.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+function SidebarNavSubItem({ item, pathname, search }: NavItemProps) {
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton
-        isActive={active}
-        render={<Link to={item.to} preload="intent" data-testid={`sidebar-nav-${slug}`} />}
+        isActive={isNavItemActive(item, pathname, search)}
+        render={
+          <Link
+            to={item.to}
+            search={item.search}
+            preload="intent"
+            data-testid={`sidebar-nav-${navSlug(item)}`}
+          />
+        }
       >
-        <Icon />
-        <span className="capitalize">{item.label}</span>
+        <span>{item.label}</span>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
   );
 }
 
-function SidebarNavGroup({ item, pathname }: { item: SidebarItem; pathname: string }) {
+function SidebarNavGroup({ item, pathname, search }: NavItemProps) {
   const Icon = item.icon;
-  const active = isPathActive(pathname, item.to);
+  const active = isNavItemActive(item, pathname, search);
   const children = item.children ?? [];
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(active);
+  const slug = navSlug(item);
 
   useEffect(() => {
-    if (active) {
-      setOpen(true);
-    }
+    if (active) setOpen(true);
   }, [active]);
-
-  const slug = toSlug(item.label);
 
   return (
     <CollapsiblePrimitive.Root
@@ -138,11 +219,12 @@ function SidebarNavGroup({ item, pathname }: { item: SidebarItem; pathname: stri
       render={<SidebarMenuItem />}
     >
       <SidebarMenuButton
-        isActive={active}
+        isActive={active && !open}
         tooltip={item.label}
         render={
           <Link
             to={item.to}
+            search={item.search}
             preload="intent"
             onClick={() => setOpen(true)}
             data-testid={`sidebar-nav-${slug}`}
@@ -150,7 +232,7 @@ function SidebarNavGroup({ item, pathname }: { item: SidebarItem; pathname: stri
         }
       >
         <Icon />
-        <span className="capitalize">{item.label}</span>
+        <span>{item.label}</span>
       </SidebarMenuButton>
       <CollapsiblePrimitive.Trigger
         render={
@@ -165,7 +247,12 @@ function SidebarNavGroup({ item, pathname }: { item: SidebarItem; pathname: stri
       <CollapsiblePrimitive.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-all duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
         <SidebarMenuSub>
           {children.map((child) => (
-            <SidebarNavSubItem key={child.label} item={child} pathname={pathname} />
+            <SidebarNavSubItem
+              key={`${child.label}-${child.to}`}
+              item={child}
+              pathname={pathname}
+              search={search}
+            />
           ))}
         </SidebarMenuSub>
       </CollapsiblePrimitive.Panel>

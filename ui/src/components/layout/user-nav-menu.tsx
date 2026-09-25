@@ -1,11 +1,13 @@
-import { BankIcon, GearIcon, HouseIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react";
+import { GearIcon, SignOutIcon, UserCircleIcon, UserIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import type { Organization } from "@/app";
 import { pluginPath } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
@@ -16,7 +18,7 @@ interface SignOutMutationLike {
 
 interface UserNavMenuContentProps {
   nearAccountId: string | null | undefined;
-  activeOrg: Organization | undefined;
+  activeOrg?: Organization | undefined;
   avatarSrc: string | undefined;
   displayName: string;
   handle: string;
@@ -29,7 +31,6 @@ interface UserNavMenuContentProps {
 
 export function UserNavMenuContent({
   nearAccountId,
-  activeOrg,
   avatarSrc,
   displayName,
   handle,
@@ -39,47 +40,43 @@ export function UserNavMenuContent({
   className = "w-64",
   align = "end",
 }: UserNavMenuContentProps) {
-  const identityContent = (
-    <>
-      <Avatar size="lg" className="shrink-0">
-        {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
-        <AvatarFallback>{initials || <UserIcon className="size-4" />}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
-        {showHandle && <p className="truncate text-xs text-muted-foreground">{handle}</p>}
-      </div>
-    </>
-  );
-
   return (
     <DropdownMenuContent className={className} align={align}>
-      <DropdownMenuItem
-        render={
-          nearAccountId ? (
-            <Link to="/$accountId" params={{ accountId: nearAccountId }} />
-          ) : (
-            <Link to={pluginPath("/settings/profile")} />
-          )
-        }
-      >
-        {identityContent}
-      </DropdownMenuItem>
+      <DropdownMenuGroup>
+        <DropdownMenuLabel>
+          <div className="flex items-center gap-3">
+            <Avatar size="lg">
+              {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
+              <AvatarFallback>{initials || <UserIcon className="size-4" />}</AvatarFallback>
+            </Avatar>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
+              {showHandle && (
+                <span className="truncate text-xs text-muted-foreground">{handle}</span>
+              )}
+            </div>
+          </div>
+        </DropdownMenuLabel>
+      </DropdownMenuGroup>
       <DropdownMenuSeparator />
-      <DropdownMenuItem render={<Link to="/dashboard" />}>
-        <HouseIcon />
-        workspace
-      </DropdownMenuItem>
-      {activeOrg && (
-        <DropdownMenuItem render={<Link to="/orgs/$slug" params={{ slug: activeOrg.slug }} />}>
-          <BankIcon />
-          {activeOrg.name}
+      <DropdownMenuGroup>
+        {nearAccountId && (
+          <DropdownMenuItem
+            render={<Link to="/$accountId" params={{ accountId: nearAccountId }} />}
+            data-testid="account.profile-menuitem"
+          >
+            <UserCircleIcon />
+            Your profile
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          render={<Link to={pluginPath("/settings")} />}
+          data-testid="account.settings-menuitem"
+        >
+          <GearIcon />
+          Settings
         </DropdownMenuItem>
-      )}
-      <DropdownMenuItem render={<Link to={pluginPath("/settings")} />}>
-        <GearIcon />
-        settings
-      </DropdownMenuItem>
+      </DropdownMenuGroup>
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"
@@ -89,7 +86,7 @@ export function UserNavMenuContent({
         data-testid="account.signout-menuitem"
       >
         <SignOutIcon />
-        {signOutMutation.isPending ? "signing out..." : "sign out"}
+        {signOutMutation.isPending ? "Signing out…" : "Sign out"}
       </DropdownMenuItem>
     </DropdownMenuContent>
   );

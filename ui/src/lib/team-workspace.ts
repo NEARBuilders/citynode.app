@@ -24,6 +24,7 @@ export interface TeamWorkspace {
   teams: WorkspaceTeam[];
   activeTeam: WorkspaceTeam | null;
   allowedAreas: FeatureArea[] | null;
+  canManageOrganization?: boolean;
 }
 
 const ROUTE_AREAS: Array<{ prefix: string; area: FeatureArea }> = [
@@ -47,6 +48,7 @@ export function resolveTeamWorkspace(
     teams,
     activeTeam,
     allowedAreas: activeTeam && !bypass ? activeTeam.areas.filter(isFeatureArea) : null,
+    canManageOrganization: bypass,
   };
 }
 

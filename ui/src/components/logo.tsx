@@ -1,24 +1,54 @@
-import { BankIcon } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
 
 interface LogoProps {
-  appName: string;
+  appName?: string;
   showText?: boolean;
   className?: string;
   size?: "sm" | "md" | "lg";
 }
 
-export function Logo({ appName, showText = false, className = "", size = "md" }: LogoProps) {
-  const boxSize = size === "sm" ? "w-8 h-8" : size === "lg" ? "w-14 h-14" : "w-10 h-10";
-  const iconSize = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-7 h-7" : "w-5 h-5";
-
+export function LogoMark({ size = "md", className }: Pick<LogoProps, "size" | "className">) {
   return (
-    <div className={`flex items-center justify-center gap-3 ${className}`}>
-      <div
-        className={`${boxSize} flex items-center justify-center rounded-lg border border-border bg-card`}
-      >
-        <BankIcon className={`${iconSize} text-foreground`} aria-hidden />
-      </div>
-      {showText && <span className="text-sm font-semibold text-foreground">{appName}</span>}
-    </div>
+    <span
+      aria-hidden
+      className={cn(
+        "flex shrink-0 items-center justify-center bg-brand text-brand-foreground",
+        size === "sm"
+          ? "size-6 rounded-md"
+          : size === "lg"
+            ? "size-12 rounded-xl"
+            : "size-8 rounded-lg",
+        className,
+      )}
+    >
+      <svg viewBox="0 0 16 16" className="size-1/2" fill="none" aria-hidden="true">
+        <path
+          d="M3 13.5V6.5L8 3l5 3.5v7"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="8" cy="9.5" r="1.75" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
+export function Logo({ appName = "CityNode", showText = true, className, size = "md" }: LogoProps) {
+  return (
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
+      <LogoMark size={size} />
+      {showText && (
+        <span
+          className={cn(
+            "font-heading font-semibold text-foreground",
+            size === "lg" ? "text-xl" : "text-base",
+          )}
+        >
+          {appName}
+        </span>
+      )}
+    </span>
   );
 }

@@ -1,52 +1,46 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
+import { createContext, type ReactNode, useContext } from "react";
 import type { ClientRuntimeConfig, SessionData } from "@/app";
 import { getAppName } from "@/app";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { resolveTeamWorkspace } from "@/lib/team-workspace";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
-import {
-  appendPluginSidebarItems,
-  filterSidebarByArea,
-  filterSidebarByRole,
-  getUserRole,
-  NAV_ITEMS,
-  pluginNavToSidebar,
-} from "./nav-items";
-import { useTeamWorkspace } from "./use-team-workspace";
+import type { pluginNavToSidebar } from "./nav-items";
+import { useShellNav } from "./use-shell-nav";
 
 interface AppShellProps {
   session: SessionData | null | undefined;
   runtimeConfig?: Partial<ClientRuntimeConfig>;
   isAdmin?: boolean;
-  /** nav manifest derived from grafted plugin subtrees */
   pluginNav?: { items: Parameters<typeof pluginNavToSidebar>[0] };
+  children?: ReactNode;
 }
 
-export function AppShell({ session, runtimeConfig, isAdmin = false, pluginNav }: AppShellProps) {
+const InsideAppShell = createContext(false);
+
+export function AppShell(props: AppShellProps) {
+  const nested = useContext(InsideAppShell);
+  if (nested) return <>{props.children ?? <Outlet />}</>;
+  return (
+    <InsideAppShell.Provider value={true}>
+      <AppShellFrame {...props} />
+    </InsideAppShell.Provider>
+  );
+}
+
+function AppShellFrame({ runtimeConfig, isAdmin = false, pluginNav, children }: AppShellProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const appName = getAppName(runtimeConfig);
-  const { data: workspace = resolveTeamWorkspace(null) } = useTeamWorkspace(!!session?.user);
-
-  const builtin = filterSidebarByRole(NAV_ITEMS, getUserRole(!!session?.user, isAdmin));
-  const roleItems = pluginNav?.items?.length
-    ? filterSidebarByRole(
-        appendPluginSidebarItems(builtin, pluginNavToSidebar(pluginNav.items)),
-        getUserRole(!!session?.user, isAdmin),
-      )
-    : builtin;
-  const visibleItems = filterSidebarByArea(roleItems, workspace.allowedAreas);
+  const items = useShellNav(isAdmin, pluginNav);
 
   return (
-    <SidebarProvider className="flex-1 min-h-0">
-      <AppSidebar items={visibleItems} appName={appName} pathname={pathname} />
-      <SidebarInset className="min-h-0">
-        <AppHeader runtimeConfig={runtimeConfig} />
-        <main className="flex-1 w-full min-h-0 overflow-y-auto">
-          <div className="min-h-full">
-            <Outlet />
-          </div>
-        </main>
+    <SidebarProvider className="min-h-0 flex-1">
+      <AppSidebar items={items} appName={appName} pathname={pathname} />
+      <SidebarInset className="min-h-0 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="app-shell-main">
+          <AppHeader runtimeConfig={runtimeConfig} />
+          <div className="flex-1">{children ?? <Outlet />}</div>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
