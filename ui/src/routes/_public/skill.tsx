@@ -1,11 +1,23 @@
-import { ArrowSquareOutIcon, CheckIcon, CopyIcon, FileTextIcon } from "@phosphor-icons/react";
-import { createFileRoute } from "@tanstack/react-router";
+import {
+  ArrowLeftIcon,
+  ArrowUpRightIcon,
+  CheckIcon,
+  CopyIcon,
+  FileTextIcon,
+  SparkleIcon,
+  TerminalIcon,
+} from "@phosphor-icons/react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getActiveRuntime, getAppName } from "@/app";
+import { getAppName } from "@/app";
+import { EmptyState } from "@/components/empty-state";
 import { PageContainer } from "@/components/layout/page-container";
+import { PageHeader } from "@/components/layout/page-header";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
+
+const INTENT_COMMAND = "npx @tanstack/intent@latest load everything-dev";
 
 const INTENT_REGISTRY_URL = "https://tanstack.com/intent/registry/everything-dev";
 
@@ -31,7 +43,7 @@ export const Route = createFileRoute("/_public/skill")({
   },
   head: () => ({
     meta: [
-      { title: "Skill | app" },
+      { title: "Agent skill | CityNode" },
       {
         name: "description",
         content: "Agent-oriented instructions for running, editing, and publishing this runtime.",
@@ -43,102 +55,112 @@ export const Route = createFileRoute("/_public/skill")({
 
 function SkillPage() {
   const { skill, runtimeConfig, intentRegistryUrl } = Route.useLoaderData();
-  const runtime = getActiveRuntime(runtimeConfig);
-  const account = getAccount(runtimeConfig);
   const appName = getAppName(runtimeConfig);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"prompt" | "command" | null>(null);
 
-  const accountId = runtime?.accountId ?? account;
-
-  const handleCopy = async () => {
-    if (!skill) {
+  const copy = async (kind: "prompt" | "command", text: string | null) => {
+    if (!text) {
       toast.error("Skill prompt unavailable");
       return;
     }
-
-    await navigator.clipboard.writeText(skill);
-    setCopied(true);
-    toast.success("Skill prompt copied");
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(kind);
+      toast.success(kind === "prompt" ? "Skill prompt copied" : "Command copied");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast.error("Couldn’t copy. Select the text and copy it instead.");
+    }
   };
 
   return (
     <PageContainer variant="default">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
-                <FileTextIcon size={18} />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono text-muted-foreground">{accountId}</span>
-                  <span className="text-muted-foreground">/</span>
-                  <span className="text-base font-semibold text-foreground">{appName}</span>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Agent-ready prompt for TanStack Intent, local development, UI changes, and publish
-                  flow.
-                </p>
-              </div>
-            </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-mb-6 self-start"
+        nativeButton={false}
+        render={<Link to="/about" data-testid="skill.back" />}
+      >
+        <ArrowLeftIcon />
+        About
+      </Button>
+      <PageHeader
+        headerTestId="skill.heading"
+        icon={SparkleIcon}
+        label="Docs"
+        title="Agent skill"
+        description={`One prompt that teaches an agent to run, change and publish ${appName}.`}
+        actions={
+          <>
+            <Button
+              onClick={() => copy("prompt", skill)}
+              disabled={!skill}
+              data-testid="skill.copy"
+            >
+              {copied === "prompt" ? <CheckIcon /> : <CopyIcon />}
+              {copied === "prompt" ? "Copied" : "Copy prompt"}
+            </Button>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={(props) => (
+                <a
+                  {...props}
+                  href="/skill.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="skill.raw-link"
+                />
+              )}
+            >
+              <FileTextIcon />
+              skill.md
+            </Button>
+          </>
+        }
+      />
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={handleCopy} disabled={!skill}>
-                {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-                {copied ? "Copied" : "Copy prompt"}
-              </Button>
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={(props) => (
-                  <a
-                    {...props}
-                    href="/skill.md"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid="skill.raw-link"
-                  />
-                )}
-              >
-                <ArrowSquareOutIcon size={14} />
-                raw skill.md
-              </Button>
-              <Button
-                nativeButton={false}
-                render={(props) => (
-                  <a
-                    {...props}
-                    href={intentRegistryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  />
-                )}
-              >
-                <ArrowSquareOutIcon size={14} />
-                TanStack Intent
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border bg-muted px-3.5 py-3 text-sm text-muted-foreground">
-            Best entry points: `npx @tanstack/intent@latest load everything-dev`, `/skill.md`, and
-            the registry page above.
-          </div>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium text-foreground">Load it with TanStack Intent</h2>
+        <div className="flex items-center gap-3 rounded-2xl bg-muted py-2 pr-2 pl-4">
+          <TerminalIcon className="size-5 shrink-0 text-muted-foreground" />
+          <code className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">
+            {INTENT_COMMAND}
+          </code>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Copy command"
+            onClick={() => copy("command", INTENT_COMMAND)}
+          >
+            {copied === "command" ? <CheckIcon /> : <CopyIcon />}
+          </Button>
         </div>
+        <Button
+          variant="link"
+          className="self-start"
+          nativeButton={false}
+          render={(props) => (
+            <a {...props} href={intentRegistryUrl} target="_blank" rel="noopener noreferrer" />
+          )}
+        >
+          Browse the Intent registry
+          <ArrowUpRightIcon />
+        </Button>
+      </section>
 
+      <section className="flex flex-col gap-6 border-t border-border pt-10">
         {skill ? (
-          <div className="rounded-xl border border-border bg-card p-8">
-            <Markdown content={skill} />
-          </div>
+          <Markdown content={skill} />
         ) : (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-8 py-16 text-muted-foreground">
-            <FileTextIcon size={32} className="text-border" />
-            <p className="text-sm text-muted-foreground">Skill prompt unavailable.</p>
-          </div>
+          <EmptyState
+            icon={FileTextIcon}
+            title="Skill prompt unavailable"
+            description="Open skill.md directly, or try again in a moment."
+          />
         )}
-      </div>
+      </section>
     </PageContainer>
   );
 }
