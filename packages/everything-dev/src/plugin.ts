@@ -25,6 +25,7 @@ import {
   selectWorkspaceTargets,
 } from "./build";
 import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
+import { pruneUnusedUiFiles } from "./cli/prune";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
@@ -1403,6 +1404,12 @@ export default createPlugin({
                 staging: parentConfig?.staging,
               }),
             );
+
+            if (overrides.includes("ui")) {
+              await timePhase(timings, "prune unused ui files", async () =>
+                pruneUnusedUiFiles(targetDir, { log: console.log }),
+              );
+            }
 
             await timePhase(timings, "write snapshot", () =>
               writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {

@@ -1281,8 +1281,11 @@ export async function writeInitSnapshot(
     const src = join(sourceDir, filePath);
     const stat = lstatSync(src);
     if (!stat.isFile()) continue;
-    const content = readFileSync(src);
     const destPath = sourcePathToDestinationPath(filePath);
+    // Only snapshot what the scaffold actually delivered — files pruned
+    // after copy (e.g. unused ui sources) must not come back via bos sync.
+    if (!existsSync(join(destination, destPath))) continue;
+    const content = readFileSync(src);
     fileHashes[destPath] = computeHash(content);
   }
 
