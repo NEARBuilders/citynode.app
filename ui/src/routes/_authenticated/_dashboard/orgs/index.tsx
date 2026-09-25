@@ -1,33 +1,53 @@
-import {
-  ArrowsClockwiseIcon,
-  BankIcon,
-  EnvelopeIcon,
-  PlusIcon,
-  UsersIcon,
-  WalletIcon,
-} from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { BankIcon, EnvelopeSimpleIcon, PlusIcon, WalletIcon } from "@phosphor-icons/react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
+  getAppName,
   type Organization,
   type SessionData,
   sessionQueryOptions,
   useApiClient,
   useAuthClient,
 } from "@/app";
-import { Button, Card, Chip, PageContainer, PageHeader } from "@/components";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  EmptyState,
+  LocalDate,
+  PageContainer,
+  PageHeader,
+  SectionHeader,
+  Skeleton,
+} from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
+import { OrgAvatar, roleLabel } from "./-org-avatar";
+import { orgMembersQueryKey } from "./-organization-query-keys";
 import { useInvitationActions } from "./-use-invitation-actions";
 
 type ApiClientType = import("@/app").ApiClient;
+type AuthClientType = import("@/app").AuthClient;
 type UserInvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listUserInvitations"]>>[number];
+type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMembers"]>>;
+type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
-  head: () => ({
-    title: "Organizations | auth.everything.dev",
-    meta: [{ name: "description", content: "Manage your organizations and teams." }],
+  head: ({ match }) => ({
+    meta: [
+      { title: `Organizations | ${getAppName(match.context.runtimeConfig)}` },
+      { name: "description", content: "Your organizations, their members and teams." },
+    ],
   }),
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
@@ -90,221 +110,204 @@ function OrganizationsList() {
     enabled: orgs.length > 0,
   });
 
+  const memberQueries = useQueries({
+    queries: orgs.map((organization) => ({
+      queryKey: orgMembersQueryKey(organization.id),
+      queryFn: async (): Promise<MemberItem[]> => {
+        const { data, error } = await auth.organization.listMembers({
+          query: { organizationId: organization.id },
+        });
+        if (error) throw new Error(error.message);
+        return (data?.members ?? []) as MemberItem[];
+      },
+      staleTime: 30 * 1000,
+    })),
+  });
+
   const pendingInvitations = userInvitations.filter((i) => i.status === "pending");
 
-  const { acceptMutation: acceptInvitationMutation, rejectMutation: rejectInvitationMutation } =
-    useInvitationActions({
-      apiClient,
-      auth,
-      onAccepted: async (invitation) => {
-        toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
-        if (invitation.organizationSlug) {
-          await router.navigate({
-            to: "/orgs/$slug",
-            params: { slug: invitation.organizationSlug },
-          });
-        }
-      },
-      onRejected: () => {
-        toast.success("Invitation declined");
-      },
-    });
+  const { acceptMutation, rejectMutation } = useInvitationActions({
+    apiClient,
+    auth,
+    onAccepted: async (invitation) => {
+      toast.success(`Joined ${invitation.organizationName ?? "organization"}`);
+      if (invitation.organizationSlug) {
+        await router.navigate({
+          to: "/orgs/$slug",
+          params: { slug: invitation.organizationSlug },
+        });
+      }
+    },
+    onRejected: () => {
+      toast.success("Invitation declined");
+    },
+  });
 
   const user = session?.user;
   const activeOrgId = session?.session?.activeOrganizationId;
-
   const switchOrgMutation = useSwitchOrganization();
+  const invitationBusy = acceptMutation.isPending || rejectMutation.isPending;
+  const hasInvitations = pendingInvitations.length > 0;
 
   return (
     <PageContainer variant="wide">
-      <div className="space-y-8">
-        <PageHeader
-          icon={UsersIcon}
-          label="Teams"
-          title="Organizations"
-          headerTestId="orgs.heading"
-          actions={
+      <PageHeader
+        title="Organizations"
+        description="Groups you belong to. The active one decides what you manage."
+        headerTestId="orgs.heading"
+        actions={
+          orgs.length > 0 ? (
+            <Button
+              variant={hasInvitations ? "outline" : "default"}
+              nativeButton={false}
+              render={<Link to="/orgs/new" />}
+              data-testid="orgs-new-button"
+            >
+              <PlusIcon />
+              New organization
+            </Button>
+          ) : null
+        }
+      />
+
+      {hasInvitations && (
+        <section className="flex flex-col gap-4" data-testid="orgs-invitations">
+          <SectionHeader title={`Invitations (${pendingInvitations.length})`} />
+          <div className="flex flex-col gap-2">
+            {pendingInvitations.map((invitation) => {
+              const orgName = invitation.organizationName ?? invitation.organizationSlug ?? "";
+              return (
+                <Item key={invitation.id} variant="outline">
+                  <ItemMedia>
+                    <OrgAvatar name={orgName || "?"} />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle>{orgName}</ItemTitle>
+                    <ItemDescription>
+                      {roleLabel(invitation.role)} ·{" "}
+                      {invitation.nearAccountId ? (
+                        <WalletIcon className="inline size-3.5" />
+                      ) : (
+                        <EnvelopeSimpleIcon className="inline size-3.5" />
+                      )}{" "}
+                      {invitation.nearAccountId ?? invitation.email} · expires{" "}
+                      <LocalDate value={invitation.expiresAt} format="relative" />
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => rejectMutation.mutate(invitation)}
+                      disabled={invitationBusy}
+                    >
+                      {rejectMutation.isPending && rejectMutation.variables?.id === invitation.id
+                        ? "Declining…"
+                        : "Decline"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => acceptMutation.mutate(invitation)}
+                      disabled={invitationBusy}
+                    >
+                      {acceptMutation.isPending && acceptMutation.variables?.id === invitation.id
+                        ? "Joining…"
+                        : "Accept"}
+                    </Button>
+                  </ItemActions>
+                </Item>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((n) => (
+            <Skeleton key={n} className="h-40 w-full" />
+          ))}
+        </div>
+      ) : orgs.length === 0 ? (
+        <EmptyState
+          icon={BankIcon}
+          title="No organizations yet"
+          description="Create one to invite people, form teams and start a community."
+          action={
             <Button nativeButton={false} render={<Link to="/orgs/new" />}>
               <PlusIcon />
-              new
+              Create organization
             </Button>
           }
         />
-
-        <div className="space-y-6">
-          {pendingInvitations.length > 0 && (
-            <section className="space-y-3">
-              <div className="text-sm font-medium text-muted-foreground">
-                Pending invitations ({pendingInvitations.length})
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                {pendingInvitations.map((invitation) => (
-                  <Card key={invitation.id} className="flex flex-col gap-4 p-6">
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-xl border border-border bg-muted flex items-center justify-center shrink-0">
-                        {invitation.nearAccountId ? (
-                          <WalletIcon className="h-5 w-5 text-muted-foreground" />
-                        ) : (
-                          <EnvelopeIcon className="h-5 w-5 text-muted-foreground" />
-                        )}
+      ) : (
+        <section className="flex flex-col gap-4">
+          {hasInvitations && <SectionHeader title="Your organizations" />}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {orgs.map((org, index) => {
+              const members = memberQueries[index]?.data;
+              const myRole = members?.find((member) => member.userId === user?.id)?.role;
+              const isActive = org.id === activeOrgId;
+              const isPersonal = user
+                ? org.slug === user.id || org.metadata?.isPersonal === true
+                : false;
+              return (
+                <Card key={org.id} data-testid={`orgs-card-${org.slug}`}>
+                  <CardContent className="flex h-full flex-col gap-5 p-5">
+                    <Link
+                      to="/orgs/$slug"
+                      params={{ slug: org.slug }}
+                      className="flex min-w-0 items-start gap-3 outline-none focus-visible:underline"
+                    >
+                      <OrgAvatar name={org.name} logo={org.logo} size="lg" />
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className="truncate text-lg font-medium text-foreground">
+                          {org.name}
+                        </span>
+                        <span className="truncate font-mono text-sm text-muted-foreground">
+                          @{org.slug}
+                        </span>
                       </div>
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="text-base font-semibold text-foreground break-all">
-                          {invitation.organizationName ?? invitation.organizationSlug}
-                        </div>
-                        <div className="text-sm text-muted-foreground font-mono">
-                          invited as {invitation.role ?? "member"}
-                        </div>
-                        <div className="text-sm text-muted-foreground break-all">
-                          {invitation.nearAccountId ?? invitation.email}
-                        </div>
-                        {invitation.nearAccountId && invitation.nearNetwork && (
-                          <div className="text-sm text-muted-foreground font-mono">
-                            network {invitation.nearNetwork}
-                          </div>
-                        )}
-                        {invitation.teamId && (
-                          <div className="text-sm text-muted-foreground font-mono">
-                            team {invitation.teamId}
-                          </div>
-                        )}
-                        <div className="text-sm text-muted-foreground">
-                          expires {new Date(invitation.expiresAt).toLocaleDateString()}
-                        </div>
-                      </div>
+                    </Link>
+                    <div className="flex flex-wrap gap-1.5">
+                      {myRole && <Badge variant="secondary">{roleLabel(myRole)}</Badge>}
+                      {isActive && <Badge variant="success">Active</Badge>}
+                      {isPersonal && <Badge variant="outline">Personal</Badge>}
+                      {tenantOrgIds.has(org.id) && <Badge variant="outline">Community</Badge>}
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => acceptInvitationMutation.mutate(invitation)}
-                        disabled={
-                          acceptInvitationMutation.isPending || rejectInvitationMutation.isPending
-                        }
-                      >
-                        {acceptInvitationMutation.isPending &&
-                        acceptInvitationMutation.variables?.id === invitation.id
-                          ? "accepting..."
-                          : "accept"}
-                      </Button>
-                      <Button
-                        onClick={() => rejectInvitationMutation.mutate(invitation)}
-                        disabled={
-                          acceptInvitationMutation.isPending || rejectInvitationMutation.isPending
-                        }
-                        variant="outline"
-                      >
-                        {rejectInvitationMutation.isPending &&
-                        rejectInvitationMutation.variables?.id === invitation.id
-                          ? "declining..."
-                          : "decline"}
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {isLoading ? (
-            <div className="grid gap-6 md:grid-cols-2">
-              {[1, 2].map((n) => (
-                <Card key={n} className="flex flex-col gap-5 p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="h-14 w-14 rounded-xl animate-pulse bg-muted shrink-0" />
-                    <div className="space-y-2 flex-1 pt-1">
-                      <div className="h-5 w-3/4 rounded-sm animate-pulse bg-muted" />
-                      <div className="h-4 w-1/2 rounded-sm animate-pulse bg-muted" />
-                    </div>
-                  </div>
-                  <div className="h-10 w-full rounded-lg animate-pulse bg-muted" />
-                  <div className="flex gap-2">
-                    <div className="h-10 w-24 rounded-4xl animate-pulse bg-muted" />
-                    <div className="h-10 w-24 rounded-4xl animate-pulse bg-muted" />
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : orgs.length === 0 ? (
-            <Card className="items-center gap-4 p-10 text-center">
-              <BankIcon className="h-10 w-10 mx-auto text-muted-foreground" />
-              <p className="text-base font-semibold text-foreground">No organizations yet.</p>
-              <Button nativeButton={false} render={<Link to="/orgs/new" />}>
-                create your first org
-              </Button>
-            </Card>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2">
-              {orgs.map((org: Organization) => {
-                const isActive = org.id === activeOrgId;
-                const isPersonal = user
-                  ? org.slug === user.id || org.metadata?.isPersonal === true
-                  : false;
-                const hasTenant = tenantOrgIds.has(org.id);
-
-                return (
-                  <Card key={org.id} className="flex flex-col gap-5 p-6">
-                    <div className="flex items-start gap-4">
-                      {org.logo ? (
-                        <img
-                          src={org.logo}
-                          alt=""
-                          className="w-14 h-14 rounded-xl border border-border object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl border border-border bg-muted flex items-center justify-center text-xl font-bold text-foreground shrink-0">
-                          {org.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0 space-y-1.5 flex-1 pt-0.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-base font-semibold text-foreground break-all leading-tight">
-                            {org.name}
-                          </span>
-                          {isActive && <Chip>active</Chip>}
-                          {isPersonal && <Chip>personal</Chip>}
-                          {hasTenant && <Chip>tenant</Chip>}
-                        </div>
-                        <div className="text-sm font-mono text-muted-foreground">@{org.slug}</div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-border bg-muted px-3.5 py-2.5 text-sm text-muted-foreground">
-                      {org.createdAt
-                        ? `created ${new Date(org.createdAt).toLocaleDateString()}`
-                        : "organization record"}
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        nativeButton={false}
-                        render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
-                      >
-                        open org
-                      </Button>
-                      {!isActive && (
+                    <div className="mt-auto flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground">
+                        {members
+                          ? `${members.length} member${members.length === 1 ? "" : "s"}`
+                          : " "}
+                      </span>
+                      {isActive ? (
                         <Button
+                          variant="ghost"
+                          size="sm"
+                          nativeButton={false}
+                          render={<Link to="/orgs/$slug" params={{ slug: org.slug }} />}
+                        >
+                          Open
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => switchOrgMutation.mutate(org.id)}
                           disabled={switchOrgMutation.isPending}
-                          variant="outline"
                         >
-                          <ArrowsClockwiseIcon className="h-4 w-4" />
-                          switch
+                          Make active
                         </Button>
                       )}
                     </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          <Card className="p-5">
-            <p className="text-sm text-muted-foreground">
-              Each user gets a personal organization automatically. Additional organizations give
-              teams their own members, invitations, and API key scope.
-            </p>
-          </Card>
-        </div>
-      </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </PageContainer>
   );
 }
