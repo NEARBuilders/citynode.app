@@ -49,8 +49,15 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     queryFn: () => api.listNodes({}),
   });
   const navigate = useNavigate();
+  const [maxJoins, setMaxJoins] = useState("");
   const startOnboarding = useMutation({
-    mutationFn: (eventId: string) => api.createEventOnboardingCode({ eventId }),
+    mutationFn: (eventId: string) => {
+      const maxUses = Number.parseInt(maxJoins, 10);
+      return api.createEventOnboardingCode({
+        eventId,
+        ...(Number.isInteger(maxUses) && maxUses > 0 ? { maxUses: Math.min(maxUses, 500) } : {}),
+      });
+    },
     onSuccess: (code) =>
       navigate({ to: "/onboarding/station/$codeId", params: { codeId: code.id } }),
   });
@@ -104,6 +111,20 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         </div>
       </div>
       <LumaImport nodeId={nodeId} />
+      {list.data?.some((a) => a.kind === "event" && a.status !== "cancelled") && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <label htmlFor="discovery-onboarding-max-joins">Max joins per onboarding code</label>
+          <Input
+            id="discovery-onboarding-max-joins"
+            data-testid="discovery-onboarding-max-joins"
+            className="w-24"
+            inputMode="numeric"
+            placeholder="50"
+            value={maxJoins}
+            onChange={(event) => setMaxJoins(event.target.value)}
+          />
+        </div>
+      )}
       {startOnboarding.isError && (
         <p
           role="alert"

@@ -339,14 +339,15 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           where: eq(schema.user.id, codeRow.createdBy),
         });
 
+        const state = codeState(codeRow);
         return {
           organizationName: organization?.name ?? "",
           eventName: codeRow.eventName,
           inviterName: inviter?.name ?? null,
           role: codeRow.role,
-          expired: toDate(codeRow.expiresAt) < new Date(),
-          revoked: codeRow.revokedAt !== null,
-          usedUp: codeRow.usedCount >= codeRow.maxUses,
+          expired: state === "expired",
+          revoked: state === "revoked",
+          usedUp: state === "used-up",
         };
       },
     ),

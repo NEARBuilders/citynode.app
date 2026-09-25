@@ -253,37 +253,47 @@ export default createPlugin.withPlugins<PluginsClient>()({
       createEventOnboardingCode: builder.createEventOnboardingCode.effect(function* ({
         input,
         context,
+        errors,
       }) {
         if (!context.userId) {
           return yield* Effect.fail(
-            new ORPCError("UNAUTHORIZED", { message: "Authentication required" }),
+            errors.UNAUTHORIZED({
+              message: "Authentication required",
+              data: { apiKeyProvided: !!context.apiKey },
+            }),
           );
         }
         const { discovery } = yield* ApiServices;
-        const record = yield* Effect.promise(() => discovery.eventOrganization(input.eventId));
+        const record = yield* Effect.tryPromise({
+          try: () => discovery.eventOrganization(input.eventId),
+          catch: () =>
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "Could not load the event" }),
+        });
         if (!record) {
-          return yield* Effect.fail(new ORPCError("NOT_FOUND", { message: "Event not found" }));
+          return yield* Effect.fail(errors.NOT_FOUND({ message: "Event not found", data: {} }));
         }
         const { event, organizationId } = record;
         const endsAt = event.endsAt;
         if (event.kind !== "event" || !endsAt) {
           return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", { message: "Only events can have onboarding codes" }),
+            errors.BAD_REQUEST({ message: "Only events can have onboarding codes", data: {} }),
           );
         }
         if (!organizationId) {
           return yield* Effect.fail(
-            new ORPCError("BAD_REQUEST", {
+            errors.BAD_REQUEST({
               message:
                 "This event's node has no organization, so there is nothing for attendees to join",
+              data: {},
             }),
           );
         }
         if (context.organization?.activeOrganizationId !== organizationId) {
           return yield* Effect.fail(
-            new ORPCError("FORBIDDEN", {
+            errors.FORBIDDEN({
               message:
                 "This event belongs to another organization than your active one — switch organizations to onboard for it",
+              data: {},
             }),
           );
         }
