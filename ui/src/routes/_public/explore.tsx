@@ -16,8 +16,17 @@ export const Route = createFileRoute("/_public/explore")({
     node: z.uuid().optional().catch(undefined),
     query: z.string().max(120).optional().catch(undefined),
     region: z.string().max(120).optional().catch(undefined),
+    view: z.enum(["list", "map"]).optional().catch(undefined),
   }),
-  head: () => ({ meta: [{ title: "Explore communities" }] }),
+  head: () => ({
+    meta: [
+      { title: "Explore | CityNode" },
+      {
+        name: "description",
+        content: "Find a CityNode community near you and see what's coming up.",
+      },
+    ],
+  }),
   component: Explore,
 });
 function Explore() {
