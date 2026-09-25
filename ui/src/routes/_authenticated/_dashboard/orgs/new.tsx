@@ -1,14 +1,12 @@
-import { UsersIcon } from "@phosphor-icons/react";
+import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useApiClient, useAuthClient } from "@/app";
+import { getAppName, useApiClient, useAuthClient } from "@/app";
 import {
   Button,
-  Card,
-  CardContent,
   Field,
   FieldDescription,
   FieldError,
@@ -17,12 +15,22 @@ import {
   PageContainer,
   PageHeader,
 } from "@/components";
+import { FieldGroup } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
 import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/new")({
-  head: () => ({
-    title: "New Organization | auth.everything.dev",
-    meta: [{ name: "description", content: "Create a new organization." }],
+  head: ({ match }) => ({
+    meta: [
+      { title: `New organization | ${getAppName(match.context.runtimeConfig)}` },
+      { name: "description", content: "Create a new organization." },
+    ],
   }),
   component: NewOrganization,
 });
@@ -97,154 +105,152 @@ function NewOrganization() {
     };
   }, [slugTaken, formValues.name, slugValue, form, apiClient]);
 
+  const slugStatus = slugChecking
+    ? "checking"
+    : slugTaken
+      ? "taken"
+      : slugValue
+        ? "available"
+        : "idle";
+
   return (
-    <PageContainer variant="wide">
-      <div className="space-y-6">
-        <PageHeader
-          icon={UsersIcon}
-          label="Teams"
-          title="New Organization"
-          actions={
-            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
-              back to organizations
-            </Button>
-          }
-          headerTestId="orgs.new.heading"
-        />
+    <PageContainer variant="narrow">
+      <PageHeader
+        title="New organization"
+        description="You'll be the owner. Invite people once it's created."
+        headerTestId="orgs.new.heading"
+      />
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-6"
-        >
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <form.Field
-                name="name"
-                validators={{
-                  onChange: ({ value }) => (!value.trim() ? "name is required" : undefined),
-                }}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="flex flex-col gap-8"
+      >
+        <FieldGroup>
+          <form.Field
+            name="name"
+            validators={{
+              onChange: ({ value }) => (!value.trim() ? "Name is required" : undefined),
+            }}
+          >
+            {(field) => {
+              const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+              return (
+                <Field data-invalid={errors.length > 0 || undefined}>
+                  <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="text"
+                    autoFocus
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => {
+                      field.handleChange(e.target.value);
+                      form.setFieldValue(
+                        "slug",
+                        deriveSlug(
+                          e.target.value,
+                          form.getFieldValue("slug"),
+                          slugManuallyEdited.current,
+                        ),
+                        { dontUpdateMeta: true },
+                      );
+                    }}
+                    placeholder="My Team"
+                    aria-invalid={errors.length > 0 || undefined}
+                  />
+                  {errors.length > 0 ? <FieldError>{errors.join(", ")}</FieldError> : null}
+                </Field>
+              );
+            }}
+          </form.Field>
+
+          <form.Field
+            name="slug"
+            validators={{
+              onChange: ({ value }) => {
+                if (!value) return "Handle is required";
+                if (!/^[a-z0-9-]+$/.test(value)) {
+                  return "Use lowercase letters, numbers and hyphens";
+                }
+                return undefined;
+              },
+            }}
+          >
+            {(field) => {
+              const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+              return (
+                <Field data-invalid={errors.length > 0 || undefined}>
+                  <FieldLabel htmlFor={field.name}>Handle</FieldLabel>
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <InputGroupText>@</InputGroupText>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      id={field.name}
+                      name={field.name}
+                      type="text"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => {
+                        slugManuallyEdited.current = true;
+                        field.setMeta((meta) => ({ ...meta, isTouched: true }));
+                        field.handleChange(event.target.value.replace(/[^a-z0-9-]/g, ""));
+                      }}
+                      placeholder="my-team"
+                      pattern="[a-z0-9-]+"
+                      className="font-mono"
+                      aria-invalid={errors.length > 0 || undefined}
+                    />
+                    <InputGroupAddon align="inline-end" data-testid="orgs.new.slug-status">
+                      {slugStatus === "checking" ? (
+                        <Spinner />
+                      ) : slugStatus === "available" ? (
+                        <CheckCircleIcon className="text-success" aria-label="available" />
+                      ) : slugStatus === "taken" ? (
+                        <XCircleIcon className="text-destructive" aria-label="taken" />
+                      ) : null}
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {errors.length > 0 ? (
+                    <FieldError>{errors.join(", ")}</FieldError>
+                  ) : (
+                    <FieldDescription>
+                      {slugStatus === "taken"
+                        ? "Taken. We'll suggest a free one, or pick your own."
+                        : "Used in links to your organization."}
+                    </FieldDescription>
+                  )}
+                </Field>
+              );
+            }}
+          </form.Field>
+        </FieldGroup>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <form.Subscribe
+            selector={(state) =>
+              state.canSubmit && !!state.values.name.trim() && !!state.values.slug
+            }
+          >
+            {(canSubmit) => (
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || !canSubmit}
+                data-testid="orgs.new.submit"
               >
-                {(field) => {
-                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-                  return (
-                    <Field data-invalid={errors.length > 0 || undefined}>
-                      <FieldLabel htmlFor={field.name}>name</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type="text"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => {
-                          field.handleChange(e.target.value);
-                          form.setFieldValue(
-                            "slug",
-                            deriveSlug(
-                              e.target.value,
-                              form.getFieldValue("slug"),
-                              slugManuallyEdited.current,
-                            ),
-                            { dontUpdateMeta: true },
-                          );
-                        }}
-                        placeholder="My Team"
-                        aria-invalid={errors.length > 0 || undefined}
-                      />
-                      {errors.length > 0 ? <FieldError>{errors.join(", ")}</FieldError> : null}
-                    </Field>
-                  );
-                }}
-              </form.Field>
-
-              <form.Field
-                name="slug"
-                validators={{
-                  onChange: ({ value }) => {
-                    if (!value) return "slug is required";
-                    if (!/^[a-z0-9-]+$/.test(value)) {
-                      return "only lowercase letters, numbers, and hyphens";
-                    }
-                    return undefined;
-                  },
-                }}
-              >
-                {(field) => {
-                  const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-                  return (
-                    <Field data-invalid={errors.length > 0 || undefined}>
-                      <FieldLabel htmlFor={field.name}>slug</FieldLabel>
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type="text"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => {
-                          slugManuallyEdited.current = true;
-                          field.setMeta((meta) => ({ ...meta, isTouched: true }));
-                          field.handleChange(event.target.value.replace(/[^a-z0-9-]/g, ""));
-                        }}
-                        placeholder="my-team"
-                        pattern="[a-z0-9-]+"
-                        aria-invalid={errors.length > 0 || undefined}
-                      />
-                      <FieldDescription>
-                        {slugChecking
-                          ? "checking availability…"
-                          : slugTaken
-                            ? "taken — pick another or let us suggest one"
-                            : slugValue
-                              ? "available"
-                              : "Only lowercase letters, numbers, and hyphens."}
-                      </FieldDescription>
-                      {errors.length > 0 ? <FieldError>{errors.join(", ")}</FieldError> : null}
-                    </Field>
-                  );
-                }}
-              </form.Field>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-2">
-            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
-              cancel
-            </Button>
-            <form.Subscribe
-              selector={(state) =>
-                state.canSubmit && !!state.values.name.trim() && !!state.values.slug
-              }
-            >
-              {(canSubmit) => (
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending || !canSubmit}
-                  variant="outline"
-                  data-testid="orgs.new.submit"
-                >
-                  {createMutation.isPending ? "creating..." : "create"}
-                </Button>
-              )}
-            </form.Subscribe>
-          </div>
-        </form>
-
-        <section className="space-y-4">
-          <h2 className="text-sm font-medium text-muted-foreground">What happens next</h2>
-          <Card>
-            <CardContent className="p-4">
-              <ul className="space-y-2 text-xs text-muted-foreground">
-                <li>• Your organization will be created immediately</li>
-                <li>• You'll be the owner with full permissions</li>
-                <li>• You can invite team members from the organization settings</li>
-                <li>• You can switch between organizations anytime</li>
-              </ul>
-            </CardContent>
-          </Card>
-        </section>
-      </div>
+                {createMutation.isPending ? "Creating…" : "Create organization"}
+              </Button>
+            )}
+          </form.Subscribe>
+          <Button variant="ghost" nativeButton={false} render={<Link to="/orgs" />}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </PageContainer>
   );
 }
