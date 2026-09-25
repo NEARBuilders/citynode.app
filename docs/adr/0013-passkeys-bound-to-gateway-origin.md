@@ -1,7 +1,7 @@
 # ADR 0013: Passkey ceremonies happen only on the gateway origin
 
 Date: 2026-09-25
-Status: Proposed
+Status: Accepted
 
 A passkey is bound forever to the relying-party ID it was created under; changing the rpID later orphans every passkey — and every Passkey Wallet derived from one — already issued. Tenants are served on subdomains and custom domains, where rpID `citynode.app` is either rejected by the browser (custom domains) or fails server origin verification (subdomains other than the host `baseUrl`). We keep rpID `citynode.app` and run every passkey ceremony (create, sign-in, onboarding) on the gateway origin: Onboarding Code QR URLs always encode the gateway origin, whatever tenant domain the organizer generated them from, and tenant custom domains offer NEAR wallet sign-in or Device Link instead of passkeys.
 

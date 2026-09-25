@@ -77,6 +77,7 @@ export const authSiwnRecipientsSchema = authSiwnBaseSchema.extend({
 });
 
 export const authVariablesSchema = z.object({
+  account: z.string().optional(),
   baseUrl: z.string().optional(),
   trustedOrigins: z.array(z.string()).optional(),
   apiKeyHeaders: z.array(z.string()).default(["x-api-key"]),
@@ -99,6 +100,12 @@ export const authVariablesSchema = z.object({
       rpID: z.string().optional(),
       rpName: z.string().optional(),
       origin: z.string().optional(),
+      gatewayOrigins: z
+        .object({
+          mainnet: z.array(z.string()).optional(),
+          testnet: z.array(z.string()).optional(),
+        })
+        .optional(),
     })
     .optional(),
   siwn: z.union([authSiwnRecipientSchema, authSiwnRecipientsSchema]),

@@ -1,15 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import {
-  refreshSessionCache,
-  sessionQueryOptions,
-  signInWithPasskey,
-  useAuthClient,
-} from "everything-dev/ui/auth";
+import { refreshSessionCache, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
+import { DisplayNameStep } from "./-display-name-step";
+import { OnboardSignUp } from "./-onboard-sign-up";
 
 type SearchParams = {
   code?: string;
@@ -32,7 +29,7 @@ export const Route = createFileRoute("/_public/onboard")({
 function OnboardPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { code } = Route.useSearch();
+  const code = sanitizeCode(Route.useSearch().code);
   const { apiClient, runtimeConfig } = Route.useRouteContext();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const { data: info } = useQuery({
@@ -43,23 +40,13 @@ function OnboardPage() {
     enabled: !!code,
   });
 
-  const [nearPending, setNearPending] = useState(false);
-  const [passkeyPending, setPasskeyPending] = useState(false);
-  const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
+  const [accountCreated, setAccountCreated] = useState(false);
   const [redeemed, setRedeemed] = useState<{
     organizationName: string;
     eventName: string;
   } | null>(null);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const redeemingRef = useRef(false);
-
-  useEffect(() => {
-    void auth.near.detectNearAccount().then((result: { accountId?: string | null } | null) => {
-      if (result?.accountId) {
-        setDetectedAccount(result.accountId);
-      }
-    });
-  }, [auth.near]);
 
   useEffect(() => {
     if (!session?.user || !code || redeemingRef.current || redeemed || redeemError) return;
@@ -76,34 +63,6 @@ function OnboardPage() {
       });
   }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient]);
 
-  const handleNear = async () => {
-    setNearPending(true);
-    await auth.signIn.near({
-      onSuccess: async () => {
-        setNearPending(false);
-        await refreshSessionCache(auth, queryClient);
-      },
-      onError: (error: { code?: string; message?: string }) => {
-        setNearPending(false);
-        toast.error(error?.message || "Failed to sign in");
-      },
-    });
-  };
-
-  const handlePasskey = async () => {
-    setPasskeyPending(true);
-    await signInWithPasskey(auth, {
-      onSuccess: async () => {
-        setPasskeyPending(false);
-        await refreshSessionCache(auth, queryClient);
-      },
-      onError: (error) => {
-        setPasskeyPending(false);
-        toast.error(error.message || "Passkey sign-in failed");
-      },
-    });
-  };
-
   if (redeemed) {
     const gatewayHost = new URL(getGatewayOrigin(runtimeConfig)).host;
     return (
@@ -117,6 +76,7 @@ function OnboardPage() {
             <span className="text-foreground font-medium">{redeemed.organizationName}</span> for{" "}
             {redeemed.eventName}.
           </p>
+          <DisplayNameStep initialName={accountCreated ? "" : (session?.user.name ?? "")} />
           <div
             className="space-y-2 rounded-[8px] border border-border bg-muted p-4 text-left"
             data-testid="onboard.continue-on-computer"
@@ -145,6 +105,16 @@ function OnboardPage() {
         description="This onboarding link is missing its code. Ask the organizer for a new QR code."
         testId="onboard.invalid"
       />
+    );
+  }
+
+  if (info === undefined) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <p className="text-sm text-muted-foreground" data-testid="onboard.loading">
+          Loading invitation…
+        </p>
+      </div>
     );
   }
 
@@ -205,75 +175,10 @@ function OnboardPage() {
           </p>
         </div>
 
-        {detectedAccount ? (
-          <div className="space-y-3">
-            <Button
-              type="button"
-              variant="default"
-              onClick={handlePasskey}
-              disabled={passkeyPending || nearPending}
-              className="w-full"
-              data-testid="onboard.passkey-button"
-            >
-              {passkeyPending ? "waiting for passkey..." : "Create your account"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleNear}
-              disabled={passkeyPending || nearPending}
-              className="w-full"
-              data-testid="onboard.signin-button"
-            >
-              {nearPending ? "connecting..." : `Continue as ${detectedAccount}`}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={async () => {
-                setNearPending(true);
-                try {
-                  await auth.near.disconnect();
-                  await handleNear();
-                } catch {
-                  setNearPending(false);
-                  toast.error("Failed to disconnect wallet");
-                }
-              }}
-              disabled={nearPending}
-            >
-              Use another wallet
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <Button
-              type="button"
-              variant="default"
-              onClick={handlePasskey}
-              disabled={passkeyPending || nearPending}
-              className="w-full"
-              data-testid="onboard.passkey-button"
-            >
-              {passkeyPending ? "waiting for passkey..." : "Create your account"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleNear}
-              disabled={passkeyPending || nearPending}
-              className="w-full"
-              data-testid="onboard.signin-button"
-            >
-              {nearPending ? "connecting..." : "sign in with a NEAR wallet"}
-            </Button>
-          </div>
-        )}
-
-        <p className="text-xs text-center text-muted-foreground">
-          New here? Creating an account uses your device passkey — no seed phrase.
-        </p>
+        <OnboardSignUp
+          networkId={runtimeConfig?.networkId ?? "mainnet"}
+          onAccountCreated={() => setAccountCreated(true)}
+        />
       </div>
     </div>
   );

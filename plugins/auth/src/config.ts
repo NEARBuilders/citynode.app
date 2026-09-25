@@ -7,7 +7,7 @@ import type {
   SubAccountConfig,
 } from "better-near-auth";
 import { DEFAULT_DEVICE_LINK_CLIENT_ID } from "better-near-auth";
-import type { AuthConfig } from "./auth-config";
+import type { AuthConfig, AuthNetwork } from "./auth-config";
 import type { AuthPluginSecrets, AuthPluginVariables } from "./config-schemas";
 import { localDevTrustedOrigins } from "./utils";
 
@@ -126,6 +126,15 @@ export function buildSessionGasKeyConfig(
   };
 }
 
+function networkOf(accountId: string): AuthNetwork {
+  return accountId.endsWith(".testnet") ? "testnet" : "mainnet";
+}
+
+export function resolveAuthNetwork(variables: AuthPluginVariables): AuthNetwork {
+  if (variables.account) return networkOf(variables.account);
+  return networkOf(variables.siwn.recipient ?? variables.siwn.recipients?.mainnet ?? "");
+}
+
 export function normalizeAuthConfig(
   variables: AuthPluginVariables,
   secrets: AuthPluginSecrets,
@@ -163,6 +172,7 @@ export function normalizeAuthConfig(
   const authConfig: AuthConfig = {
     secret: secrets.BETTER_AUTH_SECRET,
     baseUrl,
+    network: resolveAuthNetwork(variables),
     trustedOrigins,
     isProduction: process.env.NODE_ENV === "production",
     socialProviders: {
