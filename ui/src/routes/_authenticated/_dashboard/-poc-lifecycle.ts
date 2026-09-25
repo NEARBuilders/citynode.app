@@ -64,7 +64,7 @@ export const hosDelegateUrl = (accountId: string) => `${HOS_URL}/delegates/${acc
 
 export interface LogEntry {
   id: string;
-  time: string;
+  at: number;
   label: string;
   detail?: string;
 }
@@ -108,7 +108,7 @@ export function usePocLifecycle(routeAuth: PocRouteAuth, runtimeConfig: RuntimeC
       [
         {
           id: `${Date.now()}-${Math.random()}`,
-          time: new Date().toLocaleTimeString(),
+          at: Date.now(),
           label,
           detail,
         },
