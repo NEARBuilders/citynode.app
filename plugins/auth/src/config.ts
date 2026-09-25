@@ -173,6 +173,7 @@ export function normalizeAuthConfig(
     secret: secrets.BETTER_AUTH_SECRET,
     baseUrl,
     network: resolveAuthNetwork(variables),
+    organizationMembershipLimit: variables.organizationMembershipLimit,
     trustedOrigins,
     isProduction: process.env.NODE_ENV === "production",
     socialProviders: {

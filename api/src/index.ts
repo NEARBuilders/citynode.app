@@ -4,7 +4,7 @@ import { Context, Effect, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { z } from "zod";
-import { contract } from "./contract";
+import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
@@ -29,6 +29,8 @@ class ApiServices extends Context.Service<
     discovery: DiscoveryService;
   }
 >()("api/ApiServices") {}
+
+const ONBOARDING_GRACE_MS = 48 * 3_600_000;
 
 const ACCOUNT_ID_REGEX =
   /^(?=.{2,64}$)([a-z0-9]+(?:[-_][a-z0-9]+)*)(\.([a-z0-9]+(?:[-_][a-z0-9]+)*))*$/;
@@ -248,6 +250,84 @@ export default createPlugin.withPlugins<PluginsClient>()({
       getDiscoveryActivity: builder.getDiscoveryActivity.handler(async ({ input, context }) =>
         Context.get(context["effect/context"], ApiServices).discovery.activity(input.id),
       ),
+      createEventOnboardingCode: builder.createEventOnboardingCode.effect(function* ({
+        input,
+        context,
+        errors,
+      }) {
+        if (!context.userId) {
+          return yield* Effect.fail(
+            errors.UNAUTHORIZED({
+              message: "Authentication required",
+              data: { apiKeyProvided: !!context.apiKey },
+            }),
+          );
+        }
+        const { discovery } = yield* ApiServices;
+        const record = yield* Effect.tryPromise({
+          try: () => discovery.eventOrganization(input.eventId),
+          catch: () =>
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "Could not load the event" }),
+        });
+        if (!record) {
+          return yield* Effect.fail(errors.NOT_FOUND({ message: "Event not found", data: {} }));
+        }
+        const { event, organizationId } = record;
+        const endsAt = event.endsAt;
+        if (event.kind !== "event" || !endsAt) {
+          return yield* Effect.fail(
+            errors.BAD_REQUEST({ message: "Only events can have onboarding codes", data: {} }),
+          );
+        }
+        if (!organizationId) {
+          return yield* Effect.fail(
+            errors.BAD_REQUEST({
+              message:
+                "This event's node has no organization, so there is nothing for attendees to join",
+              data: {},
+            }),
+          );
+        }
+        if (context.organization?.activeOrganizationId !== organizationId) {
+          return yield* Effect.fail(
+            errors.FORBIDDEN({
+              message:
+                "This event belongs to another organization than your active one — switch organizations to onboard for it",
+              data: {},
+            }),
+          );
+        }
+        const authPlugin = plugins.auth;
+        if (!authPlugin) {
+          return yield* Effect.fail(
+            new ORPCError("INTERNAL_SERVER_ERROR", { message: "The auth plugin is not available" }),
+          );
+        }
+        const auth = authPlugin.client({
+          reqHeaders: Object.fromEntries(new Headers(context.reqHeaders).entries()),
+        });
+        return yield* Effect.tryPromise<
+          z.infer<typeof EventOnboardingCodeSchema>,
+          ORPCError<string, unknown>
+        >({
+          try: () =>
+            auth.createOnboardingCode({
+              organizationId,
+              eventId: event.id,
+              eventName: event.title,
+              ...(input.maxUses ? { maxUses: input.maxUses } : {}),
+              expiresAt: input.expiresAt
+                ? new Date(input.expiresAt)
+                : new Date(Date.parse(endsAt) + ONBOARDING_GRACE_MS),
+            }),
+          catch: (error) =>
+            error instanceof ORPCError
+              ? error
+              : new ORPCError("INTERNAL_SERVER_ERROR", {
+                  message: "Could not create the onboarding code",
+                }),
+        });
+      }),
       listDiscovery: builder.listDiscovery.handler(async ({ input, context }) =>
         Context.get(context["effect/context"], ApiServices).discovery.list(input),
       ),

@@ -284,6 +284,14 @@ describe("normalizeAuthConfig", () => {
     expect(apiKeyHeaders).toEqual(["x-api-key"]);
   });
 
+  it("carries the configured organization membership limit", () => {
+    const { authConfig } = normalizeAuthConfig(
+      { ...baseVariables, organizationMembershipLimit: 1000 },
+      baseSecrets,
+    );
+    expect(authConfig.organizationMembershipLimit).toBe(1000);
+  });
+
   it("serves mainnet for a mainnet runtime account", () => {
     const { authConfig } = normalizeAuthConfig(
       { ...baseVariables, account: "v1.citynode.near" },
