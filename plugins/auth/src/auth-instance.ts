@@ -20,6 +20,12 @@ import {
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
 import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
+import {
+  passkeyAuthenticatorSelection,
+  passkeySignUp,
+  requireUserVerifiedSignIn,
+  requireWalletCapablePasskey,
+} from "./passkey-sign-up";
 
 const orgStatements = {
   ...defaultStatements,
@@ -64,7 +70,7 @@ export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPlu
 export interface PasskeyRelyingPartyOptions {
   rpID: string;
   rpName: string;
-  origin: string;
+  origin: string[];
 }
 
 function normalizeOrigin(value: string): string {
@@ -100,7 +106,7 @@ function isLocalOrigin(origin: string): boolean {
 }
 
 export function resolvePasskeyRelyingPartyOptions(
-  config: Pick<AuthConfig, "baseUrl" | "passkey">,
+  config: Pick<AuthConfig, "baseUrl" | "passkey" | "network">,
 ): PasskeyRelyingPartyOptions {
   const passkey = config.passkey;
   const origin = normalizeOrigin(passkey?.origin?.trim() || config.baseUrl);
@@ -110,12 +116,17 @@ export function resolvePasskeyRelyingPartyOptions(
       ? normalizeRpId(passkey.rpID.trim())
       : new URL(origin).hostname;
   const rpName = passkey?.rpName?.trim() || "Everything Dev";
+  const gatewayOrigins = (passkey?.gatewayOrigins?.[config.network ?? "mainnet"] ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(normalizeOrigin);
 
-  return { rpID, rpName, origin };
+  return { rpID, rpName, origin: [...new Set([origin, ...gatewayOrigins])] };
 }
 
 export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0] {
   const base = {
+    passkeyWalletNetwork: config.network ?? "mainnet",
     apiKey: config.siwn.apiKey,
     rpcUrl: config.siwn.rpcUrl,
     relayer: config.siwn.relayer,
@@ -263,6 +274,7 @@ export function createAuthInstance(
   const twilioConfig = config.phoneNumber?.twilio;
   const githubConfig = config.socialProviders?.github;
   const googleConfig = config.socialProviders?.google;
+  const network = config.network ?? "mainnet";
   const siwnOptions = buildSiwnOptions(config);
   const membershipPolicy = createOrganizationMembershipPolicy(config.organizationMembershipLimit);
   const deviceClientIds = new Set([
@@ -317,8 +329,11 @@ export function createAuthInstance(
         : []),
       passkey({
         ...passkeyOptions,
+        authenticatorSelection: passkeyAuthenticatorSelection,
+        authentication: { afterVerification: requireUserVerifiedSignIn },
         registration: {
           requireSession: false,
+          afterVerification: requireWalletCapablePasskey,
           resolveUser: async ({ ctx }) => {
             const recipient = mainnetRecipient;
             const email = `passkey-${crypto.randomUUID().slice(0, 8)}@${recipient}`;
@@ -334,6 +349,7 @@ export function createAuthInstance(
           },
         },
       }),
+      passkeySignUp({ network }),
       organization({
         ac: orgAc,
         roles: orgRoles,

@@ -84,7 +84,6 @@ import {
   ViewContractResponse,
 } from "./types.js";
 
-export * from "./types.js";
 export {
   getPasskeyWalletFactory,
   isPasskeyWalletAvailable,
@@ -96,6 +95,7 @@ export {
   PASSKEY_WALLET_UNAVAILABLE,
   type PasskeyWalletLink,
 } from "./passkey-wallet-link.js";
+export * from "./types.js";
 
 import { bytesToHex, decryptPrivateKey, encryptPrivateKey } from "./utils.js";
 

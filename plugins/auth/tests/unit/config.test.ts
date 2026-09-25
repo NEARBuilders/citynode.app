@@ -284,6 +284,34 @@ describe("normalizeAuthConfig", () => {
     expect(apiKeyHeaders).toEqual(["x-api-key"]);
   });
 
+  it("serves mainnet for a mainnet runtime account", () => {
+    const { authConfig } = normalizeAuthConfig(
+      { ...baseVariables, account: "v1.citynode.near" },
+      baseSecrets,
+    );
+    expect(authConfig.network).toBe("mainnet");
+  });
+
+  it("serves testnet for a testnet runtime account", () => {
+    const { authConfig } = normalizeAuthConfig(
+      {
+        ...baseVariables,
+        account: "v1.citynode.testnet",
+        siwn: { recipients: { mainnet: "v1.citynode.near", testnet: "v1.citynode.testnet" } },
+      },
+      baseSecrets,
+    );
+    expect(authConfig.network).toBe("testnet");
+  });
+
+  it("falls back to the SIWN recipient's network without a runtime account", () => {
+    const { authConfig } = normalizeAuthConfig(
+      { ...baseVariables, siwn: { recipient: "app.testnet" } },
+      baseSecrets,
+    );
+    expect(authConfig.network).toBe("testnet");
+  });
+
   it("uses recipient mode when recipient is set", () => {
     const { authConfig } = normalizeAuthConfig(
       { ...baseVariables, siwn: { recipient: "myapp.near" } },

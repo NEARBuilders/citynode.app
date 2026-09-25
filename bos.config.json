@@ -70,7 +70,15 @@
         },
         "passkey": {
           "rpID": "citynode.app",
-          "rpName": "City Nodes"
+          "rpName": "City Nodes",
+          "gatewayOrigins": {
+            "mainnet": [
+              "https://citynode.app"
+            ],
+            "testnet": [
+              "https://testnet.citynode.app"
+            ]
+          }
         },
         "socialProviders": {
           "github": {},

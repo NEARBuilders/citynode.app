@@ -909,9 +909,7 @@ export const siwnClient = (config: SIWNClientConfig) => {
                 },
                 fetchLink: async (body) => {
                   const response = await $fetch<
-                    | { success: true; accountId: string }
-                    | { success: false; reason: string }
-                    | null
+                    { success: true; accountId: string } | { success: false; reason: string } | null
                   >("/near/link-passkey-wallet", {
                     method: "POST",
                     body,
