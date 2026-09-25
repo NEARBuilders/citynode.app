@@ -77,8 +77,8 @@ export {
   FieldError,
   FieldLabel,
 } from "./ui/field";
-export { InfoPopover, type InfoPopoverLink } from "./ui/info-popover";
-export { InfoRow } from "./ui/info-row";
+export { InfoPopover, type InfoPopoverLink } from "./info-popover";
+export { InfoRow } from "./info-row";
 export { Input } from "./ui/input";
 export { Label } from "./ui/label";
 export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -89,7 +89,7 @@ export {
   StepList,
   type StepState,
   useStepper,
-} from "./ui/stepper";
+} from "./stepper";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 export { Textarea } from "./ui/textarea";
 export { UnderConstruction } from "./under-construction";

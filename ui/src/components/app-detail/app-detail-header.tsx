@@ -2,7 +2,7 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BASE_RUNTIME, type RegistryAppDetail } from "./app-detail-types";
-import { Badge } from "./badge";
+import { Badge } from "@/components/ui/badge";
 
 export function AppDetailHeader({
   accountId,

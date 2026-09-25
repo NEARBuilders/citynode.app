@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { getAccount, getActiveRuntime, getAppName } from "@/app";
 import { PageContainer } from "@/components/layout/page-container";
 import { Button } from "@/components/ui/button";
-import { Markdown } from "@/components/ui/markdown";
+import { Markdown } from "@/components/markdown";
 
 const INTENT_REGISTRY_URL = "https://tanstack.com/intent/registry/everything-dev";
 

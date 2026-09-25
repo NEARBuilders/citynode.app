@@ -4,7 +4,7 @@ import { Building2, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
-import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 

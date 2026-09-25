@@ -1,6 +1,6 @@
 import { FileCheck2 } from "lucide-react";
 import { Button, Card, EmptyState, Skeleton } from "@/components";
-import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import type { Proposal } from "./-proposal-columns";
 import type { ProposalReviewFilter } from "./-proposal-review";
 

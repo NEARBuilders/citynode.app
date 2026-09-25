@@ -10,9 +10,9 @@ import { useNearAccount } from "@/lib/use-near-account";
 import { AppDetailMetadataActions } from "./app-detail-metadata-actions";
 import { AppDetailSectionLabel } from "./app-detail-section-label";
 import type { RegistryAppDetail, RegistryStatus } from "./app-detail-types";
-import { Field, FieldLabel } from "./field";
-import { Input } from "./input";
-import { Textarea } from "./textarea";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export function AppDetailMetadataEditor({
   accountId,

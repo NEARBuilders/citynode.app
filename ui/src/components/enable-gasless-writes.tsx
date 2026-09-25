@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import { useSessionGasKey } from "@/lib/use-gas-key";
-import { Button } from "./button";
+import { Button } from "@/components/ui/button";
 
 export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string | null }) {
   const auth = useAuthClient();
