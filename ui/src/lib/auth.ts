@@ -25,6 +25,7 @@ export {
   refreshSessionCache,
   requireAdmin,
   requireSession,
+  resolveSessionFromCache,
   sessionQueryKey,
   sessionQueryOptions,
   useAuthClient,

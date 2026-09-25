@@ -50,13 +50,14 @@ across two remotes owned pieces of one concern.
    `catalog:` range, per the single-resolver principle of advisor-plan 010.
 
 4. **Sync surface shrinks.** `ui/src/lib/auth-guards.ts`,
-   `ui/src/lib/plugin-path.ts`, and `plugins/auth/ui/src/lib/session-cache.ts`
-   exit child ownership (deleted; the drifted WeakSet copy dies with the
-   last one). `ui/src/lib/session-cache.ts` retains only
+   `ui/src/lib/plugin-path.ts`, `ui/src/lib/session-cache.ts`, and
+   `plugins/auth/ui/src/lib/session-cache.ts` exit child ownership (deleted;
+   the drifted WeakSet copy dies with the last one).
    `resolveSessionFromCache` — the SSR↔query-cache hydration bridge the
    sync-owned `__root.tsx` imports (better-auth owns the session fetch; it has
-   no concept of TanStack Router hydration — this is router glue, not an
-   auth concern).
+   no concept of TanStack Router hydration — router glue, not an auth
+   concern) — lives in `everything-dev/ui/auth` with the rest of the session
+   surface.
 
 ## Consequences
 
