@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import * as authSchema from "../../../plugins/auth/src/db/schema.ts";
+import * as authSchema from "../../../plugins/auth/api/src/db/schema.ts";
 import { createAuthTestInstance } from "./auth-test-instance.ts";
 import { seedTenant } from "./seed-tenant.mjs";
 

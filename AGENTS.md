@@ -455,7 +455,7 @@ The `bos` CLI wraps near-cli-rs for account and key management — you normally 
 3. Use in UI via `apiClient` from `useApiClient()` in `@/app`
 
 **Handler convention (required for new routes):** write handlers as Effect-native
-`.effect(function* ...)` generators (see `plugins/_template/src/index.ts`) and access
+`.effect(function* ...)` generators (see `plugins/_template/api/src/index.ts`) and access
 services with `yield* Tag` — the tag must be exposed from the plugin's returned
 `initialize` layer. Auth checks fail via `Effect.fail(errors.UNAUTHORIZED(...))` /
 `errors.FORBIDDEN(...)` inside the generator (note: the shared `every-plugin/errors`

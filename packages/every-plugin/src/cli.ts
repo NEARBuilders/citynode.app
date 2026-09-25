@@ -26,7 +26,7 @@ function run(
 export async function emitContractTypes(): Promise<void> {
   const status = await generateContractTypes();
   if (status === "skipped") {
-    console.log("[every-plugin] No src/contract.ts — nothing to emit.");
+    console.log("[every-plugin] No api/src/contract.ts — nothing to emit.");
   } else {
     console.log(`[every-plugin] Contract types ${status}.`);
   }

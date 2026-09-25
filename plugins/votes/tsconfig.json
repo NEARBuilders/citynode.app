@@ -28,10 +28,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./api/src/*"]
     }
   },
   "files": ["tests/types.d.ts"],
-  "include": ["src/**/*", "tests/**/*", "plugin.dev.ts"],
+  "include": ["api/src/**/*", "tests/**/*", "bos.dev.ts"],
   "exclude": ["node_modules", "dist"]
 }

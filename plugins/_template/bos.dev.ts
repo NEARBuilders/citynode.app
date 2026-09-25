@@ -1,7 +1,7 @@
 import "dotenv/config";
 import type { PluginConfigInput } from "every-plugin";
+import type Plugin from "./api/src/index";
 import packageJson from "./package.json" with { type: "json" };
-import type Plugin from "./src/index";
 
 export default {
   pluginId: packageJson.name,

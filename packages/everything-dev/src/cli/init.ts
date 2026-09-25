@@ -967,7 +967,7 @@ export async function personalizeConfig(
 
   if (has("plugins")) {
     for (const plugin of opts.plugins ?? []) {
-      const pluginSrcDir = join(destination, "plugins", plugin, "src");
+      const pluginSrcDir = join(destination, "plugins", plugin, "api", "src");
       const pluginIndexPath = join(pluginSrcDir, "index.ts");
       const pluginClientGenPath = join(pluginSrcDir, "lib", "plugins-client.gen.ts");
       if (!existsSync(pluginIndexPath) || existsSync(pluginClientGenPath)) {

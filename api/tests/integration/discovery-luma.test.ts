@@ -10,8 +10,8 @@ vi.mock("@/services/dao", () => ({
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));
-vi.mock("../../plugin.dev", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../plugin.dev")>();
+vi.mock("../../bos.dev", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../bos.dev")>();
   return {
     default: {
       ...original.default,

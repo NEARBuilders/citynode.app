@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { PluginServices } from "../../src/service-types";
+import type { PluginServices } from "../../api/src/service-types";
 import { createTestServices, createTestUser, type TestUser } from "../helpers";
 
 const CLIENT_ID = "citynode-web";

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { AuthConfig } from "../../src/auth-config";
+import type { AuthConfig } from "../../api/src/auth-config";
 import {
   buildSiwnOptions,
   createAuthInstance,
   isRecipientsConfig,
   resolvePasskeyRelyingPartyOptions,
-} from "../../src/auth-instance";
+} from "../../api/src/auth-instance";
 
 describe("resolvePasskeyRelyingPartyOptions", () => {
   it("derives localhost relying party options from baseUrl", () => {

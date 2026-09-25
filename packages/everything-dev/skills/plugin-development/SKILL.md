@@ -2,7 +2,7 @@
 name: plugin-development
 description: Build, register, and deploy plugins within everything.dev. Covers the _template scaffold, contract/service/index pattern, database setup with Drizzle, bos.config.json registration, plugin UI/sidebar, and CLI workflow. Use when creating new plugins, adding database-backed routes, or deploying plugins to production.
 metadata:
-  sources: "plugins/_template/src/index.ts,plugins/_template/src/contract.ts,plugins/_template/src/service.ts,plugins/_template/rspack.config.js,plugins/_template/plugin.dev.ts,plugins/_template/src/db/schema.ts,plugins/_template/src/db/layer.ts,api/src/db/index.ts,api/src/db/migrator.ts,packages/every-plugin/src/plugin.ts"
+  sources: "plugins/_template/api/src/index.ts,plugins/_template/api/src/contract.ts,plugins/_template/api/src/service.ts,plugins/_template/rspack.config.js,plugins/_template/bos.dev.ts,plugins/_template/api/src/db/schema.ts,plugins/_template/api/src/db/layer.ts,api/src/db/index.ts,api/src/db/migrator.ts,packages/every-plugin/src/plugin.ts"
 ---
 
 # Plugin Development
@@ -24,7 +24,7 @@ plugins/your-plugin/
 │   └── __tests__/            # Tests
 ├── package.json
 ├── rspack.config.js          # Build config
-├── plugin.dev.ts             # Dev server (port, variables, secrets)
+├── bos.dev.ts             # Dev server (port, variables, secrets)
 └── tsconfig.json
 ```
 
@@ -36,7 +36,7 @@ The quickest start is to copy the template:
 cp -r plugins/_template plugins/your-plugin
 ```
 
-Then rename in `package.json`, `plugin.dev.ts`, and `rspack.config.js`.
+Then rename in `package.json`, `bos.dev.ts`, and `rspack.config.js`.
 
 Or use the CLI (no automated command yet — copy template manually).
 
@@ -281,7 +281,7 @@ The CLI updates `bos.config.json` automatically when you run `bos plugin add` / 
 
 **Remote-only plugins:** The `development` key is optional. A plugin can be remote-only (just a `production` URL) — the host/API consume it via `pluginsClient` and HTTP, and types resolve from the deployed manifest. Plugin source does not need to live in the consuming repo. This is how plugins maintained in other repos are mounted.
 
-## Step 6: `plugin.dev.ts`
+## Step 6: `bos.dev.ts`
 
 Dev server config for local development:
 

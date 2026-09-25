@@ -62,7 +62,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
     const dir = makeProjectDir();
     writeFile(
       dir,
-      "plugins/widgets/src/index.ts",
+      "plugins/widgets/api/src/index.ts",
       [
         'import { Effect } from "every-plugin/effect";',
         'import { WidgetsLive, WidgetsTag } from "./widgets";',
@@ -80,9 +80,9 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
     );
 
     const migrated = await rewriteLegacyPluginScopedLayerPatterns(dir);
-    expect(migrated).toContain("plugins/widgets/src/index.ts");
+    expect(migrated).toContain("plugins/widgets/api/src/index.ts");
 
-    const result = readFileSync(join(dir, "plugins/widgets/src/index.ts"), "utf-8");
+    const result = readFileSync(join(dir, "plugins/widgets/api/src/index.ts"), "utf-8");
     expect(result).toContain(
       "yield* Layer.buildWithScope(WidgetsLive(config.secrets.URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, WidgetsTag)))",
     );
@@ -131,7 +131,7 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
     const dir = makeProjectDir();
     writeFile(
       dir,
-      "plugins/widgets/src/index.ts",
+      "plugins/widgets/api/src/index.ts",
       [
         'import { Effect } from "every-plugin/effect";',
         'import { WidgetsLive, WidgetsTag } from "./widgets";',
@@ -149,9 +149,9 @@ describe("rewriteLegacyPluginScopedLayerPatterns", () => {
     );
 
     const migrated = await rewriteLegacyPluginScopedLayerPatterns(dir);
-    expect(migrated).toContain("plugins/widgets/src/index.ts");
+    expect(migrated).toContain("plugins/widgets/api/src/index.ts");
 
-    const result = readFileSync(join(dir, "plugins/widgets/src/index.ts"), "utf-8");
+    const result = readFileSync(join(dir, "plugins/widgets/api/src/index.ts"), "utf-8");
     expect(result).toContain(
       "const widgets = yield* Layer.buildWithScope(WidgetsLive(config.secrets.URL), yield* Effect.scope).pipe(Effect.map((context) => Context.get(context, WidgetsTag)));",
     );

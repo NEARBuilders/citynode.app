@@ -8,7 +8,7 @@ import {
   toORPCError,
   tryJsonParse,
   withoutSessionDataCookie,
-} from "../../src/utils";
+} from "../../api/src/utils";
 
 describe("toError", () => {
   it("wraps a string in an Error", () => {

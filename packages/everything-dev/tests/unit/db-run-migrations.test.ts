@@ -4,8 +4,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { migrate as apiMigrate } from "../../../../api/src/db/migrate";
-import { migrate as proposalsMigrate } from "../../../../plugins/proposals/src/db/migrate";
-import { migrate as votesMigrate } from "../../../../plugins/votes/src/db/migrate";
+import { migrate as proposalsMigrate } from "../../../../plugins/proposals/api/src/db/migrate";
+import { migrate as votesMigrate } from "../../../../plugins/votes/api/src/db/migrate";
 import {
   type DatabaseError,
   type Migration,

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import * as schema from "../../src/db/schema";
+import * as schema from "../../api/src/db/schema";
 import {
   addTestMember,
   createTestHandlers,

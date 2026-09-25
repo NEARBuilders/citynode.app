@@ -5,8 +5,8 @@ import {
   ensureOrigin,
   normalizeAuthConfig,
   parseTrustedOrigins,
-} from "../../src/config";
-import type { AuthPluginSecrets, AuthPluginVariables } from "../../src/config-schemas";
+} from "../../api/src/config";
+import type { AuthPluginSecrets, AuthPluginVariables } from "../../api/src/config-schemas";
 
 const baseSecrets: AuthPluginSecrets = {
   AUTH_DATABASE_URL: "pglite::memory:",

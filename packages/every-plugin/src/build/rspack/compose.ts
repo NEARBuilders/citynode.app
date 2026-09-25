@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import path from "node:path";
+import path, { dirname } from "node:path";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
 import { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
 import {
@@ -20,14 +20,24 @@ export class EveryPluginComposedBuild implements RspackPluginInstance {
   constructor(private readonly options: EveryPluginComposedBuildOptions = {}) {}
 
   apply(compiler: Compiler) {
-    new EmitPluginManifest(this.options.manifest ?? {}).apply(compiler);
-    new EveryPluginBuild({ dts: this.options.dts }).apply(compiler);
+    const manifestOptions = this.options.manifest ?? {};
+    const manifest: PluginManifestEmitterOptions = this.options.entry
+      ? {
+          ...manifestOptions,
+          contractPath:
+            manifestOptions.contractPath ?? join(dirname(this.options.entry), "contract.ts"),
+        }
+      : manifestOptions;
+    new EmitPluginManifest(manifest).apply(compiler);
+    new EveryPluginBuild({ dts: this.options.dts, entry: this.options.entry }).apply(compiler);
     new FixMfDataUriPlugin().apply(compiler);
   }
 }
 
 export interface PluginBaseConfigOptions {
   drizzle?: boolean;
+  /** Workspace-relative MF expose entry override (e.g. the root api workspace's "src/index.ts"). */
+  entry?: string;
   externals?: string[];
   /** Concrete rspack fields to merge over the defaults (devtool, infrastructureLogging, ...). */
   rspack?: Partial<PluginBaseConfig>;
@@ -65,7 +75,7 @@ export interface PluginBaseConfig {
 
 export function createPluginBaseConfig(options: PluginBaseConfigOptions = {}): PluginBaseConfig {
   const shouldDeploy = process.env.DEPLOY === "true";
-  const plugins: unknown[] = [new EveryPluginComposedBuild({ dts: false })];
+  const plugins: unknown[] = [new EveryPluginComposedBuild({ dts: false, entry: options.entry })];
 
   if (options.drizzle !== false) {
     const drizzlePlugin = loadDrizzleMigrationsPlugin();

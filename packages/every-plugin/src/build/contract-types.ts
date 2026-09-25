@@ -3,20 +3,21 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { promisify } from "node:util";
+import { resolvePluginContract } from "../entry-resolution";
 
 const execFileAsync = promisify(execFile);
 
 export type ContractTypesStatus = "generated" | "up-to-date" | "skipped";
 
-export const CONTRACT_ENTRY = path.join("src", "contract.ts");
 export const CONTRACT_TYPES_DIR = "types";
 export const CONTRACT_TYPES_FILE = path.join("types", "contract.d.ts");
 
 export function contractTypesUpToDate(cwd: string): boolean {
-  const entry = path.join(cwd, CONTRACT_ENTRY);
+  const contract = resolvePluginContract(cwd);
+  if (!contract) return false;
   const outFile = path.join(cwd, CONTRACT_TYPES_FILE);
-  if (!fs.existsSync(entry) || !fs.existsSync(outFile)) return false;
-  return fs.statSync(outFile).mtimeMs >= fs.statSync(entry).mtimeMs;
+  if (!fs.existsSync(outFile)) return false;
+  return fs.statSync(outFile).mtimeMs >= fs.statSync(path.join(cwd, contract)).mtimeMs;
 }
 
 export function resolveTscBinary(cwd: string): string {
@@ -40,16 +41,17 @@ export function resolveTscBinary(cwd: string): string {
  * workspace's TypeScript 7 binary with explicit flags — no tsconfig file
  * involved, so emit layout is deterministic and there is nothing to sync.
  *
- * - "skipped": the workspace has no src/contract.ts
- * - "up-to-date": types/contract.d.ts is newer than src/contract.ts
+ * - "skipped": the workspace has no api/src/contract.ts
+ * - "up-to-date": types/contract.d.ts is newer than the contract entry
  * - "generated": declarations were re-emitted (types/ is cleaned first, so
  *   stale nested layouts never survive)
  */
 export async function generateContractTypes(
   cwd: string = process.cwd(),
+  opts: { contractPath?: string } = {},
 ): Promise<ContractTypesStatus> {
-  const entry = path.join(cwd, CONTRACT_ENTRY);
-  if (!fs.existsSync(entry)) {
+  const contract = opts.contractPath ?? resolvePluginContract(cwd);
+  if (!contract) {
     return "skipped";
   }
 
@@ -67,7 +69,7 @@ export async function generateContractTypes(
     "--emitDeclarationOnly",
     "--declaration",
     "--rootDir",
-    "src",
+    path.dirname(contract),
     "--outDir",
     CONTRACT_TYPES_DIR,
     "--target",
@@ -78,7 +80,7 @@ export async function generateContractTypes(
     "bundler",
     "--strict",
     "--skipLibCheck",
-    CONTRACT_ENTRY,
+    contract,
   ];
 
   try {
