@@ -1,5 +1,5 @@
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { NearBranding } from "@/components/layout/near-branding";
 import { PublicHeader } from "./public-header";
 
 interface PublicShellProps {
@@ -24,5 +24,26 @@ export function PublicShell({ children, footer, showConnect = true }: PublicShel
 }
 
 export function PublicShellFooter() {
-  return <NearBranding />;
+  return (
+    <nav
+      aria-label="Footer"
+      data-testid="public-footer"
+      className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
+    >
+      <Link to="/about" className="hover:text-foreground">
+        About
+      </Link>
+      <Link to="/skill" className="hover:text-foreground">
+        Docs for agents
+      </Link>
+      <a
+        href="https://nearbuilders.org"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hover:text-foreground"
+      >
+        NEARBuilders
+      </a>
+    </nav>
+  );
 }

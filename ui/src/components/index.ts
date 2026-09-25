@@ -20,7 +20,6 @@ export {
   type SidebarItem,
   type SidebarRole,
 } from "./layout/nav-items";
-export { NearBranding } from "./layout/near-branding";
 export { NetworkToggle } from "./layout/network-toggle";
 export { OrgSwitcher } from "./layout/org-switcher";
 export { PageContainer } from "./layout/page-container";
