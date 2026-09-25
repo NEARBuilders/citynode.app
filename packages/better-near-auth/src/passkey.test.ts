@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeNep413Challenge,
   derivePasskeyAccountId,
+  getPasskeyWalletFactory,
   isDeterministicAccountId,
   verifyPasskeyNep413Signature,
 } from "./passkey";
@@ -183,5 +184,37 @@ describe("verifyPasskeyNep413Signature", () => {
         nonce,
       }),
     ).toBe(false);
+  });
+});
+
+describe("getPasskeyWalletFactory", () => {
+  it("selects the P-256 passkey wallet factory on mainnet", () => {
+    expect(getPasskeyWalletFactory("mainnet", "p256")).toBe(
+      "p256-passkey-wallet-contract.trezu.near",
+    );
+  });
+
+  it("selects the Ed25519 passkey wallet factory on mainnet", () => {
+    expect(getPasskeyWalletFactory("mainnet", "ed25519")).toBe(
+      "ed25519-passkey-wallet-contract.trezu.near",
+    );
+  });
+
+  it("has no passkey wallet factory on testnet", () => {
+    expect(getPasskeyWalletFactory("testnet", "p256")).toBeNull();
+    expect(getPasskeyWalletFactory("testnet", "ed25519")).toBeNull();
+  });
+});
+
+describe("derivePasskeyAccountId", () => {
+  const publicKey = `ed25519:${base58.encode(ed25519.getPublicKey(ed25519.keygen().secretKey))}`;
+
+  it("derives the mainnet account by default", () => {
+    expect(derivePasskeyAccountId(publicKey)).toBe(derivePasskeyAccountId(publicKey, "mainnet"));
+    expect(isDeterministicAccountId(derivePasskeyAccountId(publicKey) ?? "")).toBe(true);
+  });
+
+  it("derives no account on a network without a passkey wallet factory", () => {
+    expect(derivePasskeyAccountId(publicKey, "testnet")).toBeNull();
   });
 });

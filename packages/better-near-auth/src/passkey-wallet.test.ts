@@ -5,7 +5,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { base58, base64, base64url } from "@scure/base";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { siwn } from "./index.js";
+import { type SIWNPluginOptions, siwn } from "./index.js";
 import { computeNep413Challenge } from "./passkey.js";
 
 const MOCK_RECIPIENT = "example.near";
@@ -95,10 +95,10 @@ function buildAssertion(keypair: P256Keypair, nonce: Uint8Array) {
   return { nonce, proof };
 }
 
-async function setup(keypair: P256Keypair) {
+async function setup(keypair: P256Keypair, siwnOptions: Partial<SIWNPluginOptions> = {}) {
   const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
     plugins: [
-      siwn({ recipient: MOCK_RECIPIENT }),
+      siwn({ recipient: MOCK_RECIPIENT, ...siwnOptions } as SIWNPluginOptions),
       passkey({ rpID: RP_ID, rpName: "Test", origin: "http://localhost" }),
     ],
   });
@@ -212,5 +212,53 @@ describe("link-passkey-wallet", () => {
     );
     const res = await link(nonce, proof);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("link-passkey-wallet network", () => {
+  it("reports the passkey wallet as unavailable on a network without a factory", async () => {
+    const keypair = generateP256();
+    const { link, context, userId } = await setup(keypair, { passkeyWalletNetwork: "testnet" });
+
+    const { nonce, proof } = buildAssertion(keypair, makeUniqueNonce());
+    const res = await link(nonce, proof);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      success: false,
+      network: "testnet",
+      reason: "PASSKEY_WALLET_UNAVAILABLE",
+    });
+
+    const linked = await context.adapter.findMany({
+      model: "nearAccount",
+      where: [{ field: "userId", operator: "eq", value: userId }],
+    });
+    expect(linked).toEqual([]);
+  });
+
+  it("keeps an existing primary NEAR account primary when linking a passkey wallet", async () => {
+    const keypair = generateP256();
+    const { link, context, userId } = await setup(keypair);
+    await context.adapter.create({
+      model: "nearAccount",
+      data: {
+        userId,
+        accountId: "alice.near",
+        network: "mainnet",
+        publicKey: "ed25519:placeholder",
+        isPrimary: true,
+        createdAt: new Date(),
+      },
+    });
+
+    const { nonce, proof } = buildAssertion(keypair, makeUniqueNonce());
+    const res = await link(nonce, proof);
+    const body = (await res.json()) as { accountId: string };
+
+    const passkeyWallet = await context.adapter.findOne<{ isPrimary: boolean }>({
+      model: "nearAccount",
+      where: [{ field: "accountId", operator: "eq", value: body.accountId }],
+    });
+    expect(passkeyWallet?.isPrimary).toBe(false);
   });
 });
