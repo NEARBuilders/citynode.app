@@ -211,7 +211,7 @@ async function completeLogin(
     );
   }
   const cookiePair = claim.setCookie?.split(";")[0];
-  if (!cookiePair || !cookiePair.includes("=")) {
+  if (!cookiePair?.includes("=")) {
     throw new Error("Session claim returned no session cookie");
   }
 
