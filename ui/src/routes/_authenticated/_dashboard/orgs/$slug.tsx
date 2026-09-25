@@ -8,9 +8,10 @@ import {
   UsersThreeIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   getAccount,
   getActiveRuntime,
@@ -61,6 +62,25 @@ type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMe
 type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
 
+const ORGANIZATION_TABS = [
+  "members",
+  "teams",
+  "invitations",
+  "onboard",
+  "apikeys",
+  "node-config",
+] as const;
+
+type OrganizationTab = (typeof ORGANIZATION_TABS)[number];
+
+const organizationSearchSchema = z.object({
+  tab: z.enum(ORGANIZATION_TABS).default("members").catch("members"),
+});
+
+function isOrganizationTab(value: unknown): value is OrganizationTab {
+  return ORGANIZATION_TABS.some((tab) => tab === value);
+}
+
 async function handleCopyApiKey(value: string, message = "API key copied") {
   try {
     await navigator.clipboard.writeText(value);
@@ -71,6 +91,8 @@ async function handleCopyApiKey(value: string, message = "API key copied") {
 }
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
+  validateSearch: organizationSearchSchema,
+  search: { middlewares: [stripSearchParams({ tab: "members" })] },
   head: () => ({
     title: "Organization | auth.everything.dev",
     meta: [{ name: "description", content: "Manage organization details and members." }],
@@ -91,7 +113,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
 
 function OrganizationDetail() {
   const router = useRouter();
+  const navigate = Route.useNavigate();
   const { slug: orgSlug } = Route.useParams();
+  const { tab: requestedTab } = Route.useSearch();
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { runtimeConfig } = Route.useRouteContext();
@@ -170,7 +194,11 @@ function OrganizationDetail() {
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
-  const [activeTab, setActiveTab] = useState("members");
+  const activeTab = requestedTab === "onboard" && !canOrganize ? "members" : requestedTab;
+  const setActiveTab = (value: unknown) => {
+    if (!isOrganizationTab(value) || value === activeTab) return;
+    void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
+  };
   const teamsState = useOrganizationTeams(orgId, activeTab === "teams");
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
@@ -182,7 +210,7 @@ function OrganizationDetail() {
   if (isLoadingOrgs) {
     return (
       <PageContainer variant="wide">
-        <div className="flex flex-col items-center justify-center min-h-[40vh]">
+        <div className="flex flex-col items-center justify-center min-h-96">
           <p className="text-sm text-muted-foreground">Loading organization...</p>
         </div>
       </PageContainer>

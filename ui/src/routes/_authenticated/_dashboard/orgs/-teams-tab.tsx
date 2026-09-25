@@ -38,10 +38,8 @@ export function TeamsTab({
   return (
     <TabsContent value="teams" className="space-y-6 pt-4">
       {canManage && (
-        <Card className="p-6 space-y-4 hover:shadow-md">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Create team
-          </div>
+        <Card className="flex flex-col gap-4 p-6">
+          <div className="text-sm font-medium text-muted-foreground">Create team</div>
           <p className="text-sm text-muted-foreground">
             Teams group organization members by function. Grant each team the areas it works in;
             members operating as that team only see those areas.

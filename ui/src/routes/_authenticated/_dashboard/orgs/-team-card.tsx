@@ -2,6 +2,14 @@ import { PencilIcon, TrashIcon, UserMinusIcon, UserPlusIcon } from "@phosphor-ic
 import { useState } from "react";
 import { Button, Card, CardContent, Input } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FEATURE_AREA_LABELS, FEATURE_AREAS } from "@/lib/feature-areas";
 import type { MemberCardMember } from "./-member-card";
 
@@ -52,6 +60,15 @@ export function TeamCard({
   const candidates = membersLoaded
     ? orgMembers.filter((member) => !team.memberUserIds.includes(member.userId))
     : [];
+  const selectItems = candidates.map((member) => ({
+    label: memberLabel(member, member.userId),
+    value: member.userId,
+  }));
+  const placeholder = !membersLoaded
+    ? "Members unavailable"
+    : candidates.length === 0
+      ? "All organization members added"
+      : "Select a member";
 
   const toggleArea = (area: string, checked: boolean) => {
     const next = checked
@@ -61,7 +78,7 @@ export function TeamCard({
   };
 
   return (
-    <Card className="hover:shadow-md" data-testid={`teams-tab-team-${team.id}`}>
+    <Card data-testid={`teams-tab-team-${team.id}`}>
       <CardContent className="p-5 space-y-5">
         <div className="flex items-start justify-between gap-3">
           {isRenaming ? (
@@ -118,8 +135,7 @@ export function TeamCard({
                 rename
               </Button>
               <Button
-                variant="outline"
-                className="text-destructive hover:text-destructive"
+                variant="destructive"
                 onClick={onDelete}
                 disabled={isMutating}
                 data-testid={`teams-tab-delete-${team.id}`}
@@ -131,15 +147,13 @@ export function TeamCard({
           )}
         </div>
 
-        <fieldset className="space-y-2">
-          <legend className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Areas
-          </legend>
+        <FieldSet>
+          <FieldLegend variant="label">Areas</FieldLegend>
           <div className="grid gap-2 sm:grid-cols-2">
             {FEATURE_AREAS.map((area) => {
               const checkboxId = `team-${team.id}-area-${area}`;
               return (
-                <div key={area} className="flex items-center gap-2">
+                <Field key={area} orientation="horizontal">
                   <Checkbox
                     id={checkboxId}
                     checked={team.areas.includes(area)}
@@ -147,19 +161,15 @@ export function TeamCard({
                     onCheckedChange={(checked) => toggleArea(area, checked === true)}
                     data-testid={`teams-tab-area-${team.id}-${area}`}
                   />
-                  <label htmlFor={checkboxId} className="text-sm">
-                    {FEATURE_AREA_LABELS[area]}
-                  </label>
-                </div>
+                  <FieldLabel htmlFor={checkboxId}>{FEATURE_AREA_LABELS[area]}</FieldLabel>
+                </Field>
               );
             })}
           </div>
-        </fieldset>
+        </FieldSet>
 
         <div className="space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Members
-          </div>
+          <div className="text-sm font-medium text-muted-foreground">Members</div>
           {memberStatus === "loading" ? (
             <p className="text-sm text-muted-foreground" role="status">
               Loading members...
@@ -209,27 +219,31 @@ export function TeamCard({
           )}
           {canManage && (
             <div className="flex gap-2 pt-1">
-              <select
-                aria-label={`Add member to ${team.name}`}
-                value={selectedUserId}
-                onChange={(event) => setSelectedUserId(event.target.value)}
+              <Select
+                items={selectItems}
+                value={selectedUserId || null}
+                onValueChange={(value) => setSelectedUserId(typeof value === "string" ? value : "")}
                 disabled={!membersLoaded || candidates.length === 0 || isMutating}
-                data-testid={`teams-tab-add-member-${team.id}`}
-                className="w-full px-3 py-2 text-sm bg-card text-foreground border-2 border-inset border-border-strong rounded-[8px] outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">
-                  {!membersLoaded
-                    ? "Members unavailable"
-                    : candidates.length === 0
-                      ? "All organization members added"
-                      : "Select a member"}
-                </option>
-                {candidates.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {memberLabel(member, member.userId)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  aria-label={`Add member to ${team.name}`}
+                  className="w-full min-w-0"
+                  data-testid={`teams-tab-add-member-${team.id}`}
+                >
+                  <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {candidates.map((member) => (
+                    <SelectItem
+                      key={member.userId}
+                      value={member.userId}
+                      data-testid={`teams-tab-add-member-option-${team.id}-${member.userId}`}
+                    >
+                      {memberLabel(member, member.userId)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="outline"
                 disabled={!membersLoaded || !selectedUserId || isMutating}

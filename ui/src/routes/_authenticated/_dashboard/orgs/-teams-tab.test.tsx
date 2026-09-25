@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Tabs } from "@/components";
 import { TeamsTab, type TeamsTabTeam } from "./-teams-tab";
@@ -97,18 +97,28 @@ describe("TeamsTab", () => {
     expect(onDelete).toHaveBeenCalledWith("team-ops");
   });
 
-  it("lists team members and offers only organization members outside the team", () => {
+  it("lists team members and offers only organization members outside the team", async () => {
     const { onAddMember, onRemoveMember } = renderTab();
     const card = screen.getByTestId("teams-tab-team-team-ops");
 
     expect(within(card).getByText("Oscar Ops")).toBeTruthy();
-    const picker = screen.getByTestId("teams-tab-add-member-team-ops") as HTMLSelectElement;
-    const options = Array.from(picker.options)
-      .map((option) => option.value)
-      .filter(Boolean);
-    expect(options).toEqual(["u-owner", "u-fin"]);
+    fireEvent.click(screen.getByTestId("teams-tab-add-member-team-ops"));
+    const options = (await screen.findAllByRole("option")).map((option) =>
+      option.getAttribute("data-testid"),
+    );
+    expect(options).toEqual([
+      "teams-tab-add-member-option-team-ops-u-owner",
+      "teams-tab-add-member-option-team-ops-u-fin",
+    ]);
 
-    fireEvent.change(picker, { target: { value: "u-fin" } });
+    const finOption = screen.getByTestId("teams-tab-add-member-option-team-ops-u-fin");
+    fireEvent.pointerDown(finOption);
+    fireEvent.click(finOption);
+    await waitFor(() =>
+      expect(screen.getByTestId("teams-tab-add-member-team-ops").textContent).toContain(
+        "fin@example.com",
+      ),
+    );
     fireEvent.click(screen.getByTestId("teams-tab-add-member-button-team-ops"));
     expect(onAddMember).toHaveBeenCalledWith("team-ops", "u-fin");
 
@@ -131,9 +141,9 @@ describe("TeamsTab", () => {
     const card = screen.getByTestId("teams-tab-team-team-ops");
     expect(within(card).getByText("Loading members...")).toBeTruthy();
     expect(within(card).queryByText("0 members")).toBeNull();
-    expect(
-      (screen.getByTestId("teams-tab-add-member-team-ops") as HTMLSelectElement).disabled,
-    ).toBe(true);
+    expect(screen.getByTestId("teams-tab-add-member-team-ops").hasAttribute("data-disabled")).toBe(
+      true,
+    );
     expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
       false,
     );
