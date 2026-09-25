@@ -206,15 +206,7 @@ export type PasskeyWalletStatus =
   | { status: "linked"; accountId: string; network: "mainnet" | "testnet"; isPrimary: boolean }
   | { status: "unavailable"; network: "mainnet" | "testnet" };
 
-export class PasskeyCeremonyError extends Error {
-  readonly code?: string;
-
-  constructor(message: string, code?: string) {
-    super(message);
-    this.name = "PasskeyCeremonyError";
-    this.code = code;
-  }
-}
+export type PasskeyCeremonyError = Error & { code?: string };
 
 const UNSUPPORTED_AUTHENTICATOR_CODES = new Set([
   "PASSKEY_UNSUPPORTED_AUTHENTICATOR",
@@ -224,16 +216,15 @@ const UNSUPPORTED_AUTHENTICATOR_CODES = new Set([
 ]);
 
 export function isUnsupportedAuthenticatorError(error: unknown): boolean {
-  return (
-    error instanceof PasskeyCeremonyError && UNSUPPORTED_AUTHENTICATOR_CODES.has(error.code ?? "")
-  );
+  if (!(error instanceof Error) || !("code" in error)) return false;
+  return typeof error.code === "string" && UNSUPPORTED_AUTHENTICATOR_CODES.has(error.code);
 }
 
 function toPasskeyError(
   error: { code?: string; message?: string } | null | undefined,
   fallback: string,
 ): PasskeyCeremonyError {
-  return new PasskeyCeremonyError(error?.message || fallback, error?.code);
+  return Object.assign(new Error(error?.message || fallback), { code: error?.code });
 }
 
 export async function isPasskeyAutofillAvailable(): Promise<boolean> {
