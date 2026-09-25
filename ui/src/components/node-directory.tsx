@@ -1,8 +1,15 @@
+import {
+  BuildingsIcon,
+  CaretRightIcon,
+  GlobeHemisphereWestIcon,
+  MapTrifoldIcon,
+} from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { buildTenantUrl } from "@/lib/tenant-url";
+import { cn } from "@/lib/utils";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
-import { Table, TableBody, TableCell, TableRow } from "./ui/table";
 
 export interface NodeDirectoryNode {
   id: string;
@@ -19,8 +26,22 @@ interface NodeDirectoryProps {
   validatorNodeIds?: ReadonlySet<string>;
   isLoading?: boolean;
   emptyMessage?: string;
+  empty?: ReactNode;
+  layout?: "list" | "grid";
   linkTo?: "/stake" | "/n/$slug";
   linkSearch?: (node: NodeDirectoryNode) => { node?: string } | undefined;
+}
+
+const KIND_LABELS: Record<string, string> = {
+  country: "Country",
+  state: "State",
+  city: "City",
+};
+
+function KindIcon({ kind, className }: { kind: string; className?: string }) {
+  if (kind === "country") return <GlobeHemisphereWestIcon className={className} />;
+  if (kind === "state") return <MapTrifoldIcon className={className} />;
+  return <BuildingsIcon className={className} />;
 }
 
 export function NodeDirectory({
@@ -28,67 +49,78 @@ export function NodeDirectory({
   gateway,
   validatorNodeIds,
   isLoading = false,
-  emptyMessage = "No nodes yet.",
+  emptyMessage = "No communities yet.",
+  empty,
+  layout = "list",
   linkTo,
   linkSearch,
 }: NodeDirectoryProps) {
   if (isLoading) {
-    return <NodeDirectorySkeleton />;
+    return <NodeDirectorySkeleton layout={layout} />;
   }
 
   if (nodes.length === 0) {
-    return <p className="py-4 text-sm text-muted-foreground">{emptyMessage}</p>;
+    return empty ?? <p className="py-4 text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
+  const grid = layout === "grid";
+
   return (
-    <Table className="table-fixed">
-      <TableBody>
-        {nodes.map((node) => {
-          const hostname = node.hostname ?? `${node.slug}.${gateway}`;
-          const href = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
-          const className = "flex items-center gap-4";
-          const content = (
-            <>
-              <div className="min-w-0">
-                <div className="truncate text-base font-semibold capitalize text-foreground group-hover:underline">
-                  {node.name}
-                </div>
-                <div className="truncate font-mono text-xs text-muted-foreground">{hostname}</div>
-              </div>
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Badge variant="secondary">
-                  <span className="capitalize">{node.kind}</span>
-                </Badge>
-                {validatorNodeIds?.has(node.id) && <Badge variant="outline">validator</Badge>}
-              </div>
-            </>
-          );
-          return (
-            <TableRow key={node.id} className="group">
-              <TableCell>
-                {linkTo === "/n/$slug" ? (
-                  <Link
-                    to="/n/$slug"
-                    params={{ slug: node.slug }}
-                    search={{ parentId: node.parentId ?? undefined }}
-                    className={className}
-                  >
-                    {content}
-                  </Link>
-                ) : linkTo ? (
-                  <Link to={linkTo} search={linkSearch?.(node) ?? {}} className={className}>
-                    {content}
-                  </Link>
-                ) : (
-                  <a href={href} className={className}>
-                    {content}
-                  </a>
-                )}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <ul
+      className={cn(
+        grid
+          ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          : "flex flex-col divide-y divide-border overflow-hidden rounded-2xl border border-border",
+      )}
+    >
+      {nodes.map((node) => {
+        const hostname = node.hostname ?? `${node.slug}.${gateway}`;
+        const href = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
+        const className = cn(
+          "group flex min-h-16 items-center gap-4 outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
+          grid
+            ? "h-full rounded-2xl border border-border bg-card p-4 hover:bg-muted"
+            : "bg-card px-4 py-3 hover:bg-muted",
+        );
+        const content = (
+          <>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground group-hover:bg-background">
+              <KindIcon kind={node.kind} className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="truncate text-base font-medium text-foreground">{node.name}</div>
+              <div className="truncate text-sm text-muted-foreground">{hostname}</div>
+            </div>
+            <span className="flex shrink-0 items-center gap-2">
+              {validatorNodeIds?.has(node.id) && <Badge variant="success">Validator</Badge>}
+              <Badge variant="secondary">{KIND_LABELS[node.kind] ?? node.kind}</Badge>
+              <CaretRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </>
+        );
+        return (
+          <li key={node.id}>
+            {linkTo === "/n/$slug" ? (
+              <Link
+                to="/n/$slug"
+                params={{ slug: node.slug }}
+                search={{ parentId: node.parentId ?? undefined }}
+                className={className}
+              >
+                {content}
+              </Link>
+            ) : linkTo ? (
+              <Link to={linkTo} search={linkSearch?.(node) ?? {}} className={className}>
+                {content}
+              </Link>
+            ) : (
+              <a href={href} className={className}>
+                {content}
+              </a>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
