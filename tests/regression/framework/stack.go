@@ -64,13 +64,12 @@ func requireTestDatabases(t *testing.T) {
 	}
 }
 
-// StartStack boots a real `bos dev` session from source (bun cli.ts) on an
-// explicit port block, waits for the host to answer /health, then waits for
-// the registry to carry the session's full childPids map. registryPath is
-// caller-owned: tests that boot multiple stacks pass the SAME path (like the
-// real shared registry) so adoption scenarios can observe a predecessor's
-// dead entries.
-func StartStack(t *testing.T, basePort int, registryPath string) *Stack {
+// buildDevCommand assembles a real `bos dev` CLI invocation from source (bun
+// cli.ts) on an explicit port block, with the test env layered on top:
+// .env.test's DB URLs and secret, port-derived origins, and the ephemeral-run
+// guards. interactive=false passes --no-interactive (signal-driven teardown
+// tests); interactive=true leaves the TUI to mount under the caller's pty.
+func buildDevCommand(t *testing.T, basePort int, registryPath string, interactive bool) (*exec.Cmd, *os.File, string) {
 	t.Helper()
 	repoRoot := findRepoRoot(t)
 
@@ -84,16 +83,24 @@ func StartStack(t *testing.T, basePort int, registryPath string) *Stack {
 	overrides["CORS_ORIGIN"] = origin
 	overrides["BOS_NO_PERSIST_PORTS"] = "1"
 	overrides["BO_PID_REGISTRY_PATH"] = registryPath
+	if interactive {
+		overrides["TERM"] = "xterm-256color"
+	}
 
 	args := []string{
 		filepath.Join(repoRoot, "packages", "everything-dev", "src", "cli.ts"),
-		"dev", "--no-interactive",
-		"--port", strconv.Itoa(basePort),
-		"--api-port", strconv.Itoa(basePort + 1),
-		"--auth-port", strconv.Itoa(basePort + 2),
-		"--ui-port", strconv.Itoa(basePort + 3),
-		"--plugin-port-start", strconv.Itoa(basePort + 10),
+		"dev",
 	}
+	if !interactive {
+		args = append(args, "--no-interactive")
+	}
+	args = append(args,
+		"--port", strconv.Itoa(basePort),
+		"--api-port", strconv.Itoa(basePort+1),
+		"--auth-port", strconv.Itoa(basePort+2),
+		"--ui-port", strconv.Itoa(basePort+3),
+		"--plugin-port-start", strconv.Itoa(basePort+10),
+	)
 
 	cmd := exec.Command("bun", args...)
 	cmd.Dir = repoRoot
@@ -107,6 +114,19 @@ func StartStack(t *testing.T, basePort int, registryPath string) *Stack {
 	if logErr != nil {
 		t.Fatalf("creating log file: %v", logErr)
 	}
+	return cmd, logFile, repoRoot
+}
+
+// StartStack boots a real `bos dev` session from source (bun cli.ts) on an
+// explicit port block, waits for the host to answer /health, then waits for
+// the registry to carry the session's full childPids map. registryPath is
+// caller-owned: tests that boot multiple stacks pass the SAME path (like the
+// real shared registry) so adoption scenarios can observe a predecessor's
+// dead entries.
+func StartStack(t *testing.T, basePort int, registryPath string) *Stack {
+	t.Helper()
+
+	cmd, logFile, repoRoot := buildDevCommand(t, basePort, registryPath, false)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 

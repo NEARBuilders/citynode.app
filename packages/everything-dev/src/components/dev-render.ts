@@ -42,6 +42,8 @@ export interface DevRendererOutput {
 
 interface DevRendererInput {
   setRawMode?: (mode: boolean) => void;
+  resume?: () => void;
+  pause?: () => void;
   on: (event: string, listener: (...args: unknown[]) => void) => unknown;
   removeListener: (event: string, listener: (...args: unknown[]) => void) => unknown;
 }
@@ -440,19 +442,27 @@ export function createDevRenderer(
   const onKey = (...args: unknown[]) => {
     const data = args[0] as Buffer;
     const key = data.toString();
-    if (key === "q" || key === "\x03" || key === "l") {
+    if (key === "l") {
+      void Promise.resolve(onExportLogs?.());
+      return;
+    }
+    if (key === "q" || key === "\x03") {
       quitCount++;
       if (quitCount > 1) {
         void Promise.resolve(options?.onForceExit?.());
         return;
       }
-      if (key === "l") void Promise.resolve(onExportLogs?.());
-      else void Promise.resolve(onExit?.());
+      void Promise.resolve(onExit?.());
     }
   };
 
   try {
     rawCapable.setRawMode?.(true);
+    // Bun's TTY stdin never enters flowing mode from a bare `data` listener
+    // attach, so q/Ctrl-C bytes would never arrive while ISIG is off — the
+    // session would be unquittable from its own terminal. resume() starts the
+    // stream (a no-op if already flowing).
+    rawCapable.resume?.();
   } catch {
     // raw mode unavailable: key handling is inert; shutdown stays reachable via SIGTERM and bos kill
   }
@@ -466,6 +476,7 @@ export function createDevRenderer(
     rawCapable.removeListener("data", onKey);
     ttyOutput.removeListener?.("resize", onResize);
     rawCapable.setRawMode?.(false);
+    rawCapable.pause?.();
     output.write("\x1b[?25h\x1b[?1049l");
   };
 

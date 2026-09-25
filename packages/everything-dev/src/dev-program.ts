@@ -482,7 +482,8 @@ export const startBootstrap = (
 
     const localhostOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
     const corsOrigin = process.env.CORS_ORIGIN;
-    const isLocalhostProductionOrigin = corsOrigin !== undefined && localhostOrigin.test(corsOrigin);
+    const isLocalhostProductionOrigin =
+      corsOrigin !== undefined && localhostOrigin.test(corsOrigin);
     if (isLocalhostProductionOrigin && isRegistryStart(explicitConfig)) {
       warnings.push(
         `CORS_ORIGIN is a localhost origin (${corsOrigin}) in a registry production start — overriding with the configured domain`,

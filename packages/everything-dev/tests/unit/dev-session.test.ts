@@ -221,7 +221,7 @@ describe("runDevSession quit correctness", () => {
 
     await makeAllReady(2);
     const controls = getControls();
-    const suspendSpy = vi.spyOn(controls, "suspendForceExitTimer");
+    const suspendSpy = vi.spyOn(controls, "rearmForceExitTimer");
     controls.requestShutdown();
 
     await exitPromise;

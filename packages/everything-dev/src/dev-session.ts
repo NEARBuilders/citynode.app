@@ -92,7 +92,7 @@ export interface DevSessionControls {
   requestShutdownEscalating: () => void;
   forceExit: () => void;
   restoreView: () => void;
-  suspendForceExitTimer: () => void;
+  rearmForceExitTimer: () => void;
 }
 
 export const runDevSession = (
@@ -135,7 +135,7 @@ export const runDevSession = (
       requestShutdownEscalating: () => {},
       forceExit: () => {},
       restoreView: () => {},
-      suspendForceExitTimer: () => {},
+      rearmForceExitTimer: () => {},
     };
 
     onShutdownReady?.(controls);
@@ -219,23 +219,14 @@ export const runDevSession = (
 
     controls.emergencyKill = () => {
       for (const handle of spawned) {
-        const pid = Number(handle.pid);
-        if (!Number.isFinite(pid) || pid <= 1 || pid === process.pid) continue;
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          try {
-            process.kill(pid, "SIGKILL");
-          } catch {
-            // already gone
-          }
-        }
+        if (handle.pid === undefined) continue;
+        reapGroup(handle.pid);
       }
     };
 
     yield* Effect.addFinalizer(() =>
       Effect.gen(function* () {
-        controls.suspendForceExitTimer();
+        controls.rearmForceExitTimer();
 
         yield* Effect.forEach(spawned, (h) => h.kill.pipe(Effect.ignore), {
           concurrency: "unbounded",
@@ -417,21 +408,25 @@ const runApp = (
   }, 200);
   orphanWatch.unref?.();
 
+  const requestShutdownEscalating = () => {
+    signalCount++;
+    if (signalCount > 1) {
+      forceExit();
+      return;
+    }
+    controls?.restoreView();
+    console.log("\n[Dev] Shutting down...");
+    forceExitTimer = setTimeout(forceExit, 5000);
+    forceExitTimer.unref?.();
+    controls?.requestShutdown();
+  };
+  const handleSignal = requestShutdownEscalating;
+
   const program = Effect.scoped(
     runDevSession(orchestrator, (sessionControls) => {
       controls = sessionControls;
-      sessionControls.requestShutdownEscalating = () => {
-        signalCount++;
-        if (signalCount > 1) {
-          forceExit();
-          return;
-        }
-        sessionControls.restoreView();
-        console.log("\n[Dev] Shutting down...");
-        forceExitTimer = setTimeout(forceExit, 5000);
-        sessionControls.requestShutdown();
-      };
-      sessionControls.suspendForceExitTimer = () => {
+      sessionControls.requestShutdownEscalating = requestShutdownEscalating;
+      sessionControls.rearmForceExitTimer = () => {
         if (forceExitTimer) clearTimeout(forceExitTimer);
         forceExitTimer = setTimeout(forceExit, 5000);
         forceExitTimer.unref?.();
@@ -449,18 +444,6 @@ const runApp = (
       }).pipe(Effect.andThen(Effect.die(defect))),
     ),
   );
-
-  const handleSignal = () => {
-    signalCount++;
-    if (signalCount > 1) {
-      forceExit();
-      return;
-    }
-    controls?.restoreView();
-    console.log("\n[Dev] Shutting down...");
-    forceExitTimer = setTimeout(forceExit, 5000);
-    controls?.requestShutdown();
-  };
 
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);

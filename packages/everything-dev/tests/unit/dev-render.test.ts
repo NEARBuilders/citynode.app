@@ -465,7 +465,7 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     expect(onForceExit).toHaveBeenCalledTimes(1);
   });
 
-  it("q after l escalates to force exit", () => {
+  it("q after l still quits gracefully — l does not arm the quit escalation", () => {
     const { stdin, output } = makeTty();
     const onExit = vi.fn();
     const onExportLogs = vi.fn();
@@ -479,8 +479,8 @@ describe("createDevRenderer (TTY alt-screen)", () => {
     stdin.emit("data", Buffer.from("l"));
     stdin.emit("data", Buffer.from("q"));
     expect(onExportLogs).toHaveBeenCalledTimes(1);
-    expect(onExit).not.toHaveBeenCalled();
-    expect(onForceExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onForceExit).not.toHaveBeenCalled();
   });
 
   it("l triggers export", () => {
