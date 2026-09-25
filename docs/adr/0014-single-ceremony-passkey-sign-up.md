@@ -1,7 +1,7 @@
 # ADR 0014: Passkey sign-up is one ceremony that signs in and links the Passkey Wallet
 
 Date: 2026-09-25
-Status: Proposed
+Status: Accepted
 
 Better Auth's passkey plugin treats registration and authentication as separate ceremonies: `verify-registration` stores the credential but creates no session, so a new user today sees up to four WebAuthn sheets (a dismissed sign-in, create, sign-in, and a fresh assertion to link the wallet). We deviate from the plugin: when a registration begins without a session (passkey-first sign-up), a server hook on successful `verify-registration` creates the session and links the Passkey Wallet derived from the credential public key just verified, so a new member sees exactly one biometric prompt. The wallet link needs no extra assertion because the account id is a pure function of the stored key and registration already proved possession of it.
 
