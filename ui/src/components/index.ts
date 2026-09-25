@@ -31,6 +31,7 @@ export { SectionHeader } from "./layout/section-header";
 export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
+export { formatLocalDate, LocalDate, useLocalDate } from "./local-date";
 export { Logo } from "./logo";
 export { NodeDirectory, type NodeDirectoryNode } from "./node-directory";
 export { NodeDirectorySkeleton } from "./node-directory-skeleton";
