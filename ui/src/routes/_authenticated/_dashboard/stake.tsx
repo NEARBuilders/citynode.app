@@ -1,11 +1,12 @@
-import { BankIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
-import { PageContainer, PageHeader } from "@/components";
+import { PageContainer, PageHeader, SectionHeader } from "@/components";
+import { Button } from "@/components/ui/button";
 import { parseNearAmount } from "@/lib/near-amount";
 import {
   childNodesQueryOptions,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/queries/nodes";
 import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
+import { StakeDirectory } from "./-stake-directory";
 import { StakeForm } from "./-stake-form";
 import { useStakeMutation, useStakeWalletConnection } from "./-stake-mutations";
 import { StakeNodeContent } from "./-stake-node-content";
@@ -25,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/stake")({
   head: () => ({
     meta: [
       { title: "Stake | app" },
-      { name: "description", content: "Stake NEAR to a city validator pool." },
+      { name: "description", content: "Stake NEAR to back a CityNode community." },
     ],
   }),
   component: StakePage,
@@ -51,10 +53,15 @@ function getDirectoryNodes(tenantApps: TenantApp[]) {
   );
 }
 
-function getStakeTitle(node: Node | undefined, slug: string | null): ReactNode {
-  if (node) return `Stake NEAR to ${node.name}`;
-  if (slug) return <span className="capitalize">Stake NEAR to {slug}</span>;
-  return "Stake NEAR to a city";
+function getStakeTitle(node: Node | undefined, slug: string | null, loading: boolean): ReactNode {
+  if (node) return `Stake to ${node.name}`;
+  if (slug && loading)
+    return (
+      <>
+        Stake to <span className="capitalize">{slug}</span>
+      </>
+    );
+  return "Stake";
 }
 
 function hasInheritedValidator(node: Node | undefined, sourceNodeId: string | null | undefined) {
@@ -126,51 +133,72 @@ function StakePage() {
 
   const stakeMutation = useStakeMutation(auth, queryClient);
 
-  return (
-    <PageContainer variant="wide">
-      <div className="space-y-8">
+  const form = (
+    <StakeForm
+      amount={amount}
+      connectingWallet={connectingWallet}
+      isPending={stakeMutation.isPending}
+      nearAccountId={nearAccountId}
+      onAmountChange={setAmount}
+      onConnect={() => void handleConnectWallet()}
+      onStake={(variables) => stakeMutation.mutate(variables)}
+      parsedYocto={parsedYocto}
+      validator={selectedValidator}
+    />
+  );
+
+  if (!hasNodeSelection) {
+    return (
+      <PageContainer>
         <PageHeader
-          icon={BankIcon}
-          label="Stake"
-          title={getStakeTitle(node, slug)}
-          description={
-            <>
-              Deposits are staked directly to the validator pool via{" "}
-              <code className="font-mono text-xs">deposit_and_stake</code>.
-            </>
-          }
+          headerTestId="stake.heading"
+          title="Stake"
+          description="Back a community by staking NEAR to its validator. Your NEAR stays yours."
         />
-
-        <StakeNodeContent
-          childNodes={children}
-          directoryLoading={directoryLoading}
-          directoryNodes={directoryNodes}
-          gateway={gateway}
-          hasNodeSelection={hasNodeSelection}
-          isInherited={isInherited}
-          node={node}
-          nodeLoading={nodeLoading}
-          onSelectValidator={setSelectedValidatorId}
-          selectedValidatorId={selectedValidator?.id ?? null}
-          sourceNode={sourceNode}
-          stakingLoading={stakingLoading}
-          validators={validators}
-        />
-
-        <StakeForm
-          amount={amount}
-          connectingWallet={connectingWallet}
-          isPending={stakeMutation.isPending}
-          nearAccountId={nearAccountId}
-          onAmountChange={setAmount}
-          onConnect={() => void handleConnectWallet()}
-          onStake={(variables) => stakeMutation.mutate(variables)}
-          parsedYocto={parsedYocto}
-          validator={selectedValidator}
-        />
-
+        <section className="flex flex-col gap-4">
+          <SectionHeader title="Pick a community" />
+          <StakeDirectory nodes={directoryNodes} gateway={gateway} isLoading={directoryLoading} />
+        </section>
         <StakeOnramp />
+      </PageContainer>
+    );
+  }
+
+  return (
+    <PageContainer>
+      <div className="flex flex-col gap-4">
+        {(nodeSlug || selectedNodeId) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start"
+            nativeButton={false}
+            data-testid="stake.back"
+            render={<Link to="/stake" />}
+          >
+            <ArrowLeftIcon data-icon="inline-start" />
+            All communities
+          </Button>
+        )}
+        <PageHeader headerTestId="stake.heading" title={getStakeTitle(node, slug, nodeLoading)} />
       </div>
+      <StakeNodeContent
+        aside={
+          <>
+            {form}
+            <StakeOnramp />
+          </>
+        }
+        childNodes={children}
+        isInherited={isInherited}
+        node={node}
+        nodeLoading={nodeLoading}
+        onSelectValidator={setSelectedValidatorId}
+        selectedValidatorId={selectedValidator?.id ?? null}
+        sourceNode={sourceNode}
+        stakingLoading={stakingLoading}
+        validators={validators}
+      />
     </PageContainer>
   );
 }

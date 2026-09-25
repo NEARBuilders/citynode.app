@@ -1,33 +1,43 @@
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Button, Card } from "@/components";
+import { SectionHeader } from "@/components";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 
 type ChildNode = { id: string; name: string; slug: string };
 
-export function StakeNoValidator({ childNodes }: { childNodes: ChildNode[] }) {
+export function StakeNoValidator({ name, childNodes }: { name: string; childNodes: ChildNode[] }) {
   return (
-    <Card className="p-6 space-y-4">
-      <p className="text-sm text-muted-foreground">
-        This node doesn&apos;t run a validator — browse child nodes that might.
-      </p>
-      {childNodes.length > 0 ? (
-        <div className="flex flex-col gap-2">
+    <section className="flex flex-col gap-4" data-testid="stake.no-validator">
+      <SectionHeader
+        title={`${name} doesn't have a validator yet`}
+        description={
+          childNodes.length > 0
+            ? "Pick a community inside it instead."
+            : "Check back once it sets one up."
+        }
+      />
+      {childNodes.length > 0 && (
+        <ul className="flex flex-col gap-2">
           {childNodes.map((child) => (
-            <Button
-              key={child.id}
-              variant="outline"
-              nativeButton={false}
-              className="justify-between"
-              render={<Link to="/stake" search={{ node: child.slug, nodeId: child.id }} />}
-            >
-              <span className="capitalize">{child.name}</span>
-              <ArrowRightIcon />
-            </Button>
+            <li key={child.id}>
+              <Item
+                variant="outline"
+                size="sm"
+                render={<Link to="/stake" search={{ node: child.slug, nodeId: child.id }} />}
+              >
+                <ItemContent>
+                  <ItemTitle>
+                    <span className="capitalize">{child.name}</span>
+                  </ItemTitle>
+                </ItemContent>
+                <ItemActions>
+                  <ArrowRightIcon className="text-muted-foreground" />
+                </ItemActions>
+              </Item>
+            </li>
           ))}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">No child nodes either.</p>
+        </ul>
       )}
-    </Card>
+    </section>
   );
 }

@@ -1,6 +1,9 @@
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import type { useApiClient } from "@/app";
-import { Card } from "@/components";
-import { StakeDirectory } from "./-stake-directory";
+import { EmptyState } from "@/components";
+import { Button } from "@/components/ui/button";
 import { StakeNoValidator } from "./-stake-no-validator";
 import { StakeSkeleton } from "./-stake-skeleton";
 import { StakeValidatorList } from "./-stake-validator-list";
@@ -11,11 +14,8 @@ type Validator = Awaited<ReturnType<ApiClient["resolveStakingValidators"]>>["val
 type ChildNode = Awaited<ReturnType<ApiClient["listChildren"]>>[number];
 
 export function StakeNodeContent({
+  aside,
   childNodes,
-  directoryLoading,
-  directoryNodes,
-  gateway,
-  hasNodeSelection,
   isInherited,
   node,
   nodeLoading,
@@ -25,17 +25,8 @@ export function StakeNodeContent({
   stakingLoading,
   validators,
 }: {
+  aside: ReactNode;
   childNodes: ChildNode[];
-  directoryLoading: boolean;
-  directoryNodes: {
-    id: string;
-    kind: string;
-    name: string;
-    slug: string;
-    hostname: string | null;
-  }[];
-  gateway: string;
-  hasNodeSelection: boolean;
   isInherited: boolean;
   node: Node | undefined;
   nodeLoading: boolean;
@@ -45,38 +36,45 @@ export function StakeNodeContent({
   stakingLoading: boolean;
   validators: Validator[];
 }) {
-  if (!hasNodeSelection) {
-    return <StakeDirectory nodes={directoryNodes} gateway={gateway} isLoading={directoryLoading} />;
-  }
   if (nodeLoading || stakingLoading) return <StakeSkeleton />;
   if (!node) {
     return (
-      <Card className="p-10 text-center">
-        <p className="text-sm text-muted-foreground">Node not found.</p>
-      </Card>
+      <EmptyState
+        icon={MagnifyingGlassIcon}
+        title="Community not found"
+        description="It may have moved or not be set up yet."
+        action={
+          <Button nativeButton={false} render={<Link to="/stake" />}>
+            See all communities
+          </Button>
+        }
+      />
     );
   }
   if (validators.length === 0) {
     return (
-      <StakeNoValidator childNodes={childNodes.map(({ id, name, slug }) => ({ id, name, slug }))} />
+      <StakeNoValidator
+        name={node.name}
+        childNodes={childNodes.map(({ id, name, slug }) => ({ id, name, slug }))}
+      />
     );
   }
   return (
-    <div className="space-y-4">
-      {isInherited && sourceNode && (
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">
-            {node.name} doesn&apos;t run its own validator — staking to{" "}
-            <span className="font-semibold text-foreground">{sourceNode.name}</span>
-            &apos;s inherited validator.
+    <div className="grid gap-8 lg:grid-cols-5">
+      <div className="flex flex-col gap-4 lg:col-span-3">
+        {isInherited && sourceNode && (
+          <p className="text-sm text-muted-foreground" data-testid="stake.inherited">
+            {node.name} uses the validator from{" "}
+            <span className="font-medium text-foreground">{sourceNode.name}</span>.
           </p>
-        </Card>
-      )}
-      <StakeValidatorList
-        validators={validators}
-        selectedValidatorId={selectedValidatorId}
-        onSelect={onSelectValidator}
-      />
+        )}
+        <StakeValidatorList
+          validators={validators}
+          selectedValidatorId={selectedValidatorId}
+          onSelect={onSelectValidator}
+        />
+      </div>
+      <div className="flex flex-col gap-4 lg:col-span-2">{aside}</div>
     </div>
   );
 }

@@ -2,9 +2,26 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NodeStakeSection } from "./node-stake-section";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    to,
+    search,
+    children,
+    ...rest
+  }: {
+    to: string;
+    search?: { nodeId?: string };
+    children?: ReactNode;
+  }) => (
+    <a href={search?.nodeId ? `${to}?nodeId=${search.nodeId}` : to} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 const node = {
   id: "state",
@@ -79,7 +96,7 @@ describe("public node staking", () => {
       ],
     });
     expect(screen.getByRole("link", { name: "Stake to Illinois" }).getAttribute("href")).toBe(
-      "https://illinois.citynode.app/stake?nodeId=state",
+      "/stake?nodeId=state",
     );
     expect(screen.getByRole("heading", { name: "pool.example" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "grandchild.pool" })).toBeTruthy();
@@ -96,7 +113,7 @@ describe("public node staking", () => {
     expect(await screen.findByText(/Stake inherited from USA/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "ancestor.pool" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Stake to USA" }).getAttribute("href")).toBe(
-      "https://usa.citynode.app/stake?nodeId=country",
+      "/stake?nodeId=country",
     );
   });
 
@@ -122,7 +139,7 @@ describe("public node staking", () => {
       },
     });
     expect(screen.getByRole("link", { name: /Chicago/ }).getAttribute("href")).toBe(
-      "https://chicago.citynode.app/stake?nodeId=city",
+      "/stake?nodeId=city",
     );
     expect(await screen.findByText(/Pools across this node and its descendants/)).toBeTruthy();
     expect(screen.queryByText(/Stake inherited/)).toBeNull();

@@ -1,4 +1,10 @@
-import { NodeDirectory } from "@/components";
+import { ArrowRightIcon, BuildingsIcon } from "@phosphor-icons/react";
+import { Link } from "@tanstack/react-router";
+import { EmptyState } from "@/components";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type DirectoryNode = {
   id: string;
@@ -17,17 +23,55 @@ export function StakeDirectory({
   isLoading: boolean;
   nodes: DirectoryNode[];
 }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-      <p className="text-sm text-muted-foreground">Select a city to stake to.</p>
-      <NodeDirectory
-        nodes={nodes}
-        gateway={gateway}
-        linkTo="/stake"
-        linkSearch={(node) => ({ node: node.slug })}
-        isLoading={isLoading}
-        emptyMessage="No city nodes available yet."
+  if (isLoading) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        {["a", "b", "c", "d"].map((key) => (
+          <Skeleton key={key} className="h-20 w-full rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+  if (nodes.length === 0) {
+    return (
+      <EmptyState
+        icon={BuildingsIcon}
+        title="No communities to stake to yet"
+        description="Start one and it can run its own validator."
+        action={
+          <Button nativeButton={false} render={<Link to="/apply" />}>
+            Start a community
+          </Button>
+        }
       />
-    </div>
+    );
+  }
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2" data-testid="stake.directory">
+      {nodes.map((node) => (
+        <li key={node.id}>
+          <Item
+            variant="outline"
+            data-testid={`stake.community-${node.slug}`}
+            render={<Link to="/stake" search={{ node: node.slug }} />}
+          >
+            <ItemContent className="min-w-0">
+              <ItemTitle>
+                <span className="capitalize">{node.name}</span>
+              </ItemTitle>
+              <ItemDescription>
+                <span className="block truncate">{node.hostname ?? `${node.slug}.${gateway}`}</span>
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Badge variant="secondary">
+                <span className="capitalize">{node.kind}</span>
+              </Badge>
+              <ArrowRightIcon className="text-muted-foreground" />
+            </ItemActions>
+          </Item>
+        </li>
+      ))}
+    </ul>
   );
 }

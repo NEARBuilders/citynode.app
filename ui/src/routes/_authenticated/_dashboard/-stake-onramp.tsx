@@ -1,11 +1,20 @@
-import { SpinnerIcon, WalletIcon } from "@phosphor-icons/react";
+import { WalletIcon } from "@phosphor-icons/react";
 import { PingpayOnramp, PingpayOnrampError } from "@pingpay/onramp-sdk";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
 import pingpayLogoLight from "@/assets/brands/pingpay/pingpay-logo-light.png";
-import { Button } from "@/components";
+import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNearAccount } from "@/lib/use-near-account";
 
@@ -38,14 +47,14 @@ export function StakeOnramp() {
     <Button
       type="button"
       variant="outline"
+      size="sm"
       onClick={onBuy}
       disabled={disabled || pending}
       aria-label={pending ? "Opening PingPay" : "Buy NEAR with PingPay"}
-      className="shrink-0"
     >
       {pending ? (
         <>
-          <SpinnerIcon className="size-4 animate-spin" />
+          <Spinner />
           Opening…
         </>
       ) : (
@@ -69,30 +78,26 @@ export function StakeOnramp() {
   );
 
   return (
-    <div className="rounded-2xl bg-muted p-5">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background">
-            <WalletIcon className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Need NEAR to stake?</p>
-            <p className="text-sm text-muted-foreground">
-              Buy instantly with card, Apple Pay, or bank transfer.
-            </p>
-          </div>
-        </div>
+    <Item variant="muted" data-testid="stake.onramp">
+      <ItemMedia variant="icon">
+        <WalletIcon />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>Need NEAR?</ItemTitle>
+        <ItemDescription>Buy it with a card or bank transfer.</ItemDescription>
+      </ItemContent>
+      <ItemActions>
         {disabled ? (
           <Tooltip>
             <TooltipTrigger render={button} />
             <TooltipContent side="top" className="max-w-xs">
-              Connect a NEAR wallet to buy NEAR
+              Connect a NEAR wallet first
             </TooltipContent>
           </Tooltip>
         ) : (
           button
         )}
-      </div>
-    </div>
+      </ItemActions>
+    </Item>
   );
 }

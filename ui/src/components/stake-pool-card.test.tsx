@@ -119,7 +119,7 @@ describe("StakePoolCard", () => {
       expect.stringContaining("Some pool data is unavailable"),
     );
     expect(screen.getAllByText("—")).toHaveLength(3);
-    expect(screen.getByText("No pool accounts found.")).toBeTruthy();
+    expect(screen.getByText("No stakers yet.")).toBeTruthy();
     expect(screen.queryByText("0 NEAR")).toBeNull();
   });
 
@@ -178,17 +178,17 @@ describe("StakePoolCard", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderCard();
-    expect(screen.getByLabelText("Loading Stake")).toBeTruthy();
+    expect(screen.getByLabelText("Loading Total staked")).toBeTruthy();
     expect(await screen.findByText("12,345.6789 NEAR")).toBeTruthy();
     expect(screen.getByText("5%")).toBeTruthy();
     expect(screen.getByText("60")).toBeTruthy();
-    const firstAccounts = screen.getByRole("list", { name: "Top accounts in this sample" });
+    const firstAccounts = screen.getByRole("list", { name: "Top stakers" });
     expect(within(firstAccounts).getAllByRole("listitem")).toHaveLength(5);
     expect(within(firstAccounts).getAllByRole("listitem")[0].textContent).toContain(
       "staker-5.near",
     );
-    expect(screen.getByText("Show 1 more account").closest("details")?.open).toBe(false);
-    expect(screen.getByText(/6 of 60 pool accounts/)).toBeTruthy();
+    expect(screen.getByText("Show 1 more").closest("details")?.open).toBe(false);
+    expect(screen.getByText(/Top 5 of 6 sampled from 60/)).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "View account on Nearblocks" }).getAttribute("href"),
     ).toBe("https://nearblocks.io/address/chicago.poolv1.near");

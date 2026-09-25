@@ -2,11 +2,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function StakeSkeleton() {
   return (
-    <div className="space-y-4">
-      <Skeleton className="h-3 w-20" />
-      <Skeleton className="h-16 w-full rounded-xl" />
-      <Skeleton className="h-16 w-full rounded-xl" />
-      <Skeleton className="h-40 w-full rounded-xl" />
+    <div className="flex flex-col gap-3" data-testid="stake.loading">
+      <Skeleton className="h-5 w-32" />
+      <Skeleton className="h-20 w-full rounded-2xl" />
+      <Skeleton className="h-20 w-full rounded-2xl" />
     </div>
   );
 }
