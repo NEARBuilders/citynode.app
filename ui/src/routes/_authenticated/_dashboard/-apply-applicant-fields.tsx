@@ -1,69 +1,30 @@
-import { Card, CardContent, Field, FieldError, FieldLabel, Input, Textarea } from "@/components";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import type { ApplicationForm } from "./-apply-form";
 
-export function ApplyApplicantFields({
-  activeOrganizationLabel,
-  daoAccountId,
-  form,
-  nearAccountId,
-  activatingOrganization,
-}: {
-  activeOrganizationLabel: string;
-  daoAccountId: string | null;
-  form: ApplicationForm;
-  nearAccountId: string | null;
-  activatingOrganization: boolean;
-}) {
+export function ApplyApplicantFields({ form }: { form: ApplicationForm }) {
   return (
-    <Card>
-      <CardContent className="space-y-5 p-6">
-        <h2 className="font-semibold text-foreground">Applicant</h2>
-        <Field>
-          <FieldLabel htmlFor="application-org">active organization</FieldLabel>
-          <Input id="application-org" value={activeOrganizationLabel} readOnly />
-          {activatingOrganization && (
-            <p className="text-sm text-muted-foreground">Activating this organization…</p>
-          )}
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="application-account">NEAR account</FieldLabel>
-          <Input
-            id="application-account"
-            className="font-mono"
-            value={nearAccountId ?? ""}
-            readOnly
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="application-dao-account">tenant DAO account</FieldLabel>
-          <Input
-            id="application-dao-account"
-            className="font-mono"
-            value={daoAccountId ?? ""}
-            readOnly
-          />
-        </Field>
-        <form.Field name="motivation">
-          {(field) => {
-            const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-            return (
-              <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="application-motivation">motivation</FieldLabel>
-                <Textarea
-                  id="application-motivation"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  rows={6}
-                  placeholder="Why do you want to operate this node, and how will it serve the local community?"
-                  aria-invalid={errors.length > 0 || undefined}
-                />
-                <FieldError errors={errors} />
-              </Field>
-            );
-          }}
-        </form.Field>
-      </CardContent>
-    </Card>
+    <form.Field name="motivation">
+      {(field) => {
+        const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+        return (
+          <Field data-invalid={errors.length > 0 || undefined}>
+            <FieldLabel htmlFor="application-motivation">Why you want to run it</FieldLabel>
+            <Textarea
+              id="application-motivation"
+              data-testid="apply.motivation"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(event) => field.handleChange(event.target.value)}
+              rows={5}
+              placeholder="Who is the community, and what will you do for it?"
+              aria-invalid={errors.length > 0 || undefined}
+            />
+            <FieldDescription>Reviewers read this before approving.</FieldDescription>
+            <FieldError errors={errors} />
+          </Field>
+        );
+      }}
+    </form.Field>
   );
 }

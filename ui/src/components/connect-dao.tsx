@@ -1,6 +1,15 @@
-import { LinkIcon, ShieldCheckIcon, ShieldSlashIcon, WalletIcon } from "@phosphor-icons/react";
+import { UsersThreeIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { Button, Card, CardContent } from "@/components";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import {
   connectDaoAccount,
@@ -12,8 +21,17 @@ import {
 } from "@/lib/dao-connect";
 import { useNearAccount } from "@/lib/use-near-account";
 
+export type ConnectDaoPurpose =
+  | "apply"
+  | "tenant-create"
+  | "tenant-deploy"
+  | "proposal-review"
+  | "community-settings";
+
 interface ConnectDaoProps {
   onVerified?: (info: { daoAccountId: string; membership: ParsedDaoMembership }) => void;
+  purpose?: ConnectDaoPurpose;
+  variant?: "card" | "plain";
 }
 
 type MembershipState =
@@ -23,6 +41,15 @@ type MembershipState =
   | { kind: "not-member" }
   | { kind: "not-sputnik" }
   | { kind: "error"; message: string };
+
+const purposeCopy: Record<ConnectDaoPurpose | "default", string> = {
+  default: "Sign in as the DAO that owns this community, through Trezu.",
+  apply: "Your DAO will own the community. Sign in as the DAO through Trezu.",
+  "tenant-create": "The community's settings are published under this DAO's account.",
+  "tenant-deploy": "Publishing needs the DAO to sign. Keep it connected until deploy finishes.",
+  "proposal-review": "Approving creates the community and asks this DAO to publish its settings.",
+  "community-settings": "Changes to this community are signed by its DAO.",
+};
 
 async function handleConnect(authAccountId: string | null) {
   try {
@@ -34,7 +61,7 @@ async function handleDisconnect() {
   await disconnectDaoAccount();
 }
 
-export function ConnectDao({ onVerified }: ConnectDaoProps) {
+export function ConnectDao({ onVerified, purpose, variant = "card" }: ConnectDaoProps) {
   const primaryAccountId = useNearAccount();
   useDaoAutoRestore(primaryAccountId);
   const connection = useDaoConnection();
@@ -75,114 +102,105 @@ export function ConnectDao({ onVerified }: ConnectDaoProps) {
     };
   }, [connection.status, connection.daoAccountId, primaryAccountId, onVerified]);
 
-  if (connection.status === "connected" && connection.daoAccountId) {
-    return (
-      <Card>
-        <CardContent className="p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <WalletIcon className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">connected DAO account</h2>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <code className="font-mono text-sm text-foreground">{connection.daoAccountId}</code>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleDisconnect()}
-            >
-              disconnect
-            </Button>
-          </div>
-          <MembershipBadge state={membership} primaryAccountId={primaryAccountId} />
-        </CardContent>
-      </Card>
-    );
-  }
+  const connected = connection.status === "connected" && !!connection.daoAccountId;
+  const connecting = connection.status === "connecting";
 
   return (
-    <Card>
-      <CardContent className="p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <LinkIcon className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">connect your DAO</h2>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Sign in to your DAO account via the Trezu multiplexer. Tenant creation will publish the
-          tenant runtime config under your DAO account on the mainnet FastKV registry.
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void handleConnect(primaryAccountId)}
-            disabled={connection.status === "connecting"}
-          >
-            {connection.status === "connecting" ? (
-              <>
-                <Spinner className="mr-2" />
-                opening Trezu…
-              </>
-            ) : (
-              "connect via Trezu"
-            )}
-          </Button>
-          {connection.status === "error" && connection.error && (
-            <span className="text-xs text-destructive">{connection.error}</span>
+    <div className="flex flex-col gap-2" data-testid="dao-connect">
+      <Item variant={variant === "card" ? "outline" : "muted"}>
+        <ItemMedia variant="icon">
+          <UsersThreeIcon />
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          {connected ? (
+            <>
+              <ItemTitle data-testid="dao-connect-account">
+                <code className="truncate font-mono">{connection.daoAccountId}</code>
+              </ItemTitle>
+              <MembershipLine state={membership} primaryAccountId={primaryAccountId} />
+            </>
+          ) : (
+            <>
+              <ItemTitle>Connect your DAO</ItemTitle>
+              <ItemDescription>{purposeCopy[purpose ?? "default"]}</ItemDescription>
+            </>
           )}
-        </div>
-      </CardContent>
-    </Card>
+        </ItemContent>
+        <ItemActions>
+          {connected ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-testid="dao-connect-disconnect"
+              onClick={() => void handleDisconnect()}
+            >
+              Disconnect
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant={variant === "plain" ? "default" : "outline"}
+              data-testid="dao-connect-button"
+              onClick={() => void handleConnect(primaryAccountId)}
+              disabled={connecting}
+            >
+              {connecting && <Spinner />}
+              {connecting ? "Opening Trezu…" : "Connect with Trezu"}
+            </Button>
+          )}
+        </ItemActions>
+      </Item>
+      {!connected && connection.status === "error" && connection.error && (
+        <p role="alert" className="text-sm text-destructive">
+          {connection.error}
+        </p>
+      )}
+    </div>
   );
 }
 
-interface MembershipBadgeProps {
+function MembershipLine({
+  state,
+  primaryAccountId,
+}: {
   state: MembershipState;
   primaryAccountId: string | null;
-}
-
-function MembershipBadge({ state, primaryAccountId }: MembershipBadgeProps) {
+}) {
+  if (state.kind === "idle") return null;
   if (state.kind === "loading") {
     return (
-      <p className="text-xs text-muted-foreground flex items-center gap-2">
-        <Spinner className="h-3 w-3" />
-        verifying membership…
-      </p>
+      <div
+        className="flex items-center gap-2 text-sm text-muted-foreground"
+        data-testid="dao-connect-status"
+      >
+        <Spinner />
+        Checking membership…
+      </div>
     );
   }
-
   if (state.kind === "ok") {
     return (
-      <p className="text-xs text-muted-foreground flex items-center gap-2">
-        <ShieldCheckIcon className="h-3 w-3 text-success" />
-        {primaryAccountId
-          ? `${primaryAccountId} is listed in a DAO policy group`
-          : "connected account listed in a DAO policy group"}
-      </p>
+      <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
+        <Badge variant="success">Member</Badge>
+        {primaryAccountId && (
+          <span className="truncate text-sm text-muted-foreground">{primaryAccountId}</span>
+        )}
+      </div>
     );
   }
-
-  if (state.kind === "not-member") {
-    return (
-      <p className="text-xs text-destructive flex items-center gap-2">
-        <ShieldSlashIcon className="h-3 w-3" />
-        your primary NEAR account is not listed in any DAO policy group
-      </p>
-    );
-  }
-
-  if (state.kind === "not-sputnik") {
-    return (
-      <p className="text-xs text-destructive flex items-center gap-2">
-        <ShieldSlashIcon className="h-3 w-3" />
-        target is not a sputnik-dao contract
-      </p>
-    );
-  }
-
-  if (state.kind === "error") {
-    return <p className="text-xs text-destructive">membership check failed: {state.message}</p>;
-  }
-
-  return null;
+  const message =
+    state.kind === "not-member"
+      ? `${primaryAccountId ?? "Your NEAR account"} isn't a member of this DAO`
+      : state.kind === "not-sputnik"
+        ? "This account isn't a Sputnik DAO"
+        : `Couldn't check membership: ${state.message}`;
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="dao-connect-status">
+      <Badge variant="destructive">
+        {state.kind === "error" ? "Check failed" : "Not verified"}
+      </Badge>
+      <span className="text-sm text-muted-foreground">{message}</span>
+    </div>
+  );
 }

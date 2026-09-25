@@ -1,28 +1,20 @@
-import { PaperPlaneTiltIcon } from "@phosphor-icons/react";
-import { Badge, Button } from "@/components";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 export function ApplySubmit({
   canSubmit,
-  hostname,
   isSubmitting,
-  hostnameAvailable,
 }: {
   canSubmit: boolean;
-  hostname: string;
   isSubmitting: boolean;
-  hostnameAvailable: boolean | undefined;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Button type="submit" disabled={!canSubmit}>
-        <PaperPlaneTiltIcon />
-        {isSubmitting ? "submitting…" : "submit for review"}
+      <Button type="submit" disabled={!canSubmit} data-testid="apply.submit">
+        {isSubmitting && <Spinner />}
+        {isSubmitting ? "Submitting…" : "Submit for review"}
       </Button>
-      {hostname && hostnameAvailable !== undefined && (
-        <Badge variant={hostnameAvailable ? "secondary" : "destructive"}>
-          {hostnameAvailable ? "hostname available" : "hostname unavailable"}
-        </Badge>
-      )}
+      <p className="text-sm text-muted-foreground">An admin reviews every new community.</p>
     </div>
   );
 }

@@ -1,25 +1,39 @@
 import { CheckCircleIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Button, Card, CardContent, PageContainer } from "@/components";
+import { PageContainer } from "@/components";
+import { Button } from "@/components/ui/button";
 
-export function ApplySubmitted({ proposalId }: { proposalId: string }) {
+export function ApplySubmitted({ proposalId, name }: { proposalId: string; name?: string }) {
   return (
-    <PageContainer variant="wide">
-      <Card>
-        <CardContent className="space-y-4 p-8 text-center">
-          <CheckCircleIcon className="mx-auto size-10 text-primary" />
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-foreground">Application submitted</h1>
-            <p className="text-sm text-muted-foreground">
-              Your proposal is awaiting platform administrator review.
-            </p>
-          </div>
+    <PageContainer variant="narrow">
+      <div
+        className="flex flex-col items-center gap-6 py-12 text-center"
+        data-testid="apply.submitted"
+      >
+        <span className="flex size-14 items-center justify-center rounded-full bg-success-muted text-success-muted-foreground">
+          <CheckCircleIcon className="size-7" weight="fill" />
+        </span>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold text-foreground">Application submitted</h1>
+          <p className="text-base text-muted-foreground">
+            {name ? `${name} is` : "Your community is"} waiting for review. We&apos;ll show the
+            decision in Proposals.
+          </p>
           <p className="font-mono text-xs text-muted-foreground">{proposalId}</p>
-          <Button variant="outline" nativeButton={false} render={<Link to="/dashboard" />}>
-            back to dashboard
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button
+            nativeButton={false}
+            render={<Link to="/dashboard/node/proposals" />}
+            data-testid="apply.view-proposals"
+          >
+            View proposals
           </Button>
-        </CardContent>
-      </Card>
+          <Button variant="ghost" nativeButton={false} render={<Link to="/dashboard" />}>
+            Back to Home
+          </Button>
+        </div>
+      </div>
     </PageContainer>
   );
 }

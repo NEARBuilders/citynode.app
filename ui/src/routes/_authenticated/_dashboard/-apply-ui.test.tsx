@@ -144,15 +144,19 @@ function renderApply(queryClient = createQueryClient()) {
 }
 
 async function fillValidApplication() {
-  fireEvent.change(screen.getByLabelText("name"), {
+  fireEvent.change(screen.getByLabelText("Name"), {
     target: { value: "Chicago" },
   });
-  fireEvent.change(screen.getByLabelText("motivation"), {
+  fireEvent.change(screen.getByLabelText("Why you want to run it"), {
     target: { value: "Serve the local community." },
   });
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "submit for review" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Submit for review" })).toBeTruthy();
   });
+}
+
+function stepStatus(id: string) {
+  return screen.getByTestId(`apply.step-${id}`).getAttribute("data-status");
 }
 
 beforeEach(() => {
@@ -188,9 +192,15 @@ describe("apply route submission", () => {
     });
     renderApply(queryClient);
 
-    await fillValidApplication();
+    expect(stepStatus("organization")).toBe("complete");
+    expect(stepStatus("near")).toBe("complete");
+    expect(stepStatus("dao")).toBe("current");
+    expect(stepStatus("details")).toBe("upcoming");
     fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
-    const submitButton = screen.getByRole("button", { name: "submit for review" });
+    await waitFor(() => expect(stepStatus("details")).toBe("current"));
+    expect(stepStatus("dao")).toBe("complete");
+    await fillValidApplication();
+    const submitButton = screen.getByRole("button", { name: "Submit for review" });
     await waitFor(() => expect(submitButton).toHaveProperty("disabled", false));
     fireEvent.click(submitButton);
 
@@ -213,6 +223,9 @@ describe("apply route submission", () => {
     );
     expect(await screen.findByText("Application submitted")).toBeTruthy();
     expect(screen.getByText("proposal-1")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View proposals" }).getAttribute("href")).toBe(
+      "/dashboard/node/proposals",
+    );
     await waitFor(() => {
       expect(
         queryClient.getQueryState(proposalReviewQueryKeys.list("pending"))?.isInvalidated,
@@ -236,15 +249,36 @@ describe("apply route submission", () => {
       label: "unverified DAO connection",
       daoConnection: { status: "connected", daoAccountId: "dao.sputnik" },
     },
-  ])("keeps submission disabled with a $label", async ({ daoConnection }) => {
+  ])("keeps the details step locked with a $label", async ({ daoConnection }) => {
     harness.daoConnection = daoConnection;
     renderApply();
 
-    await fillValidApplication();
-    expect(screen.getByRole("button", { name: "submit for review" })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(stepStatus("dao")).toBe("current");
+    expect(stepStatus("details")).toBe("upcoming");
+    expect(screen.queryByRole("button", { name: "Submit for review" })).toBeNull();
     expect(harness.apiClient?.proposals.propose).not.toHaveBeenCalled();
+  });
+
+  it("returns to details after reopening a verified DAO step", async () => {
+    renderApply();
+    fireEvent.click(screen.getByRole("button", { name: "verify DAO" }));
+    await waitFor(() => expect(stepStatus("details")).toBe("current"));
+
+    fireEvent.click(screen.getByTestId("apply.step-dao-change"));
+    expect(stepStatus("dao")).toBe("current");
+    fireEvent.click(screen.getByTestId("apply.dao-continue"));
+    expect(stepStatus("details")).toBe("current");
+  });
+
+  it("opens the organization step first when there is no active organization", async () => {
+    harness.routeContext = { auth: { activeOrganizationId: null }, runtimeConfig: {} };
+    harness.authClient = {
+      organization: { list: vi.fn().mockResolvedValue({ data: [], error: null }) },
+    };
+    renderApply();
+
+    expect(stepStatus("organization")).toBe("current");
+    expect(await screen.findByRole("link", { name: /Create organization/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "verify DAO" })).toBeNull();
   });
 });

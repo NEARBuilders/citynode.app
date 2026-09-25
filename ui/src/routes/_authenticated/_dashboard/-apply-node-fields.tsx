@@ -1,13 +1,11 @@
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
-  Card,
-  CardContent,
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  Input,
-} from "@/components";
-import { Button } from "@/components/ui/button";
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -15,12 +13,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { deriveSlug } from "@/lib/slug";
 import type { ApplicationForm } from "./-apply-form";
 import type { NodeApplicationValues } from "./-node-application";
 import { nodeApplicationKinds } from "./-node-application";
 
 const DIRECT_COUNTRY_PARENT = "__direct-country__";
+
+const kindLabels: Record<(typeof nodeApplicationKinds)[number], string> = {
+  country: "Country",
+  state: "State",
+  city: "City",
+};
 
 type NodeOption = { id: string; name: string; kind: string };
 
@@ -51,156 +56,147 @@ export function ApplyNodeFields({
   stateNodes: NodeOption[];
   statesLoading: boolean;
 }) {
+  const stateOptions = stateNodes.filter((node) => node.kind === "state");
   return (
-    <Card>
-      <CardContent className="space-y-5 p-6">
-        <div className="space-y-1">
-          <h2 className="font-semibold text-foreground">Node details</h2>
-          <p className="text-sm text-muted-foreground">
-            Choose where this node belongs and describe the location it represents.
-          </p>
-        </div>
+    <>
+      <form.Field name="kind">
+        {(field) => (
+          <Field>
+            <FieldLabel id="application-kind-label">Type</FieldLabel>
+            <ToggleGroup
+              aria-labelledby="application-kind-label"
+              variant="outline"
+              value={[field.state.value]}
+              onValueChange={(values) => {
+                const kind = values[0] as NodeApplicationValues["kind"] | undefined;
+                if (!kind) return;
+                field.handleChange(kind);
+                const parentId = kind === "country" ? null : rootParentId || null;
+                form.setFieldValue("parentId", parentId, { dontUpdateMeta: true });
+              }}
+              data-testid="apply.kind"
+            >
+              {nodeApplicationKinds.map((kind) => (
+                <ToggleGroupItem key={kind} value={kind} data-testid={`apply.kind-${kind}`}>
+                  {kindLabels[kind]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+        )}
+      </form.Field>
 
-        <form.Field name="kind">
-          {(field) => (
-            <Field>
-              <FieldLabel>kind</FieldLabel>
-              <div className="flex flex-wrap gap-2">
-                {nodeApplicationKinds.map((kind) => (
-                  <Button
-                    key={kind}
-                    type="button"
-                    size="sm"
-                    variant={field.state.value === kind ? "default" : "outline"}
-                    onClick={() => {
-                      field.handleChange(kind);
-                      const parentId = kind === "country" ? null : rootParentId || null;
-                      form.setFieldValue("parentId", parentId, { dontUpdateMeta: true });
+      {formValues.kind !== "country" && (
+        <form.Field name="parentId">
+          {(field) => {
+            const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+            return (
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Field className="sm:flex-1" data-invalid={errors.length > 0 || undefined}>
+                  <FieldLabel htmlFor="application-country">Country</FieldLabel>
+                  <Select
+                    items={rootNodes.map((node) => ({ label: node.name, value: node.id }))}
+                    value={rootParentId || null}
+                    onValueChange={(countryId) => {
+                      if (countryId === null) return;
+                      setRootParentId(countryId);
+                      field.handleChange(countryId);
                     }}
                   >
-                    {kind}
-                  </Button>
-                ))}
-              </div>
-            </Field>
-          )}
-        </form.Field>
+                    <SelectTrigger id="application-country" className="w-full">
+                      <SelectValue placeholder="Choose a country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rootNodes.map((node) => (
+                        <SelectItem key={node.id} value={node.id}>
+                          {node.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError errors={errors} />
+                </Field>
 
-        {formValues.kind !== "country" && (
-          <form.Field name="parentId">
-            {(field) => {
-              const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-              return (
-                <div className="space-y-4">
-                  <Field data-invalid={errors.length > 0 || undefined}>
-                    <FieldLabel htmlFor="application-country">parent country</FieldLabel>
+                {formValues.kind === "city" && rootParentId && (
+                  <Field className="sm:flex-1">
+                    <FieldLabel htmlFor="application-state">State</FieldLabel>
                     <Select
-                      items={rootNodes.map((node) => ({ label: node.name, value: node.id }))}
-                      value={rootParentId || null}
-                      onValueChange={(countryId) => {
-                        if (countryId === null) return;
-                        setRootParentId(countryId);
-                        field.handleChange(countryId);
+                      value={
+                        field.state.value === rootParentId
+                          ? DIRECT_COUNTRY_PARENT
+                          : (field.state.value ?? DIRECT_COUNTRY_PARENT)
+                      }
+                      items={[
+                        { label: "No state", value: DIRECT_COUNTRY_PARENT },
+                        ...stateOptions.map((node) => ({ label: node.name, value: node.id })),
+                      ]}
+                      onValueChange={(value) => {
+                        if (value === null) return;
+                        field.handleChange(value === DIRECT_COUNTRY_PARENT ? rootParentId : value);
                       }}
                     >
-                      <SelectTrigger id="application-country" className="w-full">
-                        <SelectValue placeholder="Select a country" />
+                      <SelectTrigger id="application-state" className="w-full">
+                        <SelectValue
+                          placeholder={statesLoading ? "Loading states…" : "Choose a state"}
+                        />
                       </SelectTrigger>
                       <SelectContent>
-                        {rootNodes.map((node) => (
+                        <SelectItem value={DIRECT_COUNTRY_PARENT}>No state</SelectItem>
+                        {stateOptions.map((node) => (
                           <SelectItem key={node.id} value={node.id}>
                             {node.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <FieldError errors={errors} />
                   </Field>
-
-                  {formValues.kind === "city" && rootParentId && (
-                    <Field>
-                      <FieldLabel htmlFor="application-state">parent state</FieldLabel>
-                      <Select
-                        value={
-                          field.state.value === rootParentId
-                            ? DIRECT_COUNTRY_PARENT
-                            : (field.state.value ?? DIRECT_COUNTRY_PARENT)
-                        }
-                        items={[
-                          { label: "Directly under country", value: DIRECT_COUNTRY_PARENT },
-                          ...stateNodes
-                            .filter((node) => node.kind === "state")
-                            .map((node) => ({ label: node.name, value: node.id })),
-                        ]}
-                        onValueChange={(value) => {
-                          if (value === null) return;
-                          field.handleChange(
-                            value === DIRECT_COUNTRY_PARENT ? rootParentId : value,
-                          );
-                        }}
-                      >
-                        <SelectTrigger id="application-state" className="w-full">
-                          <SelectValue
-                            placeholder={statesLoading ? "Loading states…" : "Select a state"}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={DIRECT_COUNTRY_PARENT}>
-                            Directly under country
-                          </SelectItem>
-                          {stateNodes
-                            .filter((node) => node.kind === "state")
-                            .map((node) => (
-                              <SelectItem key={node.id} value={node.id}>
-                                {node.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  )}
-                </div>
-              );
-            }}
-          </form.Field>
-        )}
-
-        <form.Field name="name">
-          {(field) => {
-            const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-            return (
-              <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="application-name">name</FieldLabel>
-                <Input
-                  id="application-name"
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    const nextName = event.target.value;
-                    field.handleChange(nextName);
-                    form.setFieldValue(
-                      "slug",
-                      deriveSlug(nextName, form.getFieldValue("slug"), slugManuallyEdited.current),
-                      { dontUpdateMeta: true },
-                    );
-                  }}
-                  placeholder="Chicago"
-                  aria-invalid={errors.length > 0 || undefined}
-                />
-                <FieldError errors={errors} />
-              </Field>
+                )}
+              </div>
             );
           }}
         </form.Field>
+      )}
 
-        <form.Field name="slug">
-          {(field) => {
-            const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
-            return (
-              <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="application-slug">slug</FieldLabel>
-                <Input
+      <form.Field name="name">
+        {(field) => {
+          const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+          return (
+            <Field data-invalid={errors.length > 0 || undefined}>
+              <FieldLabel htmlFor="application-name">Name</FieldLabel>
+              <Input
+                id="application-name"
+                data-testid="apply.name"
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  field.handleChange(nextName);
+                  form.setFieldValue(
+                    "slug",
+                    deriveSlug(nextName, form.getFieldValue("slug"), slugManuallyEdited.current),
+                    { dontUpdateMeta: true },
+                  );
+                }}
+                placeholder="Chicago"
+                aria-invalid={errors.length > 0 || undefined}
+              />
+              <FieldError errors={errors} />
+            </Field>
+          );
+        }}
+      </form.Field>
+
+      <form.Field name="slug">
+        {(field) => {
+          const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
+          const available = preflight?.hostname.available;
+          return (
+            <Field data-invalid={errors.length > 0 || available === false || undefined}>
+              <FieldLabel htmlFor="application-slug">Web address</FieldLabel>
+              <InputGroup>
+                <InputGroupInput
                   id="application-slug"
+                  data-testid="apply.slug"
                   className="font-mono"
                   name={field.name}
                   value={field.state.value}
@@ -212,24 +208,30 @@ export function ApplyNodeFields({
                   }}
                   placeholder="chicago"
                   pattern="[a-z0-9-]+"
-                  aria-invalid={errors.length > 0 || undefined}
+                  aria-invalid={errors.length > 0 || available === false || undefined}
                 />
-                <FieldDescription>
-                  {hostname || `your-node.${gatewayId}`}
-                  {preflightLoading
-                    ? " — checking availability…"
-                    : preflight
-                      ? preflight.hostname.available
-                        ? " — available"
-                        : " — unavailable"
-                      : ""}
-                </FieldDescription>
-                <FieldError errors={errors} />
-              </Field>
-            );
-          }}
-        </form.Field>
-      </CardContent>
-    </Card>
+                <InputGroupAddon align="inline-end">
+                  <InputGroupText>
+                    <code className="font-mono">.{gatewayId}</code>
+                  </InputGroupText>
+                </InputGroupAddon>
+              </InputGroup>
+              <FieldDescription data-testid="apply.slug-status">
+                {!hostname
+                  ? "Lowercase letters, numbers and hyphens."
+                  : preflightLoading
+                    ? "Checking availability…"
+                    : available === true
+                      ? `${hostname} is available`
+                      : available === false
+                        ? `${hostname} is taken`
+                        : hostname}
+              </FieldDescription>
+              <FieldError errors={errors} />
+            </Field>
+          );
+        }}
+      </form.Field>
+    </>
   );
 }
