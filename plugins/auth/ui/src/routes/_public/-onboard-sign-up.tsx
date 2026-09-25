@@ -1,3 +1,4 @@
+import { FingerprintIcon, WalletIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { isPasskeyWalletAvailable, type PasskeyWalletNetwork } from "better-near-auth/client";
 import {
@@ -10,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 type Mode = "create" | "existing";
 
@@ -88,28 +90,30 @@ export function OnboardSignUp({
   };
 
   const nearButtons = (
-    <div className="space-y-3">
+    <div className="flex flex-col items-center gap-1">
       <Button
         type="button"
         variant="outline"
+        size="lg"
         onClick={() => void handleNear()}
         disabled={pending !== null}
         className="w-full"
         data-testid="onboard.signin-button"
       >
-        {pending === "near"
-          ? "connecting..."
-          : detectedAccount
-            ? `Continue as ${detectedAccount}`
-            : "Sign in with a NEAR wallet"}
+        {pending === "near" ? (
+          <Spinner data-icon="inline-start" />
+        ) : (
+          <WalletIcon data-icon="inline-start" />
+        )}
+        {detectedAccount ? `Continue as ${detectedAccount}` : "Continue with NEAR"}
       </Button>
       {detectedAccount ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="link"
+          size="sm"
           onClick={() => void handleNear(true)}
           disabled={pending !== null}
-          className="w-full"
         >
           Use another wallet
         </Button>
@@ -119,23 +123,28 @@ export function OnboardSignUp({
 
   if (mode === "existing") {
     return (
-      <div className="space-y-3" data-testid="onboard.existing-account">
+      <div className="flex flex-col gap-3" data-testid="onboard.existing-account">
         <Button
           type="button"
-          variant="default"
+          size="lg"
           onClick={() => void handlePasskeySignIn()}
           disabled={pending !== null}
           className="w-full"
           data-testid="onboard.passkey-signin-button"
         >
-          {pending === "passkey" ? "waiting for passkey..." : "Sign in with passkey"}
+          {pending === "passkey" ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <FingerprintIcon data-icon="inline-start" />
+          )}
+          {pending === "passkey" ? "Waiting for passkey…" : "Sign in with passkey"}
         </Button>
         {passkeyMissing ? (
           <p
-            className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground"
+            className="text-center text-sm text-muted-foreground"
             data-testid="onboard.no-passkey-hint"
           >
-            No passkey on this device? Sign in with your phone, or connect your NEAR wallet.
+            No passkey on this device? Use a NEAR wallet instead.
           </p>
         ) : null}
         {nearButtons}
@@ -144,7 +153,7 @@ export function OnboardSignUp({
           variant="ghost"
           onClick={() => setMode("create")}
           disabled={pending !== null}
-          className="w-full"
+          className="self-center"
           data-testid="onboard.create-account-link"
         >
           I'm new here
@@ -154,40 +163,45 @@ export function OnboardSignUp({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <Button
         type="button"
-        variant="default"
+        size="lg"
         onClick={() => void handleCreate()}
         disabled={pending !== null}
         className="w-full"
         data-testid="onboard.create-account-button"
       >
-        {pending === "create" ? "waiting for passkey..." : "Create account"}
+        {pending === "create" ? (
+          <Spinner data-icon="inline-start" />
+        ) : (
+          <FingerprintIcon data-icon="inline-start" />
+        )}
+        {pending === "create" ? "Waiting for passkey…" : "Create account"}
       </Button>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => setMode("existing")}
-        disabled={pending !== null}
-        className="w-full"
-        data-testid="onboard.existing-account-button"
-      >
-        I already have an account
-      </Button>
+      <p className="text-center text-sm text-muted-foreground" data-testid="onboard.passkey-note">
+        {walletAvailable
+          ? "Uses a passkey on this device and sets up a NEAR wallet for you. No seed phrase."
+          : "Uses a passkey on this device. No password to remember."}
+      </p>
       {unsupported ? (
-        <div className="space-y-3" data-testid="onboard.unsupported-authenticator">
-          <p className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
-            This device can't create a supported passkey. Sign in with a NEAR wallet instead.
+        <div className="flex flex-col gap-3" data-testid="onboard.unsupported-authenticator">
+          <p className="text-center text-sm text-muted-foreground">
+            This device can't create a supported passkey. Use a NEAR wallet instead.
           </p>
           {nearButtons}
         </div>
       ) : null}
-      <p className="text-xs text-center text-muted-foreground" data-testid="onboard.passkey-note">
-        {walletAvailable
-          ? "Creating an account uses your device passkey and sets up a NEAR wallet for you — no seed phrase."
-          : "Creating an account uses your device passkey. A passkey wallet isn't available on this network, so no NEAR wallet is created."}
-      </p>
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setMode("existing")}
+        disabled={pending !== null}
+        className="self-center"
+        data-testid="onboard.existing-account-button"
+      >
+        I already have an account
+      </Button>
     </div>
   );
 }

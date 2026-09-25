@@ -6,15 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-export function DisplayNameStep({ initialName }: { initialName: string }) {
+export function DisplayNameStep({
+  initialName,
+  onDone,
+}: {
+  initialName: string;
+  onDone: () => void;
+}) {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const [name, setName] = useState(initialName);
   const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
-
-  if (done) return null;
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = name.trim();
@@ -27,13 +29,13 @@ export function DisplayNameStep({ initialName }: { initialName: string }) {
       return;
     }
     await refreshSessionCache(auth, queryClient);
-    setDone(true);
+    onDone();
   };
 
   return (
     <form
       onSubmit={(event) => void handleSubmit(event)}
-      className="space-y-3 text-left"
+      className="flex flex-col gap-4"
       data-testid="onboard.display-name"
     >
       <Field>
@@ -48,26 +50,25 @@ export function DisplayNameStep({ initialName }: { initialName: string }) {
           data-testid="onboard.display-name-input"
         />
       </Field>
-      <div className="flex gap-2">
-        <Button
-          type="submit"
-          className="flex-1"
-          disabled={pending || !name.trim()}
-          data-testid="onboard.display-name-save"
-        >
-          {pending ? "saving..." : "Save"}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="flex-1"
-          onClick={() => setDone(true)}
-          disabled={pending}
-          data-testid="onboard.display-name-skip"
-        >
-          Skip
-        </Button>
-      </div>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full"
+        disabled={pending || !name.trim()}
+        data-testid="onboard.display-name-save"
+      >
+        {pending ? "Saving…" : "Continue"}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="self-center"
+        onClick={onDone}
+        disabled={pending}
+        data-testid="onboard.display-name-skip"
+      >
+        Skip for now
+      </Button>
     </form>
   );
 }

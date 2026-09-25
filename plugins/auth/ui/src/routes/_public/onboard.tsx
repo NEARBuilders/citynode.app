@@ -1,9 +1,14 @@
+import { CheckCircleIcon, DesktopIcon, TicketIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { refreshSessionCache, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AuthPanel } from "@/components/auth-panel";
+import { StepProgress } from "@/components/step-progress";
 import { Button } from "@/components/ui/button";
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
@@ -11,6 +16,8 @@ import { OnboardSignUp } from "./-onboard-sign-up";
 type SearchParams = {
   code?: string;
 };
+
+const JOIN_STEPS = ["Create your account", "Join the organization", "Add your name"] as const;
 
 function sanitizeCode(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -25,6 +32,8 @@ export const Route = createFileRoute("/_public/onboard")({
   }),
   component: OnboardPage,
 });
+
+type Redeemed = { organizationName: string; eventName: string };
 
 function OnboardPage() {
   const auth = useAuthClient();
@@ -41,10 +50,8 @@ function OnboardPage() {
   });
 
   const [accountCreated, setAccountCreated] = useState(false);
-  const [redeemed, setRedeemed] = useState<{
-    organizationName: string;
-    eventName: string;
-  } | null>(null);
+  const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
+  const [nameDone, setNameDone] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const redeemingRef = useRef(false);
 
@@ -53,7 +60,7 @@ function OnboardPage() {
     redeemingRef.current = true;
     void apiClient.auth
       .redeemOnboardingCode({ code })
-      .then((result) => {
+      .then((result: Redeemed) => {
         setRedeemed({ organizationName: result.organizationName, eventName: result.eventName });
         toast.success(`You've joined ${result.organizationName}`);
         void refreshSessionCache(auth, queryClient);
@@ -64,50 +71,72 @@ function OnboardPage() {
   }, [session?.user, code, redeemed, redeemError, auth, apiClient, queryClient]);
 
   if (redeemed) {
+    const joinedLine = (
+      <span data-testid="onboard.success">
+        You've joined{" "}
+        <span className="font-medium text-foreground">{redeemed.organizationName}</span> for{" "}
+        {redeemed.eventName}.
+      </span>
+    );
+
+    if (!nameDone) {
+      return (
+        <AuthPanel
+          icon={<CheckCircleIcon />}
+          title="You're in"
+          titleTestId="onboard.heading"
+          description={joinedLine}
+        >
+          <StepProgress steps={JOIN_STEPS} current={2} testId="onboard.progress" />
+          <DisplayNameStep
+            initialName={accountCreated ? "" : (session?.user.name ?? "")}
+            onDone={() => setNameDone(true)}
+          />
+        </AuthPanel>
+      );
+    }
+
     const gatewayHost = new URL(getGatewayOrigin(runtimeConfig)).host;
     return (
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
-          <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
-            You're in
-          </h1>
-          <p className="text-sm text-muted-foreground" data-testid="onboard.success">
-            You've joined{" "}
-            <span className="text-foreground font-medium">{redeemed.organizationName}</span> for{" "}
-            {redeemed.eventName}.
-          </p>
-          <DisplayNameStep initialName={accountCreated ? "" : (session?.user.name ?? "")} />
-          <div
-            className="space-y-2 rounded-lg border border-border bg-muted p-4 text-left"
-            data-testid="onboard.continue-on-computer"
-          >
-            <p className="text-sm font-medium text-foreground">Continue on your computer</p>
-            <p className="text-sm text-muted-foreground">
+      <AuthPanel
+        icon={<CheckCircleIcon />}
+        title="You're all set"
+        titleTestId="onboard.heading"
+        description={joinedLine}
+      >
+        <Item variant="muted" data-testid="onboard.continue-on-computer">
+          <ItemMedia variant="icon">
+            <DesktopIcon />
+          </ItemMedia>
+          <ItemContent>
+            <ItemTitle>Continue on your computer</ItemTitle>
+            <ItemDescription>
               Open{" "}
               <span className="font-mono text-foreground" data-testid="onboard.gateway-origin">
                 {gatewayHost}
-              </span>{" "}
-              on your laptop, choose "Sign in with phone", and scan the code with this phone.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            className="w-full"
-            nativeButton={false}
-            render={<Link to="/dashboard" />}
-          >
-            Go to dashboard
-          </Button>
-        </div>
-      </div>
+              </span>
+              , choose "Sign in with your phone" and scan the code with this phone.
+            </ItemDescription>
+          </ItemContent>
+        </Item>
+        <Button
+          size="lg"
+          className="w-full"
+          nativeButton={false}
+          render={<Link to="/dashboard" />}
+          data-testid="onboard.home-button"
+        >
+          Go to Home
+        </Button>
+      </AuthPanel>
     );
   }
 
   if (!code) {
     return (
-      <StatusCard
+      <StatusPanel
         title="Invalid invitation"
-        description="This onboarding link is missing its code. Ask the organizer for a new QR code."
+        description="This link is missing its code. Ask the organizer for a new QR code."
         testId="onboard.invalid"
       />
     );
@@ -115,8 +144,12 @@ function OnboardPage() {
 
   if (info === undefined) {
     return (
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <p className="text-sm text-muted-foreground" data-testid="onboard.loading">
+      <div className="flex flex-1 items-center justify-center px-4 py-20">
+        <p
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          data-testid="onboard.loading"
+        >
+          <Spinner />
           Loading invitation…
         </p>
       </div>
@@ -125,7 +158,7 @@ function OnboardPage() {
 
   if (info === null) {
     return (
-      <StatusCard
+      <StatusPanel
         title="Invitation not found"
         description="This onboarding code is invalid. Ask the organizer for a new QR code."
         testId="onboard.not-found"
@@ -135,7 +168,7 @@ function OnboardPage() {
 
   if (info.revoked || info.expired || info.usedUp) {
     return (
-      <StatusCard
+      <StatusPanel
         title="Invitation unavailable"
         description={
           info.revoked
@@ -150,48 +183,52 @@ function OnboardPage() {
   }
 
   if (redeemError) {
-    return <StatusCard title="Could not join" description={redeemError} testId="onboard.error" />;
+    return <StatusPanel title="Could not join" description={redeemError} testId="onboard.error" />;
   }
 
   if (session?.user) {
     return (
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-3 text-center">
-          <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
-            Joining {info.organizationName}
-          </h1>
-          <p className="text-sm text-muted-foreground" data-testid="onboard.status">
-            Joining {info.eventName}…
-          </p>
-        </div>
-      </div>
+      <AuthPanel
+        icon={<TicketIcon />}
+        title={`Joining ${info.organizationName}`}
+        titleTestId="onboard.heading"
+      >
+        <StepProgress steps={JOIN_STEPS} current={1} testId="onboard.progress" />
+        <p
+          className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+          data-testid="onboard.status"
+        >
+          <Spinner />
+          Adding you to {info.eventName}…
+        </p>
+      </AuthPanel>
     );
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5">
-        <div className="space-y-1 text-center">
-          <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
-            You're invited
-          </h1>
-          <p className="text-sm text-muted-foreground" data-testid="onboard.invite">
-            Join <span className="text-foreground font-medium">{info.organizationName}</span> for{" "}
-            {info.eventName}
-            {info.inviterName ? `, invited by ${info.inviterName}` : ""}.
-          </p>
-        </div>
-
-        <OnboardSignUp
-          networkId={runtimeConfig?.networkId ?? "mainnet"}
-          onAccountCreated={() => setAccountCreated(true)}
-        />
-      </div>
-    </div>
+    <AuthPanel
+      icon={<TicketIcon />}
+      eyebrow={info.inviterName ? `${info.inviterName} invited you` : "You're invited"}
+      title={`Join ${info.organizationName}`}
+      titleTestId="onboard.heading"
+      description={
+        <>
+          {info.eventName} with{" "}
+          <span className="font-medium text-foreground">{info.organizationName}</span>
+        </>
+      }
+      descriptionTestId="onboard.invite"
+    >
+      <StepProgress steps={JOIN_STEPS} current={0} testId="onboard.progress" />
+      <OnboardSignUp
+        networkId={runtimeConfig?.networkId ?? "mainnet"}
+        onAccountCreated={() => setAccountCreated(true)}
+      />
+    </AuthPanel>
   );
 }
 
-function StatusCard({
+function StatusPanel({
   title,
   description,
   testId,
@@ -200,25 +237,24 @@ function StatusCard({
   description: string;
   testId: string;
 }) {
-  const navigate = useNavigate();
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 sm:p-8 space-y-5 text-center">
-        <h1 className="text-xl font-semibold text-foreground" data-testid="onboard.heading">
-          {title}
-        </h1>
-        <p className="text-sm text-muted-foreground" data-testid={testId}>
-          {description}
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => void navigate({ to: "/" })}
-        >
-          Back to home
-        </Button>
-      </div>
-    </div>
+    <AuthPanel
+      icon={<WarningCircleIcon />}
+      title={title}
+      titleTestId="onboard.heading"
+      description={description}
+      descriptionTestId={testId}
+    >
+      <Button
+        variant="outline"
+        size="lg"
+        className="w-full"
+        nativeButton={false}
+        render={<Link to="/explore" />}
+        data-testid="onboard.explore-button"
+      >
+        Explore communities
+      </Button>
+    </AuthPanel>
   );
 }
