@@ -4,7 +4,7 @@ import { digestOf } from "./descriptor";
 import type { PluginManifest, RouteRecord } from "./manifest-schema";
 import { MOUNT_REGISTRY, type MountDef, type MountId, resolveMountSegment } from "./mount-registry";
 import { compareNavItems, type NavDeclaration, type NavItem, type NavManifest } from "./nav";
-import type { RouteConfigModule, RouteOptionsBundle } from "./route-config";
+import { ROUTE_OPTION_KEYS, type RouteConfigModule, type RouteOptionsBundle } from "./route-config";
 
 /**
  * Host-side route-graph construction (ADR 0008 §1): manifests + route
@@ -153,6 +153,23 @@ function layoutBeforeLoad(
   };
 }
 
+const AUTHORED_OPTION_KEYS = ROUTE_OPTION_KEYS.filter(
+  (key) => key !== "beforeLoad" && key !== "component",
+);
+
+function authoredOptions(options: RouteOptionsBundle): Partial<RouteOptionsBundle> {
+  const authored: Partial<Record<keyof RouteOptionsBundle, unknown>> = {};
+  for (const key of AUTHORED_OPTION_KEYS) {
+    if (options[key] !== undefined) authored[key] = options[key];
+  }
+  return authored as Partial<RouteOptionsBundle>;
+}
+
+function rootAuthoredOptions(options: RouteOptionsBundle): Partial<RouteOptionsBundle> {
+  const { params: _params, ...authored } = authoredOptions(options);
+  return authored;
+}
+
 export async function constructTree(input: ConstructInput): Promise<ConstructedTree> {
   const refs = [...input.plugins].sort((a, b) => a.key.localeCompare(b.key));
   const resolved: ResolvedPlugin[] = [];
@@ -202,16 +219,9 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
 
   const rootRoute = toAnyRoute(
     createRootRoute({
+      ...(input.rootOptions ? rootAuthoredOptions(input.rootOptions) : {}),
       component: input.rootOptions?.component ?? Outlet,
-      ...(input.rootOptions?.errorComponent
-        ? { errorComponent: input.rootOptions.errorComponent }
-        : {}),
-      ...(input.rootOptions?.notFoundComponent
-        ? { notFoundComponent: input.rootOptions.notFoundComponent }
-        : {}),
-      ...(input.rootOptions?.loader ? { loader: input.rootOptions.loader } : {}),
       ...(input.rootOptions?.beforeLoad ? { beforeLoad: input.rootOptions.beforeLoad } : {}),
-      ...(input.rootOptions?.head ? { head: input.rootOptions.head } : {}),
     }),
   );
 
@@ -228,13 +238,8 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
       ...(gate || options.beforeLoad
         ? { beforeLoad: layoutBeforeLoad(gate, options.beforeLoad) }
         : {}),
-      ...(options.loader ? { loader: options.loader } : {}),
-      ...(options.head ? { head: options.head } : {}),
-      ...(options.staticData ? { staticData: options.staticData } : {}),
+      ...authoredOptions(options),
       component: options.component ?? Outlet,
-      ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
-      ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
-      ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
     });
     mountRoutes.set(mountId, toAnyRoute(route));
   }
@@ -333,27 +338,17 @@ export async function constructTree(input: ConstructInput): Promise<ConstructedT
           route = createRoute({
             id: `${plugin.key}__${record.id}`,
             getParentRoute: () => parent.route,
-            ...(options.loader ? { loader: options.loader } : {}),
+            ...authoredOptions(options),
             ...(options.beforeLoad ? { beforeLoad: options.beforeLoad } : {}),
-            ...(options.head ? { head: options.head } : {}),
-            ...(options.staticData ? { staticData: options.staticData } : {}),
             component: options.component ?? Outlet,
-            ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
-            ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
-            ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
           });
         } else {
           route = createRoute({
             path: routePath,
             getParentRoute: () => parent.route,
-            ...(options.loader ? { loader: options.loader } : {}),
+            ...authoredOptions(options),
             ...(options.beforeLoad ? { beforeLoad: options.beforeLoad } : {}),
-            ...(options.head ? { head: options.head } : {}),
-            ...(options.staticData ? { staticData: options.staticData } : {}),
             component: options.component ?? Outlet,
-            ...(options.errorComponent ? { errorComponent: options.errorComponent } : {}),
-            ...(options.pendingComponent ? { pendingComponent: options.pendingComponent } : {}),
-            ...(options.notFoundComponent ? { notFoundComponent: options.notFoundComponent } : {}),
           });
         }
 
