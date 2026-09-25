@@ -80,7 +80,7 @@ const SERVICE_CONFIGS: Record<
   string,
   Pick<
     ServiceDescriptor,
-    "command" | "args" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
+    "command" | "args" | "env" | "readyPatterns" | "errorPatterns" | "defaultPort" | "readinessPath"
   >
 > = {
   host: {
