@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { InvitationCard } from "./-invitation-card";
+import { InvitationRow } from "./-invitation-row";
 import { detectInviteIdentifier, InviteMemberForm } from "./-invite-member-form";
 
 const teams = [
@@ -148,8 +148,8 @@ describe("InviteMemberForm team targeting", () => {
   });
 });
 
-describe("InvitationCard team targeting", () => {
-  it("labels the wallet network and requires reissue for legacy invitations", () => {
+describe("InvitationRow team targeting", () => {
+  it("labels the wallet network and requires reissue for legacy invitations", async () => {
     const invitation = {
       id: "wallet-invite",
       email: "wallet@near-wallet.invalid",
@@ -162,25 +162,27 @@ describe("InvitationCard team targeting", () => {
     const onResend = vi.fn();
     const onCancel = vi.fn();
     const { rerender } = render(
-      <InvitationCard invitation={invitation} onResend={onResend} onCancel={onCancel} />,
+      <InvitationRow invitation={invitation} onResend={onResend} onCancel={onCancel} />,
     );
     expect(screen.getByTestId("invitation-network-wallet-invite").textContent).toContain("testnet");
     rerender(
-      <InvitationCard
+      <InvitationRow
         invitation={{ ...invitation, nearNetwork: null }}
         onResend={onResend}
         onCancel={onCancel}
       />,
     );
     expect(screen.getByText(/cancel and reissue/i)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /resend/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for alice.near" }));
+    await screen.findByRole("menu");
+    expect(screen.queryByRole("menuitem", { name: /resend/i })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: /cancel invitation/i }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("shows the targeted team when present", () => {
     render(
-      <InvitationCard
+      <InvitationRow
         invitation={{
           id: "inv-1",
           email: "hire@example.com",

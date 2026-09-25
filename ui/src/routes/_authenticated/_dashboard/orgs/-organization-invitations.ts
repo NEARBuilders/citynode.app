@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ApiClient } from "@/app";
-import type { InvitationCardInvitation } from "./-invitation-card";
+import type { InvitationRowInvitation } from "./-invitation-row";
 import type { InviteMemberValues } from "./-invite-member-form";
 import { orgInvitationsQueryKey } from "./-organization-query-keys";
 
@@ -38,7 +38,7 @@ export function useOrganizationInvitationActions(apiClient: ApiClient, orgId: st
     onError: (error: Error) => toast.error(error.message || "Failed to cancel invitation"),
   });
   const resendInvitationMutation = useMutation({
-    mutationFn: async (invitation: InvitationCardInvitation) => {
+    mutationFn: async (invitation: InvitationRowInvitation) => {
       if (invitation.nearAccountId && !invitation.nearNetwork) {
         throw new Error("Cancel and reissue this wallet invitation with an explicit network.");
       }

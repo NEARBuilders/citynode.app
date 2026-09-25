@@ -1,13 +1,17 @@
 import { PencilSimpleIcon, SignOutIcon, TrashIcon } from "@phosphor-icons/react";
+import { useState } from "react";
 import type { Organization } from "@/app";
-import { Button, Card, Chip, InfoRow } from "@/components";
-import { useClientValue } from "@/hooks";
+import { Badge, Button, ConfirmDialog, LocalDate, PageHeader } from "@/components";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { roleLabel } from "./-org-avatar";
+import { RowMenu } from "./-row-menu";
+
+type PendingConfirm = "delete" | "leave" | null;
 
 export function OrganizationOverview({
   canDelete,
-  apiKeysCount,
   memberCount,
-  pendingInvitationsCount,
+  myRole,
   isActive,
   isDeleting,
   isLeaving,
@@ -20,9 +24,8 @@ export function OrganizationOverview({
   org,
 }: {
   canDelete: boolean;
-  apiKeysCount: number;
   memberCount: number;
-  pendingInvitationsCount: number;
+  myRole?: string | null;
   isActive: boolean;
   isDeleting: boolean;
   isPersonal: boolean;
@@ -34,49 +37,103 @@ export function OrganizationOverview({
   onSwitch: () => void;
   org: Organization;
 }) {
-  return (
-    <Card className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip>organization</Chip>
-        {isActive && <Chip accent>active</Chip>}
-        {isPersonal && <Chip>personal</Chip>}
-      </div>
-      <div className="flex flex-col gap-2">
-        <InfoRow label="members" value={String(memberCount)} />
-        <InfoRow label="invites" value={String(pendingInvitationsCount)} />
-        <InfoRow label="api keys" value={String(apiKeysCount)} />
-        {org.createdAt && <CreatedRow createdAt={org.createdAt} />}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {!isActive && (
-          <Button onClick={onSwitch} disabled={isSwitching}>
-            {isSwitching ? "switching..." : "switch to org"}
-          </Button>
-        )}
-        {canDelete && !isPersonal && (
-          <Button variant="outline" onClick={onEdit}>
-            <PencilSimpleIcon className="h-3.5 w-3.5" />
-            edit
-          </Button>
-        )}
-        {!isPersonal && !canDelete && (
-          <Button variant="outline" onClick={onLeave} disabled={isLeaving}>
-            <SignOutIcon className="h-3.5 w-3.5" />
-            leave
-          </Button>
-        )}
-        {canDelete && !isPersonal && (
-          <Button variant="outline" onClick={onDelete} disabled={isDeleting}>
-            <TrashIcon className="h-3.5 w-3.5" />
-            delete org
-          </Button>
-        )}
-      </div>
-    </Card>
-  );
-}
+  const [confirming, setConfirming] = useState<PendingConfirm>(null);
+  const canEdit = canDelete && !isPersonal;
+  const canLeave = !isPersonal && !canDelete;
+  const hasMenu = canEdit || canLeave;
 
-function CreatedRow({ createdAt }: { createdAt: string | Date }) {
-  const value = useClientValue(() => new Date(createdAt).toLocaleDateString(), "");
-  return <InfoRow label="created" value={value} />;
+  return (
+    <>
+      <PageHeader
+        label={
+          <span className="flex flex-wrap items-center gap-1.5" data-testid="org-badges">
+            {myRole && <Badge variant="secondary">{roleLabel(myRole)}</Badge>}
+            {isActive && <Badge variant="success">Active</Badge>}
+            {isPersonal && <Badge variant="outline">Personal</Badge>}
+          </span>
+        }
+        title={org.name}
+        description={
+          <span className="text-base">
+            <span className="font-mono">@{org.slug}</span> · {memberCount} member
+            {memberCount === 1 ? "" : "s"}
+            {org.createdAt ? (
+              <>
+                {" "}
+                · created <LocalDate value={org.createdAt} />
+              </>
+            ) : null}
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            {!isActive && (
+              <Button onClick={onSwitch} disabled={isSwitching} data-testid="org-make-active">
+                {isSwitching ? "Switching…" : "Make active"}
+              </Button>
+            )}
+            {hasMenu && (
+              <RowMenu label="Organization actions" testId="org-actions-menu">
+                {canEdit && (
+                  <DropdownMenuItem onClick={onEdit}>
+                    <PencilSimpleIcon />
+                    Edit details
+                  </DropdownMenuItem>
+                )}
+                {canLeave && (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setConfirming("leave")}
+                    disabled={isLeaving}
+                  >
+                    <SignOutIcon />
+                    Leave organization
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setConfirming("delete")}
+                      disabled={isDeleting}
+                    >
+                      <TrashIcon />
+                      Delete organization
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </RowMenu>
+            )}
+          </div>
+        }
+      />
+      <ConfirmDialog
+        open={confirming === "delete"}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={`Delete ${org.name}?`}
+        description="Members lose access and its teams, invitations and API keys are removed. This cannot be undone."
+        confirmLabel="Delete organization"
+        variant="destructive"
+        isPending={isDeleting}
+        onConfirm={() => {
+          onDelete();
+          setConfirming(null);
+        }}
+      />
+      <ConfirmDialog
+        open={confirming === "leave"}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={`Leave ${org.name}?`}
+        description="You'll need a new invitation to rejoin."
+        confirmLabel="Leave"
+        variant="destructive"
+        isPending={isLeaving}
+        onConfirm={() => {
+          onLeave();
+          setConfirming(null);
+        }}
+      />
+    </>
+  );
 }

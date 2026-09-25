@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Field, FieldLabel, Input } from "@/components";
+import { Button, Field, FieldLabel, Input } from "@/components";
 import {
   Select,
   SelectContent,
@@ -73,73 +73,65 @@ export function InviteMemberForm({
   ];
 
   return (
-    <Card className="flex flex-col gap-4 p-6">
-      <div className="text-sm font-medium text-muted-foreground">Invite member</div>
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (!detectedIdentifier) return;
-          try {
-            await onInvite({
-              ...(detectedIdentifier.kind === "email"
-                ? { email: detectedIdentifier.value }
-                : { nearAccountId: detectedIdentifier.value, nearNetwork }),
-              role,
-              ...(teamId ? { teamId } : {}),
-            });
-            setIdentifier("");
-            setTeamId(NO_TEAM);
-          } catch {}
-        }}
-      >
-        <div className="grid gap-4 md:grid-cols-4">
-          <Field className="md:col-span-2">
-            <FieldLabel htmlFor="invite-identifier" className="sr-only">
-              Email or NEAR account
-            </FieldLabel>
-            <Input
-              id="invite-identifier"
-              type="text"
-              value={identifier}
-              onChange={(event) => setIdentifier(event.target.value)}
-              placeholder="email@example.com or alice.near"
-              aria-label="Email or NEAR account"
-              data-testid="invite-identifier-input"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="invite-role" className="sr-only">
-              Role
-            </FieldLabel>
-            <Select
-              value={role}
-              items={ROLE_ITEMS}
-              onValueChange={(value) => {
-                if (value === "admin" || value === "member") setRole(value);
-              }}
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!detectedIdentifier) return;
+        try {
+          await onInvite({
+            ...(detectedIdentifier.kind === "email"
+              ? { email: detectedIdentifier.value }
+              : { nearAccountId: detectedIdentifier.value, nearNetwork }),
+            role,
+            ...(teamId ? { teamId } : {}),
+          });
+          setIdentifier("");
+          setTeamId(NO_TEAM);
+        } catch {}
+      }}
+    >
+      <div className="flex flex-col gap-2 lg:flex-row">
+        <Field className="min-w-0 flex-1">
+          <FieldLabel htmlFor="invite-identifier" className="sr-only">
+            Email or NEAR account
+          </FieldLabel>
+          <Input
+            id="invite-identifier"
+            type="text"
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+            placeholder="email@example.com or alice.near"
+            aria-label="Email or NEAR account"
+            autoComplete="off"
+            data-testid="invite-identifier-input"
+          />
+        </Field>
+        <div className="flex flex-wrap gap-2">
+          <Select
+            value={role}
+            items={ROLE_ITEMS}
+            onValueChange={(value) => {
+              if (value === "admin" || value === "member") setRole(value);
+            }}
+          >
+            <SelectTrigger
+              id="invite-role"
+              aria-label="Role"
+              className="min-w-32 flex-1 lg:flex-none"
+              data-testid="invite-role-select"
             >
-              <SelectTrigger
-                id="invite-role"
-                aria-label="Role"
-                className="w-full"
-                data-testid="invite-role-select"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLE_ITEMS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="invite-team" className="sr-only">
-              Team
-            </FieldLabel>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLE_ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {teams.length > 0 && (
             <Select
               value={teamId}
               items={teamItems}
@@ -148,7 +140,7 @@ export function InviteMemberForm({
               <SelectTrigger
                 id="invite-team"
                 aria-label="Team"
-                className="w-full"
+                className="min-w-36 flex-1 lg:flex-none"
                 data-testid="invite-team-select"
               >
                 <SelectValue />
@@ -161,13 +153,8 @@ export function InviteMemberForm({
                 ))}
               </SelectContent>
             </Select>
-          </Field>
-        </div>
-        {detectedIdentifier?.kind === "near" && (
-          <Field>
-            <FieldLabel htmlFor="invite-network" className="sr-only">
-              NEAR network
-            </FieldLabel>
+          )}
+          {detectedIdentifier?.kind === "near" && (
             <Select
               value={nearNetwork}
               items={NETWORK_ITEMS}
@@ -178,7 +165,7 @@ export function InviteMemberForm({
               <SelectTrigger
                 id="invite-network"
                 aria-label="NEAR network"
-                className="w-full"
+                className="min-w-32 flex-1 lg:flex-none"
                 data-testid="invite-network-select"
               >
                 <SelectValue />
@@ -191,30 +178,30 @@ export function InviteMemberForm({
                 ))}
               </SelectContent>
             </Select>
-          </Field>
-        )}
-        <div
-          className="text-xs text-muted-foreground"
-          aria-live="polite"
-          data-testid="invite-identifier-feedback"
-        >
-          {detectedIdentifier?.kind === "email"
-            ? "Email invitation: a message will be sent to this address."
-            : detectedIdentifier?.kind === "near"
-              ? `NEAR invitation: ${detectedIdentifier.value} on ${nearNetwork} will claim this invitation with its wallet.`
-              : identifier.trim()
-                ? "Enter a valid email address or NEAR account ID."
-                : "Invite by email or NEAR account ID."}
+          )}
+          <Button
+            type="submit"
+            disabled={isPending || !detectedIdentifier}
+            className="flex-1 lg:flex-none"
+            data-testid="invite-submit-button"
+          >
+            {isPending ? "Inviting…" : "Invite"}
+          </Button>
         </div>
-        <Button
-          type="submit"
-          disabled={isPending || !detectedIdentifier}
-          variant="outline"
-          data-testid="invite-submit-button"
-        >
-          {isPending ? "sending..." : "send invitation"}
-        </Button>
-      </form>
-    </Card>
+      </div>
+      <p
+        className="text-sm text-muted-foreground"
+        aria-live="polite"
+        data-testid="invite-identifier-feedback"
+      >
+        {detectedIdentifier?.kind === "email"
+          ? "We'll email an invitation link to this address."
+          : detectedIdentifier?.kind === "near"
+            ? `NEAR invitation: ${detectedIdentifier.value} on ${nearNetwork} claims it by signing in with that wallet.`
+            : identifier.trim()
+              ? "Enter a valid email address or NEAR account ID."
+              : "Invite by email or NEAR account."}
+      </p>
+    </form>
   );
 }

@@ -1,4 +1,12 @@
-import { ArrowSquareOutIcon, FlaskIcon, ShieldCheckIcon } from "@phosphor-icons/react";
+import {
+  ArrowSquareOutIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  FlaskIcon,
+  GearSixIcon,
+  ShieldCheckIcon,
+  StackIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
@@ -8,8 +16,8 @@ import { useApiClient, useAuthClient } from "@/app";
 import {
   Badge,
   Button,
-  Card,
-  CardContent,
+  ConfirmDialog,
+  EmptyState,
   Field,
   FieldLabel,
   InfoPopover,
@@ -18,6 +26,7 @@ import {
   SectionHeader,
 } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
+import { FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { describeDaoError, useDaoConnection } from "@/lib/dao-connect";
 import {
@@ -68,9 +77,16 @@ export interface NodeConfigTabProps {
   gatewayId: string;
   baseAccount: string;
   canManage: boolean;
+  isPlatformAdmin?: boolean;
 }
 
-export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: NodeConfigTabProps) {
+export function NodeConfigTab({
+  orgId,
+  gatewayId,
+  baseAccount,
+  canManage,
+  isPlatformAdmin = false,
+}: NodeConfigTabProps) {
   const apiClient = useApiClient();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
@@ -149,6 +165,8 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
 
   const [verifying, setVerifying] = useState(false);
   const [computing, setComputing] = useState(false);
+  const [unverified, setUnverified] = useState<string | null>(null);
+  const [showBundle, setShowBundle] = useState(false);
 
   const fetchPublishedNow = () =>
     apiClient.apps
@@ -196,12 +214,12 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
           3_000,
         );
         if (live) {
-          toast.success(`config is live — ${tenantUrl ?? hostname}`);
+          toast.success(`Config is live at ${tenantUrl ?? hostname}`);
         } else {
-          toast.info("publish proposal awaiting votes — the config goes live once it passes");
+          toast.info("Proposal submitted. The config goes live once it passes.");
         }
       } else {
-        toast.success("config published");
+        toast.success("Config published");
       }
       await invalidateTenantQueries(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["node-config"] });
@@ -239,7 +257,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
 
   const onVerifyUiBundle = () => {
     if (!draft.uiProduction) {
-      toast.error("enter the UI bundle URL first");
+      toast.error("Enter the UI bundle URL first");
       return;
     }
     return onVerifyBundle(
@@ -253,7 +271,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
 
   const onVerifySsrBundle = () => {
     if (!draft.ssrUrl) {
-      toast.error("enter the SSR bundle URL first");
+      toast.error("Enter the SSR bundle URL first");
       return;
     }
     return onVerifyBundle(
@@ -267,7 +285,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
 
   const onPropose = async () => {
     if (!parsedDraft.success) {
-      toast.error(parsedDraft.error.issues[0]?.message ?? "fix the form first");
+      toast.error(parsedDraft.error.issues[0]?.message ?? "Fix the form first");
       return;
     }
     const value = parsedDraft.data;
@@ -299,10 +317,8 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
         toast.error(`${label} integrity mismatch — the bundle hashes to ${check.computed}`);
         return;
       }
-      if (
-        check.status === "unverified" &&
-        !confirm(`couldn't fetch the ${label} bundle to verify (${check.reason}) — propose anyway?`)
-      ) {
+      if (check.status === "unverified") {
+        setUnverified(`Couldn't fetch the ${label} bundle to verify it (${check.reason}).`);
         return;
       }
     }
@@ -311,215 +327,211 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
 
   if (!tenant || !gatewayId) {
     return (
-      <Card>
-        <CardContent className="space-y-3 p-6" data-testid="orgs-node-config-empty">
-          {!gatewayId ? (
-            <p className="text-sm text-muted-foreground">
-              The active runtime does not declare a gateway, so tenant config cannot be resolved
-              here.
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">
-                This organization has no node yet. Run the node lifecycle to apply, get approved,
-                and publish a tenant config first.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                nativeButton={false}
-                render={<Link to="/prototype-staking-poc" />}
-              >
-                <FlaskIcon className="h-3.5 w-3.5" />
-                open the node lifecycle
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <div data-testid="orgs-node-config-empty">
+        {!gatewayId ? (
+          <EmptyState
+            icon={StackIcon}
+            title="Gateway not configured"
+            description="The active runtime declares no gateway, so community config can't be resolved here."
+          />
+        ) : (
+          <EmptyState
+            icon={StackIcon}
+            title="No community yet"
+            description="Start a community to get its own site, events and staking."
+            action={
+              <>
+                <Button nativeButton={false} render={<Link to="/apply" />}>
+                  Start a community
+                </Button>
+                {isPlatformAdmin && (
+                  <Button
+                    variant="ghost"
+                    nativeButton={false}
+                    render={<Link to="/prototype-staking-poc" />}
+                  >
+                    <FlaskIcon />
+                    Node lifecycle
+                  </Button>
+                )}
+              </>
+            }
+          />
+        )}
+      </div>
     );
   }
 
   const busy = proposeMutation.isPending || verifying || computing;
   const proposeBlockReason = !editable
     ? !canManage
-      ? "organization owners and admins can propose config changes"
-      : `tenant is ${tenant.status}`
+      ? "Only owners and admins can change the config."
+      : `This community is ${tenant.status}.`
     : !parsedDraft.success
-      ? (parsedDraft.error.issues[0]?.message ?? "fix the form first")
+      ? (parsedDraft.error.issues[0]?.message ?? "Fix the form first.")
       : !hasSigningWallet
         ? daoOwned
-          ? `connect ${tenantAccount} via Trezu to propose`
-          : "connect your NEAR wallet to publish"
+          ? `Connect ${tenantAccount} via Trezu to propose.`
+          : "Connect your NEAR wallet to publish."
         : null;
   const canPropose = editable && parsedDraft.success && hasSigningWallet && !busy;
+  const bundleOpen = showBundle || !!draft.uiProduction || !!draft.ssrUrl;
+  const allowed = [
+    tenant.allowUiOverrides ? "Custom UI" : null,
+    tenant.allowSsr ? "Server rendering" : null,
+  ].filter(Boolean);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <SectionHeader
-            title="Published config"
-            sectionTestId="orgs-node-config-state"
-            action={
-              <InfoPopover
-                title="Tenant config"
-                body="The tenant's bos.config.json, published on-chain in FastKV and served by the platform host at the binding hostname. DAO-owned tenants publish changes as proposals that go live once passed."
-                links={fastKvUrl ? [{ label: "view on FastKV", href: fastKvUrl }] : []}
-              />
-            }
-          />
+    <div className="flex flex-col gap-12">
+      <section className="flex flex-col gap-4">
+        <SectionHeader
+          title="Published config"
+          sectionTestId="orgs-node-config-state"
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/tenant/$tenantId" params={{ tenantId: tenant.id }} />}
+              data-testid="orgs-node-config-settings"
+            >
+              <GearSixIcon />
+              Community settings
+            </Button>
+          }
+        />
+        <div className="flex flex-col">
           <InfoRow
-            label="config"
+            label="Status"
             value={
               <span
-                className="inline-flex flex-wrap items-center gap-2"
+                className="inline-flex flex-wrap items-center justify-end gap-2"
                 data-testid="orgs-node-config-config"
               >
                 {configPublished ? (
-                  <Badge variant="success">live</Badge>
+                  <Badge variant="success">Live</Badge>
                 ) : pendingConfigProposal ? (
-                  <Badge variant="warning">awaiting votes #{pendingConfigProposal.id}</Badge>
+                  <Badge variant="warning">Awaiting votes · #{pendingConfigProposal.id}</Badge>
                 ) : (
-                  <Badge variant="outline">not published</Badge>
+                  <Badge variant="outline">Not published</Badge>
                 )}
                 {fastKvUrl && (
                   <a
                     href={fastKvUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground"
+                    className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   >
-                    view on FastKV
+                    FastKV
                   </a>
                 )}
               </span>
             }
           />
           <InfoRow
-            label="hostname"
+            label="Address"
             value={
               tenantUrl && configPublished ? (
                 <a
                   href={tenantUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground"
+                  className="inline-flex items-center gap-1 underline underline-offset-2"
                   data-testid="orgs-node-config-open-tenant"
                 >
                   {tenantUrl.replace(/^https?:\/\//, "")}
-                  <ArrowSquareOutIcon className="h-3 w-3 shrink-0" />
+                  <ArrowSquareOutIcon className="size-3.5 shrink-0" />
                 </a>
               ) : (
-                (hostname ?? "—")
+                (hostname ?? "Not bound yet")
               )
             }
             mono
           />
-          <InfoRow label="owner" value={daoOwned ? "DAO — changes go live by vote" : "platform"} />
-          <InfoRow
-            label="account"
-            value={
-              fastKvUrl ? (
-                <a
-                  href={fastKvUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground"
-                >
-                  {tenantAccount}
-                </a>
-              ) : (
-                tenantAccount
-              )
-            }
-            mono
-          />
+          <InfoRow label="Owner" value={daoOwned ? "DAO · changes go live by vote" : "Platform"} />
+          <InfoRow label="Account" value={tenantAccount} mono />
           {pendingConfigProposal && (
             <InfoRow
-              label="pending proposal"
+              label="Pending proposal"
               value={`#${pendingConfigProposal.id} · ${pendingThreshold.approved}${
                 pendingThreshold.required == null ? "" : `/${pendingThreshold.required}`
               } approvals`}
-              mono
             />
           )}
           <InfoRow
-            label="ui overrides"
-            value={
-              <Badge variant={tenant.allowUiOverrides ? "default" : "outline"}>
-                {tenant.allowUiOverrides ? "allowed" : "disabled"}
-              </Badge>
-            }
+            label="Allowed"
+            value={allowed.length > 0 ? allowed.join(" · ") : "Metadata only"}
           />
-          <InfoRow
-            label="ssr"
-            value={
-              <Badge variant={tenant.allowSsr ? "default" : "outline"}>
-                {tenant.allowSsr ? "allowed" : "off"}
-              </Badge>
-            }
-          />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {daoOwned && <ConnectDao />}
 
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <SectionHeader
-            title="Customize"
-            sectionTestId="orgs-node-config-editor"
-            action={
-              <InfoPopover
-                title="Propose your own config"
-                body="Edits here re-publish the tenant's config: metadata always, and a custom UI bundle when overrides are allowed. The platform host serves the tenant's own UI bundle once the config is live."
-              />
-            }
+      <section className="flex flex-col gap-6">
+        <SectionHeader
+          title="Customize"
+          sectionTestId="orgs-node-config-editor"
+          description={
+            daoOwned
+              ? "Changes go live when the DAO proposal passes."
+              : "Changes publish immediately."
+          }
+        />
+
+        {!editable && (
+          <p className="text-sm text-muted-foreground" data-testid="orgs-node-config-locked">
+            {proposeBlockReason}
+          </p>
+        )}
+
+        <FieldGroup className="max-w-2xl">
+          <ConfigField
+            id="orgs-node-config-title"
+            label="Title"
+            value={draft.title}
+            onChange={(value) => setDraft((prev) => ({ ...prev, title: value }))}
+            disabled={!editable}
           />
+          <ConfigField
+            id="orgs-node-config-description"
+            label="Description"
+            value={draft.description}
+            onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))}
+            disabled={!editable}
+          />
+          <ConfigField
+            id="orgs-node-config-repository"
+            label="Repository"
+            value={draft.repository}
+            onChange={(value) => setDraft((prev) => ({ ...prev, repository: value }))}
+            placeholder="https://github.com/…"
+            mono
+            disabled={!editable}
+          />
+        </FieldGroup>
 
-          {!editable && (
-            <p className="text-xs text-muted-foreground" data-testid="orgs-node-config-locked">
-              {proposeBlockReason}
-            </p>
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <ConfigField
-              id="orgs-node-config-title"
-              label="Title"
-              value={draft.title}
-              onChange={(value) => setDraft((prev) => ({ ...prev, title: value }))}
-              disabled={!editable}
-            />
-            <ConfigField
-              id="orgs-node-config-description"
-              label="Description"
-              value={draft.description}
-              onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))}
-              disabled={!editable}
-            />
-            <ConfigField
-              id="orgs-node-config-repository"
-              label="Repository"
-              value={draft.repository}
-              onChange={(value) => setDraft((prev) => ({ ...prev, repository: value }))}
-              placeholder="https://github.com/…"
-              disabled={!editable}
-            />
-          </div>
-
-          {tenant.allowUiOverrides ? (
-            <div className="space-y-3 border-t border-border pt-3">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-foreground">Custom UI bundle</h3>
-                <InfoPopover
-                  title="Custom UI bundle"
-                  body="A deployed UI bundle that replaces the platform UI for this tenant. Paste the bundle's base URL — the integrity is the sha384 of <base>/remoteEntry.js (SSR: <base>/remoteEntry.server.js), the same convention the deploy pipeline and the host use. A mismatching pair makes the host refuse the tenant until it is fixed."
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
+        {tenant.allowUiOverrides && (
+          <div className="flex max-w-2xl flex-col gap-4">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                onClick={() => setShowBundle((open) => !open)}
+                aria-expanded={bundleOpen}
+                data-testid="orgs-node-config-bundle-toggle"
+              >
+                {bundleOpen ? <CaretDownIcon /> : <CaretRightIcon />}
+                Custom UI bundle
+              </Button>
+              <InfoPopover
+                title="Custom UI bundle"
+                body="A deployed UI bundle that replaces the platform UI for this community. Integrity is the sha384 of <base>/remoteEntry.js (SSR: remoteEntry.server.js). A mismatch makes the host refuse the community until fixed."
+              />
+            </div>
+            {bundleOpen && (
+              <FieldGroup>
+                <div className="flex flex-col gap-1">
                   <ConfigField
                     id="orgs-node-config-ui-url"
                     label="UI bundle URL"
@@ -532,6 +544,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                       }))
                     }
                     placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
+                    mono
                     disabled={!editable}
                   />
                   <Button
@@ -540,9 +553,10 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                     disabled={!editable || computing || !draft.uiProduction}
                     variant="link"
                     size="xs"
+                    className="self-start"
                     data-testid="orgs-node-config-verify"
                   >
-                    {computing ? "hashing…" : "verify · fill integrity from the bundle"}
+                    {computing ? "Hashing…" : "Verify and fill integrity"}
                   </Button>
                 </div>
                 <ConfigField
@@ -551,11 +565,12 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                   value={draft.uiIntegrity}
                   onChange={(value) => setDraft((prev) => ({ ...prev, uiIntegrity: value }))}
                   placeholder="sha384-…"
+                  mono
                   disabled={!editable}
                 />
                 {tenant.allowSsr && (
                   <>
-                    <div className="space-y-1">
+                    <div className="flex flex-col gap-1">
                       <ConfigField
                         id="orgs-node-config-ssr-url"
                         label="SSR bundle URL"
@@ -568,6 +583,7 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                           }))
                         }
                         placeholder="https://example.com/bundles/<account>/<gateway>/plugin/"
+                        mono
                         disabled={!editable}
                       />
                       <Button
@@ -576,9 +592,10 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                         disabled={!editable || computing || !draft.ssrUrl}
                         variant="link"
                         size="xs"
+                        className="self-start"
                         data-testid="orgs-node-config-verify-ssr"
                       >
-                        {computing ? "hashing…" : "verify · fill integrity from the bundle"}
+                        {computing ? "Hashing…" : "Verify and fill integrity"}
                       </Button>
                     </div>
                     <ConfigField
@@ -587,59 +604,57 @@ export function NodeConfigTab({ orgId, gatewayId, baseAccount, canManage }: Node
                       value={draft.ssrIntegrity}
                       onChange={(value) => setDraft((prev) => ({ ...prev, ssrIntegrity: value }))}
                       placeholder="sha384-…"
+                      mono
                       disabled={!editable}
                     />
                   </>
                 )}
-              </div>
-            </div>
-          ) : (
-            <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-              UI overrides are disabled for this tenant — the platform UI is served as-is.
-            </p>
-          )}
-
-          {diff.length > 0 && (
-            <div
-              className="space-y-1 border-t border-border pt-3"
-              data-testid="orgs-node-config-diff"
-            >
-              <p className="text-xs font-semibold text-foreground">changes</p>
-              {diff.map((entry) => (
-                <p key={entry.field} className="truncate font-mono text-xs text-muted-foreground">
-                  {entry.field}: <span className="text-foreground">{entry.from || "—"}</span> →{" "}
-                  <span className="text-foreground">{entry.to || "—"}</span>
-                </p>
-              ))}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            <Button
-              size="sm"
-              onClick={() => void onPropose()}
-              disabled={!canPropose}
-              title={proposeBlockReason ?? undefined}
-              data-testid="orgs-node-config-propose"
-            >
-              {busy ? (
-                <Spinner className="h-3.5 w-3.5" />
-              ) : (
-                <ShieldCheckIcon className="h-3.5 w-3.5" />
-              )}
-              {daoOwned ? "propose config" : "publish config"}
-            </Button>
-            {proposeBlockReason && !editable ? null : (
-              <span className="text-xs text-muted-foreground">
-                {proposeBlockReason ??
-                  (daoOwned
-                    ? "the config goes live when the DAO proposal passes"
-                    : "published immediately")}
-              </span>
+              </FieldGroup>
             )}
           </div>
-        </CardContent>
-      </Card>
+        )}
+
+        {diff.length > 0 && (
+          <div className="flex max-w-2xl flex-col gap-2" data-testid="orgs-node-config-diff">
+            <p className="text-sm font-medium text-foreground">
+              {diff.length} change{diff.length === 1 ? "" : "s"}
+            </p>
+            {diff.map((entry) => (
+              <p key={entry.field} className="truncate font-mono text-xs text-muted-foreground">
+                {entry.field}: {entry.from || "—"} →{" "}
+                <span className="text-foreground">{entry.to || "—"}</span>
+              </p>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={() => void onPropose()}
+            disabled={!canPropose}
+            title={proposeBlockReason ?? undefined}
+            data-testid="orgs-node-config-propose"
+          >
+            {busy ? <Spinner /> : <ShieldCheckIcon />}
+            {daoOwned ? "Propose changes" : "Publish changes"}
+          </Button>
+          {editable && proposeBlockReason && (
+            <span className="text-sm text-muted-foreground">{proposeBlockReason}</span>
+          )}
+        </div>
+      </section>
+
+      <ConfirmDialog
+        open={unverified !== null}
+        onOpenChange={(open) => !open && setUnverified(null)}
+        title={daoOwned ? "Propose without verifying?" : "Publish without verifying?"}
+        description={unverified ?? ""}
+        confirmLabel={daoOwned ? "Propose anyway" : "Publish anyway"}
+        onConfirm={() => {
+          setUnverified(null);
+          proposeMutation.mutate();
+        }}
+      />
     </div>
   );
 }
@@ -652,6 +667,7 @@ function ConfigField({
   onBlur,
   placeholder,
   disabled,
+  mono,
 }: {
   id: string;
   label: string;
@@ -660,6 +676,7 @@ function ConfigField({
   onBlur?: () => void;
   placeholder?: string;
   disabled?: boolean;
+  mono?: boolean;
 }) {
   return (
     <Field>
@@ -672,7 +689,7 @@ function ConfigField({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
-        className="font-mono"
+        className={mono ? "font-mono" : undefined}
         data-testid={id}
       />
     </Field>

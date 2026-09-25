@@ -1,10 +1,12 @@
-import { CopyIcon } from "@phosphor-icons/react";
+import { CheckCircleIcon, CopyIcon, PlusIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
+import { Field, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "./ui/input-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 export interface ApiKeyFormValues {
   name: string;
@@ -17,73 +19,75 @@ interface ApiKeyFormProps {
 }
 
 const EXPIRATION_PRESETS = [
-  { label: "no expiry", value: 0 },
-  { label: "7 days", value: 7 * 24 * 60 * 60 },
-  { label: "30 days", value: 30 * 24 * 60 * 60 },
-  { label: "90 days", value: 90 * 24 * 60 * 60 },
-  { label: "1 year", value: 365 * 24 * 60 * 60 },
-] as const;
+  { label: "Never expires", value: "0" },
+  { label: "7 days", value: String(7 * 24 * 60 * 60) },
+  { label: "30 days", value: String(30 * 24 * 60 * 60) },
+  { label: "90 days", value: String(90 * 24 * 60 * 60) },
+  { label: "1 year", value: String(365 * 24 * 60 * 60) },
+];
 
 export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
   const [name, setName] = useState("");
-  const [expiresInSeconds, setExpiresInSeconds] = useState<number>(0);
-
-  const handleSubmit = () => {
-    if (!name.trim()) return;
-    onCreate({
-      name: name.trim(),
-      expiresIn: expiresInSeconds > 0 ? expiresInSeconds : undefined,
-    });
-    setName("");
-    setExpiresInSeconds(0);
-  };
+  const [expiresIn, setExpiresIn] = useState("0");
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>name</Label>
+    <form
+      className="flex flex-col gap-2 sm:flex-row"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        const seconds = Number(expiresIn);
+        onCreate({ name: name.trim(), expiresIn: seconds > 0 ? seconds : undefined });
+        setName("");
+        setExpiresIn("0");
+      }}
+    >
+      <Field className="min-w-0 flex-1">
+        <FieldLabel htmlFor="api-key-name" className="sr-only">
+          Key name
+        </FieldLabel>
         <Input
+          id="api-key-name"
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(event) => setName(event.target.value)}
           maxLength={64}
-          placeholder="API key name"
+          placeholder="Key name, e.g. Deploy bot"
+          data-testid="api-key-name-input"
         />
-      </div>
-
-      <div className="space-y-2">
-        <Label>expiration</Label>
-        <div className="flex flex-wrap gap-2">
-          {EXPIRATION_PRESETS.map((preset) => (
-            <Button
-              key={preset.value}
-              type="button"
-              variant={expiresInSeconds === preset.value ? "default" : "outline"}
-              size="sm"
-              onClick={() => setExpiresInSeconds(preset.value)}
-            >
-              {preset.label}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        Permissions, rate limits, and refill configuration are server-only and cannot be set from
-        the browser. Provision them through a server-side endpoint or admin tooling.
-      </p>
-
+      </Field>
       <div className="flex gap-2">
-        <Button
-          onClick={handleSubmit}
-          disabled={isPending || !name.trim()}
-          variant="outline"
-          size="sm"
+        <Select
+          value={expiresIn}
+          items={EXPIRATION_PRESETS}
+          onValueChange={(value) => setExpiresIn(value ?? "0")}
         >
-          {isPending ? "creating..." : "create key"}
+          <SelectTrigger
+            aria-label="Expiration"
+            className="min-w-36 flex-1 sm:flex-none"
+            data-testid="api-key-expiry-select"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {EXPIRATION_PRESETS.map((preset) => (
+              <SelectItem key={preset.value} value={preset.value}>
+                {preset.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="submit"
+          variant="outline"
+          disabled={isPending || !name.trim()}
+          data-testid="api-key-create-button"
+        >
+          <PlusIcon />
+          {isPending ? "Creating…" : "Create key"}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -110,47 +114,37 @@ export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
   };
 
   return (
-    <Card>
-      <CardContent className="p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="font-medium">New API key ready</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Copy and store this key now. You will only be able to see the full secret once.
-            </p>
+    <Card data-testid="api-key-reveal">
+      <CardContent className="flex flex-col gap-4 p-5">
+        <div className="flex items-start gap-3">
+          <CheckCircleIcon className="mt-0.5 size-5 shrink-0 text-success" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-medium text-foreground">{apiKey.name ?? "New key"} created</span>
+            <span className="text-sm text-muted-foreground">
+              Copy it now. You won't see the full key again.
+            </span>
           </div>
-          <Button onClick={onDismiss} variant="outline" size="sm">
-            dismiss
-          </Button>
         </div>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <Input
+        <InputGroup>
+          <InputGroupInput
             readOnly
             value={apiKey.key}
-            className="flex-1"
-            onFocus={(e) => e.target.select()}
-            onClick={(e) => e.currentTarget.select()}
+            aria-label="New API key"
+            className="font-mono"
+            onFocus={(event) => event.target.select()}
+            onClick={(event) => event.currentTarget.select()}
           />
-          <Button onClick={handleCopy} variant="outline" size="sm">
-            <CopyIcon className="h-3.5 w-3.5 mr-1" />
-            copy
-          </Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-          <InfoRow label="name" value={apiKey.name ?? "unnamed"} />
-          <InfoRow label="prefix" value={`${apiKey.prefix ?? "api_"}...`} mono />
-          <InfoRow label="created" value={new Date(apiKey.createdAt).toLocaleString()} />
-        </div>
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton onClick={handleCopy} aria-label="Copy API key">
+              <CopyIcon />
+              Copy
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+        <Button variant="ghost" size="sm" className="self-end" onClick={onDismiss}>
+          Done
+        </Button>
       </CardContent>
     </Card>
-  );
-}
-
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg bg-muted/30 p-3">
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
-      <div className={mono ? "text-xs font-mono break-all" : "text-sm break-all"}>{value}</div>
-    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { PencilIcon, TrashIcon, UserMinusIcon, UserPlusIcon } from "@phosphor-icons/react";
+import { PencilSimpleIcon, TrashIcon, UserMinusIcon, UserPlusIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Button, Card, CardContent, Input } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FEATURE_AREA_LABELS, FEATURE_AREAS } from "@/lib/feature-areas";
-import type { MemberCardMember } from "./-member-card";
+import { MemberAvatar, type MemberCardMember, memberDisplayName } from "./-member-card";
 
 export interface TeamCardTeam {
   id: string;
@@ -23,10 +23,6 @@ export interface TeamCardTeam {
 }
 
 export type TeamMembershipStatus = "unloaded" | "loading" | "success" | "error";
-
-function memberLabel(member: MemberCardMember | undefined, userId: string) {
-  return member?.user?.name || member?.user?.email || userId;
-}
 
 export function TeamCard({
   canManage,
@@ -61,14 +57,14 @@ export function TeamCard({
     ? orgMembers.filter((member) => !team.memberUserIds.includes(member.userId))
     : [];
   const selectItems = candidates.map((member) => ({
-    label: memberLabel(member, member.userId),
+    label: memberDisplayName(member, member.userId),
     value: member.userId,
   }));
   const placeholder = !membersLoaded
     ? "Members unavailable"
     : candidates.length === 0
-      ? "All organization members added"
-      : "Select a member";
+      ? "Everyone is in this team"
+      : "Add a member…";
 
   const toggleArea = (area: string, checked: boolean) => {
     const next = checked
@@ -79,11 +75,11 @@ export function TeamCard({
 
   return (
     <Card data-testid={`teams-tab-team-${team.id}`}>
-      <CardContent className="p-5 space-y-5">
+      <CardContent className="flex flex-col gap-6 p-5">
         <div className="flex items-start justify-between gap-3">
           {isRenaming ? (
             <form
-              className="flex flex-1 gap-2"
+              className="flex flex-1 flex-wrap gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 const name = draftName.trim();
@@ -96,34 +92,37 @@ export function TeamCard({
                 value={draftName}
                 onChange={(event) => setDraftName(event.target.value)}
                 aria-label="Team name"
+                autoFocus
+                className="min-w-0 flex-1"
                 data-testid={`teams-tab-rename-input-${team.id}`}
               />
               <Button
                 type="submit"
-                variant="outline"
                 disabled={isMutating || !draftName.trim()}
                 data-testid={`teams-tab-rename-save-${team.id}`}
               >
-                save
+                Save
               </Button>
               <Button type="button" variant="ghost" onClick={() => setIsRenaming(false)}>
-                cancel
+                Cancel
               </Button>
             </form>
           ) : (
-            <div className="min-w-0">
-              <div className="font-semibold break-words">{team.name}</div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <h3 className="text-lg font-medium break-words text-foreground">{team.name}</h3>
               {memberStatus === "success" && (
-                <div className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {team.memberUserIds.length} member{team.memberUserIds.length === 1 ? "" : "s"}
-                </div>
+                </span>
               )}
             </div>
           )}
           {canManage && !isRenaming && (
             <div className="flex shrink-0 gap-1">
               <Button
-                variant="outline"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Rename ${team.name}`}
                 onClick={() => {
                   setDraftName(team.name);
                   setIsRenaming(true);
@@ -131,29 +130,29 @@ export function TeamCard({
                 disabled={isMutating}
                 data-testid={`teams-tab-rename-${team.id}`}
               >
-                <PencilIcon className="h-3 w-3 mr-1" />
-                rename
+                <PencilSimpleIcon />
               </Button>
               <Button
-                variant="destructive"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Delete ${team.name}`}
                 onClick={onDelete}
                 disabled={isMutating}
                 data-testid={`teams-tab-delete-${team.id}`}
               >
-                <TrashIcon className="h-3 w-3 mr-1" />
-                delete
+                <TrashIcon />
               </Button>
             </div>
           )}
         </div>
 
         <FieldSet>
-          <FieldLegend variant="label">Areas</FieldLegend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <FieldLegend variant="label">Can use</FieldLegend>
+          <div className="flex flex-wrap gap-x-5 gap-y-3">
             {FEATURE_AREAS.map((area) => {
               const checkboxId = `team-${team.id}-area-${area}`;
               return (
-                <Field key={area} orientation="horizontal">
+                <Field key={area} orientation="horizontal" className="w-auto">
                   <Checkbox
                     id={checkboxId}
                     checked={team.areas.includes(area)}
@@ -168,14 +167,13 @@ export function TeamCard({
           </div>
         </FieldSet>
 
-        <div className="space-y-2">
-          <div className="text-sm font-medium text-muted-foreground">Members</div>
+        <div className="flex flex-col gap-3">
           {memberStatus === "loading" ? (
             <p className="text-sm text-muted-foreground" role="status">
               Loading members...
             </p>
           ) : memberStatus === "error" ? (
-            <div className="space-y-2" role="alert">
+            <div className="flex flex-wrap items-center gap-3" role="alert">
               <p className="text-sm text-destructive">
                 {team.memberError || "Unable to load team members."}
               </p>
@@ -186,39 +184,42 @@ export function TeamCard({
                   onClick={onRetryMembers}
                   data-testid={`teams-tab-retry-members-${team.id}`}
                 >
-                  retry
+                  Retry
                 </Button>
               )}
             </div>
           ) : memberStatus === "unloaded" ? (
             <p className="text-sm text-muted-foreground">Members are not loaded yet</p>
           ) : team.memberUserIds.length > 0 ? (
-            <ul className="space-y-1">
-              {team.memberUserIds.map((userId) => (
-                <li key={userId} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="truncate">
-                    {memberLabel(membersByUserId.get(userId), userId)}
-                  </span>
-                  {canManage && membersLoaded && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveMember(userId)}
-                      disabled={isMutating}
-                      aria-label={`Remove ${memberLabel(membersByUserId.get(userId), userId)}`}
-                      data-testid={`teams-tab-remove-member-${team.id}-${userId}`}
-                    >
-                      <UserMinusIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </li>
-              ))}
+            <ul className="flex flex-col gap-1">
+              {team.memberUserIds.map((userId) => {
+                const member = membersByUserId.get(userId);
+                const name = memberDisplayName(member, userId);
+                return (
+                  <li key={userId} className="flex min-h-11 items-center gap-3">
+                    <MemberAvatar member={member} fallback={userId} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{name}</span>
+                    {canManage && membersLoaded && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onRemoveMember(userId)}
+                        disabled={isMutating}
+                        aria-label={`Remove ${name} from ${team.name}`}
+                        data-testid={`teams-tab-remove-member-${team.id}-${userId}`}
+                      >
+                        <UserMinusIcon />
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">No members in this team</p>
           )}
           {canManage && (
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2">
               <Select
                 items={selectItems}
                 value={selectedUserId || null}
@@ -227,7 +228,7 @@ export function TeamCard({
               >
                 <SelectTrigger
                   aria-label={`Add member to ${team.name}`}
-                  className="w-full min-w-0"
+                  className="w-full min-w-0 flex-1"
                   data-testid={`teams-tab-add-member-${team.id}`}
                 >
                   <SelectValue placeholder={placeholder} />
@@ -239,7 +240,7 @@ export function TeamCard({
                       value={member.userId}
                       data-testid={`teams-tab-add-member-option-${team.id}-${member.userId}`}
                     >
-                      {memberLabel(member, member.userId)}
+                      {memberDisplayName(member, member.userId)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -253,8 +254,8 @@ export function TeamCard({
                 }}
                 data-testid={`teams-tab-add-member-button-${team.id}`}
               >
-                <UserPlusIcon className="h-3.5 w-3.5 mr-1" />
-                add
+                <UserPlusIcon />
+                Add
               </Button>
             </div>
           )}
