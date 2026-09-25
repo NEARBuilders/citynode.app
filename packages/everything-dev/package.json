@@ -216,15 +216,6 @@
       "import": "./dist/ui/manifest-generator.mjs",
       "require": "./dist/ui/manifest-generator.cjs"
     },
-    "./ui/mf-build": {
-      "development": {
-        "types": "./src/ui/mf-build/index.ts",
-        "import": "./src/ui/mf-build/index.ts"
-      },
-      "types": "./dist/ui/mf-build/index.d.mts",
-      "import": "./dist/ui/mf-build/index.mjs",
-      "require": "./dist/ui/mf-build/index.cjs"
-    },
     "./package.json": "./package.json",
     "./db": {
       "development": {

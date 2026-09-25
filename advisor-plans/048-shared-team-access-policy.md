@@ -1,4 +1,4 @@
-# Plan 028: Share the pure team access policy between API and UI
+# Plan 048: Share the pure team access policy between API and UI
 
 > Follow each step and its verification gate. Do not push, merge, deploy, or modify live data. Update only this plan's status in advisor-plans/README.md when verified.
 
@@ -30,7 +30,7 @@ Only these paths may change:
 - A new scoped `.changeset/*.md` for user-visible behavior.
 - This plan and its status row in `advisor-plans/README.md`.
 
-Do not modify unrelated organizations API-key behavior, node/resource ownership, framework-wide auth, dependencies, live databases, environment secrets, or unrelated advisor plans. Work in an isolated `fix/teams-028` branch/worktree if dispatched for execution. Preserve existing changes. Use semantic commits only when requested, such as `fix(auth): bind wallet invitations to their network`.
+Do not modify unrelated organizations API-key behavior, node/resource ownership, framework-wide auth, dependencies, live databases, environment secrets, or unrelated advisor plans. Work in an isolated `fix/teams-048` branch/worktree if dispatched for execution. Preserve existing changes. Use semantic commits only when requested, such as `fix(auth): bind wallet invitations to their network`.
 
 ## Commands
 Run from repository root. Dependencies already exist; do not reinstall or upgrade them.

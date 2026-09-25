@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
+import { pluginPath } from "@/app";
 import { Button, Card, CardContent } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
-import { pluginPath } from "@/lib/plugin-path";
 
 export function ApplyPrerequisites({
   displayedOrgId,

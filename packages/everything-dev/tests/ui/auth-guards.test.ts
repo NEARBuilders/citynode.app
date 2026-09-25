@@ -10,9 +10,10 @@
  */
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import type { ApiClient, AuthClient, SessionData } from "@/app";
-import { sessionQueryKey } from "@/lib/auth";
-import { requireSession } from "./auth-guards";
+import type { ApiClient } from "../../src/ui/api";
+import type { AuthClient, SessionData } from "../../src/ui/auth";
+import { sessionQueryKey } from "../../src/ui/auth";
+import { clearAuthenticatedQueries, requireSession } from "../../src/ui/auth-guards";
 
 const signedInSession = {
   user: { id: "user-1", name: "Tester", banned: false, role: "user" },
@@ -98,5 +99,20 @@ describe("requireSession", () => {
 
     expect(thrown).toBeDefined();
     expect((thrown as { options: { href?: string } }).options.href).toBe("/login#banned");
+  });
+});
+
+describe("clearAuthenticatedQueries", () => {
+  it("clears private and public query data while leaving an explicit signed-out session", async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(sessionQueryKey, { user: { id: "user-1" } });
+    queryClient.setQueryData(["private-data"], { secret: true });
+    queryClient.setQueryData(["public-data"], { title: "City Node" });
+
+    await clearAuthenticatedQueries(queryClient);
+
+    expect(queryClient.getQueryData(sessionQueryKey)).toBeNull();
+    expect(queryClient.getQueryData(["private-data"])).toBeUndefined();
+    expect(queryClient.getQueryData(["public-data"])).toBeUndefined();
   });
 });

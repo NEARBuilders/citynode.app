@@ -1,4 +1,4 @@
-# Plan 029: Load team memberships only when the Teams tab needs them
+# Plan 047: Load team memberships only when the Teams tab needs them
 
 > Follow each step and its verification gate. Do not push, merge, deploy, or modify live data. Update only this plan's status in advisor-plans/README.md when verified.
 
@@ -6,7 +6,7 @@
 - Priority: P2
 - Effort: M (about one day, including regression coverage)
 - Risk: LOW — loading and cache presentation
-- Depends on: 027-workspace-synchronization.md
+- Depends on: 046-workspace-synchronization.md
 - Category: correctness / architecture
 - Planned at: `f0b65165`, 2026-09-21
 - Scope: PR #136, teams and organizations only; findings introduced by this branch.
@@ -27,7 +27,7 @@ Only these paths may change:
 - A new scoped `.changeset/*.md` for user-visible behavior.
 - This plan and its status row in `advisor-plans/README.md`.
 
-Do not modify unrelated organizations API-key behavior, node/resource ownership, framework-wide auth, dependencies, live databases, environment secrets, or unrelated advisor plans. Work in an isolated `fix/teams-029` branch/worktree if dispatched for execution. Preserve existing changes. Use semantic commits only when requested, such as `fix(auth): bind wallet invitations to their network`.
+Do not modify unrelated organizations API-key behavior, node/resource ownership, framework-wide auth, dependencies, live databases, environment secrets, or unrelated advisor plans. Work in an isolated `fix/teams-047` branch/worktree if dispatched for execution. Preserve existing changes. Use semantic commits only when requested, such as `fix(auth): bind wallet invitations to their network`.
 
 ## Commands
 Run from repository root. Dependencies already exist; do not reinstall or upgrade them.
@@ -61,7 +61,7 @@ Use lazy loading rather than adding a new bulk endpoint now. The list is still n
 1. Add hook/UI tests with 20 synthetic teams and mocked membership transport. Before Teams is active assert zero membership calls while team names remain available for invitation targeting. When it activates assert members load; on return with fresh cache assert no unnecessary reload. Verify focused tests initially expose eager loading.
 2. Make the organization tab selection controlled using the existing Tabs interface, preserving the default tab and existing navigation behavior. Pass a membership-enabled flag to the team hook; set it only for the Teams tab. Keep hook calls unconditional and use query enabled state. Verify all focused tests pass.
 3. Return explicit per-team loading/error states. Show loading text before first success; show a retry action on errors. Never show “0 members” or offer an add based on a failed/unloaded membership query. Disable only membership-dependent controls while unresolved; preserve unrelated rename/grant/delete capability. Verify loading, empty-success, error, retry-success and read-only-member cases.
-4. Retain plan 027's synchronization after mutations. Assert active Teams views refetch affected member lists, hidden tabs stay deferred, and workspace refresh still occurs regardless of selected tab. Run focused tests plus common gates.
+4. Retain plan 046's synchronization after mutations. Assert active Teams views refetch affected member lists, hidden tabs stay deferred, and workspace refresh still occurs regardless of selected tab. Run focused tests plus common gates.
 
 ## Maintenance
 The accepted request fan-out is zero membership requests outside Teams and N while Teams is displayed. This plan reduces unnecessary work; it does not claim batching. Revisit an authorized, organization-scoped bulk read only if actual team counts make active-tab fan-out costly. Do not bypass backend organization membership checks to optimize loading.

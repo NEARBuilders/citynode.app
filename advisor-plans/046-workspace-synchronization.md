@@ -1,4 +1,4 @@
-# Plan 027: Centralize workspace refresh and invitation actions
+# Plan 046: Centralize workspace refresh and invitation actions
 
 > Follow each step and its verification gate. Do not push, merge, deploy, or modify live data. Update only this plan's status in advisor-plans/README.md when verified.
 
@@ -6,7 +6,7 @@
 - Priority: P2
 - Effort: M (about one day, including regression coverage)
 - Risk: MED — session ordering and routing
-- Depends on: none; coordinate with 025 if editing claim-page presentation
+- Depends on: none; coordinate with 044 if editing claim-page presentation
 - Category: correctness / architecture
 - Planned at: `f0b65165`, 2026-09-21
 - Scope: PR #136, teams and organizations only; findings introduced by this branch.
@@ -33,7 +33,7 @@ Only these paths may change:
 - A new scoped `.changeset/*.md` for user-visible behavior.
 - This plan and its status row in `advisor-plans/README.md`.
 
-Do not modify unrelated organizations API-key behavior, node/resource ownership, framework-wide auth, dependencies, live databases, environment secrets, or unrelated advisor plans. Work in an isolated `fix/teams-027` branch/worktree if dispatched for execution. Preserve existing changes. Use semantic commits only when requested, such as `fix(auth): bind wallet invitations to their network`.
+Do not modify unrelated organizations API-key behavior, node/resource ownership, framework-wide auth, dependencies, live databases, environment secrets, or unrelated advisor plans. Work in an isolated `fix/teams-046` branch/worktree if dispatched for execution. Preserve existing changes. Use semantic commits only when requested, such as `fix(auth): bind wallet invitations to their network`.
 
 ## Commands
 Run from repository root. Dependencies already exist; do not reinstall or upgrade them.

@@ -14,7 +14,7 @@
 - **Priority**: P2
 - **Effort**: S-M
 - **Risk**: MED
-- **Depends on**: plans/001-buildscoped-helper.md (the codemod may emit `buildScoped` after 001 lands — see Step 4)
+- **Depends on**: done/001-buildscoped-helper.md (the codemod may emit `buildScoped` after 001 lands — see Step 4)
 - **Category**: bug / tech-debt
 - **Planned at**: commit `c9ca44e1`, 2026-09-15
 

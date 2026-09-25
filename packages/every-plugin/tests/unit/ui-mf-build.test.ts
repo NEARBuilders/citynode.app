@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CORE_UI_DEPLOY_FIELDS, createUiSharedDeps } from "../../src/ui/mf-build";
 
@@ -9,24 +10,45 @@ const pkg = {
     "@orpc/contract": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "everything-dev": "catalog:",
   },
 };
+
+const expectedSharedKeys = [
+  "@orpc/client",
+  "@orpc/contract",
+  "@tanstack/react-query",
+  "@tanstack/react-router",
+  "everything-dev/ui/auth",
+  "react",
+  "react-dom",
+];
 
 describe("createUiSharedDeps", () => {
   it("resolves requiredVersion from the installed package version", () => {
     const deps = createUiSharedDeps(pkg);
-    expect(Object.keys(deps).sort()).toEqual([
-      "@orpc/client",
-      "@orpc/contract",
-      "@tanstack/react-query",
-      "@tanstack/react-router",
-      "react",
-      "react-dom",
-    ]);
+    expect(Object.keys(deps).sort()).toEqual(expectedSharedKeys);
     expect(deps.react.singleton).toBe(true);
     expect(deps.react.eager).toBe(false);
     expect(deps.react.requiredVersion).toMatch(/^\d+\.\d+\.\d+/);
     expect(deps.react.strictVersion).toBe(true);
+  });
+
+  it("shares the session read path module as a strict singleton", () => {
+    const provider = createUiSharedDeps(pkg, { role: "provider" });
+    const consumer = createUiSharedDeps(pkg, { role: "consumer" });
+
+    expect(provider["everything-dev/ui/auth"]).toMatchObject({
+      singleton: true,
+      strictVersion: true,
+      requiredVersion: expect.stringMatching(/^\d+\.\d+\.\d+/),
+    });
+    expect(consumer["everything-dev/ui/auth"]?.import).toBe(false);
+  });
+
+  it("resolves the session module version from the building workspace root", () => {
+    const deps = createUiSharedDeps(pkg, { workspaceRoot: path.resolve(process.cwd(), "../..") });
+    expect(deps["everything-dev/ui/auth"]?.requiredVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("can relax strictVersion (core-shell parity mode)", () => {

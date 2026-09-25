@@ -126,6 +126,14 @@ export function createAuthClient(options: CreateAuthClientOptions = {}) {
   });
 }
 
+export type { AuthContext } from "./auth-guards";
+export {
+  clearAuthenticatedQueries,
+  requireAdmin,
+  requireSession,
+} from "./auth-guards";
+export { pluginHref, pluginPath, pluginSearch } from "./plugin-path";
+
 export type AuthClient = ReturnType<typeof createAuthClient>;
 type OrganizationListResult = Awaited<ReturnType<AuthClient["organization"]["list"]>>;
 type PasskeyListResult = Awaited<ReturnType<AuthClient["passkey"]["listUserPasskeys"]>>;
@@ -159,6 +167,27 @@ export async function refreshSessionCache(
   queryClient: QueryClient,
 ): Promise<SessionData | null> {
   return queryClient.fetchQuery({ ...sessionQueryOptions(authClient), staleTime: 0 });
+}
+
+/**
+ * Resolves the session for the root route: the query cache wins (it is kept
+ * authoritative by the single sessionQueryOptions read path), and a populated
+ * router-context session — the host's SSR resolution — seeds an empty cache so
+ * the dehydrated state carries it to the client.
+ */
+export function resolveSessionFromCache<T>(
+  queryClient: QueryClient | undefined,
+  contextSession: T | null | undefined,
+): T | null | undefined {
+  if (!queryClient) return contextSession;
+
+  const cachedSession = queryClient.getQueryData<T | null>(sessionQueryKey);
+  if (cachedSession !== undefined) return cachedSession;
+
+  if (contextSession !== undefined) {
+    queryClient.setQueryData(sessionQueryKey, contextSession);
+  }
+  return contextSession;
 }
 
 export function useRelayHistory(session: SessionData | null | undefined, authClient: AuthClient) {

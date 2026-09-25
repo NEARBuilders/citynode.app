@@ -14,7 +14,7 @@
 - **Priority**: P2
 - **Effort**: S-M
 - **Risk**: LOW
-- **Depends on**: plans/001-buildscoped-helper.md (the `buildScoped` helper the new `runWithLayer` builds on)
+- **Depends on**: done/001-buildscoped-helper.md (the `buildScoped` helper the new `runWithLayer` builds on)
 - **Category**: tests / dx
 - **Planned at**: commit `c9ca44e1`, 2026-09-15
 
