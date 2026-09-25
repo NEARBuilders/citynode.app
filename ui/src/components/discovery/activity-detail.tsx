@@ -38,7 +38,7 @@ export function ActivityDetail({
       ) : activity.isError ? (
         <p role="alert">Couldn’t load this event.</p>
       ) : activity.data ? (
-        <div className="overflow-hidden rounded-2xl border-2 border-border-strong bg-card">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="bg-muted/50">
             <ActivityCard
               activity={activity.data}

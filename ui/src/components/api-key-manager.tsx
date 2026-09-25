@@ -41,7 +41,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wide">name</Label>
+        <Label>name</Label>
         <Input
           type="text"
           value={name}
@@ -52,7 +52,7 @@ export function ApiKeyForm({ onCreate, isPending }: ApiKeyFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wide">expiration</Label>
+        <Label>expiration</Label>
         <div className="flex flex-wrap gap-2">
           {EXPIRATION_PRESETS.map((preset) => (
             <Button
@@ -123,11 +123,11 @@ export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
             dismiss
           </Button>
         </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <Input
             readOnly
             value={apiKey.key}
-            className="font-mono text-xs"
+            className="flex-1"
             onFocus={(e) => e.target.select()}
             onClick={(e) => e.currentTarget.select()}
           />
@@ -148,8 +148,8 @@ export function ApiKeyReveal({ apiKey, onDismiss }: ApiKeyRevealProps) {
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="border-2 border-outset border-[rgb(51,51,51)] dark:border-[rgb(100,100,100)] bg-muted/30 p-3 grid gap-1 sm:grid-cols-[100px_1fr] sm:gap-4">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="flex flex-col gap-1 rounded-lg bg-muted/30 p-3">
+      <div className="text-sm font-medium text-muted-foreground">{label}</div>
       <div className={mono ? "text-xs font-mono break-all" : "text-sm break-all"}>{value}</div>
     </div>
   );

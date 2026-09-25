@@ -40,16 +40,13 @@ export function OrgSwitcherMenuContent({
   return (
     <DropdownMenuContent className={className} align={align} side={side} sideOffset={sideOffset}>
       <DropdownMenuGroup>
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          organizations
-        </DropdownMenuLabel>
+        <DropdownMenuLabel>organizations</DropdownMenuLabel>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
       {organizations.map((org) =>
         itemVariant === "iconTile" ? (
           <DropdownMenuItem
             key={org.id}
-            className="gap-2 p-2"
             onClick={() => handleSwitch(org.id)}
             disabled={switchOrg.isPending}
           >
@@ -71,11 +68,7 @@ export function OrgSwitcherMenuContent({
           </DropdownMenuItem>
         ),
       )}
-      {organizations.length === 0 && (
-        <DropdownMenuItem disabled className="text-muted-foreground">
-          no organizations
-        </DropdownMenuItem>
-      )}
+      {organizations.length === 0 && <DropdownMenuItem disabled>no organizations</DropdownMenuItem>}
       <DropdownMenuSeparator />
       <DropdownMenuItem
         className={cn(

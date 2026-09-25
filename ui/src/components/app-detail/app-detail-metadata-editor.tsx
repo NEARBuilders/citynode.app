@@ -157,7 +157,6 @@ export function AppDetailMetadataEditor({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder="App title"
-                className="h-9 text-sm"
               />
             </Field>
             <Field>
@@ -167,7 +166,6 @@ export function AppDetailMetadataEditor({
                 value={repoUrl}
                 onChange={(event) => setRepoUrl(event.target.value)}
                 placeholder="https://github.com/..."
-                className="h-9 text-sm"
               />
             </Field>
             <Field>
@@ -177,7 +175,6 @@ export function AppDetailMetadataEditor({
                 value={homepageUrl}
                 onChange={(event) => setHomepageUrl(event.target.value)}
                 placeholder="https://..."
-                className="h-9 text-sm"
               />
             </Field>
             <Field>
@@ -187,7 +184,6 @@ export function AppDetailMetadataEditor({
                 value={imageUrl}
                 onChange={(event) => setImageUrl(event.target.value)}
                 placeholder="https://..."
-                className="h-9 text-sm"
               />
             </Field>
           </div>
@@ -199,7 +195,6 @@ export function AppDetailMetadataEditor({
               onChange={(event) => setDescription(event.target.value)}
               rows={3}
               placeholder="Short description"
-              className="text-sm"
             />
           </Field>
 

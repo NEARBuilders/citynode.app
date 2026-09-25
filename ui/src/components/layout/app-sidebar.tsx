@@ -162,7 +162,7 @@ function SidebarNavGroup({ item, pathname }: { item: SidebarItem; pathname: stri
       >
         <CaretRightIcon className="transition-transform duration-200 group-data-open/collapsible:rotate-90" />
       </CollapsiblePrimitive.Trigger>
-      <CollapsiblePrimitive.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
+      <CollapsiblePrimitive.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-all duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
         <SidebarMenuSub>
           {children.map((child) => (
             <SidebarNavSubItem key={child.label} item={child} pathname={pathname} />

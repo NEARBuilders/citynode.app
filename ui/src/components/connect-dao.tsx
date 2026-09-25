@@ -154,7 +154,7 @@ function MembershipBadge({ state, primaryAccountId }: MembershipBadgeProps) {
   if (state.kind === "ok") {
     return (
       <p className="text-xs text-muted-foreground flex items-center gap-2">
-        <ShieldCheckIcon className="h-3 w-3 text-green-500" />
+        <ShieldCheckIcon className="h-3 w-3 text-success" />
         {primaryAccountId
           ? `${primaryAccountId} is listed in a DAO policy group`
           : "connected account listed in a DAO policy group"}

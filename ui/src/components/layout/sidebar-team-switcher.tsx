@@ -37,13 +37,7 @@ export function SidebarTeamSwitcher({
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton
-                data-testid="team-switcher"
-                disabled={isPending}
-                className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
-              />
-            }
+            render={<SidebarMenuButton data-testid="team-switcher" disabled={isPending} />}
           >
             <UsersIcon className="size-4" />
             <div className="grid flex-1 text-left text-sm leading-tight">
@@ -53,15 +47,13 @@ export function SidebarTeamSwitcher({
             <CaretUpDownIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--anchor-width) min-w-56 rounded-lg"
+            className="w-(--anchor-width) min-w-56"
             align="start"
             side="bottom"
             sideOffset={4}
           >
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                operate as team
-              </DropdownMenuLabel>
+              <DropdownMenuLabel>operate as team</DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {teams.map((team) => (

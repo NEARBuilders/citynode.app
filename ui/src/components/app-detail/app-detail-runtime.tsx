@@ -77,12 +77,7 @@ function RuntimeRow({
   const looksLikeUrl = isUrl && /^https?:\/\//.test(value);
   return (
     <div className="flex items-start gap-2 rounded border border-border bg-muted/10 px-2.5 py-1.5 text-xs">
-      <span
-        className="text-muted-foreground uppercase tracking-wide shrink-0 pt-px font-semibold min-w-[40px]"
-        style={{ fontSize: 10 }}
-      >
-        {label}
-      </span>
+      <span className="text-muted-foreground shrink-0 font-medium min-w-10">{label}</span>
       {looksLikeUrl ? (
         <a
           href={value}

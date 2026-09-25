@@ -1,5 +1,6 @@
 import { ArrowSquareOutIcon, InfoIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -31,20 +32,21 @@ export function InfoPopover({
   return (
     <Popover>
       <PopoverTrigger
-        className={cn(
-          "inline-flex shrink-0 items-center gap-1 rounded-[6px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          className,
-        )}
+        render={
+          <Button
+            variant="ghost"
+            size={label ? "xs" : "icon-xs"}
+            className={cn("shrink-0", className)}
+          />
+        }
         aria-label={label ?? `about ${title}`}
         data-testid={testId}
       >
         {icon ?? <InfoIcon className="h-3.5 w-3.5" />}
-        {label ? <span className="text-xs">{label}</span> : null}
+        {label ? <span>{label}</span> : null}
       </PopoverTrigger>
-      <PopoverContent className="space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          {title}
-        </p>
+      <PopoverContent>
+        <p className="text-sm font-medium text-muted-foreground">{title}</p>
         {body ? <div className="text-xs leading-relaxed text-foreground">{body}</div> : null}
         {links && links.length > 0 ? (
           <div className="flex flex-col gap-1 border-t border-border pt-2">

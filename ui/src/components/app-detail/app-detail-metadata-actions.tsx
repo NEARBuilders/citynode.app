@@ -40,13 +40,12 @@ export function AppDetailMetadataActions({
       {delegatePayload && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               Signed delegate payload
             </span>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs gap-1"
+              size="xs"
               onClick={async () => {
                 await navigator.clipboard.writeText(delegatePayload);
                 toast.success("Payload copied");
@@ -56,10 +55,7 @@ export function AppDetailMetadataActions({
               copy
             </Button>
           </div>
-          <pre
-            className="overflow-x-auto rounded border border-border bg-muted/10 p-3 font-mono text-foreground whitespace-pre-wrap break-all"
-            style={{ fontSize: 10, lineHeight: "1.5", maxHeight: 140 }}
-          >
+          <pre className="max-h-36 overflow-x-auto rounded-lg border border-border bg-muted/10 p-3 font-mono text-xs leading-normal text-foreground whitespace-pre-wrap break-all">
             {delegatePayload}
           </pre>
         </div>

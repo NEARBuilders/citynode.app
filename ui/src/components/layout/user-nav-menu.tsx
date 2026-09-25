@@ -41,11 +41,9 @@ export function UserNavMenuContent({
 }: UserNavMenuContentProps) {
   const identityContent = (
     <>
-      <Avatar className="size-9 shrink-0 ring-1 ring-border">
+      <Avatar size="lg" className="shrink-0">
         {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
-        <AvatarFallback className="text-xs font-semibold">
-          {initials || <UserIcon className="size-4" />}
-        </AvatarFallback>
+        <AvatarFallback>{initials || <UserIcon className="size-4" />}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{displayName}</p>

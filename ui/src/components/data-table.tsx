@@ -95,11 +95,8 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No results.
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <span className="text-muted-foreground">No results.</span>
                 </TableCell>
               </TableRow>
             )}
@@ -119,7 +116,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               if (value) table.setPageSize(Number(value));
             }}
           >
-            <SelectTrigger className="h-8 w-[70px]">
+            <SelectTrigger size="sm" className="w-20">
               <SelectValue placeholder={table.state.pagination.pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
@@ -132,13 +129,13 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
           </Select>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+          <div className="flex w-25 items-center justify-center text-sm font-medium">
             Page {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
           </div>
           <div className="flex items-center space-x-2">
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
             >
@@ -147,7 +144,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
             </Button>
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
@@ -156,7 +153,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
             </Button>
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
@@ -165,7 +162,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
             </Button>
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.setPageIndex(table.getPageCount() - 1)}
               disabled={!table.getCanNextPage()}
             >

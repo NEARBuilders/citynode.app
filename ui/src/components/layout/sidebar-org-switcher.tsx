@@ -21,16 +21,8 @@ export function SidebarOrgSwitcher({
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton
-                size="lg"
-                data-testid="org-switcher"
-                className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
-              />
-            }
-          >
-            <div className="flex aspect-square size-8 items-center justify-center rounded-lg border-2 border-outset border-border-strong bg-card text-foreground shrink-0">
+          <DropdownMenuTrigger render={<SidebarMenuButton size="lg" data-testid="org-switcher" />}>
+            <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-border bg-card text-foreground shrink-0">
               <BankIcon className="size-4" />
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight">
@@ -44,7 +36,7 @@ export function SidebarOrgSwitcher({
           <OrgSwitcherMenuContent
             organizations={organizations}
             activeOrgId={activeOrgId}
-            className="w-(--anchor-width) min-w-56 rounded-lg"
+            className="w-(--anchor-width) min-w-56"
             align="start"
             side="bottom"
             sideOffset={4}

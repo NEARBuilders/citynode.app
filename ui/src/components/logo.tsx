@@ -14,7 +14,7 @@ export function Logo({ appName, showText = false, className = "", size = "md" }:
   return (
     <div className={`flex items-center justify-center gap-3 ${className}`}>
       <div
-        className={`${boxSize} flex items-center justify-center border-2 border-outset border-border-strong bg-card shadow-sm`}
+        className={`${boxSize} flex items-center justify-center rounded-lg border border-border bg-card`}
       >
         <BankIcon className={`${iconSize} text-foreground`} aria-hidden />
       </div>

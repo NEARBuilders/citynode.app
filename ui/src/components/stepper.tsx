@@ -15,9 +15,13 @@ export interface Step {
 export function StepIcon({ state }: { state: StepState }) {
   switch (state) {
     case "running":
-      return <Spinner className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-px" />;
+      return (
+        <span className="inline-flex text-muted-foreground shrink-0 mt-px">
+          <Spinner className="h-3.5 w-3.5" />
+        </span>
+      );
     case "success":
-      return <CheckIcon className="h-3.5 w-3.5 text-green-500 shrink-0 mt-px" />;
+      return <CheckIcon className="h-3.5 w-3.5 text-success shrink-0 mt-px" />;
     case "failed":
       return <XCircleIcon className="h-3.5 w-3.5 text-destructive shrink-0 mt-px" />;
     default:
@@ -39,9 +43,7 @@ export function StepList({ steps }: { steps: Step[] }) {
                 {step.label}
               </span>
               {step.blocking === false && (
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                  non-blocking
-                </span>
+                <span className="text-xs text-muted-foreground">non-blocking</span>
               )}
             </div>
             {step.error && (
