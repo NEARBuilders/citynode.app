@@ -1,46 +1,42 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  getAccount,
   type Passkey,
   type SessionData,
   sessionQueryOptions,
+  useApiClient,
   useAuthClient,
 } from "@/app";
+import { PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
+import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
+import { IdentityCard } from "./-identity-card";
+import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
+import { getNextSteps } from "./-next-steps";
+import { NextStepsList } from "./-next-steps-list";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
-import { TenantSummary } from "./-tenant-summary";
-import { WorkspaceIdentity } from "./-workspace-identity";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
   validateSearch: (search: Record<string, unknown>): { restricted?: FeatureArea } =>
     typeof search.restricted === "string" && isFeatureArea(search.restricted)
       ? { restricted: search.restricted }
       : {},
-  beforeLoad: async ({ context }) => {
-    const { apiClient, runtimeConfig } = context;
-    const accountId = getAccount(runtimeConfig);
-    let tenant: Awaited<ReturnType<typeof apiClient.resolveTenant>> | null = null;
-    try {
-      tenant = await apiClient.resolveTenant({ accountId });
-    } catch {
-      tenant = null;
-    }
-    return { tenant };
-  },
   head: () => ({
-    meta: [{ title: "Workspace | app" }, { name: "description", content: "Your workspace." }],
+    meta: [{ title: "Home | app" }, { name: "description", content: "Your next steps." }],
   }),
   component: Home,
 });
 
 function Home() {
   const auth = useAuthClient();
-  const { tenant } = Route.useRouteContext();
+  const apiClient = useApiClient();
   const { restricted } = Route.useSearch();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
-  const { data: passkeys = [] } = useQuery({
+  const nearAccountId = useNearAccount();
+  const activeOrgId = session?.session?.activeOrganizationId ?? "";
+
+  const passkeys = useQuery({
     queryKey: ["passkeys"],
     queryFn: async () => {
       const { data } = await auth.passkey.listUserPasskeys();
@@ -48,30 +44,101 @@ function Home() {
     },
     staleTime: 60 * 1000,
   });
-  const user = session?.user;
-  const nearAccountId = useNearAccount();
+  const organizations = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      const { data } = await auth.organization.list();
+      return data || [];
+    },
+    staleTime: 30 * 1000,
+  });
+  const invitations = useQuery({
+    queryKey: ["user-invitations"],
+    queryFn: async (): Promise<HomeInvitation[]> => {
+      try {
+        return await apiClient.auth.listUserInvitations();
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 30 * 1000,
+  });
+  const tenant = useQuery(tenantByOrgQueryOptions(apiClient, activeOrgId));
+  const authContext = useQuery({
+    queryKey: ["home-auth-context", activeOrgId],
+    queryFn: () => apiClient.auth.getContext().catch(() => null),
+    enabled: !!activeOrgId,
+    staleTime: 30 * 1000,
+  });
 
-  const profile = {
-    isAnonymous: user?.isAnonymous || false,
-    hasEmail: Boolean(user?.email),
-    hasNear: Boolean(nearAccountId),
-    hasPasskeys: passkeys.length > 0,
-    isAdmin: user?.role === "admin",
-  };
-  const activeOrgId = session?.session?.activeOrganizationId ?? null;
-  const isTenantMember = !!tenant && !!activeOrgId && activeOrgId === tenant.orgId;
+  const user = session?.user;
+  const pending = (invitations.data ?? []).filter((invitation) => invitation.status === "pending");
+  const orgs = organizations.data ?? [];
+  const activeOrg = orgs.find((org) => org.id === activeOrgId) ?? null;
+  const orgRole = authContext.data?.organization?.member?.role;
+  const isAdmin = user?.role === "admin";
+  const community = tenant.data ? { name: tenant.data.name, tenantId: tenant.data.id } : null;
+  const loading =
+    !user || organizations.isPending || (!!activeOrgId && tenant.isPending) || passkeys.isPending;
+
+  const steps = getNextSteps({
+    isAnonymous: user?.isAnonymous ?? false,
+    hasPasskey: (passkeys.data?.length ?? 0) > 0,
+    hasNear: !!nearAccountId,
+    organizationCount: orgs.length,
+    activeOrganizationName: activeOrg?.name ?? null,
+    community,
+    canManageCommunity: isAdmin || orgRole === "owner" || orgRole === "admin",
+    isAdmin,
+  });
+
+  const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
   return (
-    <div className="space-y-8">
+    <PageContainer>
       {restricted && <RestrictedAreaNotice area={restricted} />}
-      <WorkspaceIdentity
-        nearAccountId={nearAccountId}
-        passkeys={passkeys}
-        profile={profile}
-        tenantMember={isTenantMember}
-        user={user}
+      <PageHeader
+        headerTestId="home.heading"
+        title={firstName ? `Welcome back, ${firstName}` : "Home"}
+        description="Pick up where you left off."
       />
-      {tenant && <TenantSummary tenant={tenant} />}
-    </div>
+      <div className="grid gap-10 lg:grid-cols-3">
+        <div className="flex flex-col gap-10 lg:col-span-2">
+          {pending.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <SectionHeader title="Invitations" />
+              <InvitationSteps invitations={pending} />
+            </section>
+          )}
+          <section className="flex flex-col gap-4">
+            <SectionHeader title="Next steps" />
+            {loading ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ) : (
+              <NextStepsList
+                steps={steps}
+                tenantId={community?.tenantId ?? null}
+                primary={pending.length === 0}
+              />
+            )}
+          </section>
+        </div>
+        <aside className="flex flex-col gap-4">
+          {user ? (
+            <IdentityCard
+              user={user}
+              nearAccountId={nearAccountId}
+              passkeyCount={passkeys.data?.length ?? 0}
+            />
+          ) : (
+            <Skeleton className="h-56 w-full" />
+          )}
+        </aside>
+      </div>
+    </PageContainer>
   );
 }
