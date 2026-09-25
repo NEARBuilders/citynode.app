@@ -67,8 +67,6 @@ It runs inside the **everything-plugin** framework (oRPC + Effect) and is design
 | `TWILIO_PHONE_NUMBER` | `string` | — | Twilio sender phone number |
 | `NEAR_RELAYER_PRIVATE_KEY_MAINNET` | `string` | — | Optional mainnet relayer private key |
 | `NEAR_RELAYER_PRIVATE_KEY_TESTNET` | `string` | — | Optional testnet relayer private key |
-| `NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET` | `string` | — | Optional mainnet sub-account parent key |
-| `NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET` | `string` | — | Optional testnet sub-account parent key |
 
 ### Plugin Context
 

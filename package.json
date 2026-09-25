@@ -21,8 +21,8 @@
       "@tanstack/react-devtools": "^0.10.1",
       "@tanstack/react-form": "^1.29.1",
       "@tanstack/react-table": "^9.2.4",
-      "near-kit": "^0.19.0",
-      "@hot-labs/near-connect": "0.11.4",
+      "near-kit": "^0.20.2",
+      "@fastnear/near-connect": "^0.14.1",
       "@scure/base": "^2.2.0",
       "drizzle-orm": "^0.45.1",
       "drizzle-kit": "^0.31.8",
@@ -95,7 +95,8 @@
     "db:studio": "bos db:studio",
     "db:generate": "bun run --cwd api drizzle-kit generate",
     "db:migrate": "bun run --cwd api drizzle-kit migrate",
-    "test": "bun run test:ui && bun run test:api && bun run test:e2e",
+    "test": "bun run test:ui && bun run test:api && bun run test:e2e && bun run test:framework",
+    "test:framework": "bun run --cwd packages/everything-dev test && bun run --cwd packages/every-plugin test",
     "test:ui": "bun run --cwd ui test",
     "test:api": "cd api && bun run test tests/integration/ tests/unit/",
     "test:integration": "cd api && bun run test tests/integration/",
@@ -110,6 +111,7 @@
     "test:regression:http:dev": "REGRESSION_MODE=dev:ssr sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
     "test:regression:http:start": "REGRESSION_MODE=start:ssr sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
     "test:regression:http:backcompat": "REGRESSION_MODE=backcompat sh -lc 'cd tests/regression/http && go test ./... -count=1 -v -timeout 10m'",
+    "test:regression:framework": "cd tests/regression/framework && go test ./... -count=1 -v -timeout 15m",
     "regression:dev:ssr": "bun tests/regression/lib/start-stack.mjs dev:ssr",
     "regression:dev:csr": "bun tests/regression/lib/start-stack.mjs dev:csr",
     "regression:start:ssr": "bun tests/regression/lib/start-container.mjs ssr",
@@ -170,5 +172,8 @@
     "everything-dev": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"
+  },
+  "patchedDependencies": {
+    "@fastnear/near-connect@0.14.1": "patches/@fastnear%2Fnear-connect@0.14.1.patch"
   }
 }

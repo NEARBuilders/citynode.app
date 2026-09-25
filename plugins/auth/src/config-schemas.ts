@@ -22,14 +22,6 @@ export const subAccountNetworkSchema = z.object({
       args: z.record(z.string(), z.any()).optional(),
     })
     .optional(),
-  addRelayerFCAK: z.boolean().optional(),
-  relayerFCAK: z
-    .object({
-      receiverId: z.string(),
-      methodNames: z.array(z.string()).optional(),
-      allowance: z.string().optional(),
-    })
-    .optional(),
 });
 
 export const relayerNetworkSchema = z.object({
@@ -39,6 +31,15 @@ export const relayerNetworkSchema = z.object({
   maxDepositPerTransaction: z.string().optional(),
 });
 
+export const sessionGasKeyNetworkSchema = z.object({
+  receiverId: z.string(),
+  methodNames: z.array(z.string()).optional(),
+  fundAmount: z.string().optional(),
+  topUpThreshold: z.string().optional(),
+  maxFundPerUser: z.string().optional(),
+  numNonces: z.number().optional(),
+});
+
 export const authSiwnBaseSchema = z.object({
   apiKey: z.string().optional(),
   rpcUrl: z.string().optional(),
@@ -46,6 +47,12 @@ export const authSiwnBaseSchema = z.object({
     .object({
       mainnet: relayerNetworkSchema.optional(),
       testnet: relayerNetworkSchema.optional(),
+    })
+    .optional(),
+  sessionGasKey: z
+    .object({
+      mainnet: sessionGasKeyNetworkSchema.optional(),
+      testnet: sessionGasKeyNetworkSchema.optional(),
     })
     .optional(),
   subAccount: z
@@ -118,8 +125,6 @@ export const authSecretsSchema = z.object({
   TWILIO_PHONE_NUMBER: z.string().optional(),
   NEAR_RELAYER_PRIVATE_KEY_MAINNET: z.string().optional(),
   NEAR_RELAYER_PRIVATE_KEY_TESTNET: z.string().optional(),
-  NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET: z.string().optional(),
-  NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
 });
 

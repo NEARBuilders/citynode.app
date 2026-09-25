@@ -17,7 +17,7 @@ Better-near-auth is a Better Auth plugin implementing Sign in with NEAR (SIWN, N
 | Package | Purpose |
 |---|---|
 | `near-kit` | NEAR Protocol SDK: RPC, transactions, wallet, NEP-413 verify, delegate actions, key stores |
-| `@hot-labs/near-connect` | Browser wallet connector (NEAR Connect) |
+| `@fastnear/near-connect` | Browser wallet connector (NEAR Connect) |
 | `@scure/base` | Hex encode/decode for nonce transport |
 | `nanostores` | Client state management |
 | `zod` | Validation |
@@ -252,7 +252,7 @@ Profile lookup tries FastNear KV first, falls back to NEAR Social:
 
 ## Wallet Connection (Client)
 
-Uses near-kit's `fromNearConnect()` adapter with `@hot-labs/near-connect`:
+Uses near-kit's `fromNearConnect()` adapter with `@fastnear/near-connect`:
 
 - `connector.connect()` — opens wallet picker
 - `connector.disconnect()` — disconnects

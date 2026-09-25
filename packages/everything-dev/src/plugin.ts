@@ -7,7 +7,7 @@ import * as p from "@clack/prompts";
 import { Context, Effect, Layer } from "effect";
 import { buildScoped, buildScopedContext } from "every-plugin";
 import { type KeyPair, parseKey } from "near-kit";
-import { buildRuntimeConfig } from "./app";
+import { buildRuntimeConfig, probePortBindable } from "./app";
 import { openInBrowser, startDeviceLogin } from "./auth-login";
 import {
   deleteSessionHandle,
@@ -72,7 +72,7 @@ import {
   makeDatabaseBindings,
   makeDrizzleKitLive,
 } from "./db";
-import { getLogsDir, readDevLatestLog } from "./dev-logs";
+import { readDevLatestLog, resolveDevLatestFile } from "./dev-logs";
 import {
   bootstrapLayers,
   type DevSessionData,
@@ -90,6 +90,7 @@ import {
   parseBosUrl,
 } from "./fastkv";
 import { materializeViaLayer } from "./infra/materializer";
+import { ownerOfPort } from "./infra/port-ownership";
 import { type BosEnv, mergeBosConfigWithExtends, resolveExtendsRef } from "./merge";
 import { checkFederationCompat } from "./mf";
 import {
@@ -101,7 +102,8 @@ import {
 } from "./near-cli";
 import { getNetworkIdForAccount } from "./network";
 import { applyPluginPublishUrl } from "./platform-deploy";
-import { pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
+import { killProcessGroupEscalating, reapGroup } from "./process-kill";
+import { isPidAlive, pruneDeadEffect, readRegistry, unregisterPid } from "./process-registry";
 import { timePhase } from "./progress";
 import { publishToFastKv } from "./publish";
 import { applyRegistrySections } from "./registry-use";
@@ -311,6 +313,21 @@ async function exportPublishKey(
   const { FileKeyStore } = await import("near-kit/keys/file");
   const keyStore = new FileKeyStore("~/.near-credentials", network);
   await keyStore.add(account, parseNearPrivateKey(keyPair.privateKey));
+  try {
+    const { statSync, chmodSync } = await import("node:fs");
+    const { homedir } = await import("node:os");
+    const credentialPath = join(
+      homedir(),
+      ".near-credentials",
+      network === "mainnet" ? "mainnet" : network,
+      `${account}.json`,
+    );
+    if (statSync(credentialPath).mode & 0o077) {
+      chmodSync(credentialPath, 0o600);
+    }
+  } catch {
+    // best-effort tightening; near-kit owns the write path
+  }
 
   return {
     publicKey: keyPair.publicKey,
@@ -833,7 +850,6 @@ export default createPlugin({
         privateKey: input.privateKey,
         wallet: input.wallet,
         registry: input.registry,
-        cdn: input.cdn,
       });
 
       if (result.publishConfig) {
@@ -2049,7 +2065,7 @@ export default createPlugin({
             return match?.[1] === service || match?.[1] === `plugin:${service}`;
           });
         return {
-          logFile: join(getLogsDir(configDir), "dev-latest.log"),
+          logFile: resolveDevLatestFile(configDir),
           lines,
         };
       } catch (error) {
@@ -2082,50 +2098,69 @@ export default createPlugin({
 
     kill: builder.kill.handler(async ({ input }) => {
       try {
-        const entries = await Effect.runPromise(pruneDeadEffect(readRegistry()));
         const configPath = findConfigPath();
         const targetConfigDir = input.all
           ? undefined
           : (input.configDir ?? (configPath ? resolve(dirname(configPath)) : undefined));
 
         const targets = targetConfigDir
-          ? entries.filter((entry) => entry.configDir === targetConfigDir)
-          : entries;
+          ? readRegistry().filter((entry) => entry.configDir === targetConfigDir)
+          : readRegistry();
 
         const killed: Array<{ pid: number; configDir: string }> = [];
         const skipped: Array<{ pid: number; reason: string }> = [];
 
         for (const entry of targets) {
-          const signal = input.signal === "SIGKILL" ? "SIGKILL" : "SIGTERM";
-          try {
-            process.kill(entry.pid, signal);
-            killed.push({ pid: entry.pid, configDir: entry.configDir });
-            unregisterPid(entry.pid);
-          } catch (err) {
-            const code = (err as NodeJS.ErrnoException).code;
-            if (code === "ESRCH") {
-              skipped.push({
-                pid: entry.pid,
-                reason: "process already exited",
-              });
-              unregisterPid(entry.pid);
-            } else {
-              skipped.push({
-                pid: entry.pid,
-                reason: (err as Error).message ?? "kill failed",
-              });
+          const wasAlive = isPidAlive(entry.pid);
+          if (wasAlive) {
+            await Effect.runPromise(
+              killProcessGroupEscalating(entry.pid, {
+                terminateMs: 5000,
+                signal: input.signal === "SIGKILL" ? "SIGKILL" : "SIGTERM",
+              }),
+            );
+          }
+
+          const reapedChildren: number[] = [];
+          for (const childPid of entry.childPids ?? []) {
+            if (isPidAlive(childPid)) {
+              reapGroup(childPid);
+              reapedChildren.push(childPid);
             }
           }
-          for (const childPid of entry.childPids ?? []) {
-            try {
-              process.kill(-childPid, signal);
-            } catch {
-              try {
-                process.kill(childPid, signal);
-              } catch {
-                // already gone
-              }
+
+          const ports = Object.values(entry.ports ?? {}).filter(
+            (port) => Number.isFinite(port) && port > 0,
+          );
+          const stillBound: number[] = [];
+          for (const port of ports) {
+            let bindable = false;
+            for (let attempt = 0; attempt < 4; attempt++) {
+              bindable = await Effect.runPromise(probePortBindable(port));
+              if (bindable) break;
+              await new Promise((resolve) => setTimeout(resolve, 500));
             }
+            if (!bindable) stillBound.push(port);
+          }
+
+          if (stillBound.length > 0) {
+            const owner = await Effect.runPromise(ownerOfPort(stillBound[0]));
+            skipped.push({
+              pid: entry.pid,
+              reason: `ports still bound after kill: ${stillBound.join(", ")}${
+                owner ? ` — held by pid ${owner.pid} (${owner.command})` : " — owner unknown"
+              }`,
+            });
+            continue;
+          }
+
+          unregisterPid(entry.pid);
+          killed.push({ pid: entry.pid, configDir: entry.configDir });
+          if (!wasAlive && reapedChildren.length > 0) {
+            skipped.push({
+              pid: entry.pid,
+              reason: `process already exited; reaped orphaned children ${reapedChildren.join(", ")}`,
+            });
           }
         }
 

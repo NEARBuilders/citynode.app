@@ -249,10 +249,8 @@ export function buildDatabaseConfigs(
 
   for (const secret of orderedSecrets) {
     const slug = normalizeDatabaseSlug(secret);
-    if (secret === AUTH_DATABASE_SECRET) {
-      portMap[slug] = 5433;
-    } else {
-      portMap[slug] = 5432;
+    if (portMap[slug] === undefined) {
+      portMap[slug] = secret === AUTH_DATABASE_SECRET ? 5433 : 5432;
     }
   }
 
@@ -284,12 +282,12 @@ export function buildDatabaseConfigs(
       secret,
       slug,
       fromKey,
-      port: 5432,
+      port,
       serviceName: "postgres-api",
       containerName: apiContainerName,
       databaseName: "api_db",
       volumeName: apiVolumeName,
-      url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/api_db`,
+      url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${port}/api_db`,
     };
   });
 }

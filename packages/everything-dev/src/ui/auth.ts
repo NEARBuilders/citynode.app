@@ -140,12 +140,6 @@ export function useAuthClient(): AuthClient {
 
 export const sessionQueryKey = ["session"] as const;
 
-/**
- * The app's single session read path. disableCookieCache forces the server to
- * answer from the session table (the cookie cache can lag it) so every
- * consumer — route guards, the login route, useQuery observers — sees the
- * same authoritative answer. Client-side staleness is handled by staleTime.
- */
 export function sessionQueryOptions(authClient: AuthClient) {
   return {
     queryKey: sessionQueryKey,
@@ -160,12 +154,6 @@ export function sessionQueryOptions(authClient: AuthClient) {
   };
 }
 
-/**
- * Authoritative post-sign-in session sync. Fetches through sessionQueryOptions
- * with staleness overridden so a fresh signed-out cache entry (written by the
- * login page's observer moments earlier) cannot short-circuit the read, then
- * leaves the fresh session in the cache for the route guards.
- */
 export async function refreshSessionCache(
   authClient: AuthClient,
   queryClient: QueryClient,

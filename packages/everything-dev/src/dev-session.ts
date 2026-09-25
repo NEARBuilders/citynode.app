@@ -1,21 +1,30 @@
 import { Deferred, Effect, Exit } from "effect";
+import { probePortBindable } from "./app";
 import {
-  type DevViewHandle,
-  type LogEntry,
-  type ProcessState,
-  renderDevView,
-} from "./components/dev-view";
-import { renderStreamingView } from "./components/streaming-view";
+  createDevRenderer,
+  type DevProcessState,
+  type DevRendererHandle,
+} from "./components/dev-render";
 import { getProjectRoot } from "./config";
-import { createDevLogger, formatLogLine, isDebug, isLogNoise } from "./dev-logs";
+import { createLogPipeline, type LogEvent, resolveLogLevel } from "./dev-log-pipeline";
+import { createDevLogger, formatLogLine } from "./dev-logs";
 import { ShellEnvLive } from "./env/project-env";
+import { ownerOfPort } from "./infra/port-ownership";
 import {
   getProcessStates,
   makeDevProcess,
   type ProcessCallbacks,
   type ProcessHandle,
 } from "./orchestrator";
-import { registerStandalone, unregisterPid, updateChildPids } from "./process-registry";
+import { reapGroup } from "./process-kill";
+import {
+  isPidAlive,
+  readRegistry,
+  registerStandalone,
+  unregisterPid,
+  updateChildPids,
+  writeRegistry,
+} from "./process-registry";
 import {
   type AppOrchestrator,
   DevGeneratedEnvLive,
@@ -28,9 +37,32 @@ import {
 } from "./service-descriptor";
 import type { RuntimeConfig } from "./types";
 
-const shouldDisplayLog = (line: string): boolean => {
-  if (isDebug()) return true;
-  return !isLogNoise(line);
+const adoptOrphanedChildren = (configDir: string): void => {
+  try {
+    const entries = readRegistry().filter(
+      (entry) => entry.pid > 1 && entry.configDir === configDir && !isPidAlive(entry.pid),
+    );
+    if (entries.length === 0) return;
+    const reaped: number[] = [];
+    for (const entry of entries) {
+      for (const childPid of entry.childPids ?? []) {
+        if (childPid === process.pid) continue;
+        if (isPidAlive(childPid)) {
+          reapGroup(childPid);
+          reaped.push(childPid);
+        }
+      }
+    }
+    if (reaped.length > 0) {
+      console.error(
+        `[Dev] Reaped ${reaped.length} orphaned child process(es) from dead session(s): ${reaped.join(", ")}`,
+      );
+    }
+    const deadPids = new Set(entries.map((entry) => entry.pid));
+    writeRegistry(readRegistry().filter((entry) => !deadPids.has(entry.pid)));
+  } catch {
+    // best-effort; registry hygiene is non-critical for the running session
+  }
 };
 
 const isInteractiveSupported = (): boolean => {
@@ -57,6 +89,10 @@ const sortByOrder = (packages: string[]): string[] => {
 export interface DevSessionControls {
   requestShutdown: () => void;
   emergencyKill: () => void;
+  requestShutdownEscalating: () => void;
+  forceExit: () => void;
+  restoreView: () => void;
+  rearmForceExitTimer: () => void;
 }
 
 export const runDevSession = (
@@ -65,10 +101,11 @@ export const runDevSession = (
 ) =>
   Effect.gen(function* () {
     const configDir = getProjectRoot();
+    adoptOrphanedChildren(configDir);
     const services = yield* ServiceDescriptorMap;
     const runtimeConfig = yield* DevRuntimeConfig;
     const orderedPackages = sortByOrder(orchestrator.packages);
-    const initialProcesses: ProcessState[] = getProcessStates(
+    const initialProcesses: DevProcessState[] = getProcessStates(
       orderedPackages,
       services,
       orchestrator.port,
@@ -95,11 +132,16 @@ export const runDevSession = (
         void Effect.runPromise(Deferred.succeed(shutdown, undefined));
       },
       emergencyKill: () => {},
+      requestShutdownEscalating: () => {},
+      forceExit: () => {},
+      restoreView: () => {},
+      rearmForceExitTimer: () => {},
     };
 
     onShutdownReady?.(controls);
 
     const isWorkspaceChild = process.env.BOS_WORKSPACE_CHILD === "1";
+    let ownedPorts: number[] = [];
     if (!isWorkspaceChild) {
       const regPorts: Record<string, number> = {};
       const addPort = (key: string, value: number | undefined | null) => {
@@ -111,7 +153,7 @@ export const runDevSession = (
       addPort("auth", runtimeConfig.auth?.port);
       if (runtimeConfig.plugins) {
         for (const [id, plugin] of Object.entries(runtimeConfig.plugins)) {
-          if (!isAuthMirrorPluginEntry(runtimeConfig, id, plugin)) {
+          if (!isAuthMirrorPluginEntry(runtimeConfig.auth, id, plugin)) {
             addPort(`plugin:${id}`, plugin.port);
           }
           addPort(`plugin-ui:${id}`, plugin.ui?.port);
@@ -124,58 +166,127 @@ export const runDevSession = (
         startedAt: Date.now(),
         description: orchestrator.description,
       });
+      ownedPorts = Object.values(regPorts);
     }
 
-    const allLogs: LogEntry[] = [];
-    let view: DevViewHandle | null = null;
+    let view: DevRendererHandle | null = null;
     let shouldExportLogs = false;
 
-    const requestShutdownAndExport = () => {
-      shouldExportLogs = true;
-      void Effect.runPromise(Deferred.succeed(shutdown, undefined));
-    };
+    const logLevel = resolveLogLevel();
+    const allLogs: LogEvent[] = [];
+    const pipeline = createLogPipeline({
+      level: logLevel,
+      sinks: {
+        display: (event) => {
+          view?.addLog(event.source, event.line, event.level === "error");
+        },
+        file: (event) => {
+          if (orchestrator.noLogs) return;
+          void logger.write(event);
+        },
+        export: (event) => {
+          allLogs.push(event);
+        },
+      },
+    });
 
-    const useInteractive = orchestrator.interactive ?? isInteractiveSupported();
-    view = useInteractive
-      ? renderDevView(
-          initialProcesses,
-          orchestrator.description,
-          orchestrator.env,
-          () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
-          requestShutdownAndExport,
-        )
-      : renderStreamingView(
-          initialProcesses,
-          orchestrator.description,
-          orchestrator.env,
-          () => void Effect.runPromise(Deferred.succeed(shutdown, undefined)),
-        );
+    const useInteractive = isInteractiveSupported() && orchestrator.interactive !== false;
+    view = createDevRenderer(
+      initialProcesses,
+      orchestrator.description,
+      orchestrator.env,
+      () => controls.requestShutdownEscalating(),
+      () => {
+        shouldExportLogs = true;
+        controls.requestShutdownEscalating();
+      },
+      { interactive: useInteractive, onForceExit: () => controls.forceExit() },
+    );
+    controls.restoreView = () => {
+      if (useInteractive) view?.unmount();
+    };
 
     const callbacks: ProcessCallbacks = {
       onStatus: (name, status, message) => {
         view?.updateProcess(name, status, message);
       },
       onLog: (name, line, isError) => {
-        const entry: LogEntry = {
-          id: `${Date.now()}-${allLogs.length + 1}`,
-          source: name,
-          line,
-          timestamp: Date.now(),
-          isError,
-        };
-        allLogs.push(entry);
-        if (shouldDisplayLog(line)) {
-          view?.addLog(name, line, isError);
-        }
-        if (!orchestrator.noLogs) {
-          void logger.write(entry);
-        }
+        pipeline.ingest({ source: name, line, isError });
       },
     };
+
+    const spawned: ProcessHandle[] = [];
+
+    controls.emergencyKill = () => {
+      for (const handle of spawned) {
+        if (handle.pid === undefined) continue;
+        reapGroup(handle.pid);
+      }
+    };
+
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        controls.rearmForceExitTimer();
+
+        yield* Effect.forEach(spawned, (h) => h.kill.pipe(Effect.ignore), {
+          concurrency: "unbounded",
+        });
+
+        yield* Effect.sleep("200 millis");
+
+        for (const port of ownedPorts) {
+          const bindable = yield* probePortBindable(port);
+          if (!bindable) {
+            const owner = yield* ownerOfPort(port);
+            console.error(
+              `[Dev] Port ${port} still bound after teardown${
+                owner
+                  ? ` — pid ${owner.pid} (${owner.command})`
+                  : " — owner unknown (lsof unavailable)"
+              }`,
+            );
+          }
+        }
+
+        if (!isWorkspaceChild) {
+          try {
+            unregisterPid(process.pid);
+          } catch {
+            // best-effort; pruneDead cleans stale entries on next ps/kill
+          }
+        }
+
+        pipeline.flush();
+
+        view?.unmount();
+
+        if (shouldExportLogs) {
+          console.log("\n");
+          console.log("═".repeat(70));
+          console.log(`  SESSION LOGS: ${orchestrator.description}`);
+          console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
+          console.log(`  Filtered entries: ${allLogs.length} (level: ${logLevel})`);
+          console.log("═".repeat(70));
+          console.log("");
+          for (const event of allLogs) {
+            console.log(formatLogLine(event));
+          }
+          console.log("");
+          console.log("═".repeat(70));
+          console.log(`  Full logs saved to: ${logger.logFile}`);
+          console.log("═".repeat(70));
+          console.log("");
+        }
+      }),
+    );
 
     const startProcess = (pkg: string) => {
       const portOverride = pkg === "host" ? orchestrator.port : undefined;
       return makeDevProcess(pkg, callbacks, portOverride).pipe(
+        Effect.tap((handle) => Effect.sync(() => spawned.push(handle))),
+        Effect.flatMap((handle) =>
+          Effect.acquireRelease(Effect.succeed(handle), () => handle.kill.pipe(Effect.ignore)),
+        ),
         Effect.tapError((err) =>
           Effect.sync(() => {
             callbacks.onLog(pkg, `Failed to start: ${err}`, true);
@@ -214,44 +325,44 @@ export const runDevSession = (
     const nonHostPackages = orderedPackages.filter((pkg) => pkg !== "host");
     const hostPackages = orderedPackages.filter((pkg) => pkg === "host");
 
-    const nonHostHandles = yield* startGroup(nonHostPackages);
+    const startupPhase = Effect.gen(function* () {
+      const nonHostHandles = yield* startGroup(nonHostPackages);
 
-    yield* Effect.forEach(
-      nonHostHandles.map((handle, index) => ({
-        handle,
-        pkg: nonHostPackages[index] ?? handle.name,
-      })),
-      ({ handle, pkg }) => awaitReady(pkg, handle),
-      { concurrency: "unbounded" },
+      yield* Effect.forEach(
+        nonHostHandles.map((handle, index) => ({
+          handle,
+          pkg: nonHostPackages[index] ?? handle.name,
+        })),
+        ({ handle, pkg }) => awaitReady(pkg, handle),
+        { concurrency: "unbounded" },
+      );
+
+      const hostHandles = yield* startGroup(hostPackages);
+
+      yield* Effect.forEach(
+        hostHandles.map((handle, index) => ({
+          handle,
+          pkg: hostPackages[index] ?? handle.name,
+        })),
+        ({ handle, pkg }) => awaitReady(pkg, handle),
+        { concurrency: "unbounded" },
+      );
+
+      return { nonHostHandles, hostHandles };
+    });
+
+    const startup = yield* Effect.raceFirst(
+      startupPhase,
+      Deferred.await(shutdown).pipe(Effect.as(null)),
     );
 
-    const hostHandles = yield* startGroup(hostPackages);
+    if (startup === null) return;
 
-    yield* Effect.forEach(
-      hostHandles.map((handle, index) => ({ handle, pkg: hostPackages[index] ?? handle.name })),
-      ({ handle, pkg }) => awaitReady(pkg, handle),
-      { concurrency: "unbounded" },
-    );
-
-    const allHandles = [...nonHostHandles, ...hostHandles];
+    const allHandles = [...startup.nonHostHandles, ...startup.hostHandles];
 
     const childPids = allHandles
       .map((handle) => Number(handle.pid))
-      .filter((pid) => Number.isFinite(pid) && pid > 1);
-
-    controls.emergencyKill = () => {
-      for (const pid of childPids) {
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          try {
-            process.kill(pid, "SIGKILL");
-          } catch {
-            // already gone
-          }
-        }
-      }
-    };
+      .filter((pid) => Number.isFinite(pid) && pid > 1 && pid !== process.pid);
 
     if (!isWorkspaceChild && childPids.length > 0) {
       try {
@@ -260,44 +371,6 @@ export const runDevSession = (
         // best-effort; registry hygiene is non-critical for the running session
       }
     }
-
-    yield* Effect.addFinalizer(() =>
-      Effect.gen(function* () {
-        yield* Effect.forEach(allHandles, (h) => h.kill.pipe(Effect.ignore), {
-          concurrency: "unbounded",
-        });
-
-        yield* Effect.sleep("200 millis");
-
-        view?.unmount();
-
-        if (!isWorkspaceChild) {
-          try {
-            unregisterPid(process.pid);
-          } catch {
-            // best-effort; pruneDead cleans stale entries on next ps/kill
-          }
-        }
-
-        if (shouldExportLogs) {
-          console.log("\n");
-          console.log("═".repeat(70));
-          console.log(`  SESSION LOGS: ${orchestrator.description}`);
-          console.log(`  Started: ${new Date(allLogs[0]?.timestamp || Date.now()).toISOString()}`);
-          console.log(`  Total entries: ${allLogs.length}`);
-          console.log("═".repeat(70));
-          console.log("");
-          for (const entry of allLogs) {
-            console.log(formatLogLine(entry));
-          }
-          console.log("");
-          console.log("═".repeat(70));
-          console.log(`  Full logs saved to: ${logger.logFile}`);
-          console.log("═".repeat(70));
-          console.log("");
-        }
-      }),
-    );
 
     yield* Deferred.await(shutdown);
   });
@@ -314,6 +387,7 @@ const runApp = (
   let forceExitTimer: ReturnType<typeof setTimeout> | null = null;
 
   const forceExit = () => {
+    controls?.restoreView();
     console.log("\n[Dev] Force exit");
     controls?.emergencyKill();
     process.exit(0);
@@ -334,9 +408,30 @@ const runApp = (
   }, 200);
   orphanWatch.unref?.();
 
+  const requestShutdownEscalating = () => {
+    signalCount++;
+    if (signalCount > 1) {
+      forceExit();
+      return;
+    }
+    controls?.restoreView();
+    console.log("\n[Dev] Shutting down...");
+    forceExitTimer = setTimeout(forceExit, 5000);
+    forceExitTimer.unref?.();
+    controls?.requestShutdown();
+  };
+  const handleSignal = requestShutdownEscalating;
+
   const program = Effect.scoped(
     runDevSession(orchestrator, (sessionControls) => {
       controls = sessionControls;
+      sessionControls.requestShutdownEscalating = requestShutdownEscalating;
+      sessionControls.rearmForceExitTimer = () => {
+        if (forceExitTimer) clearTimeout(forceExitTimer);
+        forceExitTimer = setTimeout(forceExit, 5000);
+        forceExitTimer.unref?.();
+      };
+      sessionControls.forceExit = forceExit;
     }),
   ).pipe(
     Effect.provide(ServiceDescriptorMapLive(services)),
@@ -346,20 +441,9 @@ const runApp = (
     Effect.catchDefect((defect) =>
       Effect.sync(() => {
         console.error("[Dev] Unhandled defect in orchestrator:", defect);
-      }),
+      }).pipe(Effect.andThen(Effect.die(defect))),
     ),
   );
-
-  const handleSignal = () => {
-    signalCount++;
-    if (signalCount > 1) {
-      forceExit();
-      return;
-    }
-    console.log("\n[Dev] Shutting down...");
-    forceExitTimer = setTimeout(forceExit, 5000);
-    controls?.requestShutdown();
-  };
 
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
@@ -367,7 +451,7 @@ const runApp = (
   Effect.runPromiseExit(program).then((exit) => {
     clearInterval(orphanWatch);
     if (forceExitTimer) clearTimeout(forceExitTimer);
-    process.exit(Exit.isSuccess(exit) ? 0 : 0);
+    process.exit(Exit.isSuccess(exit) ? 0 : 1);
   });
 };
 

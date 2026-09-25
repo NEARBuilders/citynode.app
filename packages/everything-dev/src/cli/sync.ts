@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { glob } from "glob";
@@ -11,6 +10,7 @@ import {
   resolveExtendsRef,
 } from "../merge";
 import { syncResolvedSharedDeps } from "../shared-deps";
+import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import {
   buildChildAgentsMd,
   buildChildRootScripts,
@@ -67,10 +67,6 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
 ]);
 
 type PackageJson = Record<string, unknown>;
-
-function computeHash(content: string | Uint8Array): string {
-  return createHash("sha256").update(content).digest("hex").substring(0, 16);
-}
 
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;

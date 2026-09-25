@@ -265,8 +265,6 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
-    "@effect/platform": "^0.97.2",
-    "@effect/platform-node": "4.0.0-rc.112",
     "@module-federation/enhanced": "catalog:",
     "@module-federation/node": "catalog:",
     "@module-federation/runtime-core": "catalog:",
@@ -277,11 +275,10 @@
     "execa": "^9.5.2",
     "every-plugin": "catalog:",
     "glob": "^13.0.6",
-    "gradient-string": "^3.0.0",
-    "ink": "^6.8.0",
     "near-kit": "catalog:",
     "pg": "catalog:",
-    "tar": "^7.4.3"
+    "tar": "^7.4.3",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/api-key": "catalog:",
@@ -293,8 +290,6 @@
     "@tanstack/react-router": ">=1.0.0",
     "better-auth": "catalog:",
     "better-near-auth": "catalog:",
-    "react": ">=19.0.0",
-    "react-dom": ">=19.0.0",
     "sonner": ">=2.0.0",
     "effect": "catalog:",
     "zod": "catalog:"
@@ -346,17 +341,13 @@
     "@tanstack/react-router": "catalog:",
     "@tanstack/router-generator": "catalog:",
     "@tanstack/router-plugin": "catalog:",
-    "@types/gradient-string": "^1.1.6",
-    "@types/node": "^22.10.2",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
+    "@types/node": "catalog:",
     "@types/tar": "^7.0.0",
     "better-auth": "catalog:",
     "better-near-auth": "catalog:",
-    "react-devtools-core": "^7.0.1",
     "tsdown": "^0.22.0",
     "typescript": "^7.0.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.0.18"
+    "vitest": "catalog:"
   }
 }

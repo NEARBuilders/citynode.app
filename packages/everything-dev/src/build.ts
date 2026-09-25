@@ -210,7 +210,7 @@ export async function buildWorkspaceTargets(opts: {
   const shouldBuildPlugin = existing.some((entry) => entry.key === "api");
 
   const forceRebuild = opts.deploy;
-  const buildTasks: Promise<void>[] = [
+  const buildTasks: Promise<unknown>[] = [
     buildEverythingDevQuietly(opts.configDir, forceRebuild),
     buildBetterNearAuthQuietly(opts.configDir, forceRebuild),
   ];

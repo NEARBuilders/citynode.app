@@ -18,19 +18,10 @@ interface GuardArgs {
   location: { href: string };
 }
 
-/**
- * The root route resolves the session to `SessionData | null` for signed-out
- * visitors, so guards accept the widened session instead of the narrower
- * `RouterContext`.
- */
 interface GuardContext extends Omit<RouterContext, "session"> {
   session: RouterContext["session"] | null;
 }
 
-/**
- * Every guard reads the same session query the login route and sign-in flows
- * use, so all redirect decisions see one authoritative answer.
- */
 async function ensureSession(context: GuardContext): Promise<SessionData | null> {
   const { queryClient, authClient } = context;
   return queryClient.query(sessionQueryOptions(authClient));

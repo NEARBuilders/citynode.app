@@ -19,6 +19,10 @@ export const cliCommandMeta = {
         description:
           "Comma-separated plugin IDs to force remote (e.g. --remote-plugins auth,registry)",
       },
+      logLevel: {
+        description:
+          "Log tail level: error, warn (default), info, or debug (overrides BOS_LOG_LEVEL; the file always gets everything)",
+      },
     },
   },
   start: {

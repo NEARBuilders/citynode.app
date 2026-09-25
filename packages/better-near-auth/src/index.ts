@@ -15,13 +15,14 @@ import {
 import { setSessionCookie } from "better-auth/cookies";
 import type { Account, DBAdapter, User } from "better-auth/types";
 import type {} from "better-call";
-import type { AccountState, PrivateKey, SignedDelegateAction } from "near-kit";
+import type { AccountState, PrivateKey, SignedDelegateAction, TransactionBuilder } from "near-kit";
 import {
   decodeSignedDelegateAction,
   generateKey,
   generateNonce,
   InMemoryKeyStore,
   Near,
+  parseAmount,
   parseKey,
   verifyNep413Signature,
 } from "near-kit";
@@ -42,6 +43,11 @@ import {
   CreateSubAccountRequest,
   CreateSubAccountResponse,
   type DualNetworkConfig,
+  GasKeyFundRequest,
+  GasKeyFundResponse,
+  GasKeyInfoRequest,
+  GasKeyInfoResponse,
+  GasKeyScopeResponse,
   GetRelayerInfoRequest,
   LinkAccountRequest,
   type ListAccountsResponseT,
@@ -61,10 +67,14 @@ import {
   RelayStatusResponse,
   relayerConfigSchema,
   relayerDualNetworkConfigSchema,
+  type SessionGasKeyConfig,
+  type SessionGasKeyDualNetworkConfig,
   SetPrimaryAccountRequest,
   type SubAccountConfig,
   type SubAccountLifecycleCtx,
   type SubAccountTxCtx,
+  sessionGasKeyConfigSchema,
+  sessionGasKeyDualNetworkConfigSchema,
   VerifyRequest,
   VerifyResponse,
   ViewContractRequest,
@@ -175,40 +185,72 @@ interface RelayerState {
   lastUsedAt?: Date;
 }
 
-type ParsedRelayerConfig =
-  | { kind: "flat"; config: RelayerConfig }
-  | { kind: "dual"; config: RelayerDualNetworkConfig };
+type ParsedDualNetworkConfig<T> =
+  | { kind: "flat"; config: T }
+  | { kind: "dual"; config: { mainnet?: T; testnet?: T } };
 
-export function parseRelayerConfig(
-  input: RelayerConfig | RelayerDualNetworkConfig | undefined,
-): ParsedRelayerConfig | undefined {
+function parseDualNetworkConfig<T extends object>(
+  input: T | { mainnet?: T; testnet?: T } | undefined,
+  opts: {
+    flatKeys: (keyof T)[];
+    flatSchema: { safeParse: (v: unknown) => unknown };
+    dualSchema: { safeParse: (v: unknown) => unknown };
+    label: string;
+  },
+): ParsedDualNetworkConfig<T> | undefined {
   if (input == null) return undefined;
   if (typeof input !== "object") {
     throw new BetterAuthError(
-      "Invalid relayer config: expected an object with 'mainnet'/'testnet' keys or top-level relayer fields.",
+      `Invalid ${opts.label} config: expected an object with 'mainnet'/'testnet' keys or top-level fields.`,
     );
   }
   const keys = Object.keys(input);
-  const flatKeys = Object.keys(relayerConfigSchema.shape) as (keyof RelayerConfig)[];
   const hasNetworkKey = keys.includes("mainnet") || keys.includes("testnet");
-  const hasFlatKey = flatKeys.some((k) => keys.includes(k));
+  const hasFlatKey = opts.flatKeys.some((k) => keys.includes(k as string));
   if (hasNetworkKey && hasFlatKey) {
     throw new BetterAuthError(
-      `Invalid relayer config: cannot mix per-network keys (mainnet/testnet) with top-level fields (${flatKeys.join(", ")}). Use either a flat RelayerConfig or a RelayerDualNetworkConfig.`,
+      `Invalid ${opts.label} config: cannot mix per-network keys (mainnet/testnet) with top-level fields (${opts.flatKeys.join(", ")}). Use either a flat config or a dual-network config.`,
     );
   }
-  const schema = hasNetworkKey ? relayerDualNetworkConfigSchema : relayerConfigSchema;
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    const detail = result.error.issues
-      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-      .join("; ");
-    throw new BetterAuthError(`Invalid relayer config: ${detail}`);
+  const schema = hasNetworkKey ? opts.dualSchema : opts.flatSchema;
+  const result = schema.safeParse(input) as {
+    success: boolean;
+    data?: unknown;
+    error?: { issues: Array<{ path: PropertyKey[]; message: string }> };
+  };
+  if (!result.success || !result.data) {
+    const detail =
+      result.error?.issues
+        .map((issue) => `${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`)
+        .join("; ") ?? "invalid config";
+    throw new BetterAuthError(`Invalid ${opts.label} config: ${detail}`);
   }
   if (hasNetworkKey) {
-    return { kind: "dual", config: result.data as RelayerDualNetworkConfig };
+    return { kind: "dual", config: result.data as { mainnet?: T; testnet?: T } };
   }
-  return { kind: "flat", config: result.data as RelayerConfig };
+  return { kind: "flat", config: result.data as T };
+}
+
+export function parseRelayerConfig(
+  input: RelayerConfig | RelayerDualNetworkConfig | undefined,
+): ParsedDualNetworkConfig<RelayerConfig> | undefined {
+  return parseDualNetworkConfig(input, {
+    flatKeys: Object.keys(relayerConfigSchema.shape) as (keyof RelayerConfig)[],
+    flatSchema: relayerConfigSchema,
+    dualSchema: relayerDualNetworkConfigSchema,
+    label: "relayer",
+  });
+}
+
+export function parseSessionGasKeyConfig(
+  input: SessionGasKeyConfig | SessionGasKeyDualNetworkConfig | undefined,
+): ParsedDualNetworkConfig<SessionGasKeyConfig> | undefined {
+  return parseDualNetworkConfig(input, {
+    flatKeys: Object.keys(sessionGasKeyConfigSchema.shape) as (keyof SessionGasKeyConfig)[],
+    flatSchema: sessionGasKeyConfigSchema,
+    dualSchema: sessionGasKeyDualNetworkConfigSchema,
+    label: "sessionGasKey",
+  });
 }
 
 function createNear(
@@ -390,6 +432,49 @@ async function relayOnChain(
   return { txHash: result.transaction.hash };
 }
 
+function sponsorTransferToGasKey(
+  builder: TransactionBuilder,
+  receiverId: string,
+  publicKey: string,
+  amountYocto: bigint,
+): TransactionBuilder {
+  (builder as unknown as { receiverId?: string }).receiverId = receiverId;
+  return builder.transferToGasKey(publicKey, amountYocto);
+}
+
+function toYocto(amount: string): bigint {
+  return BigInt(parseAmount(amount as Parameters<typeof parseAmount>[0]));
+}
+
+interface GasKeyPermissionView {
+  balance: string;
+  num_nonces: number;
+  receiver_id: string;
+  method_names: string[];
+}
+
+function extractGasKeyPermission(view: { permission: unknown }): GasKeyPermissionView | null {
+  if (typeof view.permission === "string") return null;
+  const permission = view.permission as Record<string, unknown> | null;
+  if (!permission) return null;
+  const details = permission.GasKeyFunctionCall;
+  if (!details || typeof details !== "object") return null;
+  const d = details as Partial<GasKeyPermissionView>;
+  if (typeof d.balance !== "string" || typeof d.num_nonces !== "number") return null;
+  if (typeof d.receiver_id !== "string" || !Array.isArray(d.method_names)) return null;
+  return {
+    balance: d.balance,
+    num_nonces: d.num_nonces,
+    receiver_id: d.receiver_id,
+    method_names: d.method_names,
+  };
+}
+
+function matchesSessionGasKeyScope(key: GasKeyPermissionView, cfg: SessionGasKeyConfig): boolean {
+  if (key.receiver_id !== cfg.receiverId) return false;
+  return cfg.methodNames.every((method) => key.method_names.includes(method));
+}
+
 async function defaultValidateLimitedAccessKey(
   accountId: string,
   publicKey: string,
@@ -544,6 +629,7 @@ export interface SIWNPluginOptions {
   apiKey?: string;
   rpcUrl?: string | DualNetworkConfig<string>;
   relayer?: RelayerConfig | RelayerDualNetworkConfig;
+  sessionGasKey?: SessionGasKeyConfig | SessionGasKeyDualNetworkConfig;
   secrets?: {
     parentKey?: string | DualNetworkConfig<string>;
   };
@@ -556,6 +642,7 @@ export const siwn = (options: SIWNPluginOptions) => {
   }
 
   const relayerConfig = parseRelayerConfig(options.relayer);
+  const sessionGasKeyConfig = parseSessionGasKeyConfig(options.sessionGasKey);
 
   const apiKey = options.apiKey;
 
@@ -573,6 +660,15 @@ export const siwn = (options: SIWNPluginOptions) => {
   const getRelayerConfig = (network: "mainnet" | "testnet"): RelayerConfig | undefined => {
     if (!relayerConfig) return undefined;
     return relayerConfig.kind === "dual" ? relayerConfig.config[network] : relayerConfig.config;
+  };
+
+  const getSessionGasKeyConfig = (
+    network: "mainnet" | "testnet",
+  ): SessionGasKeyConfig | undefined => {
+    if (!sessionGasKeyConfig) return undefined;
+    return sessionGasKeyConfig.kind === "dual"
+      ? sessionGasKeyConfig.config[network]
+      : sessionGasKeyConfig.config;
   };
 
   const getRpcUrl = (network: "mainnet" | "testnet"): string | undefined => {
@@ -615,6 +711,24 @@ export const siwn = (options: SIWNPluginOptions) => {
 
   const primaryNetwork = getSupportedNetworks()[0];
   const relayerStates = new Map<"mainnet" | "testnet", RelayerState | null>();
+  const gasKeyFundLocks = new Map<string, Promise<unknown>>();
+
+  const withGasKeyFundLock = async <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+    const pending = gasKeyFundLocks.get(key) ?? Promise.resolve();
+    const run = pending.then(fn, fn);
+    gasKeyFundLocks.set(
+      key,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    try {
+      return await run;
+    } finally {
+      if (gasKeyFundLocks.get(key) === run) gasKeyFundLocks.delete(key);
+    }
+  };
   const relayerInitPromises = new Map<"mainnet" | "testnet", Promise<RelayerState | null>>();
 
   const headers: Record<string, string> = {};
@@ -1828,6 +1942,277 @@ export const siwn = (options: SIWNPluginOptions) => {
           });
         },
       ),
+      getGasKeyScope: createAuthEndpoint(
+        "/near/gas-key/scope",
+        {
+          method: "GET",
+          use: [sessionMiddleware],
+        },
+        async (ctx) => {
+          const session = ctx.context.session;
+          const nearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [
+              { field: "userId", operator: "eq", value: session.user.id },
+              { field: "isPrimary", operator: "eq", value: true },
+            ],
+          });
+          const network = (nearAccount?.network ?? primaryNetwork) as "mainnet" | "testnet";
+          const cfg = getSessionGasKeyConfig(network);
+          if (!cfg) {
+            return ctx.json(GasKeyScopeResponse.parse({ enabled: false }));
+          }
+          return ctx.json(
+            GasKeyScopeResponse.parse({
+              enabled: true,
+              receiverId: cfg.receiverId,
+              methodNames: cfg.methodNames,
+              numNonces: cfg.numNonces,
+              fundAmount: cfg.fundAmount,
+              fundAmountYocto: toYocto(cfg.fundAmount).toString(),
+              topUpThreshold: cfg.topUpThreshold,
+              topUpThresholdYocto: toYocto(cfg.topUpThreshold).toString(),
+              maxFundPerUser: cfg.maxFundPerUser,
+            }),
+          );
+        },
+      ),
+      fundGasKey: createAuthEndpoint(
+        "/near/gas-key/fund",
+        {
+          method: "POST",
+          body: GasKeyFundRequest,
+          use: [sessionMiddleware],
+        },
+        async (ctx) => {
+          const session = ctx.context.session;
+          const { accountId, publicKey } = ctx.body;
+
+          const nearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [
+              { field: "userId", operator: "eq", value: session.user.id },
+              { field: "isPrimary", operator: "eq", value: true },
+            ],
+          });
+
+          if (!nearAccount) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "No NEAR account linked to session",
+              status: 401,
+            });
+          }
+          if (nearAccount.accountId !== accountId) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Account does not match session account",
+              status: 401,
+            });
+          }
+
+          const network = nearAccount.network as "mainnet" | "testnet";
+          const cfg = getSessionGasKeyConfig(network);
+          if (!cfg) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "Session gas keys are not configured",
+              status: 503,
+            });
+          }
+
+          const rState = await ensureRelayer(ctx.context.adapter, ctx.context.secret, network);
+          if (!rState) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "Sponsor account not configured",
+              status: 503,
+            });
+          }
+
+          return withGasKeyFundLock(`${session.user.id}:${network}`, async () => {
+            try {
+              if (!publicKey.startsWith("ed25519:")) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Unsupported public key type",
+                  status: 400,
+                });
+              }
+
+              const view = await rState.near.getAccessKey(accountId, publicKey);
+              const key = view ? extractGasKeyPermission(view) : null;
+              if (!key) {
+                throw new APIError("NOT_FOUND", {
+                  message: "Gas key not found on account",
+                  status: 404,
+                });
+              }
+              if (!matchesSessionGasKeyScope(key, cfg)) {
+                throw new APIError("FORBIDDEN", {
+                  message: `Gas key scope (${key.receiver_id}) does not match the configured scope (${cfg.receiverId})`,
+                  status: 403,
+                });
+              }
+
+              const amountYocto = toYocto(cfg.fundAmount);
+              const thresholdYocto = toYocto(cfg.topUpThreshold);
+              if (BigInt(key.balance) >= thresholdYocto) {
+                throw new APIError("BAD_REQUEST", {
+                  message: `Gas key balance (${key.balance}) is above the top-up threshold (${thresholdYocto})`,
+                  status: 400,
+                });
+              }
+
+              const capYocto = toYocto(cfg.maxFundPerUser);
+              const funded = await ctx.context.adapter.findMany<{ amount: string }>({
+                model: "fundedGasKey",
+                where: [
+                  { field: "userId", operator: "eq", value: session.user.id },
+                  { field: "network", operator: "eq", value: network },
+                ],
+              });
+              const fundedTotal = (funded ?? []).reduce(
+                (sum, row) => sum + BigInt(row.amount || "0"),
+                0n,
+              );
+              if (fundedTotal + amountYocto > capYocto) {
+                throw new APIError("FORBIDDEN", {
+                  message: `Per-user funding cap exceeded (${fundedTotal}/${capYocto} yoctoNEAR)`,
+                  status: 403,
+                });
+              }
+
+              const result = await sponsorTransferToGasKey(
+                rState.near.transaction(rState.accountId),
+                accountId,
+                publicKey,
+                amountYocto,
+              ).send({ waitUntil: "EXECUTED" });
+
+              await ctx.context.adapter.create({
+                model: "fundedGasKey",
+                data: {
+                  userId: session.user.id,
+                  accountId,
+                  publicKey,
+                  network,
+                  amount: amountYocto.toString(),
+                  txHash: result.transaction.hash,
+                  createdAt: new Date(),
+                },
+              });
+
+              if (rState.mode === "ephemeral") {
+                await ctx.context.adapter.update({
+                  model: "relayerKey",
+                  where: [{ field: "network", operator: "eq", value: network }],
+                  update: { lastUsedAt: new Date() },
+                });
+              }
+
+              return ctx.json(
+                GasKeyFundResponse.parse({
+                  txHash: result.transaction.hash,
+                  amountFunded: amountYocto.toString(),
+                }),
+              );
+            } catch (error: unknown) {
+              if (error instanceof APIError) throw error;
+              throw new APIError("INTERNAL_SERVER_ERROR", {
+                message: error instanceof Error ? error.message : "Gas key funding failed",
+                status: 500,
+              });
+            }
+          });
+        },
+      ),
+      getGasKeyInfo: createAuthEndpoint(
+        "/near/gas-key/info",
+        {
+          method: "POST",
+          body: GasKeyInfoRequest,
+          use: [sessionMiddleware],
+        },
+        async (ctx) => {
+          const session = ctx.context.session;
+          const { accountId, publicKey } = ctx.body;
+
+          const nearAccount: NearAccount | null = await ctx.context.adapter.findOne({
+            model: "nearAccount",
+            where: [
+              { field: "userId", operator: "eq", value: session.user.id },
+              { field: "isPrimary", operator: "eq", value: true },
+            ],
+          });
+
+          if (!nearAccount) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "No NEAR account linked to session",
+              status: 401,
+            });
+          }
+          if (nearAccount.accountId !== accountId) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Account does not match session account",
+              status: 401,
+            });
+          }
+
+          const network = nearAccount.network as "mainnet" | "testnet";
+          const cfg = getSessionGasKeyConfig(network);
+          if (!cfg) {
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "Session gas keys are not configured",
+              status: 503,
+            });
+          }
+
+          try {
+            const near = getNear(network);
+            const view = await near.getAccessKey(accountId, publicKey, { blockId: "final" });
+            const key = view ? extractGasKeyPermission(view) : null;
+            if (!key) {
+              throw new APIError("NOT_FOUND", {
+                message: "Gas key not found on account",
+                status: 404,
+              });
+            }
+
+            const capYocto = toYocto(cfg.maxFundPerUser);
+            let fundedTotal = 0n;
+            try {
+              const funded = await ctx.context.adapter.findMany<{ amount: string }>({
+                model: "fundedGasKey",
+                where: [
+                  { field: "userId", operator: "eq", value: session.user.id },
+                  { field: "network", operator: "eq", value: network },
+                ],
+              });
+              fundedTotal = (funded ?? []).reduce(
+                (sum, row) => sum + BigInt(row.amount || "0"),
+                0n,
+              );
+            } catch (err) {
+              console.error("gas-key info findMany error:", err);
+            }
+
+            return ctx.json(
+              GasKeyInfoResponse.parse({
+                accountId,
+                publicKey,
+                balance: key.balance,
+                numNonces: key.num_nonces,
+                receiverId: key.receiver_id,
+                methodNames: key.method_names,
+                fundedTotal: fundedTotal.toString(),
+                capRemaining: (capYocto - fundedTotal).toString(),
+              }),
+            );
+          } catch (error: unknown) {
+            if (error instanceof APIError) throw error;
+            throw new APIError("INTERNAL_SERVER_ERROR", {
+              message: error instanceof Error ? error.message : "Gas key info lookup failed",
+              status: 500,
+            });
+          }
+        },
+      ),
       viewContract: createAuthEndpoint(
         "/near/view",
         {
@@ -1903,7 +2288,7 @@ export const siwn = (options: SIWNPluginOptions) => {
             const configuredParent = subAccountCfg?.parentAccount;
             let msg: string;
             if (configuredParent && !parentKey) {
-              msg = `Sub-account creation unavailable on ${network}: parent key not configured for ${configuredParent}. Set NEAR_SUB_ACCOUNT_PARENT_KEY_${network.toUpperCase()} in your environment, or use an explicit relayer with a named account.`;
+              msg = `Sub-account creation unavailable on ${network}: parent key not configured for ${configuredParent}. Provide siwn({ secrets: { parentKey } }) on the server, or use an explicit relayer with a named account.`;
             } else if (!configuredParent) {
               msg = `Sub-account creation unavailable on ${network}: no parent account configured. Set subAccount.${network}.parentAccount in your SIWN plugin options, or use an explicit relayer with a named account.`;
             } else {
@@ -1957,27 +2342,6 @@ export const siwn = (options: SIWNPluginOptions) => {
                 ? rState.publicKey
                 : parseKey(effectiveParentKey!).publicKey.toString();
             txBuilder = txBuilder.addKey(parentPublicKey, { type: "fullAccess" });
-          }
-
-          if (subAccountCfg?.addRelayerFCAK !== false && subAccountCfg?.relayerFCAK && rState) {
-            const fcakPermission: {
-              type: "functionCall";
-              receiverId: string;
-              methodNames?: string[];
-              allowance?: string;
-            } = {
-              type: "functionCall",
-              receiverId: subAccountCfg.relayerFCAK.receiverId,
-            };
-            if (subAccountCfg.relayerFCAK.methodNames) {
-              fcakPermission.methodNames = subAccountCfg.relayerFCAK.methodNames;
-            }
-            if (subAccountCfg.relayerFCAK.allowance) {
-              fcakPermission.allowance = subAccountCfg.relayerFCAK.allowance as
-                | `${number} NEAR`
-                | `${bigint} yocto`;
-            }
-            txBuilder.addKey(rState.publicKey, fcakPermission as any);
           }
 
           txBuilder.transfer(newAccountId, minDeposit as `${number} NEAR`);

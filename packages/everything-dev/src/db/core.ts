@@ -89,6 +89,8 @@ export function getDatabaseUrlSecretName(slug: string): string {
   return `${slug.toUpperCase().replace(/-/g, "_")}_DATABASE_URL`;
 }
 
+export const DUPLICATE_OBJECT_SQLSTATES: readonly string[] = ["42710", "42701", "42P07"];
+
 const RETRYABLE_SQLSTATES: ReadonlySet<string> = new Set([
   "42P06",
   "42710",

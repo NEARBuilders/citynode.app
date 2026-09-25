@@ -156,7 +156,7 @@ tanstackIntent:
     for: "Programmatic route tree building as an alternative to filesystem conventions: rootRoute, index, route, layout, physical, defineVirtualSubtreeConfig. Use with TanStack Router plugin's virtualRouteConfig option."
   - id: "better-near-auth#auth-plugin"
     run: "bunx @tanstack/intent@latest load better-near-auth#auth-plugin"
-    for: "Mount and consume the @everything-dev/auth-plugin in an everything-dev or every-plugin project. Register it in bos.config.json, wire the Better Auth client into the UI with siwnClient/passkey/API-key/organization plugins, protect routes with session checks, compose with the auth plugin in-process via createPlugin.withPlugins, and use the auth context (getContext) in your own oRPC middleware. Sub-account creation is supported in bos.config.json for scalar fields (parentHasFullAccess, minDeposit, deploy.fromPublished, init with static args, addRelayerFCAK, relayerFCAK). Load when adding auth to an everything.dev app, configuring SIWN recipients from runtime config, calling auth endpoints from another plugin, or debugging auth context resolution. As of better-near-auth 1.8.2 the client uses getNearClient() (not .client) and signIn.near / near.link refresh the session atomically."
+    for: "Mount and consume the @everything-dev/auth-plugin in an everything-dev or every-plugin project. Register it in bos.config.json, wire the Better Auth client into the UI with siwnClient/passkey/API-key/organization plugins, protect routes with session checks, compose with the auth plugin in-process via createPlugin.withPlugins, and use the auth context (getContext) in your own oRPC middleware. Sub-account creation is supported in bos.config.json for scalar fields (parentHasFullAccess, minDeposit, deploy.fromPublished, init with static args). Load when adding auth to an everything.dev app, configuring SIWN recipients from runtime config, calling auth endpoints from another plugin, or debugging auth context resolution. As of better-near-auth 1.8.2 the client uses getNearClient() (not .client) and signIn.near / near.link refresh the session atomically."
   - id: "better-near-auth#client"
     run: "bunx @tanstack/intent@latest load better-near-auth#client"
     for: "Set up the siwnClient plugin for Better Auth client, configure NEAR wallet connection via NearConnect, use authClient.near actions for sign-in, profile lookup, account management, delegate action building with TransactionBuilder, and relay submission. Load when implementing NEAR wallet sign-in on the client, using authClient.near.* methods, or building delegate actions for gasless relay."
@@ -237,7 +237,7 @@ bun run dev
 
 # Or combined: bun run dev:postgres  ==  docker compose up -d --wait && bun run dev
 
-# Pin individual service ports (unset flags are auto-picked and persisted in .bos/infra-state.json)
+# Pin individual service ports (explicitly-passed flags are pinned; unset services derive from the base; only explicit choices persist in .bos/infra-state.json — see ADR 0012)
 bos dev --port 3100 --api-port 3101 --ui-port 3103 --auth-port 3102 --plugin-port-start 3110
 ```
 
@@ -251,7 +251,7 @@ bos dev --port 3100 --api-port 3101 --ui-port 3103 --auth-port 3102 --plugin-por
 
 The API and plugins auto-apply migrations on boot, so `bun db:migrate` is optional (use it to migrate without starting the dev server). `bun run dev` runs `bos dev`'s preflight, which probes the localhost DB ports and exits with a clear `docker compose up -d --wait` hint if Postgres isn't up.
 
-Dev ports are persisted to `.bos/infra-state.json` under `devPorts` and reused across restarts. Test-spawned stacks never persist ports (`BOS_NO_PERSIST_PORTS=1`, plus `NODE_ENV=test` / `BOS_TEST=1` are honored), so test runs can never repin your dev ports.
+Port allocation is atomic block allocation (ADR 0012): the layout derives deterministically from one base port (`--port N` → api N+1, auth N+2, ui N+3, plugins N+10+), the whole block is validated before anything spawns, and only explicitly-passed port flags persist to `.bos/infra-state.json` under `devPorts` (drift is never persisted — a busy block moves +100 with a prominent notice naming the holders, and restarts re-try the preferred base). Explicitly-passed flags are pinned: if that exact port is occupied, allocation fails loudly instead of silently moving. `bos kill` escalates SIGTERM → 5s → SIGKILL, reaps orphaned children of dead sessions, and verifies ports actually freed; new sessions adopt-and-reap orphaned children from dead same-project sessions at boot. Test-spawned stacks never persist ports (`BOS_NO_PERSIST_PORTS=1`, plus `NODE_ENV=test` / `BOS_TEST=1` are honored), so test runs can never repin your dev ports.
 `CORS_ORIGIN` in `.env.example` is derived from the actual resolved host port in development.
 A global PID registry at `~/.cache/everything-dev/pids.json` tracks running `bos dev` sessions.
 
@@ -270,7 +270,7 @@ bos kill      # SIGTERM processes owned by the cwd
 bos kill --all              # SIGTERM across all config directories
 bos kill --signal SIGKILL    # Force kill
 bos status    # Project health check
-bos info      # Show configuration
+bos config    # Show configuration
 ```
 
 ## Architecture
@@ -633,18 +633,15 @@ const { runtimeConfig } = Route.useLoaderData();
 const appName = getActiveRuntime(runtimeConfig)?.title ?? getAccount(runtimeConfig);
 ```
 
-### SIWN Auth Relayer (gasless NEP-366 relay)
+### Gasless writes: session gas keys first, relayer fallback
 
-The auth plugin's `siwn({ relayer: ... })` block in `bos.config.json → app.auth.variables.siwn` is **ephemeral mode** — the rich-object shape with `whitelistedContracts`, `maxGasPerTransaction`, and `maxDepositPerTransaction` but no `accountId` / `privateKey`. From the better-near-auth skill: that's `RelayerEphemeralConfig` ("Ephemeral with settings").
+Two sponsorship models share the same funded account. The **Sponsor** is the ephemeral relayer account in its funding role; the **relayer** is the same account's NEP-366 role. See ADR 0012 (`docs/adr/0012-session-gas-keys.md`) and the "Gasless transactions" vocabulary in `CONTEXT.md`.
 
-**Operational rules:**
+**Session Gas Keys (primary, NEP-611):** when the connected wallet advertises `features.gasKeys` (Meteor verified on testnet), the user opts in via the `EnableGaslessWrites` affordance; the wallet signs a one-time Bootstrap `AddKey` with `gasKeyInfo` that installs a `GasKeyFunctionCall` key scoped to the FastKV namespace's `__fastdata_kv` method on the user's account. The Sponsor funds it via `TransferToGasKey` (`POST /near/gas-key/fund`), which verifies the on-chain key scope and balance against the top-up threshold and enforces a per-user lifetime cap before signing. The browser signs platform writes locally (`authClient.near.sendWithGasKey`) on rotating nonce Lanes — no relayer on the hot path. Config: `sessionGasKey` block (dual-network) beside `relayer` in `bos.config.json → app.auth.variables.siwn`. Key material lives in browser IndexedDB per `network:account` — nothing server-side; a cleared cache re-Bootstraps a new key (old keys are recorded in `fundedGasKey` rows for later cleanup).
 
-- On first startup the server generates an ED25519 keypair per network, derives an implicit hex account from the public key, and encrypts the private key with `BETTER_AUTH_SECRET` (HKDF-SHA256 → AES-256-GCM) into the `relayerKey` table. Same keypair recovers on every restart.
-- After first startup the server logs the implicit account id. **Fund that account with NEAR** to enable relay — otherwise every relay attempt fails with insufficient balance from the RPC.
-- Funding workflow: admins hit `getRelayerInfo`; the `/admin/relayer` page surfaces a "needs funding" banner on `/admin` when `enabled === false` and `accountId` is set, then the admin's connected wallet transfers NEAR to the implicit account via `authClient.near.getNearClient().transfer()`.
-- The implicit relayer account is *not* a `.near` named account and is short-lived, so it cannot own sub-accounts. The platform's tenant wizard no longer relies on server-side subaccount creation — tenants are owned by the connected sputnik-dao account (see "DAO-owned tenants"). The legacy `siwn.subAccount.parentAccount` configuration block, `parentHasFullAccess`, `minDeposit`, and `NEAR_SUB_ACCOUNT_PARENT_KEY_*` secrets are unused even if still declared during a transition window.
-- `NEAR_RELAYER_PRIVATE_KEY` is vestigial in ephemeral mode and is omitted from `.env.example`. Only reintroduce (plus explicit `relayer: { accountId, privateKey }`) when moving to `RelayerExplicitConfig`.
-- The mode is observable at runtime: `getRelayerInfo()` returns `{ accountId, mode: "ephemeral", publicKey, balance, enabled }`.
+**Relayer (fallback, NEP-366):** the auth plugin's `siwn({ relayer: ... })` block is **ephemeral mode** — the rich-object shape with `whitelistedContracts`, `maxGasPerTransaction`, and `maxDepositPerTransaction` but no `accountId` / `privateKey`. On first startup the server generates an ED25519 keypair per network, derives an implicit hex account from the public key, and encrypts the private key with `BETTER_AUTH_SECRET` (HKDF-SHA256 → AES-256-GCM) into the `relayerKey` table. Same keypair recovers on every restart. **Fund that account with NEAR** — it pays gas both for relayed delegates and for Session Gas Key top-ups; the `/admin/relayer` page surfaces the funding banner. `NEAR_RELAYER_PRIVATE_KEY` is vestigial in ephemeral mode and is omitted from `.env.example`; only reintroduce (plus explicit `relayer: { accountId, privateKey }`) when moving to `RelayerExplicitConfig`. The mode is observable at runtime: `getRelayerInfo()` returns `{ accountId, mode: "ephemeral", publicKey, balance, enabled }`.
+
+**Protocol rules (gas keys):** a gas key cannot sign NEP-366 delegate actions, and `WithdrawFromGasKey` is refused inside a delegate — the two paths never compose. Deleting a gas key **burns** any remaining balance (`DeleteKey` refuses above 1 NEAR), so drain with `WithdrawFromGasKey` before deleting. The wallet connector is `@fastnear/near-connect` (fork of `@hot-labs/near-connect`) — it can express gas-key actions; `@hot-labs` 0.11.4 cannot. The legacy sub-account relayer-FCAK config (`addRelayerFCAK`/`relayerFCAK`) has been removed; session gas keys are the only key-sponsorship mechanism.
 
 To switch to `RelayerExplicitConfig`, replace the rich-object shape with `relayer: { accountId: "relayer.<your-domain>.near", privateKey: process.env.RELAYER_PRIVATE_KEY, whitelistedContracts: [...], maxGasPerTransaction: "...", maxDepositPerTransaction: "0" }` and re-add the env var. The ephemeral key in the `relayerKey` table is ignored once an explicit key is provided.
 

@@ -12,7 +12,7 @@
  * consume it today.
  */
 
-import { LocalStorage, NearConnector } from "@hot-labs/near-connect";
+import { LocalStorage, NearConnector } from "@fastnear/near-connect";
 import { Amount, type FinalExecutionOutcome, fromNearConnect, Gas, Near } from "near-kit";
 import { useEffect } from "react";
 import { create } from "zustand";
@@ -297,6 +297,10 @@ export interface SignAsDaoOptions {
   waitUntil?: "NONE" | "INCLUDED" | "EXECUTED" | "FINAL";
 }
 
+export function toNearKitWallet(connector: NearConnector) {
+  return fromNearConnect(connector as unknown as Parameters<typeof fromNearConnect>[0]);
+}
+
 export async function signAsDaoTransaction(
   daoAccountId: string,
   spec: SignAsDaoSpec,
@@ -305,7 +309,7 @@ export async function signAsDaoTransaction(
   const connector = getConnector();
   const near = new Near({
     network: "mainnet",
-    wallet: fromNearConnect(connector),
+    wallet: toNearKitWallet(connector),
   });
   const builder = near
     .transaction(daoAccountId)

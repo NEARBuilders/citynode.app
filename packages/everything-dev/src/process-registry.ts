@@ -14,6 +14,10 @@ export interface PidEntry {
   ports: Record<string, number>;
   childPids?: number[];
   budget?: { min: number; max: number };
+  // Lease seam (ADR 0012 §6): entries are leases on shared resources, keyed
+  // by what they hold; refcount-ready for the shared-plugin broker.
+  leaseKey?: string;
+  refcount?: number;
   startedAt: number;
   description: string;
 }
@@ -117,9 +121,9 @@ export function updateChildPids(pid: number, childPids: number[]): void {
 }
 
 export function unregisterPid(pid: number): void {
-  const live = pruneDead(readRegistry());
-  const next = live.filter((entry) => entry.pid !== pid);
-  if (next.length === live.length) return;
+  const entries = readRegistry();
+  const next = pruneDead(entries).filter((entry) => entry.pid !== pid);
+  if (next.length === entries.length) return;
   writeRegistry(next);
 }
 

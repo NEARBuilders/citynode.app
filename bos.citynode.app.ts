@@ -47,8 +47,6 @@ export default App({
       "RESEND_API_KEY",
       "NEAR_RELAYER_PRIVATE_KEY_MAINNET",
       "NEAR_RELAYER_PRIVATE_KEY_TESTNET",
-      "NEAR_SUB_ACCOUNT_PARENT_KEY_MAINNET",
-      "NEAR_SUB_ACCOUNT_PARENT_KEY_TESTNET",
     ],
     variables: {
       deviceLink: { clientId: "citynode-web" },
@@ -69,6 +67,16 @@ export default App({
             whitelistedContracts: ["v1.citynode.testnet", "dev.allthethings.testnet"],
             maxGasPerTransaction: "400000000000000",
             maxDepositPerTransaction: "0",
+          },
+        },
+        sessionGasKey: {
+          mainnet: {
+            receiverId: "dev.everything.near",
+            methodNames: ["__fastdata_kv"],
+          },
+          testnet: {
+            receiverId: "dev.allthethings.testnet",
+            methodNames: ["__fastdata_kv"],
           },
         },
       },

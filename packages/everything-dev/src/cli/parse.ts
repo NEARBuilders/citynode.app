@@ -1,3 +1,4 @@
+import { commandOptionSchemas } from "../contract";
 import type { CommandDescriptor } from "./catalog";
 
 type SchemaLike = {
@@ -62,10 +63,7 @@ function getShape(schema: SchemaLike): Record<string, SchemaLike> {
 }
 
 export function parseCommandInput(descriptor: CommandDescriptor, argv: string[]): unknown {
-  const inputSchemas = (descriptor.procedure as any)["~orpc"]?.inputSchemas as
-    | SchemaLike[]
-    | undefined;
-  const schema = Array.isArray(inputSchemas) ? inputSchemas[0] : undefined;
+  const schema = commandOptionSchemas[descriptor.key as keyof typeof commandOptionSchemas];
   if (!schema) return {};
 
   const shape = getShape(schema);

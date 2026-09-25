@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   createWriteStream,
   existsSync,
@@ -29,6 +28,7 @@ import {
 } from "../internal/manifest-normalizer";
 import type { BosConfig, BosConfigInput } from "../types";
 import { saveBosConfig } from "../utils/save-config";
+import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import { writeSnapshot } from "./snapshot";
 import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
 
@@ -774,6 +774,7 @@ export async function personalizeConfig(
     pkg.type = "module";
     delete pkg.module;
     delete pkg.peerDependencies;
+    delete pkg.patchedDependencies;
 
     if (pkg.workspaces && typeof pkg.workspaces === "object") {
       const ws = pkg.workspaces as { packages?: string[] };
@@ -1286,10 +1287,6 @@ export async function writeInitSnapshot(
     parentRef: `bos://${extendsAccount}/${extendsGateway}`,
     files: fileHashes,
   });
-}
-
-function computeHash(data: Uint8Array): string {
-  return createHash("sha256").update(data).digest("hex").substring(0, 16);
 }
 
 function mkTmpDir(prefix: string): string {

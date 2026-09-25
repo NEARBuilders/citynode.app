@@ -143,17 +143,21 @@ async function warnIfOutdated(client: any, command: string): Promise<void> {
 
     if (outdated.length === 0) return;
 
-    console.log();
-    console.log(colors.yellow(`  ! Outdated packages detected:`));
+    const warn = (line: string) => {
+      if (command === "dev" || command === "start") process.stderr.write(`${line}\n`);
+      else console.log(line);
+    };
+    warn("");
+    warn(colors.yellow(`  ! Outdated packages detected:`));
     for (const pkg of outdated) {
-      console.log(colors.dim(`    ${pkg.name}  ${pkg.installed} → ${pkg.latest}`));
+      warn(colors.dim(`    ${pkg.name}  ${pkg.installed} → ${pkg.latest}`));
     }
-    console.log(
+    warn(
       colors.dim(
         `    Run ${colors.cyan("bos upgrade")} to update packages and sync template files.`,
       ),
     );
-    console.log();
+    warn("");
   } catch {
     // silently ignore if status check fails
   }
@@ -250,7 +254,7 @@ async function main() {
       clearSpinnerStopLine();
 
       const session = consumeDevSession();
-      await outdatedWarning;
+      void outdatedWarning;
       if (session) {
         const { devApp } = await import("./dev-session");
         devApp(
@@ -297,7 +301,7 @@ async function main() {
       startSpinner.stop("Ready");
 
       const session = consumeDevSession();
-      await outdatedWarning;
+      void outdatedWarning;
       if (session) {
         const summary = session.summary;
         if (summary) {
@@ -472,8 +476,6 @@ async function main() {
 
       return;
     }
-
-    await outdatedWarning;
 
     const result = await (client as any)[descriptor.key](input);
 
@@ -1047,6 +1049,11 @@ async function main() {
       process.stdout.write(`  Allowance: ${result.allowance}\n`);
       process.stdout.write(`\n`);
       const secretName = result.env === "staging" ? "NEAR_TESTNET_PRIVATE_KEY" : "NEAR_PRIVATE_KEY";
+      if (!process.stdout.isTTY) {
+        process.stderr.write(
+          `  ⚠ Non-interactive stdout: this private key will be captured in any log or pipe (GitHub Actions logs persist stdout).\n`,
+        );
+      }
       process.stdout.write(
         `  Set this as ${secretName} in GitHub Actions or before calling publish:\n`,
       );

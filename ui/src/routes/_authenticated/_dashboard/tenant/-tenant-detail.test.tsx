@@ -206,6 +206,21 @@ function createHarness({
         error: null,
       })),
     },
+    near: {
+      getGasKeyScope: vi.fn(async () => ({ data: { enabled: false }, error: null })),
+      isGasKeyWalletSupported: vi.fn(async () => false),
+      addSessionGasKey: vi.fn(async () => undefined),
+      ensureGasKeyFunded: vi.fn(async () => false),
+      refreshGasKeyInfo: vi.fn(async () => null),
+    },
+    $store: {
+      atoms: {
+        nearState: { get: () => null, set: () => {}, subscribe: () => () => {} },
+        walletConnected: { get: () => false, set: () => {}, subscribe: () => () => {} },
+        activeNetwork: { get: () => "mainnet", set: () => {}, subscribe: () => () => {} },
+        gasKeyState: { get: () => null, set: () => {}, subscribe: () => () => {} },
+      },
+    },
   };
 
   const apiClient = {
