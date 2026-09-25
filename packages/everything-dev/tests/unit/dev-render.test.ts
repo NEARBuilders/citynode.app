@@ -164,6 +164,24 @@ describe("renderDevState", () => {
     expect(authIdx).toBeLessThan(servicesIdx);
   });
 
+  it("annotates folder-form ui ports (uiPort, no companion service) on the plugin row", () => {
+    const out = stripAnsi(
+      renderDevState({
+        description: "dev session",
+        processes: [
+          proc("auth", "ready", 3002, "local"),
+          proc("host", "ready", 3000),
+          proc("api", "ready", 3001),
+          proc("ui", "ready", 3003),
+        ].map((p) => (p.name === "auth" ? { ...p, uiPort: 3011 } : p)),
+        logs: [],
+      }),
+    );
+    expect(out).toContain("ui :3011");
+    expect(out).not.toContain("PLUGIN-UI");
+    expect(out.match(/AUTH/g)?.length).toBe(1);
+  });
+
   it("shows only host, api, ui in SERVICES", () => {
     const out = stripAnsi(
       renderDevState({

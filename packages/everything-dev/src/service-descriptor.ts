@@ -56,6 +56,8 @@ export interface ServiceDescriptor {
   env?: Record<string, string>;
   readyPatterns?: RegExp[];
   errorPatterns?: RegExp[];
+  /** folder-form plugin UI port — the UI build is a child of this dev process (BOS_UI_PORT) */
+  uiPort?: number;
 }
 
 export class ServiceDescriptorMap extends Context.Service<
@@ -249,6 +251,7 @@ export function buildServiceDescriptorMap(
           command: "bun",
           args: ["run", "dev"],
           env: isFolderFormUi ? { BOS_UI_PORT: String(folderUiPort) } : undefined,
+          uiPort: isFolderFormUi ? folderUiPort : undefined,
           readyPatterns: PLUGIN_READY_PATTERNS,
           errorPatterns: PLUGIN_ERROR_PATTERNS,
           defaultPort: resolvedPort,
@@ -261,7 +264,11 @@ export function buildServiceDescriptorMap(
         // config wired into the mirror's ui.url (withLocalRuntimeUrl).
         const authDescriptor = map.get("auth");
         if (authDescriptor) {
-          map.set("auth", { ...authDescriptor, env: { BOS_UI_PORT: String(folderUiPort) } });
+          map.set("auth", {
+            ...authDescriptor,
+            env: { BOS_UI_PORT: String(folderUiPort) },
+            uiPort: folderUiPort,
+          });
         }
       }
 

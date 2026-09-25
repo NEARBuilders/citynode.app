@@ -15,6 +15,7 @@ export interface DevProcessState {
   port: number;
   message?: string;
   source?: string;
+  uiPort?: number;
 }
 
 export interface DevLogLine {
@@ -77,6 +78,9 @@ const worstStatus = (a: DevProcessStatus, b: DevProcessStatus): DevProcessStatus
  * One row per plugin: `plugin-ui:<id>` companions merge into their parent
  * (`plugin:<id>`, or the `auth` app slot for the auth mirror) as an inline
  * ui-port annotation. Orphan ui rows (no parent process) render as-is.
+ * Folder-form plugin UIs never get a companion service — their UI build is a
+ * child of the parent's dev process — so their `uiPort` synthesizes the same
+ * annotation.
  */
 export const mergePluginUiRows = (processes: DevProcessState[]): MergedProcess[] => {
   const byName = new Map(processes.map((p) => [p.name, p]));
@@ -92,6 +96,8 @@ export const mergePluginUiRows = (processes: DevProcessState[]): MergedProcess[]
       row.ui = ui;
       row.status = worstStatus(proc.status, ui.status);
       consumed.add(ui.name);
+    } else if (proc.uiPort && proc.uiPort > 0) {
+      row.ui = { ...proc, port: proc.uiPort };
     }
     merged.push(row);
   }

@@ -41,6 +41,7 @@ export interface ProcessState {
   port: number;
   message?: string;
   source?: "local" | "remote";
+  uiPort?: number;
 }
 
 const probeHttpOk = (url: string, timeoutMs = 400) =>
@@ -684,6 +685,7 @@ export function getProcessStates(
           ? portOverride
           : (descriptor?.port ?? descriptor?.defaultPort ?? 0),
       source: descriptor?.source,
+      uiPort: descriptor?.uiPort,
     };
   });
 }
