@@ -1,7 +1,10 @@
-import { ArrowRightIcon, CheckCircleIcon, SparkleIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Button, Card, CardContent, PageHeader, type Step, StepList } from "@/components";
+import { Button, PageHeader, type Step } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
+import { Spinner } from "@/components/ui/spinner";
+import { TenantStep } from "./-tenant-step";
+import { resolveTenantDeploySteps } from "./-tenant-wizard";
 
 export function TenantDeployPhase({
   steps,
@@ -30,123 +33,138 @@ export function TenantDeployPhase({
   onSubmitPublish: () => void;
   onResetPublish: () => void;
 }) {
-  const hasFailure = steps.some((step) => step.state === "failed");
+  const createStep = steps[0];
   const publishStep = steps[1];
+  const status = resolveTenantDeploySteps({
+    create: createStep?.state ?? "pending",
+    publish: publishStep?.state ?? "pending",
+    verified: verifyState === "verified",
+  });
+  const live = verifyState === "verified";
+  const tenantLink = createdTenantId ? (
+    <Link to="/tenant/$tenantId" params={{ tenantId: tenantSlug || createdTenantId }} />
+  ) : null;
 
   return (
-    <div className="space-y-8">
+    <>
       <PageHeader
-        icon={SparkleIcon}
-        label="Deploying"
-        title={allDone ? "Deployment complete" : "Deploying tenant…"}
+        title={live ? "Tenant is live" : allDone ? "Waiting for the DAO" : "Finish deploying"}
+        subtitle={hostname}
+        headerTestId="admin-tenant-deploy.heading"
       />
 
-      <ConnectDao />
-
-      <Card>
-        <CardContent className="p-6 space-y-6">
-          <StepList steps={steps} />
-
-          {publishStep?.state === "success" && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Transaction submitted as <code className="font-mono text-xs">{daoAccountId}</code>.
-                Trezu multiplexes the call into your DAO&apos;s internal proposal — sign in to
-                trezu.app to confirm or wait for council approval.
-              </p>
-              {verifyMessage && (
-                <p
-                  className={
-                    verifyState === "verified"
-                      ? "text-sm text-foreground"
-                      : "text-sm text-muted-foreground"
-                  }
-                >
-                  {verifyMessage}
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={onRecheck}
-                  disabled={verifyState === "checking"}
-                >
-                  {verifyState === "checking" ? "rechecking…" : "recheck publish"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={onResetPublish}>
-                  re-submit
-                </Button>
-              </div>
-            </div>
+      <ol className="flex flex-col" data-testid="admin-tenant-deploy-steps">
+        <TenantStep
+          id="deploy-create"
+          number={1}
+          title="Create tenant, node and domain"
+          status={status.create}
+          summary="Records created"
+        >
+          {createStep?.error && (
+            <p role="alert" className="text-sm break-all text-destructive">
+              {createStep.error}
+            </p>
           )}
+        </TenantStep>
 
-          {publishStep?.state === "failed" && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Publish failed — re-check the Trezu connection or re-submit.
+        <TenantStep
+          id="deploy-publish"
+          number={2}
+          title="Publish settings through the DAO"
+          status={status.publish}
+          summary={daoAccountId ? `Submitted as ${daoAccountId}` : "Submitted"}
+        >
+          <div className="flex max-w-xl flex-col gap-4">
+            {publishStep?.state === "pending" && (
+              <>
+                <ConnectDao purpose="tenant-deploy" />
+                <Button
+                  className="self-start"
+                  onClick={onSubmitPublish}
+                  disabled={publishPending || !daoAccountId}
+                  data-testid="admin-tenant-publish"
+                >
+                  Publish settings
+                </Button>
+              </>
+            )}
+            {publishStep?.state === "running" && (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
+                Waiting for the DAO wallet…
               </p>
-              <Button variant="outline" size="sm" onClick={onResetPublish}>
-                retry publish
+            )}
+            {publishStep?.state === "failed" && (
+              <>
+                {publishStep.error && (
+                  <p role="alert" className="text-sm break-all text-destructive">
+                    {publishStep.error}
+                  </p>
+                )}
+                <Button variant="outline" className="self-start" onClick={onResetPublish}>
+                  Retry publish
+                </Button>
+              </>
+            )}
+          </div>
+        </TenantStep>
+
+        <TenantStep
+          id="deploy-live"
+          number={3}
+          title="Approve in Trezu"
+          status={status.live}
+          summary={`Live at ${hostname}`}
+          last
+        >
+          <div className="flex max-w-xl flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Sign in to trezu.app as{" "}
+              <span className="font-mono text-foreground">{daoAccountId}</span> to approve, or wait
+              for the council. Then check again.
+            </p>
+            {verifyMessage && verifyState !== "verified" && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="admin-tenant-verify-message"
+              >
+                {verifyMessage}
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={onRecheck}
+                disabled={verifyState === "checking"}
+                data-testid="admin-tenant-recheck"
+              >
+                {verifyState === "checking" ? "Checking…" : "Check again"}
+              </Button>
+              <Button variant="ghost" onClick={onResetPublish}>
+                Submit again
               </Button>
             </div>
-          )}
+          </div>
+        </TenantStep>
+      </ol>
 
-          {publishStep?.state === "pending" && (
-            <Button size="sm" onClick={onSubmitPublish} disabled={publishPending}>
-              publish config via DAO
-            </Button>
-          )}
+      {live && tenantLink && (
+        <div className="flex flex-col gap-4" data-testid="admin-tenant-live">
+          <p className="text-base">
+            Tenant deployed at <span className="font-mono">{hostname}</span>
+          </p>
+          <Button className="self-start" nativeButton={false} render={tenantLink}>
+            Open community settings
+            <ArrowRightIcon />
+          </Button>
+        </div>
+      )}
 
-          {verifyState === "verified" && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <CheckCircleIcon className="h-4 w-4 text-success" />
-                Tenant deployed at <code className="font-mono text-xs">{hostname}</code>
-              </div>
-              {createdTenantId && (
-                <Button
-                  size="sm"
-                  nativeButton={false}
-                  render={
-                    <Link
-                      to="/tenant/$tenantId"
-                      params={{ tenantId: tenantSlug || createdTenantId }}
-                    />
-                  }
-                >
-                  open tenant
-                  <ArrowRightIcon className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          )}
-
-          {hasFailure && !verifyState && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Some steps failed. API records were created — you can retry on-chain steps from the
-                tenant detail page.
-              </p>
-              {createdTenantId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  nativeButton={false}
-                  render={
-                    <Link
-                      to="/tenant/$tenantId"
-                      params={{ tenantId: tenantSlug || createdTenantId }}
-                    />
-                  }
-                >
-                  go to tenant
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      {!live && tenantLink && status.create === "complete" && (
+        <Button variant="ghost" className="self-start" nativeButton={false} render={tenantLink}>
+          Finish later in community settings
+        </Button>
+      )}
+    </>
   );
 }
