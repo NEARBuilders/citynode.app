@@ -13,7 +13,7 @@
 - **Priority**: P3
 - **Effort**: S-M
 - **Risk**: LOW-MED
-- **Depends on**: 029-platform-cdn.md
+- **Depends on**: done/029-platform-cdn.md
 - **Category**: architecture
 - **Planned at**: 2026-09-19, recorded during plan 029 execution
 

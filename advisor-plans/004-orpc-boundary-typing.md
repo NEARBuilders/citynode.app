@@ -17,7 +17,7 @@
 - **Priority**: P1
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: plans/001-buildscoped-helper.md (same files; land 001 first)
+- **Depends on**: done/001-buildscoped-helper.md (same files; land 001 first)
 - **Category**: tech-debt / type-safety
 - **Planned at**: commit `c9ca44e1`, 2026-09-15
 

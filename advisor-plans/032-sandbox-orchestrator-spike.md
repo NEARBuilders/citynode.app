@@ -16,7 +16,7 @@
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: 029-platform-cdn.md, 031-resource-provisioner-seam.md
+- **Depends on**: done/029-platform-cdn.md, 031-resource-provisioner-seam.md
 - **Category**: direction / spike
 - **Planned at**: commit `00d162cb`, 2026-09-18
 

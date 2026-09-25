@@ -3,7 +3,7 @@
 Date: 2026-09-21
 Status: Accepted
 
-Supersedes: nothing (first SSR-model ADR). Related: ADR 0005 (`app.ts` authored descriptor), ADR 0008 (manifest composition + mount registry v2), [plan 034](../../advisor-plans/034-manifest-composition-rework.md), [ui-route-grafting-migration](../../plans/extensions/ui-route-grafting-migration.md).
+Supersedes: nothing (first SSR-model ADR). Related: ADR 0005 (`app.ts` authored descriptor), ADR 0008 (manifest composition + mount registry v2), [plan 034](../../advisor-plans/034-manifest-composition-rework.md). (The ui route-grafting-migration plan was never filed as a doc — its content is superseded by ADR 0008; see map issue citynode.app#108.)
 
 ## Context
 
@@ -20,7 +20,7 @@ Two architectural temptations were evaluated and rejected:
 
 ## Decision
 
-1. **Runtime composition is the SSR model.** The app *is* the published JSON — a generic host boots from `bos.config.json` remote URLs and composes plugin UI at boot time, digest-cached, SRI-verified. Per-request work is only `createRouter({ routeTree, history: memoryHistory })` + `renderRouterToStream` with session-forwarded context (the `ui-route-grafting-migration` C2 decision — per-request tree composition stays dead). The render pipeline is TanStack-native: `createRequestHandler`, `renderRouterToStream`, native `head:` route options, automatic loader dehydration — no custom plumbing around router-core SSR.
+1. **Runtime composition is the SSR model.** The app *is* the published JSON — a generic host boots from `bos.config.json` remote URLs and composes plugin UI at boot time, digest-cached, SRI-verified. Per-request work is only `createRouter({ routeTree, history: memoryHistory })` + `renderRouterToStream` with session-forwarded context (the route-grafting-migration C2 decision, superseded by [ADR 0008](./0008-manifest-composition.md) — per-request tree composition stays dead). The render pipeline is TanStack-native: `createRequestHandler`, `renderRouterToStream`, native `head:` route options, automatic loader dehydration — no custom plumbing around router-core SSR.
 2. **Health-gated composition.** Composition failure at boot fails the host's health check and the deploy — it never silently degrades to the CSR shell forever. The CSR shell remains the per-request tenant-gate failure path only.
 3. **Own host = own host instance.** Apps and sovereign tenants run the same generic image parameterized by their own published config (`BOS_ACCOUNT`/`BOS_GATEWAY`, `extends` inheritance) — this is the existing self-deployment model. The parent platform keeps the single generic host for Tier-1 shared tenants; no per-app host builds exist.
 4. **Dev and regression consume source manifests.** `bos dev --ssr` composes from source on disk — one module graph, one React by construction, no node-MF, no dev SSR servers, no port patching, no readiness probes. Dev without `--ssr` simply composes nothing (SSR off by default; loud when requested). The dev path consumes the *same manifests* as production (disk-resolved vs MF-resolved) — identical construction code. Regression dev mode rides this and becomes deterministic.
