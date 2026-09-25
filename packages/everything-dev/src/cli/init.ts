@@ -41,6 +41,7 @@ export const INIT_ROOT_PATTERNS = [
   ".gitignore",
   "biome.json",
   "bunfig.toml",
+  "docker-compose.yml",
   "Dockerfile",
   "railway.json",
   "railway.toml",
@@ -572,6 +573,8 @@ export function buildChildRootScripts(sections: {
       ? testTargets.join(" && ")
       : 'echo "No workspace directories configured"';
 
+  // Scripts key off the child's own override selection (what it runs locally),
+  // not off resolved-config secrets — a ui-only child gets none of these.
   if (sections.api || sections.host) {
     scripts["dev:postgres"] = "docker compose up -d --wait && bun run dev";
     scripts["dev:postgres:down"] = "docker compose down";

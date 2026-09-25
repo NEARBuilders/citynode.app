@@ -15,7 +15,6 @@ async function materialize(targetDir: string, runtime: RuntimeConfig): Promise<v
       const m = yield* InfraMaterializer;
       yield* m.materializeTemplate(targetDir, runtime);
       yield* m.materializeTestInfra(targetDir, runtime);
-      yield* m.materializeCompose(targetDir, runtime);
     }).pipe(Effect.provide(InfraMaterializerLive)),
   );
 }

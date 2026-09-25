@@ -2182,14 +2182,14 @@ export default createPlugin({
     infraExport: builder.infraExport.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
       const configDir = input.configDir ?? deps.configDir;
-      const ci = deps.runtimeConfig ? buildCiInfraPlan(deps.runtimeConfig, { configDir }) : null;
+      const ci = deps.runtimeConfig ? buildCiInfraPlan(deps.runtimeConfig) : null;
       if (!ci) {
         const refreshed = await loadResolvedConfig({ cwd: configDir });
         if (!refreshed?.runtime) {
           throw new Error("No resolved runtime config available for infra export");
         }
         deps.runtimeConfig = refreshed.runtime;
-        return buildCiInfraPlan(refreshed.runtime, { configDir });
+        return buildCiInfraPlan(refreshed.runtime);
       }
       const result: CiInfraPlan & { account: string; gateway: string } = {
         ...ci,
