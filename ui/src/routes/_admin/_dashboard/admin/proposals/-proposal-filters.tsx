@@ -1,6 +1,7 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components";
 import {
   DEFAULT_PROPOSAL_REVIEW_FILTER,
+  PROPOSAL_REVIEW_FILTER_LABELS,
   PROPOSAL_REVIEW_FILTERS,
   type ProposalReviewFilter,
 } from "./-proposal-review";
@@ -21,10 +22,10 @@ export function ProposalReviewFilters({
         }
       }}
     >
-      <TabsList className="justify-start overflow-x-auto">
+      <TabsList className="max-w-full justify-start overflow-x-auto">
         {PROPOSAL_REVIEW_FILTERS.map((filter) => (
-          <TabsTrigger key={filter} value={filter}>
-            <span className="capitalize">{filter}</span>
+          <TabsTrigger key={filter} value={filter} data-testid={`admin-proposals-filter-${filter}`}>
+            {PROPOSAL_REVIEW_FILTER_LABELS[filter]}
           </TabsTrigger>
         ))}
       </TabsList>
