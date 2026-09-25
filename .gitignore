@@ -358,3 +358,5 @@ repos/
 # tsdown dts side-emissions beside sources (root fix pending in every-plugin tsdown config)
 packages/every-plugin/src/**/*.d.ts
 packages/every-plugin/src/**/*.d.ts.map
+
+.claude/
