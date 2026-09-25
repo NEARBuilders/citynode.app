@@ -73,11 +73,11 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="View account on Nearblocks"
-                />
+                >
+                  <ArrowSquareOutIcon />
+                </a>
               }
-            >
-              <ArrowSquareOutIcon />
-            </Button>
+            />
           )}
         </div>
         <p className="text-xs text-muted-foreground">

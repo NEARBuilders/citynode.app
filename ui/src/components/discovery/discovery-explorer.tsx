@@ -333,12 +333,12 @@ export function DiscoveryExplorer({
                           href={channel.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                        />
+                        >
+                          {channel.label}
+                          <ArrowUpRightIcon />
+                        </a>
                       }
-                    >
-                      {channel.label}
-                      <ArrowUpRightIcon />
-                    </Button>
+                    ></Button>
                   ))}
                 </div>
               )}

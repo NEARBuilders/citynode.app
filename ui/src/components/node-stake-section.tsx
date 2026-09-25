@@ -112,11 +112,11 @@ function StakeLink({
     <Button
       nativeButton={false}
       render={
-        <a href={`https://${node.slug}.${gateway}/stake?nodeId=${encodeURIComponent(node.id)}`} />
+        <a href={`https://${node.slug}.${gateway}/stake?nodeId=${encodeURIComponent(node.id)}`}>
+          Stake to {node.name}
+          <ArrowRightIcon />
+        </a>
       }
-    >
-      Stake to {node.name}
-      <ArrowRightIcon />
-    </Button>
+    />
   );
 }
