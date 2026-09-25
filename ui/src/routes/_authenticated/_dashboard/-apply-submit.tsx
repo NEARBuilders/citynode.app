@@ -1,4 +1,4 @@
-import { Send } from "lucide-react";
+import { PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { Badge, Button } from "@/components";
 
 export function ApplySubmit({
@@ -15,7 +15,7 @@ export function ApplySubmit({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button type="submit" disabled={!canSubmit}>
-        <Send />
+        <PaperPlaneTiltIcon />
         {isSubmitting ? "submitting…" : "submit for review"}
       </Button>
       {hostname && hostnameAvailable !== undefined && (

@@ -21,8 +21,8 @@ export function ApplyPrerequisites({
             <p className="text-sm text-muted-foreground">
               Node applications must be associated with an active organization.
             </p>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/orgs">manage organizations</Link>
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              manage organizations
             </Button>
           </CardContent>
         </Card>
@@ -36,8 +36,13 @@ export function ApplyPrerequisites({
               The connected SIWN account identifies the applicant. The tenant itself is owned by the
               DAO connected through Trezu.
             </p>
-            <Button asChild size="sm" variant="outline">
-              <Link to={pluginPath("/settings/auth-methods")}>manage sign-in methods</Link>
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link to={pluginPath("/settings/auth-methods")} />}
+            >
+              manage sign-in methods
             </Button>
           </CardContent>
         </Card>

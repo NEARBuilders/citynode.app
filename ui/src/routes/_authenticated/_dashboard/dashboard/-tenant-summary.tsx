@@ -22,10 +22,13 @@ export function TenantSummary({ tenant }: { tenant: NonNullable<Tenant> }) {
         />
       </div>
       <div className="flex gap-2 pt-1">
-        <Button asChild variant="outline" size="sm">
-          <Link to="/admin" preload="intent">
-            manage tenant
-          </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/admin" preload="intent" />}
+        >
+          manage tenant
         </Button>
       </div>
     </Card>

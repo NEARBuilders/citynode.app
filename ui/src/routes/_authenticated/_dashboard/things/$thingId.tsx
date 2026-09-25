@@ -164,8 +164,8 @@ function ThingDetailsPage() {
               Proposal status could not be loaded: {proposalQuery.error.message}
             </p>
           )}
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/things">back to things</Link>
+          <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/things" />}>
+            back to things
           </Button>
         </div>
       </PageContainer>

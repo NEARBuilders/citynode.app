@@ -1,5 +1,5 @@
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
 import { Card } from "@/components";
 
 type ChildNode = { id: string; name: string; slug: string };
@@ -20,7 +20,7 @@ export function StakeNoValidator({ childNodes }: { childNodes: ChildNode[] }) {
               className="inline-flex h-10 items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
               <span className="capitalize">{child.name}</span>
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRightIcon className="h-4 w-4" />
             </Link>
           ))}
         </div>

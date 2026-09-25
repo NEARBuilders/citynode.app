@@ -1,5 +1,11 @@
+import {
+  ArrowSquareOutIcon,
+  BrowserIcon,
+  CalendarDotsIcon,
+  NetworkIcon,
+  SealCheckIcon,
+} from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
 import { getActiveRuntime } from "@/app";
 import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { buildTenantUrl } from "@/lib/tenant-url";
@@ -102,12 +108,12 @@ function NodeDashboardLayout() {
     return (
       <PageContainer variant="wide">
         <EmptyState
-          icon={Network}
+          icon={NetworkIcon}
           title="No node available"
           description={emptyState.description}
           action={
-            <Button asChild>
-              <Link to={emptyState.actionTo}>{emptyState.actionLabel}</Link>
+            <Button nativeButton={false} render={<Link to={emptyState.actionTo} />}>
+              {emptyState.actionLabel}
             </Button>
           }
         />
@@ -122,7 +128,7 @@ function NodeDashboardLayout() {
     <PageContainer variant="wide">
       <div className="space-y-8">
         <PageHeader
-          icon={Network}
+          icon={NetworkIcon}
           label="My Node"
           title={selectedNode.name}
           subtitle={selectedNode.slug}
@@ -153,11 +159,16 @@ function NodeDashboardLayout() {
                 </select>
               )}
               {gatewayUrl && (
-                <Button asChild variant="outline" size="sm">
-                  <a href={gatewayUrl} target="_blank" rel="noopener noreferrer">
-                    {selectedNode.slug}.{gateway}
-                    <ExternalLink />
-                  </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={(props) => (
+                    <a {...props} href={gatewayUrl} target="_blank" rel="noopener noreferrer" />
+                  )}
+                >
+                  {selectedNode.slug}.{gateway}
+                  <ArrowSquareOutIcon />
                 </Button>
               )}
             </>
@@ -170,11 +181,12 @@ function NodeDashboardLayout() {
         </div>
 
         <nav className="flex flex-wrap gap-2">
-          <Button asChild>
-            <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }}>
-              <CalendarDays />
-              Events & community profile
-            </Link>
+          <Button
+            nativeButton={false}
+            render={<Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} />}
+          >
+            <CalendarDotsIcon />
+            Events & community profile
           </Button>
           <Link
             to="/dashboard/node"
@@ -184,7 +196,7 @@ function NodeDashboardLayout() {
               isSummary ? "bg-foreground text-background" : "bg-card text-foreground",
             )}
           >
-            <PanelTop className="h-3.5 w-3.5" />
+            <BrowserIcon className="h-3.5 w-3.5" />
             overview
           </Link>
           <Link
@@ -197,7 +209,7 @@ function NodeDashboardLayout() {
                 : "bg-card text-foreground",
             )}
           >
-            <FileCheck2 className="h-3.5 w-3.5" />
+            <SealCheckIcon className="h-3.5 w-3.5" />
             proposals
           </Link>
         </nav>

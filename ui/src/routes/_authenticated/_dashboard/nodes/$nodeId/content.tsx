@@ -1,6 +1,6 @@
+import { ArrowLeftIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { useApiClient } from "@/app";
 import { ProfileEditor } from "@/components/discovery/profile-editor";
 import { PageContainer } from "@/components/layout/page-container";
@@ -22,7 +22,7 @@ function CommunityContent() {
           to="/dashboard/node"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeftIcon className="size-4" />
           My community
         </Link>
         <header className="flex flex-wrap items-end justify-between gap-4">
@@ -42,7 +42,7 @@ function CommunityContent() {
             search={{ node: nodeId }}
             className="inline-flex items-center gap-1 text-sm font-medium"
           >
-            View on Explore <ArrowUpRight className="size-4" />
+            View on Explore <ArrowUpRightIcon className="size-4" />
           </Link>
         </header>
         <ProfileEditor nodeId={nodeId} defaultTab="events" />

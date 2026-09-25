@@ -1,5 +1,5 @@
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { useClientValue } from "@/hooks";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
@@ -37,7 +37,7 @@ function OnboardingStationPage() {
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           data-testid="station.exit"
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeftIcon className="size-4" />
           Exit station
         </button>
       </header>

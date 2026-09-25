@@ -1,5 +1,5 @@
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import type { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
 import { ThingContent } from "./-thing-content";
@@ -47,13 +47,16 @@ export function ThingDetailsView({
           actions={
             canGoBack ? (
               <Button type="button" variant="outline" size="icon-sm" onClick={onBack}>
-                <ArrowLeft />
+                <ArrowLeftIcon />
               </Button>
             ) : (
-              <Button asChild variant="outline" size="icon-sm">
-                <Link to="/things">
-                  <ArrowLeft />
-                </Link>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                nativeButton={false}
+                render={<Link to="/things" />}
+              >
+                <ArrowLeftIcon />
               </Button>
             )
           }

@@ -1,6 +1,6 @@
+import { CheckIcon, PlusIcon, SealCheckIcon, XIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, FileCheck2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { Badge, Button, Card, EmptyState, SectionHeader } from "@/components";
@@ -67,11 +67,9 @@ function NodeProposals() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionHeader title="Node proposals" />
-        <Button asChild size="sm">
-          <Link to="/apply">
-            <Plus />
-            new proposal
-          </Link>
+        <Button size="sm" nativeButton={false} render={<Link to="/apply" />}>
+          <PlusIcon />
+          new proposal
         </Button>
       </div>
 
@@ -83,7 +81,7 @@ function NodeProposals() {
         </Card>
       ) : proposals.length === 0 ? (
         <EmptyState
-          icon={FileCheck2}
+          icon={SealCheckIcon}
           title="No node proposals"
           description={`No proposals currently target ${selectedNode.name}.`}
           className="min-h-[40vh]"
@@ -129,7 +127,7 @@ function NodeProposals() {
                       }
                       disabled={reviewMutation.isPending}
                     >
-                      <Check />
+                      <CheckIcon />
                       approve
                     </Button>
                     <Button
@@ -143,7 +141,7 @@ function NodeProposals() {
                       }
                       disabled={reviewMutation.isPending}
                     >
-                      <X />
+                      <XIcon />
                       reject
                     </Button>
                   </div>

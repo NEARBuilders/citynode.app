@@ -1,4 +1,4 @@
-import { Clock3 } from "lucide-react";
+import { ClockIcon } from "@phosphor-icons/react";
 import type { useApiClient } from "@/app";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +54,7 @@ export function ThingProposalStatus({ proposal }: { proposal: ThingProposal }) {
   return (
     <div className={cn("rounded-[12px] border-2 p-4", content.className)}>
       <div className="flex items-start gap-3">
-        <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
+        <ClockIcon className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="space-y-1">
           <p className="text-sm font-semibold">{content.title}</p>
           <p className="text-sm">{content.description}</p>

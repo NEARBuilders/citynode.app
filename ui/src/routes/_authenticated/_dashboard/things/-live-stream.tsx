@@ -1,5 +1,5 @@
+import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { Link, useRouter } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApiClient } from "@/app";
 import { Badge, Button, PageContainer, PageHeader } from "@/components";
@@ -62,13 +62,16 @@ export function ThingsLiveStreamPage() {
                   size="icon-sm"
                   onClick={() => router.history.back()}
                 >
-                  <ArrowLeft />
+                  <ArrowLeftIcon />
                 </Button>
               ) : (
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/things">
-                    <ArrowLeft />
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  nativeButton={false}
+                  render={<Link to="/things" />}
+                >
+                  <ArrowLeftIcon />
                 </Button>
               )}
               <span

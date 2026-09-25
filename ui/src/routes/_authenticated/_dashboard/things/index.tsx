@@ -1,6 +1,6 @@
+import { ArrowUpIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUp } from "lucide-react";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
@@ -52,7 +52,7 @@ function createColumns(
       header: "Upvotes",
       cell: ({ row }) => (
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <ArrowUp className="h-3.5 w-3.5" />
+          <ArrowUpIcon className="h-3.5 w-3.5" />
           {isLoadingUpvotes ? "—" : (upvoteCounts?.[row.original.thingId]?.totalCount ?? 0)}
         </span>
       ),
@@ -79,10 +79,13 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/things/$thingId" params={{ thingId: row.original.thingId }}>
-            View
-          </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/things/$thingId" params={{ thingId: row.original.thingId }} />}
+        >
+          View
         </Button>
       ),
     },

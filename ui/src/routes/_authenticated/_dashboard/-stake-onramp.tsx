@@ -1,6 +1,6 @@
+import { WalletIcon } from "@phosphor-icons/react";
 import { PingpayOnramp, PingpayOnrampError } from "@pingpay/onramp-sdk";
 import { useMutation } from "@tanstack/react-query";
-import { Wallet } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import pingpayLogoDark from "@/assets/brands/pingpay/pingpay-logo-dark.png";
@@ -78,7 +78,7 @@ export function StakeOnramp() {
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/70 dark:bg-white/5">
-            <Wallet className="h-4 w-4 text-[#6D5BD0] dark:text-[#C9BBFF]" />
+            <WalletIcon className="h-4 w-4 text-[#6D5BD0] dark:text-[#C9BBFF]" />
           </div>
           <div>
             <p className="text-sm font-semibold text-[#3D315E] dark:text-[#EDE8FF]">
@@ -91,7 +91,7 @@ export function StakeOnramp() {
         </div>
         {disabled ? (
           <Tooltip>
-            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipTrigger render={button} />
             <TooltipContent side="top" className="max-w-xs">
               Connect a NEAR wallet to buy NEAR
             </TooltipContent>

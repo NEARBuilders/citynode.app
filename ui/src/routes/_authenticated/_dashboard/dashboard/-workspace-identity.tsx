@@ -1,5 +1,5 @@
+import { GearIcon, HouseIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Home as HomeIcon, Settings } from "lucide-react";
 import { pluginPath } from "@/app";
 import { Button, PageHeader } from "@/components";
 import { IdentityStatus } from "./-identity-status";
@@ -16,15 +16,17 @@ export function WorkspaceIdentity({
   return (
     <>
       <PageHeader
-        icon={HomeIcon}
+        icon={HouseIcon}
         label="Workspace"
         title={user?.name || user?.email || "You"}
         actions={
-          <Button asChild variant="outline">
-            <Link to={pluginPath("/settings")} preload="intent">
-              <Settings />
-              settings
-            </Link>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link to={pluginPath("/settings")} preload="intent" />}
+          >
+            <GearIcon />
+            settings
           </Button>
         }
       />

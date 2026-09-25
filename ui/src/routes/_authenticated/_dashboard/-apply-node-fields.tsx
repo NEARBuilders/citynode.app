@@ -95,8 +95,10 @@ export function ApplyNodeFields({
                   <Field data-invalid={errors.length > 0 || undefined}>
                     <FieldLabel htmlFor="application-country">parent country</FieldLabel>
                     <Select
-                      value={rootParentId}
+                      items={rootNodes.map((node) => ({ label: node.name, value: node.id }))}
+                      value={rootParentId || null}
                       onValueChange={(countryId) => {
+                        if (countryId === null) return;
                         setRootParentId(countryId);
                         field.handleChange(countryId);
                       }}
@@ -124,9 +126,18 @@ export function ApplyNodeFields({
                             ? DIRECT_COUNTRY_PARENT
                             : (field.state.value ?? DIRECT_COUNTRY_PARENT)
                         }
-                        onValueChange={(value) =>
-                          field.handleChange(value === DIRECT_COUNTRY_PARENT ? rootParentId : value)
-                        }
+                        items={[
+                          { label: "Directly under country", value: DIRECT_COUNTRY_PARENT },
+                          ...stateNodes
+                            .filter((node) => node.kind === "state")
+                            .map((node) => ({ label: node.name, value: node.id })),
+                        ]}
+                        onValueChange={(value) => {
+                          if (value === null) return;
+                          field.handleChange(
+                            value === DIRECT_COUNTRY_PARENT ? rootParentId : value,
+                          );
+                        }}
                       >
                         <SelectTrigger id="application-state" className="w-full">
                           <SelectValue

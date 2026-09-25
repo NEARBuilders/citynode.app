@@ -1,6 +1,6 @@
+import { SparkleIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { pluginPath, pluginSearch, useApiClient } from "@/app";
@@ -61,7 +61,7 @@ function CreateThingPage() {
     <PageContainer variant="wide">
       <div className="space-y-6">
         <PageHeader
-          icon={Sparkles}
+          icon={SparkleIcon}
           label="Create"
           title="New thing"
           description="Submit a thing proposal for an admin to review before it goes live."

@@ -1,4 +1,4 @@
-import { ArrowUp, Trash2 } from "lucide-react";
+import { ArrowUpIcon, TrashIcon } from "@phosphor-icons/react";
 import type { useApiClient } from "@/app";
 import { Badge, Button } from "@/components";
 import { ThingMetaRow } from "./-thing-meta-row";
@@ -45,7 +45,7 @@ export function ThingContent({
             onClick={() => onVote(!(userVote?.hasUpvote ?? false))}
             disabled={isVoteLoading || isVotePending}
           >
-            <ArrowUp className="h-3.5 w-3.5" />
+            <ArrowUpIcon className="h-3.5 w-3.5" />
             {upvoteCount?.totalCount ?? 0}
             <span>{userVote?.hasUpvote ? "upvoted" : "upvote"}</span>
           </Button>
@@ -80,7 +80,7 @@ export function ThingContent({
             </span>
           </div>
           <Button variant="destructive" size="sm" className="gap-1.5" onClick={onDelete}>
-            <Trash2 size={12} />
+            <TrashIcon size={12} />
             {isDeletePending ? "Deleting..." : "Delete thing"}
           </Button>
         </div>

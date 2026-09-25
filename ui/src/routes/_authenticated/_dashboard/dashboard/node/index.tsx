@@ -1,6 +1,6 @@
+import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ExternalLink } from "lucide-react";
 import { getActiveRuntime, useApiClient } from "@/app";
 import {
   Badge,
@@ -52,10 +52,11 @@ function NodeOverview() {
             Add an event, share an update, or change how your community appears on Explore.
           </p>
         </div>
-        <Button asChild>
-          <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }}>
-            Manage events & profile
-          </Link>
+        <Button
+          nativeButton={false}
+          render={<Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }} />}
+        >
+          Manage events & profile
         </Button>
       </div>
       <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
@@ -98,7 +99,7 @@ function NodeOverview() {
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:underline"
                     >
                       {child.slug}.{gateway}
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <ArrowSquareOutIcon className="h-3.5 w-3.5" />
                     </a>
                   )}
                 </Card>

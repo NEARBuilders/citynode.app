@@ -1,4 +1,4 @@
-import { Wallet } from "lucide-react";
+import { WalletIcon } from "@phosphor-icons/react";
 import type { useApiClient } from "@/app";
 import { Button, Card, Field, FieldLabel, Input } from "@/components";
 import type { StakeVariables } from "./-stake-mutations";
@@ -45,7 +45,7 @@ export function StakeForm({
       ) : (
         <>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Wallet className="h-4 w-4" />
+            <WalletIcon className="h-4 w-4" />
             <span className="font-mono text-xs">{nearAccountId}</span>
           </div>
           <Field>

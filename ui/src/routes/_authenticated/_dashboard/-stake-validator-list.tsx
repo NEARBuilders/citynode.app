@@ -1,4 +1,4 @@
-import { Globe } from "lucide-react";
+import { GlobeIcon } from "@phosphor-icons/react";
 import type { useApiClient } from "@/app";
 import { Badge } from "@/components";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export function StakeValidatorList({
                 isCommunity ? "bg-muted text-muted-foreground" : "bg-foreground text-background",
               )}
             >
-              <Globe className="h-4 w-4" />
+              <GlobeIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">

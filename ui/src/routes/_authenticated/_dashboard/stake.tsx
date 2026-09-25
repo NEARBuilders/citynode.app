@@ -1,6 +1,6 @@
+import { BankIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Landmark } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
@@ -130,7 +130,7 @@ function StakePage() {
     <PageContainer variant="wide">
       <div className="space-y-8">
         <PageHeader
-          icon={Landmark}
+          icon={BankIcon}
           label="Stake"
           title={getStakeTitle(node, slug)}
           description={
