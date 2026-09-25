@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, CalendarDays, Clock, MapPin, MessageCircle } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowUpRight, CalendarDays, Clock, MapPin, MessageCircle, QrCode } from "lucide-react";
 import { useState } from "react";
 import { type ApiClient, useApiClient } from "@/app";
 import { Button, Input, Textarea } from "@/components";
@@ -47,6 +47,12 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const nodes = useQuery({
     queryKey: ["discovery-editor-nodes"],
     queryFn: () => api.listNodes({}),
+  });
+  const navigate = useNavigate();
+  const startOnboarding = useMutation({
+    mutationFn: (eventId: string) => api.createEventOnboardingCode({ eventId }),
+    onSuccess: (code) =>
+      navigate({ to: "/onboarding/station/$codeId", params: { codeId: code.id } }),
   });
   const save = useMutation({
     mutationFn: (input: Draft) => api.saveDiscoveryActivity(input),
@@ -98,6 +104,15 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         </div>
       </div>
       <LumaImport nodeId={nodeId} />
+      {startOnboarding.isError && (
+        <p
+          role="alert"
+          className="rounded-xl border border-border p-4 text-sm"
+          data-testid="discovery-start-onboarding-error"
+        >
+          {startOnboarding.error.message || "Could not start onboarding for this event."}
+        </p>
+      )}
       {list.isPending && <p className="text-sm text-muted-foreground">Loading events…</p>}
       {list.data?.length === 0 && (
         <p className="rounded-xl bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
@@ -134,6 +149,17 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
                       {tile.day}
                     </span>
                   </div>
+                )}
+                {a.kind === "event" && a.status !== "cancelled" && (
+                  <Button
+                    data-testid={`discovery-start-onboarding-${a.id}`}
+                    variant="outline"
+                    size="sm"
+                    disabled={startOnboarding.isPending}
+                    onClick={() => startOnboarding.mutate(a.id)}
+                  >
+                    <QrCode /> Start onboarding
+                  </Button>
                 )}
                 {a.luma ? (
                   <a

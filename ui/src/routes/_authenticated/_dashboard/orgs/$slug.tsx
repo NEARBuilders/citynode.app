@@ -23,6 +23,7 @@ import {
   TabsTrigger,
 } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
+import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
@@ -136,6 +137,10 @@ function OrganizationDetail() {
   const myMembership = members.find((member) => member.userId === session?.user?.id);
   const canManageMembers = myMembership?.role === "owner" || myMembership?.role === "admin";
   const isOwner = myMembership?.role === "owner";
+  const workspace = useTeamWorkspace(isActive).data;
+  const canOrganize =
+    canManageMembers ||
+    (isActive && (workspace?.teams ?? []).some((team) => team.areas.includes("events")));
   const pendingInvitationsCount = invitations.filter(
     (invitation) => invitation.status === "pending",
   ).length;
@@ -257,7 +262,7 @@ function OrganizationDetail() {
               <Mail className="h-4 w-4 mr-1.5" />
               Invitations ({pendingInvitationsCount})
             </TabsTrigger>
-            {canManageMembers && (
+            {canOrganize && (
               <TabsTrigger value="onboard" className="shrink-0" data-testid="orgs-tab-onboard">
                 <QrCode className="h-4 w-4 mr-1.5" />
                 Onboard
@@ -314,7 +319,7 @@ function OrganizationDetail() {
             onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
             teams={teamsState.teams}
           />
-          {canManageMembers && <OnboardingTab apiClient={apiClient} canManage orgId={orgId} />}
+          {canOrganize && <OnboardingTab apiClient={apiClient} canManage orgId={orgId} />}
           <ApiKeysTab
             apiKeys={apiKeys}
             canManageMembers={canManageMembers}

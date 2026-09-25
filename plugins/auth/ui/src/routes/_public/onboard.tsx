@@ -128,14 +128,16 @@ function OnboardPage() {
     );
   }
 
-  if (info.revoked || info.expired) {
+  if (info.revoked || info.expired || info.usedUp) {
     return (
       <StatusCard
         title="Invitation unavailable"
         description={
           info.revoked
             ? "This onboarding code was revoked by the organizer."
-            : "This onboarding code has expired. Ask the organizer for a new one."
+            : info.expired
+              ? "This onboarding code has expired. Ask the organizer for a new one."
+              : "This onboarding code has reached its limit. Ask the organizer for a new one."
         }
         testId="onboard.unavailable"
       />
