@@ -1,248 +1,300 @@
 import {
-  BankIcon,
+  BuildingsIcon,
+  CaretRightIcon,
+  CheckCircleIcon,
+  GasPumpIcon,
   GavelIcon,
   GearIcon,
-  SquaresFourIcon,
   TreeStructureIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { getAccount, pluginPath, useApiClient } from "@/app";
-import { Badge, Button, Card, SectionHeader } from "@/components";
-import { InfoRow } from "@/components/info-row";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
+import type { ComponentType, ReactNode } from "react";
+import { getAccount, useApiClient } from "@/app";
+import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { allNodesQueryOptions } from "@/lib/queries/nodes";
+import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
-import { pendingProposalCountQueryOptions } from "./proposals/-proposal-review";
+import { useRelayerInfoQuery } from "@/lib/use-relayer";
+import { ListSkeleton, StatFigure, StatGrid } from "./-admin-ui";
+import {
+  adminProposalListQueryOptions,
+  proposalTitle,
+  proposalTypeLabel,
+} from "./proposals/-proposal-review";
+
+const QUEUE_SIZE = 5;
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/")({
   loader: ({ context }) =>
-    context.queryClient.ensureQueryData(pendingProposalCountQueryOptions(context.apiClient)),
+    context.queryClient.ensureInfiniteQueryData(
+      adminProposalListQueryOptions(context.apiClient, "pending"),
+    ),
   head: () => ({
-    meta: [{ title: "Admin Dashboard | app" }],
+    meta: [{ title: "Admin | app" }],
   }),
-  component: AdminDashboard,
+  component: AdminOverview,
 });
 
-function AdminDashboard() {
+function AdminOverview() {
   const { auth, tenant, tenantOrganizationSlug, runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
-  // Read from route context, not the window-only helper — a bare getAccount()
-  // falls back to the default account on the server and hydrates to a
-  // different text, tearing the tree down client-side.
   const platformAccount = getAccount(runtimeConfig);
   const user = auth?.user ?? null;
   const walletAccount = useNearAccount();
-  const pendingProposalsQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
-  const pendingProposalCount = pendingProposalsQuery.data?.meta.total;
+
+  const pendingQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, "pending"));
+  const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
+  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
+  const relayerQuery = useRelayerInfoQuery();
+
+  const pending = pendingQuery.data?.pages[0]?.data ?? [];
+  const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
+  const relayer = relayerQuery.data;
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Wallet" value={walletAccount ?? user?.name ?? "—"} mono />
-        <StatCard label="Name" value={user?.name || user?.email || "—"} />
-        <StatCard label="Role" value={user?.role ?? "—"} />
-        <StatCard label="Platform account" value={platformAccount} mono />
-      </section>
+    <>
+      <PageHeader title="Admin" subtitle={platformAccount} headerTestId="admin.heading" />
 
-      <section className="space-y-3">
-        <SectionHeader title="Manage" sectionTestId="admin.section.manage" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <TreeStructureIcon className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.nodes"
-            >
-              Nodes
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Inspect the node tree, validator health, and staking resolution.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link to="/admin/nodes" />}
-            >
-              open nodes
-            </Button>
-          </Card>
+      <StatGrid>
+        <StatFigure
+          label="Waiting for review"
+          value={pendingTotal ?? "—"}
+          tone={pendingTotal ? "attention" : "default"}
+          testId="admin.stat.pending-proposals"
+        />
+        <StatFigure
+          label="Nodes"
+          value={nodesQuery.data?.length ?? "—"}
+          testId="admin.stat.nodes"
+        />
+        <StatFigure
+          label="Tenants"
+          value={tenantsQuery.data?.length ?? "—"}
+          testId="admin.stat.tenants"
+        />
+        <StatFigure
+          label="Relayer balance"
+          value={relayer?.enabled ? relayer.balance : relayer ? "0" : "—"}
+          hint={relayer ? (relayer.enabled ? "NEAR" : "Needs funding") : "Not configured"}
+          tone={relayer && !relayer.enabled ? "attention" : "default"}
+          testId="admin.stat.relayer"
+        />
+      </StatGrid>
 
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <GavelIcon className="h-4 w-4" />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3
-                className="text-base font-semibold text-foreground"
-                data-testid="admin.heading.proposals"
-              >
-                Proposals
-              </h3>
-              {pendingProposalCount !== undefined && (
-                <Badge variant="secondary">{pendingProposalCount} pending</Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Review and approve thing submissions from the community.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link to="/admin/proposals" />}
-            >
-              review proposals
-            </Button>
-          </Card>
-
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <SquaresFourIcon className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.tenants"
-            >
-              Tenants
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Create and manage tenant deployments for your organization.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link to="/admin/tenants" />}
-            >
-              <BankIcon className="h-3.5 w-3.5" />
-              open tenants
-            </Button>
-          </Card>
-
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <BankIcon className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.organizations"
-            >
-              Organizations
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Manage organizations, members, roles, and invitations.
-            </p>
-            <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
-              <UsersIcon className="h-3.5 w-3.5" />
-              open organizations
-            </Button>
-          </Card>
-
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <GearIcon className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.settings"
-            >
-              Settings
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Update your profile, auth methods, and security preferences.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link to={pluginPath("/settings")} />}
-            >
-              open settings
-            </Button>
-          </Card>
-        </div>
-      </section>
-
-      {tenant && (
-        <section className="space-y-3">
-          <SectionHeader title="Tenant details" />
-          <Card className="p-6 space-y-4">
-            <div className="text-sm font-medium text-muted-foreground">Configuration</div>
-            <div className="flex flex-col gap-2">
-              <InfoRow label="name" value={tenant.name} />
-              <InfoRow label="id" value={tenant.id} mono />
-              <InfoRow label="account" value={tenant.accountId} mono />
-              <InfoRow label="org Id" value={tenant.orgId} mono />
-              <InfoRow
-                label="created"
-                value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-              />
-            </div>
-          </Card>
-        </section>
-      )}
-
-      {tenant && (
-        <section className="space-y-3">
-          <SectionHeader title="Members & permissions" />
-          <Card className="p-4 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              This tenant is backed by an organization. Manage members, roles, and invitations
-              there.
-            </p>
-            {tenantOrganizationSlug ? (
+      <section className="flex flex-col gap-6">
+        <SectionHeader
+          title="Waiting for review"
+          sectionTestId="admin.section.queue"
+          action={
+            pendingTotal ? (
               <Button
                 variant="outline"
                 size="sm"
                 nativeButton={false}
-                render={<Link to="/orgs/$slug" params={{ slug: tenantOrganizationSlug }} />}
+                render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
               >
-                <UsersIcon className="h-3.5 w-3.5" />
-                open organization
+                See all {pendingTotal}
               </Button>
-            ) : (
-              <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/orgs" />}>
-                <UsersIcon className="h-3.5 w-3.5" />
-                open organizations
-              </Button>
-            )}
-          </Card>
-        </section>
-      )}
-    </div>
+            ) : undefined
+          }
+        />
+        {pendingQuery.isLoading ? (
+          <ListSkeleton rows={3} />
+        ) : pendingQuery.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            Couldn't load proposals: {pendingQuery.error.message}
+          </p>
+        ) : pending.length === 0 ? (
+          <EmptyState
+            icon={CheckCircleIcon}
+            title="All caught up"
+            description="New community applications and submissions show up here."
+            className="py-10"
+          />
+        ) : (
+          <ItemGroup data-testid="admin-queue">
+            {pending.slice(0, QUEUE_SIZE).map((proposal) => (
+              <Item
+                key={proposal.id}
+                variant="outline"
+                render={
+                  <Link
+                    to="/admin/proposals/$proposalId"
+                    params={{ proposalId: proposal.id }}
+                    search={{ pluginId: proposal.pluginId, entityId: proposal.entityId }}
+                  />
+                }
+                data-testid={`admin-queue-item-${proposal.id}`}
+              >
+                <ItemMedia variant="icon">
+                  <GavelIcon />
+                </ItemMedia>
+                <ItemContent className="min-w-0">
+                  <ItemTitle>{proposalTitle(proposal)}</ItemTitle>
+                  <ItemDescription>
+                    {proposalTypeLabel(proposal.pluginId)} · submitted{" "}
+                    <LocalDate value={proposal.createdAt} format="relative" />
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <span className="hidden text-sm font-medium sm:inline">Review</span>
+                  <CaretRightIcon className="size-4 text-muted-foreground" />
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="Manage" sectionTestId="admin.section.manage" />
+        <ItemGroup>
+          <ManageRow
+            to="/admin/nodes"
+            icon={TreeStructureIcon}
+            title="Nodes"
+            testId="admin.heading.nodes"
+            description="The community tree, validators and domains"
+          />
+          <ManageRow
+            to="/admin/proposals"
+            icon={GavelIcon}
+            title="Proposals"
+            testId="admin.heading.proposals"
+            description="Every application and decision"
+            badge={pendingTotal ? <Badge variant="warning">{pendingTotal} pending</Badge> : null}
+          />
+          <ManageRow
+            to="/admin/tenants"
+            icon={BuildingsIcon}
+            title="Tenants"
+            testId="admin.heading.tenants"
+            description="Deployments and their DAOs"
+          />
+          <ManageRow
+            to="/orgs"
+            icon={UsersIcon}
+            title="Organizations"
+            testId="admin.heading.organizations"
+            description="Members, teams and invitations"
+          />
+          <ManageRow
+            to="/admin/relayer"
+            icon={GasPumpIcon}
+            title="Relayer"
+            testId="admin.heading.relayer"
+            description="Gas for gasless writes"
+          />
+          <ManageRow
+            to="/admin/system"
+            icon={GearIcon}
+            title="System"
+            testId="admin.heading.system"
+            description="Runtime configuration and endpoints"
+          />
+        </ItemGroup>
+      </section>
+
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="This runtime" />
+        <div className="flex flex-col">
+          <ContextRow label="Platform account" value={platformAccount} mono />
+          {tenant && <ContextRow label="Tenant" value={tenant.name} />}
+          {tenant && (
+            <ContextRow
+              label="Organization"
+              value={
+                tenantOrganizationSlug ? (
+                  <Link
+                    to="/orgs/$slug"
+                    params={{ slug: tenantOrganizationSlug }}
+                    className="hover:underline"
+                  >
+                    {tenantOrganizationSlug}
+                  </Link>
+                ) : (
+                  "—"
+                )
+              }
+            />
+          )}
+          {tenant?.createdAt && (
+            <ContextRow label="Created" value={<LocalDate value={tenant.createdAt} />} />
+          )}
+          <ContextRow label="Name" value={user?.name || user?.email || "—"} />
+          <ContextRow label="Role" value={user?.role ?? "—"} />
+          <ContextRow
+            label="Wallet"
+            value={walletAccount ?? "Not connected"}
+            mono={!!walletAccount}
+          />
+        </div>
+      </section>
+    </>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  mono,
+function ManageRow({
+  to,
+  icon: Icon,
+  title,
+  description,
+  testId,
+  badge,
 }: {
-  label: string;
-  value: React.ReactNode;
-  mono?: boolean;
+  to: LinkProps["to"];
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  testId: string;
+  badge?: ReactNode;
 }) {
+  return (
+    <Item variant="outline" size="sm" render={<Link to={to} />}>
+      <ItemMedia variant="icon">
+        <Icon />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>
+          <h3 data-testid={testId}>{title}</h3>
+          {badge}
+        </ItemTitle>
+        <ItemDescription>{description}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <CaretRightIcon className="size-4 text-muted-foreground" />
+      </ItemActions>
+    </Item>
+  );
+}
+
+function ContextRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   const slug = label.toLowerCase().replace(/\s+/g, "-");
   return (
     <div
-      className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4"
+      className="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
       data-testid={`admin.stat.${slug}`}
     >
-      <div
-        className="text-sm font-medium text-muted-foreground"
-        data-testid={`admin.stat.${slug}.label`}
-      >
+      <span className="text-sm text-muted-foreground" data-testid={`admin.stat.${slug}.label`}>
         {label}
-      </div>
-      <div
-        className={`text-base font-bold text-foreground leading-tight ${mono ? "font-mono" : ""}`}
+      </span>
+      <span
+        className={`break-all text-sm text-foreground sm:text-right ${mono ? "font-mono" : ""}`}
         data-testid={`admin.stat.${slug}.value`}
       >
         {value}
-      </div>
+      </span>
     </div>
   );
 }
