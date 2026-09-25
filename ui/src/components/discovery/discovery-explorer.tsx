@@ -14,6 +14,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Badge, Button } from "@/components";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Item } from "@/components/ui/item";
 import {
   Select,
   SelectContent,
@@ -198,19 +199,22 @@ export function DiscoveryExplorer({
                 {list.data.filter((node) => node.active).length} active
               </span>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
               {list.data.map((node) => (
-                <button
-                  type="button"
+                <Item
                   key={node.nodeId}
-                  data-testid={`discovery-node-${node.nodeId}`}
-                  data-node-id={node.nodeId}
-                  aria-pressed={search.node === node.nodeId}
-                  onClick={() => select(node.nodeId)}
-                  className={cn(
-                    "flex w-full items-start gap-3 border-b border-border px-4 py-3.5 text-left last:border-0 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                    search.node === node.nodeId && "bg-muted",
-                  )}
+                  size="sm"
+                  variant={search.node === node.nodeId ? "muted" : "default"}
+                  className="items-start"
+                  render={
+                    <button
+                      type="button"
+                      data-testid={`discovery-node-${node.nodeId}`}
+                      data-node-id={node.nodeId}
+                      aria-pressed={search.node === node.nodeId}
+                      onClick={() => select(node.nodeId)}
+                    />
+                  }
                 >
                   <span
                     className={cn(
@@ -241,7 +245,7 @@ export function DiscoveryExplorer({
                           : "Quiet lately"}
                     </span>
                   </span>
-                </button>
+                </Item>
               ))}
               {!list.data.length && (
                 <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
