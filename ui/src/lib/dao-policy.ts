@@ -43,7 +43,7 @@ export function isExplicitDaoMember(policy: unknown, accountId: string): boolean
   return parsePolicyGroupMembers(policy).includes(accountId);
 }
 
-import type { TenantUiOverride } from "everything-dev/ui/tenant";
+import type { TenantUiOverride } from "@/app";
 
 export interface TenantPublishConfigInput {
   daoAccountId: string;
