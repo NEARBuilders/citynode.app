@@ -1,8 +1,14 @@
+import { ClockCounterClockwiseIcon } from "@phosphor-icons/react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { History } from "lucide-react";
+import { useState } from "react";
 import type { ApiClient } from "@/app";
-import { Card, EmptyState, SectionHeader, Skeleton } from "@/components";
+import { Button, EmptyState, SectionHeader } from "@/components";
+import { ItemGroup } from "@/components/ui/item";
+import { ListSkeleton } from "../-admin-ui";
+import { proposalTypeLabel } from "./-proposal-review";
 import { ReviewHistoryCard } from "./-review-history-card";
+
+const HISTORY_PREVIEW = 8;
 
 type ReviewHistoryResponse = Awaited<ReturnType<ApiClient["proposals"]["getReviewHistory"]>>;
 
@@ -14,29 +20,38 @@ export function ProposalReviewHistory({
   query: Pick<UseQueryResult<ReviewHistoryResponse>, "data" | "isLoading" | "isError" | "error">;
 }) {
   const history = query.data?.data ?? [];
+  const [showAll, setShowAll] = useState(false);
   return (
-    <section className="space-y-3">
-      <SectionHeader title="Review history" />
+    <section className="flex flex-col gap-6">
+      <SectionHeader
+        title="Recent decisions"
+        description={`${proposalTypeLabel(pluginId)} proposals`}
+      />
       {query.isLoading ? (
-        <Card className="space-y-3 p-6">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </Card>
+        <ListSkeleton rows={2} />
       ) : query.isError ? (
-        <Card className="p-6 text-sm text-destructive">
-          Review history could not be loaded: {query.error?.message}
-        </Card>
+        <p role="alert" className="text-sm text-destructive">
+          Couldn't load decisions: {query.error?.message}
+        </p>
       ) : history.length === 0 ? (
         <EmptyState
-          icon={History}
-          title="No review history"
-          description={`No ${pluginId} proposals have been approved or rejected yet.`}
+          icon={ClockCounterClockwiseIcon}
+          title="No decisions yet"
+          description="Approvals and rejections show up here."
+          className="py-10"
         />
       ) : (
-        <div className="space-y-3">
-          {history.map((entry) => (
-            <ReviewHistoryCard key={entry.id} entry={entry} />
-          ))}
+        <div className="flex flex-col gap-4">
+          <ItemGroup>
+            {(showAll ? history : history.slice(0, HISTORY_PREVIEW)).map((entry) => (
+              <ReviewHistoryCard key={entry.id} entry={entry} />
+            ))}
+          </ItemGroup>
+          {!showAll && history.length > HISTORY_PREVIEW && (
+            <Button variant="ghost" className="self-center" onClick={() => setShowAll(true)}>
+              Show all {history.length}
+            </Button>
+          )}
         </div>
       )}
     </section>

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
+import { SectionHeader } from "@/components/layout/section-header";
 import { useNearAccount } from "@/lib/use-near-account";
 import { EmailMethod } from "./-email-method";
 import { NearMethod } from "./-near-method";
@@ -19,10 +20,15 @@ function AuthMethodsSettings() {
   if (!user) return null;
 
   return (
-    <div className="space-y-4">
-      <EmailMethod user={user} />
-      <NearMethod nearAccountId={nearAccountId} />
+    <div className="flex flex-col gap-10">
+      <SectionHeader
+        title="Sign-in methods"
+        description="Ways you can get back into this account."
+        sectionTestId="settings.auth-methods-heading"
+      />
       <PasskeysMethod />
+      <NearMethod nearAccountId={nearAccountId} />
+      {user.email && !user.isAnonymous && <EmailMethod email={user.email} />}
     </div>
   );
 }

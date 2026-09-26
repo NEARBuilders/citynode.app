@@ -1,4 +1,4 @@
-import { Globe } from "lucide-react";
+import { GlobeIcon } from "@phosphor-icons/react";
 import { useAuthClient } from "@/app";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -11,15 +11,17 @@ export function NetworkToggle() {
 
   return (
     <ToggleGroup
-      type="single"
-      value={currentNetwork}
+      value={[currentNetwork]}
       onValueChange={(value) => {
-        if (value) auth.near.setNetwork(value as (typeof supportedNetworks)[number]);
+        const next = supportedNetworks.find(
+          (network) => value.includes(network) && network !== currentNetwork,
+        );
+        if (next) auth.near.setNetwork(next);
       }}
     >
       {supportedNetworks.map((network) => (
         <ToggleGroupItem key={network} value={network} aria-label={`Switch to ${network}`}>
-          <Globe />
+          <GlobeIcon />
           {network === "mainnet" ? "Mainnet" : "Testnet"}
         </ToggleGroupItem>
       ))}

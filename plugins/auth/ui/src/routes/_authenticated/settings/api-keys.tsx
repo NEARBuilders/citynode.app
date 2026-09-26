@@ -1,28 +1,46 @@
+import {
+  CopyIcon,
+  DotsThreeIcon,
+  KeyIcon,
+  PlusIcon,
+  TrashIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
-import { Key, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/layout/section-header";
+import { LocalDate } from "@/components/local-date";
+import { Button } from "@/components/ui/button";
 import {
-  ApiKeyForm,
-  type ApiKeyFormValues,
-  ApiKeyReveal,
-  type ApiKeyRevealProps,
-  Button,
-  Card,
-  EmptyState,
-  PageHeader,
-} from "@/components";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ApiKeyCreateDialog, type ApiKeyFormValues } from "./-api-key-create-dialog";
+import { ApiKeyRevealDialog, type CreatedApiKey } from "./-api-key-reveal-dialog";
 
 export const Route = createFileRoute("/_authenticated/settings/api-keys")({
   head: () => ({
     meta: [
-      { title: "API Keys | settings" },
-      {
-        name: "description",
-        content: "Create and manage API keys for programmatic access.",
-      },
+      { title: "API keys · Settings" },
+      { name: "description", content: "Create and manage API keys for programmatic access." },
     ],
   }),
   loader: async ({ context }) => {
@@ -40,9 +58,7 @@ type ApiKeyItem = {
   expiresAt?: string | Date | null;
 };
 
-type CreatedApiKey = ApiKeyRevealProps["apiKey"];
-
-async function handleCopy(value: string, message = "API key copied") {
+async function copyText(value: string, message: string) {
   try {
     await navigator.clipboard.writeText(value);
     toast.success(message);
@@ -58,18 +74,20 @@ function ApiKeysSettings() {
   const queryClient = useQueryClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const user = session?.user;
+  const [creating, setCreating] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<CreatedApiKey | null>(null);
+  const [keyToDelete, setKeyToDelete] = useState<ApiKeyItem | null>(null);
 
-  const apiKeys =
-    useQuery({
-      queryKey: userApiKeysQueryKey,
-      queryFn: async (): Promise<ApiKeyItem[]> => {
-        const { data, error } = await auth.apiKey.list({});
-        if (error) throw new Error(error.message);
-        return (data?.apiKeys ?? []) as ApiKeyItem[];
-      },
-      enabled: !!user,
-    }).data ?? [];
+  const apiKeysQuery = useQuery({
+    queryKey: userApiKeysQueryKey,
+    queryFn: async (): Promise<ApiKeyItem[]> => {
+      const { data, error } = await auth.apiKey.list({});
+      if (error) throw new Error(error.message);
+      return (data?.apiKeys ?? []) as ApiKeyItem[];
+    },
+    enabled: !!user,
+  });
+  const apiKeys = apiKeysQuery.data ?? [];
 
   const createApiKeyMutation = useMutation({
     mutationFn: async (values: ApiKeyFormValues) => {
@@ -82,6 +100,7 @@ function ApiKeysSettings() {
       return data;
     },
     onSuccess: async (data) => {
+      setCreating(false);
       if (data) setCreatedApiKey(data as CreatedApiKey);
       toast.success("API key created");
       await queryClient.invalidateQueries({ queryKey: userApiKeysQueryKey });
@@ -99,13 +118,13 @@ function ApiKeysSettings() {
     onMutate: async (keyId) => {
       await queryClient.cancelQueries({ queryKey: userApiKeysQueryKey });
       const previousKeys = queryClient.getQueryData<ApiKeyItem[]>(userApiKeysQueryKey);
-      queryClient.setQueryData<ApiKeyItem[]>(userApiKeysQueryKey, (current) => {
-        if (!current) return current;
-        return current.filter((key) => key.id !== keyId);
-      });
+      queryClient.setQueryData<ApiKeyItem[]>(userApiKeysQueryKey, (current) =>
+        current?.filter((key) => key.id !== keyId),
+      );
       return { previousKeys };
     },
     onSuccess: async () => {
+      setKeyToDelete(null);
       toast.success("API key deleted");
       await queryClient.invalidateQueries({ queryKey: userApiKeysQueryKey });
     },
@@ -119,67 +138,142 @@ function ApiKeysSettings() {
 
   if (!user) return null;
 
+  const hasKeys = apiKeys.length > 0;
+
   return (
-    <div className="space-y-6">
-      <PageHeader icon={Key} label="Account" title="API Keys" headerTestId="api-keys.heading" />
+    <section className="flex flex-col gap-6">
+      <SectionHeader
+        title="API keys"
+        description={
+          <>
+            For MCP clients and scripts. Send it as the{" "}
+            <code className="font-mono text-foreground">x-api-key</code> header.
+          </>
+        }
+        sectionTestId="api-keys.heading"
+        action={
+          hasKeys ? (
+            <Button onClick={() => setCreating(true)} data-testid="api-keys.create-button">
+              <PlusIcon data-icon="inline-start" />
+              Create key
+            </Button>
+          ) : null
+        }
+      />
 
-      <Card className="p-6 space-y-3">
-        <div className="text-sm text-muted-foreground leading-relaxed">
-          API keys allow programmatic access to the API via the{" "}
-          <code className="font-mono">x-api-key</code> header. Use them for MCP clients, scripts,
-          and integrations. The full key is shown only once at creation — store it securely.
-        </div>
-      </Card>
-
-      <Card className="p-6 hover:shadow-md">
-        <ApiKeyForm
-          onCreate={(values: ApiKeyFormValues) => createApiKeyMutation.mutate(values)}
-          isPending={createApiKeyMutation.isPending}
-        />
-      </Card>
-
-      {createdApiKey && (
-        <ApiKeyReveal apiKey={createdApiKey} onDismiss={() => setCreatedApiKey(null)} />
-      )}
-
-      {apiKeys.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
+      {hasKeys ? (
+        <ItemGroup data-testid="api-keys.list">
           {apiKeys.map((key) => (
-            <Card key={key.id} className="p-5 space-y-3 hover:shadow-md">
-              <div className="space-y-1 min-w-0">
-                <div className="font-medium text-foreground break-all">{key.name ?? "unnamed"}</div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  {key.prefix ?? "api_"}...{key.start ?? ""}
-                </div>
-              </div>
-              <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                <div>created {new Date(key.createdAt).toLocaleString()}</div>
-                {key.expiresAt && <div>expires {new Date(key.expiresAt).toLocaleString()}</div>}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleCopy(key.start || "", "Key prefix copied")}
-                  variant="outline"
-                  size="sm"
-                >
-                  copy id
-                </Button>
-                <Button
-                  onClick={() => deleteApiKeyMutation.mutate(key.id)}
-                  disabled={deleteApiKeyMutation.isPending}
-                  variant="outline"
-                  size="sm"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  delete
-                </Button>
-              </div>
-            </Card>
+            <Item key={key.id} variant="outline" size="sm" role="listitem">
+              <ItemMedia variant="icon">
+                <KeyIcon />
+              </ItemMedia>
+              <ItemContent className="basis-0">
+                <ItemTitle className="max-w-full">
+                  <span className="min-w-0 truncate">{key.name ?? "Unnamed key"}</span>
+                </ItemTitle>
+                <ItemDescription>
+                  <span className="font-mono">
+                    {key.prefix ?? "api_"}…{key.start ?? ""}
+                  </span>
+                  {" · "}
+                  Created <LocalDate value={key.createdAt} format="relative" />
+                  {key.expiresAt ? (
+                    <>
+                      {" · "}
+                      Expires <LocalDate value={key.expiresAt} />
+                    </>
+                  ) : null}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Actions for ${key.name ?? "API key"}`}
+                        data-testid={`api-keys.menu-${key.id}`}
+                      />
+                    }
+                  >
+                    <DotsThreeIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => void copyText(key.start ?? "", "Key prefix copied")}
+                    >
+                      <CopyIcon />
+                      Copy prefix
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => setKeyToDelete(key)}>
+                      <TrashIcon />
+                      Delete key
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ItemActions>
+            </Item>
           ))}
+        </ItemGroup>
+      ) : apiKeysQuery.isPending ? (
+        <div className="flex flex-col gap-4" data-testid="api-keys.loading">
+          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
         </div>
+      ) : apiKeysQuery.isError ? (
+        <EmptyState
+          icon={WarningCircleIcon}
+          title="Couldn't load your API keys"
+          description="Check your connection and try again."
+          action={
+            <Button
+              variant="outline"
+              onClick={() => void apiKeysQuery.refetch()}
+              data-testid="api-keys.retry-button"
+            >
+              Try again
+            </Button>
+          }
+        />
       ) : (
-        <EmptyState title="No API keys yet" />
+        <EmptyState
+          icon={KeyIcon}
+          title="No API keys yet"
+          description="Create a key to call the API from scripts and agents."
+          action={
+            <Button onClick={() => setCreating(true)} data-testid="api-keys.create-button">
+              <PlusIcon data-icon="inline-start" />
+              Create key
+            </Button>
+          }
+        />
       )}
-    </div>
+
+      <ApiKeyCreateDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onCreate={(values) => createApiKeyMutation.mutate(values)}
+        isPending={createApiKeyMutation.isPending}
+      />
+      <ApiKeyRevealDialog apiKey={createdApiKey} onDismiss={() => setCreatedApiKey(null)} />
+      <ConfirmDialog
+        open={!!keyToDelete}
+        onOpenChange={(open: boolean) => {
+          if (!open) setKeyToDelete(null);
+        }}
+        title="Delete API key?"
+        description={`Anything using ${keyToDelete?.name ?? "this key"} will stop working immediately.`}
+        confirmLabel="Delete key"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={() => {
+          if (keyToDelete) deleteApiKeyMutation.mutate(keyToDelete.id);
+        }}
+        isPending={deleteApiKeyMutation.isPending}
+      />
+    </section>
   );
 }

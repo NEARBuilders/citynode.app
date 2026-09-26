@@ -1,12 +1,14 @@
+import { BuildingsIcon, CheckIcon, PlusIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Building2, Check, Plus } from "lucide-react";
 import type { Organization } from "@/app";
 import {
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { OrgMark } from "./org-mark";
 import { useSwitchOrganization } from "./use-switch-organization";
 
 interface OrgSwitcherMenuContentProps {
@@ -22,7 +24,7 @@ interface OrgSwitcherMenuContentProps {
 export function OrgSwitcherMenuContent({
   organizations,
   activeOrgId,
-  className = "w-56",
+  className = "w-60",
   align = "end",
   side,
   sideOffset,
@@ -37,56 +39,32 @@ export function OrgSwitcherMenuContent({
 
   return (
     <DropdownMenuContent className={className} align={align} side={side} sideOffset={sideOffset}>
-      <DropdownMenuLabel className="text-xs text-muted-foreground">organizations</DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      {organizations.map((org) =>
-        itemVariant === "iconTile" ? (
+      <DropdownMenuGroup>
+        <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+        {organizations.map((org) => (
           <DropdownMenuItem
             key={org.id}
-            className="gap-2 p-2"
             onClick={() => handleSwitch(org.id)}
             disabled={switchOrg.isPending}
+            data-testid={`org-switcher-item-${org.id}`}
           >
-            <div className="flex size-6 items-center justify-center rounded-sm border border-border">
-              <Building2 className="size-3.5 shrink-0" />
-            </div>
-            <span className="truncate min-w-0 flex-1">{org.name}</span>
-            {org.id === activeOrgId && <Check className="size-3.5 text-muted-foreground" />}
+            {itemVariant === "iconTile" && <OrgMark name={org.name} size="sm" />}
+            <span className="min-w-0 flex-1 truncate">{org.name}</span>
+            {org.id === activeOrgId && <CheckIcon className="text-muted-foreground" />}
           </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            key={org.id}
-            className="flex items-center justify-between cursor-pointer"
-            onClick={() => handleSwitch(org.id)}
-            disabled={switchOrg.isPending}
-          >
-            <span className="truncate min-w-0 flex-1">{org.name}</span>
-            {org.id === activeOrgId && <Check className="h-3.5 w-3.5 text-muted-foreground" />}
-          </DropdownMenuItem>
-        ),
-      )}
-      {organizations.length === 0 && (
-        <DropdownMenuItem disabled className="text-muted-foreground">
-          no organizations
-        </DropdownMenuItem>
-      )}
+        ))}
+        {organizations.length === 0 && (
+          <DropdownMenuItem disabled>No organizations yet</DropdownMenuItem>
+        )}
+      </DropdownMenuGroup>
       <DropdownMenuSeparator />
-      <DropdownMenuItem asChild className={itemVariant === "iconTile" ? "gap-2 p-2" : undefined}>
-        <Link to="/orgs/new" className="flex items-center gap-2 cursor-pointer">
-          {itemVariant === "iconTile" ? (
-            <>
-              <div className="flex size-6 items-center justify-center rounded-md border border-border bg-background">
-                <Plus className="size-4" />
-              </div>
-              <span className="font-medium text-muted-foreground">new organization</span>
-            </>
-          ) : (
-            <>
-              <Plus className="h-3.5 w-3.5" />
-              new organization
-            </>
-          )}
-        </Link>
+      <DropdownMenuItem render={<Link to="/orgs/new" />} data-testid="org-switcher-new">
+        <PlusIcon />
+        New organization
+      </DropdownMenuItem>
+      <DropdownMenuItem render={<Link to="/orgs" />} data-testid="org-switcher-all">
+        <BuildingsIcon />
+        All organizations
       </DropdownMenuItem>
     </DropdownMenuContent>
   );

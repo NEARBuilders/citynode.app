@@ -1,11 +1,39 @@
+import { DotsThreeIcon, SealCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, FileCheck2, Plus, X } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, EmptyState, SectionHeader } from "@/components";
-
-const NODE_PLUGIN_ID = "api";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  LocalDate,
+  SectionHeader,
+  Skeleton,
+} from "@/components";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
+import { NODE_PLUGIN_ID, nodeProposalsQueryOptions } from "./-node-proposals-query";
+import {
+  applyStatusLabel,
+  proposalTitle,
+  reviewStatusBadge,
+  sortProposals,
+} from "./-proposal-summary";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/proposals/")({
   component: NodeProposals,
@@ -16,19 +44,10 @@ function NodeProposals() {
   const queryClient = useQueryClient();
   const { selectedNode, canReview } = Route.useRouteContext();
   const nodeId = selectedNode?.id ?? "";
-  const queryKey = ["node-proposals", nodeId] as const;
+  const { queryKey } = nodeProposalsQueryOptions(apiClient, nodeId);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const proposalsQuery = useQuery({
-    queryKey,
-    queryFn: () =>
-      apiClient.proposals.getProposals({
-        pluginId: NODE_PLUGIN_ID,
-        entityId: nodeId,
-        limit: 100,
-      }),
-    enabled: !!nodeId,
-    staleTime: 30 * 1000,
-  });
+  const proposalsQuery = useQuery(nodeProposalsQueryOptions(apiClient, nodeId));
 
   const reviewMutation = useMutation({
     mutationFn: async ({
@@ -54,6 +73,7 @@ function NodeProposals() {
     },
     onSuccess: async (_, variables) => {
       toast.success(variables.action === "approve" ? "Proposal approved" : "Proposal rejected");
+      setRejectingId(null);
       await queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: Error) => toast.error(error.message || "Failed to review proposal"),
@@ -61,109 +81,141 @@ function NodeProposals() {
 
   if (!selectedNode) return null;
 
-  const proposals = proposalsQuery.data?.data ?? [];
+  const proposals = sortProposals(proposalsQuery.data?.data ?? []);
+  const rejecting = proposals.find((proposal) => proposal.id === rejectingId) ?? null;
+  let primaryUsed = false;
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionHeader title="Node proposals" />
-        <Button asChild size="sm">
-          <Link to="/apply">
-            <Plus />
-            new proposal
-          </Link>
-        </Button>
-      </div>
+    <section className="flex flex-col gap-6">
+      <SectionHeader
+        title="Changes"
+        description="Proposed changes to this community."
+        action={
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/apply" />}>
+            Propose a sub-community
+          </Button>
+        }
+      />
 
       {proposalsQuery.isLoading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading proposals…</Card>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+        </div>
       ) : proposalsQuery.isError ? (
-        <Card className="p-8 text-center text-sm text-destructive">
-          Unable to load this node&apos;s proposals.
-        </Card>
+        <p role="alert" className="text-sm text-destructive">
+          Couldn't load proposals.{" "}
+          <Button variant="link" size="xs" onClick={() => proposalsQuery.refetch()}>
+            Try again
+          </Button>
+        </p>
       ) : proposals.length === 0 ? (
         <EmptyState
-          icon={FileCheck2}
-          title="No node proposals"
-          description={`No proposals currently target ${selectedNode.name}.`}
-          className="min-h-[40vh]"
+          icon={SealCheckIcon}
+          title="No proposals yet"
+          description={`Nothing is waiting for review in ${selectedNode.name}.`}
         />
       ) : (
-        <div className="space-y-3">
+        <ItemGroup data-testid="dashboard-node.proposals">
           {proposals.map((proposal) => {
-            const pending = proposal.reviewStatus === "pending";
+            const badge = reviewStatusBadge(proposal.reviewStatus);
+            const applied = applyStatusLabel(proposal.applyStatus);
+            const reviewable = canReview && proposal.reviewStatus === "pending";
+            const isPrimary = reviewable && !primaryUsed;
+            if (isPrimary) primaryUsed = true;
             return (
-              <Card key={proposal.id} className="space-y-4 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <p className="font-mono text-xs text-muted-foreground">{proposal.id}</p>
-                    <p className="text-sm text-foreground">
-                      Submitted {new Date(proposal.createdAt).toLocaleString()}
-                    </p>
+              <Item
+                key={proposal.id}
+                variant="outline"
+                data-testid={`dashboard-node.proposal-${proposal.id}`}
+              >
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="max-w-full">
+                    <span className="truncate">{proposalTitle(proposal.payload, "Proposal")}</span>
+                  </ItemTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                    {applied && <Badge variant="outline">{applied}</Badge>}
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant={reviewStatusVariant(proposal.reviewStatus)}>
-                      {proposal.reviewStatus}
-                    </Badge>
-                    <Badge variant="outline">{proposal.applyStatus.replace("_", " ")}</Badge>
-                  </div>
-                </div>
-
-                <pre className="max-h-72 overflow-auto rounded-[8px] border border-border bg-muted/40 p-4 text-xs text-foreground">
-                  {JSON.stringify(proposal.payload, null, 2)}
-                </pre>
-
-                {proposal.rejectionReason && (
-                  <p className="text-sm text-destructive">{proposal.rejectionReason}</p>
-                )}
-
-                {canReview && pending ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        reviewMutation.mutate({
-                          action: "approve",
-                          expectedUpdatedAt: proposal.updatedAt,
-                        })
-                      }
-                      disabled={reviewMutation.isPending}
-                    >
-                      <Check />
-                      approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() =>
-                        reviewMutation.mutate({
-                          action: "reject",
-                          expectedUpdatedAt: proposal.updatedAt,
-                        })
-                      }
-                      disabled={reviewMutation.isPending}
-                    >
-                      <X />
-                      reject
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {canReview ? "This proposal is no longer awaiting review." : "Read-only access"}
-                  </p>
-                )}
-              </Card>
+                  <ItemDescription>
+                    Submitted <LocalDate value={proposal.createdAt} format="relative" />
+                    {proposal.rejectionReason ? ` · ${proposal.rejectionReason}` : ""}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions className="w-full justify-end sm:w-auto">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    nativeButton={false}
+                    data-testid={`dashboard-node.proposal-details-${proposal.id}`}
+                    render={
+                      <Link
+                        to="/dashboard/node/proposals/$proposalId"
+                        params={{ proposalId: proposal.id }}
+                        search={{ nodeId }}
+                      />
+                    }
+                  >
+                    Details
+                  </Button>
+                  {reviewable && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant={isPrimary ? "default" : "outline"}
+                        disabled={reviewMutation.isPending}
+                        data-testid={`dashboard-node.proposal-approve-${proposal.id}`}
+                        onClick={() =>
+                          reviewMutation.mutate({
+                            action: "approve",
+                            expectedUpdatedAt: proposal.updatedAt,
+                          })
+                        }
+                      >
+                        Approve
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button variant="ghost" size="icon-sm" aria-label="More actions" />
+                          }
+                        >
+                          <DotsThreeIcon />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setRejectingId(proposal.id)}
+                          >
+                            Reject
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                </ItemActions>
+              </Item>
             );
           })}
-        </div>
+        </ItemGroup>
       )}
+
+      <ConfirmDialog
+        open={!!rejecting}
+        onOpenChange={(open) => {
+          if (!open) setRejectingId(null);
+        }}
+        title="Reject this proposal?"
+        description="The submitter will see it as rejected. This can't be undone."
+        confirmLabel="Reject"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isPending={reviewMutation.isPending}
+        onConfirm={() => {
+          if (rejecting)
+            reviewMutation.mutate({ action: "reject", expectedUpdatedAt: rejecting.updatedAt });
+        }}
+      />
     </section>
   );
-}
-
-function reviewStatusVariant(status: "pending" | "approved" | "rejected" | "removed") {
-  if (status === "rejected") return "destructive" as const;
-  if (status === "pending") return "secondary" as const;
-  if (status === "removed") return "outline" as const;
-  return "default" as const;
 }

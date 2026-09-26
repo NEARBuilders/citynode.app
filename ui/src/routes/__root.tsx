@@ -83,7 +83,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         },
         { title },
         { name: "description", content: description },
-        { name: "theme-color", content: "#ffffff" },
+        { name: "theme-color", content: "#ffffff", media: "(prefers-color-scheme: light)" },
+        { name: "theme-color", content: "#0b0d10", media: "(prefers-color-scheme: dark)" },
         { name: "color-scheme", content: "light dark" },
         { name: "application-name", content: title },
         { name: "mobile-web-app-capable", content: "yes" },
@@ -106,12 +107,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         {
           rel: "stylesheet",
           href: `${assetsUrl ?? ""}/static/css/style.css${runtimeConfig?.ui?.integrity ? `?v=${encodeURIComponent(runtimeConfig.ui.integrity)}` : ""}`,
-        },
-        { rel: "preconnect", href: "https://fonts.googleapis.com" },
-        {
-          rel: "preconnect",
-          href: "https://fonts.gstatic.com",
-          crossOrigin: "anonymous",
         },
         { rel: "shortcut icon", href: "/favicon.ico" },
         { rel: "icon", href: "/favicon.ico" },
@@ -213,8 +208,8 @@ function GlobalChrome() {
         }}
       >
         {showBar && (
-          <div className="fixed top-0 left-0 right-0 h-[2px] z-50 overflow-hidden pointer-events-none">
-            <div className="h-full bg-foreground animate-progress-bar" style={{ width: "100%" }} />
+          <div className="fixed top-0 left-0 right-0 h-0.5 z-50 overflow-hidden pointer-events-none">
+            <div className="h-full w-full bg-brand" />
           </div>
         )}
 
