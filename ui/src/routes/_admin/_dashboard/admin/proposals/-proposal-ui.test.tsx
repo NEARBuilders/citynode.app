@@ -45,10 +45,7 @@ describe("proposal review UI seams", () => {
     const onChange = vi.fn();
     render(<ProposalReviewFilters value="all" onChange={onChange} />);
 
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "pending" }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByRole("tab", { name: "Pending" }));
 
     expect(onChange).toHaveBeenCalledWith("pending");
     expect(normalizeProposalReviewFilter("all")).toBeUndefined();
@@ -71,10 +68,10 @@ describe("proposal review UI seams", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "load more" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
 
     expect(onLoadMore).toHaveBeenCalledOnce();
-    expect(screen.getByText("proposal-1")).toBeTruthy();
+    expect(screen.getAllByText("node-1").length).toBeGreaterThan(0);
   });
 
   it("shows a retry control for a failed proposal list", () => {
@@ -93,37 +90,64 @@ describe("proposal review UI seams", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(screen.getByText("proposal API unavailable")).toBeTruthy();
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("keeps the DAO gate visible and forwards review controls without live writes", () => {
+  it("keeps the DAO gate visible and asks for a reason before rejecting", () => {
     const onApprove = vi.fn();
     const onReject = vi.fn();
     const onDaoVerified = vi.fn();
+    const onRejectionReasonChange = vi.fn();
+    const props = {
+      isPending: true,
+      isNodeProposal: true,
+      proposalDaoAccountId: "dao.sputnik-dao.near",
+      daoIsVerified: true,
+      isReviewing: false,
+      onDaoVerified,
+      onRejectionReasonChange,
+      onApprove,
+      onReject,
+    };
+    const { rerender } = render(<ProposalReviewActions {...props} rejectionReason="" />);
+
+    expect(screen.getByTestId("connect-dao")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onApprove).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    const confirm = screen.getByRole("button", { name: "Reject proposal" });
+    expect(confirm).toHaveProperty("disabled", true);
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "not enough detail" } });
+    expect(onRejectionReasonChange).toHaveBeenCalled();
+
+    rerender(<ProposalReviewActions {...props} rejectionReason="not enough detail" />);
+    fireEvent.click(screen.getByRole("button", { name: "Reject proposal" }));
+
+    expect(onReject).toHaveBeenCalledOnce();
+    expect(onDaoVerified).not.toHaveBeenCalled();
+  });
+
+  it("locks approval until the proposal DAO is verified", () => {
     render(
       <ProposalReviewActions
         isPending
         isNodeProposal
         proposalDaoAccountId="dao.sputnik-dao.near"
-        daoIsVerified
-        rejectionReason="not enough detail"
+        daoIsVerified={false}
+        rejectionReason=""
         isReviewing={false}
-        onDaoVerified={onDaoVerified}
+        onDaoVerified={vi.fn()}
         onRejectionReasonChange={vi.fn()}
-        onApprove={onApprove}
-        onReject={onReject}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
       />,
     );
 
-    expect(screen.getByTestId("connect-dao")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "approve" }));
-    fireEvent.click(screen.getByRole("button", { name: "reject" }));
-
-    expect(onApprove).toHaveBeenCalledOnce();
-    expect(onReject).toHaveBeenCalledOnce();
-    expect(onDaoVerified).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveProperty("disabled", true);
+    expect(screen.getByText("Approve unlocks once the DAO is verified.")).toBeTruthy();
   });
 });

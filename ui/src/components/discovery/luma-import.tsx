@@ -1,10 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useApiClient } from "@/app";
-import { Button } from "@/components";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { LocalDate } from "@/components/local-date";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function LumaImport({ nodeId }: { nodeId: string }) {
   const api = useApiClient();
   const client = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
   const calendars = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
     queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
@@ -27,87 +40,117 @@ export function LumaImport({ nodeId }: { nodeId: string }) {
       }),
   });
   const connection = calendars.data?.connection;
+  const calendarItems = [
+    ...(connection &&
+    !calendars.data?.calendars.some((calendar) => calendar.id === connection.calendarId)
+      ? [
+          {
+            label: `${connection.calendarName} · unavailable`,
+            value: connection.calendarId,
+          },
+        ]
+      : []),
+    ...(calendars.data?.calendars ?? []).map((calendar) => ({
+      label: calendar.name,
+      value: calendar.id,
+    })),
+  ];
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border-2 border-border-strong bg-card p-5">
-      <div>
-        <h3 className="font-semibold">Luma calendar</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Bring in public events from Luma. Change times and details there — they stay in sync here.
+    <div className="flex flex-col gap-4">
+      {calendars.isPending && <Skeleton className="h-11 w-full" />}
+      {calendars.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          Couldn't load calendars. Try again in a moment.
         </p>
-      </div>
-      {calendars.isPending && (
-        <p className="text-sm text-muted-foreground">Looking for calendars…</p>
       )}
-      {calendars.isError && <p role="alert">Couldn’t load calendars. Try again in a moment.</p>}
       {calendars.data?.unavailableCount ? (
-        <p role="alert">Some calendars couldn’t be loaded. Try again later.</p>
+        <p role="alert" className="text-sm text-muted-foreground">
+          Some calendars couldn't be loaded.
+        </p>
       ) : null}
-      {calendars.data?.calendars.length === 0 && (
+      {calendars.data?.calendars.length === 0 && !connection && (
         <p className="text-sm text-muted-foreground">
-          No calendars are available yet. You can still add an event above. Ask whoever looks after
-          this site if you want events from Luma.
+          No Luma calendars are set up for this site yet. Ask a site admin to add one.
         </p>
       )}
-      {calendars.data && calendars.data.calendars.length > 0 && (
-        <label className="block text-sm font-medium" htmlFor={`luma-calendar-${nodeId}`}>
-          Choose a calendar
-          <select
-            id={`luma-calendar-${nodeId}`}
-            data-testid="discovery-luma-calendar"
-            value={connection?.calendarId ?? ""}
+      {calendars.data && (calendars.data.calendars.length > 0 || connection) && (
+        <Field>
+          <FieldLabel htmlFor={`luma-calendar-${nodeId}`}>Calendar</FieldLabel>
+          <Select
+            items={calendarItems}
+            value={connection?.calendarId ?? null}
             disabled={refresh.isPending || disconnect.isPending}
-            className="mt-2 block h-10 w-full rounded-[12px] border-2 border-inset border-border-strong bg-card px-3"
-            onChange={(event) => {
-              if (event.target.value) refresh.mutate(event.target.value);
+            onValueChange={(value) => {
+              if (value) refresh.mutate(value);
             }}
           >
-            <option value="" disabled>
-              Select a calendar
-            </option>
-            {connection &&
-              !calendars.data.calendars.some(
-                (calendar) => calendar.id === connection.calendarId,
-              ) && (
-                <option value={connection.calendarId}>
-                  {connection.calendarName} · unavailable
-                </option>
+            <SelectTrigger
+              id={`luma-calendar-${nodeId}`}
+              data-testid="discovery-luma-calendar"
+              className="w-full"
+            >
+              <SelectValue placeholder="Choose a calendar" />
+            </SelectTrigger>
+            <SelectContent>
+              {calendarItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {connection && (
+            <FieldDescription role="status">
+              {refresh.isPending ? (
+                "Loading events…"
+              ) : (
+                <>
+                  Updated <LocalDate value={connection.syncedAt} format="relative" />
+                  {connection.error ? " · last update failed" : ""}
+                </>
               )}
-            {calendars.data.calendars.map((calendar) => (
-              <option key={calendar.id} value={calendar.id}>
-                {calendar.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {refresh.isPending && <p role="status">Connecting calendar and loading events…</p>}
-      {connection && (
-        <div className="flex flex-col gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm">
-          <p role="status">
-            Connected to {connection.calendarName}. Public events appear automatically.
-          </p>
-          <p className="text-muted-foreground">
-            Last updated {new Date(connection.syncedAt).toLocaleString()}.
-          </p>
-          {connection.error && (
-            <p role="alert">Couldn’t update events from Luma. Try again later.</p>
+            </FieldDescription>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="discovery-luma-disconnect"
-            disabled={disconnect.isPending}
-            onClick={() => disconnect.mutate()}
-          >
-            Disconnect calendar
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Disconnecting takes these Luma events off Explore. Events you added yourself stay.
-          </p>
-        </div>
+        </Field>
       )}
-      {disconnect.isError && <p role="alert">Couldn’t disconnect the calendar. Try again.</p>}
-      {refresh.isError && <p role="alert">Couldn’t connect that calendar. Try again.</p>}
-    </section>
+      {!connection && refresh.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Connecting and loading events…
+        </p>
+      )}
+      {refresh.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          Couldn't connect that calendar. Try again.
+        </p>
+      )}
+      {disconnect.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          Couldn't disconnect the calendar. Try again.
+        </p>
+      )}
+      {connection && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          data-testid="discovery-luma-disconnect"
+          disabled={disconnect.isPending}
+          onClick={() => setConfirming(true)}
+        >
+          Disconnect calendar
+        </Button>
+      )}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Disconnect Luma?"
+        description="Luma events come off Explore. Events you added yourself stay."
+        confirmLabel="Disconnect"
+        cancelLabel="Cancel"
+        variant="destructive"
+        isPending={disconnect.isPending}
+        onConfirm={() => disconnect.mutate(undefined, { onSettled: () => setConfirming(false) })}
+      />
+    </div>
   );
 }

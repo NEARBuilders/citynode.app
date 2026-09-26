@@ -1,18 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Fuel, Shield } from "lucide-react";
-import { getAccount, useApiClient } from "@/app";
-import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
+import { GasPumpIcon } from "@phosphor-icons/react";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { getAccount } from "@/app";
+import { Button, PageContainer } from "@/components";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { organizationByIdQueryOptions } from "@/lib/queries/organizations";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
-import { AdminNav } from "./-admin-nav";
-import { StatCard } from "./-stat-card";
-import { pendingProposalCountQueryOptions } from "./admin/proposals/-proposal-review";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin")({
-  head: () => ({
-    meta: [{ title: "Admin | app" }],
-  }),
   beforeLoad: async ({ context }) => {
     const { apiClient, queryClient, runtimeConfig } = context;
     const accountId = getAccount(runtimeConfig);
@@ -30,117 +32,46 @@ export const Route = createFileRoute("/_admin/_dashboard/admin")({
     const tenantOrganizationSlug = tenantOrganization?.slug ?? null;
     return { tenant, tenantOrganizationSlug };
   },
-  component: AdminPage,
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Admin", match.context.runtimeConfig) }],
+  }),
+  component: AdminLayout,
 });
 
-function AdminPage() {
-  const { tenant, tenantOrganizationSlug, session } = Route.useRouteContext();
-  const apiClient = useApiClient();
-
-  const activeOrgId = session?.session?.activeOrganizationId ?? null;
-  const isMember = !!tenant && !!activeOrgId && activeOrgId === tenant.orgId;
-  const isAdmin = session?.user?.role === "admin";
-  const authorized = isMember || isAdmin;
-
-  const { data: relayerInfo } = useRelayerInfoQuery();
-  const pendingProposalsQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
-
-  const relayerNeedsFunding =
-    relayerInfo && relayerInfo.enabled === false && !!relayerInfo.accountId;
-
-  if (tenant && !authorized) {
-    return (
-      <EmptyState
-        icon={Shield}
-        title="Not authorized"
-        description={
-          <>
-            You need to be a member of <span className="font-mono">{tenant.id.slice(0, 8)}</span>'s
-            organization to access tenant admin.
-          </>
-        }
-        action={
-          <div className="flex justify-center gap-2">
-            <Button asChild variant="outline">
-              <Link to="/">home</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/orgs">organizations</Link>
-            </Button>
-          </div>
-        }
-      />
-    );
-  }
-
+function AdminLayout() {
   return (
     <PageContainer variant="wide">
-      <div className="space-y-8">
-        {tenant && (
-          <PageHeader
-            icon={Shield}
-            label="Admin"
-            title={tenant.name}
-            subtitle={`${tenant.id.slice(0, 8)} · ${tenant.accountId}`}
-          />
-        )}
-
-        {tenant && (
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Subdomain" value={tenant.id.slice(0, 8)} mono />
-            <StatCard label="Account" value={tenant.accountId} mono />
-            <StatCard
-              label="Organization"
-              value={
-                tenantOrganizationSlug ? (
-                  <Link
-                    to="/orgs/$slug"
-                    params={{ slug: tenantOrganizationSlug }}
-                    className="font-mono text-foreground hover:underline"
-                  >
-                    {tenantOrganizationSlug}
-                  </Link>
-                ) : (
-                  <Link to="/orgs" className="text-foreground hover:underline">
-                    organizations
-                  </Link>
-                )
-              }
-            />
-            <StatCard
-              label="Created"
-              value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-            />
-          </section>
-        )}
-
-        {relayerNeedsFunding && (
-          <Link
-            to="/admin/relayer"
-            className="block border-2 border-outset border-destructive/40 bg-destructive/5 hover:bg-destructive/10 p-4 rounded-[12px] shadow-sm transition-colors duration-200"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <Fuel className="h-5 w-5 text-destructive mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">Relayer needs funding</p>
-                  <p className="text-xs text-muted-foreground">
-                    The ephemeral relayer{" "}
-                    <span className="font-mono text-foreground">{relayerInfo?.accountId}</span> has
-                    zero balance — gasless relay is disabled. Fund it with NEAR to enable tenant +
-                    app meta publishes.
-                  </p>
-                </div>
-              </div>
-              <Badge variant="destructive">action needed</Badge>
-            </div>
-          </Link>
-        )}
-
-        <AdminNav pendingProposalCount={pendingProposalsQuery.data?.meta.total} />
-
-        <Outlet />
-      </div>
+      <RelayerFundingNotice />
+      <Outlet />
     </PageContainer>
+  );
+}
+
+function RelayerFundingNotice() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { data: relayerInfo } = useRelayerInfoQuery();
+  const needsFunding = !!relayerInfo && relayerInfo.enabled === false && !!relayerInfo.accountId;
+  if (!needsFunding || pathname.startsWith("/admin/relayer")) return null;
+
+  return (
+    <Item variant="outline" data-testid="admin-relayer-notice">
+      <ItemMedia variant="icon">
+        <GasPumpIcon className="text-destructive" />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>Relayer needs funding</ItemTitle>
+        <ItemDescription>Gasless writes are paused until the relayer has NEAR.</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/admin/relayer" />}
+        >
+          Fund relayer
+        </Button>
+      </ItemActions>
+    </Item>
   );
 }

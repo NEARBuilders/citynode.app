@@ -1,9 +1,28 @@
+import { ArrowRightIcon, QrCodeIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ApiClient } from "@/app";
-import { Button, Card, TabsContent } from "@/components";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  ConfirmDialog,
+  EmptyState,
+  SectionHeader,
+  TabsContent,
+} from "@/components";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemGroup,
+  ItemMedia,
+  ItemSeparator,
+  ItemTitle,
+} from "@/components/ui/item";
 import { formatRemaining, onboardingCodeState } from "@/lib/onboarding-codes";
 
 type OnboardingCodeSummary = Awaited<ReturnType<ApiClient["auth"]["listOnboardingCodes"]>>[number];
@@ -11,6 +30,13 @@ type OnboardingStatus = Awaited<ReturnType<ApiClient["auth"]["getOnboardingStatu
 
 const orgOnboardingQueryKey = (orgId: string) => ["org-onboarding", orgId] as const;
 const orgOnboardingStatusQueryKey = (codeId: string) => ["org-onboarding-status", codeId] as const;
+
+const STATE_BADGE = {
+  active: "success",
+  expired: "outline",
+  revoked: "outline",
+  "used-up": "secondary",
+} as const;
 
 function stateLabel(code: OnboardingCodeSummary): string {
   const state = onboardingCodeState(code);
@@ -31,6 +57,7 @@ export function OnboardingTab({
   const queryClient = useQueryClient();
   const location = useLocation();
   const [selectedCodeId, setSelectedCodeId] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   const codes =
     useQuery({
@@ -70,108 +97,186 @@ export function OnboardingTab({
   const selectedCode = codes.find((code) => code.id === selectedCodeId) ?? null;
   const activeStatus = status && selectedCode ? status : null;
 
-  return (
-    <TabsContent value="onboard" className="space-y-6 pt-4">
-      {canManage ? (
-        <>
-          <Card className="p-6 space-y-2">
-            <h3 className="text-base font-semibold text-foreground">Onboarding stations</h3>
-            <p className="text-sm text-muted-foreground" data-testid="onboard.start-from-event">
-              Start onboarding from an event: open your community editor, find the event under
-              Events & updates, and choose Start onboarding. Attendees who scan its QR join this
-              organization and the event's team.
-            </p>
-          </Card>
+  if (!canManage) {
+    return (
+      <TabsContent value="onboard" className="pt-6">
+        <EmptyState
+          icon={QrCodeIcon}
+          title="Only organizers run onboarding"
+          description="Owners, admins and members of a team with the Events area."
+        />
+      </TabsContent>
+    );
+  }
 
-          {activeStatus && selectedCode && (
-            <Card className="p-6 space-y-4" data-testid="onboard.status">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-base font-semibold text-foreground">
-                  Live status — {selectedCode.eventName}
-                </h4>
-                <span className="text-sm text-muted-foreground" data-testid="onboard.joined-count">
-                  {activeStatus.usedCount}/{activeStatus.maxUses} joined ·{" "}
-                  {formatRemaining(activeStatus.expiresAt)} remaining
+  return (
+    <TabsContent value="onboard" className="flex flex-col gap-6 pt-6">
+      <SectionHeader
+        title="Onboarding stations"
+        description={
+          <span data-testid="onboard.start-from-event">
+            Start one from an event in My community; people who scan it join.
+          </span>
+        }
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/dashboard/node" />}
+            data-testid="onboard.open-my-community"
+          >
+            Open My community
+            <ArrowRightIcon />
+          </Button>
+        }
+      />
+
+      {activeStatus && selectedCode && (
+        <Card data-testid="onboard.status">
+          <CardContent className="flex flex-col gap-5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 flex-col gap-1">
+                <h3 className="text-lg font-medium text-foreground">{selectedCode.eventName}</h3>
+                <span className="text-sm text-muted-foreground">
+                  {formatRemaining(activeStatus.expiresAt)} left
                 </span>
               </div>
-              {activeStatus.joined.length > 0 ? (
-                <ul className="divide-y divide-border" data-testid="onboard.joined-list">
-                  {activeStatus.joined.map((entry) => (
-                    <li key={entry.userId} className="flex items-center justify-between py-2 gap-2">
-                      <span className="text-sm text-foreground truncate">
-                        {entry.userName ?? "New member"}
-                      </span>
-                      <span className="text-xs text-muted-foreground truncate font-mono">
-                        {entry.accountId ?? ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Waiting for the first scan…</p>
-              )}
-              {onboardingCodeState(selectedCode) === "active" && (
+              <div className="flex flex-col items-end" data-testid="onboard.joined-count">
+                <span className="text-4xl font-semibold text-foreground tabular-nums">
+                  {activeStatus.usedCount}
+                  <span className="text-xl text-muted-foreground">/{activeStatus.maxUses}</span>
+                </span>
+                <span className="text-sm text-muted-foreground">joined</span>
+              </div>
+            </div>
+            {activeStatus.joined.length > 0 ? (
+              <ul
+                className="flex flex-col divide-y divide-border"
+                data-testid="onboard.joined-list"
+              >
+                {activeStatus.joined.map((entry) => (
+                  <li key={entry.userId} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0 truncate text-sm text-foreground">
+                      {entry.userName ?? "New member"}
+                    </span>
+                    <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                      {entry.accountId ?? ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Waiting for the first scan…</p>
+            )}
+            {onboardingCodeState(selectedCode) === "active" && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/onboarding/station/$codeId"
+                      params={{ codeId: selectedCode.id }}
+                      search={{ org: orgId, from: location.href }}
+                    />
+                  }
+                >
+                  Open station
+                </Button>
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={() => {
-                    if (confirm("Revoke this onboarding code?"))
-                      revokeMutation.mutate(selectedCode.id);
-                  }}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRevoking(selectedCode.id)}
                   disabled={revokeMutation.isPending}
                   data-testid="onboard.revoke-button"
                 >
                   Revoke
                 </Button>
-              )}
-            </Card>
-          )}
-
-          {codes.length > 0 && (
-            <Card className="p-6 space-y-3">
-              <h4 className="text-base font-semibold text-foreground">Recent codes</h4>
-              <ul className="divide-y divide-border">
-                {codes.map((code) => (
-                  <li key={code.id} className="flex items-center justify-between py-2 gap-2">
-                    <button
-                      type="button"
-                      className="text-sm text-foreground truncate text-left hover:underline"
-                      onClick={() => setSelectedCodeId(code.id)}
-                      data-testid={`onboard.code-${code.id}`}
-                    >
-                      {code.eventName}
-                    </button>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <span
-                        className="text-xs text-muted-foreground"
-                        data-testid={`onboard.code-state-${code.id}`}
-                      >
-                        {stateLabel(code)}
-                      </span>
-                      {onboardingCodeState(code) === "active" && (
-                        <Link
-                          to="/onboarding/station/$codeId"
-                          params={{ codeId: code.id }}
-                          search={{ org: orgId, from: location.href }}
-                          className="text-sm font-medium underline-offset-4 hover:underline"
-                          data-testid={`onboard.open-station-${code.id}`}
-                        >
-                          Open station
-                        </Link>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Only organizers can run onboarding: organization owners, admins, and members of a team
-          with the Events area.
-        </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
+
+      {codes.length > 0 ? (
+        <ItemGroup>
+          {codes.map((code, index) => {
+            const state = onboardingCodeState(code);
+            return (
+              <div key={code.id} className="flex flex-col">
+                {index > 0 && <ItemSeparator />}
+                <Item size="sm">
+                  <ItemMedia variant="icon">
+                    <QrCodeIcon />
+                  </ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="max-w-full">
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="min-w-0 max-w-full justify-start"
+                        onClick={() => setSelectedCodeId(code.id)}
+                        data-testid={`onboard.code-${code.id}`}
+                      >
+                        <span className="min-w-0 truncate">{code.eventName}</span>
+                      </Button>
+                    </ItemTitle>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge
+                      variant={STATE_BADGE[state]}
+                      data-testid={`onboard.code-state-${code.id}`}
+                    >
+                      {stateLabel(code)}
+                    </Badge>
+                    {state === "active" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={
+                          <Link
+                            to="/onboarding/station/$codeId"
+                            params={{ codeId: code.id }}
+                            search={{ org: orgId, from: location.href }}
+                            data-testid={`onboard.open-station-${code.id}`}
+                          />
+                        }
+                      >
+                        Open station
+                      </Button>
+                    )}
+                  </ItemActions>
+                </Item>
+              </div>
+            );
+          })}
+        </ItemGroup>
+      ) : (
+        <EmptyState
+          icon={QrCodeIcon}
+          title="No stations yet"
+          description="Stations you start from events show up here."
+          className="py-10"
+        />
+      )}
+
+      <ConfirmDialog
+        open={revoking !== null}
+        onOpenChange={(open) => !open && setRevoking(null)}
+        title="Revoke this station?"
+        description="Its QR code stops working. People who already joined stay."
+        confirmLabel="Revoke"
+        variant="destructive"
+        isPending={revokeMutation.isPending}
+        onConfirm={() => {
+          if (revoking) revokeMutation.mutate(revoking);
+          setRevoking(null);
+        }}
+      />
     </TabsContent>
   );
 }

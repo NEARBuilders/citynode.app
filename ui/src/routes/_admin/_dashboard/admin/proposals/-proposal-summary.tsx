@@ -1,58 +1,99 @@
-import { Badge, Card } from "@/components";
-import { MetaRow } from "./-meta-row";
+import { CheckCircleIcon, WarningCircleIcon, XCircleIcon } from "@phosphor-icons/react";
+import { Badge, InfoRow, LocalDate, SectionHeader } from "@/components";
+import { humanize, RawJson, RawJsonDisclosure } from "../-admin-ui";
 import { NodeProposalDetails } from "./-node-proposal-details";
 import type { Proposal } from "./-proposal-columns";
 import { proposalReviewStatusVariant } from "./-proposal-review";
 
-export function ProposalSummary({ proposal }: { proposal: Proposal }) {
+export function ProposalStatusBadges({ proposal }: { proposal: Proposal }) {
   return (
-    <Card className="space-y-5 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="font-mono text-xs text-muted-foreground">{proposal.id}</p>
-          <h2 className="font-mono text-lg font-semibold text-foreground">{proposal.entityId}</h2>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant={proposalReviewStatusVariant(proposal.reviewStatus)}>
-            {proposal.reviewStatus}
-          </Badge>
-          <Badge variant="outline">apply: {proposal.applyStatus.replace("_", " ")}</Badge>
-        </div>
-      </div>
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge
+        variant={proposalReviewStatusVariant(proposal.reviewStatus)}
+        data-testid="admin-proposal-status"
+      >
+        {humanize(proposal.reviewStatus)}
+      </Badge>
+      {proposal.applyStatus !== "not_started" && (
+        <Badge variant={proposal.applyStatus === "applied" ? "success" : "outline"}>
+          {humanize(proposal.applyStatus)}
+        </Badge>
+      )}
+    </div>
+  );
+}
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <MetaRow label="Plugin" value={proposal.pluginId} mono />
-        <MetaRow label="Entity" value={proposal.entityId} mono />
-        <MetaRow label="Created by" value={proposal.createdBy} mono />
-        <MetaRow label="Submissions" value={String(proposal.submissionCount)} />
-        <MetaRow label="Created" value={new Date(proposal.createdAt).toLocaleString()} />
-        <MetaRow label="Updated" value={new Date(proposal.updatedAt).toLocaleString()} />
-      </div>
+export function ProposalSubject({ proposal }: { proposal: Proposal }) {
+  const isNode = proposal.pluginId === "node";
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader title={isNode ? "Application" : "Submission"} />
+      {isNode ? (
+        <>
+          <NodeProposalDetails payload={proposal.payload} />
+          <RawJsonDisclosure value={proposal.payload} label="payload" />
+        </>
+      ) : (
+        <RawJson value={proposal.payload} />
+      )}
+    </section>
+  );
+}
 
+export function ProposalDetails({ proposal }: { proposal: Proposal }) {
+  return (
+    <section className="flex flex-col gap-6">
+      <SectionHeader title="Details" />
+      <div className="flex flex-col">
+        <InfoRow label="Submitted by" value={proposal.createdBy} mono />
+        <InfoRow
+          label="Submitted"
+          value={<LocalDate value={proposal.createdAt} format="datetime" />}
+        />
+        <InfoRow
+          label="Updated"
+          value={<LocalDate value={proposal.updatedAt} format="datetime" />}
+        />
+        <InfoRow label="Submissions" value={proposal.submissionCount} />
+        <InfoRow label="Plugin" value={proposal.pluginId} mono />
+        <InfoRow label="Entity" value={proposal.entityId} mono />
+        <InfoRow label="Proposal ID" value={proposal.id} mono />
+      </div>
+    </section>
+  );
+}
+
+export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
+  const rejected = proposal.reviewStatus === "rejected";
+  const Icon = rejected ? XCircleIcon : CheckCircleIcon;
+  return (
+    <div className="flex flex-col gap-4" data-testid="admin-proposal-outcome">
+      <h2 className="text-xl font-semibold text-foreground">Decision</h2>
+      <div className="flex items-center gap-3">
+        <Icon
+          weight="fill"
+          className={rejected ? "size-6 text-destructive" : "size-6 text-success"}
+        />
+        <span className="text-lg font-medium text-foreground">
+          {humanize(proposal.reviewStatus)}
+        </span>
+      </div>
       {proposal.rejectionReason && (
-        <div className="rounded-[8px] border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger-fg">
-          <p className="font-semibold">Rejection reason</p>
-          <p className="mt-1">{proposal.rejectionReason}</p>
-        </div>
-      )}
-
-      {proposal.applyError && (
-        <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-foreground">
-          <p className="font-semibold text-destructive">Apply error</p>
-          <p className="mt-1">{proposal.applyError}</p>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Payload
+        <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+          {proposal.rejectionReason}
         </p>
-        <pre className="max-h-96 overflow-auto rounded-[8px] border border-border bg-muted/40 p-4 font-mono text-xs text-foreground">
-          {JSON.stringify(proposal.payload, null, 2)}
-        </pre>
-      </div>
-
-      {proposal.pluginId === "node" && <NodeProposalDetails payload={proposal.payload} />}
-    </Card>
+      )}
+      {proposal.appliedResourceId && (
+        <InfoRow label="Created resource" value={proposal.appliedResourceId} mono />
+      )}
+      {proposal.applyError && (
+        <div className="flex items-start gap-2 text-sm text-destructive" role="alert">
+          <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0 wrap-anywhere">
+            Couldn't finish applying: {proposal.applyError}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

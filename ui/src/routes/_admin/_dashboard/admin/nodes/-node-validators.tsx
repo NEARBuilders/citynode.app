@@ -1,11 +1,11 @@
+import { PlusIcon, ShieldCheckIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
 import {
+  Badge,
   Button,
-  Card,
   ConfirmDialog,
   Dialog,
   DialogContent,
@@ -13,12 +13,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  EmptyState,
+  Field,
+  FieldLabel,
   Input,
-  Label,
-  NodeValidatorTable,
   SectionHeader,
 } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldGroup } from "@/components/ui/field";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import {
   Select,
   SelectContent,
@@ -27,8 +38,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
+import { humanize, RowMenu } from "../-admin-ui";
 
 type Validator = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["validators"][number];
+
+const VALIDATOR_ROLE_ITEMS = [
+  { label: "Community", value: "community" },
+  { label: "Official", value: "official" },
+];
 
 export function NodeValidators({
   nodeId,
@@ -61,48 +78,65 @@ export function NodeValidators({
   });
 
   return (
-    <section className="space-y-3">
+    <section className="flex flex-col gap-6">
       <SectionHeader
         title="Validators"
+        description="Staking pools attached to this community."
         action={
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Plus /> add validator
+          <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-validator">
+            <PlusIcon /> Add validator
           </Button>
         }
       />
-      <Card className="overflow-hidden">
-        {validators.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">
-            No validators are attached to this node.
-          </p>
-        ) : (
-          <NodeValidatorTable
-            validators={validators}
-            renderActions={(validator) => (
-              <div className="flex gap-2">
-                {!validator.isDefault && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={mutation.isPending}
-                    onClick={() => mutation.mutate({ validator, action: "default" })}
-                  >
-                    set default
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={mutation.isPending}
-                  onClick={() => setRemoving(validator)}
-                >
-                  remove
-                </Button>
-              </div>
-            )}
-          />
-        )}
-      </Card>
+      {validators.length === 0 ? (
+        <EmptyState
+          icon={ShieldCheckIcon}
+          title="No validators yet"
+          description="Add a staking pool so people can stake with this community."
+          className="py-10"
+        />
+      ) : (
+        <ItemGroup data-testid="admin-node-validators">
+          {validators.map((validator) => (
+            <Item key={validator.id} variant="outline">
+              <ItemMedia variant="icon">
+                <ShieldCheckIcon />
+              </ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle className="max-w-full">
+                  <span className="min-w-0 truncate font-mono">{validator.accountId}</span>
+                </ItemTitle>
+                <ItemDescription>
+                  {humanize(validator.role)} · {validator.network} · {validator.protocol}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                {validator.isDefault && <Badge variant="success">Default</Badge>}
+                <RowMenu
+                  label={`Actions for ${validator.accountId}`}
+                  actions={[
+                    ...(validator.isDefault
+                      ? []
+                      : [
+                          {
+                            label: "Make default",
+                            disabled: mutation.isPending,
+                            onSelect: () => mutation.mutate({ validator, action: "default" }),
+                          },
+                        ]),
+                    {
+                      label: "Remove",
+                      destructive: true,
+                      disabled: mutation.isPending,
+                      onSelect: () => setRemoving(validator),
+                    },
+                  ]}
+                />
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
       <Dialog open={adding} onOpenChange={setAdding}>
         {adding && <AddValidatorForm nodeId={nodeId} onClose={() => setAdding(false)} />}
       </Dialog>
@@ -112,9 +146,10 @@ export function NodeValidators({
           if (!open) setRemoving(null);
         }}
         title="Remove validator?"
-        description={`Remove ${removing?.accountId ?? "this validator"} from this node? Staking resolution may change.`}
+        description={`${removing?.accountId ?? "This validator"} will be detached from this node. Staking may resolve elsewhere.`}
         variant="destructive"
-        confirmLabel="remove validator"
+        confirmLabel="Remove validator"
+        cancelLabel="Cancel"
         isPending={mutation.isPending}
         onConfirm={() => {
           if (removing) mutation.mutate({ validator: removing, action: "remove" });
@@ -132,6 +167,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
   const [protocol, setProtocol] = useState("near");
   const [role, setRole] = useState<Validator["role"]>("community");
   const [isDefault, setIsDefault] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const mutation = useMutation({
     mutationFn: () =>
       apiClient.createValidator({
@@ -150,71 +186,87 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
     onError: (error: Error) => toast.error(error.message),
   });
   return (
-    <DialogContent className="max-h-[90dvh] overflow-y-auto">
+    <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Add validator</DialogTitle>
-        <DialogDescription>Attach a validator account to this node.</DialogDescription>
+        <DialogDescription>Attach a staking pool to this community.</DialogDescription>
       </DialogHeader>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate();
         }}
       >
-        <div className="space-y-2">
-          <Label htmlFor="validator-account">Account ID</Label>
-          <Input
-            id="validator-account"
-            value={accountId}
-            onChange={(event) => setAccountId(event.target.value)}
-            placeholder="everything.pool.near"
-            required
-          />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="validator-network">Network</Label>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="validator-account">Pool account</FieldLabel>
             <Input
-              id="validator-network"
-              value={network}
-              onChange={(event) => setNetwork(event.target.value)}
+              id="validator-account"
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
+              placeholder="everything.pool.near"
               required
+              className="font-mono"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="validator-protocol">Protocol</Label>
-            <Input
-              id="validator-protocol"
-              value={protocol}
-              onChange={(event) => setProtocol(event.target.value)}
-              required
+          </Field>
+          {showAdvanced ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="validator-network">Network</FieldLabel>
+                <Input
+                  id="validator-network"
+                  value={network}
+                  onChange={(event) => setNetwork(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="validator-protocol">Protocol</FieldLabel>
+                <Input
+                  id="validator-protocol"
+                  value={protocol}
+                  onChange={(event) => setProtocol(event.target.value)}
+                  required
+                />
+              </Field>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => setShowAdvanced(true)}
+            >
+              Change network ({network}, {protocol})
+            </Button>
+          )}
+          <Field>
+            <FieldLabel htmlFor="validator-role">Role</FieldLabel>
+            <Select
+              value={role}
+              items={VALIDATOR_ROLE_ITEMS}
+              onValueChange={(value) => setRole(value === "official" ? "official" : "community")}
+            >
+              <SelectTrigger id="validator-role" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="community">Community</SelectItem>
+                <SelectItem value="official">Official</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field orientation="horizontal">
+            <Checkbox
+              id="validator-default"
+              checked={isDefault}
+              onCheckedChange={(checked) => setIsDefault(checked === true)}
             />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="validator-role">Role</Label>
-          <Select
-            value={role}
-            onValueChange={(value) => setRole(value === "official" ? "official" : "community")}
-          >
-            <SelectTrigger id="validator-role" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="community">Community</SelectItem>
-              <SelectItem value="official">Official</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="validator-default"
-            checked={isDefault}
-            onCheckedChange={(checked) => setIsDefault(checked === true)}
-          />
-          <Label htmlFor="validator-default">Set as this node's default validator</Label>
-        </div>
+            <FieldLabel htmlFor="validator-default">Make this the community's default</FieldLabel>
+          </Field>
+        </FieldGroup>
         {mutation.isError && (
           <p role="alert" className="text-sm text-destructive">
             {mutation.error.message}
@@ -222,7 +274,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
-            cancel
+            Cancel
           </Button>
           <Button
             type="submit"
@@ -230,7 +282,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               mutation.isPending || !accountId.trim() || !network.trim() || !protocol.trim()
             }
           >
-            {mutation.isPending ? "adding..." : "add validator"}
+            {mutation.isPending ? "Adding…" : "Add validator"}
           </Button>
         </DialogFooter>
       </form>

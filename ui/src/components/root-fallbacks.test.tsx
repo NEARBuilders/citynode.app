@@ -48,8 +48,12 @@ async function showFallback(path: string) {
 
 describe("document fallbacks", () => {
   it.each([
-    ["/missing", "Page not found", "The page you requested doesn't exist here."],
-    ["/broken", "Application error", "Something went wrong before the app layout could render."],
+    ["/missing", "Page not found", "This link may be old, or the page has moved."],
+    [
+      "/broken",
+      "Something went wrong",
+      "The app hit an error before it could load. Try again in a moment.",
+    ],
   ])("renders %s without application providers and can return home", async (path, title, body) => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
