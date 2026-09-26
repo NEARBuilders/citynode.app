@@ -1,7 +1,6 @@
 import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
-import { BookOpenIcon, CaretRightIcon, GearIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
-import { ClientOnly, Link, useRouterState } from "@tanstack/react-router";
-import { useTheme } from "next-themes";
+import { BookOpenIcon, CaretRightIcon, GearIcon } from "@phosphor-icons/react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { pluginPath } from "@/app";
 import {
@@ -104,43 +103,10 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
               <span>Docs</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <ClientOnly fallback={<SidebarThemeTogglePlaceholder />}>
-            <SidebarThemeToggle />
-          </ClientOnly>
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  );
-}
-
-function SidebarThemeTogglePlaceholder() {
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton disabled aria-hidden>
-        <SunIcon />
-        <span>Theme</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
-}
-
-function SidebarThemeToggle() {
-  const { setTheme, resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
-  const label = isDark ? "Light mode" : "Dark mode";
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        tooltip={label}
-        aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
-        onClick={() => setTheme(isDark ? "light" : "dark")}
-        data-testid="sidebar-theme-toggle"
-      >
-        {isDark ? <SunIcon /> : <MoonIcon />}
-        <span>{label}</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
   );
 }
 

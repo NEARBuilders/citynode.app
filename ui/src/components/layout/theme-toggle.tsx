@@ -6,7 +6,16 @@ import { Button } from "@/components/ui/button";
 export function ThemeToggle({ className }: { className?: string }) {
   return (
     <ClientOnly
-      fallback={<Button variant="ghost" size="icon" disabled aria-hidden className={className} />}
+      fallback={
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled
+          aria-hidden
+          className={className}
+          data-testid="theme-toggle"
+        />
+      }
     >
       <ThemeToggleButton className={className} />
     </ClientOnly>

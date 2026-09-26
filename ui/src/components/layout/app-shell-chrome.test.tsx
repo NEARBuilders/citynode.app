@@ -43,7 +43,7 @@ vi.mock("./use-switch-team", () => ({
 }));
 
 vi.mock("./theme-toggle", () => ({
-  ThemeToggle: () => <button type="button" aria-label="Switch theme" />,
+  ThemeToggle: () => <button type="button" aria-label="Switch theme" data-testid="theme-toggle" />,
 }));
 
 vi.mock("./network-toggle", () => ({
@@ -123,6 +123,17 @@ describe("app shell chrome", () => {
     expect(screen.getByTestId("account-menu")).toBeTruthy();
   });
 
+  it("puts the theme toggle just left of the account menu", async () => {
+    render(
+      <SidebarProvider>
+        <AppHeader />
+      </SidebarProvider>,
+    );
+    const toggle = await screen.findByTestId("theme-toggle");
+    const menu = screen.getByTestId("account-menu");
+    expect(toggle.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows which team the user is operating as", () => {
     workspace.activeTeam = { id: "team-fin", name: "Finance", areas: ["finance"] };
     render(
@@ -155,7 +166,7 @@ describe("app shell chrome", () => {
     expect(crumbs.textContent).not.toContain("v1.citynode.near");
   });
 
-  it("puts Settings, Docs and the theme toggle in the sidebar footer, not the account menu", () => {
+  it("puts Settings and Docs in the sidebar footer, with no theme toggle or account menu", () => {
     render(
       <SidebarProvider>
         <AppSidebar items={[]} appName="City Nodes" pathname="/dashboard" />
@@ -164,7 +175,7 @@ describe("app shell chrome", () => {
 
     expect(screen.getByTestId("sidebar-nav-settings").getAttribute("href")).toBe("/settings");
     expect(screen.getByTestId("sidebar-nav-docs").getAttribute("href")).toBe("/about");
-    expect(screen.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Switch to (dark|light) theme/ })).toBeNull();
     expect(screen.queryByTestId("account-menu")).toBeNull();
   });
 });

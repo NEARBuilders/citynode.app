@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { crumbsFor } from "./breadcrumbs";
+import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
 import { useTeamWorkspace } from "./use-team-workspace";
 import { UserNav } from "./user-nav";
@@ -78,7 +79,8 @@ export function AppHeader({ runtimeConfig }: AppHeaderProps) {
             </span>
           </div>
         )}
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-1">
+          <ThemeToggle />
           <UserNav />
         </div>
       </div>
