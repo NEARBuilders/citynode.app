@@ -1,13 +1,12 @@
+import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { verifyDaoMembership } from "@/services/dao";
 import { authedContext, getPluginClient, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
-  verifyDaoMembership: vi.fn(async () => ({
-    isSputnikContract: true,
-    isMember: true,
-    policy: { roles: [] },
-  })),
+  verifyDaoMembership: vi.fn(() =>
+    Effect.succeed({ isSputnikContract: true, isMember: true, policy: { roles: [] } }),
+  ),
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));
@@ -91,11 +90,13 @@ describe("node proposal application", () => {
   });
 
   it("rejects proposals whose applicant is not a member of the tenant DAO", async () => {
-    (verifyDaoMembership as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      isSputnikContract: true,
-      isMember: false,
-      policy: { roles: [] },
-    });
+    (verifyDaoMembership as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      Effect.succeed({
+        isSputnikContract: true,
+        isMember: false,
+        policy: { roles: [] },
+      }),
+    );
     const admin = await getPluginClient(adminContext);
 
     await expect(

@@ -1,13 +1,12 @@
+import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { isExplicitDaoMember } from "@/services/dao";
 import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
-  verifyDaoMembership: vi.fn(async () => ({
-    isSputnikContract: true,
-    isMember: true,
-    policy: { roles: [] },
-  })),
+  verifyDaoMembership: vi.fn(() =>
+    Effect.succeed({ isSputnikContract: true, isMember: true, policy: { roles: [] } }),
+  ),
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));

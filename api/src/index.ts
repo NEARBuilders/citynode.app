@@ -8,7 +8,6 @@ import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
-import { toOrpcError } from "./lib/errors";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
@@ -497,13 +496,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .effect(function* ({ input, context }) {
           const services = yield* ApiServices;
           yield* validateAccountId(input.accountId);
-          const result = yield* Effect.tryPromise({
-            try: () =>
-              verifyDaoMembership({
-                daoAccountId: input.accountId,
-                memberAccountId: context.near?.primaryAccountId ?? null,
-              }),
-            catch: toOrpcError,
+          const result = yield* verifyDaoMembership({
+            daoAccountId: input.accountId,
+            memberAccountId: context.near?.primaryAccountId ?? null,
           });
           if (!result.isMember) {
             return yield* Effect.fail(
@@ -698,13 +693,9 @@ export default createPlugin.withPlugins<PluginsClient>()({
         yield* validateAccountId(input.submitterAccountId);
         if (input.poolAccountId) yield* validateAccountId(input.poolAccountId);
         yield* validateHostname(input.hostname);
-        const result = yield* Effect.tryPromise({
-          try: () =>
-            verifyDaoMembership({
-              daoAccountId: input.accountId,
-              memberAccountId: input.submitterAccountId,
-            }),
-          catch: toOrpcError,
+        const result = yield* verifyDaoMembership({
+          daoAccountId: input.accountId,
+          memberAccountId: input.submitterAccountId,
         });
         if (!result.isMember) {
           return yield* Effect.fail(
