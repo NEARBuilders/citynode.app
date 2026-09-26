@@ -252,6 +252,15 @@
       "import": "./dist/ui/router-error.mjs",
       "require": "./dist/ui/router-error.cjs"
     },
+    "./ui/router-defaults": {
+      "development": {
+        "types": "./src/ui/router-defaults.tsx",
+        "import": "./src/ui/router-defaults.tsx"
+      },
+      "types": "./dist/ui/router-defaults.d.mts",
+      "import": "./dist/ui/router-defaults.mjs",
+      "require": "./dist/ui/router-defaults.cjs"
+    },
     "./ui/manifest": {
       "development": {
         "types": "./src/ui/manifest/index.ts",

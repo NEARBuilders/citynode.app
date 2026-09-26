@@ -17,10 +17,14 @@ import {
   RouterServer,
   renderRouterToStream,
 } from "@tanstack/react-router/ssr/server";
-import type { ReactNode } from "react";
 import { createApiClient } from "./api";
 import { createAuthClient } from "./auth";
 import { collectHeadData } from "./router";
+import {
+  defaultNotFoundComponent,
+  defaultPendingComponent,
+  defaultQueryClient,
+} from "./router-defaults";
 import { RouterError } from "./router-error";
 import type {
   CreateRouterOptions,
@@ -28,61 +32,28 @@ import type {
   RenderOptionsWithApi,
   RenderResult,
   RouterContextWithApi,
-  RouterModule,
 } from "./types";
 
-function defaultNotFoundComponent() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold text-foreground">Not Found</h1>
-        <p className="mt-2 text-muted-foreground">The requested page could not be found.</p>
-      </div>
-    </div>
-  );
-}
-
-function defaultPendingComponent() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <p className="text-sm text-muted-foreground">Loading...</p>
-    </div>
-  );
-}
-
-export interface ServerRouterModuleOptions {
+export interface ServerRouterModuleOptions<TRouteTree extends AnyRoute = AnyRoute> {
   /** The app's generated route tree — the core-only fallback when no composed tree is passed. */
-  defaultRouteTree?: unknown;
-  /** Route error boundary; defaults to the generic framework component. */
-  errorComponent?: (props: { error: Error }) => ReactNode;
+  defaultRouteTree?: TRouteTree;
 }
 
-type ServerRouterOptions = CreateRouterOptions & {
+type ServerRouterOptions<TRouteTree extends AnyRoute> = CreateRouterOptions & {
   context?: Partial<RouterContextWithApi> & { pluginNav?: unknown };
+  routeTree?: TRouteTree;
 };
 
-export function createServerRouterModule(
-  options: ServerRouterModuleOptions = {},
-): RouterModule<unknown, unknown> {
+export function createServerRouterModule<TRouteTree extends AnyRoute = AnyRoute>(
+  options: ServerRouterModuleOptions<TRouteTree> = {},
+) {
   const defaultRouteTree = options.defaultRouteTree;
-  const errorComponent = options.errorComponent ?? RouterError;
 
   const createRouter = (
-    opts?: ServerRouterOptions,
+    opts?: ServerRouterOptions<TRouteTree>,
   ): { router: AnyRouter; queryClient: QueryClient } => {
     const context = opts?.context;
-    const queryClient =
-      context?.queryClient ??
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 5 * 60 * 1000,
-            gcTime: 30 * 60 * 1000,
-            refetchOnWindowFocus: false,
-            retry: 1,
-          },
-        },
-      });
+    const queryClient = context?.queryClient ?? defaultQueryClient();
 
     const history = opts?.history ?? createMemoryHistory();
 
@@ -91,7 +62,7 @@ export function createServerRouterModule(
     // AnyRouter contract when the tree is typed as the wide AnyRoute — the
     // runtime instance genuinely satisfies it, so the boundary casts once.
     const router = createTanStackRouter({
-      routeTree: (opts?.routeTree ?? defaultRouteTree) as AnyRoute,
+      routeTree: (opts?.routeTree ?? defaultRouteTree) as TRouteTree,
       history,
       basepath: opts?.basepath,
       context: {
@@ -113,7 +84,7 @@ export function createServerRouterModule(
       scrollRestoration: true,
       defaultStructuralSharing: true,
       defaultPreloadStaleTime: 0,
-      defaultErrorComponent: errorComponent,
+      defaultErrorComponent: RouterError,
       defaultOnCatch: (error, errorInfo) => {
         console.error("[SSR] Router error boundary caught:", error, {
           componentStack: errorInfo.componentStack,
@@ -134,14 +105,14 @@ export function createServerRouterModule(
           hydrate(queryClient, dehydrated.queryClientState);
         }
       },
-    }) as unknown as AnyRouter;
+    });
 
     return { router, queryClient };
   };
 
   const getRouteHead = async (
     pathname: string,
-    context?: Partial<RouterContextWithApi> & { routeTree?: unknown },
+    context?: Partial<RouterContextWithApi> & { routeTree?: TRouteTree },
   ): Promise<HeadData> => {
     const history = createMemoryHistory({ initialEntries: [pathname] });
     const queryClient = new QueryClient();
@@ -151,7 +122,7 @@ export function createServerRouterModule(
     }
 
     const router = createTanStackRouter({
-      routeTree: (context?.routeTree ?? defaultRouteTree) as AnyRoute,
+      routeTree: context?.routeTree ?? defaultRouteTree,
       history,
       context: {
         queryClient,
@@ -179,21 +150,10 @@ export function createServerRouterModule(
     const handler = createRequestHandler({
       request,
       createRouter: () => {
-        const localQueryClient =
-          queryClientRef ??
-          new QueryClient({
-            defaultOptions: {
-              queries: {
-                staleTime: 5 * 60 * 1000,
-                gcTime: 30 * 60 * 1000,
-                refetchOnWindowFocus: false,
-                retry: 1,
-              },
-            },
-          });
+        const localQueryClient = queryClientRef ?? defaultQueryClient();
         const { router } = createRouter({
           history,
-          routeTree: renderOptions.routeTree,
+          routeTree: renderOptions.routeTree as TRouteTree,
           basepath: renderOptions.basepath,
           context: {
             queryClient: localQueryClient,

@@ -12,27 +12,9 @@ import {
   createRouter as createTanStackRouter,
 } from "@tanstack/react-router";
 import { createAuthClient } from "./auth";
+import { defaultNotFoundComponent, defaultPendingComponent } from "./router-defaults";
 import { RouterError } from "./router-error";
 import type { CreateRouterOptions, RouterContextWithApi } from "./types";
-
-function defaultNotFoundComponent() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold text-foreground">Not Found</h1>
-        <p className="mt-2 text-muted-foreground">The requested page could not be found.</p>
-      </div>
-    </div>
-  );
-}
-
-function defaultPendingComponent() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <p className="text-sm text-muted-foreground">Loading...</p>
-    </div>
-  );
-}
 
 export interface CoreRouterOptions<TApiClient = unknown, TSession = unknown>
   extends CreateRouterOptions<TApiClient, TSession> {

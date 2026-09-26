@@ -19,6 +19,7 @@ import {
   type NavManifest,
   type RouteConfigModule,
 } from "./manifest";
+import { defaultQueryClient } from "./router-defaults";
 import { getCspNonce, getRuntimeConfig } from "./runtime";
 
 declare global {
@@ -168,23 +169,14 @@ export async function hydrate(options: CoreHydrateOptions) {
       throw new Error("Missing hostUrl or rpcBase in runtime config");
     }
 
-    const [{ QueryClient, QueryClientProvider }, { createRouter }] = await Promise.all([
+    const [{ QueryClientProvider }, { createRouter }] = await Promise.all([
       import("@tanstack/react-query"),
       import("./router-client"),
     ]);
     const [coreRouteConfig] = await Promise.all([
       options.routeConfig().then((mod) => ("default" in mod ? mod.default : mod)),
     ]);
-    const client = new QueryClient({
-      defaultOptions: {
-        queries: {
-          staleTime: 5 * 60 * 1000,
-          gcTime: 30 * 60 * 1000,
-          refetchOnWindowFocus: false,
-          retry: 1,
-        },
-      },
-    });
+    const client = defaultQueryClient();
 
     mark(`$_TSR present: ${Boolean(window.$_TSR)}`);
 

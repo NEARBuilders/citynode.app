@@ -55,6 +55,7 @@ export default defineConfig({
     "src/ui/hydrate.tsx",
     "src/ui/router-client.tsx",
     "src/ui/router-server.tsx",
+    "src/ui/router-defaults.tsx",
     "src/ui/router-error.tsx",
     "src/ui/manifest/index.ts",
     "src/ui/manifest-generator.ts",
