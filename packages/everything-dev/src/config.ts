@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { Schema } from "effect";
 import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
@@ -104,7 +105,9 @@ export function getConfig(): BosConfig | null {
 
 export function getProjectRoot(): string {
   if (!projectRoot) {
-    throw new Error("Config not loaded. Call loadResolvedConfig() first.");
+    throw new ConfigNotLoadedError({
+      message: "Config not loaded. Call loadResolvedConfig() first.",
+    });
   }
   return projectRoot;
 }
@@ -168,6 +171,32 @@ export async function loadLocalConfig(options?: {
     },
   };
 }
+
+export class ConfigNotLoadedError extends Schema.TaggedError<ConfigNotLoadedError>()(
+  "ConfigNotLoadedError",
+  { message: Schema.String },
+) {}
+
+export class ConfigLoadError extends Schema.TaggedError<ConfigLoadError>()("ConfigLoadError", {
+  path: Schema.String,
+  message: Schema.String,
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class CircularExtendsError extends Schema.TaggedError<CircularExtendsError>()(
+  "CircularExtendsError",
+  { chain: Schema.Array(Schema.String), message: Schema.String },
+) {}
+
+export class ConfigNotfoundError extends Schema.TaggedError<ConfigNotfoundError>()(
+  "ConfigNotfoundError",
+  { message: Schema.String },
+) {}
+
+export class ConfigExtendsError extends Schema.TaggedError<ConfigExtendsError>()(
+  "ConfigExtendsError",
+  { message: Schema.String },
+) {}
 
 export function defaultConfigEnv(): BosEnv {
   return process.env.NODE_ENV === "production" ? "production" : "development";
@@ -233,11 +262,16 @@ export async function loadResolvedConfig(options?: {
   } catch (error) {
     resumeWarnings();
     if (error instanceof Error) {
-      throw new Error(`Failed to load config from ${configPath}: ${error.message}`, {
+      throw new ConfigLoadError({
+        path: configPath,
+        message: `Failed to load config from ${configPath}: ${error.message}`,
         cause: error,
       });
     }
-    throw new Error(`Failed to load config from ${configPath}: ${String(error)}`);
+    throw new ConfigLoadError({
+      path: configPath,
+      message: `Failed to load config from ${configPath}: ${String(error)}`,
+    });
   }
 }
 
@@ -248,7 +282,7 @@ export async function loadBosConfig(options?: {
 }): Promise<RuntimeConfig> {
   const result = await loadResolvedConfig(options);
   if (!result) {
-    throw new Error("No bos.config.json found");
+    throw new ConfigNotfoundError({ message: "No bos.config.json found" });
   }
 
   return result.runtime;
@@ -302,7 +336,7 @@ export function parseRuntimeOverrideTargets(value?: string | null): RuntimeOverr
       return entry as RuntimeOverrideTarget;
     }
 
-    throw new Error(`Invalid runtime override target: ${entry}`);
+    throw new ConfigExtendsError({ message: `Invalid runtime override target: ${entry}` });
   });
 }
 
@@ -341,9 +375,10 @@ function getEntryAssociatedUi(entry: Partial<BosPluginRef>): Record<string, unkn
   if (!ui) return undefined;
 
   if ("shared" in ui) {
-    throw new Error(
-      "app.ui.shared is no longer supported. Move shared deps to app.api.shared, app.auth.shared, or plugins.*.shared.",
-    );
+    throw new ConfigExtendsError({
+      message:
+        "app.ui.shared is no longer supported. Move shared deps to app.api.shared, app.auth.shared, or plugins.*.shared.",
+    });
   }
 
   return ui;
@@ -529,7 +564,9 @@ function asComposableEntry(value: unknown): BosPluginRef {
     return { extends: value };
   }
   if (!isPlainObject(value)) {
-    throw new Error(`Expected config entry object, received ${typeof value}`);
+    throw new ConfigExtendsError({
+      message: `Expected config entry object, received ${typeof value}`,
+    });
   }
   return value as BosPluginRef;
 }
@@ -543,12 +580,12 @@ function getTargetedEntry(config: BosConfigInput, targetPath: string): BosPlugin
   if (targetPath.startsWith("plugins.")) {
     const pluginId = targetPath.slice("plugins.".length);
     if (pluginId.length === 0) {
-      throw new Error(`Invalid plugin target path: ${targetPath}`);
+      throw new ConfigExtendsError({ message: `Invalid plugin target path: ${targetPath}` });
     }
     return asComposableEntry(config.plugins?.[pluginId]);
   }
 
-  throw new Error(`Unsupported extends target path: ${targetPath}`);
+  throw new ConfigExtendsError({ message: `Unsupported extends target path: ${targetPath}` });
 }
 
 function getAssociatedUi(
@@ -561,9 +598,10 @@ function getAssociatedUi(
 
   const ui = config.app.ui as Record<string, unknown>;
   if ("shared" in ui) {
-    throw new Error(
-      "app.ui.shared is no longer supported. Move shared deps to app.api.shared, app.auth.shared, or plugins.*.shared.",
-    );
+    throw new ConfigExtendsError({
+      message:
+        "app.ui.shared is no longer supported. Move shared deps to app.api.shared, app.auth.shared, or plugins.*.shared.",
+    });
   }
 
   return ui;
@@ -960,7 +998,10 @@ async function resolveConfigWithExtends(
   env: BosEnv = "development",
 ): Promise<BosConfigInput> {
   if (visited.has(configPath)) {
-    throw new Error(`Circular extends detected: ${[...visited, configPath].join(" -> ")}`);
+    throw new CircularExtendsError({
+      chain: [...visited, configPath],
+      message: `Circular extends detected: ${[...visited, configPath].join(" -> ")}`,
+    });
   }
 
   const config = await loadConfigFile(configPath, baseDir);
@@ -1090,9 +1131,9 @@ function buildRuntimePluginConfig(
   const production = typeof source.production === "string" ? source.production : undefined;
 
   if (production?.startsWith("bos://")) {
-    throw new Error(
-      `Plugin "${pluginId}" has unsupported production target "${production}". Use extends: "bos://account/domain" for plugin configs or a CDN URL for production.`,
-    );
+    throw new ConfigExtendsError({
+      message: `Plugin "${pluginId}" has unsupported production target "${production}". Use extends: "bos://account/domain" for plugin configs or a CDN URL for production.`,
+    });
   }
 
   const pluginExtendsRef = source.extends ? resolveExtendsRef(source.extends, env) : undefined;
@@ -1313,7 +1354,7 @@ function resolveRuntimeTarget(
   if (value.startsWith(LOCAL_PREFIX)) {
     const localTarget = value?.slice(LOCAL_PREFIX.length).trim();
     if (!localTarget) {
-      throw new Error(`Invalid local development target: ${value}`);
+      throw new ConfigExtendsError({ message: `Invalid local development target: ${value}` });
     }
 
     const localPath = resolve(baseDir, localTarget);
