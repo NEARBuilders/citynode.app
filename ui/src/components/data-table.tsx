@@ -1,4 +1,10 @@
 import {
+  CaretDoubleLeftIcon,
+  CaretDoubleRightIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+} from "@phosphor-icons/react";
+import {
   type ColumnDef,
   createPaginatedRowModel,
   createSortedRowModel,
@@ -10,9 +16,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -35,7 +39,12 @@ const dataTableFeatures = tableFeatures({
   rowPaginationFeature,
   sortedRowModel: createSortedRowModel(),
   paginatedRowModel: createPaginatedRowModel(),
+  columnMeta: {} as DataTableColumnMeta,
 });
+
+export interface DataTableColumnMeta {
+  className?: string;
+}
 
 export type DataTableColumnDef<TData extends RowData> = ColumnDef<typeof dataTableFeatures, TData>;
 
@@ -60,15 +69,15 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
   });
 
   return (
-    <div>
-      <div className="rounded-md border border-border">
+    <div className="flex min-w-0 flex-col">
+      <div className="min-w-0 overflow-hidden rounded-md border border-border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className={header.column.columnDef.meta?.className}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(header.column.columnDef.header, header.getContext())}
@@ -83,7 +92,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id}>
                   {row.getAllCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className={cell.column.columnDef.meta?.className}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -91,11 +100,8 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No results.
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <span className="text-muted-foreground">No results.</span>
                 </TableCell>
               </TableRow>
             )}
@@ -107,15 +113,15 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
           Showing {table.getRowModel().rows.length} of {table.getPrePaginatedRowModel().rows.length}{" "}
           row(s).
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <p className="text-sm font-medium">Rows per page</p>
           <Select
             value={`${table.state.pagination.pageSize}`}
             onValueChange={(value) => {
-              table.setPageSize(Number(value));
+              if (value) table.setPageSize(Number(value));
             }}
           >
-            <SelectTrigger className="h-8 w-[70px]">
+            <SelectTrigger size="sm" className="w-20">
               <SelectValue placeholder={table.state.pagination.pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
@@ -127,46 +133,46 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center text-sm font-medium sm:w-25 sm:justify-center">
             Page {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
             >
               <span className="sr-only">Go to first page</span>
-              <ChevronsLeft className="h-4 w-4" />
+              <CaretDoubleLeftIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
               <span className="sr-only">Go to previous page</span>
-              <ChevronLeft className="h-4 w-4" />
+              <CaretLeftIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
               <span className="sr-only">Go to next page</span>
-              <ChevronRight className="h-4 w-4" />
+              <CaretRightIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
-              className="h-8 w-8 p-0"
+              size="icon-sm"
               onClick={() => table.setPageIndex(table.getPageCount() - 1)}
               disabled={!table.getCanNextPage()}
             >
               <span className="sr-only">Go to last page</span>
-              <ChevronsRight className="h-4 w-4" />
+              <CaretDoubleRightIcon className="h-4 w-4" />
             </Button>
           </div>
         </div>

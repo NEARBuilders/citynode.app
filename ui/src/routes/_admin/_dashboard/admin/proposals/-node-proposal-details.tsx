@@ -1,35 +1,34 @@
+import { InfoRow } from "@/components";
 import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
-import { MetaRow } from "./-meta-row";
+import { humanize } from "../-admin-ui";
 
 export function NodeProposalDetails({ payload }: { payload: unknown }) {
   const parsed = nodeProposalPayloadSchema.safeParse(payload);
   if (!parsed.success) {
     return (
-      <div className="rounded-[8px] border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-        This node proposal has an invalid payload and cannot be applied safely.
-      </div>
+      <p role="alert" className="text-sm text-destructive">
+        This application's payload is invalid and can't be applied safely.
+      </p>
     );
   }
 
   const proposal = parsed.data;
   return (
-    <div className="space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Node application
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <MetaRow label="Applicant account" value={proposal.accountId} mono />
-        <MetaRow label="Submitting account" value={proposal.submitterAccountId} mono />
-        <MetaRow label="Organization" value={proposal.orgId} mono />
-        <MetaRow label="Kind" value={proposal.kind} />
-        <MetaRow label="Parent" value={proposal.parentId ?? "root"} mono />
-        <MetaRow label="Name" value={proposal.name} />
-      </div>
-      <div className="rounded-[8px] border border-border bg-muted/20 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Motivation
-        </p>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{proposal.motivation}</p>
+    <div className="flex flex-col gap-6">
+      <blockquote className="border-l-2 border-border pl-4 text-base whitespace-pre-wrap text-foreground">
+        {proposal.motivation}
+      </blockquote>
+      <div className="flex flex-col">
+        <InfoRow label="Kind" value={humanize(proposal.kind)} />
+        <InfoRow label="Slug" value={proposal.slug} mono />
+        <InfoRow
+          label="Parent"
+          value={proposal.parentId ?? "None (country)"}
+          mono={!!proposal.parentId}
+        />
+        <InfoRow label="Owning DAO" value={proposal.accountId} mono />
+        <InfoRow label="Submitted from" value={proposal.submitterAccountId} mono />
+        <InfoRow label="Organization" value={proposal.orgId} mono />
       </div>
     </div>
   );

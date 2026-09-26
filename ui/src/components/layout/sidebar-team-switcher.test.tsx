@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -26,7 +27,7 @@ function renderSwitcher(props: Partial<Parameters<typeof SidebarTeamSwitcher>[0]
 }
 
 function openMenu() {
-  fireEvent.pointerDown(screen.getByTestId("team-switcher"), { button: 0, ctrlKey: false });
+  fireEvent.click(screen.getByTestId("team-switcher"));
 }
 
 beforeEach(() => {
@@ -63,13 +64,13 @@ describe("SidebarTeamSwitcher", () => {
     expect(screen.getByTestId("team-switcher").textContent).toContain("All areas");
   });
 
-  it("lists the user's teams, marks the active one and switches on select", () => {
+  it("lists the user's teams, marks the active one and switches on select", async () => {
     const { onSelect } = renderSwitcher();
     openMenu();
 
-    expect(screen.getByTestId("team-switcher-item-team-ops").getAttribute("aria-checked")).toBe(
-      "true",
-    );
+    expect(
+      (await screen.findByTestId("team-switcher-item-team-ops")).getAttribute("aria-checked"),
+    ).toBe("true");
     expect(screen.getByTestId("team-switcher-item-team-fin").getAttribute("aria-checked")).toBe(
       "false",
     );
@@ -78,11 +79,11 @@ describe("SidebarTeamSwitcher", () => {
     expect(onSelect).toHaveBeenCalledWith("team-fin");
   });
 
-  it("clears the active team from the all areas option", () => {
+  it("clears the active team from the all areas option", async () => {
     const { onSelect } = renderSwitcher();
     openMenu();
 
-    fireEvent.click(screen.getByTestId("team-switcher-item-all"));
+    fireEvent.click(await screen.findByTestId("team-switcher-item-all"));
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 });

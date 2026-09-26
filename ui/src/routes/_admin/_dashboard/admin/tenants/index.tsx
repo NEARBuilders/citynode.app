@@ -1,12 +1,38 @@
+import {
+  BuildingsIcon,
+  CaretRightIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+} from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Plus } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, EmptyState, SectionHeader, Skeleton } from "@/components";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  LocalDate,
+  PageHeader,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components";
 import { DataTable, type DataTableColumnDef } from "@/components/data-table";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
+import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
+import { filterTenants } from "./-tenant-wizard";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["listTenants"]>>[number];
@@ -18,27 +44,29 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/")({
       context.queryClient.ensureQueryData(allNodesQueryOptions(context.apiClient)),
     ]);
   },
-  head: () => ({
-    meta: [{ title: "Tenants | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Sites · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminTenants,
 });
 
-const STATUS_VARIANT: Record<Tenant["status"], "default" | "destructive" | "secondary"> = {
-  active: "default",
-  pending: "secondary",
-  suspended: "destructive",
-  pending_deletion: "secondary",
+const STATUS_FILTERS = ["all", "active", "pending", "suspended"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All",
+  active: "Active",
+  pending: "Pending",
+  suspended: "Suspended",
 };
 
 function AdminTenants() {
   const apiClient = useApiClient();
-
   const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
   const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
-  const tenants = tenantsQuery.data ?? [];
   const isLoading = tenantsQuery.isLoading || nodesQuery.isLoading;
   const error = tenantsQuery.error ?? nodesQuery.error;
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [query, setQuery] = useState("");
 
   const slugByTenantId = useMemo(() => {
     const map = new Map<string, string>();
@@ -48,34 +76,37 @@ function AdminTenants() {
     return map;
   }, [nodesQuery.data]);
 
+  const tenants = useMemo(
+    () => filterTenants(tenantsQuery.data ?? [], { status, query, slugByTenantId }),
+    [tenantsQuery.data, status, query, slugByTenantId],
+  );
+
   const columns = useMemo<DataTableColumnDef<Tenant>[]>(
     () => [
       {
         accessorKey: "name",
         header: "Name",
         cell: ({ row }) => (
-          <Link
-            to="/tenant/$tenantId"
-            params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
-            className="font-medium text-foreground hover:underline"
-          >
-            {row.original.name}
-          </Link>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Link
+              to="/tenant/$tenantId"
+              params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
+              className="font-medium text-foreground hover:underline"
+            >
+              {row.original.name}
+            </Link>
+            <span className="font-mono text-xs text-muted-foreground">
+              {slugByTenantId.get(row.original.id) ?? row.original.id.slice(0, 8)}
+            </span>
+          </div>
         ),
       },
       {
         accessorKey: "accountId",
-        header: "Account",
+        header: "DAO account",
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">{row.original.accountId}</span>
-        ),
-      },
-      {
-        accessorKey: "slug",
-        header: "Slug",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            {slugByTenantId.get(row.original.id) ?? row.original.id.slice(0, 8)}
+          <span className="block max-w-64 truncate font-mono text-xs text-muted-foreground">
+            {row.original.accountId}
           </span>
         ),
       },
@@ -83,84 +114,158 @@ function AdminTenants() {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge variant={STATUS_VARIANT[row.original.status]}>{row.original.status}</Badge>
+          <Badge variant={tenantStatusTone(row.original.status)}>
+            {humanize(row.original.status)}
+          </Badge>
         ),
       },
       {
         accessorKey: "createdAt",
         header: "Created",
-        cell: ({ row }) =>
-          row.original.createdAt ? new Date(row.original.createdAt).toLocaleDateString() : "—",
-      },
-      {
-        id: "actions",
-        header: "",
+        meta: { className: "hidden lg:table-cell" },
+
         cell: ({ row }) => (
-          <Button asChild variant="outline" size="sm">
-            <Link
-              to="/tenant/$tenantId"
-              params={{ tenantId: slugByTenantId.get(row.original.id) ?? row.original.id }}
-            >
-              open
-            </Link>
-          </Button>
+          <span className="text-muted-foreground">
+            <LocalDate value={row.original.createdAt} fallback="—" />
+          </span>
         ),
       },
     ],
     [slugByTenantId],
   );
 
+  const total = tenantsQuery.data?.length ?? 0;
+
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Tenants"
-        action={
-          <Button asChild>
-            <Link to="/admin/tenants/new">
-              <Plus size={14} />
-              new tenant
-            </Link>
-          </Button>
+    <>
+      <PageHeader
+        title="Sites"
+        description="Each site is a community deployment owned by a DAO."
+        actions={
+          total > 0 ? (
+            <Button
+              nativeButton={false}
+              render={<Link to="/admin/tenants/new" />}
+              data-testid="admin-tenants-create"
+            >
+              <PlusIcon />
+              New site
+            </Button>
+          ) : undefined
         }
+        headerTestId="admin-tenants.heading"
       />
 
-      {isLoading ? (
-        <Card className="p-6 space-y-3">
-          {[1, 2, 3].map((n) => (
-            <Skeleton key={n} className="h-10 w-full" />
-          ))}
-        </Card>
-      ) : error ? (
-        <EmptyState
-          icon={Building2}
-          title="Failed to load tenants"
-          description={error.message || "Something went wrong while loading tenants."}
-          action={
-            <Button
-              variant="outline"
-              onClick={() => Promise.all([tenantsQuery.refetch(), nodesQuery.refetch()])}
-            >
-              retry
-            </Button>
-          }
-        />
-      ) : tenants.length === 0 ? (
-        <EmptyState
-          icon={Building2}
-          title="No tenants yet"
-          description="Create your first tenant deployment to get started."
-          action={
-            <Button asChild>
-              <Link to="/admin/tenants/new">
-                <Plus size={14} />
-                create tenant
-              </Link>
-            </Button>
-          }
-        />
-      ) : (
-        <DataTable columns={columns} data={tenants} />
-      )}
-    </div>
+      <section className="flex flex-col gap-6">
+        {total > 0 && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+              <Tabs
+                value={status}
+                onValueChange={(value) => {
+                  const next = STATUS_FILTERS.find((filter) => filter === value);
+                  if (next) setStatus(next);
+                }}
+              >
+                <TabsList>
+                  {STATUS_FILTERS.map((filter) => (
+                    <TabsTrigger
+                      key={filter}
+                      value={filter}
+                      data-testid={`admin-tenants-filter-${filter}`}
+                    >
+                      {STATUS_FILTER_LABELS[filter]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+            <InputGroup className="sm:ml-auto sm:max-w-xs">
+              <InputGroupAddon>
+                <MagnifyingGlassIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search name, slug or DAO"
+                aria-label="Search sites"
+                data-testid="admin-tenants-search"
+              />
+            </InputGroup>
+          </div>
+        )}
+
+        {isLoading ? (
+          <ListSkeleton />
+        ) : error ? (
+          <EmptyState
+            icon={BuildingsIcon}
+            title="Couldn't load sites"
+            description={error.message || "Something went wrong while loading tenants."}
+            action={
+              <Button
+                variant="outline"
+                onClick={() => Promise.all([tenantsQuery.refetch(), nodesQuery.refetch()])}
+              >
+                Retry
+              </Button>
+            }
+          />
+        ) : total === 0 ? (
+          <EmptyState
+            icon={BuildingsIcon}
+            title="No sites yet"
+            description="Create the first community deployment."
+            action={
+              <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
+                <PlusIcon />
+                New site
+              </Button>
+            }
+          />
+        ) : tenants.length === 0 ? (
+          <EmptyState
+            icon={BuildingsIcon}
+            title="No matching sites"
+            description="Try another status or search."
+          />
+        ) : (
+          <>
+            <div className="hidden md:block" data-testid="admin-tenants-table">
+              <DataTable columns={columns} data={tenants} />
+            </div>
+            <ItemGroup className="md:hidden" data-testid="admin-tenants-rows">
+              {tenants.map((tenant) => (
+                <Item
+                  key={tenant.id}
+                  variant="outline"
+                  render={
+                    <Link
+                      to="/tenant/$tenantId"
+                      params={{ tenantId: slugByTenantId.get(tenant.id) ?? tenant.id }}
+                    />
+                  }
+                >
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="max-w-full">
+                      <span className="min-w-0 truncate">{tenant.name}</span>
+                    </ItemTitle>
+                    <ItemDescription>
+                      <span className="font-mono break-all">{tenant.accountId}</span>
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant={tenantStatusTone(tenant.status)}>
+                      {humanize(tenant.status)}
+                    </Badge>
+                    <CaretRightIcon className="size-4 text-muted-foreground" />
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </>
+        )}
+      </section>
+    </>
   );
 }

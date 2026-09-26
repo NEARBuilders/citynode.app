@@ -17,7 +17,7 @@ vi.mock("@/components/connect-dao", () => ({
 afterEach(cleanup);
 
 const createSteps = (publishState: Step["state"]): Step[] => [
-  { id: "create", label: "Create tenant + node + binding", state: "success", blocking: true },
+  { id: "create", label: "Create site, community and domain", state: "success", blocking: true },
   { id: "publish", label: "Publish config as DAO", state: publishState, blocking: false },
 ];
 
@@ -54,9 +54,11 @@ describe("tenant wizard UI seams", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("name"), { target: { value: "Chicago City Node" } });
-    fireEvent.change(screen.getByLabelText("slug"), { target: { value: "chicago" } });
-    fireEvent.submit(screen.getByRole("textbox", { name: "name" }).closest("form")!);
+    fireEvent.change(screen.getByLabelText("Organization name"), {
+      target: { value: "Chicago City Node" },
+    });
+    fireEvent.change(screen.getByLabelText("Organization slug"), { target: { value: "chicago" } });
+    fireEvent.submit(screen.getByTestId("admin-tenant-org-gate"));
 
     expect(onOrgNameChange).toHaveBeenCalledWith("Chicago City Node");
     expect(onOrgSlugChange).toHaveBeenLastCalledWith("chicago");
@@ -68,11 +70,11 @@ describe("tenant wizard UI seams", () => {
       <TenantDeployPhase {...deployProps} steps={createSteps("pending")} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "publish config via DAO" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish settings" }));
     expect(deployProps.onSubmitPublish).toHaveBeenCalledOnce();
 
     rerender(<TenantDeployPhase {...deployProps} steps={createSteps("failed")} />);
-    fireEvent.click(screen.getByRole("button", { name: "retry publish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry publish" }));
     expect(deployProps.onResetPublish).toHaveBeenCalledOnce();
 
     rerender(
@@ -85,6 +87,6 @@ describe("tenant wizard UI seams", () => {
       />,
     );
     expect(screen.getByText("Tenant deployed at")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /open tenant/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Open community settings/ })).toBeTruthy();
   });
 });

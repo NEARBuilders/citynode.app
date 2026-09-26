@@ -1,224 +1,306 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Gavel, LayoutDashboard, Network, Settings, Users } from "lucide-react";
-import { getAccount, pluginPath, useApiClient } from "@/app";
-import { Badge, Button, Card, SectionHeader } from "@/components";
-import { InfoRow } from "@/components/info-row";
+import {
+  BuildingsIcon,
+  CaretRightIcon,
+  CheckCircleIcon,
+  GasPumpIcon,
+  GavelIcon,
+  GearIcon,
+  TreeStructureIcon,
+  UsersIcon,
+} from "@phosphor-icons/react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
+import { cn } from "cn";
+import type { ComponentType, ReactNode } from "react";
+import { getAccount, useApiClient } from "@/app";
+import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
+import { allNodesQueryOptions } from "@/lib/queries/nodes";
+import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
-import { pendingProposalCountQueryOptions } from "./proposals/-proposal-review";
+import { useRelayerInfoQuery } from "@/lib/use-relayer";
+import { formatNearFigure, ListSkeleton, StatFigure, StatGrid } from "./-admin-ui";
+import {
+  adminProposalListQueryOptions,
+  proposalTitle,
+  proposalTypeLabel,
+} from "./proposals/-proposal-review";
+
+const QUEUE_SIZE = 5;
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/")({
   loader: ({ context }) =>
-    context.queryClient.ensureQueryData(pendingProposalCountQueryOptions(context.apiClient)),
-  head: () => ({
-    meta: [{ title: "Admin Dashboard | app" }],
+    context.queryClient.ensureInfiniteQueryData(
+      adminProposalListQueryOptions(context.apiClient, "pending"),
+    ),
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Admin", match.context.runtimeConfig) }],
   }),
-  component: AdminDashboard,
+  component: AdminOverview,
 });
 
-function AdminDashboard() {
+function AdminOverview() {
   const { auth, tenant, tenantOrganizationSlug, runtimeConfig } = Route.useRouteContext();
   const apiClient = useApiClient();
-  // Read from route context, not the window-only helper — a bare getAccount()
-  // falls back to the default account on the server and hydrates to a
-  // different text, tearing the tree down client-side.
   const platformAccount = getAccount(runtimeConfig);
   const user = auth?.user ?? null;
   const walletAccount = useNearAccount();
-  const pendingProposalsQuery = useQuery(pendingProposalCountQueryOptions(apiClient));
-  const pendingProposalCount = pendingProposalsQuery.data?.meta.total;
+
+  const pendingQuery = useInfiniteQuery(adminProposalListQueryOptions(apiClient, "pending"));
+  const nodesQuery = useQuery(allNodesQueryOptions(apiClient));
+  const tenantsQuery = useQuery(tenantsQueryOptions(apiClient));
+  const relayerQuery = useRelayerInfoQuery();
+
+  const pending = pendingQuery.data?.pages[0]?.data ?? [];
+  const pendingTotal = pendingQuery.data?.pages[0]?.meta.total;
+  const relayer = relayerQuery.data;
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Wallet" value={walletAccount ?? user?.name ?? "—"} mono />
-        <StatCard label="Name" value={user?.name || user?.email || "—"} />
-        <StatCard label="Role" value={user?.role ?? "—"} />
-        <StatCard label="Platform account" value={platformAccount} mono />
+    <>
+      <PageHeader title="Admin" subtitle={platformAccount} headerTestId="admin.heading" />
+
+      <StatGrid>
+        <StatFigure
+          label="Waiting for review"
+          value={pendingTotal ?? "—"}
+          tone={pendingTotal ? "attention" : "default"}
+          testId="admin.stat.pending-proposals"
+        />
+        <StatFigure
+          label="Communities"
+          value={nodesQuery.data?.length ?? "—"}
+          testId="admin.stat.nodes"
+        />
+        <StatFigure
+          label="Sites"
+          value={tenantsQuery.data?.length ?? "—"}
+          testId="admin.stat.tenants"
+        />
+        <StatFigure
+          label="Relayer balance"
+          value={relayer?.enabled ? formatNearFigure(relayer.balance) : relayer ? "0" : "—"}
+          hint={relayer ? (relayer.enabled ? "NEAR" : "Needs funding") : "Not configured"}
+          tone={relayer && !relayer.enabled ? "attention" : "default"}
+          testId="admin.stat.relayer"
+        />
+      </StatGrid>
+
+      <section className="flex flex-col gap-6">
+        <SectionHeader
+          title="Waiting for review"
+          sectionTestId="admin.section.queue"
+          action={
+            pendingTotal ? (
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link to="/admin/proposals" search={{ status: "pending" }} />}
+              >
+                See all {pendingTotal}
+              </Button>
+            ) : undefined
+          }
+        />
+        {pendingQuery.isLoading ? (
+          <ListSkeleton rows={3} />
+        ) : pendingQuery.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            Couldn't load proposals: {pendingQuery.error.message}
+          </p>
+        ) : pending.length === 0 ? (
+          <EmptyState
+            icon={CheckCircleIcon}
+            title="All caught up"
+            description="New community applications and submissions show up here."
+            className="py-10"
+          />
+        ) : (
+          <ItemGroup data-testid="admin-queue">
+            {pending.slice(0, QUEUE_SIZE).map((proposal) => (
+              <Item
+                key={proposal.id}
+                variant="outline"
+                render={
+                  <Link
+                    to="/admin/proposals/$proposalId"
+                    params={{ proposalId: proposal.id }}
+                    search={{ pluginId: proposal.pluginId, entityId: proposal.entityId }}
+                  />
+                }
+                data-testid={`admin-queue-item-${proposal.id}`}
+              >
+                <ItemMedia variant="icon">
+                  <GavelIcon />
+                </ItemMedia>
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="max-w-full">
+                    <span className="min-w-0 truncate">{proposalTitle(proposal)}</span>
+                  </ItemTitle>
+                  <ItemDescription>
+                    {proposalTypeLabel(proposal.pluginId)} · submitted{" "}
+                    <LocalDate value={proposal.createdAt} format="relative" />
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <span className="hidden text-sm font-medium sm:inline">Review</span>
+                  <CaretRightIcon className="size-4 text-muted-foreground" />
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
+        )}
       </section>
 
-      <section className="space-y-3">
+      <section className="flex flex-col gap-6">
         <SectionHeader title="Manage" sectionTestId="admin.section.manage" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Network className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.nodes"
-            >
-              Nodes
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Inspect the node tree, validator health, and staking resolution.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/nodes">open nodes</Link>
-            </Button>
-          </Card>
+        <ItemGroup>
+          <ManageRow
+            to="/admin/nodes"
+            icon={TreeStructureIcon}
+            title="Communities"
+            testId="admin.heading.nodes"
+            description="The community tree, validators and domains"
+          />
+          <ManageRow
+            to="/admin/proposals"
+            icon={GavelIcon}
+            title="Proposals"
+            testId="admin.heading.proposals"
+            description="Every application and decision"
+            badge={pendingTotal ? <Badge variant="warning">{pendingTotal} pending</Badge> : null}
+          />
+          <ManageRow
+            to="/admin/tenants"
+            icon={BuildingsIcon}
+            title="Sites"
+            testId="admin.heading.tenants"
+            description="Deployments and their DAOs"
+          />
+          <ManageRow
+            to="/orgs"
+            icon={UsersIcon}
+            title="Organizations"
+            testId="admin.heading.organizations"
+            description="Members, teams and invitations"
+          />
+          <ManageRow
+            to="/admin/relayer"
+            icon={GasPumpIcon}
+            title="Relayer"
+            testId="admin.heading.relayer"
+            description="Gas for gasless writes"
+          />
+          <ManageRow
+            to="/admin/system"
+            icon={GearIcon}
+            title="System"
+            testId="admin.heading.system"
+            description="Runtime configuration and endpoints"
+          />
+        </ItemGroup>
+      </section>
 
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Gavel className="h-4 w-4" />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3
-                className="text-base font-semibold text-foreground"
-                data-testid="admin.heading.proposals"
-              >
-                Proposals
-              </h3>
-              {pendingProposalCount !== undefined && (
-                <Badge variant="secondary">{pendingProposalCount} pending</Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Review and approve thing submissions from the community.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/proposals">review proposals</Link>
-            </Button>
-          </Card>
-
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <LayoutDashboard className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.tenants"
-            >
-              Tenants
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Create and manage tenant deployments for your organization.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/tenants">
-                <Building2 className="h-3.5 w-3.5" />
-                open tenants
-              </Link>
-            </Button>
-          </Card>
-
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Building2 className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.organizations"
-            >
-              Organizations
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Manage organizations, members, roles, and invitations.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/orgs">
-                <Users className="h-3.5 w-3.5" />
-                open organizations
-              </Link>
-            </Button>
-          </Card>
-
-          <Card className="p-6 space-y-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-foreground text-background">
-              <Settings className="h-4 w-4" />
-            </div>
-            <h3
-              className="text-base font-semibold text-foreground"
-              data-testid="admin.heading.settings"
-            >
-              Settings
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Update your profile, auth methods, and security preferences.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link to={pluginPath("/settings")}>open settings</Link>
-            </Button>
-          </Card>
+      <section className="flex flex-col gap-6">
+        <SectionHeader title="This runtime" />
+        <div className="flex flex-col">
+          <ContextRow label="Platform account" value={platformAccount} mono />
+          {tenant && <ContextRow label="Site" value={tenant.name} />}
+          {tenant && (
+            <ContextRow
+              label="Organization"
+              value={
+                tenantOrganizationSlug ? (
+                  <Link
+                    to="/orgs/$slug"
+                    params={{ slug: tenantOrganizationSlug }}
+                    className="hover:underline"
+                  >
+                    {tenantOrganizationSlug}
+                  </Link>
+                ) : (
+                  "—"
+                )
+              }
+            />
+          )}
+          {tenant?.createdAt && (
+            <ContextRow label="Created" value={<LocalDate value={tenant.createdAt} />} />
+          )}
+          <ContextRow label="Name" value={user?.name || user?.email || "—"} />
+          <ContextRow label="Role" value={user?.role ?? "—"} />
+          <ContextRow
+            label="Wallet"
+            value={walletAccount ?? "Not connected"}
+            mono={!!walletAccount}
+          />
         </div>
       </section>
-
-      {tenant && (
-        <section className="space-y-3">
-          <SectionHeader title="Tenant details" />
-          <Card className="p-6 space-y-4">
-            <div className="text-muted-foreground text-[11px] font-bold uppercase tracking-wider">
-              Configuration
-            </div>
-            <div className="flex flex-col gap-2">
-              <InfoRow label="name" value={tenant.name} />
-              <InfoRow label="id" value={tenant.id} mono />
-              <InfoRow label="account" value={tenant.accountId} mono />
-              <InfoRow label="org Id" value={tenant.orgId} mono />
-              <InfoRow
-                label="created"
-                value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-              />
-            </div>
-          </Card>
-        </section>
-      )}
-
-      {tenant && (
-        <section className="space-y-3">
-          <SectionHeader title="Members & permissions" />
-          <Card className="p-4 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              This tenant is backed by an organization. Manage members, roles, and invitations
-              there.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              {tenantOrganizationSlug ? (
-                <Link to="/orgs/$slug" params={{ slug: tenantOrganizationSlug }}>
-                  <Users className="h-3.5 w-3.5" />
-                  open organization
-                </Link>
-              ) : (
-                <Link to="/orgs">
-                  <Users className="h-3.5 w-3.5" />
-                  open organizations
-                </Link>
-              )}
-            </Button>
-          </Card>
-        </section>
-      )}
-    </div>
+    </>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  mono,
+function ManageRow({
+  to,
+  icon: Icon,
+  title,
+  description,
+  testId,
+  badge,
 }: {
-  label: string;
-  value: React.ReactNode;
-  mono?: boolean;
+  to: LinkProps["to"];
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  testId: string;
+  badge?: ReactNode;
 }) {
+  return (
+    <Item variant="outline" size="sm" render={<Link to={to} />}>
+      <ItemMedia variant="icon">
+        <Icon />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="flex-wrap">
+          <h3 className="min-w-0 truncate" data-testid={testId}>
+            {title}
+          </h3>
+          {badge}
+        </ItemTitle>
+        <ItemDescription>{description}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <CaretRightIcon className="size-4 text-muted-foreground" />
+      </ItemActions>
+    </Item>
+  );
+}
+
+function ContextRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   const slug = label.toLowerCase().replace(/\s+/g, "-");
   return (
     <div
-      className="border-2 border-outset border-border-strong bg-card p-4 rounded-[12px] shadow-sm space-y-1"
+      className="flex flex-col gap-1 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
       data-testid={`admin.stat.${slug}`}
     >
-      <div
-        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-        data-testid={`admin.stat.${slug}.label`}
-      >
+      <span className="text-sm text-muted-foreground" data-testid={`admin.stat.${slug}.label`}>
         {label}
-      </div>
-      <div
-        className={`text-base font-bold text-foreground leading-tight ${mono ? "font-mono" : ""}`}
+      </span>
+      <span
+        className={cn("text-sm break-all text-foreground sm:text-right", mono && "font-mono")}
         data-testid={`admin.stat.${slug}.value`}
       >
         {value}
-      </div>
+      </span>
     </div>
   );
 }

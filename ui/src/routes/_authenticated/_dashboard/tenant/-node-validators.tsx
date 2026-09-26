@@ -1,19 +1,95 @@
+import {
+  PencilSimpleIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+  StarIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Badge, Button, Card, CardContent, Input, SectionHeader } from "@/components";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  Field,
+  FieldLabel,
+  Input,
+  SectionHeader,
+} from "@/components";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemSeparator,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { fetchPoolOwner } from "@/lib/pool-owner";
 import {
   invalidateNodeQueries,
   nodeValidatorsQueryOptions,
   tenantNodesQueryOptions,
 } from "@/lib/queries/nodes";
+import { roleLabel } from "../orgs/-org-avatar";
+import { RowMenu } from "../orgs/-row-menu";
 
 interface TenantNodeValidatorsProps {
   tenantId: string;
   canManage: boolean;
+}
+
+const VALIDATOR_ROLE_ITEMS = [
+  { label: "Official", value: "official" },
+  { label: "Community", value: "community" },
+];
+
+function toValidatorRole(value: string | null): ValidatorRow["role"] | null {
+  return value === "official" || value === "community" ? value : null;
+}
+
+function ValidatorRoleSelect({
+  value,
+  onChange,
+  id,
+  ariaLabel,
+}: {
+  value: ValidatorRow["role"];
+  onChange: (role: ValidatorRow["role"]) => void;
+  id?: string;
+  ariaLabel: string;
+}) {
+  return (
+    <Select
+      value={value}
+      items={VALIDATOR_ROLE_ITEMS}
+      onValueChange={(next) => {
+        const role = toValidatorRole(next);
+        if (role) onChange(role);
+      }}
+    >
+      <SelectTrigger id={id} size="sm" aria-label={ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {VALIDATOR_ROLE_ITEMS.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 interface ValidatorRow {
@@ -35,8 +111,8 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
 
   if (isLoading) {
     return (
-      <span className="text-[10px] text-muted-foreground" title="reading owner_id() on-chain">
-        owner: …
+      <span className="text-sm text-muted-foreground" title="reading owner_id() on-chain">
+        Checking pool owner…
       </span>
     );
   }
@@ -44,21 +120,21 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
   if (!owner) {
     return (
       <span
-        className="text-[10px] text-muted-foreground"
+        className="text-sm text-muted-foreground"
         title="account is not a staking pool contract"
       >
-        owner: unknown
+        Not a staking pool
       </span>
     );
   }
 
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+      className="inline-flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground"
       title="verified via owner_id() on-chain"
     >
-      <ShieldCheck className="h-3 w-3 text-green-500" />
-      owner: <code className="font-mono">{owner}</code>
+      <ShieldCheckIcon className="size-3.5 shrink-0 text-success" />
+      Owned by <span className="font-mono break-all">{owner}</span>
     </span>
   );
 }
@@ -68,6 +144,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
   const queryClient = useQueryClient();
   const [newAccountId, setNewAccountId] = useState("");
   const [newRole, setNewRole] = useState<"official" | "community">("community");
+  const [removing, setRemoving] = useState<ValidatorRow | null>(null);
 
   const { data: validators = [] } = useQuery({
     ...nodeValidatorsQueryOptions(apiClient, nodeId),
@@ -87,7 +164,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
     onSuccess: () => {
       toast.success("Validator added");
       setNewAccountId("");
-      invalidate();
+      void invalidate();
     },
     onError: (error: Error) => toast.error(error.message || "Failed to add validator"),
   });
@@ -96,7 +173,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
     mutationFn: async (validatorId: string) => apiClient.deleteValidator({ validatorId }),
     onSuccess: () => {
       toast.success("Validator removed");
-      invalidate();
+      void invalidate();
     },
     onError: (error: Error) => toast.error(error.message || "Failed to remove validator"),
   });
@@ -105,7 +182,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
     mutationFn: async (validatorId: string) => apiClient.setDefaultValidator({ validatorId }),
     onSuccess: () => {
       toast.success("Default validator updated");
-      invalidate();
+      void invalidate();
     },
     onError: (error: Error) => toast.error(error.message || "Failed to set default validator"),
   });
@@ -120,123 +197,128 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
     }) => apiClient.updateValidator({ validatorId, role }),
     onSuccess: () => {
       toast.success("Validator updated");
-      invalidate();
+      void invalidate();
     },
     onError: (error: Error) => toast.error(error.message || "Failed to update validator"),
   });
 
   return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        {validators.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No validators attached to this node yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <tbody>
-              {validators.map((validator) => (
-                <tr key={validator.id} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-3">
-                    <code className="font-mono text-xs text-foreground">{validator.accountId}</code>
-                  </td>
-                  <td className="py-2 pr-3">
+    <div className="flex flex-col gap-3">
+      {validators.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No validators yet.</p>
+      ) : (
+        <ItemGroup>
+          {validators.map((validator, index) => (
+            <div key={validator.id} className="flex flex-col">
+              {index > 0 && <ItemSeparator />}
+              <Item size="sm" data-testid={`tenant-validator-${validator.id}`}>
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="break-all">
+                    <span className="font-mono">{validator.accountId}</span>
+                    {validator.isDefault && <Badge variant="secondary">Default</Badge>}
+                  </ItemTitle>
+                  <ItemDescription>
                     <PoolOwnerBadge
                       poolAccountId={validator.accountId}
                       network={validator.network}
                     />
-                  </td>
-                  <td className="py-2 pr-3">
-                    {canManage ? (
-                      <select
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions className="flex-wrap">
+                  {canManage ? (
+                    <>
+                      <ValidatorRoleSelect
                         value={validator.role}
-                        onChange={(e) =>
-                          updateRoleMutation.mutate({
-                            validatorId: validator.id,
-                            role: e.target.value as ValidatorRow["role"],
-                          })
+                        ariaLabel={`Role for ${validator.accountId}`}
+                        onChange={(role) =>
+                          updateRoleMutation.mutate({ validatorId: validator.id, role })
                         }
-                        className="h-7 rounded-[10px] border-2 border-outset border-border-strong bg-card px-2 text-xs text-foreground"
-                        aria-label="validator role"
-                      >
-                        <option value="official">official</option>
-                        <option value="community">community</option>
-                      </select>
-                    ) : (
-                      <Badge variant="secondary" className="capitalize">
-                        {validator.role}
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {validator.isDefault && <Badge variant="outline">default</Badge>}
-                      {canManage && (
-                        <>
-                          {!validator.isDefault && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setDefaultMutation.mutate(validator.id)}
-                              disabled={setDefaultMutation.isPending}
-                            >
-                              make default
-                            </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteMutation.mutate(validator.id)}
-                            disabled={deleteMutation.isPending}
-                            aria-label="remove validator"
+                      />
+                      <RowMenu label={`Actions for ${validator.accountId}`}>
+                        {!validator.isDefault && (
+                          <DropdownMenuItem
+                            onClick={() => setDefaultMutation.mutate(validator.id)}
+                            disabled={setDefaultMutation.isPending}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                            <StarIcon />
+                            Make default
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setRemoving(validator)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <TrashIcon />
+                          Remove validator
+                        </DropdownMenuItem>
+                      </RowMenu>
+                    </>
+                  ) : (
+                    <Badge variant="outline">{roleLabel(validator.role)}</Badge>
+                  )}
+                </ItemActions>
+              </Item>
+            </div>
+          ))}
+        </ItemGroup>
+      )}
 
-        {canManage && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!newAccountId.trim()) return;
-              createMutation.mutate();
-            }}
-            className="flex items-center gap-2"
-          >
+      {canManage && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newAccountId.trim()) return;
+            createMutation.mutate();
+          }}
+          className="flex max-w-2xl flex-col gap-2 sm:flex-row"
+        >
+          <Field className="min-w-0 flex-1">
+            <FieldLabel htmlFor={`new-validator-account-${nodeId}`} className="sr-only">
+              Validator account
+            </FieldLabel>
             <Input
+              id={`new-validator-account-${nodeId}`}
               value={newAccountId}
               onChange={(e) => setNewAccountId(e.target.value)}
               placeholder="everything.pool.near"
-              className="max-w-xs font-mono text-xs"
+              className="font-mono"
               required
             />
-            <select
+          </Field>
+          <div className="flex gap-2">
+            <ValidatorRoleSelect
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as "official" | "community")}
-              className="h-9 rounded-[10px] border-2 border-outset border-border-strong bg-card px-2 text-xs text-foreground"
-              aria-label="new validator role"
-            >
-              <option value="official">official</option>
-              <option value="community">community</option>
-            </select>
+              ariaLabel="New validator role"
+              onChange={setNewRole}
+            />
             <Button
               type="submit"
-              size="sm"
+              variant="outline"
+              className="flex-1 sm:flex-none"
               disabled={createMutation.isPending || !newAccountId.trim()}
             >
-              <Plus className="h-3.5 w-3.5" />
-              add validator
+              <PlusIcon />
+              Add validator
             </Button>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </form>
+      )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Remove ${removing?.accountId ?? "validator"}?`}
+        description="Stakers can no longer pick it for this community."
+        confirmLabel="Remove"
+        variant="destructive"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (removing) deleteMutation.mutate(removing.id);
+          setRemoving(null);
+        }}
+      />
+    </div>
   );
 }
 
@@ -257,87 +339,69 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
     onSuccess: () => {
       toast.success("Node renamed");
       setRenamingNodeId(null);
-      invalidateNodeQueries(queryClient);
+      void invalidateNodeQueries(queryClient);
     },
     onError: (error: Error) => toast.error(error.message || "Failed to rename node"),
   });
 
-  if (nodes.length === 0) {
-    return (
-      <section className="space-y-3">
-        <SectionHeader title="Node & validators" />
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">
-              No geographic node is attached to this tenant yet.
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-    );
-  }
-
   return (
-    <section className="space-y-3">
-      <SectionHeader title="Node & validators" />
-      <div className="space-y-4">
-        {nodes.map((node) => (
-          <div key={node.id} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="capitalize">
-                {node.kind}
-              </Badge>
-              {renamingNodeId === node.id ? (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!nodeName.trim()) return;
-                    renameMutation.mutate({ nodeId: node.id, name: nodeName.trim() });
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <Input
-                    value={nodeName}
-                    onChange={(e) => setNodeName(e.target.value)}
-                    className="max-w-xs"
-                    autoFocus
-                  />
-                  <Button type="submit" size="sm" disabled={renameMutation.isPending}>
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    save
-                  </Button>
+    <section className="flex flex-col gap-6" data-testid="tenant.section.validators">
+      <SectionHeader title="Node and validators" />
+      {nodes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No node is attached to this community yet.</p>
+      ) : (
+        nodes.map((node) => (
+          <div key={node.id} className="flex flex-col gap-3">
+            {renamingNodeId === node.id ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!nodeName.trim()) return;
+                  renameMutation.mutate({ nodeId: node.id, name: nodeName.trim() });
+                }}
+                className="flex max-w-md flex-wrap gap-2"
+              >
+                <Input
+                  id={`node-name-${node.id}`}
+                  aria-label="Node name"
+                  value={nodeName}
+                  onChange={(e) => setNodeName(e.target.value)}
+                  autoFocus
+                  className="min-w-0 flex-1"
+                />
+                <Button type="submit" disabled={renameMutation.isPending}>
+                  Save
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setRenamingNodeId(null)}>
+                  Cancel
+                </Button>
+              </form>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-medium text-foreground">{node.name}</h3>
+                <Badge variant="outline">{node.kind}</Badge>
+                <span className="font-mono text-sm break-all text-muted-foreground">
+                  {node.slug}
+                </span>
+                {canManage && (
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRenamingNodeId(null)}
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Rename ${node.name}`}
+                    onClick={() => {
+                      setNodeName(node.name);
+                      setRenamingNodeId(node.id);
+                    }}
                   >
-                    cancel
+                    <PencilSimpleIcon />
                   </Button>
-                </form>
-              ) : (
-                <>
-                  <span className="text-sm font-semibold text-foreground">{node.name}</span>
-                  <code className="font-mono text-xs text-muted-foreground">{node.slug}</code>
-                  {canManage && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setNodeName(node.name);
-                        setRenamingNodeId(node.id);
-                      }}
-                    >
-                      rename
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
+                )}
+              </div>
+            )}
             <NodeSection nodeId={node.id} canManage={canManage} />
           </div>
-        ))}
-      </div>
+        ))
+      )}
     </section>
   );
 }

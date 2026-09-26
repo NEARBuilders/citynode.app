@@ -1,5 +1,16 @@
-import { Shield, Trash2, User, UserCog } from "lucide-react";
-import { Badge, Button, Card, CardContent } from "@/components";
+import { UserMinusIcon } from "@phosphor-icons/react";
+import { Avatar, AvatarFallback, AvatarImage, Badge } from "@/components";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { roleLabel } from "./-org-avatar";
+import { RowMenu } from "./-row-menu";
 
 export interface MemberCardMember {
   id: string;
@@ -13,103 +24,71 @@ export interface MemberCardMember {
   } | null;
 }
 
-export function MemberCard({
+export function memberDisplayName(member: MemberCardMember | undefined, fallback: string) {
+  return member?.user?.name || member?.user?.email || fallback;
+}
+
+export function MemberAvatar({
+  member,
+  fallback,
+  size = "default",
+}: {
+  member: MemberCardMember | undefined;
+  fallback: string;
+  size?: "default" | "sm" | "lg";
+}) {
+  const name = memberDisplayName(member, fallback);
+  return (
+    <Avatar size={size}>
+      {member?.user?.image ? <AvatarImage src={member.user.image} alt="" /> : null}
+      <AvatarFallback>{name.charAt(0).toUpperCase()}</AvatarFallback>
+    </Avatar>
+  );
+}
+
+export function MemberRow({
   canManage,
-  isRemoving,
-  isUpdatingRole,
+  isSelf,
   member,
   onRemove,
-  onUpdateRole,
 }: {
   member: MemberCardMember;
   canManage: boolean;
+  isSelf?: boolean;
   onRemove?: () => void;
-  onUpdateRole?: (role: "owner" | "admin" | "member") => void;
-  isRemoving?: boolean;
-  isUpdatingRole?: boolean;
 }) {
-  const user = member.user;
+  const name = memberDisplayName(member, member.userId);
+  const secondary = member.user?.name && member.user.email ? member.user.email : member.userId;
 
   return (
-    <Card className="hover:shadow-md">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {user?.image ? (
-              <img
-                src={user.image}
-                alt=""
-                className="w-9 h-9 rounded-full object-cover border-2 border-outset border-border-strong"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                <User className="h-4 w-4 text-muted-foreground" />
-              </div>
-            )}
-            <div className="min-w-0 space-y-0.5">
-              <div className="font-medium text-sm truncate">
-                {user?.name || user?.email || member.userId}
-              </div>
-              {user?.email && user.name && (
-                <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-              )}
-            </div>
-          </div>
-          <Badge variant="outline" className="shrink-0">
-            {member.role}
-          </Badge>
-        </div>
-
-        {canManage && onUpdateRole && (
-          <div className="flex flex-wrap gap-2">
-            {member.role !== "owner" && (
-              <Button
-                onClick={() => onUpdateRole("owner")}
-                disabled={isUpdatingRole}
-                variant="outline"
-                size="sm"
-              >
-                <Shield className="h-3 w-3 mr-1" />
-                make owner
-              </Button>
-            )}
-            {member.role !== "admin" && (
-              <Button
-                onClick={() => onUpdateRole("admin")}
-                disabled={isUpdatingRole}
-                variant="outline"
-                size="sm"
-              >
-                <UserCog className="h-3 w-3 mr-1" />
-                make admin
-              </Button>
-            )}
-            {member.role !== "member" && (
-              <Button
-                onClick={() => onUpdateRole("member")}
-                disabled={isUpdatingRole}
-                variant="outline"
-                size="sm"
-              >
-                make member
-              </Button>
-            )}
-          </div>
+    <Item size="sm" data-testid={`org-member-${member.userId}`}>
+      <ItemMedia>
+        <MemberAvatar member={member} fallback={member.userId} />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full">
+          <span className="min-w-0 truncate">{name}</span>
+          {isSelf && <span className="shrink-0 text-muted-foreground">(you)</span>}
+        </ItemTitle>
+        <ItemDescription>
+          <span className="font-mono break-all">{secondary}</span>
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Badge variant={member.role === "member" ? "outline" : "secondary"}>
+          {roleLabel(member.role)}
+        </Badge>
+        {canManage && onRemove ? (
+          <RowMenu label={`Actions for ${name}`}>
+            <DropdownMenuItem variant="destructive" onClick={onRemove}>
+              <UserMinusIcon />
+              Remove from organization
+            </DropdownMenuItem>
+          </RowMenu>
+        ) : (
+          <span className="size-11" aria-hidden />
         )}
-
-        {canManage && onRemove && (
-          <Button
-            onClick={onRemove}
-            disabled={isRemoving}
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            {isRemoving ? "removing..." : "remove"}
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+      </ItemActions>
+    </Item>
   );
 }

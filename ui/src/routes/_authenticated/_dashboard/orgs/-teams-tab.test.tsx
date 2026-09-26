@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Tabs } from "@/components";
 import { TeamsTab, type TeamsTabTeam } from "./-teams-tab";
@@ -41,6 +41,11 @@ function renderTab(props: Partial<Parameters<typeof TeamsTab>[0]> = {}) {
   return handlers;
 }
 
+async function openTeamMenu() {
+  fireEvent.click(screen.getByTestId("teams-tab-menu-team-ops"));
+  await screen.findByRole("menu");
+}
+
 afterEach(cleanup);
 
 describe("TeamsTab", () => {
@@ -48,11 +53,11 @@ describe("TeamsTab", () => {
     renderTab({ canManage: false });
 
     expect(screen.queryByTestId("teams-tab-create-input")).toBeNull();
-    expect(screen.queryByTestId("teams-tab-delete-team-ops")).toBeNull();
+    expect(screen.queryByTestId("teams-tab-menu-team-ops")).toBeNull();
     expect(screen.queryByTestId("teams-tab-add-member-team-ops")).toBeNull();
     expect(screen.queryByTestId("teams-tab-remove-member-team-ops-u-ops")).toBeNull();
     expect(
-      (screen.getByTestId("teams-tab-area-team-ops-node-operations") as HTMLButtonElement).disabled,
+      screen.getByTestId("teams-tab-area-team-ops-node-operations").hasAttribute("data-disabled"),
     ).toBe(true);
     expect(screen.getByText("Node operations")).toBeTruthy();
   });
@@ -83,9 +88,10 @@ describe("TeamsTab", () => {
     expect(onAreasChange).toHaveBeenLastCalledWith("team-ops", []);
   });
 
-  it("renames and deletes a team", () => {
+  it("renames and deletes a team from its menu", async () => {
     const { onRename, onDelete } = renderTab();
 
+    await openTeamMenu();
     fireEvent.click(screen.getByTestId("teams-tab-rename-team-ops"));
     fireEvent.change(screen.getByTestId("teams-tab-rename-input-team-ops"), {
       target: { value: "Operators" },
@@ -93,22 +99,33 @@ describe("TeamsTab", () => {
     fireEvent.click(screen.getByTestId("teams-tab-rename-save-team-ops"));
     expect(onRename).toHaveBeenCalledWith("team-ops", "Operators");
 
+    await openTeamMenu();
     fireEvent.click(screen.getByTestId("teams-tab-delete-team-ops"));
     expect(onDelete).toHaveBeenCalledWith("team-ops");
   });
 
-  it("lists team members and offers only organization members outside the team", () => {
+  it("lists team members and offers only organization members outside the team", async () => {
     const { onAddMember, onRemoveMember } = renderTab();
     const card = screen.getByTestId("teams-tab-team-team-ops");
 
     expect(within(card).getByText("Oscar Ops")).toBeTruthy();
-    const picker = screen.getByTestId("teams-tab-add-member-team-ops") as HTMLSelectElement;
-    const options = Array.from(picker.options)
-      .map((option) => option.value)
-      .filter(Boolean);
-    expect(options).toEqual(["u-owner", "u-fin"]);
+    fireEvent.click(screen.getByTestId("teams-tab-add-member-team-ops"));
+    const options = (await screen.findAllByRole("option")).map((option) =>
+      option.getAttribute("data-testid"),
+    );
+    expect(options).toEqual([
+      "teams-tab-add-member-option-team-ops-u-owner",
+      "teams-tab-add-member-option-team-ops-u-fin",
+    ]);
 
-    fireEvent.change(picker, { target: { value: "u-fin" } });
+    const finOption = screen.getByTestId("teams-tab-add-member-option-team-ops-u-fin");
+    fireEvent.pointerDown(finOption);
+    fireEvent.click(finOption);
+    await waitFor(() =>
+      expect(screen.getByTestId("teams-tab-add-member-team-ops").textContent).toContain(
+        "fin@example.com",
+      ),
+    );
     fireEvent.click(screen.getByTestId("teams-tab-add-member-button-team-ops"));
     expect(onAddMember).toHaveBeenCalledWith("team-ops", "u-fin");
 
@@ -131,14 +148,14 @@ describe("TeamsTab", () => {
     const card = screen.getByTestId("teams-tab-team-team-ops");
     expect(within(card).getByText("Loading members...")).toBeTruthy();
     expect(within(card).queryByText("0 members")).toBeNull();
-    expect(
-      (screen.getByTestId("teams-tab-add-member-team-ops") as HTMLSelectElement).disabled,
-    ).toBe(true);
-    expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
+    expect(screen.getByTestId("teams-tab-add-member-team-ops").hasAttribute("data-disabled")).toBe(
+      true,
+    );
+    expect((screen.getByTestId("teams-tab-menu-team-ops") as HTMLButtonElement).disabled).toBe(
       false,
     );
     expect(
-      (screen.getByTestId("teams-tab-area-team-ops-node-operations") as HTMLButtonElement).disabled,
+      screen.getByTestId("teams-tab-area-team-ops-node-operations").hasAttribute("data-disabled"),
     ).toBe(false);
   });
 
@@ -162,7 +179,7 @@ describe("TeamsTab", () => {
     expect(within(card).queryByText("No members in this team")).toBeNull();
     fireEvent.click(within(card).getByTestId("teams-tab-retry-members-team-ops"));
     expect(onRetryMembers).toHaveBeenCalledWith("team-ops");
-    expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByTestId("teams-tab-menu-team-ops") as HTMLButtonElement).disabled).toBe(
       false,
     );
   });

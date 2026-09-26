@@ -12,7 +12,6 @@ export { InfoRow } from "./info-row";
 export { AppHeader } from "./layout/app-header";
 export { AppShell } from "./layout/app-shell";
 export { AppSidebar } from "./layout/app-sidebar";
-export { Chip } from "./layout/chip";
 export {
   filterSidebarByRole,
   getUserRole,
@@ -20,7 +19,6 @@ export {
   type SidebarItem,
   type SidebarRole,
 } from "./layout/nav-items";
-export { NearBranding } from "./layout/near-branding";
 export { NetworkToggle } from "./layout/network-toggle";
 export { OrgSwitcher } from "./layout/org-switcher";
 export { PageContainer } from "./layout/page-container";
@@ -31,6 +29,7 @@ export { SectionHeader } from "./layout/section-header";
 export { SidebarOrgSwitcher } from "./layout/sidebar-org-switcher";
 export { ThemeToggle } from "./layout/theme-toggle";
 export { UserNav } from "./layout/user-nav";
+export { formatLocalDate, LocalDate, useLocalDate } from "./local-date";
 export { Logo } from "./logo";
 export { NodeDirectory, type NodeDirectoryNode } from "./node-directory";
 export { NodeDirectorySkeleton } from "./node-directory-skeleton";
@@ -67,6 +66,7 @@ export {
   CardHeader,
   CardTitle,
 } from "./ui/card";
+export { Chip } from "./ui/chip";
 export {
   Dialog,
   DialogClose,
@@ -87,7 +87,7 @@ export {
 } from "./ui/field";
 export { Input } from "./ui/input";
 export { Label } from "./ui/label";
-export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./ui/popover";
+export { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 export { ScrollArea, ScrollBar } from "./ui/scroll-area";
 export { Skeleton } from "./ui/skeleton";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";

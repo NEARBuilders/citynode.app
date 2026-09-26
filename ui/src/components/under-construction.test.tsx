@@ -20,7 +20,8 @@ describe("UnderConstruction", () => {
       </MotionConfig>,
     );
     expect(html).toContain('aria-label="Library under construction - view source"');
-    expect(html).toContain('alt="Library under construction"');
+    expect(html).toContain("In progress");
+    expect(html).not.toContain("<img");
   });
 
   it("preserves the delayed source link and click callback", () => {

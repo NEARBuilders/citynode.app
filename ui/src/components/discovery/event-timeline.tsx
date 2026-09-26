@@ -1,7 +1,7 @@
-import { MapPin } from "lucide-react";
+import { MapPinIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type EventDateGroup, eventStartTime, type TimelineEvent } from "@/lib/event-timeline";
-import { cn } from "@/lib/utils";
 
 type TimelineItem = TimelineEvent & {
   id: string;
@@ -23,34 +23,39 @@ function scrollParent(node: HTMLElement) {
 
 function useStuck() {
   const sentinel = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLHeadingElement>(null);
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
     const node = sentinel.current;
     if (!node || typeof IntersectionObserver === "undefined") return;
+    const offset = header.current
+      ? Number.parseFloat(getComputedStyle(header.current).top) || 0
+      : 0;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
         const top = entry.rootBounds?.top ?? 0;
         setStuck(!entry.isIntersecting && entry.boundingClientRect.top < top);
       },
-      { root: scrollParent(node), threshold: 0 },
+      { root: scrollParent(node), threshold: 0, rootMargin: `-${offset}px 0px 0px 0px` },
     );
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-  return { sentinel, stuck };
+  return { sentinel, header, stuck };
 }
 
 function DateHeader<T>({ group }: { group: EventDateGroup<T> }) {
-  const { sentinel, stuck } = useStuck();
+  const { sentinel, header, stuck } = useStuck();
   return (
     <>
       <div ref={sentinel} aria-hidden className="h-px" />
       <h3
+        ref={header}
         data-testid="activity-editor.date-group"
         data-stuck={stuck || undefined}
         className={cn(
-          "sticky top-0 z-10 flex items-baseline gap-2 border-b border-transparent bg-background py-2",
+          "sticky top-sticky-offset z-1 flex items-baseline gap-2 border-b border-transparent bg-background py-2",
           stuck && "border-border",
         )}
       >
@@ -106,19 +111,19 @@ export function EventTimeline<T extends TimelineItem>({
                   )}
                   <h4
                     className={cn(
-                      "text-base font-semibold leading-snug break-words",
+                      "text-base font-semibold leading-snug wrap-anywhere",
                       cancelled && "line-through",
                     )}
                   >
                     {event.title}
                   </h4>
                   {event.source && (
-                    <p className="text-sm text-muted-foreground">By {event.source}</p>
+                    <p className="text-sm wrap-anywhere text-muted-foreground">By {event.source}</p>
                   )}
                   {event.venue && (
                     <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="size-3.5 shrink-0" />
-                      <span className="truncate">{event.venue}</span>
+                      <MapPinIcon className="size-3.5 shrink-0" />
+                      <span className="min-w-0 truncate">{event.venue}</span>
                     </p>
                   )}
                   <div className="mt-1 flex flex-wrap gap-1.5">{badges(event)}</div>
