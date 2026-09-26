@@ -1,5 +1,5 @@
 import { BookOpenIcon, CoinsIcon, CompassIcon, ListIcon } from "@phosphor-icons/react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,19 +22,34 @@ interface PublicHeaderProps {
   showSignIn?: boolean;
 }
 
+function isActive(pathname: string, to: string) {
+  if (to === "/about") return pathname === "/about" || pathname === "/skill";
+  if (to === "/explore") return pathname === "/explore" || pathname.startsWith("/n/");
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 export function PublicHeader({ focused = false, showSignIn = true }: PublicHeaderProps) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <header className="shrink-0 border-b border-border bg-background" data-testid="public-header">
+    <header
+      className="sticky top-0 z-20 shrink-0 border-b border-border bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/85"
+      data-testid="public-header"
+    >
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-2 px-4 sm:px-8">
-        <Link to="/" aria-label="CityNode home" data-testid="public-header-home" className="mr-4">
-          <Logo />
+        <Link
+          to="/"
+          aria-label="CityNode home"
+          data-testid="public-header-home"
+          className="mr-6 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <Logo mark={false} size="lg" />
         </Link>
         {!focused && (
           <nav aria-label="Main navigation" className="hidden items-center gap-1 sm:flex">
             {PUBLIC_LINKS.map((link) => (
               <Button
                 key={link.to}
-                variant="ghost"
+                variant={isActive(pathname, link.to) ? "secondary" : "ghost"}
                 size="sm"
                 nativeButton={false}
                 render={

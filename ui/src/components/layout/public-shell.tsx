@@ -18,7 +18,7 @@ export function PublicShell({
 }: PublicShellProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="public-shell">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="sticky-offset-public flex min-h-0 flex-1 flex-col overflow-y-auto">
         <PublicHeader focused={focused} showSignIn={showSignIn} />
         <div className="flex flex-1 flex-col">{children}</div>
         {footer && <footer className="shrink-0 border-t border-border">{footer}</footer>}

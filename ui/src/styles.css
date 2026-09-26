@@ -237,6 +237,10 @@ code {
   --sticky-offset: calc(var(--spacing) * 14 + 1px);
 }
 
+@utility sticky-offset-public {
+  --sticky-offset: calc(var(--spacing) * 16 + 1px);
+}
+
 @utility top-sticky-offset {
   top: var(--sticky-offset, 0px);
 }

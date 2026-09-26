@@ -5,6 +5,7 @@ interface LogoProps {
   showText?: boolean;
   className?: string;
   size?: "sm" | "md" | "lg";
+  mark?: boolean;
 }
 
 export function LogoMark({ size = "md", className }: Pick<LogoProps, "size" | "className">) {
@@ -35,14 +36,20 @@ export function LogoMark({ size = "md", className }: Pick<LogoProps, "size" | "c
   );
 }
 
-export function Logo({ appName = "CityNode", showText = true, className, size = "md" }: LogoProps) {
+export function Logo({
+  appName = "CityNode",
+  showText = true,
+  className,
+  size = "md",
+  mark = true,
+}: LogoProps) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <LogoMark size={size} />
+      {mark && <LogoMark size={size} />}
       {showText && (
         <span
           className={cn(
-            "font-heading font-semibold text-foreground",
+            "font-heading font-semibold tracking-tight text-foreground",
             size === "lg" ? "text-xl" : "text-base",
           )}
         >
