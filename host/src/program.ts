@@ -3,6 +3,7 @@ import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime } from "
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { type Context, Hono } from "hono";
 import type { AuthVariables } from "./lib/auth";
+import { createSandboxProxyHandler } from "./middleware/sandbox-proxy";
 import { getCspStrict, SecurityMiddleware } from "./middleware/security";
 import { createStaticAssetProxyHandler } from "./middleware/static-proxy";
 import { setupApiRoutes } from "./routes/api";
@@ -63,6 +64,11 @@ export const createStartServer = (onReady?: () => void) =>
     app.use("/*", security.csrf);
     app.use("/*", security.rateLimit);
     app.use("*", security.csp);
+
+    if (process.env.BOS_SANDBOX === "1") {
+      logger.info("[Server] BOS_SANDBOX=1 — sandbox tenant proxy middleware enabled");
+      app.use("/*", createSandboxProxyHandler(config));
+    }
 
     if (ssrEnabled) {
       const boot = yield* Effect.exit(composeUi(config));

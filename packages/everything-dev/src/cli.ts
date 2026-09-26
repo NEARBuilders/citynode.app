@@ -175,6 +175,12 @@ async function main() {
   const command = invocationArgs[0] ?? "dev";
   const configPath = findConfigPath();
 
+  if (command === "sandbox") {
+    const { runSandboxCli } = await import("./cli/sandbox");
+    await runSandboxCli(invocationArgs.slice(1), configPath ? dirname(configPath) : undefined);
+    return;
+  }
+
   const commandMatch = findCommandDescriptor(invocationArgs);
   if (!commandMatch) {
     console.error(`Unknown command: ${command}`);
