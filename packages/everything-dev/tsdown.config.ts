@@ -28,6 +28,7 @@ export default defineConfig({
     "src/ui/router.ts",
     "src/ui/api.ts",
     "src/ui/auth.ts",
+    "src/ui/tenant.ts",
     "src/ui/manifest/index.ts",
     "src/ui/manifest-generator.ts",
   ],
@@ -50,6 +51,12 @@ export default defineConfig({
       /^@effect\/.*/,
       /^@rsbuild\/.*/,
       /^@tanstack\/.*/,
+      // MF shared singletons — the ui-surface dist must import them
+      // externally; bundling them drags CJS-interop helpers into client code.
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-dom/client",
       "chalk",
       "every-plugin",
       "tar",

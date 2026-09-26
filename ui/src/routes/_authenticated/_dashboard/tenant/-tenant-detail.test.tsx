@@ -84,6 +84,7 @@ type Harness = {
 const harness = vi.hoisted(() => ({ current: null as Harness | null }));
 
 vi.mock("@/app", () => ({
+  buildTenantUrl: (label: string, gatewayId: string) => `https://${label}.${gatewayId}`,
   getAccount: (config: { account?: string } | undefined) => config?.account ?? "every.near",
   getActiveRuntime: (config: { runtime?: unknown } | undefined) => config?.runtime,
   useApiClient: () => harness.current?.apiClient,
