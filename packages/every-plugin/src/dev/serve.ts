@@ -2,13 +2,13 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { Effect } from "effect";
 import sirv from "sirv";
 import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
 import { ensureGeneratedUiRsbuildConfig } from "../build/ui/generated-config";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
-import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
-import { classifyPluginFailure } from "../runtime/errors";
+import { loadRemoteWithRetry } from "../remote-entry";
 import { killChildEscalating, watchParentDeath } from "./watch-kill";
 
 const corsHeaders = {
@@ -28,8 +28,6 @@ const normalizePrefix = (prefix?: string): string => {
   const cleaned = prefix.replace(/^\/+|\/+$/g, "");
   return cleaned ? `/${cleaned}` : "";
 };
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const readRuntimeConfigFromEnv = (): any => {
   const raw = process.env.BOS_RUNTIME_CONFIG;
@@ -65,43 +63,22 @@ const collectSiblingRemotes = (runtimeConfig: any, pluginId: string) => {
   return { siblings, dependsOn };
 };
 
-const RETRY_BASE_DELAY_MS = 500;
-const RETRY_MAX_DELAY_MS = 5_000;
-
-const loadPluginWithRetry = async (
+const loadPluginWithRetry = (
   runtime: any,
   pluginId: string,
   remoteUrl: string,
   options: Record<string, unknown> = { variables: {}, secrets: {} },
   pluginsMap?: Record<string, unknown>,
   timeoutMs = 90000,
-): Promise<any> => {
-  const deadline = Date.now() + timeoutMs;
-  let lastError: unknown;
-  let lastSignature: string | undefined;
-  let delay = RETRY_BASE_DELAY_MS;
-  await waitForRemoteEntryReady(pluginId, remoteUrl);
-  while (Date.now() < deadline) {
-    try {
-      return await runtime.usePlugin(pluginId, options, pluginsMap);
-    } catch (error) {
-      lastError = error;
-      purgeRemoteEntryCache(remoteUrl);
-      const classification = classifyPluginFailure(error);
-      const signature = `${classification.kind}::${classification.message}`;
-      if (signature !== lastSignature) {
-        lastSignature = signature;
-        console.error(
-          `[dev] plugin ${pluginId} ${classification.kind} failure: ${classification.message}` +
-            (classification.suggestion ? `\n[dev] → ${classification.suggestion}` : ""),
-        );
-      }
-      await sleep(Math.min(delay, RETRY_MAX_DELAY_MS));
-      delay = Math.min(delay * 2, RETRY_MAX_DELAY_MS);
-    }
-  }
-  throw lastError;
-};
+): Promise<any> =>
+  Effect.runPromise(
+    loadRemoteWithRetry({
+      label: pluginId,
+      remoteUrl,
+      load: () => runtime.usePlugin(pluginId, options, pluginsMap),
+      timeoutMs,
+    }),
+  );
 
 const sendJson = (res: http.ServerResponse, status: number, body: unknown) => {
   res.statusCode = status;

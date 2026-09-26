@@ -2,8 +2,8 @@ import { createInstance, getInstance } from "@module-federation/enhanced/runtime
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
-import { classifyPluginFailure } from "every-plugin/errors";
-import { withRemoteEntryResilience } from "every-plugin/remote-entry";
+import { classifyPluginFailure, PluginRuntimeError } from "every-plugin/errors";
+import { loadRemoteWithRetry } from "every-plugin/remote-entry";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
 import { IntegrityRegistry, verifyConfigAgainstChain } from "everything-dev/integrity";
 import { installIntegrityFetchHook } from "everything-dev/mf";
@@ -24,13 +24,40 @@ class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
   execution: "local-host-process";
   cause: unknown;
 }> {
+  /**
+   * The failing runtime stage, when the cause is a stage-attributed
+   * `PluginRuntimeError` ("register-remote" | "load-remote" | ... |
+   * "initialize-plugin") — otherwise undefined.
+   */
+  get operation(): string | undefined {
+    return this.cause instanceof PluginRuntimeError ? this.cause.operation : undefined;
+  }
+
+  /** classification of the underlying cause (kind / retryable / suggestion) */
+  get classification() {
+    return classifyPluginFailure(this.cause);
+  }
+
   get message() {
-    const classification = classifyPluginFailure(this.cause);
+    const classification = this.classification;
     const detail = classification.suggestion
       ? `${classification.message} (${classification.kind}) → ${classification.suggestion}`
       : classification.message;
     return `Plugin ${this.pluginKey}${this.pluginUrl ? ` at ${this.pluginUrl}` : ""} failed: ${detail}`;
   }
+}
+
+/** Structured per-plugin failure surfaced through health endpoints. */
+export interface PluginFailureInfo {
+  pluginKey: string;
+  pluginUrl?: string;
+  operation?: string;
+  kind: string;
+  retryable: boolean;
+  message: string;
+  suggestion?: string;
+  dbSecret?: string;
+  dbUrlMasked?: string;
 }
 
 function dbUrlSummary(url: string | undefined): string {
@@ -90,6 +117,8 @@ export interface PluginStatus {
   error: string | null;
   errorDetails: string | null;
   loadedPlugins: string[];
+  /** structured per-plugin failures (empty when all plugins loaded) */
+  failures: PluginFailureInfo[];
 }
 
 export interface PluginResult {
@@ -270,13 +299,14 @@ const unavailableResult = (
   error: string | null,
   errorDetails: string | null,
   loadedPlugins: string[] = [],
+  failures: PluginFailureInfo[] = [],
 ): PluginResult => ({
   runtime: null,
   auth: null,
   api: null,
   plugins: {},
   authClient: null,
-  status: { available: false, pluginName, error, errorDetails, loadedPlugins },
+  status: { available: false, pluginName, error, errorDetails, loadedPlugins, failures },
 });
 
 interface RuntimePluginEntry {
@@ -379,8 +409,12 @@ export function buildAuthBaseVariables(
 
 function logBootstrapError(err: PluginBootstrapError): Effect.Effect<void> {
   return Effect.gen(function* () {
+    const operation = err.operation ? ` (${err.operation})` : "";
+    const retryable = err.classification.retryable ? "retryable" : "permanent";
+    yield* Effect.logError(
+      `[Plugins][${err.pluginKey}] Failed to load plugin${operation} — ${retryable}: ${err.message}`,
+    );
     if (err.dbSecret) {
-      yield* Effect.logError(`[Plugins] Failed to load ${err.pluginKey} plugin: ${err.message}`);
       if (err.dbUrlMasked) {
         const dbLabel =
           err.pluginKey === "auth"
@@ -389,18 +423,14 @@ function logBootstrapError(err: PluginBootstrapError): Effect.Effect<void> {
               ? "API"
               : `${err.pluginKey} (${err.dbSecret})`;
         yield* Effect.logError(
-          `[Plugins] ${dbLabel} DB URL: ${err.dbUrlMasked} (${dbUrlSummary(err.dbUrlMasked)})`,
+          `[Plugins][${err.pluginKey}] ${dbLabel} DB URL: ${err.dbUrlMasked} (${dbUrlSummary(err.dbUrlMasked)})`,
         );
       }
       if (err.stage === "init") {
         yield* Effect.logError(
-          `[Plugins] Set ${err.dbSecret} in your .env file or ensure local postgres is running for ${err.pluginKey} plugin initialization`,
+          `[Plugins][${err.pluginKey}] Set ${err.dbSecret} in your .env file or ensure local postgres is running for ${err.pluginKey} plugin initialization`,
         );
       }
-    } else {
-      yield* Effect.logError(
-        `[Plugins] Plugin "${err.pluginKey}" (${err.pluginUrl ?? "unknown"}) failed: ${err.message}`,
-      );
     }
   });
 }
@@ -434,14 +464,12 @@ function loadPluginEntryEffect(
     if (pluginsClient) args.push(pluginsClient);
 
     const remoteUrl = `${entry.config.url.replace(/\/$/, "")}/remoteEntry.js`;
-    const result = yield* Effect.tryPromise({
-      try: (): Promise<Omit<HostPluginEntry, "key" | "name">> =>
-        withRemoteEntryResilience({
-          label: entry.key,
-          remoteUrl,
-          load: () => runtime.usePlugin(entry.runtimeId, ...args),
-        }),
-      catch: (error) => {
+    const result = yield* loadRemoteWithRetry<Omit<HostPluginEntry, "key" | "name">>({
+      label: entry.key,
+      remoteUrl,
+      load: () => runtime.usePlugin(entry.runtimeId, ...args),
+    }).pipe(
+      Effect.mapError((error) => {
         if (dbSecret !== null && secretKey) {
           const url = Redacted.value(dbSecret);
           const maskedUrl = url === "unset" ? "unset" : maskDbUrl(url);
@@ -462,8 +490,8 @@ function loadPluginEntryEffect(
           execution: "local-host-process",
           cause: error,
         });
-      },
-    });
+      }),
+    );
 
     return { key: entry.key, name: entry.config.name, ...result };
   });
@@ -487,6 +515,7 @@ export const initializePlugins = Effect.gen(function* () {
         error: null,
         errorDetails: null,
         loadedPlugins: [],
+        failures: [],
       },
     } satisfies PluginResult;
   }
@@ -585,6 +614,7 @@ export const initializePlugins = Effect.gen(function* () {
   });
 
   const errors: string[] = [];
+  const failures: PluginFailureInfo[] = [];
   const loadedPlugins: Record<string, HostPluginEntry> = {};
   const loadedPluginKeys: string[] = [];
   const pluginsClient: Record<string, unknown> = {};
@@ -627,7 +657,7 @@ export const initializePlugins = Effect.gen(function* () {
       baseVariables = yield* buildAuthBaseVariables(config, corsOrigins);
     }
 
-    yield* Effect.logInfo(`[Plugins] Loading ${key} (${entry.config.name})`);
+    yield* Effect.logInfo(`[Plugins][${key}] Loading (${entry.config.name})`);
 
     const result = yield* loadPluginEntryEffect(
       runtime,
@@ -640,6 +670,17 @@ export const initializePlugins = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* logBootstrapError(err);
           errors.push(err.message);
+          failures.push({
+            pluginKey: err.pluginKey,
+            pluginUrl: err.pluginUrl,
+            operation: err.operation,
+            kind: err.classification.kind,
+            retryable: err.classification.retryable,
+            message: err.message,
+            suggestion: err.classification.suggestion,
+            dbSecret: err.dbSecret,
+            dbUrlMasked: err.dbUrlMasked,
+          });
           if (node.kind === "plugin") {
             pluginsClient[key] = failedPluginsClientEntry(err.message);
           }
@@ -657,12 +698,12 @@ export const initializePlugins = Effect.gen(function* () {
       if (node.kind === "auth") {
         authPlugin = result;
         authClient = result.createClient;
-        yield* Effect.logInfo(`[Plugins] Auth plugin loaded: ${result.name}`);
+        yield* Effect.logInfo(`[Plugins][auth] loaded: ${result.name}`);
       } else if (node.kind === "api") {
         baseApi = result;
-        yield* Effect.logInfo(`[Plugins] API plugin loaded: ${result.name}`);
+        yield* Effect.logInfo(`[Plugins][api] loaded: ${result.name}`);
       } else {
-        yield* Effect.logInfo(`[Plugins] Plugin loaded: ${key}`);
+        yield* Effect.logInfo(`[Plugins][${key}] loaded`);
       }
     }
   }
@@ -694,6 +735,7 @@ export const initializePlugins = Effect.gen(function* () {
       error: errors.length > 0 ? errors.join("; ") : null,
       errorDetails: errors.length > 0 ? errors.join("\n") : null,
       loadedPlugins: loadedPluginKeys,
+      failures,
     },
   } satisfies PluginResult;
 }).pipe(

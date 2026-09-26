@@ -143,7 +143,7 @@ export const ModuleFederationServiceDefault = Layer.effect(
     return {
       registerRemote: (pluginId: string, url: string) =>
         Effect.gen(function* () {
-          yield* Effect.logDebug(`[MF] Registering ${pluginId}`);
+          yield* Effect.logDebug(`[MF][${pluginId}] Registering`);
 
           const remoteName = getNormalizedRemoteName(pluginId);
           const type = url.endsWith("/mf-manifest.json")
@@ -169,22 +169,24 @@ export const ModuleFederationServiceDefault = Layer.effect(
               }),
           });
 
-          yield* Effect.logInfo(`[MF] ✅ Registered ${pluginId}`);
+          yield* Effect.logInfo(`[MF][${pluginId}] ✅ Registered`);
         }),
 
       loadRemoteConstructor: (pluginId: string, url: string) =>
         Effect.gen(function* () {
           const remoteName = getNormalizedRemoteName(pluginId);
-          yield* Effect.logDebug(`[MF] Loading remote ${remoteName}`);
+          yield* Effect.logDebug(`[MF][${pluginId}] Loading remote ${remoteName}`);
 
           const identityError = yield* Effect.promise(() =>
             buildSharedIdentityError(pluginId, url),
           );
           if (identityError) {
             yield* Effect.logError(
-              identityError.cause instanceof Error
-                ? identityError.cause.message
-                : String(identityError.cause ?? "shared identity mismatch"),
+              `[MF][${pluginId}] ❌ shared identity mismatch: ${
+                identityError.cause instanceof Error
+                  ? identityError.cause.message
+                  : String(identityError.cause ?? "shared identity mismatch")
+              }`,
             );
             return yield* Effect.fail(identityError);
           }
@@ -261,7 +263,7 @@ export const ModuleFederationServiceDefault = Layer.effect(
               }),
           });
 
-          yield* Effect.logInfo(`[MF] ✅ Loaded constructor for ${pluginId}`);
+          yield* Effect.logInfo(`[MF][${pluginId}] ✅ Loaded constructor`);
           return pluginConstructor;
         }),
     };

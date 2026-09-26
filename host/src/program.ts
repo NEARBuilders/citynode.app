@@ -96,6 +96,7 @@ export const createStartServer = (onReady?: () => void) =>
           auth: plugins.auth ? "ready" : "unavailable",
           ssr: compositionHealth,
           ...(plugins.status.error ? { error: plugins.status.error } : {}),
+          ...(plugins.status.failures.length > 0 ? { failures: plugins.status.failures } : {}),
         },
         compositionHealth.status === "failed" ? 503 : 200,
       );

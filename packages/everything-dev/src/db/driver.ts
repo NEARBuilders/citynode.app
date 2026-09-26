@@ -51,17 +51,60 @@ function connectionOptions(namespace: string | undefined): string {
   return settings.join(" ");
 }
 
+// host.docker.internal is docker-local development networking — the test
+// databases a container reaches through the host gateway, which do not
+// terminate TLS.
+const isLocalDbUrl = (url: string): boolean =>
+  url.includes("localhost") || url.includes("127.0.0.1") || url.includes("host.docker.internal");
+
+/**
+ * TLS behavior for a non-local Postgres URL, following libpq `sslmode`
+ * semantics from the connection string itself:
+ *
+ * - `disable`            → no TLS
+ * - `prefer`/`allow`/`require` → TLS, but the server's certificate is NOT
+ *   verified (libpq: `require` encrypts, it does not trust). Managed
+ *   providers (Railway, Neon, Supabase poolers…) hand out `sslmode=require`
+ *   URLs backed by certificates no client CA bundle can verify.
+ * - `verify-ca`/`verify-full` → TLS + certificate verification.
+ * - absent → verification ON (secure default for bare URLs).
+ *
+ * `DB_SSL_REJECT_UNAUTHORIZED` stays as an explicit operator override: it
+ * wins over whatever the URL says (`"false"` disables verification, `"true"`
+ * forces it).
+ */
+export function resolvePoolSsl(url: string): false | { rejectUnauthorized: boolean } {
+  if (isLocalDbUrl(url)) return false;
+
+  let mode: string | null = null;
+  try {
+    mode = new URL(url).searchParams.get("sslmode");
+  } catch {
+    mode = null;
+  }
+
+  if (process.env.DB_SSL_REJECT_UNAUTHORIZED === "false") return { rejectUnauthorized: false };
+  if (process.env.DB_SSL_REJECT_UNAUTHORIZED === "true") return { rejectUnauthorized: true };
+
+  switch (mode) {
+    case "disable":
+      return false;
+    case "verify-ca":
+    case "verify-full":
+      return { rejectUnauthorized: true };
+    case "prefer":
+    case "allow":
+    case "require":
+      return { rejectUnauthorized: false };
+    default:
+      return { rejectUnauthorized: true };
+  }
+}
+
 function buildPoolConfig(url: string, namespace: string | undefined) {
-  // host.docker.internal is docker-local development networking — the test
-  // databases a container reaches through the host gateway, which do not
-  // terminate TLS.
-  const isLocal =
-    url.includes("localhost") || url.includes("127.0.0.1") || url.includes("host.docker.internal");
   return {
     connectionString: url,
-    ssl: isLocal
-      ? false
-      : { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false" },
+    ssl: resolvePoolSsl(url),
     max: Number(process.env.DB_POOL_MAX) || 10,
     connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS) || 30_000,
     idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS) || 30_000,

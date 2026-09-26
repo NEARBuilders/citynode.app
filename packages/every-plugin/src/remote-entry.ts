@@ -9,6 +9,8 @@
  *    `globalThis.__GLOBAL_LOADING_REMOTE_ENTRY__` (runtime-core never evicts
  *    rejections), so retries without a purge await the same failure.
  */
+import { Duration, Effect, Schedule } from "effect";
+import { classifyPluginFailure, type PluginFailureClassification } from "./runtime/errors";
 
 const POLL_INTERVAL_MS = 300;
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -55,38 +57,96 @@ export const waitForRemoteEntryReady = async (
   throw new Error(`${label} remote entry never became ready at ${url}`);
 };
 
-export interface RemoteEntryResilienceOptions<T> {
+export interface PluginLoadAttemptInfo {
+  attempt: number;
+  classification: PluginFailureClassification;
+}
+
+export interface PluginLoadRetryOptions<T> {
+  /** short plugin key for log prefixes (host entry key or plugin id) */
   label: string;
   remoteUrl: string;
   load: () => Promise<T>;
-  /** called with each failure before the next backoff attempt */
-  onFailure?: (error: unknown) => void;
+  /** wall-clock budget for the retry loop */
   timeoutMs?: number;
+  /**
+   * Budget for the readiness poll (cold-compile wait) — defaults to the
+   * retry budget, preserving the historical behavior.
+   */
+  readinessTimeoutMs?: number;
+  /**
+   * Observes every failed attempt (including non-retryable ones that end the
+   * loop). Defaults to classification-deduped console.error under the
+   * `[Plugins]` prefix.
+   */
+  onAttempt?: ((error: unknown, info: PluginLoadAttemptInfo) => void) | undefined;
 }
 
 /**
- * Poll the remote entry until it is actually served, then load with
- * bounded retry — purging the poisoned global entry cache between attempts
- * so each retry genuinely re-fetches.
+ * The one plugin-load retry policy: poll the remote entry until it is actually
+ * served, then load with capped exponential backoff — purging the poisoned
+ * global entry cache between attempts so each retry genuinely re-fetches.
+ *
+ * Recovery policy is `classifyPluginFailure().retryable`: transient network
+ * conditions retry until the wall-clock budget runs out; permanent failures
+ * (MF identity skew, schema validation, dead remotes, TLS verification) fail
+ * fast on the first attempt instead of burning the budget silently.
+ *
+ * Fails with the ORIGINAL error from `load` — the host builds
+ * `PluginBootstrapError.cause` from it and classification walks it.
  */
-export async function withRemoteEntryResilience<T>(
-  options: RemoteEntryResilienceOptions<T>,
-): Promise<T> {
-  const { label, remoteUrl, load, onFailure, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
-  await waitForRemoteEntryReady(label, remoteUrl, timeoutMs);
-  const deadline = Date.now() + timeoutMs;
-  let delay = RETRY_BASE_DELAY_MS;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      return await load();
-    } catch (error) {
-      lastError = error;
-      purgeRemoteEntryCache(remoteUrl);
-      onFailure?.(error);
-      await sleep(Math.min(delay, RETRY_MAX_DELAY_MS));
-      delay = Math.min(delay * 2, RETRY_MAX_DELAY_MS);
+export const loadRemoteWithRetry = <T>(
+  options: PluginLoadRetryOptions<T>,
+): Effect.Effect<T, unknown> => {
+  const {
+    label,
+    remoteUrl,
+    load,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    readinessTimeoutMs,
+    onAttempt,
+  } = options;
+  const readinessTimeout = readinessTimeoutMs ?? timeoutMs;
+
+  const schedule = Schedule.exponential(Duration.millis(RETRY_BASE_DELAY_MS)).pipe(
+    Schedule.modifyDelay(({ output }) =>
+      Effect.succeed(
+        Duration.toMillis(output) > RETRY_MAX_DELAY_MS
+          ? Duration.millis(RETRY_MAX_DELAY_MS)
+          : output,
+      ),
+    ),
+    Schedule.upTo({ duration: Duration.millis(timeoutMs) }),
+  );
+
+  let attempt = 0;
+  let lastSignature: string | undefined;
+  const reportFailure = (error: unknown): void => {
+    attempt += 1;
+    purgeRemoteEntryCache(remoteUrl);
+    const classification = classifyPluginFailure(error);
+    if (onAttempt) {
+      onAttempt(error, { attempt, classification });
+      return;
     }
-  }
-  throw lastError;
-}
+    const signature = `${classification.kind}::${classification.message}`;
+    if (signature === lastSignature) return;
+    lastSignature = signature;
+    console.error(
+      `[Plugins][${label}] ❌ ${classification.kind} failure (attempt ${attempt}): ${classification.message}` +
+        (classification.suggestion ? `\n[Plugins][${label}] → ${classification.suggestion}` : ""),
+    );
+  };
+
+  return Effect.tryPromise({
+    try: () => waitForRemoteEntryReady(label, remoteUrl, readinessTimeout),
+    catch: (error) => error,
+  }).pipe(
+    Effect.flatMap(() =>
+      Effect.tryPromise({ try: load, catch: (error) => error }).pipe(
+        Effect.tapError((error) => Effect.sync(() => reportFailure(error))),
+        Effect.retry({ schedule, while: (error) => classifyPluginFailure(error).retryable }),
+      ),
+    ),
+  );
+};
