@@ -61,6 +61,7 @@ export const BuildOptionsSchema = z.object({
 
 export const BuildResultSchema = z.object({
   status: z.enum(["success", "error"]),
+  error: z.string().optional(),
   built: z.array(z.string()),
   skipped: z.array(z.string()).optional(),
   deployed: z.boolean().optional(),

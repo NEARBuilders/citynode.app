@@ -779,6 +779,7 @@ export default createPlugin({
       if (!deps.bosConfig) {
         return {
           status: "error" as const,
+          error: "No bos.config.json found",
           built: [],
           skipped: [],
         };
@@ -788,8 +789,13 @@ export default createPlugin({
 
       const targets = selectWorkspaceTargets(input.packages, deps.bosConfig);
       if (targets.length === 0) {
+        const allPackages = [
+          ...Object.keys(deps.bosConfig.app ?? {}),
+          ...Object.keys(deps.bosConfig.plugins ?? {}),
+        ];
         return {
           status: "error" as const,
+          error: `Unknown build target(s): ${input.packages} — valid targets: ${allPackages.join(", ") || "none"} (framework packages build via the prerequisite train: bun run build <target>)`,
           built: [],
           skipped: [],
         };
@@ -823,6 +829,7 @@ export default createPlugin({
       if (built.length === 0) {
         return {
           status: "error" as const,
+          error: `Nothing to build — no local targets matched${skipped.length > 0 ? `: ${skipped.join(", ")}` : ""}`,
           built: [],
           skipped,
         };
