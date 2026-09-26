@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { access, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
@@ -207,16 +207,17 @@ export async function buildWorkspaceTargets(opts: {
     await run("bun", ["install"], { cwd: opts.configDir });
   }
 
-  const shouldBuildPlugin = existing.some((entry) => entry.key === "api");
-
   const forceRebuild = opts.deploy;
+  // Unconditional prerequisite train: every-plugin's dist is a runtime shared
+  // dep of server plugin builds, everything-dev's dist is bundled into ui/api
+  // code (ui/auth, db) — both must be fresh before any target builds.
+  // Bundler-config factories resolve from src (not dist), so the config chain
+  // itself cannot go stale. No-ops when fresh (isWorkspaceDistStale).
   const buildTasks: Promise<unknown>[] = [
     buildEverythingDevQuietly(opts.configDir, forceRebuild),
     buildBetterNearAuthQuietly(opts.configDir, forceRebuild),
+    buildEveryPluginQuietly(opts.configDir, forceRebuild),
   ];
-  if (shouldBuildPlugin) {
-    buildTasks.push(buildEveryPluginQuietly(opts.configDir, forceRebuild));
-  }
   await Promise.all(buildTasks);
 
   const env: Record<string, string> = {

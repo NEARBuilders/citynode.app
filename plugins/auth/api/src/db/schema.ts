@@ -275,6 +275,19 @@ export const deviceCode = pgTable(
   ],
 );
 
+export const deviceLinkClaim = pgTable(
+  "device_link_claim",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    clientId: text("client_id").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("deviceLinkClaim_tokenHash_uidx").on(table.tokenHash)],
+);
+
 export const onboardingCode = pgTable(
   "onboarding_code",
   {
@@ -283,7 +296,9 @@ export const onboardingCode = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    eventId: text("event_id"),
     eventName: text("event_name").notNull(),
+    encryptedCode: text("encrypted_code"),
     teamId: text("team_id")
       .notNull()
       .references(() => team.id, { onDelete: "cascade" }),
@@ -301,7 +316,10 @@ export const onboardingCode = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [uniqueIndex("onboardingCode_codeHash_uidx").on(table.codeHash)],
+  (table) => [
+    uniqueIndex("onboardingCode_codeHash_uidx").on(table.codeHash),
+    index("onboardingCode_organizationId_eventId_idx").on(table.organizationId, table.eventId),
+  ],
 );
 
 export const onboardingRedemption = pgTable(

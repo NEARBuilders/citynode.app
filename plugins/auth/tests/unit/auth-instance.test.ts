@@ -16,7 +16,7 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
     ).toEqual({
       rpID: "localhost",
       rpName: "Everything Dev",
-      origin: "http://localhost:3000",
+      origin: ["http://localhost:3000"],
     });
   });
 
@@ -28,7 +28,7 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
     ).toEqual({
       rpID: "everything.dev",
       rpName: "Everything Dev",
-      origin: "https://everything.dev",
+      origin: ["https://everything.dev"],
     });
   });
 
@@ -45,7 +45,7 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
     ).toEqual({
       rpID: "example.com",
       rpName: "Example Auth",
-      origin: "https://auth.example.com",
+      origin: ["https://auth.example.com"],
     });
   });
 
@@ -57,7 +57,7 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
       }),
     ).toMatchObject({
       rpID: "localhost",
-      origin: "http://localhost:3000",
+      origin: ["http://localhost:3000"],
     });
   });
 
@@ -77,6 +77,44 @@ describe("resolvePasskeyRelyingPartyOptions", () => {
         passkey: { rpID: "https://" },
       }),
     ).toThrow('Invalid passkey RP ID value: "https://"');
+  });
+
+  it("accepts every Gateway Origin of the configured network with the rpID unchanged", () => {
+    expect(
+      resolvePasskeyRelyingPartyOptions({
+        baseUrl: "https://citynode.app",
+        network: "mainnet",
+        passkey: {
+          rpID: "citynode.app",
+          gatewayOrigins: {
+            mainnet: ["https://citynode.app", "https://sf.citynode.app/"],
+            testnet: ["https://testnet.citynode.app"],
+          },
+        },
+      }),
+    ).toMatchObject({
+      rpID: "citynode.app",
+      origin: ["https://citynode.app", "https://sf.citynode.app"],
+    });
+  });
+
+  it("accepts only the testnet Gateway Origins on testnet", () => {
+    expect(
+      resolvePasskeyRelyingPartyOptions({
+        baseUrl: "https://testnet.citynode.app",
+        network: "testnet",
+        passkey: {
+          rpID: "citynode.app",
+          gatewayOrigins: {
+            mainnet: ["https://citynode.app"],
+            testnet: ["testnet.citynode.app", "https://nyc.testnet.citynode.app"],
+          },
+        },
+      }),
+    ).toMatchObject({
+      rpID: "citynode.app",
+      origin: ["https://testnet.citynode.app", "https://nyc.testnet.citynode.app"],
+    });
   });
 
   it("skips a custom rpID on localhost dev origins", () => {

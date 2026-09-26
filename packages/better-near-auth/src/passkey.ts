@@ -25,14 +25,30 @@ export function ecdsaDerToRawLowS(der: Uint8Array): Uint8Array {
   return normalized.toBytes("compact");
 }
 
-const FACTORY_IDS: Record<PasskeyCurve, string> = {
-  p256: "p256-passkey-wallet-contract.trezu.near",
-  ed25519: "ed25519-passkey-wallet-contract.trezu.near",
+export type PasskeyCurve = "p256" | "ed25519";
+export type PasskeyWalletNetwork = "mainnet" | "testnet";
+type PasskeyPublicKey = { curve: PasskeyCurve; bytes: Uint8Array };
+
+const PASSKEY_WALLET_FACTORIES: Partial<
+  Record<PasskeyWalletNetwork, Record<PasskeyCurve, string>>
+> = {
+  mainnet: {
+    p256: "p256-passkey-wallet-contract.trezu.near",
+    ed25519: "ed25519-passkey-wallet-contract.trezu.near",
+  },
 };
 const DEFAULT_TIMEOUT_SECS = 3600;
 
-type PasskeyCurve = "p256" | "ed25519";
-type PasskeyPublicKey = { curve: PasskeyCurve; bytes: Uint8Array };
+export function getPasskeyWalletFactory(
+  network: PasskeyWalletNetwork,
+  curve: PasskeyCurve,
+): string | null {
+  return PASSKEY_WALLET_FACTORIES[network]?.[curve] ?? null;
+}
+
+export function isPasskeyWalletAvailable(network: PasskeyWalletNetwork): boolean {
+  return PASSKEY_WALLET_FACTORIES[network] !== undefined;
+}
 
 export function isDeterministicAccountId(accountId: string): boolean {
   return NEP616_ACCOUNT.test(accountId);
@@ -109,11 +125,11 @@ function serializeDefaultWalletState(publicKey: PasskeyPublicKey): Uint8Array {
   return w.toBytes();
 }
 
-function serializeDefaultStateInit(publicKey: PasskeyPublicKey): Uint8Array {
+function serializeDefaultStateInit(publicKey: PasskeyPublicKey, factoryId: string): Uint8Array {
   const w = new BorshWriter();
   w.writeU8(0);
   w.writeU8(1);
-  w.writeString(FACTORY_IDS[publicKey.curve]);
+  w.writeString(factoryId);
   const state = serializeDefaultWalletState(publicKey);
   w.writeU32(1);
   w.writeU32(0);
@@ -122,8 +138,13 @@ function serializeDefaultStateInit(publicKey: PasskeyPublicKey): Uint8Array {
   return w.toBytes();
 }
 
-function deriveAccountId(publicKey: PasskeyPublicKey): string {
-  const hash = keccak_256(serializeDefaultStateInit(publicKey));
+function deriveAccountId(
+  publicKey: PasskeyPublicKey,
+  network: PasskeyWalletNetwork = "mainnet",
+): string | null {
+  const factoryId = getPasskeyWalletFactory(network, publicKey.curve);
+  if (!factoryId) return null;
+  const hash = keccak_256(serializeDefaultStateInit(publicKey, factoryId));
   return `0s${Array.from(hash.slice(12, 32))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")}`;
@@ -144,9 +165,12 @@ export function computeNep413Challenge(message: string, recipient: string, nonce
   return nep413PayloadHash(message, recipient, nonce);
 }
 
-export function derivePasskeyAccountId(publicKey: string): string | null {
+export function derivePasskeyAccountId(
+  publicKey: string,
+  network: PasskeyWalletNetwork = "mainnet",
+): string | null {
   const key = publicKeyFromString(publicKey);
-  return key ? deriveAccountId(key) : null;
+  return key ? deriveAccountId(key, network) : null;
 }
 
 export function passkeyPublicKeyToString(key: PasskeyPublicKey): string {

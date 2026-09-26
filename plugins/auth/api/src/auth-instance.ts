@@ -17,9 +17,16 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
-import { type SIWNPluginOptions, siwn } from "better-near-auth";
+import { DEFAULT_DEVICE_LINK_CLIENT_ID, type SIWNPluginOptions, siwn } from "better-near-auth";
 import { gt } from "drizzle-orm";
-import { deviceLink } from "./device-link";
+import { BOS_CLI_CLIENT_ID, deviceLink } from "./device-link";
+import {
+  createPasskeySignUpUser,
+  passkeyAuthenticatorSelection,
+  passkeySignUp,
+  requireUserVerifiedSignIn,
+  requireWalletCapablePasskey,
+} from "./passkey-sign-up";
 
 const orgStatements = {
   ...defaultStatements,
@@ -64,7 +71,7 @@ export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPlu
 export interface PasskeyRelyingPartyOptions {
   rpID: string;
   rpName: string;
-  origin: string;
+  origin: string[];
 }
 
 function normalizeOrigin(value: string): string {
@@ -100,7 +107,7 @@ function isLocalOrigin(origin: string): boolean {
 }
 
 export function resolvePasskeyRelyingPartyOptions(
-  config: Pick<AuthConfig, "baseUrl" | "passkey">,
+  config: Pick<AuthConfig, "baseUrl" | "passkey" | "network">,
 ): PasskeyRelyingPartyOptions {
   const passkey = config.passkey;
   const origin = normalizeOrigin(passkey?.origin?.trim() || config.baseUrl);
@@ -110,12 +117,17 @@ export function resolvePasskeyRelyingPartyOptions(
       ? normalizeRpId(passkey.rpID.trim())
       : new URL(origin).hostname;
   const rpName = passkey?.rpName?.trim() || "Everything Dev";
+  const gatewayOrigins = (passkey?.gatewayOrigins?.[config.network ?? "mainnet"] ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(normalizeOrigin);
 
-  return { rpID, rpName, origin };
+  return { rpID, rpName, origin: [...new Set([origin, ...gatewayOrigins])] };
 }
 
 export function buildSiwnOptions(config: AuthConfig): Parameters<typeof siwn>[0] {
   const base = {
+    passkeyWalletNetwork: config.network ?? "mainnet",
     apiKey: config.siwn.apiKey,
     rpcUrl: config.siwn.rpcUrl,
     relayer: config.siwn.relayer,
@@ -263,8 +275,13 @@ export function createAuthInstance(
   const twilioConfig = config.phoneNumber?.twilio;
   const githubConfig = config.socialProviders?.github;
   const googleConfig = config.socialProviders?.google;
+  const network = config.network ?? "mainnet";
   const siwnOptions = buildSiwnOptions(config);
   const membershipPolicy = createOrganizationMembershipPolicy(config.organizationMembershipLimit);
+  const deviceClientIds = new Set([
+    config.deviceLink?.clientId ?? DEFAULT_DEVICE_LINK_CLIENT_ID,
+    BOS_CLI_CLIENT_ID,
+  ]);
   const mainnetRecipient = isRecipientsConfig(siwnOptions)
     ? siwnOptions.recipients.mainnet
     : siwnOptions.recipient;
@@ -313,23 +330,15 @@ export function createAuthInstance(
         : []),
       passkey({
         ...passkeyOptions,
+        authenticatorSelection: passkeyAuthenticatorSelection,
+        authentication: { afterVerification: requireUserVerifiedSignIn },
         registration: {
           requireSession: false,
-          resolveUser: async ({ ctx }) => {
-            const recipient = mainnetRecipient;
-            const email = `passkey-${crypto.randomUUID().slice(0, 8)}@${recipient}`;
-            const created = await ctx.context.internalAdapter.createUser({
-              email,
-              name: "Passkey user",
-              emailVerified: true,
-            });
-            if (!created) {
-              throw new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to create user" });
-            }
-            return { id: created.id, name: created.name, displayName: created.name };
-          },
+          afterVerification: requireWalletCapablePasskey,
+          resolveUser: (args) => createPasskeySignUpUser(args, mainnetRecipient),
         },
       }),
+      passkeySignUp({ network }),
       organization({
         ac: orgAc,
         roles: orgRoles,
@@ -423,13 +432,8 @@ export function createAuthInstance(
       }),
       nearInvitations(db, membershipPolicy),
       deviceAuthorization({
-        // Public-client device flow (RFC 8628): the CLI cannot know the
-        // tenant's configured clientId, and client secrets don't exist for
-        // public clients — user approval is the trust boundary. Any non-empty
-        // client id may start a flow; the code↔client binding is still
-        // enforced at the token endpoint.
         verificationUri: "/login/device",
-        validateClient: (clientId) => typeof clientId === "string" && clientId.trim().length > 0,
+        validateClient: (clientId) => deviceClientIds.has(clientId),
       }),
       deviceLink(db),
       apiKey([

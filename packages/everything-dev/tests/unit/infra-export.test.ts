@@ -1,23 +1,6 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { Effect } from "effect";
-import { afterEach, describe, expect, it } from "vitest";
-import { buildCiInfraPlan, buildOriginMap } from "../../src/cli/infra";
-import { makeProjectEnv } from "../../src/env/project-env";
-import { InfraMaterializer, InfraMaterializerLive } from "../../src/infra/materializer";
+import { describe, expect, it } from "vitest";
+import { buildCiInfraPlan } from "../../src/cli/infra";
 import type { RuntimeConfig, RuntimePluginConfig } from "../../src/types";
-
-async function materialize(configDir: string, runtimeConfig: RuntimeConfig): Promise<void> {
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      const m = yield* InfraMaterializer;
-      yield* m.materializeTemplate(configDir, runtimeConfig);
-      yield* m.materializeTestInfra(configDir, runtimeConfig);
-      yield* m.materializeCompose(configDir, runtimeConfig);
-    }).pipe(Effect.provide(InfraMaterializerLive)),
-  );
-}
 
 function buildRuntimeConfig(overrides?: Partial<RuntimeConfig>): RuntimeConfig {
   return {
@@ -58,26 +41,12 @@ function buildRuntimeConfig(overrides?: Partial<RuntimeConfig>): RuntimeConfig {
 }
 
 describe("buildCiInfraPlan", () => {
-  const tempDirs: string[] = [];
-
-  afterEach(() => {
-    while (tempDirs.length > 0) {
-      const dir = tempDirs.pop();
-      if (dir) rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("emits env vars and shared services for api, auth, and plugin secrets", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-ci-infra-"));
-    tempDirs.push(dir);
-    await materialize(dir, buildRuntimeConfig());
-    await Effect.runPromise(makeProjectEnv().ensureFile(dir));
-
+  it("emits env vars and shared services for api, auth, and plugin secrets", () => {
     const runtime = {
       ...buildRuntimeConfig(),
       env: "production" as const,
     };
-    const plan = buildCiInfraPlan(runtime, { configDir: dir });
+    const plan = buildCiInfraPlan(runtime);
 
     expect(plan.env.API_DATABASE_URL).toBe(
       "postgres://everythingdev:everythingdev@localhost:5432/api_db",
@@ -111,7 +80,7 @@ describe("buildCiInfraPlan", () => {
     const previous = process.env.BOS_CI_HOST_PORT;
     try {
       process.env.BOS_CI_HOST_PORT = "5173";
-      const plan = buildCiInfraPlan(buildRuntimeConfig(), {});
+      const plan = buildCiInfraPlan(buildRuntimeConfig());
       expect(plan.env.CORS_ORIGIN).toBe("http://127.0.0.1:5173");
 
       const override = buildCiInfraPlan(buildRuntimeConfig(), { hostPortOverride: 8080 });
@@ -122,86 +91,13 @@ describe("buildCiInfraPlan", () => {
     }
   });
 
-  it("tracks stable ports across calls (portMap persistence)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bos-ci-infra-ports-"));
-    tempDirs.push(dir);
+  it("emits stable conventional ports across calls", () => {
     const cfg = buildRuntimeConfig();
-    await materialize(dir, cfg);
-    const first = buildCiInfraPlan(cfg, { configDir: dir });
-    const second = buildCiInfraPlan(cfg, { configDir: dir });
+    const first = buildCiInfraPlan(cfg);
+    const second = buildCiInfraPlan(cfg);
 
     const firstApi = first.services.find((s) => s.key === "api");
     const secondApi = second.services.find((s) => s.key === "api");
     expect(firstApi?.ports).toEqual(secondApi?.ports);
-  });
-});
-
-describe("buildOriginMap from resolved RuntimeConfig", () => {
-  it("uses plugin extendsRef for plugin origins", () => {
-    const runtime: RuntimeConfig = {
-      env: "development",
-      account: "city.example.near",
-      networkId: "mainnet",
-      host: { name: "host", url: "http://localhost:3000", entry: "/mf-manifest.json" },
-      ui: { name: "ui", url: "http://localhost:3003", entry: "/mf-manifest.json" },
-      api: {
-        name: "api",
-        url: "http://localhost:3001",
-        entry: "/mf-manifest.json",
-        secrets: ["API_DATABASE_URL"],
-      },
-      auth: {
-        name: "auth",
-        url: "http://localhost:3002",
-        entry: "/mf-manifest.json",
-        extendsRef: "bos://auth.everything.near/auth.everything.dev#app.auth",
-        secrets: ["AUTH_DATABASE_URL"],
-      },
-      plugins: {
-        apps: {
-          name: "apps",
-          url: "http://localhost:3010",
-          entry: "/mf-manifest.json",
-          source: "local" as const,
-          extendsRef: "bos://something/near/gateway",
-          secrets: ["APPS_DATABASE_URL"],
-        } as RuntimePluginConfig,
-      },
-    } as RuntimeConfig;
-
-    const map = buildOriginMap("", runtime);
-
-    expect(map.get("API_DATABASE_URL")).toBe("city.example.near");
-    expect(map.get("AUTH_DATABASE_URL")).toBe("auth.everything.near");
-    expect(map.get("APPS_DATABASE_URL")).toBe("something");
-  });
-
-  it("falls back to runtime.account when extendsRef is absent", () => {
-    const runtime: RuntimeConfig = {
-      env: "development",
-      account: "city.example.near",
-      networkId: "mainnet",
-      host: { name: "host", url: "http://localhost:3000", entry: "/mf-manifest.json" },
-      ui: { name: "ui", url: "http://localhost:3003", entry: "/mf-manifest.json" },
-      api: {
-        name: "api",
-        url: "http://localhost:3001",
-        entry: "/mf-manifest.json",
-        secrets: ["API_DATABASE_URL"],
-      },
-      plugins: {
-        localonly: {
-          name: "localonly",
-          url: "http://localhost:3010",
-          entry: "/mf-manifest.json",
-          source: "local" as const,
-          secrets: ["LOCALONLY_DATABASE_URL"],
-        } as RuntimePluginConfig,
-      },
-    } as RuntimeConfig;
-
-    const map = buildOriginMap("", runtime);
-    expect(map.get("API_DATABASE_URL")).toBe("city.example.near");
-    expect(map.get("LOCALONLY_DATABASE_URL")).toBe("city.example.near");
   });
 });

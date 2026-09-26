@@ -3,9 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useApiClient } from "@/app";
+import { pluginPath, pluginSearch, useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader } from "@/components";
-import { pluginPath, pluginSearch } from "@/lib/plugin-path";
 import { invalidateThingAfterProposal } from "./-thing-cache";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/new")({

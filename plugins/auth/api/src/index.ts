@@ -19,7 +19,9 @@ import { createSessionHandlers } from "./handlers/session";
 import { createTeamHandlers } from "./handlers/teams";
 import type { PluginsClient } from "./lib/plugins-client.gen";
 import { createRequireAuth } from "./middleware";
+import { createOnboardingCodeCipher } from "./onboarding-code-cipher";
 import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
+import { OrphanSweepLive } from "./orphan-sweep";
 import { AuthServicesTag } from "./service-types";
 import { toError } from "./utils";
 
@@ -48,15 +50,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
       console.log("[Auth] Better Auth instance created");
 
-      return Layer.succeed(AuthServicesTag, {
-        auth,
-        db,
-        handler: (req: Request) => auth.handler(req),
-        apiKeyHeaders,
-        membershipPolicy: createOrganizationMembershipPolicy(
-          authConfig.organizationMembershipLimit,
-        ),
-      });
+      return Layer.mergeAll(
+        Layer.succeed(AuthServicesTag, {
+          auth,
+          db,
+          handler: (req: Request) => auth.handler(req),
+          apiKeyHeaders,
+          membershipPolicy: createOrganizationMembershipPolicy(
+            authConfig.organizationMembershipLimit,
+          ),
+          onboardingCodeCipher: createOnboardingCodeCipher(authConfig.secret),
+        }),
+        OrphanSweepLive(db),
+      );
     }).pipe(Effect.mapError((e) => toError(e))),
 
   createRouter: (builder) => {

@@ -14,7 +14,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components";
-import { DataTable, type DataTableColumnDef } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumnDef } from "@/components/data-table";
 import {
   Select,
   SelectContent,

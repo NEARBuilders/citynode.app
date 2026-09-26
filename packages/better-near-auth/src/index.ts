@@ -27,13 +27,17 @@ import {
   verifyNep413Signature,
 } from "near-kit";
 import z from "zod";
+import { PASSKEY_WALLET_UNAVAILABLE } from "./constants.js";
 import {
-  derivePasskeyAccountId,
   isDeterministicAccountId,
-  parseCosePublicKey,
-  passkeyPublicKeyToString,
+  isPasskeyWalletAvailable,
+  type PasskeyWalletNetwork,
   verifyPasskeyNep413Signature,
 } from "./passkey.js";
+import {
+  linkPasskeyWalletFromCredential,
+  passkeyWalletFromCredential,
+} from "./passkey-wallet-link.js";
 import { defaultGetProfile, getImageUrl, getNetworkFromAccountId } from "./profile.js";
 import { schema } from "./schema.js";
 import {
@@ -81,6 +85,17 @@ import {
   ViewContractResponse,
 } from "./types.js";
 
+export {
+  getPasskeyWalletFactory,
+  isPasskeyWalletAvailable,
+  type PasskeyWalletNetwork,
+  parseCosePublicKey,
+} from "./passkey.js";
+export {
+  linkPasskeyWalletFromCredential,
+  PASSKEY_WALLET_UNAVAILABLE,
+  type PasskeyWalletLink,
+} from "./passkey-wallet-link.js";
 export * from "./types.js";
 
 import { bytesToHex, decryptPrivateKey, encryptPrivateKey } from "./utils.js";
@@ -634,6 +649,7 @@ export interface SIWNPluginOptions {
     parentKey?: string | DualNetworkConfig<string>;
   };
   subAccount?: SubAccountConfig | DualNetworkConfig<SubAccountConfig>;
+  passkeyWalletNetwork?: PasskeyWalletNetwork;
 }
 
 export const siwn = (options: SIWNPluginOptions) => {
@@ -710,6 +726,7 @@ export const siwn = (options: SIWNPluginOptions) => {
   };
 
   const primaryNetwork = getSupportedNetworks()[0];
+  const passkeyWalletNetwork = options.passkeyWalletNetwork ?? primaryNetwork ?? "mainnet";
   const relayerStates = new Map<"mainnet" | "testnet", RelayerState | null>();
   const gasKeyFundLocks = new Map<string, Promise<unknown>>();
 
@@ -992,7 +1009,7 @@ export const siwn = (options: SIWNPluginOptions) => {
             });
           }
 
-          const passkeys = await ctx.context.adapter.findMany({
+          const passkeys = await ctx.context.adapter.findMany<{ publicKey: string }>({
             model: "passkey",
             where: [{ field: "userId", operator: "eq", value: session.user.id }],
           });
@@ -1002,7 +1019,10 @@ export const siwn = (options: SIWNPluginOptions) => {
             });
           }
 
-          const network = "mainnet" as const;
+          const network = passkeyWalletNetwork;
+          const unavailable = () =>
+            ctx.json({ success: false, network, reason: PASSKEY_WALLET_UNAVAILABLE });
+          if (!isPasskeyWalletAvailable(network)) return unavailable();
           const recipient = getRecipient(network);
           const message = `Sign in to ${recipient}`;
           let nonceBytes: Uint8Array;
@@ -1027,36 +1047,22 @@ export const siwn = (options: SIWNPluginOptions) => {
             });
           }
 
-          let accountId: string | null = null;
-          let publicKey: string | null = null;
-          for (const passkey of passkeys as Array<{ publicKey: string }>) {
-            let cose: Uint8Array;
-            try {
-              cose = base64.decode(passkey.publicKey);
-            } catch {
-              continue;
-            }
-            const key = parseCosePublicKey(cose);
-            if (!key) continue;
-            const pubKey = passkeyPublicKeyToString(key);
-            const derived = derivePasskeyAccountId(pubKey);
-            if (!derived) continue;
-            const isValid = verifyPasskeyNep413Signature({
-              accountId: derived,
-              publicKey: pubKey,
-              signature: proof,
-              message,
-              recipient,
-              nonce: nonceBytes,
-            });
-            if (isValid) {
-              accountId = derived;
-              publicKey = pubKey;
-              break;
-            }
-          }
+          const signer = passkeys.find((passkey) => {
+            const wallet = passkeyWalletFromCredential(passkey.publicKey, network);
+            return (
+              !!wallet &&
+              verifyPasskeyNep413Signature({
+                accountId: wallet.accountId,
+                publicKey: wallet.publicKey,
+                signature: proof,
+                message,
+                recipient,
+                nonce: nonceBytes,
+              })
+            );
+          });
 
-          if (!accountId || !publicKey) {
+          if (!signer) {
             throw new APIError("UNAUTHORIZED", {
               message: "Unauthorized: Invalid passkey signature",
               status: 401,
@@ -1069,49 +1075,18 @@ export const siwn = (options: SIWNPluginOptions) => {
             expiresAt: new Date(Date.now() + 15 * 60 * 1000),
           });
 
-          const existingNearAccount: NearAccount | null = await ctx.context.adapter.findOne({
-            model: "nearAccount",
-            where: [{ field: "accountId", operator: "eq", value: accountId }],
+          const link = await linkPasskeyWalletFromCredential(ctx.context, {
+            userId: session.user.id,
+            credentialPublicKey: signer.publicKey,
+            network,
           });
-          if (existingNearAccount && existingNearAccount.userId !== session.user.id) {
-            throw new APIError("BAD_REQUEST", {
-              message: "This NEAR account is already linked to another user",
-              status: 400,
-            });
-          }
-
-          if (!existingNearAccount) {
-            const userAccounts = await ctx.context.adapter.findMany({
-              model: "nearAccount",
-              where: [{ field: "userId", operator: "eq", value: session.user.id }],
-            });
-
-            await ctx.context.adapter.create({
-              model: "nearAccount",
-              data: {
-                userId: session.user.id,
-                accountId,
-                network,
-                publicKey,
-                isPrimary: userAccounts.length === 0,
-                createdAt: new Date(),
-              },
-            });
-
-            await ctx.context.internalAdapter.createAccount({
-              userId: session.user.id,
-              providerId: "siwn",
-              accountId: `${accountId}:${network}`,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-          }
+          if (link.status === "unavailable") return unavailable();
 
           await ensureRelayer(ctx.context.adapter, ctx.context.secret, network);
 
           return ctx.json({
             success: true,
-            accountId,
+            accountId: link.accountId,
             network,
           });
         },

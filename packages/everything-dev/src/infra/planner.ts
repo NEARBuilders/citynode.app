@@ -3,13 +3,10 @@ import { resolve } from "node:path";
 import { Effect } from "effect";
 import { PortAllocator, type PortBlockEntry } from "../app";
 import {
-  buildDatabaseConfigs,
-  buildOriginMap,
-  buildRedisConfigs,
-  type DatabaseSecretConfig,
+  buildConventionalDatabases,
+  buildConventionalRedis,
   getSecretGroups,
   loadPortState,
-  type RedisSecretConfig,
   savePortState,
 } from "../cli/infra";
 import {
@@ -23,7 +20,6 @@ import { ownerOfPort } from "./port-ownership";
 import type {
   ClaimRecord,
   CliPorts,
-  ComposeModelPlan,
   DatabasePlan,
   InfraInput,
   InfraPlan,
@@ -188,8 +184,6 @@ function allocateServices(
       plugins: Object.fromEntries(
         pluginKeys.map((k) => [k, { api: pluginApiPorts[k], ui: pluginUiPorts[k] }]),
       ),
-      postgres: {},
-      redis: {},
     };
 
     const devPortsState = {
@@ -226,13 +220,8 @@ function allocateServices(
   );
 }
 
-function allocateDatabases(
-  runtimeConfig: RuntimeConfig,
-  configDir: string,
-): Effect.Effect<
+function allocateDatabases(runtimeConfig: RuntimeConfig): Effect.Effect<
   {
-    postgres: Record<string, number>;
-    redis: Record<string, number>;
     dbs: DatabasePlan[];
     redisPlans: RedisPlan[];
   },
@@ -240,23 +229,16 @@ function allocateDatabases(
   PortAllocator
 > {
   return Effect.gen(function* () {
-    const persisted = loadPortState(configDir);
     const groups = getSecretGroups(runtimeConfig);
     const allSecrets = groups.flatMap((group) => group.secrets);
-    const originMap = buildOriginMap(configDir, runtimeConfig);
     const allocator = yield* PortAllocator;
 
-    const infraDatabases: DatabaseSecretConfig[] = yield* Effect.sync(() =>
-      buildDatabaseConfigs(allSecrets, originMap, { ...persisted.postgresPorts }),
-    );
-    const infraRedis: RedisSecretConfig[] = yield* Effect.sync(() =>
-      buildRedisConfigs(allSecrets, originMap, { ...persisted.redisPorts }),
-    );
+    const conventionalDatabases = buildConventionalDatabases(allSecrets);
+    const conventionalRedis = buildConventionalRedis(allSecrets);
 
-    const postgres: Record<string, number> = {};
     const dbs: DatabasePlan[] = [];
     const allocatedByDesired = new Map<number, number>();
-    for (const db of infraDatabases) {
+    for (const db of conventionalDatabases) {
       let port: number;
       if (allocatedByDesired.has(db.port)) {
         port = allocatedByDesired.get(db.port)!;
@@ -264,34 +246,27 @@ function allocateDatabases(
         port = yield* allocator.pickAvailable(db.port);
         allocatedByDesired.set(db.port, port);
       }
-      postgres[db.slug] = port;
       dbs.push({
         secret: db.secret,
         slug: db.slug,
         port,
         dbName: db.databaseName,
-        containerName: db.containerName,
-        volumeName: db.volumeName,
         url: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${port}/${db.databaseName}`,
       });
     }
 
-    const redis: Record<string, number> = {};
     const redisPlans: RedisPlan[] = [];
-    for (const r of infraRedis) {
+    for (const r of conventionalRedis) {
       const port = yield* allocator.pickAvailable(r.port);
-      redis[r.slug] = port;
       redisPlans.push({
         secret: r.secret,
         slug: r.slug,
         port,
-        containerName: r.containerName,
-        volumeName: r.volumeName,
         url: `redis://localhost:${port}`,
       });
     }
 
-    return { postgres, redis, dbs, redisPlans };
+    return { dbs, redisPlans };
   }).pipe(
     Effect.mapError(
       (portErr) =>
@@ -414,16 +389,6 @@ export function buildLaunchSpec(
   };
 }
 
-export function buildComposeModel(dbs: DatabasePlan[], redisPlans: RedisPlan[]): ComposeModelPlan {
-  const seenContainers = new Set<string>();
-  const uniqueDbs = dbs.filter((db) => {
-    if (seenContainers.has(db.containerName)) return false;
-    seenContainers.add(db.containerName);
-    return true;
-  });
-  return { databases: uniqueDbs, redis: redisPlans };
-}
-
 export function buildEnvGenerated(
   resolvedPorts: ResolvedPorts,
   dbs: DatabasePlan[],
@@ -464,18 +429,9 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       devPortsState,
     } = yield* allocateServices(cliPorts, plugins, input.configDir, input.bosConfig.auth);
 
-    const {
-      dbs,
-      redisPlans,
-      postgres: pgPorts,
-      redis: rdPorts,
-    } = yield* allocateDatabases(input.bosConfig, input.configDir);
+    const { dbs, redisPlans } = yield* allocateDatabases(input.bosConfig);
 
-    const resolvedPorts: ResolvedPorts = {
-      ...svcPorts,
-      postgres: pgPorts,
-      redis: rdPorts,
-    };
+    const resolvedPorts: ResolvedPorts = { ...svcPorts };
 
     // Write merged state once after all allocations succeed
     // Skip persistence for regression tests / ephemeral runs
@@ -490,11 +446,7 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       pluginPortStart: devPortsState.pluginPortStart ?? previousDevPorts.pluginPortStart,
     };
     if (shouldPersistPortState()) {
-      savePortState(input.configDir, {
-        postgresPorts: pgPorts,
-        redisPorts: rdPorts,
-        devPorts,
-      });
+      savePortState(input.configDir, { devPorts });
     }
 
     const hostIsLocal = input.bosConfig.host?.source === "local";
@@ -575,7 +527,6 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
     const serviceDescriptors = buildServiceDescriptors(assignedRuntimeConfig, resolvedPorts);
 
     const launch = buildLaunchSpec(input.bosConfig, resolvedPorts);
-    const composeModel = buildComposeModel(dbs, redisPlans);
     const envGenerated = buildEnvGenerated(resolvedPorts, dbs, redisPlans);
 
     const packages = serviceDescriptors.map((d) => d.key);
@@ -599,7 +550,6 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       description,
       serviceDescriptors: new Map(serviceDescriptors.map((d) => [d.key, d])),
       envGenerated,
-      composeModel,
       claims,
       orchestrator,
     };

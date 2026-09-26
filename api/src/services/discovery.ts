@@ -744,6 +744,15 @@ function createDiscovery(db: Database, lumaKeys: string) {
           .where(eq(discoveryActivities.ownerNodeId, nodeId))
       ).map((r) => r.data);
     },
+    eventOrganization: async (eventId: string) => {
+      const [row] = await db
+        .select({ event: discoveryActivities.data, organizationId: tenants.orgId })
+        .from(discoveryActivities)
+        .innerJoin(nodes, eq(discoveryActivities.ownerNodeId, nodes.id))
+        .innerJoin(tenants, eq(nodes.tenantId, tenants.id))
+        .where(eq(discoveryActivities.id, eventId));
+      return row ?? null;
+    },
     activity: async (id: string) => {
       void syncDueLuma().catch(() => {});
       return publicActivity(id);

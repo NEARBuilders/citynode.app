@@ -13,6 +13,7 @@ import { createOrganizationHandlers } from "../api/src/handlers/organizations";
 import { createSessionHandlers } from "../api/src/handlers/session";
 import { createTeamHandlers } from "../api/src/handlers/teams";
 import { createRequireAuth } from "../api/src/middleware";
+import { createOnboardingCodeCipher } from "../api/src/onboarding-code-cipher";
 import { createOrganizationMembershipPolicy } from "../api/src/organization-membership-policy";
 import { AuthServicesTag, type PluginServices } from "../api/src/service-types";
 
@@ -42,7 +43,10 @@ export async function createTestServices(configOverrides?: Partial<AuthConfig>) 
     db: driver.db,
     handler: (req: Request) => auth.handler(req),
     apiKeyHeaders: ["x-api-key"],
-    membershipPolicy: createOrganizationMembershipPolicy(),
+    membershipPolicy: createOrganizationMembershipPolicy(
+      configOverrides?.organizationMembershipLimit,
+    ),
+    onboardingCodeCipher: createOnboardingCodeCipher(process.env.BETTER_AUTH_SECRET!),
   };
 
   return { services, driver };

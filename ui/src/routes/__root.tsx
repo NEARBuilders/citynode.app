@@ -28,8 +28,7 @@ import { RootNotFound } from "@/components/root-not-found";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks";
-import { sessionQueryKey } from "@/lib/auth";
-import { resolveSessionFromCache } from "@/lib/session-cache";
+import { resolveSessionFromCache, sessionQueryKey } from "@/lib/auth";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 export const Route = createRootRouteWithContext<RouterContext>()({

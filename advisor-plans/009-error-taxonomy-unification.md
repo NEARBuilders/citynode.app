@@ -14,7 +14,7 @@
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: plans/002-effect-bridge-dedupe.md, plans/004-orpc-boundary-typing.md (adjacent code; land after both)
+- **Depends on**: done/002-effect-bridge-dedupe.md, plans/004-orpc-boundary-typing.md (adjacent code; land after both)
 - **Category**: tech-debt
 - **Planned at**: commit `c9ca44e1`, 2026-09-15
 

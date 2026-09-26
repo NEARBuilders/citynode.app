@@ -2,9 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 import type { Organization } from "@/app";
-import { sessionQueryOptions, useAuthClient } from "@/app";
+import { clearAuthenticatedQueries, sessionQueryOptions, useAuthClient } from "@/app";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
-import { clearAuthenticatedQueries } from "@/lib/session-cache";
 import { useNearAccount } from "@/lib/use-near-account";
 
 export function useIdentity() {

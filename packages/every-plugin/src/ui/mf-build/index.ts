@@ -96,6 +96,16 @@ const SHARE_MODULE_NAMES = [
   "@tanstack/react-router",
 ] as const;
 
+/**
+ * The session/auth client module — the single authoritative session read
+ * path (`sessionQueryOptions`, guards, post-sign-in refresh) shared by the
+ * core ui and every plugin ui. Declared as a strict singleton below so
+ * exactly one runtime copy exists: a mixed deploy (one remote rebuilt, the
+ * other stale) can no longer run two divergent copies whose guard decisions
+ * disagree ("Too many redirects").
+ */
+const AUTH_SESSION_SHARED_MODULE = "everything-dev/ui/auth";
+
 export interface UiSharedDepEntry {
   version: string;
   requiredVersion: string | false;
@@ -132,6 +142,64 @@ function getInstalledVersion(pkgName: string, fallback?: string): string {
   }
 }
 
+function extractExactVersion(input: string): string {
+  const match = input.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/);
+  return match?.[0] ?? "";
+}
+
+/**
+ * Resolves the version of a subpath-shared module's package. Subpath requests
+ * like `everything-dev/ui/auth` resolve from the building workspace's own
+ * dependencies (workspace symlink in the monorepo, real install in children);
+ * the walk-up lands on the package root's package.json either way.
+ */
+function getSubpathSharedModuleVersion(
+  packageName: string,
+  subpath: string,
+  workspaceRoot?: string,
+): string | null {
+  const pkgName = packageName.split("/")[0] ?? packageName;
+  const candidates: Array<string> = [];
+  if (workspaceRoot) {
+    candidates.push(path.join(workspaceRoot, "node_modules", pkgName, "package.json"));
+  }
+  const resolveRequests: Array<{ request: string; paths?: string[] }> = [
+    {
+      request: `${packageName}/${subpath}`,
+      ...(workspaceRoot ? { paths: [workspaceRoot] } : {}),
+    },
+    { request: `${packageName}/${subpath}` },
+    {
+      request: `${packageName}/package.json`,
+      ...(workspaceRoot ? { paths: [workspaceRoot] } : {}),
+    },
+    { request: `${packageName}/package.json` },
+  ];
+  for (const { request, paths } of resolveRequests) {
+    try {
+      const resolved = require.resolve(request, paths ? { paths } : undefined);
+      candidates.push(
+        resolved.endsWith("package.json")
+          ? resolved
+          : path.resolve(path.dirname(resolved), "..", "..", "package.json"),
+      );
+    } catch {
+      // try the next request shape
+    }
+  }
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+    try {
+      const version = (JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: string })
+        .version;
+      if (version) return version;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
 /**
  * Catalog-enforced singleton shared list for ui remotes. `requiredVersion`
  * resolves from the installed package (not the declared range), so a shared
@@ -141,7 +209,7 @@ function getInstalledVersion(pkgName: string, fallback?: string): string {
  */
 export function createUiSharedDeps(
   pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> },
-  options?: { strictVersion?: boolean; role?: "provider" | "consumer" },
+  options?: { strictVersion?: boolean; role?: "provider" | "consumer"; workspaceRoot?: string },
 ): Record<string, UiSharedDepEntry> {
   const fallbacks = { ...pkg.dependencies, ...pkg.devDependencies };
   const deps: Record<string, UiSharedDepEntry> = {};
@@ -157,5 +225,27 @@ export function createUiSharedDeps(
       ...(options?.role === "consumer" ? { import: false } : {}),
     };
   }
+
+  const [packageName, subpath] = splitSubpathRequest(AUTH_SESSION_SHARED_MODULE);
+  const fallback = fallbacks[packageName] ?? fallbacks[AUTH_SESSION_SHARED_MODULE];
+  const version =
+    getSubpathSharedModuleVersion(packageName, subpath, options?.workspaceRoot) ??
+    (fallback ? extractExactVersion(fallback) : "");
+  if (!version) return deps;
+
+  deps[AUTH_SESSION_SHARED_MODULE] = {
+    version,
+    requiredVersion: options?.strictVersion === false ? false : version,
+    singleton: true,
+    strictVersion: options?.strictVersion !== false,
+    eager: false,
+    shareScope: "default",
+    ...(options?.role === "consumer" ? { import: false } : {}),
+  };
   return deps;
+}
+
+function splitSubpathRequest(request: string): [string, string] {
+  const [pkgName = request, ...segments] = request.split("/");
+  return [pkgName, segments.join("/")];
 }

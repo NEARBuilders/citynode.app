@@ -158,9 +158,6 @@ export function resolveApp(
   if (!raw) throw new Error(`App "${name}" not found in registry`);
   const descriptor = AppDescriptorSchema.parse(raw);
 
-  const nextSeen = new Set(seen);
-  nextSeen.add(name);
-
   let parentInput: BosConfigInput | undefined;
   if (descriptor.extends) {
     if (typeof descriptor.extends === "string") {
@@ -168,9 +165,9 @@ export function resolveApp(
       if (!parentRaw) {
         throw new Error(`extends target "${descriptor.extends}" not found in registry`);
       }
-      parentInput = flattenParent(parentRaw, nextSeen);
+      parentInput = flattenParent(parentRaw);
     } else {
-      parentInput = flattenParent(descriptor.extends, nextSeen);
+      parentInput = flattenParent(descriptor.extends);
     }
   }
 
@@ -183,7 +180,7 @@ export function resolveApp(
   return resolved as BosConfigInput;
 }
 
-function flattenParent(parentRaw: unknown, seen: Set<string>): BosConfigInput {
+function flattenParent(parentRaw: unknown): BosConfigInput {
   const parentDescriptor = AppDescriptorSchema.parse(parentRaw);
   if (parentDescriptor.extends) {
     const parentName =

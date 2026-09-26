@@ -3,7 +3,6 @@ import {
   type AnyPgColumn,
   boolean,
   index,
-  integer,
   jsonb,
   pgEnum,
   pgTable,

@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { requireSession } from "@/lib/auth-guards";
+import { requireSession } from "@/app";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: requireSession,

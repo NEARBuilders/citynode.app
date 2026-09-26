@@ -50,6 +50,20 @@ export const NodeProposalPayloadSchema = z
 
 export type NodeProposalPayload = z.infer<typeof NodeProposalPayloadSchema>;
 
+export const EventOnboardingCodeSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  eventId: z.string().nullable(),
+  eventName: z.string(),
+  teamId: z.string(),
+  role: z.string(),
+  maxUses: z.number(),
+  usedCount: z.number(),
+  expiresAt: z.date(),
+  revokedAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+
 export const ValidatorRoleSchema = z.enum(["official", "community"]);
 
 export const ProtocolSchema = z.string().default("near");
@@ -681,6 +695,18 @@ export const contract = oc.router({
         ok: z.literal(true).describe("Always true when no error is thrown"),
       }),
     )
+    .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
+
+  createEventOnboardingCode: oc
+    .route({ method: "POST", path: "/onboarding/event-codes" })
+    .input(
+      z.object({
+        eventId: z.uuid(),
+        maxUses: z.number().int().min(1).max(500).optional(),
+        expiresAt: z.iso.datetime().optional(),
+      }),
+    )
+    .output(EventOnboardingCodeSchema)
     .errors({ UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }),
 });
 

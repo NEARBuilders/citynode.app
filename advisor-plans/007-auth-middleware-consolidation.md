@@ -16,7 +16,7 @@
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED
-- **Depends on**: plans/002-effect-bridge-dedupe.md (both rewrite the template's `lib/` — land 002 first)
+- **Depends on**: done/002-effect-bridge-dedupe.md (both rewrite the template's `lib/` — land 002 first)
 - **Category**: tech-debt / security-adjacent
 - **Planned at**: commit `c9ca44e1`, 2026-09-15
 

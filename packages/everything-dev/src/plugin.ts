@@ -42,6 +42,7 @@ import {
   stripOrphanedWorkspacesFromLockfile,
   writeInitSnapshot,
 } from "./cli/init";
+import { pruneUnusedUiFiles } from "./cli/prune";
 import { getStatus } from "./cli/status";
 import { syncTemplate } from "./cli/sync";
 import { upgradeTemplate } from "./cli/upgrade";
@@ -1404,6 +1405,12 @@ export default createPlugin({
               }),
             );
 
+            if (overrides.includes("ui")) {
+              await timePhase(timings, "prune unused ui files", async () =>
+                pruneUnusedUiFiles(targetDir, { log: console.log }),
+              );
+            }
+
             await timePhase(timings, "write snapshot", () =>
               writeInitSnapshot(targetDir, extendsAccount, extendsGateway, sourceDir, patterns, {
                 overrides,
@@ -2183,14 +2190,14 @@ export default createPlugin({
     infraExport: builder.infraExport.handler(async ({ input, context }) => {
       const deps = Context.get(context["effect/context"], BosDepsTag);
       const configDir = input.configDir ?? deps.configDir;
-      const ci = deps.runtimeConfig ? buildCiInfraPlan(deps.runtimeConfig, { configDir }) : null;
+      const ci = deps.runtimeConfig ? buildCiInfraPlan(deps.runtimeConfig) : null;
       if (!ci) {
         const refreshed = await loadResolvedConfig({ cwd: configDir });
         if (!refreshed?.runtime) {
           throw new Error("No resolved runtime config available for infra export");
         }
         deps.runtimeConfig = refreshed.runtime;
-        return buildCiInfraPlan(refreshed.runtime, { configDir });
+        return buildCiInfraPlan(refreshed.runtime);
       }
       const result: CiInfraPlan & { account: string; gateway: string } = {
         ...ci,

@@ -5,7 +5,6 @@ import { Effect, Layer } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PortAllocatorLive } from "../../../src/app";
 import {
-  buildComposeModel,
   buildEnvGenerated,
   buildLaunchSpec,
   buildServiceDescriptors,
@@ -60,8 +59,6 @@ function stubResolvedPorts(overrides?: Partial<ResolvedPorts>): ResolvedPorts {
     ui: 3003,
     uiSsr: 3004,
     plugins: {},
-    postgres: {},
-    redis: {},
     ...overrides,
   };
 }
@@ -187,28 +184,6 @@ describe("buildLaunchSpec", () => {
   });
 });
 
-describe("buildComposeModel", () => {
-  it("returns databases and redis arrays", () => {
-    const model = buildComposeModel(
-      [
-        {
-          secret: "API_DATABASE_URL",
-          slug: "api",
-          port: 5432,
-          dbName: "api",
-          containerName: "api-postgres",
-          volumeName: "api-pgdata",
-          url: "postgres://user:pass@localhost:5432/api",
-        },
-      ],
-      [],
-    );
-    expect(model.databases).toHaveLength(1);
-    expect(model.redis).toHaveLength(0);
-    expect(model.databases[0].port).toBe(5432);
-  });
-});
-
 describe("buildEnvGenerated", () => {
   it("populates CORS_ORIGIN and DB URLs", () => {
     const env = buildEnvGenerated(
@@ -219,8 +194,6 @@ describe("buildEnvGenerated", () => {
           slug: "api",
           port: 5432,
           dbName: "api",
-          containerName: "api-postgres",
-          volumeName: "api-pgdata",
           url: "postgres://u:p@localhost:5432/api",
         },
       ],
@@ -229,8 +202,6 @@ describe("buildEnvGenerated", () => {
           secret: "REDIS_URL",
           slug: "cache",
           port: 6379,
-          containerName: "cache-redis",
-          volumeName: "cache-redisdata",
           url: "redis://localhost:6379/0",
         },
       ],
