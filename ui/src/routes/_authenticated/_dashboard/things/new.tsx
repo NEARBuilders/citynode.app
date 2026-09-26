@@ -15,6 +15,7 @@ import {
   Textarea,
 } from "@/components";
 import { FieldGroup } from "@/components/ui/field";
+import { pageTitle } from "@/lib/page-title";
 import { invalidateThingAfterProposal } from "./-thing-cache";
 import {
   DEFAULT_THING_PAYLOAD,
@@ -24,9 +25,9 @@ import {
 } from "./-thing-form";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/new")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "New Thing | app" },
+      { title: pageTitle("New Thing", match.context.runtimeConfig) },
       { name: "description", content: "Submit a new thing for community review." },
     ],
   }),

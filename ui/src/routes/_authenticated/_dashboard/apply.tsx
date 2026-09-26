@@ -8,6 +8,7 @@ import { PageContainer, PageHeader } from "@/components";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { FieldGroup } from "@/components/ui/field";
 import { useDaoConnection } from "@/lib/dao-connect";
+import { pageTitle } from "@/lib/page-title";
 import { childNodesQueryOptions, rootNodesQueryOptions } from "@/lib/queries/nodes";
 import { invalidateProposalQueries } from "@/lib/queries/proposals";
 import { bindingPreflightQueryOptions } from "@/lib/queries/tenants";
@@ -35,9 +36,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/apply")({
       apiClient: context.apiClient,
       queryClient: context.queryClient,
     }),
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Start a community | app" },
+      { title: pageTitle("Start a community", match.context.runtimeConfig) },
       { name: "description", content: "Apply to start a CityNode community." },
     ],
   }),

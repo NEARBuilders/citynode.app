@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useAuthClient } from "@/app";
 import { Button, PageHeader } from "@/components";
 import { parseNearAmount } from "@/lib/near-amount";
+import { pageTitle } from "@/lib/page-title";
 import { useNearAccount } from "@/lib/use-near-account";
 import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 import { RelayerHistory } from "./-relayer-history";
@@ -14,8 +15,8 @@ import { RelayerStatus } from "./-relayer-status";
 import { RelayerTopUp } from "./-relayer-top-up";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/relayer")({
-  head: () => ({
-    meta: [{ title: "Relayer | Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Relayer · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminRelayerPage,
 });

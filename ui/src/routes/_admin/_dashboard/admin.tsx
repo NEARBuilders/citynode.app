@@ -10,13 +10,11 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { organizationByIdQueryOptions } from "@/lib/queries/organizations";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin")({
-  head: () => ({
-    meta: [{ title: "Admin | app" }],
-  }),
   beforeLoad: async ({ context }) => {
     const { apiClient, queryClient, runtimeConfig } = context;
     const accountId = getAccount(runtimeConfig);
@@ -34,6 +32,9 @@ export const Route = createFileRoute("/_admin/_dashboard/admin")({
     const tenantOrganizationSlug = tenantOrganization?.slug ?? null;
     return { tenant, tenantOrganizationSlug };
   },
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Admin", match.context.runtimeConfig) }],
+  }),
   component: AdminLayout,
 });
 

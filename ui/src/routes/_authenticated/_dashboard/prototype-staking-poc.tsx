@@ -22,6 +22,7 @@ import { OrgSwitcherMenuContent } from "@/components/layout/org-switcher-menu";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { pageTitle } from "@/lib/page-title";
 import { PocChainState } from "./-poc-chain-state";
 import { usePocLifecycle } from "./-poc-lifecycle";
 import { PocLogSheet } from "./-poc-log-sheet";
@@ -33,9 +34,9 @@ import { LENS_OPTIONS, PHASES, type PhaseId, type StationId, signerLens } from "
 import { followingStation, phaseProgress, resolveFocus, resolvePhase } from "./-poc-walkthrough";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/prototype-staking-poc")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Node lifecycle POC | app" },
+      { title: pageTitle("Node lifecycle POC", match.context.runtimeConfig) },
       {
         name: "description",
         content:

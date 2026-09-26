@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { pageTitle } from "@/lib/page-title";
 import { buildTenantUrl } from "@/lib/tenant-url";
 import { CommunityNav } from "./node/-community-nav";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
@@ -92,9 +93,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       emptyReason: null,
     };
   },
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "My community | app" },
+      { title: pageTitle("My community", match.context.runtimeConfig) },
       { name: "description", content: "Run your community." },
     ],
   }),

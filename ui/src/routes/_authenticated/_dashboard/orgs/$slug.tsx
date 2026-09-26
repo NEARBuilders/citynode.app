@@ -7,7 +7,6 @@ import { z } from "zod";
 import {
   getAccount,
   getActiveRuntime,
-  getAppName,
   type Organization,
   type SessionData,
   sessionQueryOptions,
@@ -27,6 +26,7 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
+import { pageTitle } from "@/lib/page-title";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
@@ -89,7 +89,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
   search: { middlewares: [stripSearchParams({ tab: "members" })] },
   head: ({ match }) => ({
     meta: [
-      { title: `Organization | ${getAppName(match.context.runtimeConfig)}` },
+      { title: pageTitle("Organization", match.context.runtimeConfig) },
       { name: "description", content: "Members, teams and settings for an organization." },
     ],
   }),

@@ -22,6 +22,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pageTitle } from "@/lib/page-title";
 import { thingQueryKeys } from "./-thing-cache";
 import { filterThings } from "./-thing-list";
 
@@ -31,9 +32,9 @@ type Thing = Awaited<ReturnType<ApiClient["template"]["listThings"]>>["data"][nu
 const EMPTY_THINGS: Thing[] = [];
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/")({
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Things | app" },
+      { title: pageTitle("Things", match.context.runtimeConfig) },
       {
         name: "description",
         content: "Browse approved Things.",

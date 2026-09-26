@@ -8,6 +8,7 @@ import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader, SectionHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { parseNearAmount } from "@/lib/near-amount";
+import { pageTitle } from "@/lib/page-title";
 import {
   childNodesQueryOptions,
   nodeByIdQueryOptions,
@@ -24,9 +25,9 @@ import { StakeOnramp } from "./-stake-onramp";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/stake")({
   validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Stake | app" },
+      { title: pageTitle("Stake", match.context.runtimeConfig) },
       { name: "description", content: "Stake NEAR to back a CityNode community." },
     ],
   }),

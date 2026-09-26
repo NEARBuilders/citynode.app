@@ -9,6 +9,7 @@ import {
 } from "@/app";
 import { PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
+import { pageTitle } from "@/lib/page-title";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
@@ -22,8 +23,11 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/")({
     typeof search.restricted === "string" && isFeatureArea(search.restricted)
       ? { restricted: search.restricted }
       : {},
-  head: () => ({
-    meta: [{ title: "Home | app" }, { name: "description", content: "Your next steps." }],
+  head: ({ match }) => ({
+    meta: [
+      { title: pageTitle("Home", match.context.runtimeConfig) },
+      { name: "description", content: "Your next steps." },
+    ],
   }),
   component: Home,
 });

@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Button, EmptyState, PageContainer, PageHeader } from "@/components";
 import { Markdown } from "@/components/markdown";
+import { pageTitle } from "@/lib/page-title";
 
 function sanitizeMarkdownContent(content: string): string {
   return content
@@ -60,9 +61,9 @@ export const Route = createFileRoute("/_public/about")({
     }
     return { repository, readme, description, runtimeConfig: context.runtimeConfig };
   },
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "About | CityNode" },
+      { title: pageTitle("About", match.context.runtimeConfig) },
       { name: "description", content: "What CityNode is and how to build on it." },
     ],
   }),

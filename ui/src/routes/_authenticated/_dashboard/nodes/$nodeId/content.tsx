@@ -5,6 +5,7 @@ import { useApiClient } from "@/app";
 import { Button, PageContainer, PageHeader, Skeleton } from "@/components";
 import { EventOnboardingPanel } from "@/components/discovery/event-onboarding";
 import { ProfileEditor } from "@/components/discovery/profile-editor";
+import { pageTitle } from "@/lib/page-title";
 import { CommunityNav } from "../../dashboard/node/-community-nav";
 
 type ContentTab = "events" | "profile" | "onboarding";
@@ -14,7 +15,9 @@ const TABS: readonly ContentTab[] = ["events", "profile", "onboarding"];
 export const Route = createFileRoute("/_authenticated/_dashboard/nodes/$nodeId/content")({
   validateSearch: (search: Record<string, unknown>): { tab?: ContentTab } =>
     TABS.includes(search.tab as ContentTab) ? { tab: search.tab as ContentTab } : {},
-  head: () => ({ meta: [{ title: "Events & profile | app" }] }),
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Events & profile", match.context.runtimeConfig) }],
+  }),
   component: CommunityContent,
 });
 

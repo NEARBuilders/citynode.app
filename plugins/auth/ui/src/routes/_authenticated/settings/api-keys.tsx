@@ -31,7 +31,7 @@ import { ApiKeyRevealDialog, type CreatedApiKey } from "./-api-key-reveal-dialog
 export const Route = createFileRoute("/_authenticated/settings/api-keys")({
   head: () => ({
     meta: [
-      { title: "API keys | Settings" },
+      { title: "API keys · Settings" },
       { name: "description", content: "Create and manage API keys for programmatic access." },
     ],
   }),

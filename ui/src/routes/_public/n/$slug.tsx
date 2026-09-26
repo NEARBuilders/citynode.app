@@ -16,6 +16,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
 import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pageTitle } from "@/lib/page-title";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
@@ -59,7 +60,7 @@ export const Route = createFileRoute("/_public/n/$slug")({
   head: ({ loaderData }) => ({
     meta: [
       {
-        title: loaderData?.nodeName ? `${loaderData.nodeName} | CityNode` : "Community | CityNode",
+        title: pageTitle(loaderData?.nodeName ?? "Community", loaderData?.runtimeConfig),
       },
       {
         name: "description",

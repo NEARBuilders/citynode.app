@@ -23,6 +23,7 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { BackLink, humanize, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import { NodeBindings } from "./-node-bindings";
@@ -44,8 +45,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
   validateSearch: (search: Record<string, unknown>): { tab?: NodeDetailTab } => ({
     tab: parseNodeDetailTab(search.tab),
   }),
-  head: () => ({
-    meta: [{ title: "Node | Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Node · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminNodeDetail,
 });

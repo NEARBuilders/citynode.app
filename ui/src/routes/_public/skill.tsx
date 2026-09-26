@@ -16,6 +16,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
+import { pageTitle } from "@/lib/page-title";
 
 const INTENT_COMMAND = "npx @tanstack/intent@latest load everything-dev";
 
@@ -41,9 +42,9 @@ export const Route = createFileRoute("/_public/skill")({
       intentRegistryUrl: INTENT_REGISTRY_URL,
     };
   },
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "Agent skill | CityNode" },
+      { title: pageTitle("Agent skill", match.context.runtimeConfig) },
       {
         name: "description",
         content: "Agent-oriented instructions for running, editing, and publishing this runtime.",

@@ -3,7 +3,6 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
-  getAppName,
   type Organization,
   type SessionData,
   sessionQueryOptions,
@@ -31,6 +30,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { tenantOrganizationIdsQueryOptions } from "@/lib/queries/tenants";
 import { OrgAvatar, roleLabel } from "./-org-avatar";
 import { orgMembersQueryKey } from "./-organization-query-keys";
@@ -45,7 +45,7 @@ type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/")({
   head: ({ match }) => ({
     meta: [
-      { title: `Organizations | ${getAppName(match.context.runtimeConfig)}` },
+      { title: pageTitle("Organizations", match.context.runtimeConfig) },
       { name: "description", content: "Your organizations, their members and teams." },
     ],
   }),

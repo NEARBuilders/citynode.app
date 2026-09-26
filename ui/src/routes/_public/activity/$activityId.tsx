@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { ActivityDetail } from "@/components/discovery/activity-detail";
 import { PageContainer } from "@/components/layout/page-container";
+import { pageTitle } from "@/lib/page-title";
 export const Route = createFileRoute("/_public/activity/$activityId")({
   validateSearch: z.object({
     node: z.uuid().optional().catch(undefined),
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_public/activity/$activityId")({
       .optional()
       .catch(undefined),
   }),
-  head: () => ({ meta: [{ title: "Event | CityNode" }] }),
+  head: ({ match }) => ({ meta: [{ title: pageTitle("Event", match.context.runtimeConfig) }] }),
   component: ActivityPage,
 });
 function ActivityPage() {

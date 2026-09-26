@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getAccount, getActiveRuntime, getAppName, getRepository } from "@/app";
 import { Badge, InfoRow, PageHeader, SectionHeader } from "@/components";
+import { pageTitle } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/system")({
   loader: async ({ context }) => ({
     runtimeConfig: context.runtimeConfig,
   }),
-  head: () => ({
-    meta: [{ title: "System | Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("System · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminSystem,
 });

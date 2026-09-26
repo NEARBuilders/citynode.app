@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { getAccount, getActiveRuntime, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
 import { useStepper } from "@/components";
 import { disconnectDaoAccount, useDaoConnection } from "@/lib/dao-connect";
+import { pageTitle } from "@/lib/page-title";
 import {
   childNodesQueryOptions,
   invalidateNodeQueries,
@@ -43,8 +44,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/new")({
       apiClient: context.apiClient,
       queryClient: context.queryClient,
     }),
-  head: () => ({
-    title: "Create tenant | Admin | app",
+  head: ({ match }) => ({
+    title: pageTitle("Create tenant · Admin", match.context.runtimeConfig),
     meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],
   }),
   component: NewTenantPage,

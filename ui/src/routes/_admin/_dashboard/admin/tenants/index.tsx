@@ -28,6 +28,7 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { humanize, ListSkeleton, tenantStatusTone } from "../-admin-ui";
@@ -43,8 +44,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/")({
       context.queryClient.ensureQueryData(allNodesQueryOptions(context.apiClient)),
     ]);
   },
-  head: () => ({
-    meta: [{ title: "Tenants | Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Tenants · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminTenants,
 });

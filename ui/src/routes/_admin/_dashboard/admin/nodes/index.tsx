@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { pageTitle } from "@/lib/page-title";
 import {
   type AdminNodeListKind,
   type AdminNodeListRow,
@@ -72,8 +73,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/")({
     context.queryClient.ensureQueryData(
       adminNodeListQueryOptions(context.apiClient, deps.scope, deps.kind),
     ),
-  head: () => ({
-    meta: [{ title: "Nodes | Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Nodes · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminNodes,
 });

@@ -22,6 +22,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
 import { useNearAccount } from "@/lib/use-near-account";
@@ -40,8 +41,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/")({
     context.queryClient.ensureInfiniteQueryData(
       adminProposalListQueryOptions(context.apiClient, "pending"),
     ),
-  head: () => ({
-    meta: [{ title: "Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Admin", match.context.runtimeConfig) }],
   }),
   component: AdminOverview,
 });

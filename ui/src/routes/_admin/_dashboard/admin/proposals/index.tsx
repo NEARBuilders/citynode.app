@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useApiClient } from "@/app";
 import { PageHeader } from "@/components";
+import { pageTitle } from "@/lib/page-title";
 import { createProposalColumns } from "./-proposal-columns";
 import { normalizeProposalReviewFilter, ProposalReviewFilters } from "./-proposal-filters";
 import { ProposalListState } from "./-proposal-list-state";
@@ -26,8 +27,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/")({
     context.queryClient.ensureInfiniteQueryData(
       adminProposalListQueryOptions(context.apiClient, deps.status),
     ),
-  head: () => ({
-    meta: [{ title: "Proposals | Admin | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Proposals · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminProposals,
 });

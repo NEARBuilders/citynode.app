@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { getAppName, useApiClient, useAuthClient } from "@/app";
+import { useApiClient, useAuthClient } from "@/app";
 import {
   Button,
   Field,
@@ -23,12 +23,13 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { pageTitle } from "@/lib/page-title";
 import { deriveSlug, generateSlug, suggestAvailableSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/new")({
   head: ({ match }) => ({
     meta: [
-      { title: `New organization | ${getAppName(match.context.runtimeConfig)}` },
+      { title: pageTitle("New organization", match.context.runtimeConfig) },
       { name: "description", content: "Create a new organization." },
     ],
   }),
