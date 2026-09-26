@@ -66,7 +66,7 @@ ENV HOST=0.0.0.0
 # Defaults to "production" if unset.
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=120s --retries=3 \
   CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
 USER appuser
@@ -106,7 +106,7 @@ ENV HOST=0.0.0.0
 ENV PORT=4100
 EXPOSE 4100
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
+HEALTHCHECK --interval=10s --timeout=3s --start-period=180s --retries=5 \
   CMD curl -f http://localhost:4100/health || exit 1
 
 USER appuser
