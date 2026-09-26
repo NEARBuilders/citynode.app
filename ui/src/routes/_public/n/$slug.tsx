@@ -9,7 +9,7 @@ import {
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
-import { buildTenantUrl, type ApiClient, getActiveRuntime, useApiClient } from "@/app";
+import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { EventList } from "@/components/discovery/event-list";
 import { PageContainer } from "@/components/layout/page-container";
