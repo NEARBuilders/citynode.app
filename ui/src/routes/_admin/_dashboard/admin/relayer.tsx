@@ -1,11 +1,13 @@
+import { ArrowClockwiseIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Amount } from "near-kit";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { Card } from "@/components";
+import { Button, PageHeader } from "@/components";
 import { parseNearAmount } from "@/lib/near-amount";
+import { pageTitle } from "@/lib/page-title";
 import { useNearAccount } from "@/lib/use-near-account";
 import { relayerInfoQueryKey, useRelayerInfoQuery } from "@/lib/use-relayer";
 import { RelayerHistory } from "./-relayer-history";
@@ -13,8 +15,8 @@ import { RelayerStatus } from "./-relayer-status";
 import { RelayerTopUp } from "./-relayer-top-up";
 
 export const Route = createFileRoute("/_admin/_dashboard/admin/relayer")({
-  head: () => ({
-    meta: [{ title: "Relayer | app" }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Relayer · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminRelayerPage,
 });
@@ -98,34 +100,42 @@ function AdminRelayerPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="p-6 lg:col-span-2 space-y-4">
-          <RelayerStatus
-            info={info}
-            isLoading={relayerInfoQuery.isLoading}
-            isFetching={relayerInfoQuery.isFetching}
-            onRefresh={refresh}
-          />
-        </Card>
+    <>
+      <PageHeader
+        title="Relayer"
+        description="Pays gas for gasless writes and session gas keys."
+        actions={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh"
+            onClick={refresh}
+            disabled={relayerInfoQuery.isFetching}
+            data-testid="admin-relayer-refresh"
+          >
+            <ArrowClockwiseIcon />
+          </Button>
+        }
+        headerTestId="admin-relayer.heading"
+      />
 
-        <Card className="p-6 space-y-4">
-          <RelayerTopUp
-            nearAccountId={nearAccountId}
-            amount={amount}
-            sending={sending}
-            parsedAmount={parsedAmount}
-            onAmountChange={setAmount}
-            onPreset={setAmount}
-            onConnect={handleConnect}
-            onFund={sendFund}
-          />
-        </Card>
-      </div>
+      <RelayerStatus info={info} isLoading={relayerInfoQuery.isLoading} />
 
-      <Card>
-        <RelayerHistory history={relayHistoryQuery.data} isLoading={relayHistoryQuery.isLoading} />
-      </Card>
-    </div>
+      {info?.accountId && (
+        <RelayerTopUp
+          nearAccountId={nearAccountId}
+          amount={amount}
+          sending={sending}
+          parsedAmount={parsedAmount}
+          onAmountChange={setAmount}
+          onPreset={setAmount}
+          onConnect={handleConnect}
+          onFund={sendFund}
+        />
+      )}
+
+      <RelayerHistory history={relayHistoryQuery.data} isLoading={relayHistoryQuery.isLoading} />
+    </>
   );
 }

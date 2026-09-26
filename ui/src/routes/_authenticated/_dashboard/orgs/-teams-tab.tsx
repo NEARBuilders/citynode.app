@@ -1,6 +1,6 @@
+import { PlusIcon, UsersThreeIcon } from "@phosphor-icons/react";
 import { useState } from "react";
-import { Button, Card, Input, TabsContent } from "@/components";
-import { OrganizationEmptyState } from "./-empty-state";
+import { Button, EmptyState, Input, SectionHeader, TabsContent } from "@/components";
 import type { MemberCardMember } from "./-member-card";
 import { TeamCard, type TeamCardTeam, type TeamMembershipStatus } from "./-team-card";
 
@@ -36,42 +36,39 @@ export function TeamsTab({
   const trimmedName = teamName.trim();
 
   return (
-    <TabsContent value="teams" className="space-y-6 pt-4">
+    <TabsContent value="teams" className="flex flex-col gap-6 pt-6">
+      <SectionHeader
+        title="Teams"
+        description="Members acting as a team only see the areas it can use."
+      />
       {canManage && (
-        <Card className="p-6 space-y-4 hover:shadow-md">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Create team
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Teams group organization members by function. Grant each team the areas it works in;
-            members operating as that team only see those areas.
-          </p>
-          <form
-            className="flex flex-col gap-3 sm:flex-row"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!trimmedName) return;
-              onCreate(trimmedName);
-              setTeamName("");
-            }}
+        <form
+          className="flex w-full max-w-lg gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!trimmedName) return;
+            onCreate(trimmedName);
+            setTeamName("");
+          }}
+        >
+          <Input
+            value={teamName}
+            onChange={(event) => setTeamName(event.target.value)}
+            placeholder="New team, e.g. Finance"
+            aria-label="Team name"
+            className="min-w-0 flex-1"
+            data-testid="teams-tab-create-input"
+          />
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={isMutating || !trimmedName}
+            data-testid="teams-tab-create-button"
           >
-            <Input
-              value={teamName}
-              onChange={(event) => setTeamName(event.target.value)}
-              placeholder="Finance, Node Operator…"
-              aria-label="Team name"
-              data-testid="teams-tab-create-input"
-            />
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={isMutating || !trimmedName}
-              data-testid="teams-tab-create-button"
-            >
-              create team
-            </Button>
-          </form>
-        </Card>
+            <PlusIcon />
+            Create team
+          </Button>
+        </form>
       )}
 
       {teams.length > 0 ? (
@@ -93,7 +90,11 @@ export function TeamsTab({
           ))}
         </div>
       ) : (
-        <OrganizationEmptyState label="No teams yet" />
+        <EmptyState
+          icon={UsersThreeIcon}
+          title="No teams yet"
+          description={canManage ? "Create one above to group people by what they do." : undefined}
+        />
       )}
     </TabsContent>
   );

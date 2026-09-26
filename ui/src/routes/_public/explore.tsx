@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApiClient } from "@/app";
 import { DiscoveryExplorer } from "@/components/discovery/discovery-explorer";
 import { PageContainer } from "@/components/layout/page-container";
+import { pageTitle } from "@/lib/page-title";
 export const Route = createFileRoute("/_public/explore")({
   validateSearch: z.object({
     campaign: z
@@ -16,8 +17,17 @@ export const Route = createFileRoute("/_public/explore")({
     node: z.uuid().optional().catch(undefined),
     query: z.string().max(120).optional().catch(undefined),
     region: z.string().max(120).optional().catch(undefined),
+    view: z.enum(["list", "map"]).optional().catch(undefined),
   }),
-  head: () => ({ meta: [{ title: "Explore communities" }] }),
+  head: ({ match }) => ({
+    meta: [
+      { title: pageTitle("Explore", match.context.runtimeConfig) },
+      {
+        name: "description",
+        content: "Find a CityNode community near you and see what's coming up.",
+      },
+    ],
+  }),
   component: Explore,
 });
 function Explore() {

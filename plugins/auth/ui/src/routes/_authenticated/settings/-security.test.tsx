@@ -57,7 +57,8 @@ describe("security settings", () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "revoke sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign out others" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out other devices" }));
 
     await waitFor(() => expect(harness.revokeOtherSessions).toHaveBeenCalledOnce());
     expect(harness.revokeSessions).not.toHaveBeenCalled();
@@ -71,17 +72,18 @@ describe("security settings", () => {
         <SecurityTab user={{ email: "person@example.com" }} />
       </QueryClientProvider>,
     );
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
 
-    fireEvent.change(screen.getByPlaceholderText("Current password"), {
+    fireEvent.change(await screen.findByLabelText("Current password"), {
       target: { value: "old-password" },
     });
-    fireEvent.change(screen.getByPlaceholderText("New password"), {
+    fireEvent.change(screen.getByLabelText("New password"), {
       target: { value: "new-password" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Confirm password"), {
+    fireEvent.change(screen.getByLabelText("Confirm new password"), {
       target: { value: "different-password" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "change password" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
 
     await waitFor(() => expect(harness.error).toHaveBeenCalledWith("Passwords do not match"));
     expect(harness.changePassword).not.toHaveBeenCalled();
@@ -96,13 +98,14 @@ describe("security settings", () => {
       </QueryClientProvider>,
     );
 
-    const currentPassword = screen.getByPlaceholderText("Current password");
-    const newPassword = screen.getByPlaceholderText("New password");
-    const confirmPassword = screen.getByPlaceholderText("Confirm password");
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    const currentPassword = await screen.findByLabelText("Current password");
+    const newPassword = screen.getByLabelText("New password");
+    const confirmPassword = screen.getByLabelText("Confirm new password");
     fireEvent.change(currentPassword, { target: { value: "old-password" } });
     fireEvent.change(newPassword, { target: { value: "new-password" } });
     fireEvent.change(confirmPassword, { target: { value: "new-password" } });
-    fireEvent.click(screen.getByRole("button", { name: "change password" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
 
     await waitFor(() =>
       expect(harness.changePassword).toHaveBeenCalledWith({
@@ -131,7 +134,7 @@ describe("security settings", () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => expect(harness.signOut).toHaveBeenCalledOnce());
     expect(harness.disconnect).toHaveBeenCalledOnce();

@@ -1,36 +1,41 @@
+import { UserIcon } from "@phosphor-icons/react";
 import { ClientOnly, Link } from "@tanstack/react-router";
-import { User } from "lucide-react";
 import { pluginPath } from "@/app";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { NetworkToggle } from "./network-toggle";
-import { OrgSwitcher } from "./org-switcher";
-import { ThemeToggle } from "./theme-toggle";
 import { useIdentity } from "./use-identity";
 import { UserNavMenuContent } from "./user-nav-menu";
 
 interface UserNavProps {
-  showConnect?: boolean;
-  showOrgSwitcher?: boolean;
+  showSignIn?: boolean;
 }
 
-export function UserNav({ showConnect = true, showOrgSwitcher = true }: UserNavProps) {
+export function UserNav({ showSignIn = true }: UserNavProps) {
   return (
     <ClientOnly>
-      <UserNavContent showConnect={showConnect} showOrgSwitcher={showOrgSwitcher} />
+      <UserNavContent showSignIn={showSignIn} />
     </ClientOnly>
   );
 }
 
-function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavProps) {
+export function SignInButton() {
+  return (
+    <Button
+      nativeButton={false}
+      render={<Link to={pluginPath("/login")} />}
+      data-testid="public-header-signin"
+    >
+      Sign in
+    </Button>
+  );
+}
+
+function UserNavContent({ showSignIn }: UserNavProps) {
   const {
     user,
     isSessionLoading,
     nearAccountId,
-    organizations,
-    activeOrgId,
-    activeOrg,
     signOutMutation,
     avatarSrc,
     displayName,
@@ -41,56 +46,31 @@ function UserNavContent({ showConnect = true, showOrgSwitcher = true }: UserNavP
 
   if (isSessionLoading) return null;
 
-  if (!user) {
-    return (
-      <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
-        <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
-        <NetworkToggle />
-        {showConnect && (
-          <Button asChild variant="outline">
-            <Link to={pluginPath("/login")}>connect</Link>
-          </Button>
-        )}
-      </div>
-    );
-  }
+  if (!user) return showSignIn ? <SignInButton /> : null;
 
   return (
-    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
-      <ThemeToggle className="flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
-      {showOrgSwitcher && organizations.length > 0 && (
-        <OrgSwitcher organizations={organizations} activeOrgId={activeOrgId} />
-      )}
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={displayName}
-            data-testid="account-menu"
-            className="rounded-full! ring-1 ring-border transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:scale-105"
-            title="account menu"
-          >
-            <Avatar className="size-8">
-              {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
-              <AvatarFallback className="text-xs font-semibold">
-                {initials || <User className="size-4" />}
-              </AvatarFallback>
-            </Avatar>
-          </button>
-        </DropdownMenuTrigger>
-        <UserNavMenuContent
-          nearAccountId={nearAccountId}
-          activeOrg={activeOrg}
-          avatarSrc={avatarSrc}
-          displayName={displayName}
-          handle={handle}
-          showHandle={showHandle}
-          initials={initials}
-          signOutMutation={signOutMutation}
-          align="end"
-        />
-      </DropdownMenu>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={displayName}
+        data-testid="account-menu"
+        render={<Button variant="ghost" size="icon" />}
+        title="Account"
+      >
+        <Avatar>
+          {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
+          <AvatarFallback>{initials || <UserIcon className="size-4" />}</AvatarFallback>
+        </Avatar>
+      </DropdownMenuTrigger>
+      <UserNavMenuContent
+        nearAccountId={nearAccountId}
+        avatarSrc={avatarSrc}
+        displayName={displayName}
+        handle={handle}
+        showHandle={showHandle}
+        initials={initials}
+        signOutMutation={signOutMutation}
+        align="end"
+      />
+    </DropdownMenu>
   );
 }

@@ -1,8 +1,11 @@
+import { BroadcastIcon } from "@phosphor-icons/react";
 import { Link, useRouter } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApiClient } from "@/app";
-import { Badge, Button, PageContainer, PageHeader } from "@/components";
+import { Badge, Button, EmptyState, LocalDate, PageContainer, PageHeader } from "@/components";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
+import { ThingBackLink } from "./-thing-details-view";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type ThingEvent =
@@ -10,6 +13,12 @@ type ThingEvent =
     ? Event
     : never;
 type LiveThingEvent = { receiptId: number; event: ThingEvent };
+
+function actionVariant(action: string) {
+  if (action === "created") return "success" as const;
+  if (action === "deleted") return "destructive" as const;
+  return "secondary" as const;
+}
 
 export function ThingsLiveStreamPage() {
   const apiClient = useApiClient();
@@ -19,12 +28,13 @@ export function ThingsLiveStreamPage() {
   const [events, setEvents] = useState<LiveThingEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const abort = new AbortController();
     setConnectionError(null);
 
-    (async () => {
+    void (async () => {
       try {
         const stream = await apiClient.template.subscribeThings({}, { signal: abort.signal });
         if (abort.signal.aborted) return;
@@ -44,80 +54,94 @@ export function ThingsLiveStreamPage() {
     })();
 
     return () => abort.abort();
-  }, [apiClient]);
+  }, [apiClient, attempt]);
 
   const clearEvents = useCallback(() => setEvents([]), []);
 
   return (
     <PageContainer variant="default">
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4">
+        <ThingBackLink canGoBack={canGoBack} onBack={() => router.history.back()} />
         <PageHeader
           title="Live stream"
+          description="Things as they are created and deleted."
+          headerTestId="things.live.heading"
           actions={
-            <div className="flex items-center gap-2">
-              {canGoBack ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={() => router.history.back()}
-                >
-                  <ArrowLeft />
-                </Button>
-              ) : (
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/things">
-                    <ArrowLeft />
-                  </Link>
-                </Button>
-              )}
-              <span
-                className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                  connected ? "bg-status-success-border" : "bg-destructive"
-                }`}
+            <>
+              <Badge
+                variant={connected ? "success" : connectionError ? "destructive" : "secondary"}
                 title={connected ? "Connected" : "Disconnected"}
-              />
-              <button
+                className="self-center"
+                data-testid="things-live-status"
+              >
+                {connected ? "Live" : connectionError ? "Disconnected" : "Connecting"}
+              </Badge>
+              <Button
                 type="button"
+                variant="outline"
                 onClick={clearEvents}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                disabled={events.length === 0}
+                data-testid="things-live-clear"
               >
                 Clear ({events.length})
-              </button>
-            </div>
+              </Button>
+            </>
           }
         />
-
-        <div className="space-y-1.5">
-          {events.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-12">
-              {connectionError ?? (connected ? "Waiting for Thing events..." : "Connecting...")}
-            </p>
-          )}
-          {events.map(({ receiptId, event }) => (
-            <div
-              key={receiptId}
-              className="flex items-start gap-2 rounded-[6px] border border-border bg-card px-3 py-2"
-            >
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant="secondary" className="text-[10px] font-mono">
-                    {event.action}
-                  </Badge>
-                  <span className="text-[10px] font-mono text-foreground font-semibold">
-                    {event.thingId}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                  <span className="font-mono">{event.type}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
+
+      {events.length === 0 ? (
+        <EmptyState
+          icon={BroadcastIcon}
+          title={
+            connectionError
+              ? "Stream disconnected"
+              : connected
+                ? "Waiting for events"
+                : "Connecting"
+          }
+          description={
+            connectionError ?? (connected ? "New things appear here the moment they change." : "")
+          }
+          action={
+            connectionError ? (
+              <Button
+                variant="outline"
+                onClick={() => setAttempt((value) => value + 1)}
+                data-testid="things-live-reconnect"
+              >
+                Reconnect
+              </Button>
+            ) : connected ? undefined : (
+              <Spinner />
+            )
+          }
+        />
+      ) : (
+        <ItemGroup data-testid="things-live-events">
+          {events.map(({ receiptId, event }) => (
+            <Item key={receiptId} variant="outline" size="sm" role="listitem">
+              <ItemContent className="min-w-0">
+                <ItemTitle className="max-w-full">
+                  <Badge variant={actionVariant(event.action)}>{event.action}</Badge>
+                  <Link
+                    to="/things/$thingId"
+                    params={{ thingId: event.thingId }}
+                    className="truncate font-mono text-foreground underline-offset-4 hover:underline"
+                  >
+                    {event.thingId}
+                  </Link>
+                </ItemTitle>
+                <ItemDescription>
+                  <span className="font-mono">{event.type}</span>
+                  <span aria-hidden="true"> · </span>
+                  <LocalDate value={event.timestamp} format="time" />
+                </ItemDescription>
+              </ItemContent>
+            </Item>
+          ))}
+        </ItemGroup>
+      )}
     </PageContainer>
   );
 }

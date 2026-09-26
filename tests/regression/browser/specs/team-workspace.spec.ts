@@ -141,12 +141,13 @@ test.describe("team workspace", () => {
     ).json();
     await authFetch("/organization/set-active", ownerCookie, { organizationId: org.id });
     await useCookieHeader(page, ownerCookie);
-    await page.goto(`/orgs/${org.slug}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/orgs/${org.slug}?tab=teams`, { waitUntil: "domcontentloaded" });
     await waitForApp(page);
-    await page.getByTestId("orgs-tab-teams").click();
+    await expect(page.getByTestId("orgs-tab-teams")).toHaveAttribute("aria-selected", "true");
 
     const addMember = async () => {
-      await page.getByTestId(`teams-tab-add-member-${team.id}`).selectOption(session.user.id);
+      await page.getByTestId(`teams-tab-add-member-${team.id}`).click();
+      await page.getByTestId(`teams-tab-add-member-option-${team.id}-${session.user.id}`).click();
       await page.getByTestId(`teams-tab-add-member-button-${team.id}`).click();
       await expect(page.getByTestId("team-switcher")).toBeVisible();
       await page.getByTestId("team-switcher").click();
@@ -154,6 +155,7 @@ test.describe("team workspace", () => {
       await expect(page.getByTestId("workspace-active-team")).toBeVisible();
     };
     await addMember();
+    await page.getByTestId(`teams-tab-menu-${team.id}`).click();
     await page.getByTestId(`teams-tab-rename-${team.id}`).click();
     await page.getByTestId(`teams-tab-rename-input-${team.id}`).fill("Treasury");
     await page.getByTestId(`teams-tab-rename-save-${team.id}`).click();
@@ -163,9 +165,12 @@ test.describe("team workspace", () => {
     await page.getByTestId(`teams-tab-remove-member-${team.id}-${session.user.id}`).click();
     await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
     await expect(page.getByTestId("team-switcher")).toHaveCount(0);
+    await expect(page.getByTestId("orgs-tab-teams")).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL(/[?&]tab=teams/);
     await addMember();
-    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByTestId(`teams-tab-menu-${team.id}`).click();
     await page.getByTestId(`teams-tab-delete-${team.id}`).click();
+    await page.getByTestId("confirm-dialog-confirm").click();
     await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);
     await expect(page.getByTestId("team-switcher")).toHaveCount(0);
     await expect(page.getByTestId(`teams-tab-team-${team.id}`)).toHaveCount(0);
