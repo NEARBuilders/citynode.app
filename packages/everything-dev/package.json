@@ -54,6 +54,15 @@
       "import": "./dist/dag.mjs",
       "require": "./dist/dag.cjs"
     },
+    "./bundle-cache": {
+      "development": {
+        "types": "./src/bundle-cache.ts",
+        "import": "./src/bundle-cache.ts"
+      },
+      "types": "./dist/bundle-cache.d.mts",
+      "import": "./dist/bundle-cache.mjs",
+      "require": "./dist/bundle-cache.cjs"
+    },
     "./fastkv": {
       "development": {
         "types": "./src/fastkv.ts",

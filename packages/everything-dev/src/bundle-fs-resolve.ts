@@ -2,6 +2,12 @@ import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
+import {
+  bundleCachePath,
+  bundleCacheRoot,
+  readBundleCache,
+  writeBundleCache,
+} from "./bundle-cache";
 
 /**
  * Local-first bundle resolution (ADR 0011 amendment): a self-contained
@@ -142,29 +148,82 @@ export interface BundleFetchHandle {
   readonly uninstall: () => Promise<void>;
 }
 
+export interface BundleFetchOptions {
+  /** Own-namespace FS resolution — requires a staged `BOS_BUNDLE_DIR`. */
+  namespace?: BundleNamespace;
+  /**
+   * Foreign-namespace stale-if-error cache (child tier): `/bundles/…` URLs
+   * outside the own namespace write through to disk on success and serve
+   * the last-known-good bytes when the origin fails. Enabled implicitly
+   * when `namespace` is present (deployment contexts), or explicitly via
+   * `BOS_BUNDLE_CACHE_DIR`.
+   */
+  cacheDir?: string;
+}
+
 type FetchImpl = typeof globalThis.fetch;
+
+const staleResponse = (bytes: Uint8Array, url: string): Response => {
+  const name = url.split("?")[0].split("/").pop() ?? "";
+  const contentType = MIME_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
+  return new Response(bytes.slice().buffer, {
+    status: 200,
+    headers: { "content-type": contentType, "x-bundle-cache": "stale" },
+  });
+};
 
 /**
  * Installs the resolver as a global fetch interceptor — the one seam every
  * boot-time consumer shares (config manifest discovery, contract-type
  * fetches, orchestrator host loading, MF remoteEntry/identity probes).
- * URLs outside the own namespace fall through to the original fetch
- * untouched, and the interceptor is inert when `BOS_BUNDLE_DIR` is unset.
+ * Own-namespace URLs resolve from the staged directory; other `/bundles/…`
+ * URLs get the stale-if-error cache; everything else falls through to the
+ * original fetch untouched. Inert when neither a staged namespace nor a
+ * cache is configured.
  */
-export function installGlobalBundleFetch(namespace: BundleNamespace): BundleFetchHandle {
-  const runtime = ManagedRuntime.make(BundleResolver.layer(namespace));
+export function installGlobalBundleFetch(options: BundleFetchOptions): BundleFetchHandle {
+  const namespace = options.namespace;
+  const cacheDir = options.cacheDir;
+  const runtime = namespace ? ManagedRuntime.make(BundleResolver.layer(namespace)) : null;
   const original: FetchImpl = globalThis.fetch;
   const patched = ((input: Parameters<FetchImpl>[0], init?: Parameters<FetchImpl>[1]) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (!bundleUrlToLocalPath(url, namespace)) {
-      return original(input, init);
+
+    if (namespace && bundleUrlToLocalPath(url, namespace)) {
+      if (!runtime) throw new Error("unreachable: resolver runtime missing");
+      return runtime.runPromise(
+        Effect.gen(function* () {
+          const resolver = yield* BundleResolver;
+          return yield* resolver.lookup(input);
+        }),
+      );
     }
-    return runtime.runPromise(
-      Effect.gen(function* () {
-        const resolver = yield* BundleResolver;
-        return yield* resolver.lookup(input);
-      }),
-    );
+
+    if (cacheDir !== undefined && bundleCachePath(url, { cacheDir })) {
+      return (async () => {
+        try {
+          const response = await original(input, init);
+          if (response.ok) {
+            try {
+              const bytes = new Uint8Array(await response.clone().arrayBuffer());
+              await writeBundleCache(url, bytes, { cacheDir });
+            } catch {
+              // write-through is best-effort
+            }
+          } else {
+            const cached = await readBundleCache(url, { cacheDir });
+            if (cached) return staleResponse(cached, url);
+          }
+          return response;
+        } catch (error) {
+          const cached = await readBundleCache(url, { cacheDir });
+          if (cached) return staleResponse(cached, url);
+          throw error;
+        }
+      })();
+    }
+
+    return original(input, init);
   }) as FetchImpl;
   const originalPreconnect = (original as Partial<FetchImpl>).preconnect;
   if (originalPreconnect) {
@@ -176,23 +235,24 @@ export function installGlobalBundleFetch(namespace: BundleNamespace): BundleFetc
       if (globalThis.fetch === patched) {
         globalThis.fetch = original;
       }
-      await runtime.dispose();
+      if (runtime) await runtime.dispose();
     },
   };
 }
 
 /**
- * Boot-time installer for the CLI: derives the namespace from
+ * Boot-time installer for the CLI: derives the own namespace from
  * `BOS_BUNDLE_DIR` plus the runtime identity (`BOS_ACCOUNT`/`BOS_GATEWAY`
- * registry env taking precedence over the bos.config.json fields). Never
- * throws — a missing or malformed identity leaves the default network
- * fetch in place.
+ * registry env taking precedence over the bos.config.json fields), and the
+ * foreign-namespace cache from `BOS_BUNDLE_CACHE_DIR`. Never throws — a
+ * missing or malformed identity leaves the default network fetch in place.
  */
 export function installBundleFetchFromEnv(input: {
   configPath?: string | null;
 }): BundleFetchHandle | null {
   const bundleDir = process.env.BOS_BUNDLE_DIR;
-  if (!bundleDir) return null;
+  const cacheDir = process.env.BOS_BUNDLE_CACHE_DIR;
+  if (!bundleDir && cacheDir === undefined) return null;
 
   let configAccount: string | undefined;
   let configGateway: string | undefined;
@@ -212,7 +272,11 @@ export function installBundleFetchFromEnv(input: {
 
   const account = process.env.BOS_ACCOUNT ?? configAccount;
   const gateway = process.env.BOS_GATEWAY ?? configGateway;
-  if (!account || !gateway) return null;
+  if (bundleDir && (!account || !gateway)) return null;
 
-  return installGlobalBundleFetch({ bundleDir, account, gateway });
+  const namespace = bundleDir && account && gateway ? { bundleDir, account, gateway } : undefined;
+  return installGlobalBundleFetch({
+    namespace,
+    cacheDir: cacheDir ?? (namespace ? bundleCacheRoot() : undefined),
+  });
 }

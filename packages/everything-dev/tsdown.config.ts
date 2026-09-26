@@ -11,6 +11,8 @@ export default defineConfig({
     "src/descriptor/index.ts",
     "src/config.ts",
     "src/dag.ts",
+    "src/bundle-cache.ts",
+    "src/bundle-fs-resolve.ts",
     "src/fastkv.ts",
     "src/contract.meta.ts",
     "src/db/index.ts",

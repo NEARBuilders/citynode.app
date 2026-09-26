@@ -101,7 +101,7 @@ describe("BundleResolver global fetch adapter", () => {
   afterAll(() => rmSync(NAMESPACE.bundleDir, { recursive: true, force: true }));
 
   it("serves own-namespace URLs from disk with manifest semantics", async () => {
-    const handle = installGlobalBundleFetch(NAMESPACE);
+    const handle = installGlobalBundleFetch({ namespace: NAMESPACE });
     try {
       const res = await fetch(
         "https://citynode.app/bundles/v1.citynode.near/citynode.app/apps/plugin.manifest.json",
@@ -116,7 +116,7 @@ describe("BundleResolver global fetch adapter", () => {
   });
 
   it("returns 404 for own-namespace files that are not staged", async () => {
-    const handle = installGlobalBundleFetch(NAMESPACE);
+    const handle = installGlobalBundleFetch({ namespace: NAMESPACE });
     try {
       const res = await fetch(
         "https://citynode.app/bundles/v1.citynode.near/citynode.app/apps/missing.js",
@@ -130,7 +130,7 @@ describe("BundleResolver global fetch adapter", () => {
   it("falls through to the original fetch for foreign URLs", async () => {
     const fallthrough = new Response("from-network", { status: 200 });
     globalThis.fetch = async () => fallthrough;
-    const handle = installGlobalBundleFetch(NAMESPACE);
+    const handle = installGlobalBundleFetch({ namespace: NAMESPACE });
     try {
       const res = await fetch("https://api.fastnear.com/v0/account/test");
       expect(res).toBe(fallthrough);
@@ -139,6 +139,58 @@ describe("BundleResolver global fetch adapter", () => {
       globalThis.fetch = originalFetch;
     }
     expect(globalThis.fetch).toBe(originalFetch);
+  });
+
+  it("caches foreign-namespace bundles stale-if-error", async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), "bundle-cache-"));
+    let failOrigin = false;
+    globalThis.fetch = async () => {
+      if (failOrigin) throw new Error("origin down");
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const handle = installGlobalBundleFetch({
+      namespace: NAMESPACE,
+      cacheDir,
+    });
+    try {
+      const foreign =
+        "https://base.everything.near/bundles/base.near/everything.dev/auth/plugin.manifest.json";
+      const fresh = await fetch(foreign);
+      expect(fresh.headers.get("x-bundle-cache")).toBeNull();
+      expect(await fresh.json()).toEqual({ ok: true });
+
+      failOrigin = true;
+      const stale = await fetch(foreign);
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get("x-bundle-cache")).toBe("stale");
+      expect(await stale.json()).toEqual({ ok: true });
+
+      const uncached =
+        "https://base.everything.near/bundles/base.near/everything.dev/votes/plugin.manifest.json";
+      await expect(fetch(uncached)).rejects.toThrow("origin down");
+      rmSync(cacheDir, { recursive: true, force: true });
+    } finally {
+      await handle.uninstall();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not cache when no cache dir is configured", async () => {
+    const fallthrough = new Response("from-network", { status: 200 });
+    globalThis.fetch = async () => fallthrough;
+    const handle = installGlobalBundleFetch({ namespace: NAMESPACE });
+    try {
+      const res = await fetch(
+        "https://base.everything.near/bundles/base.near/everything.dev/auth/plugin.manifest.json",
+      );
+      expect(res).toBe(fallthrough);
+    } finally {
+      await handle.uninstall();
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

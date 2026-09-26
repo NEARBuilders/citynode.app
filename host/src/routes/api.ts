@@ -20,6 +20,7 @@ import { mountMcpRoute } from "../services/mcp";
 import type { PluginResult } from "../services/plugins";
 import { logger } from "../utils/logger";
 import { createBundleFsHandler } from "./bundles";
+import { createBundleProxyCacheHandler, deriveNamespaceOrigins } from "./bundles-proxy";
 import {
   getHealthStatus,
   getMemorySnapshot,
@@ -110,8 +111,16 @@ export async function setupApiRoutes(
 
   // FS-backed bundle serving (plan 043) — first handler on /bundles/*: the
   // image stages its own artifacts and serves them same-origin. Unset
-  // BOS_BUNDLE_DIR (dev stacks) falls through to the proxy/oRPC routes.
+  // BOS_BUNDLE_DIR (registry tier / child runtimes) falls through to the
+  // foreign-namespace proxy cache, then the proxy/oRPC routes.
   app.all("/bundles/*", createBundleFsHandler(process.env.BOS_BUNDLE_DIR));
+  app.all(
+    "/bundles/*",
+    createBundleProxyCacheHandler({
+      namespaceOrigins: deriveNamespaceOrigins(config),
+      cacheDir: process.env.BOS_BUNDLE_CACHE_DIR,
+    }),
+  );
 
   const isProxyMode = process.argv.includes("--proxy");
 
