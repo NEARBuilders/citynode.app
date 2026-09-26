@@ -7,7 +7,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ReactNode } from "react";
-import { buildTenantUrl } from "@/lib/tenant-url";
+import { buildTenantUrl } from "@/app";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
 
