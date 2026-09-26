@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModuleFederationError } from "../../src/errors";
+import type { PluginLoadAttemptInfo } from "../../src/remote-entry";
 import {
   loadRemoteWithRetry,
   purgeRemoteEntryCache,
@@ -9,8 +10,10 @@ import {
 import { classifyPluginFailure } from "../../src/runtime/errors";
 
 const poisonEntryCache = (remoteUrl: string) => {
-  const globalLoading =
-    (globalThis as Record<string, unknown>).__GLOBAL_LOADING_REMOTE_ENTRY__ ?? {};
+  const globalLoading: Record<string, unknown> =
+    ((globalThis as Record<string, unknown>).__GLOBAL_LOADING_REMOTE_ENTRY__ as
+      | Record<string, unknown>
+      | undefined) ?? {};
   const poisoned = Promise.reject(new Error("poisoned"));
   poisoned.catch(() => {});
   globalLoading[`12:${remoteUrl}`] = poisoned;
@@ -146,7 +149,7 @@ describe("loadRemoteWithRetry", () => {
   });
 
   it("reports every attempt through onAttempt with classification", async () => {
-    const onAttempt = vi.fn();
+    const onAttempt = vi.fn((_error: unknown, _info: PluginLoadAttemptInfo) => {});
     let calls = 0;
     const load = vi.fn(() => {
       calls += 1;
@@ -162,7 +165,7 @@ describe("loadRemoteWithRetry", () => {
       }),
     );
     expect(onAttempt).toHaveBeenCalledTimes(1);
-    const [error, info] = onAttempt.mock.calls[0];
+    const [error, info] = onAttempt.mock.calls[0]!;
     expect(error).toBeInstanceOf(Error);
     expect(info.attempt).toBe(1);
     expect(info.classification.kind).toBe("network");
@@ -196,8 +199,8 @@ describe("loadRemoteWithRetry", () => {
         ...READINESS_NEVER,
       }),
     ).catch(() => {});
-    const errorCalls = (console.error as ReturnType<typeof vi.spyOn>).mock.calls.filter((args) =>
-      String(args[0]).includes("[Plugins][test]"),
+    const errorCalls = (console.error as ReturnType<typeof vi.spyOn>).mock.calls.filter(
+      (args: unknown[]) => String(args[0]).includes("[Plugins][test]"),
     );
     expect(errorCalls.length).toBe(1);
   });

@@ -130,6 +130,7 @@ export const PLUGIN_ERROR_STATUS_MAP: Record<string, number> = {
   CONNECTION_ERROR: 502,
 } as const;
 
+export type { PluginLoadFailureInfo } from "./runtime/errors";
 export {
   classifyPluginFailure,
   extractFromFiberFailure,

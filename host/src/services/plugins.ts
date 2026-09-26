@@ -2,6 +2,7 @@ import { createInstance, getInstance } from "@module-federation/enhanced/runtime
 import { setGlobalFederationInstance } from "@module-federation/runtime-core";
 import { Config, Context, Data, Effect, Layer, Option, Redacted } from "effect";
 import { createPluginRuntime } from "every-plugin";
+import type { PluginLoadFailureInfo } from "every-plugin/errors";
 import { classifyPluginFailure, PluginRuntimeError } from "every-plugin/errors";
 import { loadRemoteWithRetry } from "every-plugin/remote-entry";
 import { buildDependencyDAG, getDependenciesForNode, getSingletonKey } from "everything-dev/dag";
@@ -48,17 +49,7 @@ class PluginBootstrapError extends Data.TaggedError("PluginBootstrapError")<{
 }
 
 /** Structured per-plugin failure surfaced through health endpoints. */
-export interface PluginFailureInfo {
-  pluginKey: string;
-  pluginUrl?: string;
-  operation?: string;
-  kind: string;
-  retryable: boolean;
-  message: string;
-  suggestion?: string;
-  dbSecret?: string;
-  dbUrlMasked?: string;
-}
+export type PluginFailureInfo = PluginLoadFailureInfo;
 
 function dbUrlSummary(url: string | undefined): string {
   if (!url || url === "unset") return "unset";

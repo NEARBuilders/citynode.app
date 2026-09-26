@@ -200,6 +200,27 @@ export interface PluginFailureClassification {
   suggestion?: string;
 }
 
+/**
+ * Structured report of one plugin-load failure, built by a loader (the host's
+ * plugin boot, the dev server) from a `PluginFailureClassification` plus
+ * loader context. This is the shape health endpoints and dashboards consume —
+ * keep it serializable.
+ */
+export interface PluginLoadFailureInfo {
+  /** loader-side key (host entry key, dev plugin id) */
+  pluginKey: string;
+  pluginUrl?: string;
+  /** failing runtime stage when the cause is stage-attributed */
+  operation?: string;
+  kind: PluginFailureKind | string;
+  retryable: boolean;
+  message: string;
+  suggestion?: string;
+  /** loader context: which env secret the plugin's DB binding expects */
+  dbSecret?: string;
+  dbUrlMasked?: string;
+}
+
 const NETWORK_RETRYABLE_PATTERNS = ["ETIMEDOUT", "ECONNRESET", "timeout", "503", "429"] as const;
 const NETWORK_DEAD_PATTERNS = ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH"] as const;
 const RETRYABLE_ORPC_CODES = new Set([
