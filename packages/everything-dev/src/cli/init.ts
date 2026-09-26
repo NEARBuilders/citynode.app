@@ -13,6 +13,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { execa } from "execa";
 import { glob } from "glob";
+import { extract as tarExtract } from "tar";
 import {
   buildAuthContractStub,
   buildAuthExportStub,
@@ -31,7 +32,6 @@ import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import { writeSnapshot } from "./snapshot";
 import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
 import { extract as tarExtract } from "tar";
-
 
 export const INIT_ROOT_PATTERNS = [
   "bos.config.json",

@@ -1,8 +1,9 @@
+import { BankIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { Building2, Key, Layers, Mail, QrCode, Users, UsersRound } from "lucide-react";
+import { createFileRoute, Link, stripSearchParams, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   getAccount,
   getActiveRuntime,
@@ -14,16 +15,18 @@ import {
 } from "@/app";
 import {
   Button,
+  EmptyState,
   PageContainer,
-  PageHeader,
-  EmptyState as SharedEmptyState,
+  Skeleton,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useSwitchOrganization } from "@/components/layout/use-switch-organization";
 import { useTeamWorkspace } from "@/components/layout/use-team-workspace";
+import { pageTitle } from "@/lib/page-title";
 import {
   ApiKeysTab,
   type CreatedOrganizationApiKey,
@@ -53,6 +56,25 @@ type MembersResponse = Awaited<ReturnType<AuthClientType["organization"]["listMe
 type MemberItem = NonNullable<MembersResponse["data"]>["members"][number];
 type InvitationItem = Awaited<ReturnType<ApiClientType["auth"]["listInvitations"]>>[number];
 
+const ORGANIZATION_TABS = [
+  "members",
+  "teams",
+  "invitations",
+  "onboard",
+  "apikeys",
+  "node-config",
+] as const;
+
+type OrganizationTab = (typeof ORGANIZATION_TABS)[number];
+
+const organizationSearchSchema = z.object({
+  tab: z.enum(ORGANIZATION_TABS).default("members").catch("members"),
+});
+
+function isOrganizationTab(value: unknown): value is OrganizationTab {
+  return ORGANIZATION_TABS.some((tab) => tab === value);
+}
+
 async function handleCopyApiKey(value: string, message = "API key copied") {
   try {
     await navigator.clipboard.writeText(value);
@@ -63,9 +85,13 @@ async function handleCopyApiKey(value: string, message = "API key copied") {
 }
 
 export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
-  head: () => ({
-    title: "Organization | auth.everything.dev",
-    meta: [{ name: "description", content: "Manage organization details and members." }],
+  validateSearch: organizationSearchSchema,
+  search: { middlewares: [stripSearchParams({ tab: "members" })] },
+  head: ({ match }) => ({
+    meta: [
+      { title: pageTitle("Organization", match.context.runtimeConfig) },
+      { name: "description", content: "Members, teams and settings for an organization." },
+    ],
   }),
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
@@ -83,7 +109,9 @@ export const Route = createFileRoute("/_authenticated/_dashboard/orgs/$slug")({
 
 function OrganizationDetail() {
   const router = useRouter();
+  const navigate = Route.useNavigate();
   const { slug: orgSlug } = Route.useParams();
+  const { tab: requestedTab } = Route.useSearch();
   const auth = useAuthClient();
   const apiClient = useApiClient();
   const { runtimeConfig } = Route.useRouteContext();
@@ -147,6 +175,7 @@ function OrganizationDetail() {
   const [createdApiKey, setCreatedApiKey] = useState<CreatedOrganizationApiKey | null>(null);
   const switchOrg = useSwitchOrganization();
 
+  const [pendingTeamDeleteId, setPendingTeamDeleteId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
@@ -162,7 +191,11 @@ function OrganizationDetail() {
     (apiKey) => setCreatedApiKey(apiKey),
   );
   const { removeMemberMutation } = useOrganizationMemberActions(auth, orgId);
-  const [activeTab, setActiveTab] = useState("members");
+  const activeTab = requestedTab === "onboard" && !canOrganize ? "members" : requestedTab;
+  const setActiveTab = (value: unknown) => {
+    if (!isOrganizationTab(value) || value === activeTab) return;
+    void navigate({ search: (prev) => ({ ...prev, tab: value }), replace: true });
+  };
   const teamsState = useOrganizationTeams(orgId, activeTab === "teams");
   const { deleteOrgMutation, leaveOrgMutation, updateOrgMutation } = useOrganizationSettings(
     auth,
@@ -174,22 +207,24 @@ function OrganizationDetail() {
   if (isLoadingOrgs) {
     return (
       <PageContainer variant="wide">
-        <div className="flex flex-col items-center justify-center min-h-[40vh]">
-          <p className="text-sm text-muted-foreground">Loading organization...</p>
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-5 w-80" />
         </div>
+        <Skeleton className="h-64 w-full" />
       </PageContainer>
     );
   }
   if (!org) {
     return (
       <PageContainer variant="wide">
-        <SharedEmptyState
-          icon={Building2}
+        <EmptyState
+          icon={BankIcon}
           title="Organization not found"
-          description="This organization does not exist or you do not have access."
+          description="It doesn't exist or you're not a member."
           action={
-            <Button asChild variant="outline">
-              <Link to="/orgs">back to organizations</Link>
+            <Button variant="outline" nativeButton={false} render={<Link to="/orgs" />}>
+              Back to Organizations
             </Button>
           }
         />
@@ -199,148 +234,141 @@ function OrganizationDetail() {
 
   return (
     <PageContainer variant="wide">
-      <div className="space-y-6">
-        <PageHeader
-          icon={Users}
-          label={
-            <>
-              <Link to="/orgs" className="hover:text-foreground transition-colors">
-                Organizations
-              </Link>
-              <span>/</span>
-              <span className="text-foreground">{org.slug}</span>
-            </>
-          }
-          title={org.name}
+      <OrganizationOverview
+        canDelete={isOwner}
+        isDeleting={deleteOrgMutation.isPending}
+        isActive={isActive}
+        isPersonal={isPersonal}
+        isLeaving={leaveOrgMutation.isPending}
+        isSwitching={switchOrg.isPending}
+        memberCount={members.length}
+        myRole={myMembership?.role}
+        onDelete={() => deleteOrgMutation.mutate()}
+        onEdit={() => {
+          setEditName(org.name);
+          setEditSlug(org.slug);
+          setIsEditing(true);
+        }}
+        onLeave={() => leaveOrgMutation.mutate()}
+        onSwitch={() => switchOrg.mutate(orgId)}
+        org={org}
+      />
+      {isOwner && (
+        <OrganizationEditForm
+          open={isEditing}
+          editName={editName}
+          editSlug={editSlug}
+          isPending={updateOrgMutation.isPending}
+          onCancel={() => setIsEditing(false)}
+          onNameChange={setEditName}
+          onSave={() => updateOrgMutation.mutate({ name: editName, slug: editSlug })}
+          onSlugChange={setEditSlug}
         />
-        <OrganizationOverview
-          apiKeysCount={apiKeys.length}
-          canDelete={isOwner}
-          isDeleting={deleteOrgMutation.isPending}
-          isActive={isActive}
-          isPersonal={isPersonal}
-          isLeaving={leaveOrgMutation.isPending}
-          isSwitching={switchOrg.isPending}
-          memberCount={members.length}
-          pendingInvitationsCount={pendingInvitationsCount}
-          onDelete={() => {
-            if (confirm(`Delete "${org.name}"? This cannot be undone.`)) deleteOrgMutation.mutate();
-          }}
-          onEdit={() => {
-            setEditName(org.name);
-            setEditSlug(org.slug);
-            setIsEditing(true);
-          }}
-          onLeave={() => {
-            if (confirm(`Leave "${org.name}"?`)) leaveOrgMutation.mutate();
-          }}
-          onSwitch={() => switchOrg.mutate(orgId)}
-          org={org}
-        />
-        {isEditing && isOwner && (
-          <OrganizationEditForm
-            editName={editName}
-            editSlug={editSlug}
-            isPending={updateOrgMutation.isPending}
-            onCancel={() => setIsEditing(false)}
-            onNameChange={setEditName}
-            onSave={() => updateOrgMutation.mutate({ name: editName, slug: editSlug })}
-            onSlugChange={setEditSlug}
-          />
-        )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="members" className="shrink-0">
-              <Users className="h-4 w-4 mr-1.5" />
-              Members ({members.length})
+      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList variant="line">
+            <TabsTrigger value="members" data-testid="orgs-tab-members">
+              Members <TabCount value={members.length} />
             </TabsTrigger>
-            <TabsTrigger value="teams" className="shrink-0" data-testid="orgs-tab-teams">
-              <UsersRound className="h-4 w-4 mr-1.5" />
-              Teams ({teamsState.teams.length})
+            <TabsTrigger value="teams" data-testid="orgs-tab-teams">
+              Teams <TabCount value={teamsState.teams.length} />
             </TabsTrigger>
-            <TabsTrigger value="invitations" className="shrink-0">
-              <Mail className="h-4 w-4 mr-1.5" />
-              Invitations ({pendingInvitationsCount})
+            <TabsTrigger value="invitations" data-testid="orgs-tab-invitations">
+              Invitations <TabCount value={pendingInvitationsCount} />
             </TabsTrigger>
             {canOrganize && (
-              <TabsTrigger value="onboard" className="shrink-0" data-testid="orgs-tab-onboard">
-                <QrCode className="h-4 w-4 mr-1.5" />
-                Onboard
+              <TabsTrigger value="onboard" data-testid="orgs-tab-onboard">
+                Onboarding
               </TabsTrigger>
             )}
-            <TabsTrigger value="apikeys" className="shrink-0">
-              <Key className="h-4 w-4 mr-1.5" />
-              API Keys ({apiKeys.length})
+            <TabsTrigger value="apikeys" data-testid="orgs-tab-apikeys">
+              API keys <TabCount value={apiKeys.length} />
             </TabsTrigger>
-            <TabsTrigger
-              value="node-config"
-              className="shrink-0"
-              data-testid="orgs-tab-node-config"
-            >
-              <Layers className="h-4 w-4 mr-1.5" />
-              Node config
+            <TabsTrigger value="node-config" data-testid="orgs-tab-node-config">
+              Community
             </TabsTrigger>
           </TabsList>
-          <MembersTab
-            canManageMembers={canManageMembers}
-            isRemoving={removeMemberMutation.isPending}
-            members={members}
-            onRemove={(member) => removeMemberMutation.mutate(member)}
-            sessionUserId={session?.user?.id}
-          />
-          <TeamsTab
+        </div>
+        <MembersTab
+          canManageMembers={canManageMembers}
+          isRemoving={removeMemberMutation.isPending}
+          members={members}
+          onInvite={isPersonal ? undefined : () => setActiveTab("invitations")}
+          onRemove={(member) => removeMemberMutation.mutate(member)}
+          sessionUserId={session?.user?.id}
+        />
+        <TeamsTab
+          canManage={canManageMembers}
+          isMutating={teamsState.isMutating}
+          onAddMember={(teamId, userId) => teamsState.addTeamMember.mutate({ teamId, userId })}
+          onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
+          onCreate={(name) => teamsState.createTeam.mutate(name)}
+          onDelete={(teamId) => setPendingTeamDeleteId(teamId)}
+          onRemoveMember={(teamId, userId) =>
+            teamsState.removeTeamMember.mutate({ teamId, userId })
+          }
+          onRetryMembers={teamsState.retryTeamMembers}
+          onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
+          orgMembers={members}
+          teams={teamsState.teams}
+        />
+        <ConfirmDialog
+          open={pendingTeamDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setPendingTeamDeleteId(null);
+          }}
+          title={`Delete ${teamsState.teams.find((team) => team.id === pendingTeamDeleteId)?.name ?? "team"}?`}
+          description="Members lose the areas this team grants. This can't be undone."
+          confirmLabel="Delete team"
+          variant="destructive"
+          isPending={teamsState.deleteTeam.isPending}
+          onConfirm={() => {
+            if (!pendingTeamDeleteId) return;
+            teamsState.deleteTeam.mutate(pendingTeamDeleteId, {
+              onSettled: () => setPendingTeamDeleteId(null),
+            });
+          }}
+        />
+        <InvitationsTab
+          canManageMembers={canManageMembers}
+          invitePending={inviteMutation.isPending}
+          invitations={invitations}
+          isPersonal={isPersonal}
+          isCancelling={cancelInvitationMutation.isPending}
+          isResending={resendInvitationMutation.isPending}
+          onCancel={(invitationId) => cancelInvitationMutation.mutate(invitationId)}
+          onInvite={(values) => inviteMutation.mutateAsync(values)}
+          onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
+          teams={teamsState.teams}
+        />
+        {canOrganize && <OnboardingTab apiClient={apiClient} canManage orgId={orgId} />}
+        <ApiKeysTab
+          apiKeys={apiKeys}
+          canManageMembers={canManageMembers}
+          createdApiKey={createdApiKey}
+          isCreating={createApiKeyMutation.isPending}
+          isDeleting={deleteApiKeyMutation.isPending}
+          onCopy={handleCopyApiKey}
+          onCreate={(values) => createApiKeyMutation.mutate(values)}
+          onDelete={(keyId) => deleteApiKeyMutation.mutate(keyId)}
+          onDismiss={() => setCreatedApiKey(null)}
+        />
+        <TabsContent value="node-config" className="flex flex-col gap-6 pt-6">
+          <NodeConfigTab
+            orgId={orgId}
+            gatewayId={gatewayId}
+            baseAccount={baseAccount}
             canManage={canManageMembers}
-            isMutating={teamsState.isMutating}
-            onAddMember={(teamId, userId) => teamsState.addTeamMember.mutate({ teamId, userId })}
-            onAreasChange={(teamId, areas) => teamsState.updateTeam.mutate({ teamId, areas })}
-            onCreate={(name) => teamsState.createTeam.mutate(name)}
-            onDelete={(teamId) => {
-              const team = teamsState.teams.find((candidate) => candidate.id === teamId);
-              if (confirm(`Delete team "${team?.name ?? ""}"?`))
-                teamsState.deleteTeam.mutate(teamId);
-            }}
-            onRemoveMember={(teamId, userId) =>
-              teamsState.removeTeamMember.mutate({ teamId, userId })
-            }
-            onRetryMembers={teamsState.retryTeamMembers}
-            onRename={(teamId, name) => teamsState.updateTeam.mutate({ teamId, name })}
-            orgMembers={members}
-            teams={teamsState.teams}
+            isPlatformAdmin={session?.user?.role === "admin"}
           />
-          <InvitationsTab
-            canManageMembers={canManageMembers}
-            invitePending={inviteMutation.isPending}
-            invitations={invitations}
-            isPersonal={isPersonal}
-            isCancelling={cancelInvitationMutation.isPending}
-            isResending={resendInvitationMutation.isPending}
-            onCancel={(invitationId) => cancelInvitationMutation.mutate(invitationId)}
-            onInvite={(values) => inviteMutation.mutateAsync(values)}
-            onResend={(invitation) => resendInvitationMutation.mutate(invitation)}
-            teams={teamsState.teams}
-          />
-          {canOrganize && <OnboardingTab apiClient={apiClient} canManage orgId={orgId} />}
-          <ApiKeysTab
-            apiKeys={apiKeys}
-            canManageMembers={canManageMembers}
-            createdApiKey={createdApiKey}
-            isCreating={createApiKeyMutation.isPending}
-            isDeleting={deleteApiKeyMutation.isPending}
-            onCopy={handleCopyApiKey}
-            onCreate={(values) => createApiKeyMutation.mutate(values)}
-            onDelete={(keyId) => deleteApiKeyMutation.mutate(keyId)}
-            onDismiss={() => setCreatedApiKey(null)}
-          />
-          <TabsContent value="node-config" className="space-y-6 pt-4">
-            <NodeConfigTab
-              orgId={orgId}
-              gatewayId={gatewayId}
-              baseAccount={baseAccount}
-              canManage={canManageMembers}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   );
+}
+
+function TabCount({ value }: { value: number }) {
+  if (value === 0) return null;
+  return <span className="text-muted-foreground tabular-nums">{value}</span>;
 }
