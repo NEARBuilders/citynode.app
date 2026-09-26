@@ -13,12 +13,7 @@ export function RouterError({ error, reset }: { error: Error; reset?: () => void
     >
       <div className="flex max-w-md flex-col items-center gap-6 text-center">
         <div className="flex size-14 items-center justify-center rounded-full bg-destructive-muted text-destructive-muted-foreground">
-          <svg
-            className="size-7"
-            viewBox="0 0 256 256"
-            fill="currentColor"
-            aria-hidden="true"
-          >
+          <svg className="size-7" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
             <path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm-8-80V80a8 8 0 0 1 16 0v56a8 8 0 0 1-16 0Zm20 36a12 12 0 1 1-12-12 12 12 0 0 1 12 12Z" />
           </svg>
         </div>
