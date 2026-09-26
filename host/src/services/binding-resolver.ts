@@ -1,8 +1,10 @@
+import { readLeases, sandboxLeasesPath } from "everything-dev/sandbox";
 import { logger } from "../utils/logger";
 import { resolveDomain } from "../utils/normalize";
 import type { RuntimeConfig } from "./config";
 
 export type TenantBindingStatus = "active" | "pending" | "suspended" | "pending_deletion";
+export type TenantHostMode = "shared" | "sandbox";
 
 export interface TenantBinding {
   hostname: string;
@@ -12,6 +14,8 @@ export interface TenantBinding {
   allowBackendOverrides: boolean;
   allowSsr: boolean;
   status: TenantBindingStatus;
+  hostMode?: TenantHostMode;
+  sandboxUrl?: string;
 }
 
 const BINDINGS_TTL_MS = 30_000;
@@ -51,6 +55,41 @@ function devLocalhostLabel(hostname: string): string | null {
   const label = hostname.slice(0, -LOCALHOST_SUFFIX.length);
   if (!label || label.includes(".")) return null;
   return label;
+}
+
+/**
+ * Sandbox lease overlay (plan 032, `BOS_SANDBOX=1` only): the orchestrator's
+ * lease file maps a tenant slug to its sandbox host URL. Returns a sandbox
+ * binding when the hostname matches, null otherwise — never throws.
+ */
+function sandboxLeaseBinding(hostname: string, gatewayId: string): TenantBinding | null {
+  if (process.env.BOS_SANDBOX !== "1") return null;
+  try {
+    const devLabel = devLocalhostLabel(hostname);
+    const candidates = new Set([hostname]);
+    if (devLabel) candidates.add(`${devLabel}.${gatewayId}`);
+    for (const lease of readLeases(sandboxLeasesPath())) {
+      const key = `${lease.slug}.${gatewayId}`;
+      if (candidates.has(key)) {
+        return {
+          hostname: key,
+          tenantId: "sandbox",
+          accountId: lease.account,
+          allowUiOverrides: true,
+          allowBackendOverrides: true,
+          allowSsr: true,
+          status: "active",
+          hostMode: "sandbox",
+          sandboxUrl: lease.url,
+        };
+      }
+    }
+  } catch (cause) {
+    logger.error(
+      `[BindingResolver] Sandbox lease overlay failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+  return null;
 }
 
 async function fetchBindingsFromApi(apiUrl: string): Promise<TenantBinding[]> {
@@ -177,6 +216,11 @@ export function createBindingResolver(config: RuntimeConfig): BindingResolver {
       const gatewayId = resolveGatewayId(config);
       if (isBaseHost(normalized, gatewayId)) {
         return null;
+      }
+
+      const leaseBinding = sandboxLeaseBinding(normalized, gatewayId);
+      if (leaseBinding) {
+        return leaseBinding;
       }
 
       const entries = await ensureBindingsLoaded(config);

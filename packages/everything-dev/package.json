@@ -225,6 +225,15 @@
       "types": "./dist/db/index.d.mts",
       "import": "./dist/db/index.mjs",
       "require": "./dist/db/index.cjs"
+    },
+    "./sandbox": {
+      "development": {
+        "types": "./src/sandbox/index.ts",
+        "import": "./src/sandbox/index.ts"
+      },
+      "types": "./dist/sandbox/index.d.mts",
+      "import": "./dist/sandbox/index.mjs",
+      "require": "./dist/sandbox/index.cjs"
     }
   },
   "files": [

@@ -330,6 +330,12 @@ export async function resolveRequestRuntime(
   }
 
   const tenantAccountId = binding.accountId;
+  if (binding.hostMode === "sandbox" && binding.sandboxUrl) {
+    throw new TenantRuntimeError(
+      `Sandbox tenant ${binding.hostname} must be proxied to ${binding.sandboxUrl} (BOS_SANDBOX=1 gateway middleware missing)`,
+      502,
+    );
+  }
   if (binding.status === "suspended") {
     throw new TenantRuntimeError("Tenant is suspended", 503);
   }
