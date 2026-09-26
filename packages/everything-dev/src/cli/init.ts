@@ -19,6 +19,7 @@ import {
   buildAuthExportStub,
   buildAuthTypesGenContent,
 } from "../auth-types-gen";
+import { loadAppDescriptorConfig } from "../config";
 import type { OverrideSection } from "../contract";
 import { fetchBosConfigFromFastKv } from "../fastkv";
 import { fetchResponse } from "../http-client";
@@ -29,6 +30,7 @@ import {
 import type { BosConfig, BosConfigInput } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
+import { configInputToDescriptor, serializeAppDescriptorSource } from "./app-config-form";
 import { writeSnapshot } from "./snapshot";
 import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
 
@@ -469,6 +471,23 @@ function stripProductionFields(entry: Record<string, unknown>): void {
   delete entry.ssrIntegrity;
 }
 
+/**
+ * Scaffold the authored config as the TS form: the personalized
+ * bos.config.json materializes into an authored `bos.app.ts` descriptor and
+ * the JSON copy is removed — publish/sync still canonicalize to JSON for
+ * FastKV from the resolved config.
+ */
+export async function convertChildConfigToAppForm(destination: string): Promise<void> {
+  const configPath = join(destination, "bos.config.json");
+  if (!existsSync(configPath)) return;
+  const config = JSON.parse(readFileSync(configPath, "utf-8")) as BosConfigInput;
+  writeFileSync(
+    join(destination, "bos.app.ts"),
+    serializeAppDescriptorSource(configInputToDescriptor(config)),
+  );
+  rmSync(configPath);
+}
+
 function buildRootTypecheckScript(sections: {
   ui: boolean;
   api: boolean;
@@ -631,6 +650,108 @@ export async function personalizeConfig(
       )
       .map(([key]) => key),
   );
+
+  const jsonConfigPath = join(destination, "bos.config.json");
+  const appConfigPath = join(destination, "bos.app.ts");
+  const tsForm = !existsSync(jsonConfigPath) && existsSync(appConfigPath);
+
+  if (tsForm) {
+    const config = (await loadAppDescriptorConfig(appConfigPath)) as Record<string, unknown>;
+
+    config.extends = `bos://${opts.extendsAccount}/${opts.extendsGateway}`;
+
+    if (opts.account) {
+      config.account = opts.account;
+    }
+    if (opts.domain) {
+      config.domain = opts.domain;
+    }
+    if (opts.repository) {
+      config.repository = opts.repository;
+    } else {
+      delete config.repository;
+    }
+
+    const inheritableFields = ["title", "description", "testnet", "staging"] as const;
+    for (const field of inheritableFields) {
+      if (!(field in opts)) {
+        delete config[field];
+      }
+    }
+
+    if (config.app && typeof config.app === "object") {
+      const app = config.app as Record<string, unknown>;
+
+      for (const entryKey of Object.keys(app)) {
+        if (
+          !has(entryKey as OverrideSection) &&
+          (entryKey === "host" || entryKey === "ui" || entryKey === "api")
+        ) {
+          delete app[entryKey];
+          continue;
+        }
+        if (entryKey === "auth") {
+          delete app[entryKey];
+          continue;
+        }
+        const entry = app[entryKey];
+        if (entry && typeof entry === "object") {
+          stripProductionFields(entry as Record<string, unknown>);
+        }
+      }
+
+      if (preservedAuth !== undefined) {
+        app.auth = preservedAuth;
+      }
+
+      if (Object.keys(app).length === 0) {
+        delete config.app;
+      }
+    }
+
+    if (has("plugins")) {
+      if (config.plugins && typeof config.plugins === "object") {
+        const plugins = config.plugins as Record<string, unknown>;
+
+        if (opts.plugins !== undefined) {
+          for (const pluginKey of Object.keys(plugins)) {
+            if (!opts.plugins.includes(pluginKey)) {
+              delete plugins[pluginKey];
+            }
+          }
+        }
+
+        for (const pluginKey of Object.keys(plugins)) {
+          const plugin = plugins[pluginKey];
+          let pluginObj: Record<string, unknown>;
+
+          if (typeof plugin === "string") {
+            pluginObj = { extends: plugin };
+            plugins[pluginKey] = pluginObj;
+          } else if (plugin && typeof plugin === "object") {
+            pluginObj = { ...(plugin as Record<string, unknown>) };
+            plugins[pluginKey] = pluginObj;
+          } else {
+            continue;
+          }
+
+          stripProductionFields(pluginObj);
+        }
+
+        if (Object.keys(plugins).length === 0) {
+          config.plugins = {};
+        }
+      }
+    } else {
+      config.plugins = {};
+    }
+
+    writeFileSync(
+      appConfigPath,
+      serializeAppDescriptorSource(configInputToDescriptor(config as BosConfigInput)),
+    );
+    return;
+  }
 
   const configPath = join(destination, "bos.config.json");
   if (existsSync(configPath)) {

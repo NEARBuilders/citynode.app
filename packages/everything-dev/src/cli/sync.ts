@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { glob } from "glob";
-import { loadResolvedConfig } from "../config";
+import { loadAppDescriptorConfig, loadResolvedConfig } from "../config";
 import type { SyncOptions, SyncResult } from "../contract";
 import { materializeViaLayer } from "../infra/materializer";
 import {
@@ -405,12 +405,17 @@ function hasPluginsWorkspace(projectDir: string): boolean {
 }
 
 export async function syncTemplate(projectDir: string, options: SyncOptions): Promise<SyncResult> {
-  // Sync reads the raw bos.config.json (not the resolved config) because it needs
-  // the user's explicit local settings: their extends ref, selected plugins, etc.
-  // The resolved config is the merged result and would include inherited parent
-  // values that the user didn't explicitly choose, which would break sync filtering.
-  const localConfig = JSON.parse(
-    readFileSync(join(projectDir, "bos.config.json"), "utf-8"),
+  // Sync reads the user's authored config — the raw bos.config.json, or the
+  // materialized bos.app.ts descriptor for TS-form children — not the
+  // resolved config: it needs the user's explicit local settings (their
+  // extends ref, selected plugins, etc.). The resolved config is the merged
+  // result and would include inherited parent values that the user didn't
+  // explicitly choose, which would break sync filtering.
+  const tsFormChild = existsSync(join(projectDir, "bos.app.ts"));
+  const localConfig = (
+    tsFormChild
+      ? await loadAppDescriptorConfig(join(projectDir, "bos.app.ts"))
+      : JSON.parse(readFileSync(join(projectDir, "bos.config.json"), "utf-8"))
   ) as Record<string, unknown>;
 
   let extendsRef: string | undefined;
@@ -465,7 +470,11 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
     });
 
     const destToSource = new Map<string, string>();
+    // TS-form children author bos.app.ts — the parent's JSON config must
+    // never sync into them.
+    const tsFormChild = !existsSync(join(projectDir, "bos.config.json"));
     for (const destPath of FRAMEWORK_OWNED_SYNC_FILES) {
+      if (destPath === "bos.config.json" && tsFormChild) continue;
       if (destPath.startsWith("ui/") && !withUi) continue;
       if (destPath.startsWith("api/") && !withApi) continue;
       if (destPath.startsWith("host/") && !withHost) continue;

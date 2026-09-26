@@ -24,6 +24,7 @@ import {
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
+import { configInputToDescriptor, serializeAppDescriptorSource } from "./cli/app-config-form";
 import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
 import {
   buildInitPatterns,
@@ -1381,6 +1382,10 @@ export default createPlugin({
                 staging: parentConfig?.staging,
               }),
             );
+
+            await timePhase(timings, "authored config form", () =>
+              convertChildConfigToAppForm(targetDir),
+            );
           } else {
             const patterns = buildInitPatterns(overrides, plugins, pluginDirMap);
             const routeExclusions = overrides.includes("ui")
@@ -1410,6 +1415,10 @@ export default createPlugin({
                 testnet: parentConfig?.testnet,
                 staging: parentConfig?.staging,
               }),
+            );
+
+            await timePhase(timings, "authored config form", () =>
+              convertChildConfigToAppForm(targetDir),
             );
 
             if (overrides.includes("ui")) {
