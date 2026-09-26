@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import * as schema from "../../src/db/schema";
-import { nearInvitationEmail } from "../../src/near-invitations";
+import * as schema from "../../api/src/db/schema";
+import { nearInvitationEmail } from "../../api/src/near-invitations";
 import {
   createTestHandlers,
   createTestOrg,

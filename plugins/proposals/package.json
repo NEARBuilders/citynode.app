@@ -5,12 +5,12 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./api/src/index.ts",
+      "default": "./api/src/index.ts"
     },
     "./contract": {
-      "types": "./src/contract.ts",
-      "default": "./src/contract.ts"
+      "types": "./api/src/contract.ts",
+      "default": "./api/src/contract.ts"
     }
   },
   "peerDependencies": {

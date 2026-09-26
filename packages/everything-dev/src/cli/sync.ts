@@ -53,8 +53,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "ui/src/router.tsx",
   "ui/src/routes/__root.tsx",
   "api/package.json",
-  "api/plugin.dev.ts",
-  "api/rspack.config.js",
+  "api/bos.dev.ts",
   "api/tsconfig.json",
   "api/src/lib/auth.ts",
   "api/src/lib/context.ts",
@@ -70,11 +69,9 @@ type PackageJson = Record<string, unknown>;
 
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
-  if (/^plugins\/[^/]+\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
-  if (/^plugins\/[^/]+\/src\/db\/(index|layer|migrate)\.ts$/.test(filePath)) return true;
-  if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
-  if (/^plugins\/[^/]+\/drizzle\.config\.ts$/.test(filePath)) return true;
-  if (/^plugins\/[^/]+\/src\/global\.d\.ts$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/api\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/api\/src\/db\/(index|layer|migrate)\.ts$/.test(filePath)) return true;
+  if (/^plugins\/[^/]+\/api\/src\/global\.d\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tests\/types\.d\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tsconfig\.json$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tsconfig\.contract\.json$/.test(filePath)) return true;
@@ -474,22 +471,22 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       destToSource.set(destPath, sourcePath);
     }
 
-    // Sync api/src/lib/{auth,context}.ts into each plugin's src/lib/
+    // Sync api/src/lib/{auth,context}.ts into each plugin's api/src/lib/
     for (const pluginKey of childPlugins) {
-      if (!existsSync(join(projectDir, "plugins", pluginKey, "src"))) continue;
+      if (!existsSync(join(projectDir, "plugins", pluginKey, "api", "src"))) continue;
       for (const libFile of ["auth.ts", "context.ts"]) {
         const sourceFile = `api/src/lib/${libFile}`;
         if (!existsSync(join(sourceDir, sourceFile))) continue;
-        destToSource.set(`plugins/${pluginKey}/src/lib/${libFile}`, sourceFile);
+        destToSource.set(`plugins/${pluginKey}/api/src/lib/${libFile}`, sourceFile);
       }
     }
 
-    // Sync api/src/global.d.ts into each plugin's src/
+    // Sync api/src/global.d.ts into each plugin's api/src/
     for (const pluginKey of childPlugins) {
-      if (!existsSync(join(projectDir, "plugins", pluginKey, "src"))) continue;
+      if (!existsSync(join(projectDir, "plugins", pluginKey, "api", "src"))) continue;
       const sourceFile = "api/src/global.d.ts";
       if (!existsSync(join(sourceDir, sourceFile))) continue;
-      destToSource.set(`plugins/${pluginKey}/src/global.d.ts`, sourceFile);
+      destToSource.set(`plugins/${pluginKey}/api/src/global.d.ts`, sourceFile);
     }
 
     // Sync tests/types.d.ts into each plugin's tests/
@@ -500,30 +497,14 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
       destToSource.set(`plugins/${pluginKey}/tests/types.d.ts`, sourceFile);
     }
 
-    // Sync api/src/db/{index,layer,migrate}.ts into each plugin's src/db/
+    // Sync api/src/db/{index,layer,migrate}.ts into each plugin's api/src/db/
     for (const pluginKey of childPlugins) {
-      if (!existsSync(join(projectDir, "plugins", pluginKey, "src", "db"))) continue;
+      if (!existsSync(join(projectDir, "plugins", pluginKey, "api", "src", "db"))) continue;
       for (const dbFile of ["index.ts", "layer.ts", "migrate.ts"]) {
         const sourceFile = `api/src/db/${dbFile}`;
         if (!existsSync(join(sourceDir, sourceFile))) continue;
-        destToSource.set(`plugins/${pluginKey}/src/db/${dbFile}`, sourceFile);
+        destToSource.set(`plugins/${pluginKey}/api/src/db/${dbFile}`, sourceFile);
       }
-    }
-
-    // Sync rspack.config.js from the template into each plugin
-    for (const pluginKey of childPlugins) {
-      if (!existsSync(join(projectDir, "plugins", pluginKey))) continue;
-      const sourceFile = "plugins/_template/rspack.config.js";
-      if (!existsSync(join(sourceDir, sourceFile))) continue;
-      destToSource.set(`plugins/${pluginKey}/rspack.config.js`, sourceFile);
-    }
-
-    // Sync drizzle.config.ts from api into each DB-enabled plugin
-    for (const pluginKey of childPlugins) {
-      if (!existsSync(join(projectDir, "plugins", pluginKey, "src", "db"))) continue;
-      const sourceFile = "api/drizzle.config.ts";
-      if (!existsSync(join(sourceDir, sourceFile))) continue;
-      destToSource.set(`plugins/${pluginKey}/drizzle.config.ts`, sourceFile);
     }
 
     // Sync tsconfig from the template into each plugin

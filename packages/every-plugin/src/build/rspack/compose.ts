@@ -1,7 +1,6 @@
-import fs from "node:fs";
 import { createRequire } from "node:module";
-import path from "node:path";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
+import { findBosConfigPath } from "../../entry-resolution";
 import { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
 import {
   EmitPluginManifest,
@@ -9,6 +8,8 @@ import {
   type EveryPluginBuildOptions,
   type PluginManifestEmitterOptions,
 } from "./plugin";
+
+export { findBosConfigPath };
 
 export interface EveryPluginComposedBuildOptions extends EveryPluginBuildOptions {
   manifest?: PluginManifestEmitterOptions;
@@ -34,17 +35,6 @@ export interface PluginBaseConfigOptions {
 }
 
 const pluginRequire = createRequire(import.meta.url);
-
-export function findBosConfigPath(from: string = process.cwd()): string | null {
-  let current = path.resolve(from);
-  while (true) {
-    const candidate = path.join(current, "bos.config.json");
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
-}
 
 function loadDrizzleMigrationsPlugin(): ((...args: unknown[]) => unknown) | null {
   try {

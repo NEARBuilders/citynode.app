@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, organization, testUtils } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import * as authSchema from "../../../plugins/auth/src/db/schema.ts";
+import * as authSchema from "../../../plugins/auth/api/src/db/schema.ts";
 import { migrateTestDatabase } from "./migrate-test-db.mjs";
 
 /**
@@ -21,7 +21,7 @@ export async function createAuthTestInstance({ authDatabaseUrl, secret }) {
   if (!secret) throw new Error("BETTER_AUTH_SECRET is not configured");
 
   await migrateTestDatabase({
-    migrationsDir: "plugins/auth/src/db/migrations",
+    migrationsDir: "plugins/auth/api/src/db/migrations",
     databaseUrl: authDatabaseUrl,
   });
 

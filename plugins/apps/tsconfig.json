@@ -28,9 +28,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./api/src/*"]
     }
   },
-  "include": ["src/**/*", "plugin.dev.ts"],
+  "include": ["api/src/**/*", "bos.dev.ts"],
   "exclude": ["node_modules", "dist"]
 }

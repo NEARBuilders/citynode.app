@@ -395,7 +395,7 @@ builder.listReports.use(requireTenant).handler(async ({ context }) => {
 **Row-level convention (interim isolation)**: add a `tenantId` column to any table holding
 tenant-specific application data, resolved server-side and never trusted from client input —
 same discipline the `tenants` table itself uses for `orgId` scoping. See
-`plugins/_template/src/db/schema.ts` for a commented example table.
+`plugins/_template/api/src/db/schema.ts` for a commented example table.
 
 **Forward path**: the target architecture (see `plans/beta-v2-tenants.md`) is per-tenant-per-plugin
 Postgres schema isolation (`tenant_<id>_plugin_<name>`, `search_path` injected per request). That

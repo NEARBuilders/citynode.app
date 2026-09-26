@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import * as schema from "../../src/db/schema";
-import { sweepOrphanUsers } from "../../src/orphan-sweep";
-import type { PluginServices } from "../../src/service-types";
+import * as schema from "../../api/src/db/schema";
+import { sweepOrphanUsers } from "../../api/src/orphan-sweep";
+import type { PluginServices } from "../../api/src/service-types";
 import { createTestServices } from "../helpers";
 
 const HOUR_MS = 60 * 60 * 1000;

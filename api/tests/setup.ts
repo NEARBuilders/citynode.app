@@ -7,10 +7,7 @@ import { RPCHandler } from "@orpc/server/node";
 import { createPluginRuntime } from "every-plugin";
 import type { contract } from "@/contract";
 import Plugin from "@/index";
-import pluginDevConfig from "../plugin.dev";
-
-const TEST_PLUGIN_ID = pluginDevConfig.pluginId;
-const TEST_CONFIG = pluginDevConfig.config;
+import { buildTestConfig, TEST_PLUGIN_ID } from "./test-config";
 
 const TEST_REGISTRY = {
   [TEST_PLUGIN_ID]: {
@@ -33,7 +30,11 @@ export async function getPluginClient(
   plugins?: Record<string, () => unknown>,
 ) {
   if (!server) {
-    const { router, initialized } = await runtime.usePlugin(TEST_PLUGIN_ID, TEST_CONFIG, plugins);
+    const { router, initialized } = await runtime.usePlugin(
+      TEST_PLUGIN_ID,
+      buildTestConfig(),
+      plugins,
+    );
     const rpcHandler = new RPCHandler(router);
     const effectContext = initialized.effectContext;
 

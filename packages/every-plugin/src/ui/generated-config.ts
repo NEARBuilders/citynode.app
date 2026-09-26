@@ -56,7 +56,7 @@ export function ensureGeneratedUiRsbuildConfig(cwd: string): string | null {
   fs.mkdirSync(outDir, { recursive: true });
   const outPath = path.join(outDir, GENERATED_UI_CONFIG);
   // Canonical plugin key: the config-layout id (plugins/<id>) — the same key
-  // the runtime config and composition use. plugin.dev.ts's pluginId is the
+  // the runtime config and composition use. The dev config's pluginId is the
   // npm name, which does not match the composition keying.
   const layoutKey =
     bosConfigPath && path.relative(path.dirname(bosConfigPath), cwd).startsWith("plugins/")

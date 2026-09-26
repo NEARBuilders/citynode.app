@@ -103,7 +103,7 @@ function localApiContractSource(configDir: string): ContractSource {
 }
 
 function localAuthContractSource(configDir: string): ContractSource {
-  const sourcePath = join(configDir, "plugins", "auth", "src", "contract.ts");
+  const sourcePath = join(configDir, "plugins", "auth", "api", "src", "contract.ts");
   return {
     key: "auth",
     importName: "authContract",
@@ -219,7 +219,7 @@ async function resolveContractSource(opts: {
       return {
         key: opts.key,
         importName: "authContract",
-        sourceFilePath: join(localPath, "src", "contract.ts"),
+        sourceFilePath: join(localPath, "api", "src", "contract.ts"),
       };
     }
 
@@ -237,7 +237,7 @@ async function resolveContractSource(opts: {
     return {
       key: opts.key,
       importName: `${sanitizeIdentifier(opts.key)}Contract`,
-      sourceFilePath: join(opts.source.localPath, "src", "contract.ts"),
+      sourceFilePath: join(opts.source.localPath, "api", "src", "contract.ts"),
     };
   }
 
@@ -452,49 +452,45 @@ export function writeGeneratedFiles(opts: {
   for (const key of opts.pluginKeys) {
     const localPath = opts.pluginLocalPaths?.[key];
     if (!localPath) continue;
-    const pluginSrcDir = join(localPath, "src");
+    const pluginSrcDir = join(localPath, "api", "src");
     if (existsSync(pluginSrcDir)) {
       authTypeTargets.push(join(pluginSrcDir, "lib", "auth-types.gen.ts"));
     }
   }
 
-  if (opts.authExportPath) {
-    for (const authTypesPath of authTypeTargets) {
-      const exportImportPath = toImportPath(authTypesPath, opts.authExportPath);
-      const contractImportPath = toImportPath(
-        authTypesPath,
-        join(dirname(opts.authExportPath), "contract.d.ts"),
+  if (opts.authSource) {
+    if (opts.authExportPath) {
+      for (const authTypesPath of authTypeTargets) {
+        const exportImportPath = toImportPath(authTypesPath, opts.authExportPath);
+        const contractImportPath = toImportPath(authTypesPath, opts.authSource.sourceFilePath);
+        mkdirSync(dirname(authTypesPath), { recursive: true });
+        writeFileIfChanged(
+          authTypesPath,
+          buildAuthTypesGenContent(exportImportPath, contractImportPath),
+        );
+      }
+    } else {
+      const generatedAuthExportPath = join(
+        opts.configDir,
+        ".bos",
+        "generated",
+        "auth",
+        "auth-export.d.ts",
       );
-      mkdirSync(dirname(authTypesPath), { recursive: true });
-      writeFileIfChanged(
-        authTypesPath,
-        buildAuthTypesGenContent(exportImportPath, contractImportPath),
-      );
-    }
-  } else if (opts.authSource) {
-    const generatedAuthExportPath = join(
-      opts.configDir,
-      ".bos",
-      "generated",
-      "auth",
-      "auth-export.d.ts",
-    );
-    mkdirSync(dirname(generatedAuthExportPath), { recursive: true });
-    if (!existsSync(generatedAuthExportPath)) {
-      writeFileIfChanged(generatedAuthExportPath, buildAuthExportStub());
-    }
+      mkdirSync(dirname(generatedAuthExportPath), { recursive: true });
+      if (!existsSync(generatedAuthExportPath)) {
+        writeFileIfChanged(generatedAuthExportPath, buildAuthExportStub());
+      }
 
-    for (const authTypesPath of authTypeTargets) {
-      const exportImportPath = toImportPath(authTypesPath, generatedAuthExportPath);
-      const contractImportPath = toImportPath(
-        authTypesPath,
-        join(opts.configDir, ".bos", "generated", "auth", "contract.d.ts"),
-      );
-      mkdirSync(dirname(authTypesPath), { recursive: true });
-      writeFileIfChanged(
-        authTypesPath,
-        buildAuthTypesGenContent(exportImportPath, contractImportPath),
-      );
+      for (const authTypesPath of authTypeTargets) {
+        const exportImportPath = toImportPath(authTypesPath, generatedAuthExportPath);
+        const contractImportPath = toImportPath(authTypesPath, opts.authSource.sourceFilePath);
+        mkdirSync(dirname(authTypesPath), { recursive: true });
+        writeFileIfChanged(
+          authTypesPath,
+          buildAuthTypesGenContent(exportImportPath, contractImportPath),
+        );
+      }
     }
   }
 
@@ -606,7 +602,14 @@ export async function syncApiContractBridge(opts: {
       }
 
       if (!authExportPath) {
-        const localAuthExport = join(opts.configDir, "plugins", "auth", "src", "auth-export.ts");
+        const localAuthExport = join(
+          opts.configDir,
+          "plugins",
+          "auth",
+          "api",
+          "src",
+          "auth-export.ts",
+        );
         if (existsSync(localAuthExport)) {
           authExportPath = localAuthExport;
         } else {

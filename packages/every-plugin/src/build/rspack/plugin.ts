@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ModuleFederationPlugin } from "@module-federation/enhanced/rspack";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
+import { resolvePluginEntry } from "../../entry-resolution";
 import { CONTRACT_TYPES_FILE, generateContractTypes } from "../contract-types";
 import { buildSharedDependencies } from "./module-federation";
 import { getPluginInfo } from "./utils";
@@ -76,7 +77,7 @@ export class EmitPluginManifest implements RspackPluginInstance {
         if (!contractTypes) {
           console.warn(
             `[EmitPluginManifest] No contract types at ${sourceContractPath} ` +
-              `(no src/contract.ts in this workspace?). Skipping manifest generation.`,
+              `(no api/src/contract.ts in this workspace?). Skipping manifest generation.`,
           );
           return;
         }
@@ -153,6 +154,14 @@ export class EveryPluginBuild implements RspackPluginInstance {
 
   apply(compiler: Compiler) {
     const pluginInfo = getPluginInfo(compiler.options.context || process.cwd());
+    const context = compiler.options.context || process.cwd();
+    const entry = resolvePluginEntry(context);
+    if (!entry) {
+      throw new Error(
+        `[every-plugin] ${path.basename(context)} has no api/src/index.ts — ` +
+          `the MF expose needs a plugin entry`,
+      );
+    }
 
     this.configureDefaults(compiler, pluginInfo);
 
@@ -164,7 +173,7 @@ export class EveryPluginBuild implements RspackPluginInstance {
       runtimePlugins: [require.resolve("@module-federation/node/runtimePlugin")],
       library: { type: "commonjs-module" },
       exposes: {
-        "./plugin": "./src/index.ts",
+        "./plugin": `./${entry}`,
       },
       shared: buildSharedDependencies(pluginInfo),
       shareStrategy: "version-first",

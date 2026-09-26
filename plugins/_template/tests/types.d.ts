@@ -1,5 +1,5 @@
 import Plugin from "@/index";
-import pluginDevConfig from "../plugin.dev";
+import pluginDevConfig from "../bos.dev";
 
 declare module "every-plugin" {
   interface RegisteredPlugins {

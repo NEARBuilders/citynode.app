@@ -467,7 +467,7 @@ The `bos` CLI wraps near-cli-rs for account and key management — you normally 
 3. Use in UI via `apiClient` from `useApiClient()` in `@/app`
 
 **Handler convention (required for new routes):** write handlers as Effect-native
-`.effect(function* ...)` generators (see `plugins/_template/src/index.ts`) and access
+`.effect(function* ...)` generators (see `plugins/_template/api/src/index.ts`) and access
 services with `yield* Tag` — the tag must be exposed from the plugin's returned
 `initialize` layer. Auth checks fail via `Effect.fail(errors.UNAUTHORIZED(...))` /
 `errors.FORBIDDEN(...)` inside the generator (note: the shared `every-plugin/errors`
@@ -493,7 +493,7 @@ Business logic is organized into independent plugins loaded via Module Federatio
 Each plugin is self-contained with its own:
 - `contract.ts` — oRPC route definitions and Zod schemas
 - `index.ts` — `createPlugin` with variables, secrets, context, router
-- 3-line rspack config composed from `every-plugin` defaults (docs/adr/0002); builds/scripts run via the `every-plugin` CLI (docs/adr/0003)
+- App-shape layout (`bos.app.ts`, `api/src/**`, `bos.dev.ts`); builds/scripts run via the `every-plugin` CLI (docs/adr/0003) over the composed rspack stack (docs/adr/0002)
 
 The UI accesses plugin routes via namespaced clients: `apiClient.registry.listRegistryApps()`, etc.
 

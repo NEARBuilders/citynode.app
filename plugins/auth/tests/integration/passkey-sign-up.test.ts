@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import * as schema from "../../src/db/schema";
-import type { PluginServices } from "../../src/service-types";
+import * as schema from "../../api/src/db/schema";
+import type { PluginServices } from "../../api/src/service-types";
 import { createTestServices, createTestUser } from "../helpers";
 import {
   type AuthenticationOptionsJSON,

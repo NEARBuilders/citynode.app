@@ -1,21 +1,21 @@
 import { and, eq } from "drizzle-orm";
 import { Context, Effect } from "effect";
-import { type AuthConfig, createAuthInstance } from "../src/auth-instance";
-import { createDatabaseDriver } from "../src/db";
-import { loadMigrations, migrate } from "../src/db/migrate";
-import * as schema from "../src/db/schema";
-import { createApiKeyHandlers } from "../src/handlers/api-keys";
-import { createInvitationHandlers } from "../src/handlers/invitations";
-import { createMemberHandlers } from "../src/handlers/members";
-import { createNearHandlers } from "../src/handlers/near";
-import { createOnboardingHandlers } from "../src/handlers/onboarding";
-import { createOrganizationHandlers } from "../src/handlers/organizations";
-import { createSessionHandlers } from "../src/handlers/session";
-import { createTeamHandlers } from "../src/handlers/teams";
-import { createRequireAuth } from "../src/middleware";
-import { createOnboardingCodeCipher } from "../src/onboarding-code-cipher";
-import { createOrganizationMembershipPolicy } from "../src/organization-membership-policy";
-import { AuthServicesTag, type PluginServices } from "../src/service-types";
+import { type AuthConfig, createAuthInstance } from "../api/src/auth-instance";
+import { createDatabaseDriver } from "../api/src/db";
+import { loadMigrations, migrate } from "../api/src/db/migrate";
+import * as schema from "../api/src/db/schema";
+import { createApiKeyHandlers } from "../api/src/handlers/api-keys";
+import { createInvitationHandlers } from "../api/src/handlers/invitations";
+import { createMemberHandlers } from "../api/src/handlers/members";
+import { createNearHandlers } from "../api/src/handlers/near";
+import { createOnboardingHandlers } from "../api/src/handlers/onboarding";
+import { createOrganizationHandlers } from "../api/src/handlers/organizations";
+import { createSessionHandlers } from "../api/src/handlers/session";
+import { createTeamHandlers } from "../api/src/handlers/teams";
+import { createRequireAuth } from "../api/src/middleware";
+import { createOnboardingCodeCipher } from "../api/src/onboarding-code-cipher";
+import { createOrganizationMembershipPolicy } from "../api/src/organization-membership-policy";
+import { AuthServicesTag, type PluginServices } from "../api/src/service-types";
 
 const TEST_DB_URL = "pglite::memory:";
 

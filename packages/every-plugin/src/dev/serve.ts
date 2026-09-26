@@ -5,6 +5,7 @@ import path from "node:path";
 import sirv from "sirv";
 import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
+import { resolveDevConfigPath } from "../entry-resolution";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
 import { classifyPluginFailure } from "../runtime/errors";
@@ -37,6 +38,17 @@ const readRuntimeConfigFromEnv = (): any => {
   try {
     return JSON.parse(raw);
   } catch {
+    return null;
+  }
+};
+
+const readDevConfigFromEnv = (): any => {
+  const raw = process.env.BOS_PLUGIN_DEV_CONFIG;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn(`[dev] Ignoring invalid BOS_PLUGIN_DEV_CONFIG JSON: ${(error as Error).message}`);
     return null;
   }
 };
@@ -131,7 +143,8 @@ export async function startPluginDevServer(
 ): Promise<PluginDevServerHandle> {
   const cwd = options.cwd ?? process.cwd();
   const pluginInfo = getPluginInfo(cwd);
-  const devConfig = loadDevConfig(path.join(cwd, "plugin.dev.ts"));
+  const devConfigPath = resolveDevConfigPath(cwd);
+  const devConfig = readDevConfigFromEnv() ?? (devConfigPath ? loadDevConfig(devConfigPath) : null);
   const pluginId = devConfig?.pluginId || pluginInfo.normalizedName;
   const port = options.port ?? (Number(process.env.PORT) || devConfig?.port || 3999);
   const rpcPrefix = normalizePrefix(devConfig?.prefix);

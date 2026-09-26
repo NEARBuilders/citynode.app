@@ -13,14 +13,16 @@ Every plugin has three core files:
 
 ```
 plugins/your-plugin/
-├── src/
-│   ├── contract.ts    # oRPC route definitions + Zod schemas
-│   ├── service.ts     # Business logic (plain class, Effect error handling)
-│   ├── index.ts       # createPlugin() wiring
-│   └── __tests__/     # Integration & unit tests
+├── bos.app.ts         # App identity — name + api/ui slots
+├── api/
+│   ├── src/
+│   │   ├── contract.ts    # oRPC route definitions + Zod schemas
+│   │   ├── service.ts     # Business logic (plain class, Effect error handling)
+│   │   ├── index.ts       # createPlugin() wiring
+│   │   └── __tests__/     # Integration & unit tests
+│   └── tests/
 ├── package.json
-├── rspack.config.js   # Build config (every-plugin provides defaults)
-├── plugin.dev.ts      # Dev server config (port, variables, secrets)
+├── bos.dev.ts         # Dev server config (port, variables, secrets)
 └── tsconfig.json
 ```
 
@@ -217,11 +219,11 @@ Key rules:
 - Handlers access services via the injected oRPC context (`yield* Tag` in `.effect()` handlers), not from initialize's return value
 - Do not use `Effect.provide(Tag, Layer.scoped(...))` for persistent dependencies inside `initialize`
 
-## Dev Server Config (plugin.dev.ts)
+## Dev Server Config (bos.dev.ts)
 
 ```typescript
 import type { PluginConfigInput } from "every-plugin";
-import Plugin from "./src/index";
+import Plugin from "./api/src/index";
 
 export default {
   pluginId: "my-plugin",
@@ -239,25 +241,27 @@ export default {
 
 Port assignments: host=3000, api=3001, auth=3002, ui=3003, ui-ssr=3004, plugins=3010+.
 
-## Build Config (rspack.config.js)
+## Build Config (composed stack)
 
 every-plugin provides rspack helpers as plugins:
 
 ```javascript
 import {
   EmitPluginManifest,
-  EveryPluginDevServer,
+  EveryPluginBuild,
   FixMfDataUriPlugin,
 } from "every-plugin/build/rspack";
 
 export default {
   plugins: [
     new EmitPluginManifest(),
-    new EveryPluginDevServer({ dts: false }),
+    new EveryPluginBuild({ dts: false }),
     new FixMfDataUriPlugin(),
   ],
 };
 ```
+
+In the common case you need none of this: `every-plugin build` synthesizes the composed config for you.
 
 `EveryPluginDevServer` configures the Module Federation dev server defaults. Add the manifest/fix plugins the same way the package templates do.
 

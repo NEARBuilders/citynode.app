@@ -1,8 +1,8 @@
 import "dotenv/config";
 import type { PluginConfigInput } from "every-plugin";
 import bosConfig from "../../bos.config.json" with { type: "json" };
+import type Plugin from "./api/src/index";
 import packageJson from "./package.json" with { type: "json" };
-import type Plugin from "./src/index";
 
 function splitList(value?: string) {
   return value

@@ -125,7 +125,7 @@ Structure:
 
 ### Build configs read resolved config first
 
-All build configs (ui/rsbuild.config.ts, host/rsbuild.config.ts, api/rspack.config.js, plugins/*/rspack.config.js) try `.bos/bos.resolved-config.json` first, falling back to `bos.config.json`.
+Build configs (ui/rsbuild.config.ts, host/rsbuild.config.ts) try `.bos/bos.resolved-config.json` first, falling back to `bos.config.json`. Plugin workspaces build through the every-plugin composition (no per-plugin config).
 
 The `_resolved` metadata is stripped before use.
 

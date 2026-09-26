@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEVICE_LINK_CLAIM_TTL_MS } from "../../src/device-link";
-import type { PluginServices } from "../../src/service-types";
+import { DEVICE_LINK_CLAIM_TTL_MS } from "../../api/src/device-link";
+import type { PluginServices } from "../../api/src/service-types";
 import {
   addTestMember,
   createTestOrg,

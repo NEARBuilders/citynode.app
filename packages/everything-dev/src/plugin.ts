@@ -1637,7 +1637,7 @@ export default createPlugin({
           for (const [_key, plugin] of pluginEntries) {
             const localPath = plugin.localPath;
             if (!localPath) continue;
-            const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
+            const pluginSrc = join(localPath, "api", "src", "lib", "plugins-client.gen.ts");
             if (existsSync(pluginSrc)) {
               generated.push(relative(projectDir, pluginSrc));
             }
@@ -1645,6 +1645,7 @@ export default createPlugin({
           if (refreshed.runtime.auth?.localPath) {
             const authSrc = join(
               refreshed.runtime.auth.localPath,
+              "api",
               "src",
               "lib",
               "plugins-client.gen.ts",
@@ -1684,7 +1685,7 @@ export default createPlugin({
         for (const [_key, plugin] of Object.entries(refreshed.runtime.plugins ?? {})) {
           const localPath = plugin.localPath;
           if (!localPath) continue;
-          const pluginSrc = join(localPath, "src", "lib", "plugins-client.gen.ts");
+          const pluginSrc = join(localPath, "api", "src", "lib", "plugins-client.gen.ts");
           if (existsSync(pluginSrc)) {
             generated.push(relative(projectDir, pluginSrc));
           }
