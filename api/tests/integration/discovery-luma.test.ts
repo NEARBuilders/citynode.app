@@ -1,5 +1,6 @@
 import { afterAll, afterEach, expect, it, vi } from "vitest";
 import { authedContext, daoContext, getPluginClient, orgContext, teardown } from "../setup";
+import { setTestConfigOverrides } from "../test-config";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(async () => ({
@@ -10,17 +11,8 @@ vi.mock("@/services/dao", () => ({
   parsePolicyGroupMembers: vi.fn(() => []),
   isExplicitDaoMember: vi.fn(() => true),
 }));
-vi.mock("../../bos.dev", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../bos.dev")>();
-  return {
-    default: {
-      ...original.default,
-      config: {
-        ...original.default.config,
-        secrets: { ...original.default.config.secrets, LUMA_CALENDAR_API_KEYS: "fixture-key" },
-      },
-    },
-  };
+setTestConfigOverrides({
+  secrets: { LUMA_CALENDAR_API_KEYS: "fixture-key" },
 });
 afterEach(() => vi.unstubAllGlobals());
 afterAll(teardown);

@@ -2,7 +2,7 @@
 name: plugin-development
 description: Build, register, and deploy plugins within everything.dev. Covers the _template scaffold, contract/service/index pattern, database setup with Drizzle, bos.config.json registration, plugin UI/sidebar, and CLI workflow. Use when creating new plugins, adding database-backed routes, or deploying plugins to production.
 metadata:
-  sources: "plugins/_template/api/src/index.ts,plugins/_template/api/src/contract.ts,plugins/_template/api/src/service.ts,plugins/_template/rspack.config.js,plugins/_template/bos.dev.ts,plugins/_template/api/src/db/schema.ts,plugins/_template/api/src/db/layer.ts,api/src/db/index.ts,api/src/db/migrator.ts,packages/every-plugin/src/plugin.ts"
+  sources: "plugins/_template/api/src/index.ts,plugins/_template/api/src/contract.ts,plugins/_template/api/src/service.ts,plugins/_template/bos.app.ts,plugins/_template/bos.dev.ts,plugins/_template/api/src/db/schema.ts,plugins/_template/api/src/db/layer.ts,api/src/db/index.ts,api/src/db/migrator.ts,packages/every-plugin/src/plugin.ts"
 ---
 
 # Plugin Development
@@ -11,20 +11,22 @@ metadata:
 
 ```
 plugins/your-plugin/
-├── src/
-│   ├── contract.ts          # oRPC route definitions + Zod schemas
-│   ├── service.ts           # Business logic (class or plain functions)
-│   ├── index.ts             # createPlugin() wiring
-│   ├── db/                  # Optional: database schema + migrations
-│   │   ├── schema.ts
-│   │   ├── layer.ts
-│   │   ├── migrator.ts
-│   │   └── migrations/
-│   ├── plugins-client.gen.ts  # Generated — in-process plugin client types
-│   └── __tests__/            # Tests
+├── bos.app.ts               # App identity — name + api/ui slots
+├── api/
+│   ├── src/
+│   │   ├── contract.ts      # oRPC route definitions + Zod schemas
+│   │   ├── service.ts       # Business logic (class or plain functions)
+│   │   ├── index.ts         # createPlugin() wiring
+│   │   ├── db/              # Optional: database schema + migrations
+│   │   │   ├── schema.ts
+│   │   │   ├── layer.ts
+│   │   │   ├── migrator.ts
+│   │   │   └── migrations/
+│   │   ├── plugins-client.gen.ts  # Generated — in-process plugin client types
+│   │   └── __tests__/       # Tests
+│   └── tests/types.d.ts     # Shared test types
 ├── package.json
-├── rspack.config.js          # Build config
-├── bos.dev.ts             # Dev server (port, variables, secrets)
+├── bos.dev.ts               # Dev server (port, variables, secrets)
 └── tsconfig.json
 ```
 
@@ -36,11 +38,11 @@ The quickest start is to copy the template:
 cp -r plugins/_template plugins/your-plugin
 ```
 
-Then rename in `package.json`, `bos.dev.ts`, and `rspack.config.js`.
+Then rename in `package.json`, `bos.app.ts`, and `bos.dev.ts`.
 
 Or use the CLI (no automated command yet — copy template manually).
 
-## Step 2: Define the Contract (`src/contract.ts`)
+## Step 2: Define the Contract (`api/src/contract.ts`)
 
 Use `oc.router()` to define typed routes. Each route has a method, path, optional input/output schemas, and optional error declarations:
 
@@ -91,7 +93,7 @@ Key rules:
 - `.output(eventIterator(Schema))` enables SSE streaming routes
 - `.errors(Errors)` enables typed error handling in generated clients
 
-## Step 3: Build Services (`src/service.ts`)
+## Step 3: Build Services (`api/src/service.ts`)
 
 Services are plain classes or functions, optionally using Effect:
 
@@ -124,7 +126,7 @@ export class TemplateService {
 
 Use `Effect.runPromise(service.method())` to bridge Effect and async handlers in `createRouter`.
 
-## Step 4: Wire with `createPlugin` (`src/index.ts`)
+## Step 4: Wire with `createPlugin` (`api/src/index.ts`)
 
 ```ts
 import { createPlugin } from "every-plugin";
@@ -300,28 +302,17 @@ export default defineConfig({
 });
 ```
 
-## Step 7: Build Config (`rspack.config.js`)
+## Step 7: Build
 
-```js
-const { createRspackConfig } = require("every-plugin/rspack");
+`every-plugin build` synthesizes the rspack composition (ADR 0002/0003) — no per-plugin build config. Per-workspace divergence, when genuinely needed, goes in an optional typed `build.config.ts` partial (`drizzle`, `externals`, rspack fields).
 
-module.exports = createRspackConfig({
-  name: "your-plugin",
-  exposes: {
-    ".": "./src/index.ts",
-    "./contract": "./src/contract.ts",
-  },
-  plugins: [],
-});
-```
-
-Key exports:
-- `"."` — the plugin entry point (`createPlugin` export)
-- `"./contract"` — the contract module (for type generation from remote plugins)
+Key exposes (from the plugin entry):
+- `"."` — the plugin entry point (`createPlugin` export), resolved from `api/src/index.ts`
+- `"./contract"` — the contract module, resolved from `api/src/contract.ts`
 
 ## Database Setup
 
-### Schema (`src/db/schema.ts`)
+### Schema (`api/src/db/schema.ts`)
 
 ```ts
 import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
@@ -335,7 +326,7 @@ export const items = pgTable("items", {
 }));
 ```
 
-### Driver (`src/db/index.ts` or use `api/src/db/index.ts`)
+### Driver (`api/src/db/index.ts` or use `api/src/db/index.ts`)
 
 ```ts
 export async function createDatabaseDriver(url: string) {
@@ -355,7 +346,7 @@ export async function createDatabaseDriver(url: string) {
 
 1. Create `drizzle.config.ts` in your plugin directory
 2. Run `drizzle-kit generate` to produce SQL migration files
-3. Store migrations in `src/db/migrations/` with an explicit `storage` resolved from the workspace (the no-arg fallback reads `npm_package_name`, unreliable under rspack/Module Federation bundling)
+3. Store migrations in `api/src/db/migrations/` with an explicit `storage` resolved from the workspace (the no-arg fallback reads `npm_package_name`, unreliable under rspack/Module Federation bundling)
 
 Migrations run inside `DatabaseLive`'s scoped layer. The critical rule is to **build the DB-backed service via `buildScoped`** so the scope (and the pool) lives for the plugin's lifetime. Do NOT call `DatabaseLive` directly in `initialize` and extract the driver — that creates a transient scope that releases the pool immediately. See `references/database.md` for correct/wrong examples.
 

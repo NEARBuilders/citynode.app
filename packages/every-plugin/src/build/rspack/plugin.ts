@@ -10,8 +10,6 @@ import { getPluginInfo } from "./utils";
 
 export interface EveryPluginBuildOptions {
   dts?: boolean;
-  /** Workspace-relative entry override (e.g. the root api workspace's "src/index.ts"). */
-  entry?: string;
 }
 
 export interface AdditionalExport {
@@ -22,7 +20,6 @@ export interface AdditionalExport {
 export interface PluginManifestEmitterOptions {
   manifestFileName?: string;
   contractFileName?: string;
-  contractPath?: string;
   additionalExports?: AdditionalExport[];
 }
 
@@ -45,9 +42,7 @@ export class EmitPluginManifest implements RspackPluginInstance {
 
         let generationError: string | null = null;
         try {
-          const status = await generateContractTypes(context, {
-            contractPath: this.options.contractPath,
-          });
+          const status = await generateContractTypes(context);
           if (status === "generated") {
             console.log(`[EmitPluginManifest] Contract types regenerated (${context}).`);
           }
@@ -160,11 +155,11 @@ export class EveryPluginBuild implements RspackPluginInstance {
   apply(compiler: Compiler) {
     const pluginInfo = getPluginInfo(compiler.options.context || process.cwd());
     const context = compiler.options.context || process.cwd();
-    const entry = this.options.entry ?? resolvePluginEntry(context);
+    const entry = resolvePluginEntry(context);
     if (!entry) {
       throw new Error(
         `[every-plugin] ${path.basename(context)} has no api/src/index.ts — ` +
-          `the MF expose needs a plugin entry (override via build.config.ts entry for non-plugin workspaces)`,
+          `the MF expose needs a plugin entry`,
       );
     }
 

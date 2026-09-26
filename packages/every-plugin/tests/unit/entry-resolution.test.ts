@@ -9,15 +9,14 @@ import {
 } from "../../src/entry-resolution";
 
 let dir: string;
-let logSpy: ReturnType<typeof vi.spyOn>;
+let apiSlotDir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "every-plugin-entry-resolution-"));
-  logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  apiSlotDir = join(dir, "api");
 });
 
 afterEach(() => {
-  logSpy.mockRestore();
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -28,9 +27,15 @@ const write = (rel: string, contents = "export {};\n") => {
 };
 
 describe("resolvePluginEntry", () => {
-  it("resolves api/src/index.ts", () => {
+  it("resolves api/src/index.ts for a plugin App", () => {
     write("api/src/index.ts");
     expect(resolvePluginEntry(dir)).toBe("api/src/index.ts");
+  });
+
+  it("resolves src/index.ts when the cwd is the ancestor config's declared api slot", () => {
+    write("api/src/index.ts");
+    write("bos.config.json", JSON.stringify({ app: { api: { development: "local:api" } } }));
+    expect(resolvePluginEntry(apiSlotDir)).toBe("src/index.ts");
   });
 
   it("throws on the removed src/index.ts layout with a migration hint", () => {
@@ -44,9 +49,15 @@ describe("resolvePluginEntry", () => {
 });
 
 describe("resolvePluginContract", () => {
-  it("resolves api/src/contract.ts", () => {
+  it("resolves api/src/contract.ts for a plugin App", () => {
     write("api/src/contract.ts");
     expect(resolvePluginContract(dir)).toBe("api/src/contract.ts");
+  });
+
+  it("resolves src/contract.ts when the cwd is the declared api slot", () => {
+    write("api/src/contract.ts");
+    write("bos.config.json", JSON.stringify({ app: { api: { development: "local:api" } } }));
+    expect(resolvePluginContract(apiSlotDir)).toBe("src/contract.ts");
   });
 
   it("throws on the removed src/contract.ts layout with a migration hint", () => {

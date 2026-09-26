@@ -54,7 +54,6 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "ui/src/routes/__root.tsx",
   "api/package.json",
   "api/bos.dev.ts",
-  "api/rspack.config.js",
   "api/tsconfig.json",
   "api/src/lib/auth.ts",
   "api/src/lib/context.ts",
@@ -72,7 +71,6 @@ export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
   if (/^plugins\/[^/]+\/api\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/api\/src\/db\/(index|layer|migrate)\.ts$/.test(filePath)) return true;
-  if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/api\/src\/global\.d\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tests\/types\.d\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/tsconfig\.json$/.test(filePath)) return true;
@@ -507,14 +505,6 @@ export async function syncTemplate(projectDir: string, options: SyncOptions): Pr
         if (!existsSync(join(sourceDir, sourceFile))) continue;
         destToSource.set(`plugins/${pluginKey}/api/src/db/${dbFile}`, sourceFile);
       }
-    }
-
-    // Sync rspack.config.js from the template into each plugin
-    for (const pluginKey of childPlugins) {
-      if (!existsSync(join(projectDir, "plugins", pluginKey))) continue;
-      const sourceFile = "plugins/_template/rspack.config.js";
-      if (!existsSync(join(sourceDir, sourceFile))) continue;
-      destToSource.set(`plugins/${pluginKey}/rspack.config.js`, sourceFile);
     }
 
     // Sync tsconfig from the template into each plugin

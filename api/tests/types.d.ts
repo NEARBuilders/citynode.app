@@ -1,9 +1,9 @@
 import type Plugin from "@/index";
-import pluginDevConfig from "../bos.dev";
+import { TEST_PLUGIN_ID } from "./test-config";
 
 declare module "every-plugin" {
   interface RegisteredPlugins {
-    [pluginDevConfig.pluginId]: typeof Plugin;
+    [TEST_PLUGIN_ID]: typeof Plugin;
   }
 }
 

@@ -234,7 +234,7 @@ Build a single plugin, then update `bos.config.json` with its deterministic imag
 bos plugin publish my-plugin
 ```
 
-→ [`plugin-development`](.) skill for build config (rspack.config.js), CLI lifecycle, and deploy workflow.
+→ [`plugin-development`](.) skill for the plugin build composition, CLI lifecycle, and deploy workflow.
 
 ## Types & DB
 

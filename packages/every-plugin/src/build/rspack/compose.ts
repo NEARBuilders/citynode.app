@@ -1,7 +1,6 @@
-import fs from "node:fs";
 import { createRequire } from "node:module";
-import path, { dirname } from "node:path";
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
+import { findBosConfigPath } from "../../entry-resolution";
 import { FixMfDataUriPlugin } from "./fix-mf-data-uri-plugin";
 import {
   EmitPluginManifest,
@@ -9,6 +8,8 @@ import {
   type EveryPluginBuildOptions,
   type PluginManifestEmitterOptions,
 } from "./plugin";
+
+export { findBosConfigPath };
 
 export interface EveryPluginComposedBuildOptions extends EveryPluginBuildOptions {
   manifest?: PluginManifestEmitterOptions;
@@ -20,41 +21,20 @@ export class EveryPluginComposedBuild implements RspackPluginInstance {
   constructor(private readonly options: EveryPluginComposedBuildOptions = {}) {}
 
   apply(compiler: Compiler) {
-    const manifestOptions = this.options.manifest ?? {};
-    const manifest: PluginManifestEmitterOptions = this.options.entry
-      ? {
-          ...manifestOptions,
-          contractPath:
-            manifestOptions.contractPath ?? join(dirname(this.options.entry), "contract.ts"),
-        }
-      : manifestOptions;
-    new EmitPluginManifest(manifest).apply(compiler);
-    new EveryPluginBuild({ dts: this.options.dts, entry: this.options.entry }).apply(compiler);
+    new EmitPluginManifest(this.options.manifest ?? {}).apply(compiler);
+    new EveryPluginBuild({ dts: this.options.dts }).apply(compiler);
     new FixMfDataUriPlugin().apply(compiler);
   }
 }
 
 export interface PluginBaseConfigOptions {
   drizzle?: boolean;
-  /** Workspace-relative MF expose entry override (e.g. the root api workspace's "src/index.ts"). */
-  entry?: string;
   externals?: string[];
   /** Concrete rspack fields to merge over the defaults (devtool, infrastructureLogging, ...). */
   rspack?: Partial<PluginBaseConfig>;
 }
 
 const pluginRequire = createRequire(import.meta.url);
-
-export function findBosConfigPath(from: string = process.cwd()): string | null {
-  let current = path.resolve(from);
-  while (true) {
-    const candidate = path.join(current, "bos.config.json");
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
-}
 
 function loadDrizzleMigrationsPlugin(): ((...args: unknown[]) => unknown) | null {
   try {
@@ -75,7 +55,7 @@ export interface PluginBaseConfig {
 
 export function createPluginBaseConfig(options: PluginBaseConfigOptions = {}): PluginBaseConfig {
   const shouldDeploy = process.env.DEPLOY === "true";
-  const plugins: unknown[] = [new EveryPluginComposedBuild({ dts: false, entry: options.entry })];
+  const plugins: unknown[] = [new EveryPluginComposedBuild({ dts: false })];
 
   if (options.drizzle !== false) {
     const drizzlePlugin = loadDrizzleMigrationsPlugin();

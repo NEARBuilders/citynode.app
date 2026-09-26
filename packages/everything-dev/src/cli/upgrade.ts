@@ -1112,7 +1112,7 @@ function ensureEffectImports(source: string): string {
 export async function rewriteLegacyPluginScopedLayerPatterns(
   projectDir: string,
 ): Promise<string[]> {
-  const files = await glob(["plugins/*/api/src/index.ts", "api/src/index.ts"], {
+  const files = await glob(["plugins/*/src/index.ts", "api/src/index.ts"], {
     cwd: projectDir,
     nodir: true,
     dot: false,

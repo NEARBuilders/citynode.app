@@ -48,9 +48,8 @@ export function resolveTscBinary(cwd: string): string {
  */
 export async function generateContractTypes(
   cwd: string = process.cwd(),
-  opts: { contractPath?: string } = {},
 ): Promise<ContractTypesStatus> {
-  const contract = opts.contractPath ?? resolvePluginContract(cwd);
+  const contract = resolvePluginContract(cwd);
   if (!contract) {
     return "skipped";
   }
