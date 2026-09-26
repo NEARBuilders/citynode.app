@@ -1,6 +1,25 @@
-import { Button, Card, Input } from "@/components";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Field,
+  FieldLabel,
+  Input,
+} from "@/components";
+import { FieldGroup } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 
 export function OrganizationEditForm({
+  open,
   editName,
   editSlug,
   isPending,
@@ -9,6 +28,7 @@ export function OrganizationEditForm({
   onSave,
   onSlugChange,
 }: {
+  open: boolean;
   editName: string;
   editSlug: string;
   isPending: boolean;
@@ -18,36 +38,58 @@ export function OrganizationEditForm({
   onSlugChange: (value: string) => void;
 }) {
   return (
-    <Card className="p-6 space-y-4 hover:shadow-md">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-        Edit Organization
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Input
-          type="text"
-          value={editName}
-          onChange={(event) => onNameChange(event.target.value)}
-          placeholder="Organization name"
-        />
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-sm">@</span>
-          <Input
-            type="text"
-            value={editSlug}
-            onChange={(event) => onSlugChange(event.target.value.replace(/[^a-z0-9-]/g, ""))}
-            placeholder="slug"
-            pattern="[a-z0-9-]+"
-          />
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <Button onClick={onSave} disabled={isPending || !editName || !editSlug}>
-          {isPending ? "saving..." : "save"}
-        </Button>
-        <Button onClick={onCancel} variant="outline">
-          cancel
-        </Button>
-      </div>
-    </Card>
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent>
+        <form
+          className="flex flex-col gap-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (editName && editSlug) onSave();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Edit organization</DialogTitle>
+            <DialogDescription>Changing the handle changes its links.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="organization-edit-name">Name</FieldLabel>
+              <Input
+                id="organization-edit-name"
+                type="text"
+                value={editName}
+                onChange={(event) => onNameChange(event.target.value)}
+                placeholder="Organization name"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="organization-edit-slug">Handle</FieldLabel>
+              <InputGroup>
+                <InputGroupAddon>
+                  <InputGroupText>@</InputGroupText>
+                </InputGroupAddon>
+                <InputGroupInput
+                  id="organization-edit-slug"
+                  type="text"
+                  value={editSlug}
+                  onChange={(event) => onSlugChange(event.target.value.replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="handle"
+                  pattern="[a-z0-9-]+"
+                  className="font-mono"
+                />
+              </InputGroup>
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending || !editName || !editSlug}>
+              {isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

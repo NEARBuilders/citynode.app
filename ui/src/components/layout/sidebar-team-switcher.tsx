@@ -1,8 +1,9 @@
-import { ChevronsUpDown, Layers, UsersRound } from "lucide-react";
+import { CaretUpDownIcon, StackIcon, UsersIcon } from "@phosphor-icons/react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -35,36 +36,33 @@ export function SidebarTeamSwitcher({
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              data-testid="team-switcher"
-              disabled={isPending}
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <UsersRound className="size-4" />
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{activeTeam?.name ?? "All areas"}</span>
-                <span className="truncate text-xs text-muted-foreground">team workspace</span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
-            </SidebarMenuButton>
+          <DropdownMenuTrigger
+            render={<SidebarMenuButton data-testid="team-switcher" disabled={isPending} />}
+          >
+            <UsersIcon />
+            <span className="min-w-0 flex-1 truncate">
+              <span className="text-muted-foreground">Team: </span>
+              {activeTeam?.name ?? "All areas"}
+            </span>
+            <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="w-(--anchor-width) min-w-56"
             align="start"
             side="bottom"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              operate as team
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Work as a team</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {teams.map((team) => (
               <DropdownMenuCheckboxItem
                 key={team.id}
                 checked={team.id === activeTeam?.id}
                 disabled={isPending}
-                onSelect={() => select(team.id)}
+                closeOnClick
+                onClick={() => select(team.id)}
                 data-testid={`team-switcher-item-${team.id}`}
               >
                 <span className="truncate">{team.name}</span>
@@ -74,10 +72,11 @@ export function SidebarTeamSwitcher({
             <DropdownMenuCheckboxItem
               checked={!activeTeam}
               disabled={isPending}
-              onSelect={() => select(null)}
+              closeOnClick
+              onClick={() => select(null)}
               data-testid="team-switcher-item-all"
             >
-              <Layers className="size-3.5 mr-2" />
+              <StackIcon />
               All areas
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>

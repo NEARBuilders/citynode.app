@@ -1,11 +1,13 @@
+import { CubeIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useApiClient } from "@/app";
-import { Button, PageContainer } from "@/components";
+import { Button, EmptyState, PageContainer } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pageTitle } from "@/lib/page-title";
 import { invalidateThingAfterDelete, thingQueryKeys } from "./-thing-cache";
-import { ThingDetailsView } from "./-thing-details-view";
+import { ThingBackLink, ThingDetailsView } from "./-thing-details-view";
 import { optimisticUpvoteCount } from "./-thing-votes";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -13,9 +15,9 @@ type UpvoteCount = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCount"]>>;
 type UserVote = Awaited<ReturnType<ApiClient["votes"]["getUserVote"]>>;
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/$thingId")({
-  head: ({ params }) => ({
+  head: ({ params, match }) => ({
     meta: [
-      { title: `${params.thingId} | Things | everything.dev` },
+      { title: pageTitle(params.thingId, match.context.runtimeConfig) },
       { name: "description", content: `Detail view for thing ${params.thingId}.` },
     ],
   }),
@@ -145,10 +147,11 @@ function ThingDetailsPage() {
   if (isLoading) {
     return (
       <PageContainer variant="default">
-        <div className="space-y-3">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-8 w-48" />
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-12 w-2/3" />
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-40 w-full rounded-2xl" />
         </div>
       </PageContainer>
     );
@@ -157,17 +160,21 @@ function ThingDetailsPage() {
   if (!thing && !proposal) {
     return (
       <PageContainer variant="default">
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-          <p className="text-base font-semibold text-foreground">Thing not found.</p>
-          {proposalQuery.isError && (
-            <p className="text-sm text-muted-foreground">
-              Proposal status could not be loaded: {proposalQuery.error.message}
-            </p>
-          )}
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/things">back to things</Link>
-          </Button>
-        </div>
+        <ThingBackLink canGoBack={canGoBack} onBack={() => router.history.back()} />
+        <EmptyState
+          icon={CubeIcon}
+          title="Thing not found"
+          description={
+            proposalQuery.isError
+              ? `Proposal status could not be loaded: ${proposalQuery.error.message}`
+              : `No thing or proposal exists for ${thingId}.`
+          }
+          action={
+            <Button nativeButton={false} render={<Link to="/things" />}>
+              Back to things
+            </Button>
+          }
+        />
       </PageContainer>
     );
   }
@@ -186,9 +193,7 @@ function ThingDetailsPage() {
       userVote={userVoteQuery.data}
       onBack={() => router.history.back()}
       onVote={(nextHasUpvote) => voteMutation.mutate(nextHasUpvote)}
-      onDelete={() => {
-        if (window.confirm("Delete this thing permanently?")) deleteMutation.mutate();
-      }}
+      onDelete={() => deleteMutation.mutate()}
     />
   );
 }

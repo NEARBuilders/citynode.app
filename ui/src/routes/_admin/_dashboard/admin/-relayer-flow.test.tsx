@@ -154,9 +154,9 @@ describe("relayer funding flow", () => {
     renderRelayer(current);
 
     await screen.findByText("relayer.near");
-    await screen.findByRole("button", { name: "fund relayer" });
+    await screen.findByRole("button", { name: "Fund relayer" });
     const initialHistoryCalls = current.history.mock.calls.length;
-    fireEvent.click(screen.getByRole("button", { name: "fund relayer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fund relayer" }));
 
     await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("Connect a NEAR wallet first"));
     expect(current.getNearClient).not.toHaveBeenCalled();
@@ -171,8 +171,8 @@ describe("relayer funding flow", () => {
     renderRelayer(current);
 
     await screen.findByText("relayer.near");
-    await screen.findByRole("button", { name: "fund relayer" });
-    fireEvent.click(screen.getByRole("button", { name: "fund relayer" }));
+    await screen.findByRole("button", { name: "Fund relayer" });
+    fireEvent.click(screen.getByRole("button", { name: "Fund relayer" }));
 
     await waitFor(() =>
       expect(mocks.success).toHaveBeenCalledWith("Relayer funded", expect.anything()),
@@ -184,7 +184,7 @@ describe("relayer funding flow", () => {
     expect(current.send).toHaveBeenCalledWith({ waitUntil: "FINAL" });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["relay-history"] });
     expect(await screen.findByText("abcdef123456…")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "fund relayer" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Fund relayer" })).toHaveProperty("disabled", false);
   });
 
   it("reports a rejected send and clears the pending state", async () => {
@@ -195,16 +195,16 @@ describe("relayer funding flow", () => {
     renderRelayer(current);
 
     await screen.findByText("relayer.near");
-    await screen.findByRole("button", { name: "fund relayer" });
-    fireEvent.click(screen.getByRole("button", { name: "fund relayer" }));
-    expect(await screen.findByRole("button", { name: "sending…" })).toHaveProperty(
+    await screen.findByRole("button", { name: "Fund relayer" });
+    fireEvent.click(screen.getByRole("button", { name: "Fund relayer" }));
+    expect(await screen.findByRole("button", { name: "Sending…" })).toHaveProperty(
       "disabled",
       true,
     );
 
     pendingSend.reject(new Error("wallet rejected"));
     await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("wallet rejected"));
-    expect(screen.getByRole("button", { name: "fund relayer" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Fund relayer" })).toHaveProperty("disabled", false);
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });

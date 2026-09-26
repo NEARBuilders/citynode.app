@@ -38,9 +38,17 @@ vi.mock("./org-switcher", () => ({
   ),
 }));
 
+vi.mock("@/app", () => ({
+  pluginPath: (path: string) => path,
+}));
+
 vi.mock("@tanstack/react-router", () => ({
   ClientOnly: ({ children }: { children: ReactNode }) => children,
-  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+  Link: ({ to, children, ...props }: { to: string; children: ReactNode }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 afterEach(() => {
@@ -56,27 +64,28 @@ afterEach(() => {
 describe("UserNav", () => {
   it("shows the account menu trigger for a signed-in user", () => {
     render(<UserNav />);
-    expect(screen.getByTestId("account-menu")).toBeTruthy();
+    const trigger = screen.getByTestId("account-menu");
+    expect(trigger.getAttribute("aria-label")).toBe("elliot");
   });
 
-  it("hides the workspace switcher when showOrgSwitcher is false", () => {
-    identity.organizations = [{ id: "org-1", name: "Acme", slug: "acme" }];
-    identity.activeOrgId = "org-1";
-    identity.activeOrg = identity.organizations[0];
-
-    render(<UserNav showOrgSwitcher={false} />);
-
-    expect(screen.getByTestId("account-menu")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Acme" })).toBeNull();
-  });
-
-  it("shows the workspace switcher on public chrome when orgs exist", () => {
-    identity.organizations = [{ id: "org-1", name: "Acme", slug: "acme" }];
-    identity.activeOrgId = "org-1";
-    identity.activeOrg = identity.organizations[0];
-
+  it("shows a Sign in button for signed-out visitors", () => {
+    identity.user = null;
     render(<UserNav />);
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/login");
+    expect(screen.queryByTestId("account-menu")).toBeNull();
+  });
 
-    expect(screen.getByRole("button", { name: "Acme" })).toBeTruthy();
+  it("hides Sign in when the page is the sign-in page", () => {
+    identity.user = null;
+    render(<UserNav showSignIn={false} />);
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+  });
+
+  it("does not render an organization switcher next to the account menu", () => {
+    identity.organizations = [{ id: "org-1", name: "Acme", slug: "acme" }];
+    identity.activeOrgId = "org-1";
+    identity.activeOrg = identity.organizations[0];
+    render(<UserNav />);
+    expect(screen.queryByRole("button", { name: "Acme" })).toBeNull();
   });
 });

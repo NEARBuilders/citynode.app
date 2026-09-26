@@ -1,9 +1,13 @@
+import { DeviceMobileIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { useEffect, useState } from "react";
+import { AuthPanel } from "@/components/auth-panel";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { sanitizeUserCode } from "./-user-code";
 
 type SearchParams = {
@@ -64,86 +68,100 @@ function DeviceVerifyPage() {
     });
   };
 
+  const signInToContinue = () => {
+    const deviceSearch = new URLSearchParams();
+    for (const [key, value] of Object.entries({
+      user_code,
+      pubKey,
+      contract,
+      account,
+      network,
+      source,
+    })) {
+      if (value) deviceSearch.set(key, value);
+    }
+    const query = deviceSearch.toString();
+    void navigate({
+      to: "/login",
+      search: { redirect: `/login/device${query ? `?${query}` : ""}` },
+    });
+  };
+
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-6 sm:p-8 space-y-5">
-        <div className="space-y-1 text-center">
-          <h1 className="text-xl font-semibold text-foreground" data-testid="device.verify-heading">
-            Device sign-in
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {session?.user
-              ? "A device is asking to sign in to your account."
-              : "Sign in on this device to approve it."}
-          </p>
-        </div>
-
-        {error && (
-          <p className="text-sm text-destructive text-center" data-testid="device.verify-error">
-            {error}
-          </p>
-        )}
-
-        {user_code ? (
-          <p
-            className="text-center font-mono text-lg tracking-widest text-foreground"
+    <AuthPanel
+      icon={<DeviceMobileIcon />}
+      title="Approve a sign-in"
+      titleTestId="device.verify-heading"
+      description={
+        user_code
+          ? "Check this code matches the one on your other screen."
+          : "Enter the code shown on your other screen."
+      }
+    >
+      {user_code ? (
+        <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
+          <span
+            className="font-mono text-3xl font-semibold tracking-widest break-all text-foreground"
             data-testid="device.verified-code"
           >
             {user_code}
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <Input
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder="XXXX-XXXX"
-              maxLength={12}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              className="text-center font-mono tracking-widest uppercase"
-              data-testid="device.user-code-input"
-            />
-            <Button type="submit" className="w-full" data-testid="device.verify-button">
-              Continue
-            </Button>
-          </form>
-        )}
+          </span>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <Field>
+            <FieldLabel htmlFor="device-user-code" className="sr-only">
+              Device code
+            </FieldLabel>
+            <div className="flex gap-2">
+              <Input
+                id="device-user-code"
+                value={code}
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+                placeholder="XXXX-XXXX"
+                maxLength={12}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                autoComplete="one-time-code"
+                className="flex-1 font-mono"
+                data-testid="device.user-code-input"
+              />
+              <Button type="submit" disabled={!code.trim()} data-testid="device.verify-button">
+                Continue
+              </Button>
+            </div>
+          </Field>
+        </form>
+      )}
 
-        {claiming && (
-          <p className="text-sm text-center text-muted-foreground" data-testid="device.claiming">
-            Verifying…
-          </p>
-        )}
+      {error && (
+        <p className="text-center text-sm text-destructive" data-testid="device.verify-error">
+          {error}
+        </p>
+      )}
 
-        {!session?.user && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={() => {
-              const deviceSearch = new URLSearchParams();
-              for (const [key, value] of Object.entries({
-                user_code,
-                pubKey,
-                contract,
-                account,
-                network,
-                source,
-              })) {
-                if (value) deviceSearch.set(key, value);
-              }
-              const query = deviceSearch.toString();
-              void navigate({
-                to: "/login",
-                search: { redirect: `/login/device${query ? `?${query}` : ""}` },
-              });
-            }}
-            data-testid="device.signin-redirect-button"
-          >
-            Sign in to continue
-          </Button>
-        )}
-      </div>
-    </div>
+      {claiming && (
+        <p
+          className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+          data-testid="device.claiming"
+        >
+          <Spinner />
+          Checking the code…
+        </p>
+      )}
+
+      {!session?.user && (
+        <Button
+          type="button"
+          size="lg"
+          variant={user_code ? "default" : "outline"}
+          className="w-full"
+          onClick={signInToContinue}
+          data-testid="device.signin-redirect-button"
+        >
+          Sign in to continue
+        </Button>
+      )}
+    </AuthPanel>
   );
 }

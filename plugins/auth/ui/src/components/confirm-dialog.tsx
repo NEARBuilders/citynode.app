@@ -25,8 +25,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "confirm",
-  cancelLabel = "cancel",
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   variant = "default",
   onConfirm,
   isPending,
@@ -38,27 +38,22 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <DialogFooter className="flex gap-2">
+        <DialogFooter>
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={isPending}
+            data-testid="confirm-dialog-cancel"
           >
             {cancelLabel}
           </Button>
           <Button
-            variant={variant === "destructive" ? "default" : "outline"}
-            size="sm"
+            variant={variant === "destructive" ? "destructive" : "default"}
             onClick={onConfirm}
             disabled={isPending}
-            className={
-              variant === "destructive"
-                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                : ""
-            }
+            data-testid="confirm-dialog-confirm"
           >
-            {isPending ? "..." : confirmLabel}
+            {isPending ? "Working…" : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
