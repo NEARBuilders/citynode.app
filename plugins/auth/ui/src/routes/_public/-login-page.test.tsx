@@ -32,7 +32,7 @@ vi.mock("everything-dev/ui/auth", () => ({
 vi.mock("better-near-auth/client", () => ({ isPasskeyWalletAvailable: () => true }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-function renderLogin() {
+function renderLogin(initialEntry = "/login?redirect=%2Forgs") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRouteWithContext<Record<string, unknown>>()({ component: Outlet });
   const loginRoute = LoginRoute.update({
@@ -48,7 +48,7 @@ function renderLogin() {
   });
   const router = createRouter({
     routeTree: root.addChildren([loginRoute as never, targetRoute]),
-    history: createMemoryHistory({ initialEntries: ["/login?redirect=%2Forgs"] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
     context: { queryClient, authClient: {}, runtimeConfig: { networkId: "mainnet" } },
   });
   render(
@@ -79,6 +79,15 @@ describe("login page", () => {
     expect(await screen.findByTestId("login.no-passkey-hint")).toBeTruthy();
     expect(screen.getByTestId("near.signin-button")).toBeTruthy();
     expect(screen.getByTestId("login.device-button")).toBeTruthy();
+  });
+
+  it("tells visitors coming from staking that signing in lets them stake", async () => {
+    renderLogin(`/login?redirect=${encodeURIComponent("/stake?node=india")}`);
+    expect(await screen.findByText("Sign in to stake with a CityNode community.")).toBeTruthy();
+    cleanup();
+    renderLogin();
+    expect(await screen.findByText("Welcome back. Pick how you want to sign in.")).toBeTruthy();
+    expect(screen.queryByText("Sign in to stake with a CityNode community.")).toBeNull();
   });
 
   it("creates an account with a passkey and continues to the redirect target", async () => {

@@ -1,4 +1,5 @@
-import { queryOptions } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import { redirect } from "@tanstack/react-router";
 import type { ApiClient } from "@/app";
 import type { AuthRequestContext } from "@/lib/auth";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
@@ -71,4 +72,21 @@ export function teamWorkspaceQueryOptions(apiClient: ApiClient) {
     queryFn: async () => resolveTeamWorkspace(await apiClient.auth.getContext()),
     staleTime: 30 * 1000,
   });
+}
+
+export async function requireTeamArea({
+  context,
+  location,
+}: {
+  context: { apiClient: ApiClient; queryClient: QueryClient };
+  location: { pathname: string };
+}) {
+  const area = areaForPath(location.pathname);
+  if (!area) return;
+  const workspace = await context.queryClient
+    .ensureQueryData(teamWorkspaceQueryOptions(context.apiClient))
+    .catch(() => null);
+  if (workspace && !isPathAllowed(workspace, location.pathname)) {
+    throw redirect({ to: "/dashboard", search: { restricted: area } });
+  }
 }

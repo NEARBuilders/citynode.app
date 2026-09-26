@@ -43,6 +43,13 @@ function sanitizeRedirect(url: unknown): string {
   return url;
 }
 
+const STAKE_PATH = /^\/stake(\/|\?|#|$)/;
+
+function signInDescription(redirectTo: string): string {
+  if (STAKE_PATH.test(redirectTo)) return "Sign in to stake with a CityNode community.";
+  return "Welcome back. Pick how you want to sign in.";
+}
+
 export const Route = createFileRoute("/_public/login/")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
@@ -268,7 +275,7 @@ function LoginPage() {
     <AuthPanel
       title="Sign in to CityNode"
       titleTestId="login.heading"
-      description="Welcome back. Pick how you want to sign in."
+      description={signInDescription(redirectTo)}
       footer={
         <>
           <span>New here?</span>

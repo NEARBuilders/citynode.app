@@ -1,10 +1,10 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
-import { getActiveRuntime, useApiClient, useAuthClient } from "@/app";
+import { getActiveRuntime, sessionQueryOptions, useApiClient, useAuthClient } from "@/app";
 import { PageContainer, PageHeader, SectionHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import { parseNearAmount } from "@/lib/near-amount";
@@ -16,6 +16,7 @@ import {
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
 import { tenantAppsQueryOptions } from "@/lib/queries/tenants";
+import { requireTeamArea } from "@/lib/team-workspace";
 import { useNearAccount } from "@/lib/use-near-account";
 import { StakeDirectory } from "./-stake-directory";
 import { StakeForm } from "./-stake-form";
@@ -23,8 +24,14 @@ import { useStakeMutation, useStakeWalletConnection } from "./-stake-mutations";
 import { StakeNodeContent } from "./-stake-node-content";
 import { StakeOnramp } from "./-stake-onramp";
 
-export const Route = createFileRoute("/_authenticated/_dashboard/stake")({
+export const Route = createFileRoute("/_public/stake")({
   validateSearch: z.object({ node: z.string().optional(), nodeId: z.uuid().optional() }),
+  beforeLoad: async ({ context, location }) => {
+    const session = await context.queryClient
+      .query(sessionQueryOptions(context.authClient))
+      .catch(() => null);
+    if (session?.user) await requireTeamArea({ context, location });
+  },
   head: ({ match }) => ({
     meta: [
       { title: pageTitle("Stake", match.context.runtimeConfig) },
@@ -87,7 +94,9 @@ function StakePage() {
   const { node: nodeSlug, nodeId: selectedNodeId } = Route.useSearch();
   const slug = nodeSlug ?? getSlugFromHostname();
   const hasNodeSelection = !!selectedNodeId || !!slug;
-  const { runtimeConfig } = Route.useRouteContext();
+  const { runtimeConfig, session: contextSession } = Route.useRouteContext();
+  const { data: session = contextSession } = useQuery(sessionQueryOptions(auth));
+  const href = useRouterState({ select: (state) => state.location.href });
   const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
   const { data: tenantApps = [], isLoading: directoryLoading } = useQuery({
     ...tenantAppsQueryOptions(apiClient),
@@ -144,6 +153,7 @@ function StakePage() {
       onConnect={() => void handleConnectWallet()}
       onStake={(variables) => stakeMutation.mutate(variables)}
       parsedYocto={parsedYocto}
+      signInRedirect={session?.user ? null : href}
       validator={selectedValidator}
     />
   );

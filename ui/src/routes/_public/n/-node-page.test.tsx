@@ -14,7 +14,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { createApiClient } from "@/lib/api";
 import { createAuthClient, type SessionData, sessionQueryOptions } from "@/lib/auth";
-import { Route as StakeRoute } from "../../_authenticated/_dashboard/stake";
+import { teamWorkspaceQueryKey } from "@/lib/team-workspace";
+import { Route as StakeRoute } from "../stake";
 import { Route } from "./$slug";
 
 const parent = {
@@ -119,9 +120,15 @@ function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
   );
 }
 
-async function showNode(url: string, signedIn = false) {
+async function showNode(url: string, signedIn = false, allowedAreas: string[] | null = null) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(queryClient);
+  if (allowedAreas)
+    queryClient.setQueryData(teamWorkspaceQueryKey, {
+      teams: [],
+      activeTeam: { id: "team", name: "Team", areas: allowedAreas },
+      allowedAreas,
+    });
   if (signedIn)
     queryClient.setQueryData(["session"], {
       user: { id: "preview-user" },
@@ -171,8 +178,9 @@ async function showNode(url: string, signedIn = false) {
       }
     },
   });
+  const dashboardRoute = createRoute({ getParentRoute: () => root, path: "/dashboard" });
   const router = createRouter({
-    routeTree: root.addChildren([route, stakeRoute, loginRoute]),
+    routeTree: root.addChildren([route, stakeRoute, loginRoute, dashboardRoute]),
     history: createMemoryHistory({ initialEntries: [url] }),
     context,
     defaultPendingMinMs: 0,
@@ -202,6 +210,32 @@ it("preserves the selected node when returning from sign-in", async () => {
   mockApi([parent, child], child.id);
   await showNode(`/login?redirect=${encodeURIComponent(`/stake?nodeId=${child.id}`)}`, true);
   expect(await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago/ })).toBeTruthy();
+});
+
+it("lets anonymous visitors browse a pool and asks them to sign in to stake", async () => {
+  mockApi([parent, child], child.id);
+  await showNode(`/stake?nodeId=${child.id}`);
+  expect(await screen.findByRole("heading", { level: 1, name: /Stake.*Chicago/ })).toBeTruthy();
+  const signIn = await screen.findByTestId("stake.sign-in");
+  const destination = new URL(signIn.getAttribute("href") ?? "", "http://localhost");
+  expect(destination.pathname).toBe("/login");
+  expect(destination.searchParams.get("redirect")).toBe(`/stake?nodeId=${child.id}`);
+  expect(screen.queryByTestId("stake.connect-wallet")).toBeNull();
+});
+
+it("sends signed-in members of a team without the stake area to Home", async () => {
+  mockApi([parent, child], child.id);
+  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["things"]);
+  await vi.waitFor(() => expect(router.state.location.pathname).toBe("/dashboard"));
+  expect(router.state.location.search).toEqual({ restricted: "stake" });
+});
+
+it("keeps signed-in members of a stake team on the staking page", async () => {
+  mockApi([parent, child], child.id);
+  const router = await showNode(`/stake?nodeId=${child.id}`, true, ["stake"]);
+  expect(router.state.location.pathname).toBe("/stake");
+  expect(await screen.findByTestId("stake.connect-wallet")).toBeTruthy();
+  expect(screen.queryByTestId("stake.sign-in")).toBeNull();
 });
 
 it("carries a duplicate city's identity from its overview into the staking page", async () => {

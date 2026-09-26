@@ -1,4 +1,10 @@
 // @vitest-environment jsdom
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -28,6 +34,7 @@ function show(props: Partial<Props> = {}) {
       isPending={false}
       nearAccountId="alice.near"
       parsedYocto={10n ** 25n}
+      signInRedirect={null}
       validator={validator}
       {...handlers}
       {...props}
@@ -44,6 +51,38 @@ describe("StakeForm", () => {
     expect(screen.queryByTestId("stake.submit")).toBeNull();
     fireEvent.click(screen.getByTestId("stake.connect-wallet"));
     expect(onConnect).toHaveBeenCalledOnce();
+  });
+
+  it("asks anonymous visitors to sign in before staking", async () => {
+    const root = createRootRoute({
+      component: () => (
+        <StakeForm
+          amount="10"
+          connectingWallet={false}
+          isPending={false}
+          nearAccountId={null}
+          parsedYocto={10n ** 25n}
+          signInRedirect="/stake?node=india"
+          validator={validator}
+          onAmountChange={vi.fn()}
+          onConnect={vi.fn()}
+          onStake={vi.fn()}
+        />
+      ),
+    });
+    const router = createRouter({
+      routeTree: root,
+      history: createMemoryHistory({ initialEntries: ["/stake?node=india"] }),
+    });
+    await router.load();
+    render(<RouterProvider router={router} />);
+    const signIn = await screen.findByRole("link", { name: "Sign in to stake" });
+    const destination = new URL(signIn.getAttribute("href") ?? "", "http://localhost");
+    expect(destination.pathname).toBe("/login");
+    expect(destination.searchParams.get("redirect")).toBe("/stake?node=india");
+    expect(screen.getByTestId("stake.amount")).toBeTruthy();
+    expect(screen.queryByTestId("stake.connect-wallet")).toBeNull();
+    expect(screen.queryByTestId("stake.submit")).toBeNull();
   });
 
   it("stakes the parsed amount to the selected pool on its network", () => {
