@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { buildAuthExportStub, buildAuthTypesGenContent } from "./auth-types-gen";
 import { fetchJsonOrNull, fetchResponse } from "./http-client";
 import { isAuthMirrorPluginEntry } from "./service-descriptor";
@@ -39,6 +40,244 @@ export interface ApiPluginManifest {
     variables?: JsonObject;
   }>;
   dependsOn?: string[];
+}
+
+export class ApiManifestFetchError extends Schema.TaggedError<ApiManifestFetchError>()(
+  "ApiManifestFetchError",
+  { url: Schema.String, message: Schema.String },
+) {}
+
+export class ApiManifestFormatError extends Schema.TaggedError<ApiManifestFormatError>()(
+  "ApiManifestFormatError",
+  { url: Schema.String, message: Schema.String },
+) {}
+
+export class MissingContractTypesError extends Schema.TaggedError<MissingContractTypesError>()(
+  "MissingContractTypesError",
+  { pluginName: Schema.String, message: Schema.String },
+) {}
+
+export class ContractTypesFetchError extends Schema.TaggedError<ContractTypesFetchError>()(
+  "ContractTypesFetchError",
+  { url: Schema.String, message: Schema.String },
+) {}
+
+export class ContractTypesChecksumError extends Schema.TaggedError<ContractTypesChecksumError>()(
+  "ContractTypesChecksumError",
+  { url: Schema.String, message: Schema.String },
+) {}
+
+export class AuthExportFetchError extends Schema.TaggedError<AuthExportFetchError>()(
+  "AuthExportFetchError",
+  { url: Schema.String, message: Schema.String },
+) {}
+
+export type ApiContractError =
+  | ApiManifestFetchError
+  | ApiManifestFormatError
+  | MissingContractTypesError
+  | ContractTypesFetchError
+  | ContractTypesChecksumError;
+
+export class ApiContractResolver extends Context.Service<
+  ApiContractResolver,
+  {
+    manifest: (
+      apiBaseUrl: string,
+    ) => Effect.Effect<ApiPluginManifest, ApiManifestFetchError | ApiManifestFormatError>;
+    contractSource: (opts: {
+      baseUrl: string;
+      runtimeDir: string;
+      name: string;
+      generatedSubdir: string;
+    }) => Effect.Effect<ContractSource, ApiContractError>;
+    authExportTypes: (opts: {
+      baseUrl: string;
+      runtimeDir: string;
+      manifest: ApiPluginManifest;
+    }) => Effect.Effect<string | null, AuthExportFetchError>;
+  }
+>()("everything-dev/api-contract/ApiContractResolver") {
+  static readonly layer: Layer.Layer<ApiContractResolver> = Layer.effect(
+    ApiContractResolver,
+    Effect.gen(function* () {
+      const manifest = Effect.fn("ApiContractResolver.manifest")(function* (
+        apiBaseUrl: string,
+      ): Effect.fn.Return<ApiPluginManifest, ApiManifestFetchError | ApiManifestFormatError> {
+        const url = getApiPluginManifestUrl(apiBaseUrl);
+        const fetched = yield* Effect.tryPromise({
+          try: () => fetchJsonOrNull<ApiPluginManifest>(url, { retries: 2 }),
+          catch: () =>
+            new ApiManifestFetchError({
+              url,
+              message: `Failed to fetch API plugin manifest from ${url}`,
+            }),
+        });
+        if (!fetched) {
+          return yield* new ApiManifestFetchError({
+            url,
+            message: `Failed to fetch API plugin manifest from ${url}`,
+          });
+        }
+        if (fetched.schemaVersion !== 1 || fetched.kind !== "every-plugin/manifest") {
+          return yield* new ApiManifestFormatError({
+            url,
+            message: "Unsupported API plugin manifest format",
+          });
+        }
+        return fetched;
+      });
+
+      const writeContractTypes = Effect.fn("ApiContractResolver.writeContractTypes")(
+        function* (opts: {
+          contractUrl: string;
+          manifest: ApiPluginManifest;
+          runtimeDir: string;
+          generatedSubdir: string;
+          name: string;
+        }): Effect.fn.Return<ContractSource, ContractTypesFetchError | ContractTypesChecksumError> {
+          const contractResponse = yield* Effect.tryPromise({
+            try: () => fetchResponse(opts.contractUrl),
+            catch: () =>
+              new ContractTypesFetchError({
+                url: opts.contractUrl,
+                message: `Failed to fetch contract types from ${opts.contractUrl}`,
+              }),
+          });
+          if (!contractResponse.ok) {
+            return yield* new ContractTypesFetchError({
+              url: opts.contractUrl,
+              message: `Failed to fetch contract types from ${opts.contractUrl}: ${contractResponse.status} ${contractResponse.statusText}`,
+            });
+          }
+
+          const contractTypes = yield* Effect.tryPromise({
+            try: () => contractResponse.text(),
+            catch: () =>
+              new ContractTypesFetchError({
+                url: opts.contractUrl,
+                message: `Failed to fetch contract types from ${opts.contractUrl}`,
+              }),
+          });
+          if (
+            opts.manifest.contract?.types.sha256 &&
+            opts.manifest.contract.types.sha256 !== sha256(contractTypes)
+          ) {
+            return yield* new ContractTypesChecksumError({
+              url: opts.contractUrl,
+              message: "Fetched contract types failed checksum verification",
+            });
+          }
+
+          const generatedPath = join(opts.runtimeDir, opts.generatedSubdir, "contract.d.ts");
+          yield* Effect.sync(() => {
+            mkdirSync(dirname(generatedPath), { recursive: true });
+            writeFileIfChanged(generatedPath, contractTypes);
+          });
+
+          return {
+            key: opts.name,
+            importName: `${sanitizeIdentifier(opts.name)}Contract`,
+            sourceFilePath: generatedPath,
+            generatedPath,
+          };
+        },
+      );
+
+      const contractSource = Effect.fn("ApiContractResolver.contractSource")(function* (opts: {
+        baseUrl: string;
+        runtimeDir: string;
+        name: string;
+        generatedSubdir: string;
+      }): Effect.fn.Return<ContractSource, ApiContractError> {
+        const fetchedManifest = yield* manifest(opts.baseUrl);
+        if (!fetchedManifest.contract) {
+          return yield* new MissingContractTypesError({
+            pluginName: fetchedManifest.plugin.name,
+            message: `Plugin manifest for ${fetchedManifest.plugin.name} does not advertise contract types`,
+          });
+        }
+        const contractUrl = `${trimTrailingSlash(opts.baseUrl)}/${fetchedManifest.contract.types.path.replace(/^\.\//, "")}`;
+        return yield* writeContractTypes({
+          contractUrl,
+          manifest: fetchedManifest,
+          runtimeDir: opts.runtimeDir,
+          generatedSubdir: opts.generatedSubdir,
+          name: opts.name,
+        });
+      });
+
+      const authExportTypes = Effect.fn("ApiContractResolver.authExportTypes")(function* (opts: {
+        baseUrl: string;
+        runtimeDir: string;
+        manifest: ApiPluginManifest;
+      }): Effect.fn.Return<string | null, AuthExportFetchError> {
+        const exports = opts.manifest.additionalExports ?? [];
+        const entry = exports.find(
+          (candidate) =>
+            candidate.path.includes("auth-export") || candidate.path.endsWith("auth-export.d.ts"),
+        );
+        if (!entry) return null;
+
+        const exportUrl = `${trimTrailingSlash(opts.baseUrl)}/${entry.path.replace(/^\.\//, "")}`;
+        const response = yield* Effect.tryPromise({
+          try: () => fetchResponse(exportUrl),
+          catch: () =>
+            new AuthExportFetchError({
+              url: exportUrl,
+              message: `Failed to fetch auth export types from ${exportUrl}`,
+            }),
+        });
+        if (!response.ok) {
+          return yield* new AuthExportFetchError({
+            url: exportUrl,
+            message: `Failed to fetch auth export types from ${exportUrl}: ${response.status}`,
+          });
+        }
+
+        const content = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: () =>
+            new AuthExportFetchError({
+              url: exportUrl,
+              message: `Failed to fetch auth export types from ${exportUrl}`,
+            }),
+        });
+        if (entry.sha256 && entry.sha256 !== sha256(content)) {
+          return yield* new AuthExportFetchError({
+            url: exportUrl,
+            message: `Auth export types checksum mismatch for ${exportUrl}`,
+          });
+        }
+
+        const generatedPath = join(opts.runtimeDir, "auth", "auth-export.d.ts");
+        yield* Effect.sync(() => {
+          mkdirSync(dirname(generatedPath), { recursive: true });
+          writeFileIfChanged(generatedPath, content);
+        });
+        return generatedPath;
+      });
+
+      return ApiContractResolver.of({ manifest, contractSource, authExportTypes });
+    }),
+  );
+}
+
+let resolverRuntime: ManagedRuntime.ManagedRuntime<ApiContractResolver, never> | null = null;
+
+function getResolver(): ManagedRuntime.ManagedRuntime<ApiContractResolver, never> {
+  if (!resolverRuntime) {
+    resolverRuntime = ManagedRuntime.make(ApiContractResolver.layer);
+  }
+  return resolverRuntime;
+}
+
+/** Test seam: dispose the cached resolver runtime. */
+export function disposeApiContractResolver(): Promise<void> {
+  if (!resolverRuntime) return Promise.resolve();
+  const runtime = resolverRuntime;
+  resolverRuntime = null;
+  return runtime.dispose();
 }
 
 interface ContractSource {
@@ -81,16 +320,16 @@ function getApiPluginManifestUrl(apiBaseUrl: string): string {
 }
 
 export async function fetchApiPluginManifest(apiBaseUrl: string): Promise<ApiPluginManifest> {
-  const url = getApiPluginManifestUrl(apiBaseUrl);
-  const manifest = await fetchJsonOrNull<ApiPluginManifest>(url, { retries: 2 });
-  if (!manifest) {
-    throw new Error(`Failed to fetch API plugin manifest from ${url}`);
-  }
-  if (manifest.schemaVersion !== 1 || manifest.kind !== "every-plugin/manifest") {
-    throw new Error("Unsupported API plugin manifest format");
-  }
-
-  return manifest;
+  return getResolver()
+    .runPromise(
+      Effect.gen(function* () {
+        const resolver = yield* ApiContractResolver;
+        return yield* resolver.manifest(apiBaseUrl);
+      }),
+    )
+    .catch((error: ApiManifestFetchError | ApiManifestFormatError) => {
+      throw new Error(error.message);
+    });
 }
 
 function localApiContractSource(configDir: string): ContractSource {
@@ -118,36 +357,21 @@ async function remoteContractSource(opts: {
   baseUrl: string;
   generatedSubdir: string;
 }): Promise<ContractSource> {
-  const manifest = await fetchApiPluginManifest(opts.baseUrl);
-  if (!manifest.contract) {
-    throw new Error(
-      `Plugin manifest for ${manifest.plugin.name} does not advertise contract types`,
-    );
-  }
-
-  const contractUrl = `${trimTrailingSlash(opts.baseUrl)}/${manifest.contract.types.path.replace(/^\.\//, "")}`;
-  const contractResponse = await fetchResponse(contractUrl);
-  if (!contractResponse.ok) {
-    throw new Error(
-      `Failed to fetch contract types from ${contractUrl}: ${contractResponse.status} ${contractResponse.statusText}`,
-    );
-  }
-
-  const contractTypes = await contractResponse.text();
-  if (manifest.contract.types.sha256 && manifest.contract.types.sha256 !== sha256(contractTypes)) {
-    throw new Error("Fetched contract types failed checksum verification");
-  }
-
-  const generatedPath = join(opts.runtimeDir, opts.generatedSubdir, "contract.d.ts");
-  mkdirSync(dirname(generatedPath), { recursive: true });
-  writeFileIfChanged(generatedPath, contractTypes);
-
-  return {
-    key: opts.name,
-    importName: `${sanitizeIdentifier(opts.name)}Contract`,
-    sourceFilePath: generatedPath,
-    generatedPath,
-  };
+  return getResolver()
+    .runPromise(
+      Effect.gen(function* () {
+        const resolver = yield* ApiContractResolver;
+        return yield* resolver.contractSource({
+          baseUrl: opts.baseUrl,
+          runtimeDir: opts.runtimeDir,
+          name: opts.name,
+          generatedSubdir: opts.generatedSubdir,
+        });
+      }),
+    )
+    .catch((error: ApiContractError) => {
+      throw new Error(error.message);
+    });
 }
 
 async function fetchAuthExportTypes(opts: {
@@ -155,38 +379,21 @@ async function fetchAuthExportTypes(opts: {
   runtimeDir: string;
   manifest: ApiPluginManifest;
 }): Promise<string | null> {
-  if (!opts.manifest.additionalExports || opts.manifest.additionalExports.length === 0) {
-    return null;
-  }
-
-  const authExportEntry = opts.manifest.additionalExports.find(
-    (entry) => entry.path.includes("auth-export") || entry.path.endsWith("auth-export.d.ts"),
-  );
-
-  if (!authExportEntry) {
-    return null;
-  }
-
-  const exportUrl = `${trimTrailingSlash(opts.baseUrl)}/${authExportEntry.path.replace(/^\.\//, "")}`;
-  const response = await fetchResponse(exportUrl);
-  if (!response.ok) {
-    console.warn(
-      `[API Contract] Failed to fetch auth export types from ${exportUrl}: ${response.status}`,
-    );
-    return null;
-  }
-
-  const content = await response.text();
-  if (authExportEntry.sha256 && authExportEntry.sha256 !== sha256(content)) {
-    console.warn(`[API Contract] Auth export types checksum mismatch for ${exportUrl}`);
-    return null;
-  }
-
-  const generatedPath = join(opts.runtimeDir, "auth", "auth-export.d.ts");
-  mkdirSync(dirname(generatedPath), { recursive: true });
-  writeFileIfChanged(generatedPath, content);
-
-  return generatedPath;
+  return getResolver()
+    .runPromise(
+      Effect.gen(function* () {
+        const resolver = yield* ApiContractResolver;
+        return yield* resolver.authExportTypes({
+          baseUrl: opts.baseUrl,
+          runtimeDir: opts.runtimeDir,
+          manifest: opts.manifest,
+        });
+      }),
+    )
+    .catch((error: AuthExportFetchError) => {
+      console.warn(`[API Contract] ${error.message}`);
+      return null;
+    });
 }
 
 async function resolveContractSource(opts: {
