@@ -8,7 +8,7 @@ describe("bos sync — framework-owned files", () => {
     expect(isFrameworkOwnedSyncFile(".github/workflows/deploy.yml")).toBe(true);
     expect(isFrameworkOwnedSyncFile("ui/src/globals.d.ts")).toBe(true);
     expect(isFrameworkOwnedSyncFile("ui/src/router.tsx")).toBe(true);
-    expect(isFrameworkOwnedSyncFile("api/rspack.config.js")).toBe(true);
+    expect(isFrameworkOwnedSyncFile("api/rspack.config.js")).toBe(false);
   });
 
   it("marks per-plugin lib files as framework-owned", () => {

@@ -7,7 +7,7 @@ import { RPCHandler } from "@orpc/server/node";
 import { createPluginRuntime } from "every-plugin";
 import type { contract } from "@/contract";
 import Plugin from "@/index";
-import { TEST_PLUGIN_ID, buildTestConfig } from "./test-config";
+import { buildTestConfig, TEST_PLUGIN_ID } from "./test-config";
 
 const TEST_REGISTRY = {
   [TEST_PLUGIN_ID]: {

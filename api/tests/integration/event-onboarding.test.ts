@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabaseDriver } from "@/db/index";
 import { loadMigrations, migrate } from "@/db/migrate";
 import { discoveryActivities, nodes, tenants } from "@/db/schema";
-import pluginDevConfig from "../../plugin.dev";
+import pluginDevConfig from "../../bos.dev";
 import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 const databaseDir = await vi.hoisted(async () => {
