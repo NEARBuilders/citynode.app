@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { nodeKindLabel } from "@/lib/node-kind";
 
 type DirectoryNode = {
   id: string;
@@ -65,7 +66,7 @@ export function StakeDirectory({
             </ItemContent>
             <ItemActions>
               <Badge variant="secondary">
-                <span className="capitalize">{node.kind ?? "Community"}</span>
+                <span className="capitalize">{nodeKindLabel(node.kind)}</span>
               </Badge>
               <ArrowRightIcon className="text-muted-foreground" />
             </ItemActions>

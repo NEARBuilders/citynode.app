@@ -16,14 +16,13 @@ import { PageContainer } from "@/components/layout/page-container";
 import { NodeDirectorySkeleton } from "@/components/node-directory-skeleton";
 import { NodeStakeSection } from "@/components/node-stake-section";
 import { Skeleton } from "@/components/ui/skeleton";
+import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import {
   childNodesQueryOptions,
   nodeBySlugQueryOptions,
   stakingValidatorsQueryOptions,
 } from "@/lib/queries/nodes";
-
-const KIND_LABELS: Record<string, string> = { country: "Country", state: "State", city: "City" };
 
 function discoveryProfileQueryOptions(apiClient: ApiClient, nodeId: string) {
   return queryOptions({
@@ -128,7 +127,7 @@ function NodePage() {
   const events = profile?.events ?? [];
   const hostname = `${node.slug}.${gateway}`;
   const siteUrl = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
-  const kindLabel = node.kind ? (KIND_LABELS[node.kind] ?? node.kind) : "Community";
+  const kindLabel = nodeKindLabel(node.kind);
 
   return (
     <PageContainer variant="default">

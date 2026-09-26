@@ -8,11 +8,12 @@ import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
 import { createAuthMiddleware } from "./lib/auth";
 import { ContextSchema } from "./lib/context";
+import { toOrpcError } from "./lib/errors";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
 import type { DiscoveryService } from "./services/discovery";
 import { DiscoveryLive, DiscoveryTag } from "./services/discovery";
-import type { NodesService } from "./services/nodes";
+import type { NodeEffect, NodeRecord, NodesService } from "./services/nodes";
 import { NodesLive, NodesTag } from "./services/nodes";
 import type { TenantsService } from "./services/tenants";
 import { TenantsConfigLive, TenantsLive, TenantsTag } from "./services/tenants";
@@ -62,6 +63,72 @@ function validateHostname(hostname: string): void {
 function publishStatusFor(ownerAccountId: string): "pending_funding" | "ready" {
   return ownerAccountId.startsWith("0s") ? "pending_funding" : "ready";
 }
+
+interface NodeAccessContext {
+  user?: { role?: string | null };
+  organization?: { activeOrganizationId: string | null };
+}
+
+const asOrpcEffect = <T>(run: () => Promise<T>): Effect.Effect<T, ORPCError<string, unknown>> =>
+  Effect.tryPromise({ try: run, catch: toOrpcError });
+
+const resolveNodeForAccess = (
+  services: { nodes: NodesService },
+  nodeId: string,
+): NodeEffect<NodeRecord> =>
+  Effect.gen(function* () {
+    const node = yield* services.nodes.getById(nodeId);
+    if (!node) {
+      return yield* Effect.fail(
+        new ORPCError("NOT_FOUND", {
+          message: "Node not found",
+          data: { resource: "node", resourceId: nodeId },
+        }),
+      );
+    }
+    return node;
+  });
+
+const authorizeNodeAccess = (
+  services: { tenants: TenantsService },
+  node: NodeRecord,
+  context: NodeAccessContext,
+  options: { adminBypassOrg: boolean; resource: "node" | "validators" },
+): NodeEffect<void> =>
+  Effect.gen(function* () {
+    if (!node.tenantId) {
+      if (context.user?.role !== "admin") {
+        return yield* Effect.fail(
+          new ORPCError("FORBIDDEN", {
+            message: "Standalone nodes can only be managed by platform admins",
+          }),
+        );
+      }
+      return;
+    }
+    const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(node.tenantId!));
+    if (!tenant) {
+      return yield* Effect.fail(
+        new ORPCError("NOT_FOUND", {
+          message: "Tenant not found",
+          data: { resource: "node", resourceId: node.tenantId },
+        }),
+      );
+    }
+    const ownsOrg =
+      !!context.organization?.activeOrganizationId &&
+      tenant.orgId === context.organization.activeOrganizationId;
+    if (options.adminBypassOrg ? context.user?.role !== "admin" && !ownsOrg : !ownsOrg) {
+      return yield* Effect.fail(
+        new ORPCError("FORBIDDEN", {
+          message:
+            options.resource === "validators"
+              ? "This node's validators do not belong to your organization"
+              : "This node does not belong to your organization",
+        }),
+      );
+    }
+  });
 
 export default createPlugin.withPlugins<PluginsClient>()({
   variables: z.object({
@@ -168,38 +235,16 @@ export default createPlugin.withPlugins<PluginsClient>()({
       },
     ) => {
       const services = Context.get((context as any)["effect/context"], ApiServices);
-      const node = await services.nodes.getById(nodeId);
-      if (!node) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Node not found",
-          data: { resource: "node", resourceId: nodeId },
-        });
-      }
-      if (!node.tenantId) {
-        if (context.user?.role !== "admin") {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Standalone nodes' validators can only be managed by platform admins",
+      return await Effect.runPromise(
+        Effect.gen(function* () {
+          const node = yield* resolveNodeForAccess(services, nodeId);
+          yield* authorizeNodeAccess(services, node, context, {
+            adminBypassOrg: true,
+            resource: "validators",
           });
-        }
-        return node;
-      }
-      const tenant = await services.tenants.resolveTenantById(node.tenantId);
-      if (!tenant) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Tenant not found",
-          data: { resource: "node", resourceId: nodeId },
-        });
-      }
-      if (
-        context.user?.role !== "admin" &&
-        (!context.organization?.activeOrganizationId ||
-          tenant.orgId !== context.organization.activeOrganizationId)
-      ) {
-        throw new ORPCError("FORBIDDEN", {
-          message: "This node's validators do not belong to your organization",
-        });
-      }
-      return node;
+          return node;
+        }),
+      );
     };
 
     const router = {
@@ -627,53 +672,58 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
-      listNodes: builder.listNodes.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.nodes.list({
+      listNodes: builder.listNodes.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.nodes.list({
           ...(input.kind !== undefined && { kind: input.kind }),
           ...(input.parentId !== undefined && { parentId: input.parentId }),
           ...(input.tenantId !== undefined && { tenantId: input.tenantId }),
         });
       }),
 
-      listNodeSummaries: builder.listNodeSummaries.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.nodes.listSummaries({
+      listNodeSummaries: builder.listNodeSummaries.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.nodes.listSummaries({
           ...(input.scope === "roots" && { parentId: null }),
           ...(input.kind !== undefined && { kind: input.kind }),
         });
       }),
 
-      getNode: builder.getNode.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const node = await services.nodes.getById(input.nodeId);
-        return node ?? null;
+      getNode: builder.getNode.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.nodes.getById(input.nodeId);
       }),
 
       createNode: builder.createNode
         .use(requireAuth)
         .use(requireOrganization)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const tenant = await services.tenants.resolveTenantById(input.tenantId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const tenantId = input.tenantId;
+          const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(tenantId));
           if (!tenant) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: input.tenantId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: tenantId },
+              }),
+            );
           }
           if (tenant.orgId !== context.organization.activeOrganizationId) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "This tenant does not belong to your organization",
-            });
+            return yield* Effect.fail(
+              errors.FORBIDDEN({
+                message: "This tenant does not belong to your organization",
+                data: {},
+              }),
+            );
           }
-          return await services.nodes.create({
+          return yield* services.nodes.spawn({
             kind: input.kind,
             slug: input.slug,
             name: input.name,
             parentId: input.parentId ?? null,
-            tenantId: input.tenantId,
+            tenantId,
             ...(input.metadata !== undefined && { metadata: input.metadata }),
           });
         }),
@@ -682,23 +732,53 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrganization)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          if (!input.tenantId && context.user?.role !== "admin") {
+            return yield* Effect.fail(
+              errors.FORBIDDEN({
+                message: "Standalone nodes can only be spawned by platform admins",
+                data: {},
+              }),
+            );
+          }
           if (input.tenantId) {
-            const tenant = await services.tenants.resolveTenantById(input.tenantId);
+            const tenantId = input.tenantId;
+            const tenant = yield* asOrpcEffect(() => services.tenants.resolveTenantById(tenantId));
             if (!tenant) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Tenant not found",
-                data: { resource: "tenant", resourceId: input.tenantId },
-              });
+              return yield* Effect.fail(
+                errors.NOT_FOUND({
+                  message: "Tenant not found",
+                  data: { resource: "tenant", resourceId: tenantId },
+                }),
+              );
             }
             if (tenant.orgId !== context.organization.activeOrganizationId) {
-              throw new ORPCError("FORBIDDEN", {
-                message: "This tenant does not belong to your organization",
-              });
+              return yield* Effect.fail(
+                errors.FORBIDDEN({
+                  message: "This tenant does not belong to your organization",
+                  data: {},
+                }),
+              );
             }
           }
-          return await services.nodes.spawn({
+          if (input.parentId) {
+            const parentId = input.parentId;
+            const parent = yield* services.nodes.getById(parentId);
+            if (!parent) {
+              return yield* Effect.fail(
+                errors.NOT_FOUND({
+                  message: "Parent node not found",
+                  data: { resource: "node", resourceId: parentId },
+                }),
+              );
+            }
+            yield* authorizeNodeAccess(services, parent, context, {
+              adminBypassOrg: true,
+              resource: "node",
+            });
+          }
+          return yield* services.nodes.spawn({
             ...(input.kind !== undefined && { kind: input.kind }),
             slug: input.slug,
             name: input.name,
@@ -711,46 +791,14 @@ export default createPlugin.withPlugins<PluginsClient>()({
       updateNode: builder.updateNode
         .use(requireAuth)
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const node = await services.nodes.getById(input.nodeId);
-          if (!node) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: input.nodeId },
-            });
-          }
-          if (!node.tenantId) {
-            if (context.user.role !== "admin") {
-              throw new ORPCError("FORBIDDEN", {
-                message: "Standalone nodes can only be managed by platform admins",
-              });
-            }
-            return await services.nodes.update(input.nodeId, {
-              ...(input.kind !== undefined && { kind: input.kind }),
-              ...(input.slug !== undefined && { slug: input.slug }),
-              ...(input.name !== undefined && { name: input.name }),
-              ...(input.parentId !== undefined && { parentId: input.parentId }),
-              ...(input.metadata !== undefined && { metadata: input.metadata }),
-            });
-          }
-          const tenant = await services.tenants.resolveTenantById(node.tenantId);
-          if (!tenant) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "node", resourceId: node.tenantId },
-            });
-          }
-          if (
-            context.user.role !== "admin" &&
-            (!context.organization?.activeOrganizationId ||
-              tenant.orgId !== context.organization.activeOrganizationId)
-          ) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "This node does not belong to your organization",
-            });
-          }
-          return await services.nodes.update(input.nodeId, {
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const node = yield* resolveNodeForAccess(services, input.nodeId);
+          yield* authorizeNodeAccess(services, node, context, {
+            adminBypassOrg: true,
+            resource: "node",
+          });
+          return yield* services.nodes.update(input.nodeId, {
             ...(input.kind !== undefined && { kind: input.kind }),
             ...(input.slug !== undefined && { slug: input.slug }),
             ...(input.name !== undefined && { name: input.name }),
@@ -763,82 +811,58 @@ export default createPlugin.withPlugins<PluginsClient>()({
         .use(requireAuth)
         .use(requireOrgRole("admin"))
         .use(requireNodeOperations)
-        .handler(async ({ input, context }) => {
-          const services = Context.get(context["effect/context"], ApiServices);
-          const node = await services.nodes.getById(input.nodeId);
-          if (!node) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: input.nodeId },
-            });
-          }
-          if (!node.tenantId) {
-            if (context.user.role !== "admin") {
-              throw new ORPCError("FORBIDDEN", {
-                message: "Standalone nodes can only be managed by platform admins",
-              });
-            }
-          } else {
-            const tenant = await services.tenants.resolveTenantById(node.tenantId);
-            if (!tenant) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Tenant not found",
-                data: { resource: "tenant", resourceId: node.tenantId },
-              });
-            }
-            if (tenant.orgId !== context.organization.activeOrganizationId) {
-              throw new ORPCError("FORBIDDEN", {
-                message: "This node does not belong to your organization",
-              });
-            }
-          }
-          const deleted = await services.nodes.delete(input.nodeId);
+        .effect(function* ({ input, context, errors }) {
+          const services = yield* ApiServices;
+          const node = yield* resolveNodeForAccess(services, input.nodeId);
+          yield* authorizeNodeAccess(services, node, context, {
+            adminBypassOrg: false,
+            resource: "node",
+          });
+          const deleted = yield* services.nodes.delete(input.nodeId);
           if (!deleted) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Node not found",
-              data: { resource: "node", resourceId: input.nodeId },
-            });
+            return yield* Effect.fail(
+              errors.NOT_FOUND({
+                message: "Node not found",
+                data: { resource: "node", resourceId: input.nodeId },
+              }),
+            );
           }
           return { success: true as const };
         }),
 
-      listRootNodes: builder.listRootNodes.handler(async ({ context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.nodes.listRootNodes();
+      listRootNodes: builder.listRootNodes.effect(function* () {
+        const services = yield* ApiServices;
+        return yield* services.nodes.listRootNodes();
       }),
 
-      listChildren: builder.listChildren.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        return services.nodes.listChildren(input.nodeId);
+      listChildren: builder.listChildren.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.nodes.listChildren(input.nodeId);
       }),
 
-      getSubtree: builder.getSubtree.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const subtree = await services.nodes.subtreeWithValidators(input.nodeId);
+      getSubtree: builder.getSubtree.effect(function* ({ input, errors }) {
+        const services = yield* ApiServices;
+        const subtree = yield* services.nodes.subtreeWithValidators(input.nodeId);
         if (subtree.length === 0) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Node not found",
-            data: { resource: "node", resourceId: input.nodeId },
-          });
+          return yield* Effect.fail(
+            errors.NOT_FOUND({
+              message: "Node not found",
+              data: { resource: "node", resourceId: input.nodeId },
+            }),
+          );
         }
         return subtree;
       }),
 
-      getNodeSummary: builder.getNodeSummary.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const node = await services.nodes.getById(input.nodeId);
-        if (!node) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Node not found",
-            data: { resource: "node", resourceId: input.nodeId },
-          });
-        }
+      getNodeSummary: builder.getNodeSummary.effect(function* ({ input, errors }) {
+        const services = yield* ApiServices;
+        const node = yield* resolveNodeForAccess(services, input.nodeId);
 
-        const [children, subtree, validators, stakingValidators] = await Promise.all([
+        const [children, subtree, validators, stakingValidators] = yield* Effect.all([
           services.nodes.listChildren(input.nodeId),
           services.nodes.subtreeWithValidators(input.nodeId),
-          services.validators.listByNode(input.nodeId),
-          services.validators.resolveForStaking(input.nodeId),
+          asOrpcEffect(() => services.validators.listByNode(input.nodeId)),
+          asOrpcEffect(() => services.validators.resolveForStaking(input.nodeId)),
         ]);
         const subtreeValidators = subtree.flatMap((entry) => entry.validators);
         const subtreeValidatorCountsByRole = { official: 0, community: 0 };
@@ -867,13 +891,12 @@ export default createPlugin.withPlugins<PluginsClient>()({
         };
       }),
 
-      resolveNodeBySlug: builder.resolveNodeBySlug.handler(async ({ input, context }) => {
-        const services = Context.get(context["effect/context"], ApiServices);
-        const node = await services.nodes.resolveBySlug(
+      resolveNodeBySlug: builder.resolveNodeBySlug.effect(function* ({ input }) {
+        const services = yield* ApiServices;
+        return yield* services.nodes.resolveBySlug(
           input.slug,
           input.parentId === undefined ? undefined : input.parentId,
         );
-        return node ?? null;
       }),
 
       listValidators: builder.listValidators.handler(async ({ input, context }) => {

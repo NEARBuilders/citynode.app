@@ -478,7 +478,7 @@ export const contract = oc.router({
     .route({ method: "GET", path: "/nodes" })
     .input(
       z.object({
-        kind: z.string().optional(),
+        kind: z.string().min(1).optional(),
         parentId: z.string().nullable().optional(),
         tenantId: z.string().optional(),
       }),
@@ -494,7 +494,7 @@ export const contract = oc.router({
     .input(
       z.object({
         scope: z.enum(["roots", "all"]),
-        kind: z.string().optional(),
+        kind: z.string().min(1).optional(),
       }),
     )
     .output(z.array(NodeListSummarySchema)),
@@ -508,7 +508,7 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/nodes" })
     .input(
       z.object({
-        kind: z.string().optional(),
+        kind: z.string().min(1),
         slug: z.string(),
         name: z.string(),
         parentId: z.string().nullable().optional(),
@@ -529,7 +529,7 @@ export const contract = oc.router({
     })
     .input(
       z.object({
-        kind: z.string().optional(),
+        kind: z.string().min(1).optional(),
         slug: z.string(),
         name: z.string(),
         parentId: z.string().nullable().optional(),
@@ -545,7 +545,7 @@ export const contract = oc.router({
     .input(
       z.object({
         nodeId: z.string(),
-        kind: z.string().optional(),
+        kind: z.string().min(1).optional(),
         slug: z.string().optional(),
         name: z.string().optional(),
         parentId: z.string().nullable().optional(),

@@ -22,6 +22,7 @@ import type {
 } from "../discovery-contract";
 import type { AuthContext } from "../lib/auth";
 import { createLumaCalendars } from "./discovery-luma";
+import { nodeKindOf } from "./nodes";
 
 function canonicalActivityUrl(value: string) {
   const url = new URL(value);
@@ -175,7 +176,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
           name: node.name,
           slug: node.slug,
           parentId: node.parentId,
-          kind: node.metadata?.kind ?? null,
+          kind: nodeKindOf(node.metadata),
         };
       })
       .filter((p) => (!input.active || p.active) && (!input.upcoming || p.upcoming))

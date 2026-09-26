@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { daoContext, getPluginClient, teardown } from "../setup";
+import { daoContext, getPluginClient, orgContext, teardown } from "../setup";
 
 vi.mock("@/services/dao", () => ({
   verifyDaoMembership: vi.fn(async () => ({
@@ -13,6 +13,19 @@ vi.mock("@/services/dao", () => ({
 
 const ORG = "node-generalization-org";
 const OTHER_ORG = "node-generalization-other-org";
+
+function teamContext(userId: string, org: string, areas: string[]) {
+  const base = orgContext(userId, org) as Record<string, unknown>;
+  const team = { id: `team-${userId}`, name: "Node Ops", areas };
+  return {
+    ...base,
+    organization: {
+      ...(base.organization as Record<string, unknown>),
+      teams: [team],
+      activeTeamId: team.id,
+    },
+  };
+}
 
 describe("generalized node model", () => {
   beforeAll(async () => {
@@ -84,6 +97,47 @@ describe("generalized node model", () => {
         name: "Hostile Spawn",
         parentId: null,
         tenantId: tenant.id,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects standalone spawns from non-admin org members", async () => {
+    const member = await getPluginClient(teamContext("spawn-member", ORG, ["node-operations"]));
+    await expect(
+      member.spawnNode({
+        kind: "org",
+        slug: `spawn-member-standalone-${crypto.randomUUID().slice(0, 8)}`,
+        name: "Member Standalone Spawn",
+        parentId: null,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects grafting a child under another organization's node", async () => {
+    const owner = await getPluginClient(daoContext("spawn-graft-owner", ORG, "spawn-graft.near"));
+    const outsider = await getPluginClient(
+      teamContext("spawn-graft-outsider", OTHER_ORG, ["node-operations"]),
+    );
+    const suffix = crypto.randomUUID().slice(0, 8);
+
+    const tenant = await owner.createTenant({
+      name: "Graft Tenant",
+      accountId: `spawn-graft-${suffix}.near`,
+    });
+    const parent = await owner.spawnNode({
+      kind: "org",
+      slug: `spawn-graft-parent-${suffix}`,
+      name: "Graft Parent",
+      parentId: null,
+      tenantId: tenant.id,
+    });
+
+    await expect(
+      outsider.spawnNode({
+        kind: "user",
+        slug: `spawn-graft-child-${suffix}`,
+        name: "Graft Child",
+        parentId: parent.id,
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });

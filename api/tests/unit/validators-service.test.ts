@@ -40,15 +40,20 @@ interface TestServices {
 
 async function runService<A, E>(
   layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, E, never>,
-  fn: (svc: TestServices) => Promise<A>,
+  fn: (svc: TestServices) => Promise<A> | Effect.Effect<A, unknown, never>,
 ): Promise<A> {
   const effect = Effect.gen(function* () {
     const nodes = yield* NodesTag;
     const tenants = yield* TenantsTag;
     const validators = yield* ValidatorsTag;
-    return yield* Effect.tryPromise({
-      try: () => fn({ nodes, tenants, validators }),
-      catch: (error) => new TestRunError({ cause: error }),
+    return yield* Effect.suspend(() => {
+      const result = fn({ nodes, tenants, validators });
+      return Effect.isEffect(result)
+        ? result
+        : Effect.tryPromise({
+            try: () => result,
+            catch: (error) => new TestRunError({ cause: error }),
+          });
     });
   });
   return Effect.runPromise(Effect.provide(effect, layer));
@@ -56,15 +61,20 @@ async function runService<A, E>(
 
 async function squashServiceError<A, E>(
   layer: Layer.Layer<NodesTag | TenantsTag | ValidatorsTag, E, never>,
-  fn: (svc: TestServices) => Promise<A>,
+  fn: (svc: TestServices) => Promise<A> | Effect.Effect<A, unknown, never>,
 ): Promise<unknown> {
   const effect = Effect.gen(function* () {
     const nodes = yield* NodesTag;
     const tenants = yield* TenantsTag;
     const validators = yield* ValidatorsTag;
-    return yield* Effect.tryPromise({
-      try: () => fn({ nodes, tenants, validators }),
-      catch: (error) => new TestRunError({ cause: error }),
+    return yield* Effect.suspend(() => {
+      const result = fn({ nodes, tenants, validators });
+      return Effect.isEffect(result)
+        ? result
+        : Effect.tryPromise({
+            try: () => result,
+            catch: (error) => new TestRunError({ cause: error }),
+          });
     });
   });
   const exit = await Effect.runPromiseExit(Effect.provide(effect, layer));
@@ -82,13 +92,15 @@ describe("ValidatorsService", () => {
       accountId: "test.example.near",
       orgId: "org-1",
     });
-    const node = await svc.nodes.create({
-      kind: "city",
-      slug: "test-city",
-      name: "Test City",
-      parentId: null,
-      tenantId: tenant.id,
-    });
+    const node = await Effect.runPromise(
+      svc.nodes.spawn({
+        kind: "city",
+        slug: "test-city",
+        name: "Test City",
+        parentId: null,
+        tenantId: tenant.id,
+      }),
+    );
     return node.id;
   }
 
@@ -172,7 +184,7 @@ describe("ValidatorsService", () => {
       }),
     );
     const nodeA = await runService(layer, ({ nodes }) =>
-      nodes.create({
+      nodes.spawn({
         kind: "city",
         slug: "city-a",
         name: "City A",
@@ -181,7 +193,7 @@ describe("ValidatorsService", () => {
       }),
     );
     const nodeB = await runService(layer, ({ nodes }) =>
-      nodes.create({
+      nodes.spawn({
         kind: "city",
         slug: "city-b",
         name: "City B",
@@ -257,7 +269,7 @@ describe("ValidatorsService", () => {
       }),
     );
     const nodeA = await runService(layer, ({ nodes }) =>
-      nodes.create({
+      nodes.spawn({
         kind: "city",
         slug: "city-a",
         name: "City A",
@@ -266,7 +278,7 @@ describe("ValidatorsService", () => {
       }),
     );
     const nodeB = await runService(layer, ({ nodes }) =>
-      nodes.create({
+      nodes.spawn({
         kind: "city",
         slug: "city-b",
         name: "City B",
@@ -355,7 +367,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const country = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "country",
           slug: "testland",
           name: "Testland",
@@ -364,7 +376,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const state = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "state",
           slug: "north",
           name: "North",
@@ -373,7 +385,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const city = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "city",
           slug: "alpha",
           name: "Alpha",
@@ -404,7 +416,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const country = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "country",
           slug: "testland",
           name: "Testland",
@@ -413,7 +425,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const state = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "state",
           slug: "north",
           name: "North",
@@ -422,7 +434,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const city = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "city",
           slug: "alpha",
           name: "Alpha",
@@ -452,7 +464,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const city = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "city",
           slug: "alpha",
           name: "Alpha",
@@ -479,7 +491,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const country = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "country",
           slug: "testland",
           name: "Testland",
@@ -488,7 +500,7 @@ describe("ValidatorsService", () => {
         }),
       );
       const state = await runService(layer, ({ nodes }) =>
-        nodes.create({
+        nodes.spawn({
           kind: "state",
           slug: "north",
           name: "North",

@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
@@ -14,6 +14,8 @@ import { toOrpcError } from "../lib/errors";
 export type NodeKind = string;
 type ValidatorRole = (typeof validatorRoleEnum)["enumValues"][number];
 
+export type NodeEffect<T> = Effect.Effect<T, ORPCError<string, unknown>>;
+
 export interface NodeRecord {
   id: string;
   kind: NodeKind | null;
@@ -24,15 +26,6 @@ export interface NodeRecord {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface NodeInput {
-  kind?: NodeKind;
-  slug: string;
-  name: string;
-  parentId: string | null;
-  tenantId: string | null;
-  metadata?: Record<string, unknown>;
 }
 
 export interface NodeSpawnInput {
@@ -83,28 +76,32 @@ export interface SubtreeNode {
 }
 
 export interface NodesService {
-  spawn(input: NodeSpawnInput): Promise<NodeRecord>;
-  create(input: NodeInput): Promise<NodeRecord>;
-  list(filter?: NodeListFilter): Promise<NodeRecord[]>;
-  listSummaries(filter?: NodeListFilter): Promise<NodeListSummaryRecord[]>;
-  getById(id: string): Promise<NodeRecord | null>;
-  update(id: string, input: NodeUpdateInput): Promise<NodeRecord>;
-  delete(id: string): Promise<boolean>;
-  listRootNodes(): Promise<NodeRecord[]>;
-  listChildren(parentId: string): Promise<NodeRecord[]>;
-  resolveBySlug(slug: string, parentId?: string | null): Promise<NodeRecord | null>;
-  subtreeWithValidators(nodeId: string): Promise<SubtreeNode[]>;
+  spawn(input: NodeSpawnInput): NodeEffect<NodeRecord>;
+  list(filter?: NodeListFilter): NodeEffect<NodeRecord[]>;
+  listSummaries(filter?: NodeListFilter): NodeEffect<NodeListSummaryRecord[]>;
+  getById(id: string): NodeEffect<NodeRecord | null>;
+  update(id: string, input: NodeUpdateInput): NodeEffect<NodeRecord>;
+  delete(id: string): NodeEffect<boolean>;
+  listRootNodes(): NodeEffect<NodeRecord[]>;
+  listChildren(parentId: string): NodeEffect<NodeRecord[]>;
+  resolveBySlug(slug: string, parentId?: string | null): NodeEffect<NodeRecord | null>;
+  subtreeWithValidators(nodeId: string): NodeEffect<SubtreeNode[]>;
 }
 
 export class NodesTag extends Context.Service<NodesTag, NodesService>()("api/Nodes") {}
 
 type NodeRow = typeof nodesTable.$inferSelect;
 
+export function nodeKindOf(metadata: unknown): string | null {
+  const kind = (metadata as NodeMetadata | null | undefined)?.kind;
+  return typeof kind === "string" ? kind : null;
+}
+
 function toNodeRecord(row: NodeRow): NodeRecord {
   const metadata = (row.metadata ?? {}) as NodeMetadata;
   return {
     id: row.id,
-    kind: typeof metadata.kind === "string" ? metadata.kind : null,
+    kind: nodeKindOf(metadata),
     slug: row.slug,
     name: row.name,
     parentId: row.parentId,
@@ -120,20 +117,24 @@ function mergeKindMetadata(
   metadata: Record<string, unknown> | undefined,
 ): NodeMetadata {
   return {
-    ...(kind !== undefined && { kind }),
     ...(metadata ?? {}),
+    ...(kind !== undefined && { kind }),
   } as NodeMetadata;
 }
 
 const SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
-function validateSlug(slug: string): void {
-  if (!SLUG_REGEX.test(slug)) {
-    throw new ORPCError("BAD_REQUEST", {
+const query = <T>(run: () => Promise<T>): NodeEffect<T> =>
+  Effect.tryPromise({ try: run, catch: toOrpcError });
+
+function validateSlug(slug: string): NodeEffect<void> {
+  if (SLUG_REGEX.test(slug)) return Effect.void;
+  return Effect.fail(
+    new ORPCError("BAD_REQUEST", {
       message: "Invalid slug format",
       data: { hint: "Lowercase alphanumeric with hyphens or underscores only" },
-    });
-  }
+    }),
+  );
 }
 
 export const NodesLive = Layer.effect(
@@ -142,75 +143,73 @@ export const NodesLive = Layer.effect(
     const db = yield* DatabaseTag;
 
     const service: NodesService = {
-      spawn: async (input) => {
-        try {
-          validateSlug(input.slug);
+      spawn: (input) =>
+        Effect.gen(function* () {
+          yield* validateSlug(input.slug);
 
           if (input.tenantId) {
-            const tenant = await db
-              .select({ id: tenantsTable.id })
-              .from(tenantsTable)
-              .where(eq(tenantsTable.id, input.tenantId))
-              .limit(1);
+            const tenant = yield* query(() =>
+              db
+                .select({ id: tenantsTable.id })
+                .from(tenantsTable)
+                .where(eq(tenantsTable.id, input.tenantId!))
+                .limit(1),
+            );
             if (tenant.length === 0) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Tenant not found",
-                data: { resource: "tenant", resourceId: input.tenantId },
-              });
+              return yield* Effect.fail(
+                new ORPCError("NOT_FOUND", {
+                  message: "Tenant not found",
+                  data: { resource: "tenant", resourceId: input.tenantId },
+                }),
+              );
             }
           }
 
           if (input.parentId !== null) {
-            const parent = await db
-              .select({ id: nodesTable.id })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, input.parentId))
-              .limit(1);
+            const parent = yield* query(() =>
+              db
+                .select({ id: nodesTable.id })
+                .from(nodesTable)
+                .where(eq(nodesTable.id, input.parentId!))
+                .limit(1),
+            );
             if (parent.length === 0) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Parent node not found",
-                data: { resource: "node", resourceId: input.parentId },
-              });
+              return yield* Effect.fail(
+                new ORPCError("NOT_FOUND", {
+                  message: "Parent node not found",
+                  data: { resource: "node", resourceId: input.parentId },
+                }),
+              );
             }
           }
 
-          const [row] = await db
-            .insert(nodesTable)
-            .values({
-              slug: input.slug,
-              name: input.name,
-              parentId: input.parentId,
-              tenantId: input.tenantId ?? null,
-              metadata: mergeKindMetadata(input.kind, input.metadata),
-            })
-            .returning();
+          const [row] = yield* query(() =>
+            db
+              .insert(nodesTable)
+              .values({
+                slug: input.slug,
+                name: input.name,
+                parentId: input.parentId,
+                tenantId: input.tenantId ?? null,
+                metadata: mergeKindMetadata(input.kind, input.metadata),
+              })
+              .returning(),
+          );
 
           if (!row) {
-            throw new ORPCError("INTERNAL_SERVER_ERROR", {
-              message: "Node creation failed",
-            });
+            return yield* Effect.fail(
+              new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: "Node creation failed",
+              }),
+            );
           }
 
           return toNodeRecord(row);
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      create: async (input) => {
-        return service.spawn({
-          ...(input.kind !== undefined && { kind: input.kind }),
-          slug: input.slug,
-          name: input.name,
-          parentId: input.parentId,
-          tenantId: input.tenantId,
-          ...(input.metadata !== undefined && { metadata: input.metadata }),
-        });
-      },
-
-      list: async (filter) => {
-        try {
-          const conditions = [];
+      list: (filter) =>
+        Effect.gen(function* () {
+          const conditions: SQL[] = [];
           if (filter?.kind !== undefined) {
             conditions.push(sql`${nodesTable.metadata}->>'kind' = ${filter.kind}`);
           }
@@ -224,42 +223,44 @@ export const NodesLive = Layer.effect(
               conditions.push(eq(nodesTable.parentId, filter.parentId));
             }
           }
-          const rows =
+          const rows = yield* query(() =>
             conditions.length === 0
-              ? await db.select().from(nodesTable)
-              : await db
+              ? db.select().from(nodesTable)
+              : db
                   .select()
                   .from(nodesTable)
-                  .where(and(...conditions));
+                  .where(and(...conditions)),
+          );
           return rows.map(toNodeRecord);
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      listSummaries: async (filter) => {
-        try {
-          const nodes = await service.list(filter);
+      listSummaries: (filter) =>
+        Effect.gen(function* () {
+          const nodes = yield* service.list(filter);
           if (nodes.length === 0) return [];
 
           const nodeIds = nodes.map((node) => node.id);
-          const [childRows, validatorRows] = await Promise.all([
-            db
-              .select({
-                nodeId: nodesTable.parentId,
-                count: sql<number>`cast(count(*) as integer)`,
-              })
-              .from(nodesTable)
-              .where(inArray(nodesTable.parentId, nodeIds))
-              .groupBy(nodesTable.parentId),
-            db
-              .select({
-                nodeId: validatorsTable.nodeId,
-                count: sql<number>`cast(count(*) as integer)`,
-              })
-              .from(validatorsTable)
-              .where(inArray(validatorsTable.nodeId, nodeIds))
-              .groupBy(validatorsTable.nodeId),
+          const [childRows, validatorRows] = yield* Effect.all([
+            query(() =>
+              db
+                .select({
+                  nodeId: nodesTable.parentId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(nodesTable)
+                .where(inArray(nodesTable.parentId, nodeIds))
+                .groupBy(nodesTable.parentId),
+            ),
+            query(() =>
+              db
+                .select({
+                  nodeId: validatorsTable.nodeId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(validatorsTable)
+                .where(inArray(validatorsTable.nodeId, nodeIds))
+                .groupBy(validatorsTable.nodeId),
+            ),
           ]);
           const childrenByNode = new Map(
             childRows.flatMap((row) => (row.nodeId ? [[row.nodeId, row.count] as const] : [])),
@@ -273,195 +274,192 @@ export const NodesLive = Layer.effect(
             childrenCount: childrenByNode.get(node.id) ?? 0,
             validatorCount: validatorsByNode.get(node.id) ?? 0,
           }));
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      getById: async (id) => {
-        try {
-          const [row] = await db.select().from(nodesTable).where(eq(nodesTable.id, id)).limit(1);
+      getById: (id) =>
+        Effect.gen(function* () {
+          const [row] = yield* query(() =>
+            db.select().from(nodesTable).where(eq(nodesTable.id, id)).limit(1),
+          );
           return row ? toNodeRecord(row) : null;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      update: async (id, input) => {
-        try {
-          if (input.slug !== undefined) validateSlug(input.slug);
+      update: (id, input) =>
+        Effect.gen(function* () {
+          yield* input.slug !== undefined ? validateSlug(input.slug) : Effect.void;
           const patch: Record<string, unknown> = { updatedAt: new Date() };
           if (input.kind !== undefined || input.metadata !== undefined) {
-            const [current] = await db
-              .select({ metadata: nodesTable.metadata })
-              .from(nodesTable)
-              .where(eq(nodesTable.id, id))
-              .limit(1);
+            const [current] = yield* query(() =>
+              db
+                .select({ metadata: nodesTable.metadata })
+                .from(nodesTable)
+                .where(eq(nodesTable.id, id))
+                .limit(1),
+            );
             const existing = (current?.metadata ?? {}) as NodeMetadata;
-            const kind =
-              input.kind ?? (typeof existing.kind === "string" ? existing.kind : undefined);
+            const metadataKind = nodeKindOf(input.metadata);
+            const kind = input.kind ?? metadataKind ?? nodeKindOf(existing) ?? undefined;
             patch.metadata = mergeKindMetadata(kind, input.metadata);
           }
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
 
-          return await db.transaction(async (tx) => {
-            if (input.parentId !== undefined && input.parentId !== null) {
-              await tx.execute(sql`LOCK TABLE nodes IN SHARE ROW EXCLUSIVE MODE`);
+          return yield* query(() =>
+            db.transaction(async (tx) => {
+              if (input.parentId !== undefined && input.parentId !== null) {
+                await tx.execute(sql`LOCK TABLE nodes IN SHARE ROW EXCLUSIVE MODE`);
 
-              if (input.parentId === id) {
-                throw new ORPCError("BAD_REQUEST", {
-                  message: "Node cannot be its own parent",
-                });
+                if (input.parentId === id) {
+                  throw new ORPCError("BAD_REQUEST", {
+                    message: "Node cannot be its own parent",
+                  });
+                }
+
+                const parent = await tx
+                  .select({ id: nodesTable.id })
+                  .from(nodesTable)
+                  .where(eq(nodesTable.id, input.parentId!))
+                  .limit(1);
+                if (parent.length === 0) {
+                  throw new ORPCError("NOT_FOUND", {
+                    message: "Parent node not found",
+                    data: { resource: "node", resourceId: input.parentId },
+                  });
+                }
+
+                const descendantsResult = await tx.execute(sql`
+                  WITH RECURSIVE descendants AS (
+                    SELECT id, ARRAY[id] AS path
+                    FROM nodes
+                    WHERE id = ${id}
+                    UNION ALL
+                    SELECT n.id, descendants.path || n.id
+                    FROM nodes n
+                    INNER JOIN descendants ON n.parent_id = descendants.id
+                    WHERE NOT (n.id = ANY(descendants.path))
+                  )
+                  SELECT id
+                  FROM descendants
+                  WHERE id = ${input.parentId}
+                  LIMIT 1
+                `);
+                const descendants =
+                  (descendantsResult as { rows?: unknown }).rows ?? descendantsResult;
+                if (Array.isArray(descendants) && descendants.length > 0) {
+                  throw new ORPCError("BAD_REQUEST", {
+                    message: "Node cannot be moved below one of its descendants",
+                  });
+                }
               }
 
-              const parent = await tx
-                .select({ id: nodesTable.id })
-                .from(nodesTable)
-                .where(eq(nodesTable.id, input.parentId))
-                .limit(1);
-              if (parent.length === 0) {
+              const [row] = await tx
+                .update(nodesTable)
+                .set(patch)
+                .where(eq(nodesTable.id, id))
+                .returning();
+
+              if (!row) {
                 throw new ORPCError("NOT_FOUND", {
-                  message: "Parent node not found",
-                  data: { resource: "node", resourceId: input.parentId },
+                  message: "Node not found",
+                  data: { resource: "node", resourceId: id },
                 });
               }
 
-              const descendantsResult = await tx.execute(sql`
-                WITH RECURSIVE descendants AS (
-                  SELECT id, ARRAY[id] AS path
-                  FROM nodes
-                  WHERE id = ${id}
-                  UNION ALL
-                  SELECT n.id, descendants.path || n.id
-                  FROM nodes n
-                  INNER JOIN descendants ON n.parent_id = descendants.id
-                  WHERE NOT (n.id = ANY(descendants.path))
-                )
-                SELECT id
-                FROM descendants
-                WHERE id = ${input.parentId}
-                LIMIT 1
-              `);
-              const descendants =
-                (descendantsResult as { rows?: unknown }).rows ?? descendantsResult;
-              if (Array.isArray(descendants) && descendants.length > 0) {
-                throw new ORPCError("BAD_REQUEST", {
-                  message: "Node cannot be moved below one of its descendants",
-                });
-              }
-            }
+              return toNodeRecord(row);
+            }),
+          );
+        }),
 
-            const [row] = await tx
-              .update(nodesTable)
-              .set(patch)
+      delete: (id) =>
+        Effect.gen(function* () {
+          const rows = yield* query(() =>
+            db
+              .delete(nodesTable)
               .where(eq(nodesTable.id, id))
-              .returning();
-
-            if (!row) {
-              throw new ORPCError("NOT_FOUND", {
-                message: "Node not found",
-                data: { resource: "node", resourceId: id },
-              });
-            }
-
-            return toNodeRecord(row);
-          });
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
-
-      delete: async (id) => {
-        try {
-          const rows = await db
-            .delete(nodesTable)
-            .where(eq(nodesTable.id, id))
-            .returning({ deletedId: nodesTable.id });
+              .returning({ deletedId: nodesTable.id }),
+          );
           return rows.length > 0;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      listRootNodes: async () => {
-        try {
-          const rows = await db.select().from(nodesTable).where(isNull(nodesTable.parentId));
+      listRootNodes: () =>
+        Effect.gen(function* () {
+          const rows = yield* query(() =>
+            db.select().from(nodesTable).where(isNull(nodesTable.parentId)),
+          );
           return rows.map(toNodeRecord);
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      listChildren: async (parentId) => {
-        try {
-          const rows = await db.select().from(nodesTable).where(eq(nodesTable.parentId, parentId));
+      listChildren: (parentId) =>
+        Effect.gen(function* () {
+          const rows = yield* query(() =>
+            db.select().from(nodesTable).where(eq(nodesTable.parentId, parentId)),
+          );
           return rows.map(toNodeRecord);
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      resolveBySlug: async (slug, parentId) => {
-        try {
+      resolveBySlug: (slug, parentId) =>
+        Effect.gen(function* () {
           const conditions = [eq(nodesTable.slug, slug)];
           if (parentId === null) {
             conditions.push(isNull(nodesTable.parentId));
           } else if (parentId !== undefined) {
             conditions.push(eq(nodesTable.parentId, parentId));
           }
-          const matches = await db
-            .select()
-            .from(nodesTable)
-            .where(and(...conditions))
-            .orderBy(sql`${nodesTable.parentId} IS NOT NULL`)
-            .limit(parentId === undefined ? 2 : 1);
+          const matches = yield* query(() =>
+            db
+              .select()
+              .from(nodesTable)
+              .where(and(...conditions))
+              .orderBy(sql`${nodesTable.parentId} IS NOT NULL`)
+              .limit(parentId === undefined ? 2 : 1),
+          );
           const row = matches[0];
           if (parentId === undefined && matches.length > 1 && row?.parentId !== null) {
             return null;
           }
           return row ? toNodeRecord(row) : null;
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
 
-      subtreeWithValidators: async (nodeId) => {
-        try {
-          const subtreeResult = await db.execute(sql`
-            WITH RECURSIVE subtree AS (
-              SELECT id, metadata->>'kind' AS kind, slug, name, parent_id, 0 AS depth, ARRAY[id] AS path
-              FROM nodes
-              WHERE id = ${nodeId}
-              UNION ALL
-              SELECT n.id, n.metadata->>'kind', n.slug, n.name, n.parent_id, subtree.depth + 1,
-                subtree.path || n.id
-              FROM nodes n
-              INNER JOIN subtree ON n.parent_id = subtree.id
-              WHERE NOT (n.id = ANY(subtree.path))
-            )
-            SELECT id, kind, slug, name, parent_id FROM subtree
-            ORDER BY depth
-          `);
+      subtreeWithValidators: (nodeId) =>
+        Effect.gen(function* () {
+          const subtreeResult = yield* query(() =>
+            db.execute(sql`
+              WITH RECURSIVE subtree AS (
+                SELECT id, metadata->>'kind' AS kind, slug, name, parent_id, 0 AS depth, ARRAY[id] AS path
+                FROM nodes
+                WHERE id = ${nodeId}
+                UNION ALL
+                SELECT n.id, n.metadata->>'kind', n.slug, n.name, n.parent_id, subtree.depth + 1,
+                  subtree.path || n.id
+                FROM nodes n
+                INNER JOIN subtree ON n.parent_id = subtree.id
+                WHERE NOT (n.id = ANY(subtree.path))
+              )
+              SELECT id, kind, slug, name, parent_id FROM subtree
+              ORDER BY depth
+            `),
+          );
 
           const rows = (subtreeResult as { rows?: unknown }).rows ?? subtreeResult;
           if (!Array.isArray(rows) || rows.length === 0) return [];
 
           const ids = (rows as Array<{ id: string }>).map((r) => r.id);
 
-          const validatorRows = await db
-            .select({
-              id: validatorsTable.id,
-              nodeId: validatorsTable.nodeId,
-              accountId: validatorsTable.accountId,
-              network: validatorsTable.network,
-              protocol: validatorsTable.protocol,
-              role: validatorsTable.role,
-              isDefault: validatorsTable.isDefault,
-            })
-            .from(validatorsTable)
-            .where(inArray(validatorsTable.nodeId, ids));
+          const validatorRows = yield* query(() =>
+            db
+              .select({
+                id: validatorsTable.id,
+                nodeId: validatorsTable.nodeId,
+                accountId: validatorsTable.accountId,
+                network: validatorsTable.network,
+                protocol: validatorsTable.protocol,
+                role: validatorsTable.role,
+                isDefault: validatorsTable.isDefault,
+              })
+              .from(validatorsTable)
+              .where(inArray(validatorsTable.nodeId, ids)),
+          );
 
           const validatorsByNode = new Map<string, SubtreeValidator[]>();
           for (const v of validatorRows) {
@@ -493,10 +491,7 @@ export const NodesLive = Layer.effect(
             parentId: r.parent_id,
             validators: validatorsByNode.get(r.id) ?? [],
           }));
-        } catch (error) {
-          throw toOrpcError(error);
-        }
-      },
+        }),
     };
 
     return service;

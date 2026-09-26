@@ -6,13 +6,13 @@ import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
-  type NodeMetadata,
   nodes as nodesTable,
   type tenantStatus,
   tenants as tenantsTable,
   validators as validatorsTable,
 } from "../db/schema";
 import { isUniqueViolation, toOrpcError } from "../lib/errors";
+import { nodeKindOf } from "./nodes";
 
 export type TenantStatus = (typeof tenantStatus)["enumValues"][number];
 
@@ -276,10 +276,7 @@ export const TenantsLive = Layer.effect(
                 row.nodeSlug && row.nodeName
                   ? {
                       slug: row.nodeSlug,
-                      kind:
-                        typeof (row.nodeMetadata as NodeMetadata | null)?.kind === "string"
-                          ? ((row.nodeMetadata as NodeMetadata).kind as string)
-                          : null,
+                      kind: nodeKindOf(row.nodeMetadata),
                       name: row.nodeName,
                     }
                   : null,
@@ -684,8 +681,7 @@ export const TenantsLive = Layer.effect(
                   data: { resource: "node", resourceId: input.parentId },
                 });
               }
-              const metadata = (parent.metadata ?? {}) as NodeMetadata;
-              parentKind = typeof metadata.kind === "string" ? metadata.kind : null;
+              parentKind = nodeKindOf(parent.metadata);
             }
 
             const parentIsValid =

@@ -23,9 +23,10 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
-import { BackLink, humanize, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
+import { BackLink, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import { NodeBindings } from "./-node-bindings";
 import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
 import { NodeValidators } from "./-node-validators";
@@ -96,7 +97,7 @@ function AdminNodeDetail() {
         description={
           parent ? (
             <>
-              {node.kind ? humanize(node.kind) : "Node"} in{" "}
+              {nodeKindLabel(node.kind, "Node")} in{" "}
               <Link
                 to="/admin/nodes/$nodeId"
                 params={{ nodeId: parent.id }}
@@ -107,7 +108,7 @@ function AdminNodeDetail() {
               </Link>
             </>
           ) : (
-            node.kind && humanize(node.kind)
+            nodeKindLabel(node.kind, "Node")
           )
         }
         actions={
@@ -219,7 +220,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
                     <span className="min-w-0 truncate">{child.name}</span>
                   </ItemTitle>
                   <ItemDescription>
-                    {child.kind ? humanize(child.kind) : "Node"} ·{" "}
+                    {nodeKindLabel(child.kind, "Node")} ·{" "}
                     <span className="font-mono break-all">{child.slug}</span>
                   </ItemDescription>
                 </ItemContent>

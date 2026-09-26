@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import {
   type AdminNodeListKind,
@@ -115,7 +116,7 @@ function AdminNodes() {
         header: "Kind",
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {row.original.node.kind ? humanize(row.original.node.kind) : "—"}
+            {nodeKindLabel(row.original.node.kind, "—")}
           </span>
         ),
       },
@@ -277,7 +278,7 @@ function AdminNodes() {
                       <span className="min-w-0 truncate">{row.node.name}</span>
                     </ItemTitle>
                     <ItemDescription>
-                      {row.node.kind ? humanize(row.node.kind) : "Node"}
+                      {nodeKindLabel(row.node.kind, "Node")}
                       {row.parent ? ` in ${row.parent.name}` : ""} · {row.validatorCount}{" "}
                       {row.validatorCount === 1 ? "validator" : "validators"}
                     </ItemDescription>

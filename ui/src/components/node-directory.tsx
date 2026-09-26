@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 import { buildTenantUrl } from "@/app";
+import { nodeKindLabel } from "@/lib/node-kind";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
 
@@ -31,12 +32,6 @@ interface NodeDirectoryProps {
   linkTo?: "/stake" | "/n/$slug";
   linkSearch?: (node: NodeDirectoryNode) => { node?: string } | undefined;
 }
-
-const KIND_LABELS: Record<string, string> = {
-  country: "Country",
-  state: "State",
-  city: "City",
-};
 
 function KindIcon({ kind, className }: { kind: string | null; className?: string }) {
   if (kind === "country") return <GlobeHemisphereWestIcon className={className} />;
@@ -94,7 +89,7 @@ export function NodeDirectory({
             <span className="flex shrink-0 items-center gap-2">
               {validatorNodeIds?.has(node.id) && <Badge variant="success">Validator</Badge>}
               <Badge variant="secondary" className="hidden sm:inline-flex">
-                {node.kind ? (KIND_LABELS[node.kind] ?? node.kind) : "Community"}
+                {nodeKindLabel(node.kind)}
               </Badge>
               <CaretRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </span>

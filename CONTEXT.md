@@ -1,6 +1,6 @@
 # City Node
 
-A geographic node in the City Node network, owned by a node DAO and optionally backed by a staking pool.
+A node in the City Node network — a self-referencing tree where `parentId` is the only hierarchy axis and any kind of community (geo, org, user, zone root) is the same shape. Geographic nodes are owned by a node DAO and optionally backed by a staking pool; the kind label lives in node metadata.
 
 ## Language
 
