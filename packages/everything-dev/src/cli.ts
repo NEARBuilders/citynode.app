@@ -1,4 +1,4 @@
-import { watch } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import * as p from "@clack/prompts";
@@ -835,32 +835,41 @@ async function main() {
         console.log(colors.dim(`  No matching log lines in ${logsResult.logFile}.`));
       }
       if (opts.follow) {
-        const filter = opts.service;
-        let byteOffset = 0;
-        for (const line of logsResult.lines) byteOffset += Buffer.byteLength(line, "utf8") + 1;
-        const followMatch = (line: string): boolean => {
-          if (!filter) return true;
-          const source = /\] \[([^\]]+)\] \[(?:OUT|ERR)\] /.exec(line)?.[1];
-          return source === filter || source === `plugin:${filter}`;
-        };
-        const watcher = watch(logsResult.logFile, (event) => {
-          if (event !== "change") return;
-          void readFile(logsResult.logFile, "utf8").then((text) => {
-            const newLines = text
-              .slice(byteOffset)
-              .split("\n")
-              .filter((line) => line.length > 0 && followMatch(line));
-            byteOffset = Buffer.byteLength(text, "utf8");
-            for (const line of newLines) {
-              console.log(line);
-            }
+        if (logsResult.logFile === "unknown" || !existsSync(logsResult.logFile)) {
+          console.log(colors.dim("  No log file to follow — nothing was found on disk."));
+        } else {
+          const filter = opts.service;
+          let byteOffset = 0;
+          for (const line of logsResult.lines) byteOffset += Buffer.byteLength(line, "utf8") + 1;
+          const followMatch = (line: string): boolean => {
+            if (!filter) return true;
+            const source = /\] \[([^\]]+)\] \[(?:OUT|ERR)\] /.exec(line)?.[1];
+            return source === filter || source === `plugin:${filter}`;
+          };
+          const watcher = watch(logsResult.logFile, (event) => {
+            if (event !== "change") return;
+            void readFile(logsResult.logFile, "utf8")
+              .then((text) => {
+                const newLines = text
+                  .slice(byteOffset)
+                  .split("\n")
+                  .filter((line) => line.length > 0 && followMatch(line));
+                byteOffset = Buffer.byteLength(text, "utf8");
+                for (const line of newLines) {
+                  console.log(line);
+                }
+              })
+              .catch(() => {
+                // the followed file was rotated or deleted — stop following
+                watcher.close();
+              });
           });
-        });
-        console.log(colors.dim("  Following — Ctrl+C to stop."));
-        process.on("SIGINT", () => {
-          watcher.close();
-          process.exit(0);
-        });
+          console.log(colors.dim("  Following — Ctrl+C to stop."));
+          process.on("SIGINT", () => {
+            watcher.close();
+            process.exit(0);
+          });
+        }
       }
       return;
     }

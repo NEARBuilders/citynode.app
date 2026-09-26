@@ -44,6 +44,21 @@ describe("mergeGeneratedOverFileEnv", () => {
 
     expect(merged.CORS_ORIGIN).toBe("http://localhost:3008");
   });
+
+  it("descriptor env rides the generated tier — it loses to the shell tier (#206)", () => {
+    // Pins the orchestrator fix: descriptor.env is folded into the generated
+    // tier BEFORE composeSpawnEnv — it is never Object.assigned afterwards,
+    // which used to let it outrank the shell tier (and the generated-owned
+    // keys) silently.
+    const descriptorEnv = { NODE_OPTIONS: "--conditions=development" };
+    const generatedEnv = { BASE_URL: "http://localhost:4100" };
+    const shellEnv = { NODE_OPTIONS: "--smol" };
+
+    const merged = mergeGeneratedOverFileEnv({ ...generatedEnv, ...descriptorEnv }, {}, shellEnv);
+
+    expect(merged.NODE_OPTIONS).toBe("--smol");
+    expect(merged.BASE_URL).toBe("http://localhost:4100");
+  });
 });
 
 describe("composeSpawnEnv", () => {

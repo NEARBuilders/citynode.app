@@ -39,13 +39,30 @@ interface PoolLike {
  * timeout stays off unless DB_STATEMENT_TIMEOUT_MS is set (long migrations and
  * analytical queries must not break).
  */
+/**
+ * Parses a millisecond env value for a Postgres `-c` timeout setting.
+ * A explicit `0` disables the timeout (Postgres semantics); garbage throws —
+ * a typo must fail the boot loudly, never silently become the default.
+ */
+function timeoutMsEnv(name: string, fallbackMs: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallbackMs;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(
+      `[db] Invalid ${name}="${raw}" — must be a non-negative number of milliseconds (0 disables the timeout).`,
+    );
+  }
+  return parsed;
+}
+
 function connectionOptions(namespace: string | undefined): string {
   const settings = [
     ...(namespace ? [`-c search_path="${namespace}",public`] : []),
-    `-c lock_timeout=${Number(process.env.DB_LOCK_TIMEOUT_MS) || 10_000}`,
-    `-c idle_in_transaction_session_timeout=${Number(process.env.DB_IDLE_TX_TIMEOUT_MS) || 30_000}`,
+    `-c lock_timeout=${timeoutMsEnv("DB_LOCK_TIMEOUT_MS", 10_000)}`,
+    `-c idle_in_transaction_session_timeout=${timeoutMsEnv("DB_IDLE_TX_TIMEOUT_MS", 30_000)}`,
     ...(process.env.DB_STATEMENT_TIMEOUT_MS
-      ? [`-c statement_timeout=${Number(process.env.DB_STATEMENT_TIMEOUT_MS)}`]
+      ? [`-c statement_timeout=${timeoutMsEnv("DB_STATEMENT_TIMEOUT_MS", 0)}`]
       : []),
   ];
   return settings.join(" ");

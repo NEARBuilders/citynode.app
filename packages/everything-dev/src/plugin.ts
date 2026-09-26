@@ -388,14 +388,17 @@ export default createPlugin({
             projectDir: base.configDir,
             loadRuntimeConfig: async () =>
               (await loadResolvedConfig({ cwd: base.configDir }))?.runtime ?? null,
-            loadEnv: () => {
-              void projectEnv.load(base.configDir).pipe(
+            loadEnv: () =>
+              projectEnv.load(base.configDir).pipe(
                 Effect.catchTag("EnvLoadError", (error) =>
-                  Effect.logWarning(`[env] failed to load .env: ${error.cause}`),
+                  Effect.fail(
+                    new Error(
+                      `failed to load .env: ${error.cause instanceof Error ? error.cause.message : String(error.cause)}`,
+                    ),
+                  ),
                 ),
                 Effect.runPromise,
-              );
-            },
+              ),
           }),
           makeDrizzleKitLive({
             projectDir: base.configDir,
