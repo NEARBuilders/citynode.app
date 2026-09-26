@@ -653,7 +653,7 @@ export function ActivityCard({
   variant?: "list" | "detail";
 }) {
   const tile = eventDateTile(activity);
-  const time = eventTimeRange(activity);
+  const time = useClientValue(() => eventTimeRange(activity), null);
   const cancelled = activity.status === "cancelled";
   return (
     <article className="flex flex-col gap-4">
