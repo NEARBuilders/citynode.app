@@ -91,6 +91,53 @@ export function getDatabaseUrlSecretName(slug: string): string {
 
 export const DUPLICATE_OBJECT_SQLSTATES: readonly string[] = ["42710", "42701", "42P07"];
 
+/**
+ * pg_catalog unique indexes that can surface a concurrent-DDL race as SQLSTATE
+ * 23505 instead of a duplicate-object class. When two connections run
+ * `CREATE TABLE <name>` at the same time, the loser fails its insert into
+ * `pg_type` ("duplicate key value violates unique constraint
+ * `pg_type_typname_nsp_index`") rather than seeing 42P07, because the winner's
+ * table is not yet committed. The same shape exists for schemas and other
+ * relations.
+ */
+const CONCURRENT_DDL_CONSTRAINTS: readonly string[] = [
+  "pg_type_typname_nsp_index",
+  "pg_namespace_nspname_index",
+  "pg_class_relname_nsp_index",
+];
+
+/**
+ * Whether a SQLSTATE 23505 unique violation is the concurrent-DDL catalog
+ * collision signature rather than a data-level constraint on a user table.
+ * Data-level violations must keep failing loudly; only the pg_catalog indexes
+ * above are treated as duplicate-DDL tolerance candidates.
+ */
+export function isConcurrentDdlUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let i = 0; i < 6 && current; i++) {
+    if (typeof current === "object" && current !== null) {
+      const { code, constraint, message } = current as {
+        code?: unknown;
+        constraint?: unknown;
+        message?: unknown;
+      };
+      if (code === "23505") {
+        if (typeof constraint === "string" && CONCURRENT_DDL_CONSTRAINTS.includes(constraint)) {
+          return true;
+        }
+        if (
+          typeof message === "string" &&
+          CONCURRENT_DDL_CONSTRAINTS.some((name) => message.includes(name))
+        ) {
+          return true;
+        }
+      }
+    }
+    current = (current as { cause?: unknown })?.cause;
+  }
+  return false;
+}
+
 const RETRYABLE_SQLSTATES: ReadonlySet<string> = new Set([
   "42P06",
   "42710",
@@ -123,6 +170,37 @@ export function isRetryableMigrationError(error: unknown): boolean {
       const code = (current as { code?: unknown }).code;
       if (typeof code === "string") {
         if (RETRYABLE_SQLSTATES.has(code)) return true;
+        if (code.startsWith("08")) return true;
+        if (RETRYABLE_DRIVER_CODES.has(code)) return true;
+      }
+    }
+    current = (current as { cause?: unknown })?.cause;
+  }
+  return false;
+}
+
+const RETRYABLE_STATEMENT_SQLSTATES: ReadonlySet<string> = new Set([
+  "40001", // serialization_failure
+  "40P01", // deadlock_detected
+  "55P03", // lock_not_available
+]);
+
+/**
+ * Decide whether a failed migration *statement* (inside its transaction) is
+ * worth retrying. Deliberately narrower than `isRetryableMigrationError`:
+ * duplicate-object classes are tolerated at the SAVEPOINT level, and a 23505
+ * is either the concurrent-DDL catalog collision (also tolerated) or a
+ * deterministic data-level violation (retrying is pointless) — so only
+ * lock/serialization/transient-connection states justify re-running the
+ * transaction.
+ */
+export function isRetryableMigrationExecutionError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let i = 0; i < 6 && current; i++) {
+    if (typeof current === "object" && current !== null) {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === "string") {
+        if (RETRYABLE_STATEMENT_SQLSTATES.has(code)) return true;
         if (code.startsWith("08")) return true;
         if (RETRYABLE_DRIVER_CODES.has(code)) return true;
       }

@@ -7,7 +7,9 @@ import {
   DUPLICATE_OBJECT_SQLSTATES,
   extractExpectedTables,
   getMigrationStorage,
+  isConcurrentDdlUniqueViolation,
   isRetryableMigrationError,
+  isRetryableMigrationExecutionError,
   type MigrationStorage,
   toSqlArray,
 } from "./core";
@@ -80,6 +82,20 @@ function isDuplicateObjectError(
     current = (current as { cause?: unknown })?.cause;
   }
   return false;
+}
+
+/**
+ * Whether a failed migration statement should be treated as duplicate-DDL
+ * tolerance: either an explicit duplicate-object class, or the concurrent-DDL
+ * catalog collision (SQLSTATE 23505 on a pg_catalog unique index) that two
+ * booting processes can produce when they run the same `CREATE TABLE` against
+ * a fresh database at the same time.
+ */
+function isTolerableDuplicateDdl(
+  error: unknown,
+  codes: readonly string[] = DEFAULT_DUPLICATE_SQLSTATES,
+): boolean {
+  return isDuplicateObjectError(error, codes) || isConcurrentDdlUniqueViolation(error);
 }
 
 /**
@@ -223,9 +239,10 @@ function journalRef(s: MigrationStorage): ReturnType<typeof sql> {
  * Undefined `schemaName` means public-schema (api) or dedicated-DB (auth) topology.
  *
  * Reliability floor: per-migration transaction with the journal insert,
- * SAVEPOINT-based duplicate-DDL tolerance, retryable-SQLSTATE backoff on journal
- * init, hash-tracked idempotence with a preflight that records fully-overlapped
- * migrations as applied.
+ * SAVEPOINT-based duplicate-DDL tolerance (including the concurrent-DDL catalog
+ * collisions two booting processes can produce), retryable-SQLSTATE backoff on
+ * journal init and on each migration transaction, hash-tracked idempotence with
+ * a preflight that records fully-overlapped migrations as applied.
  */
 export function runMigrations(
   db: MigrationDatabase,
@@ -295,38 +312,49 @@ export function runMigrations(
 
       yield* Effect.logInfo(`[Database] Applying migration: ${migration.tag}`);
 
-      yield* Effect.tryPromise({
-        try: () =>
-          db.transaction(async (tx) => {
-            for (const [i, statement] of migration.sql.entries()) {
-              const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
-              const sp = `stmt_${i}`;
-              await tx.execute(sql.raw(`SAVEPOINT ${sp}`));
-              try {
-                await tx.execute(sql.raw(stmt));
-              } catch (cause) {
-                if (isDuplicateObjectError(cause, duplicateSqlStates)) {
-                  await tx.execute(sql.raw(`ROLLBACK TO SAVEPOINT ${sp}`));
-                  continue;
+      yield* Effect.retry(
+        Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx) => {
+              for (const [i, statement] of migration.sql.entries()) {
+                const stmt = schemaName ? statement.replace(/"public"\./g, "") : statement;
+                const sp = `stmt_${i}`;
+                await tx.execute(sql.raw(`SAVEPOINT ${sp}`));
+                try {
+                  await tx.execute(sql.raw(stmt));
+                } catch (cause) {
+                  if (isTolerableDuplicateDdl(cause, duplicateSqlStates)) {
+                    await tx.execute(sql.raw(`ROLLBACK TO SAVEPOINT ${sp}`));
+                    continue;
+                  }
+                  throw new DatabaseError({
+                    stage: "migration",
+                    migrationTag: migration.tag,
+                    statementIndex: i,
+                    cause,
+                  });
                 }
-                throw new DatabaseError({
-                  stage: "migration",
-                  migrationTag: migration.tag,
-                  statementIndex: i,
-                  cause,
-                });
+                await tx.execute(sql.raw(`RELEASE SAVEPOINT ${sp}`));
               }
-              await tx.execute(sql.raw(`RELEASE SAVEPOINT ${sp}`));
-            }
-            await tx.execute(
-              sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
-            );
-          }),
-        catch: (cause) =>
-          cause instanceof DatabaseError
-            ? cause
-            : new DatabaseError({ stage: "migration", migrationTag: migration.tag, cause }),
-      });
+              await tx.execute(
+                sql`INSERT INTO ${ref} (hash, created_at) VALUES (${migration.hash}, ${migration.when})`,
+              );
+            }),
+          catch: (cause) =>
+            cause instanceof DatabaseError
+              ? cause
+              : new DatabaseError({ stage: "migration", migrationTag: migration.tag, cause }),
+        }),
+        {
+          // Two booting processes can deadlock or lose a serialization race on
+          // the same fresh database — the transaction rolls back cleanly, so
+          // re-running it (by then the concurrent journal insert is visible)
+          // converges instead of failing the plugin load.
+          schedule: Schedule.spaced("500 millis"),
+          times: 3,
+          while: isRetryableMigrationExecutionError,
+        },
+      );
       applied++;
     }
 

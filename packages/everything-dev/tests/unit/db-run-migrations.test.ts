@@ -8,6 +8,8 @@ import { migrate as proposalsMigrate } from "../../../../plugins/proposals/src/d
 import { migrate as votesMigrate } from "../../../../plugins/votes/src/db/migrate";
 import {
   type DatabaseError,
+  isConcurrentDdlUniqueViolation,
+  isRetryableMigrationExecutionError,
   type Migration,
   type MigrationDatabase,
   type MigrationStorage,
@@ -139,5 +141,155 @@ describe("db migration runners (008 characterization)", () => {
     );
     expect(report.applied).toBe(1);
     expect(calls).toBeGreaterThanOrEqual(6);
+  });
+});
+
+function pgUniqueViolation(constraint: string): Error {
+  const err = new Error(`duplicate key value violates unique constraint "${constraint}"`);
+  (err as { code?: string }).code = "23505";
+  (err as { constraint?: string }).constraint = constraint;
+  return err;
+}
+
+function queryText(query: unknown): string {
+  if (typeof query === "string") return query;
+  const chunks = (query as { queryChunks?: unknown[] } | undefined)?.queryChunks;
+  if (Array.isArray(chunks)) {
+    return chunks
+      .map((chunk) =>
+        typeof chunk === "string" ? chunk : ((chunk as { value?: string[] })?.value ?? []).join(""),
+      )
+      .join("");
+  }
+  return "";
+}
+
+/**
+ * A MigrationDatabase whose transaction hands the runner a tx that throws the
+ * given pg error the first time the named table's DDL statement runs — the
+ * loser's view of a concurrent `CREATE TABLE` against a fresh database.
+ */
+function racingLoser(
+  db: ReturnType<typeof makeDb>,
+  tableName: string,
+  throwOnce: () => Error,
+): MigrationDatabase {
+  let armed = true;
+  return {
+    execute: (query) => db.execute(query as never),
+    transaction: (fn) =>
+      db.transaction(
+        (tx) =>
+          fn({
+            execute: async (query: unknown) => {
+              const text = queryText(query);
+              if (armed && text.includes(`"${tableName}"`)) {
+                armed = false;
+                throw throwOnce();
+              }
+              return (tx as { execute: (q: unknown) => Promise<unknown> }).execute(query);
+            },
+          } as never) as never,
+      ),
+  } as never;
+}
+
+describe("concurrent-DDL race tolerance (23505 on pg_catalog unique indexes)", () => {
+  it("loser of a concurrent CREATE TABLE (23505 on pg_type_typname_nsp_index) is tolerated and journaled", async () => {
+    const db = makeDb();
+    const loser = racingLoser(db, "t_race", () => pgUniqueViolation("pg_type_typname_nsp_index"));
+
+    const report = await Effect.runPromise(
+      runMigrations(loser, [migration(0, "race", ['CREATE TABLE "t_race" (id int)'])], {
+        journal: JOURNAL,
+      }),
+    );
+    expect(report.applied).toBe(1);
+
+    const journal = (await db.execute(sql`SELECT hash FROM "drizzle"."__drizzle_migrations"`)) as {
+      rows: { hash: string }[];
+    };
+    expect(journal.rows.map((r) => r.hash)).toContain("hash-race");
+  });
+
+  it("data-level 23505 on a user-table constraint still fails the migration", async () => {
+    const db = makeDb();
+    const loser = racingLoser(db, "t_session", () => pgUniqueViolation("t_session_token_key"));
+
+    await expect(
+      Effect.runPromise(
+        runMigrations(loser, [migration(0, "data", ['CREATE TABLE "t_session" (id int)'])], {
+          journal: JOURNAL,
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("retryable mid-migration SQLSTATE (40P01 deadlock) is retried and then applies", async () => {
+    const db = makeDb();
+    let deadlocks = 1;
+    const loser = racingLoser(db, "t_deadlock", () => {
+      deadlocks--;
+      const err = new Error("deadlock detected");
+      (err as { code?: string }).code = "40P01";
+      return err;
+    });
+
+    const report = await Effect.runPromise(
+      runMigrations(loser, [migration(0, "deadlock", ['CREATE TABLE "t_deadlock" (id int)'])], {
+        journal: JOURNAL,
+      }),
+    );
+    expect(report.applied).toBe(1);
+    expect(deadlocks).toBe(0);
+
+    const exists = (await db.execute(
+      sql`SELECT table_name FROM information_schema.tables WHERE table_name = 't_deadlock'`,
+    )) as { rows: unknown[] };
+    expect(exists.rows).toHaveLength(1);
+  });
+});
+
+describe("isConcurrentDdlUniqueViolation", () => {
+  it("matches pg_catalog unique-index collisions, including through causes", () => {
+    expect(isConcurrentDdlUniqueViolation(pgUniqueViolation("pg_type_typname_nsp_index"))).toBe(
+      true,
+    );
+    expect(isConcurrentDdlUniqueViolation(pgUniqueViolation("pg_namespace_nspname_index"))).toBe(
+      true,
+    );
+    expect(isConcurrentDdlUniqueViolation(pgUniqueViolation("pg_class_relname_nsp_index"))).toBe(
+      true,
+    );
+    expect(
+      isConcurrentDdlUniqueViolation({ cause: pgUniqueViolation("pg_type_typname_nsp_index") }),
+    ).toBe(true);
+  });
+
+  it("does not match other states or user-table constraints", () => {
+    expect(isConcurrentDdlUniqueViolation(pgUniqueViolation("t_session_token_key"))).toBe(false);
+    const duplicate = new Error('relation "t" already exists');
+    (duplicate as { code?: string }).code = "42P07";
+    expect(isConcurrentDdlUniqueViolation(duplicate)).toBe(false);
+    expect(isConcurrentDdlUniqueViolation(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("isRetryableMigrationExecutionError", () => {
+  it("matches deadlock/serialization/lock states and connection failures", () => {
+    for (const code of ["40001", "40P01", "55P03", "08001", "ECONNREFUSED"]) {
+      const err = new Error("transient");
+      (err as { code?: string }).code = code;
+      expect(isRetryableMigrationExecutionError(err), code).toBe(true);
+    }
+  });
+
+  it("does not match duplicate/unique classes — those are tolerance or fatal, not retry", () => {
+    expect(isRetryableMigrationExecutionError(pgUniqueViolation("pg_type_typname_nsp_index"))).toBe(
+      false,
+    );
+    const duplicate = new Error('relation "t" already exists');
+    (duplicate as { code?: string }).code = "42P07";
+    expect(isRetryableMigrationExecutionError(duplicate)).toBe(false);
   });
 });
