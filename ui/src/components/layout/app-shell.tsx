@@ -37,7 +37,10 @@ function AppShellFrame({ runtimeConfig, isAdmin = false, pluginNav, children }: 
     <SidebarProvider className="min-h-0 flex-1">
       <AppSidebar items={items} appName={appName} pathname={pathname} />
       <SidebarInset className="min-h-0 overflow-hidden">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="app-shell-main">
+        <div
+          className="sticky-offset-header flex min-h-0 flex-1 flex-col overflow-y-auto"
+          data-testid="app-shell-main"
+        >
           <AppHeader runtimeConfig={runtimeConfig} />
           <div className="flex-1">{children ?? <Outlet />}</div>
         </div>

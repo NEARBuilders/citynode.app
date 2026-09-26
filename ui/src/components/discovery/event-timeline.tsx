@@ -23,34 +23,39 @@ function scrollParent(node: HTMLElement) {
 
 function useStuck() {
   const sentinel = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLHeadingElement>(null);
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
     const node = sentinel.current;
     if (!node || typeof IntersectionObserver === "undefined") return;
+    const offset = header.current
+      ? Number.parseFloat(getComputedStyle(header.current).top) || 0
+      : 0;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
         const top = entry.rootBounds?.top ?? 0;
         setStuck(!entry.isIntersecting && entry.boundingClientRect.top < top);
       },
-      { root: scrollParent(node), threshold: 0 },
+      { root: scrollParent(node), threshold: 0, rootMargin: `-${offset}px 0px 0px 0px` },
     );
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-  return { sentinel, stuck };
+  return { sentinel, header, stuck };
 }
 
 function DateHeader<T>({ group }: { group: EventDateGroup<T> }) {
-  const { sentinel, stuck } = useStuck();
+  const { sentinel, header, stuck } = useStuck();
   return (
     <>
       <div ref={sentinel} aria-hidden className="h-px" />
       <h3
+        ref={header}
         data-testid="activity-editor.date-group"
         data-stuck={stuck || undefined}
         className={cn(
-          "sticky top-0 z-10 flex items-baseline gap-2 border-b border-transparent bg-background py-2",
+          "sticky top-sticky-offset z-1 flex items-baseline gap-2 border-b border-transparent bg-background py-2",
           stuck && "border-border",
         )}
       >

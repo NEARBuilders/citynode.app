@@ -232,6 +232,14 @@ code {
   }
 }
 
+@utility sticky-offset-header {
+  --sticky-offset: calc(var(--spacing) * 14 + 1px);
+}
+
+@utility top-sticky-offset {
+  top: var(--sticky-offset, 0px);
+}
+
 @layer utilities {
   .border-outset {
     border-style: outset;
