@@ -298,8 +298,7 @@
   "sideEffects": false,
   "bin": {
     "everything-dev": "./dist/cli.mjs",
-    "bos": "./dist/cli.mjs",
-    "bos-ui": "./dist/ui-build.mjs"
+    "bos": "./dist/cli.mjs"
   },
   "keywords": [
     "tanstack-intent"

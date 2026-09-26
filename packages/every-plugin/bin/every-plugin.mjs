@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-const [cmd] = process.argv.slice(2);
+const [cmd, ...args] = process.argv.slice(2);
 
-const usage = () => console.log("Usage: every-plugin <dev|types|build|deploy>");
+const usage = () => console.log("Usage: every-plugin <dev|types|build|deploy|preview> [args…]");
 
 if (!cmd || cmd === "--help" || cmd === "-h" || cmd === "help") {
   usage();
@@ -24,7 +24,7 @@ if (cmd === "dev" && process.env.EVERY_PLUGIN_DEV_CONDITIONS !== "1") {
 }
 
 const { runCliCommand } = await import("../src/cli.ts");
-await runCliCommand(cmd).catch((err) => {
+await runCliCommand(cmd, args).catch((err) => {
   console.error(String(err instanceof Error ? err.message : err));
   process.exit(1);
 });

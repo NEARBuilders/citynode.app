@@ -42,8 +42,6 @@ export default defineConfig({
     "src/sdk.ts",
     "src/cli.ts",
     "src/cli/init.ts",
-    "src/ui-build.ts",
-    "src/ui-build-config.ts",
     "src/ui/index.ts",
     "src/ui/types.ts",
     "src/ui/runtime.ts",
@@ -102,7 +100,7 @@ export default defineConfig({
   },
   async onSuccess() {
     await stripDeadCreateRequireImport();
-    for (const file of ["cli.mjs", "cli.cjs", "ui-build.mjs", "ui-build.cjs"]) {
+    for (const file of ["cli.mjs", "cli.cjs"]) {
       const filepath = join("dist", file);
       try {
         const content = await readFile(filepath, "utf8");
