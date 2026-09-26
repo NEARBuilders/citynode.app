@@ -31,7 +31,6 @@ import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import { writeSnapshot } from "./snapshot";
 import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
-import { extract as tarExtract } from "tar";
 
 export const INIT_ROOT_PATTERNS = [
   "bos.config.json",
