@@ -45,6 +45,7 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "ui/src/components/root-error.tsx",
   "ui/src/components/root-not-found.tsx",
   "ui/src/components/router-error.tsx",
+  "ui/src/entry.ts",
   "ui/src/globals.d.ts",
   "ui/src/hydrate.tsx",
   "ui/src/lib/api.ts",
