@@ -68,7 +68,7 @@ export function runCliCommand(raw: string, args: string[] = []): Promise<void> {
   if (hasCoreUiWorkspace()) {
     switch (command) {
       case "build":
-        return runCoreUi(args);
+        return runCoreUi(["build", ...args]);
       case "preview":
         return runCoreUi(["preview", ...args]);
       case "dev":
