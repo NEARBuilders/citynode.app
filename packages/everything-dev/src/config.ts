@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
@@ -25,7 +25,6 @@ import type {
   JsonValue,
   PluginEntryValue,
   RuntimeConfig,
-  RuntimeDependencyNode,
   RuntimePluginConfig,
 } from "./types";
 import { BosConfigSchema } from "./types";
@@ -195,19 +194,22 @@ export class ConfigNotfoundError extends Schema.TaggedError<ConfigNotfoundError>
 
 export class ConfigExtendsError extends Schema.TaggedError<ConfigExtendsError>()(
   "ConfigExtendsError",
-  { message: Schema.String },
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
 ) {}
 
 export function defaultConfigEnv(): BosEnv {
   return process.env.NODE_ENV === "production" ? "production" : "development";
 }
 
-export async function loadResolvedConfig(options?: {
+export const loadResolvedConfigEffect = Effect.fn("loadResolvedConfig")(function* (options?: {
   cwd?: string;
   path?: string;
   env?: BosEnv;
   remotePlugins?: string[];
-}): Promise<ConfigResult | null> {
+}): Effect.fn.Return<ConfigResult | null, ConfigLoadError> {
   const configPath = options?.path ?? findConfigPath(options?.cwd);
   if (!configPath) {
     projectRoot = options?.cwd ?? process.cwd();
@@ -218,61 +220,74 @@ export async function loadResolvedConfig(options?: {
   const env = options?.env ?? defaultConfigEnv();
   const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
 
-  try {
-    suppressWarnings();
-    const extendedChain: string[] = [];
-    const parsed = await resolveConfigWithExtends(
-      configPath,
-      baseDir,
-      new Set(),
-      extendedChain,
-      env,
-    );
-    const config = await resolveConfigComposableEntries(
-      BosConfigSchema.parse(parsed),
-      baseDir,
-      runtimeEnv,
-    );
+  const result = yield* Effect.tryPromise({
+    try: async () => {
+      suppressWarnings();
+      try {
+        const extendedChain: string[] = [];
+        const parsed = await resolveConfigWithExtends(
+          configPath,
+          baseDir,
+          new Set(),
+          extendedChain,
+          env,
+        );
+        const config = await resolveConfigComposableEntries(
+          BosConfigSchema.parse(parsed),
+          baseDir,
+          runtimeEnv,
+        );
 
-    cachedConfig = config;
-    projectRoot = baseDir;
+        cachedConfig = config;
+        projectRoot = baseDir;
 
-    const pluginRuntime = await resolveRuntimePlugins(
-      config.plugins ?? {},
-      baseDir,
-      runtimeEnv,
-      options?.remotePlugins,
-    );
-    const runtime = await buildRuntimeConfig(config, baseDir, runtimeEnv, {
-      plugins: pluginRuntime,
-    });
-    const warnings = drainConfigWarnings();
-    resumeWarnings();
+        const pluginRuntime = await resolveRuntimePlugins(
+          config.plugins ?? {},
+          baseDir,
+          runtimeEnv,
+          options?.remotePlugins,
+        );
+        const runtime = await buildRuntimeConfig(config, baseDir, runtimeEnv, {
+          plugins: pluginRuntime,
+        });
+        const warnings = drainConfigWarnings();
+        resumeWarnings();
 
-    return {
-      config,
-      runtime,
-      source: {
+        return {
+          config,
+          runtime,
+          source: {
+            path: configPath,
+            extended: extendedChain.length > 0 ? extendedChain : undefined,
+            remote: extendedChain.some((entry) => entry.startsWith("bos://")),
+          },
+          warnings: warnings.length > 0 ? warnings : undefined,
+        } satisfies ConfigResult;
+      } catch (error) {
+        resumeWarnings();
+        throw error;
+      }
+    },
+    catch: (error): ConfigLoadError => {
+      const detail = error instanceof Error ? error.message : String(error);
+      return new ConfigLoadError({
         path: configPath,
-        extended: extendedChain.length > 0 ? extendedChain : undefined,
-        remote: extendedChain.some((entry) => entry.startsWith("bos://")),
-      },
-      warnings: warnings.length > 0 ? warnings : undefined,
-    };
-  } catch (error) {
-    resumeWarnings();
-    if (error instanceof Error) {
-      throw new ConfigLoadError({
-        path: configPath,
-        message: `Failed to load config from ${configPath}: ${error.message}`,
+        message: `Failed to load config from ${configPath}: ${detail}`,
         cause: error,
       });
-    }
-    throw new ConfigLoadError({
-      path: configPath,
-      message: `Failed to load config from ${configPath}: ${String(error)}`,
-    });
-  }
+    },
+  });
+
+  return result;
+});
+
+export async function loadResolvedConfig(options?: {
+  cwd?: string;
+  path?: string;
+  env?: BosEnv;
+  remotePlugins?: string[];
+}): Promise<ConfigResult | null> {
+  return Effect.runPromise(loadResolvedConfigEffect(options));
 }
 
 export async function loadBosConfig(options?: {
@@ -759,12 +774,12 @@ export interface BuildRuntimeConfigOptions {
   proxy?: string;
 }
 
-export async function buildRuntimeConfig(
+export const buildRuntimeConfigEffect = Effect.fn("buildRuntimeConfig")(function* (
   config: BosConfig,
   baseDir: string,
   env: BosEnv,
   options?: BuildRuntimeConfigOptions,
-): Promise<RuntimeConfig> {
+): Effect.fn.Return<RuntimeConfig, ConfigExtendsError> {
   const uiConfig = config.app.ui;
   const apiConfig = config.app.api;
   const authConfig = config.app.auth;
@@ -826,41 +841,44 @@ export async function buildRuntimeConfig(
   const apiIsRemote = apiRuntime.source === "remote";
   const resolvedApiName = resolvePluginRuntimeName(apiConfig.name, apiRuntime.localPath, "api");
 
-  const authEntry = await (async () => {
-    if (!authConfig || !authRuntime) return undefined;
-    if (!authRuntime.localPath && !authRuntime.url) return undefined;
-    let authName = resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth");
-    if (
-      authRuntime.source === "remote" &&
-      authRuntime.url &&
-      !authRuntime.localPath &&
-      typeof authConfig.name !== "string"
-    ) {
-      authName = await resolveRemotePluginRuntimeName(authRuntime.url, authName);
-    }
-    return {
-      name: authName,
-      extendsRef: authExtendsRef,
-      url: authRuntime.url,
-      entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
-      localPath: authRuntime.localPath,
-      port: authRuntime.port,
-      source: authRuntime.source,
-      proxy: authConfig.proxy,
-      variables: authConfig.variables,
-      secrets: authConfig.secrets,
-      integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
-      shared: authConfig.shared,
-      ui: buildRuntimeUiConfig(
-        "auth",
-        env,
-        getEntryAssociatedUi(authConfig as Partial<BosPluginRef>),
-        baseDir,
-        authName,
-        options?.authSource,
-      ),
-    };
-  })();
+  const authEntry = yield* Effect.tryPromise({
+    try: async () => {
+      if (!authConfig || !authRuntime) return undefined;
+      if (!authRuntime.localPath && !authRuntime.url) return undefined;
+      let authName = resolvePluginRuntimeName(authConfig.name, authRuntime.localPath, "auth");
+      if (
+        authRuntime.source === "remote" &&
+        authRuntime.url &&
+        !authRuntime.localPath &&
+        typeof authConfig.name !== "string"
+      ) {
+        authName = await resolveRemotePluginRuntimeName(authRuntime.url, authName);
+      }
+      return {
+        name: authName,
+        extendsRef: authExtendsRef,
+        url: authRuntime.url,
+        entry: authRuntime.url ? `${authRuntime.url}/mf-manifest.json` : "/mf-manifest.json",
+        localPath: authRuntime.localPath,
+        port: authRuntime.port,
+        source: authRuntime.source,
+        proxy: authConfig.proxy,
+        variables: authConfig.variables,
+        secrets: authConfig.secrets,
+        integrity: authRuntime.source === "remote" ? authConfig.integrity : undefined,
+        shared: authConfig.shared,
+        ui: buildRuntimeUiConfig(
+          "auth",
+          env,
+          getEntryAssociatedUi(authConfig as Partial<BosPluginRef>),
+          baseDir,
+          authName,
+          options?.authSource,
+        ),
+      };
+    },
+    catch: (cause) => new ConfigExtendsError({ message: String(cause), cause }),
+  });
 
   const explicitPlugins =
     options?.plugins && Object.keys(options.plugins).length > 0 ? options.plugins : undefined;
@@ -921,64 +939,75 @@ export async function buildRuntimeConfig(
     plugins: Object.keys(runtimePlugins).length > 0 ? runtimePlugins : undefined,
   };
 
-  let manifestNodes: RuntimeDependencyNode[] = [];
-  const manifestPluginEntries: Array<{ key: string; config: RuntimePluginConfig }> = [];
-
-  if (result.api.source === "remote" && result.api.url) {
-    try {
-      const manifest = await fetchApiPluginManifest(result.api.url);
-      if (manifest.plugins?.length) {
-        manifestNodes = manifestPluginsToNodes(manifest.plugins);
-        for (const node of manifestNodes) {
-          if (!result.plugins?.[node.key]) {
-            manifestPluginEntries.push({
-              key: node.key,
-              config: {
-                name: node.name,
-                url: node.url,
-                entry: node.entry,
-                source: "remote",
-                dependsOn: node.dependsOn,
-                secrets: node.secrets,
-                variables: node.variables,
-              },
-            });
-            if (node.secrets) {
-              for (const secretName of node.secrets) {
-                if (!process.env[secretName]) {
-                  console.warn(
-                    `[Config] Plugin "${node.key}" (discovered from manifest) expects secret "${secretName}" but it is not set in the environment.`,
-                  );
+  yield* Effect.tryPromise({
+    try: async () => {
+      // catch-all diagnostics: a failed discovery fetch degrades to a
+      // warning, never fails the runtime config build
+      try {
+        if (result.api.source !== "remote" || !result.api.url) return;
+        const manifest = await fetchApiPluginManifest(result.api.url);
+        const manifestPluginEntries: Array<{ key: string; config: RuntimePluginConfig }> = [];
+        if (manifest.plugins?.length) {
+          for (const node of manifestPluginsToNodes(manifest.plugins)) {
+            if (!result.plugins?.[node.key]) {
+              manifestPluginEntries.push({
+                key: node.key,
+                config: {
+                  name: node.name,
+                  url: node.url,
+                  entry: node.entry,
+                  source: "remote",
+                  dependsOn: node.dependsOn,
+                  secrets: node.secrets,
+                  variables: node.variables,
+                },
+              });
+              if (node.secrets) {
+                for (const secretName of node.secrets) {
+                  if (!process.env[secretName]) {
+                    console.warn(
+                      `[Config] Plugin "${node.key}" (discovered from manifest) expects secret "${secretName}" but it is not set in the environment.`,
+                    );
+                  }
                 }
               }
             }
           }
         }
-      }
-      if (manifest.dependsOn?.length) {
-        const existing = new Set(result.api.dependsOn ?? []);
-        for (const dep of manifest.dependsOn) {
-          if (!existing.has(dep)) {
-            result.api.dependsOn = [...(result.api.dependsOn ?? []), dep];
+        if (manifest.dependsOn?.length) {
+          const existing = new Set(result.api.dependsOn ?? []);
+          for (const dep of manifest.dependsOn) {
+            if (!existing.has(dep)) {
+              result.api.dependsOn = [...(result.api.dependsOn ?? []), dep];
+            }
           }
         }
+        if (manifestPluginEntries.length > 0) {
+          if (!result.plugins) result.plugins = {};
+          for (const { key, config: pluginConfig } of manifestPluginEntries) {
+            if (!result.plugins[key]) {
+              result.plugins[key] = pluginConfig;
+            }
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Config] Failed to fetch API plugin manifest for discovery: ${message}`);
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[Config] Failed to fetch API plugin manifest for discovery: ${message}`);
-    }
-  }
-
-  if (manifestPluginEntries.length > 0) {
-    if (!result.plugins) result.plugins = {};
-    for (const { key, config } of manifestPluginEntries) {
-      if (!result.plugins[key]) {
-        result.plugins[key] = config;
-      }
-    }
-  }
+    },
+    catch: (cause) => new ConfigExtendsError({ message: String(cause), cause }),
+  });
 
   return result;
+});
+
+export async function buildRuntimeConfig(
+  config: BosConfig,
+  baseDir: string,
+  env: BosEnv,
+  options?: BuildRuntimeConfigOptions,
+): Promise<RuntimeConfig> {
+  return Effect.runPromise(buildRuntimeConfigEffect(config, baseDir, env, options));
 }
 
 async function loadConfigFile(configPath: string, baseDir: string): Promise<BosConfigInput> {
@@ -1042,12 +1071,12 @@ function normalizePluginEntry(raw: PluginOverrideValue): BosPluginRef | null | f
   return raw;
 }
 
-async function resolveRuntimePlugins(
+const resolveRuntimePluginsEffect = Effect.fn("resolveRuntimePlugins")(function* (
   plugins: Record<string, PluginOverrideValue>,
   baseDir: string,
   env: BosEnv,
   remotePlugins?: string[],
-): Promise<Record<string, RuntimePluginConfig>> {
+): Effect.fn.Return<Record<string, RuntimePluginConfig>, ConfigExtendsError> {
   const entries = Object.entries(plugins)
     .map(([pluginId, rawInput]) => ({
       pluginId,
@@ -1058,46 +1087,52 @@ async function resolveRuntimePlugins(
         entry.normalized !== null && entry.normalized !== false,
     );
 
-  const resolved = await Promise.all(
-    entries.map(async ({ pluginId, normalized }) => {
-      const resolvedReference = await resolveComposableReference(
-        normalized,
-        baseDir,
-        env,
-        `plugins.${pluginId}`,
-      );
+  const resolved = yield* Effect.forEach(
+    entries,
+    ({ pluginId, normalized }) =>
+      Effect.gen(function* () {
+        const resolvedReference = yield* Effect.tryPromise({
+          try: () => resolveComposableReference(normalized, baseDir, env, `plugins.${pluginId}`),
+          catch: (cause) => new ConfigExtendsError({ message: String(cause), cause }),
+        });
 
-      const forceSource =
-        remotePlugins === undefined
-          ? undefined
-          : remotePlugins.length === 0 || remotePlugins.includes(pluginId)
-            ? "remote"
-            : undefined;
-      const pluginRuntime = buildRuntimePluginConfig(pluginId, env, resolvedReference, forceSource);
-
-      if (!pluginRuntime.localPath && !pluginRuntime.url) {
-        if (forceSource === "remote") {
-          emitConfigWarning(
-            `[Config] Plugin "${pluginId}" has no production URL in bos.config.json and cannot be resolved as remote. Add a "production" field or remove it from --remote-plugins.`,
-          );
-        }
-        return null;
-      }
-
-      if (
-        pluginRuntime.source === "remote" &&
-        pluginRuntime.url &&
-        !pluginRuntime.localPath &&
-        typeof resolvedReference.entry.name !== "string"
-      ) {
-        pluginRuntime.name = await resolveRemotePluginRuntimeName(
-          pluginRuntime.url,
-          pluginRuntime.name,
+        const forceSource =
+          remotePlugins === undefined
+            ? undefined
+            : remotePlugins.length === 0 || remotePlugins.includes(pluginId)
+              ? ("remote" as const)
+              : undefined;
+        const pluginRuntime = buildRuntimePluginConfig(
+          pluginId,
+          env,
+          resolvedReference,
+          forceSource,
         );
-      }
 
-      return [pluginId, pluginRuntime] as const;
-    }),
+        if (!pluginRuntime.localPath && !pluginRuntime.url) {
+          if (forceSource === "remote") {
+            emitConfigWarning(
+              `[Config] Plugin "${pluginId}" has no production URL in bos.config.json and cannot be resolved as remote. Add a "production" field or remove it from --remote-plugins.`,
+            );
+          }
+          return null;
+        }
+
+        if (
+          pluginRuntime.source === "remote" &&
+          pluginRuntime.url &&
+          !pluginRuntime.localPath &&
+          typeof resolvedReference.entry.name !== "string"
+        ) {
+          pluginRuntime.name = yield* Effect.tryPromise({
+            try: () => resolveRemotePluginRuntimeName(pluginRuntime.url, pluginRuntime.name),
+            catch: (cause) => new ConfigExtendsError({ message: String(cause), cause }),
+          });
+        }
+
+        return [pluginId, pluginRuntime] as const;
+      }),
+    { concurrency: "unbounded" },
   );
 
   const out: Record<string, RuntimePluginConfig> = {};
@@ -1108,6 +1143,15 @@ async function resolveRuntimePlugins(
   }
 
   return out;
+});
+
+function resolveRuntimePlugins(
+  plugins: Record<string, PluginOverrideValue>,
+  baseDir: string,
+  env: BosEnv,
+  remotePlugins?: string[],
+): Promise<Record<string, RuntimePluginConfig>> {
+  return Effect.runPromise(resolveRuntimePluginsEffect(plugins, baseDir, env, remotePlugins));
 }
 
 async function resolveRemotePluginRuntimeName(baseUrl: string, fallback: string): Promise<string> {
