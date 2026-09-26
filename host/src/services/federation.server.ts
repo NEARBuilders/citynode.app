@@ -11,6 +11,7 @@ import {
   UI_REMOTE_SERVER_ENTRY_FILENAME,
 } from "everything-dev/ui/manifest";
 import type { RouterModule } from "../types";
+import { logger } from "../utils/logger";
 import type { RuntimeConfig } from "./config";
 import { ExposeModuleMissing, FederationError } from "./errors";
 import { type LocalDistServer, startLocalDistServer } from "./local-dist-server";
@@ -102,8 +103,8 @@ function removeInstanceRemotes(instance: ModuleFederationInstance, remoteName?: 
         handler?.removeRemote?.(remote);
       }
     }
-  } catch {
-    /* noop */
+  } catch (error) {
+    logger.debug(`[Federation] removeRemote(${remoteName ?? "*"}) failed:`, error);
   }
 }
 
@@ -283,8 +284,8 @@ interface RemoteModuleLoad<T> {
 function bypassCompositionModuleCache(mf: ModuleFederationInstance, remoteName: string): void {
   try {
     (mf as unknown as { moduleCache?: Map<string, unknown> }).moduleCache?.delete(remoteName);
-  } catch {
-    /* noop */
+  } catch (error) {
+    logger.debug(`[Federation] bypassCompositionModuleCache(${remoteName}) failed:`, error);
   }
 }
 
