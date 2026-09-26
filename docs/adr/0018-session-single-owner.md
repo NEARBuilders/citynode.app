@@ -1,4 +1,4 @@
-# ADR 0013: One owner for the session read path — `everything-dev/ui/auth` as a shared singleton
+# ADR 0018: One owner for the session read path — `everything-dev/ui/auth` as a shared singleton
 
 Date: 2026-09-25
 Status: Accepted

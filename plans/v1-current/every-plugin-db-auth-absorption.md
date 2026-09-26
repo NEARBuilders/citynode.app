@@ -1,8 +1,8 @@
 # Per-plugin database boilerplate absorption (`everything-dev/db`)
 
 > Ticket: [#89](https://github.com/NEARBuilders/citynode.app/issues/89) (design spike)
-> Status: DECIDED — **amended 2026-09-15** after the orpc-v2 / effect-native-plugins review (original decision favored an `every-plugin/db` facade; the amendment moves the home to `everything-dev/db` and drops the `every-plugin/auth` facade)
-> Prototype: [plans/prototypes/db-auth-absorption/](../prototypes/db-auth-absorption/) (slug / namespace / R-channel proofs stand; the `databaseLayer` factory supersedes its vendored layer shape)
+> Status: MOSTLY DONE — **amended 2026-09-15** after the orpc-v2 / effect-native-plugins review (original decision favored an `every-plugin/db` facade; the amendment moves the home to `everything-dev/db` and drops the `every-plugin/auth` facade). **2026-09-26 audit:** `packages/everything-dev/src/db/` is landed and plugins' per-plugin files are thin sync-owned adapters. Remaining: the `databaseLayer` factory (referenced only in docs — no `.ts` exists), the db files' sync-ownership exit, and shrinking `plugins/*/db/layer.ts` (still a 91-line vendored copy; goal ~10 lines)
+> Prototype: ~~[plans/prototypes/db-auth-absorption/](../prototypes/db-auth-absorption/)~~ → archived at [plans/done/db-auth-absorption-prototype/](../done/db-auth-absorption-prototype/) (slug / namespace / R-channel proofs stand; the `databaseLayer` factory supersedes its vendored layer shape)
 > Build plan: [advisor-plans/017-db-layer-in-everything-dev.md](../../advisor-plans/017-db-layer-in-everything-dev.md) (depends on 008; rides the effect-native-plugins Phase 4 window)
 > Origin: post-migration improvement survey (2026-09-15), finding DIR-01 / A6
 

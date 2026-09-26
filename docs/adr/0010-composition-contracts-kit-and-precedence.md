@@ -42,7 +42,7 @@ Two candidate mechanisms were rejected:
 
 6. **Route options split meta/component.** The generated `routeConfig` contract separates eager **meta** (`loader`/`beforeLoad`/`head`/`staticData`/nav — needed to build the tree and resolve precedence before any component bytes load) from lazy **component** (imported at first match, wrapped in a lazy boundary). The client downloads only matched-route components; the server keeps eager loading (variant-cached, one-time). The generator output shape change warrants a versioned digest input (alongside `MOUNT_REGISTRY_VERSION`) so mixed-version client/server compose fails loudly, never silently.
 
-7. **`bos routes` inspector.** A CLI command that prints the composed tree for a resolved config: every path, its owning source, mount, gate, and nav entries — with precedence outcomes visible (what won, what was shadowed). This is to route composition what `bos mf check` is to shared-dependency identity. In a long extends chain, nobody can hold effective route ownership in their head; the platform must surface it.
+7. **`bos routes` inspector.** A CLI command that prints the composed tree for a resolved config: every path, its owning source, mount, gate, and nav entries — with precedence outcomes visible (what won, what was shadowed). This is to route composition what `bos mf check` is to shared-dependency identity. In a long extends chain, nobody can hold effective route ownership in their head; the platform must surface it. *(Not yet implemented — decided here, no CLI command exists as of 2026-09-26.)*
 
 ## Known couplings (accepted, versioned)
 

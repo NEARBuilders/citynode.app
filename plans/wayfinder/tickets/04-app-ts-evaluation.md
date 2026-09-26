@@ -2,6 +2,14 @@
 
 When and how is `app.ts` evaluated to produce the deployable config (TOML on FastKV)?
 
+> **Re-annotation (2026-09-26):** the TOML premise below is dead — the
+> published config format is JSON (`bos.config.json` on FastKV), per
+> toml-infra-alchemy's own decision. Additionally `bos.app.ts` became
+> operative (citynode.app#226, ADR 0005 phase 1): the loader + TS-form
+> scaffold + canonicalization exist. The remaining question is narrower:
+> how much of the descriptor stays evaluated-at-publish vs
+> evaluated-at-boot.
+
 `app.ts` is a TypeScript file that calls `App()`, `Plugin()`, `WebPlugin()`, etc. — constructors that produce a typed configuration object. But TOML is the serialization format on FastKV, and the host reads either TOML (today) or the evaluated result.
 
 Options to evaluate:

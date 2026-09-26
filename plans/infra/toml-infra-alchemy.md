@@ -1,5 +1,14 @@
 # TOML Config + Shared Databases + Alchemy Integration
 
+> **Status correction (2026-09-26 audit):** of the phases below, only the
+> per-plugin schema isolation (Phase 2) is on `main` (`api/src/db/layer.ts`
+> derives `plugin_<slug>` schemas). The Phase 1/3/4 artifacts (TOML config
+> source, `[infra]` schema, Neon/Alchemy driver split) exist only on the
+> **unmerged** `upstream/feat/alchemy` branch — the phase statuses further
+> down were written against that branch, not this tree. Also note the
+> published config format remains JSON (`bos.config.json` on FastKV) per
+> this plan's own decision; the TOML surface is authoring-side only.
+
 ## Problem
 
 The config system uses JSON with zero inline documentation. Database provisioning

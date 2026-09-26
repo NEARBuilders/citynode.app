@@ -1,7 +1,7 @@
 # ADR 0003: `every-plugin` CLI is the plugin package contract — scripts derive from framework defaults
 
 Date: 2026-09-18
-Status: Accepted
+Status: Accepted (amended 2026-09-26 — the contract-declaration mechanism changed: `tsc -p tsconfig.contract.json` / `build:types` are gone. `EmitPluginManifest` inside `every-plugin build`/`deploy`/`dev` regenerates `types/contract.d.ts` whenever `src/contract.ts` is newer (patched TS 7 binary, explicit flags). There is no `tsconfig.contract.json` anywhere and `bos sync` no longer ships one. The decision itself — manifest ordering is the CLI's job, not package scripts — is unchanged; see ADR 0005 phase 2.)
 
 ## Context
 

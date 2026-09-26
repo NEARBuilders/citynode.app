@@ -1,4 +1,4 @@
-# ADR 0012: Session gas keys are the primary gasless write path, the relayer is the fallback
+# ADR 0017: Session gas keys are the primary gasless write path, the relayer is the fallback
 
 Date: 2026-09-24
 Status: Accepted
