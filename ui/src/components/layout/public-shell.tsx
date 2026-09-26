@@ -1,5 +1,6 @@
 import { ClientOnly, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { NearBranding } from "./near-branding";
 import { NetworkToggle } from "./network-toggle";
 import { PublicHeader } from "./public-header";
 
@@ -50,9 +51,12 @@ export function PublicShellFooter() {
           nearbuilders.org
         </a>
       </nav>
-      <ClientOnly>
-        <NetworkToggle />
-      </ClientOnly>
+      <div className="flex items-center gap-6">
+        <ClientOnly>
+          <NetworkToggle />
+        </ClientOnly>
+        <NearBranding />
+      </div>
     </div>
   );
 }
