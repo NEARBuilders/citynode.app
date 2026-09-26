@@ -10,6 +10,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { Near } from "near-kit";
 import { afterEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { createApiClient } from "@/lib/api";
@@ -53,11 +54,21 @@ const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
   vi.stubGlobal("scrollTo", vi.fn());
+  vi.spyOn(Near.prototype, "view").mockImplementation((_contractId, method) => {
+    const values: Record<string, unknown> = {
+      get_total_staked_balance: "1000000000000000000000000",
+      get_reward_fee_fraction: { numerator: 5, denominator: 100 },
+      get_number_of_accounts: 1,
+      get_accounts: [{ account_id: "staker.near", staked_balance: "1000000000000000000000000" }],
+    };
+    return Promise.resolve(values[method] ?? null);
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -66,21 +77,6 @@ function mockApi(nodes = [parent, child], ownPoolNodeId?: string) {
         init?.body ?? (input instanceof Request ? await input.clone().text() : undefined);
       const body = JSON.parse(String(requestBody || url.searchParams.get("data") || "{}"));
       if (url.pathname === "/api/auth/get-session") return Response.json(null);
-      if (url.hostname === "rpc.mainnet.near.org") {
-        const values: Record<string, unknown> = {
-          get_total_staked_balance: "1000000000000000000000000",
-          get_reward_fee_fraction: { numerator: 5, denominator: 100 },
-          get_number_of_accounts: 1,
-          get_accounts: [
-            { account_id: "staker.near", staked_balance: "1000000000000000000000000" },
-          ],
-        };
-        return Response.json({
-          result: {
-            result: [...new TextEncoder().encode(JSON.stringify(values[body.params.method_name]))],
-          },
-        });
-      }
       const args = body.json ?? {};
       const method = url.pathname.split("/").at(-1);
       switch (method) {

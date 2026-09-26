@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { Near } from "near-kit";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StakePoolCard } from "./stake-pool-card";
@@ -22,8 +23,22 @@ const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+function stubPoolViews(
+  values: Record<string, unknown>,
+  failing: (method: string) => boolean = () => false,
+) {
+  return vi
+    .spyOn(Near.prototype, "view")
+    .mockImplementation((_contractId, method) =>
+      failing(method)
+        ? Promise.reject(new Error("RPC unavailable"))
+        : Promise.resolve(values[method] === undefined ? null : values[method]),
+    );
+}
 
 function renderCard(pool = validator) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -48,20 +63,11 @@ describe("StakePoolCard", () => {
       get_accounts: [{ account_id: "staker.near", staked_balance: "2000000000000000000000000" }],
     };
     let failing = false;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => ({
-        ok: true,
-        json: async () => {
-          const method = JSON.parse(String(init.body)).params.method_name;
-          const failMethod =
-            failedQuery === "accounts" ? method === "get_accounts" : method !== "get_accounts";
-          return failing && failMethod
-            ? { error: { message: "RPC unavailable" } }
-            : { result: { result: [...new TextEncoder().encode(JSON.stringify(values[method]))] } };
-        },
-      })),
-    );
+    stubPoolViews(values, (method) => {
+      const failMethod =
+        failedQuery === "accounts" ? method === "get_accounts" : method !== "get_accounts";
+      return failing && failMethod;
+    });
     const { client } = renderCard();
     expect(await screen.findByText("1 NEAR")).toBeTruthy();
     expect(await screen.findByRole("link", { name: "staker.near" })).toBeTruthy();
@@ -93,25 +99,15 @@ describe("StakePoolCard", () => {
     { ...validator, protocol: "ethereum" },
     { ...validator, network: "localnet" },
   ])("does not query unsupported protocol/network: $protocol/$network", (pool) => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+    const view = stubPoolViews({});
     renderCard({ ...pool, metadata: { stakeUrl: "javascript:alert(1)" } });
     expect(screen.getByText(/Live stats/)).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(view).not.toHaveBeenCalled();
   });
 
   it("shows unavailable metrics while keeping a successful empty account response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => ({
-        ok: true,
-        json: async () =>
-          JSON.parse(String(init.body)).params.method_name === "get_accounts"
-            ? { result: { result: [91, 93] } }
-            : { error: { message: "offline" } },
-      })),
-    );
+    stubPoolViews({ get_accounts: [] }, (method) => method !== "get_accounts");
     renderCard();
     expect(await screen.findByRole("status")).toHaveProperty(
       "textContent",
@@ -128,18 +124,7 @@ describe("StakePoolCard", () => {
       get_reward_fee_fraction: { numerator: 0, denominator: 100 },
       get_number_of_accounts: 0,
     };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => ({
-        ok: true,
-        json: async () => {
-          const value = responses[JSON.parse(String(init.body)).params.method_name];
-          return value === undefined
-            ? { error: { message: "Unavailable" } }
-            : { result: { result: [...new TextEncoder().encode(JSON.stringify(value))] } };
-        },
-      })),
-    );
+    stubPoolViews(responses, (method) => responses[method] === undefined);
     renderCard({ ...validator, network: "testnet" });
     expect(await screen.findByText("0 NEAR")).toBeTruthy();
     expect(screen.getByText("0%")).toBeTruthy();
@@ -159,21 +144,7 @@ describe("StakePoolCard", () => {
         staked_balance: String(BigInt(i + 1) * 10n ** 24n),
       })),
     };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => ({
-        ok: true,
-        json: async () => ({
-          result: {
-            result: [
-              ...new TextEncoder().encode(
-                JSON.stringify(values[JSON.parse(String(init.body)).params.method_name]),
-              ),
-            ],
-          },
-        }),
-      })),
-    );
+    stubPoolViews(values);
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderCard();

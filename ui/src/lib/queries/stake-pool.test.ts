@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { Near } from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   formatNearBalance,
@@ -10,7 +11,10 @@ import {
   stakePoolTopHoldersQueryOptions,
 } from "./stake-pool";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("stake pool queries", () => {
   it("fetches at most 50 standard pool accounts and sorts their bigint stakes descending", async () => {
@@ -18,12 +22,7 @@ describe("stake pool queries", () => {
       account_id: `staker-${i}.near`,
       staked_balance: String(BigInt(i) * 10n ** 24n),
     }));
-    const fetch = vi.fn().mockResolvedValue(
-      Response.json({
-        result: { result: [...new TextEncoder().encode(JSON.stringify(accounts))] },
-      }),
-    );
-    vi.stubGlobal("fetch", fetch);
+    const view = vi.spyOn(Near.prototype, "view").mockResolvedValue(accounts);
     const client = new QueryClient();
     const holders = await client.fetchQuery(
       stakePoolTopHoldersQueryOptions({ accountId: "pool.near", limit: 80 }),
@@ -34,9 +33,7 @@ describe("stake pool queries", () => {
       stakedBalance: 49000000000000000000000000n,
     });
     expect(holders.at(-1)).toEqual({ accountId: "staker-0.near", stakedBalance: 0n });
-    const params = JSON.parse(fetch.mock.calls[0][1].body).params;
-    expect(params.method_name).toBe("get_accounts");
-    expect(JSON.parse(atob(params.args_base64))).toEqual({ from_index: 0, limit: 50 });
+    expect(view).toHaveBeenCalledWith("pool.near", "get_accounts", { from_index: 0, limit: 50 });
     client.clear();
   });
 
@@ -90,8 +87,7 @@ describe("stake pool queries", () => {
   });
 
   it("keeps unavailable stats distinct from a valid empty account list", async () => {
-    const fetch = vi.fn().mockResolvedValue(Response.json({ error: { message: "Unavailable" } }));
-    vi.stubGlobal("fetch", fetch);
+    const view = vi.spyOn(Near.prototype, "view").mockRejectedValue(new Error("Unavailable"));
     const client = new QueryClient();
     await expect(
       client.fetchQuery(stakePoolStatsQueryOptions({ accountId: "pool.near" })),
@@ -99,7 +95,7 @@ describe("stake pool queries", () => {
     await expect(
       client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near" })),
     ).rejects.toThrow();
-    fetch.mockResolvedValue(Response.json({ result: { result: [91, 93] } }));
+    view.mockResolvedValue([]);
     expect(
       await client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near" })),
     ).toEqual([]);
@@ -112,13 +108,11 @@ describe("stake pool queries", () => {
       get_reward_fee_fraction: { numerator: 5, denominator: 100 },
       get_number_of_accounts: 60,
     };
-    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
-      const method = JSON.parse(String(init.body)).params.method_name;
-      return Response.json({
-        result: { result: [...new TextEncoder().encode(JSON.stringify(responses[method]))] },
-      });
-    });
-    vi.stubGlobal("fetch", fetch);
+    const view = vi
+      .spyOn(Near.prototype, "view")
+      .mockImplementation((_contractId: string, methodName: string) =>
+        Promise.resolve(responses[methodName]),
+      );
     const client = new QueryClient();
     const stats = await client.fetchQuery(
       stakePoolStatsQueryOptions({ accountId: "pool.near", network: "mainnet" }),
@@ -136,7 +130,7 @@ describe("stake pool queries", () => {
     expect(formatNearBalance(999999999999999999999999n)).toBe("1 NEAR");
     expect(formatNearBalance(0n)).toBe("0 NEAR");
     expect(formatPoolFee(stats.feeNumerator, stats.feeDenominator)).toBe("5%");
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(view).toHaveBeenCalledTimes(3);
     client.clear();
   });
 });
@@ -208,28 +202,16 @@ describe("team stake target", () => {
 
 describe("team stake pool account query", () => {
   it("reads the team account's stake from get_account, not the pool total", async () => {
-    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
-      const body = JSON.parse(String(init.body));
-      expect(body.params.method_name).toBe("get_account");
-      expect(JSON.parse(atob(body.params.args_base64))).toEqual({
-        account_id: "india.sputnik-dao.near",
+    vi.spyOn(Near.prototype, "view").mockImplementation((_contractId: string, methodName: string, args?: object) => {
+        expect(methodName).toBe("get_account");
+        expect(args).toEqual({ account_id: "india.sputnik-dao.near" });
+        return Promise.resolve({
+          account_id: "india.sputnik-dao.near",
+          staked_balance: "2500000000000000000000000",
+          unstaked_balance: "1000000000000000000000000",
+          can_withdraw: false,
+        });
       });
-      return Response.json({
-        result: {
-          result: [
-            ...new TextEncoder().encode(
-              JSON.stringify({
-                account_id: "india.sputnik-dao.near",
-                staked_balance: "2500000000000000000000000",
-                unstaked_balance: "1000000000000000000000000",
-                can_withdraw: false,
-              }),
-            ),
-          ],
-        },
-      });
-    });
-    vi.stubGlobal("fetch", fetch);
     const client = new QueryClient();
     const account = await client.fetchQuery(
       stakePoolAccountQueryOptions({

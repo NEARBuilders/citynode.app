@@ -1,6 +1,37 @@
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import { Near } from "near-kit";
 import { z } from "zod";
-import { callViewFunction } from "@/lib/near-rpc";
+
+const viewClients = new Map<"mainnet" | "testnet", Near>();
+
+function viewClient(network: "mainnet" | "testnet"): Near {
+  let client = viewClients.get(network);
+  if (!client) {
+    client = new Near({ network });
+    viewClients.set(network, client);
+  }
+  return client;
+}
+
+/**
+ * Public read-only contract read through near-kit. Resolves null on any
+ * failure (unsupported network, timeout, malformed result) — the stake-pool
+ * views are advisory data, and the schema parsers reject null into a clean
+ * query error state.
+ */
+async function callViewFunction(
+  accountId: string,
+  methodName: string,
+  args: Record<string, unknown>,
+  network = "mainnet",
+): Promise<unknown | null> {
+  if (network !== "mainnet" && network !== "testnet") return null;
+  try {
+    return (await viewClient(network).view(accountId, methodName, args)) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const balanceSchema = z.string().regex(/^\d+$/).transform(BigInt);
 const accountCountSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
