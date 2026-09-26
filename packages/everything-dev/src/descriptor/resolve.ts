@@ -30,7 +30,7 @@ function pick<T extends object, K extends keyof T>(source: T, keys: K[]): Partia
   return out;
 }
 
-const ATTACHMENT_FIELDS = [
+export const ATTACHMENT_FIELDS = [
   "name",
   "proxy",
   "variables",
@@ -41,6 +41,18 @@ const ATTACHMENT_FIELDS = [
   "dependsOn",
   "version",
 ] as const;
+
+/** Fields the attachment slots carry beyond the shared attachment set. */
+export const SLOT_INPUT_FIELDS = ["development", "extends", "integrity"] as const;
+
+/** Fields a config-entry may carry that map onto an attachment's slot-free set. */
+const ENTRY_ONLY_FIELDS = ["name", "extends"] as const;
+
+const LOCAL_PREFIX = "local:";
+
+function stripLocal(development: string | undefined): string | undefined {
+  return development?.startsWith(LOCAL_PREFIX) ? development.slice(LOCAL_PREFIX.length) : undefined;
+}
 
 function attachmentToEntry(attachment: AttachmentRef): Record<string, unknown> {
   const development = devRef(attachment);
@@ -215,4 +227,91 @@ export function resolveApps(
   return Object.fromEntries(
     Object.keys(registry).map((name) => [name, resolveApp(name, registry, deployMap)]),
   );
+}
+
+/**
+ * The inverse of `toConfigInput` for the scaffold surface: an authoring-shape
+ * config (as personalizeConfig computes it) back into the authored
+ * descriptor form a child's `bos.app.ts` embeds. Driven by the same field
+ * maps as `toConfigInput` so the two directions cannot drift; pipeline state
+ * (production URLs, integrity) is dropped — it is deploy-map territory,
+ * never authored.
+ */
+export function configInputToDescriptor(input: BosConfigInput): AppDescriptor {
+  const source = input as Record<string, unknown>;
+  const descriptor: Record<string, unknown> = {
+    name: (input.domain ?? input.account ?? "child.app") as string,
+  };
+  for (const field of [
+    "extends",
+    "account",
+    "domain",
+    "title",
+    "description",
+    "repository",
+    "testnet",
+    "staging",
+    "ci",
+    "publish",
+  ] as const) {
+    if (source[field] !== undefined) descriptor[field] = source[field];
+  }
+
+  const app = (input.app ?? {}) as Record<string, Record<string, unknown>>;
+  const slot = (key: "host" | "ui" | "api"): Record<string, unknown> | undefined => {
+    const entry = app[key];
+    if (!entry?.development) return undefined;
+    const out: Record<string, unknown> = { path: stripLocal(entry.development as string) };
+    for (const field of ATTACHMENT_FIELDS) {
+      if (field === "name") continue;
+      if (entry[field] !== undefined) out[field] = entry[field];
+    }
+    return out;
+  };
+  for (const key of ["host", "ui", "api"] as const) {
+    const value = slot(key);
+    if (value) descriptor[key] = value;
+  }
+
+  const auth = app.auth;
+  if (auth?.development) descriptor.auth = entryToAttachment("auth", auth);
+
+  const plugins: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries((input.plugins ?? {}) as Record<string, unknown>)) {
+    if (typeof raw === "string") {
+      plugins[key] = { name: key, extends: raw };
+    } else if (raw && typeof raw === "object") {
+      plugins[key] = entryToAttachment(key, raw as Record<string, unknown>);
+    }
+  }
+  if (Object.keys(plugins).length > 0) descriptor.plugins = plugins;
+
+  return AppDescriptorSchema.parse(descriptor);
+}
+
+/** Config-entry → authored attachment: name/extends + the shared field map. */
+function entryToAttachment(key: string, entry: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of ENTRY_ONLY_FIELDS) {
+    const value = entry[field];
+    if (value !== undefined) out[field] = field === "name" ? value : value;
+    else if (field === "name") out.name = key;
+  }
+  const development = entry.development as string | undefined;
+  const path = stripLocal(development);
+  if (path !== undefined) out.path = path;
+  for (const field of ATTACHMENT_FIELDS) {
+    if (field === "name") continue;
+    if (entry[field] !== undefined) out[field] = entry[field];
+  }
+  const ui = entry.ui as Record<string, unknown> | undefined;
+  if (ui && typeof ui === "object") {
+    const uiPath = stripLocal(ui.development as string | undefined);
+    out.ui = {
+      ...(typeof ui.name === "string" ? { name: ui.name } : {}),
+      ...(uiPath !== undefined ? { path: uiPath } : {}),
+      ...(ui.integrity !== undefined ? { integrity: ui.integrity } : {}),
+    };
+  }
+  return out;
 }

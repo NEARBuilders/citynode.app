@@ -1,7 +1,7 @@
-# ADR 0005 (draft): `app.ts` is the authored surface — build configs and infra absorb into the app descriptor
+# ADR 0005: `app.ts` is the authored surface — build configs and infra absorb into the app descriptor
 
 Date: 2026-09-18
-Status: Proposed
+Status: Accepted (phase 1) — the config loader reads `bos.app.ts` alongside `bos.config.json` (import-extends and bos:// extends), publish/sync canonicalize the resolved config to JSON for FastKV, and `bos init` scaffolds children with the TS config form. Phase 2 (absorbing railway.toml/build configs into the descriptor) remains planned.
 
 ## Context
 
