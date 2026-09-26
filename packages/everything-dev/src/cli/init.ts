@@ -8,7 +8,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -31,8 +30,8 @@ import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
 import { writeSnapshot } from "./snapshot";
 import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
+import { extract as tarExtract } from "tar";
 
-const require = createRequire(import.meta.url);
 
 export const INIT_ROOT_PATTERNS = [
   "bos.config.json",
@@ -385,10 +384,7 @@ export async function downloadTarball(
 
   const extractDir = mkTmpDir("bos-init-extract-");
   try {
-    const tar = require("tar") as {
-      extract: (opts: { cwd: string; file: string; strip: number }) => Promise<void>;
-    };
-    await tar.extract({ cwd: extractDir, file: tarballPath, strip: 1 });
+    await tarExtract({ cwd: extractDir, file: tarballPath, strip: 1 });
   } catch {
     await execCommand("tar", ["-xzf", tarballPath, "--strip-components=1", "-C", extractDir]);
   }
