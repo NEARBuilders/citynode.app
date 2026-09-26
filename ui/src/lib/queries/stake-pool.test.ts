@@ -202,7 +202,8 @@ describe("team stake target", () => {
 
 describe("team stake pool account query", () => {
   it("reads the team account's stake from get_account, not the pool total", async () => {
-    vi.spyOn(Near.prototype, "view").mockImplementation((_contractId: string, methodName: string, args?: object) => {
+    vi.spyOn(Near.prototype, "view").mockImplementation(
+      (_contractId: string, methodName: string, args?: object) => {
         expect(methodName).toBe("get_account");
         expect(args).toEqual({ account_id: "india.sputnik-dao.near" });
         return Promise.resolve({
@@ -211,7 +212,8 @@ describe("team stake pool account query", () => {
           unstaked_balance: "1000000000000000000000000",
           can_withdraw: false,
         });
-      });
+      },
+    );
     const client = new QueryClient();
     const account = await client.fetchQuery(
       stakePoolAccountQueryOptions({
