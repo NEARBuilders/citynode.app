@@ -5,10 +5,13 @@ import type {
   SubAccountConfig,
 } from "better-near-auth";
 
+export type AuthNetwork = "mainnet" | "testnet";
+
 export interface AuthPasskeyConfig {
   rpID?: string;
   rpName?: string;
   origin?: string;
+  gatewayOrigins?: Partial<Record<AuthNetwork, string[]>>;
 }
 
 export interface AuthSiwnBaseConfig {
@@ -37,6 +40,7 @@ export type AuthSiwnConfig = AuthSiwnRecipientConfig | AuthSiwnRecipientsConfig;
 export interface AuthConfig {
   secret: string;
   baseUrl: string;
+  network?: AuthNetwork;
   organizationMembershipLimit?: number;
   trustedOrigins?: string[];
   isProduction?: boolean;

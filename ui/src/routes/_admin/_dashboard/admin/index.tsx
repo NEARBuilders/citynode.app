@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Building2, Gavel, LayoutDashboard, Network, Settings, Users } from "lucide-react";
 import { getAccount, pluginPath, useApiClient } from "@/app";
 import { Badge, Button, Card, SectionHeader } from "@/components";
-import { InfoRow } from "@/components/ui/info-row";
+import { InfoRow } from "@/components/info-row";
 import { useNearAccount } from "@/lib/use-near-account";
 import { pendingProposalCountQueryOptions } from "./proposals/-proposal-review";
 

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { access, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";

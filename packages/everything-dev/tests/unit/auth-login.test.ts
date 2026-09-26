@@ -110,6 +110,7 @@ describe("device login client", () => {
     const claim = calls.find((call) => call.url.includes("/device-link/claim"));
     expect(JSON.parse(String(claim?.init.body ?? "{}"))).toMatchObject({
       token: "session-token-1",
+      client_id: "bos-cli",
     });
 
     const keyCreate = calls.find((call) => call.url.includes("/api-key/create"));

@@ -11,7 +11,7 @@ import {
   phoneNumberClient,
 } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
-import type { RelayedTransactionT } from "better-near-auth";
+import type { PasskeyWalletLink, RelayedTransactionT } from "better-near-auth";
 import { DEFAULT_DEVICE_LINK_CLIENT_ID, siwnClient } from "better-near-auth/client";
 import type { ClientRuntimeConfig } from "../types";
 import { getRuntimeConfig } from "./runtime";
@@ -202,47 +202,78 @@ export function useRelayHistory(session: SessionData | null | undefined, authCli
   });
 }
 
+export type PasskeyWalletStatus = PasskeyWalletLink;
+
+export type PasskeyCeremonyError = Error & { code?: string };
+
+const UNSUPPORTED_AUTHENTICATOR_CODES = new Set([
+  "PASSKEY_UNSUPPORTED_AUTHENTICATOR",
+  "ERROR_AUTHENTICATOR_NO_SUPPORTED_PUBKEYCREDPARAMS_ALG",
+  "ERROR_AUTHENTICATOR_MISSING_DISCOVERABLE_CREDENTIAL_SUPPORT",
+  "ERROR_AUTHENTICATOR_MISSING_USER_VERIFICATION_SUPPORT",
+]);
+
+export function isUnsupportedAuthenticatorError(error: unknown): boolean {
+  if (!(error instanceof Error) || !("code" in error)) return false;
+  return typeof error.code === "string" && UNSUPPORTED_AUTHENTICATOR_CODES.has(error.code);
+}
+
+function toPasskeyError(
+  error: { code?: string; message?: string } | null | undefined,
+  fallback: string,
+): PasskeyCeremonyError {
+  return Object.assign(new Error(error?.message || fallback), { code: error?.code });
+}
+
+export async function isPasskeyAutofillAvailable(): Promise<boolean> {
+  if (typeof window === "undefined" || !window.PublicKeyCredential) return false;
+  try {
+    return (await window.PublicKeyCredential.isConditionalMediationAvailable?.()) === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function createAccountWithPasskey(
+  authClient: AuthClient,
+  options?: {
+    onSuccess?: (result: { passkeyWallet?: PasskeyWalletStatus }) => void;
+    onError?: (error: PasskeyCeremonyError) => void;
+  },
+): Promise<void> {
+  try {
+    const { data, error } = await authClient.passkey.addPasskey();
+    if (error || !data) {
+      options?.onError?.(toPasskeyError(error, "Could not create your account"));
+      return;
+    }
+    const { passkeyWallet } = data as { passkeyWallet?: PasskeyWalletStatus };
+    options?.onSuccess?.({ passkeyWallet });
+  } catch (error) {
+    options?.onError?.(
+      toPasskeyError(error instanceof Error ? error : null, "Could not create your account"),
+    );
+  }
+}
+
 export async function signInWithPasskey(
   authClient: AuthClient,
-  options?: { onSuccess?: () => void; onError?: (error: Error) => void },
+  options?: {
+    autoFill?: boolean;
+    onSuccess?: () => void;
+    onError?: (error: PasskeyCeremonyError) => void;
+  },
 ): Promise<void> {
-  const fail = (error: Error) => {
-    options?.onError?.(error);
-  };
-
-  const attempt = async (): Promise<boolean> => {
-    const { error, data } = await authClient.signIn.passkey();
-    return !error && !!data;
-  };
-
   try {
-    if (await attempt()) {
-      options?.onSuccess?.();
+    const { data, error } = await authClient.signIn.passkey({ autoFill: options?.autoFill });
+    if (error || !data) {
+      options?.onError?.(toPasskeyError(error, "Passkey sign-in failed"));
       return;
     }
+    options?.onSuccess?.();
   } catch (error) {
-    fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
-    return;
-  }
-
-  try {
-    const { error } = await authClient.passkey.addPasskey();
-    if (error) {
-      fail(new Error(error.message || "Passkey setup failed"));
-      return;
-    }
-  } catch (error) {
-    fail(error instanceof Error ? error : new Error("Passkey setup failed"));
-    return;
-  }
-
-  try {
-    if (await attempt()) {
-      options?.onSuccess?.();
-      return;
-    }
-    fail(new Error("Passkey sign-in failed"));
-  } catch (error) {
-    fail(error instanceof Error ? error : new Error("Passkey sign-in failed"));
+    options?.onError?.(
+      toPasskeyError(error instanceof Error ? error : null, "Passkey sign-in failed"),
+    );
   }
 }

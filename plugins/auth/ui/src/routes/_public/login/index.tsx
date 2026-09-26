@@ -1,14 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import {
+  isPasskeyAutofillAvailable,
   refreshSessionCache,
   sessionQueryOptions,
   signInWithPasskey,
   useAuthClient,
 } from "everything-dev/ui/auth";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { UnderConstruction } from "@/components/under-construction";
 import { PairPanel } from "../-pair-panel";
 
@@ -16,13 +19,18 @@ type SearchParams = {
   redirect?: string;
 };
 
+const DEVICE_APPROVAL_PATH = /^\/login\/device(\/approve)?(\?|$)/;
+
 function sanitizeRedirect(url: unknown): string {
   if (
     typeof url !== "string" ||
     !url.startsWith("/") ||
     url.startsWith("//") ||
-    url.startsWith("/login")
+    url.startsWith("/\\")
   ) {
+    return "/dashboard";
+  }
+  if (url.startsWith("/login") && !DEVICE_APPROVAL_PATH.test(url)) {
     return "/dashboard";
   }
   return url;
@@ -37,7 +45,7 @@ export const Route = createFileRoute("/_public/login/")({
     const { queryClient, authClient } = context;
     const session = await queryClient.query(sessionQueryOptions(authClient));
     if (session?.user && !session.user.banned) {
-      throw redirect({ to: search.redirect });
+      throw redirect({ href: sanitizeRedirect(search.redirect) });
     }
   },
   component: LoginPage,
@@ -60,12 +68,14 @@ function LoginPage() {
   const navigate = useNavigate();
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { redirect } = Route.useSearch();
+  const redirect = sanitizeRedirect(Route.useSearch().redirect);
   const { runtimeConfig } = Route.useRouteContext();
 
   const [nearPending, setNearPending] = useState(false);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
   const [passkeyPending, setPasskeyPending] = useState(false);
+  const [passkeyMissing, setPasskeyMissing] = useState(false);
+  const [passkeyAutofill, setPasskeyAutofill] = useState(false);
   const [showPair, setShowPair] = useState(false);
 
   useEffect(() => {
@@ -79,8 +89,24 @@ function LoginPage() {
   const handleSuccess = async (message: string) => {
     toast.success(message);
     await refreshSessionCache(auth, queryClient);
-    await navigate({ to: redirect, replace: true });
+    await navigate({ href: redirect, replace: true });
   };
+  const onAutofillSignIn = useEffectEvent(() => void handleSuccess("Signed in with passkey"));
+
+  useEffect(() => {
+    let cancelled = false;
+    void isPasskeyAutofillAvailable().then((available) => {
+      if (!available || cancelled) return;
+      setPasskeyAutofill(true);
+      void signInWithPasskey(auth, {
+        autoFill: true,
+        onSuccess: onAutofillSignIn,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth]);
 
   const handleNear = async () => {
     setNearPending(true);
@@ -98,14 +124,15 @@ function LoginPage() {
 
   const handlePasskey = async () => {
     setPasskeyPending(true);
+    setPasskeyMissing(false);
     await signInWithPasskey(auth, {
       onSuccess: async () => {
         setPasskeyPending(false);
         await handleSuccess("Signed in with passkey");
       },
-      onError: (error) => {
+      onError: () => {
         setPasskeyPending(false);
-        toast.error(error.message || "Passkey sign-in failed");
+        setPasskeyMissing(true);
       },
     });
   };
@@ -125,6 +152,19 @@ function LoginPage() {
             <PairPanel redirect={redirect} onClose={() => setShowPair(false)} />
           ) : (
             <>
+              {passkeyAutofill ? (
+                <div className="space-y-2">
+                  <Label htmlFor="login-passkey-autofill">Passkey</Label>
+                  <Input
+                    id="login-passkey-autofill"
+                    type="text"
+                    name="username"
+                    autoComplete="username webauthn"
+                    placeholder="Choose a saved passkey"
+                    data-testid="login.passkey-autofill"
+                  />
+                </div>
+              ) : null}
               <Button
                 type="button"
                 variant="default"
@@ -135,6 +175,14 @@ function LoginPage() {
               >
                 {passkeyPending ? "waiting for passkey..." : "sign in with passkey"}
               </Button>
+              {passkeyMissing ? (
+                <p
+                  className="rounded-[8px] border border-border bg-muted p-3 text-sm text-muted-foreground"
+                  data-testid="login.no-passkey-hint"
+                >
+                  No passkey on this device? Sign in with your phone, or connect your NEAR wallet.
+                </p>
+              ) : null}
               {detectedAccount ? (
                 <div className="space-y-3">
                   <Button

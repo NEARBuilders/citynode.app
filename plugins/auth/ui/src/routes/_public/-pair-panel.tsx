@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { offerPasskeyOnThisDevice } from "@/lib/passkey-offer";
 
 const DEVICE_LINK_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
@@ -80,7 +81,7 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         setClaimed(true);
         const claim = await auth.$fetch("/device-link/claim", {
           method: "POST",
-          body: { token },
+          body: { token, client_id: getDeviceLinkClientId() },
         });
         if (claim.error) {
           setFailed("Failed to complete sign-in");
@@ -88,7 +89,8 @@ export function PairPanel({ redirect, onClose }: { redirect: string; onClose: ()
         }
         await refreshSessionCache(auth, queryClient);
         toast.success("Signed in");
-        await navigate({ to: redirect, replace: true });
+        await navigate({ href: redirect, replace: true });
+        offerPasskeyOnThisDevice(auth);
         return;
       }
       const err = (error as TokenError)?.error;

@@ -1,18 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Context, Effect, Layer } from "effect";
-import {
-  buildGeneratedInfraSpec,
-  type ComposeDatabaseService,
-  type GeneratedInfraSpec,
-  loadPortState,
-  type PortState,
-  renderDockerCompose,
-  renderEnvFile,
-  renderEnvTestFile,
-  resolveDevHostPort,
-  savePortState,
-} from "../cli/infra";
+import { getSecretGroups, renderEnvFile, renderEnvTestFile } from "../cli/infra";
 import type { RuntimeConfig } from "../types";
 import { InfraError, type InfraPhase } from "./types";
 
@@ -24,14 +13,6 @@ export interface InfraMaterializerShape {
   readonly materializeTestInfra: (
     configDir: string,
     runtimeConfig: RuntimeConfig,
-  ) => Effect.Effect<void, InfraError>;
-  readonly materializeCompose: (
-    configDir: string,
-    runtimeConfig: RuntimeConfig,
-  ) => Effect.Effect<void, InfraError>;
-  readonly persistPortState: (
-    configDir: string,
-    state: PortState,
   ) => Effect.Effect<void, InfraError>;
 }
 
@@ -47,21 +28,6 @@ function writeIfChanged(filePath: string, content: string): void {
   if (existsSync(filePath) && readFileSync(filePath, "utf-8") === content) return;
   ensureDir(filePath);
   writeFileSync(filePath, content);
-}
-
-function buildSpecSafe(
-  configDir: string,
-  runtimeConfig: RuntimeConfig,
-): Effect.Effect<{ spec: GeneratedInfraSpec; portState: PortState }, InfraError> {
-  return Effect.try({
-    try: () => buildGeneratedInfraSpec(runtimeConfig, configDir),
-    catch: (cause) =>
-      new InfraError({
-        phase: "materialize-env",
-        message: `failed to build infra spec for ${configDir}`,
-        cause,
-      }),
-  });
 }
 
 function writeContentEffect(
@@ -83,57 +49,18 @@ function writeContentEffect(
 const makeMaterializer = (): InfraMaterializerShape => ({
   materializeTemplate: (configDir, runtimeConfig) =>
     Effect.gen(function* () {
-      const { spec } = yield* buildSpecSafe(configDir, runtimeConfig);
+      const groups = getSecretGroups(runtimeConfig);
       const filePath = join(configDir, ".env.example");
-      const content = renderEnvFile(spec.groups, spec.databases, spec.redis, {
-        forExample: true,
-      });
+      const content = renderEnvFile(groups, { forExample: true });
       yield* writeContentEffect(filePath, content, "materialize-env");
     }),
 
   materializeTestInfra: (configDir, runtimeConfig) =>
     Effect.gen(function* () {
-      const { spec } = yield* buildSpecSafe(configDir, runtimeConfig);
+      const groups = getSecretGroups(runtimeConfig);
       const filePath = join(configDir, ".env.test");
-      const content = renderEnvTestFile(spec.groups, spec.testDatabases);
+      const content = renderEnvTestFile(groups);
       yield* writeContentEffect(filePath, content, "materialize-env");
-    }),
-
-  materializeCompose: (configDir, runtimeConfig) =>
-    Effect.gen(function* () {
-      const { spec } = yield* buildSpecSafe(configDir, runtimeConfig);
-      const filePath = join(configDir, "docker-compose.yml");
-      const databases: ComposeDatabaseService[] = spec.databases.map((d) => ({
-        serviceName: d.serviceName,
-        containerName: d.containerName,
-        port: d.port,
-        volumeName: d.volumeName,
-        databaseName: d.databaseName,
-      }));
-      const redisConfigs = spec.redis.map((r) => ({
-        serviceName: r.serviceName,
-        containerName: r.containerName,
-        port: r.port,
-        volumeName: r.volumeName,
-      }));
-      const content = renderDockerCompose(
-        databases,
-        redisConfigs,
-        runtimeConfig.account,
-        spec.testDatabases.services,
-      );
-      yield* writeContentEffect(filePath, content, "materialize-compose");
-    }),
-
-  persistPortState: (configDir, state) =>
-    Effect.try({
-      try: () => savePortState(configDir, state),
-      catch: (cause) =>
-        new InfraError({
-          phase: "materialize-env",
-          message: `failed to persist port state at ${configDir}`,
-          cause,
-        }),
     }),
 });
 
@@ -142,19 +69,9 @@ export const InfraMaterializerLive: Layer.Layer<InfraMaterializer> = Layer.succe
   makeMaterializer(),
 );
 
-export {
-  buildGeneratedInfraSpec,
-  loadPortState,
-  renderDockerCompose,
-  renderEnvFile,
-  renderEnvTestFile,
-  resolveDevHostPort,
-  savePortState,
-};
-
 /**
  * Single source of truth for "should we persist port state?".
- * Lives next to the only thing it gates (persistPortState).
+ * Lives next to the only thing that still persists dev ports (the planner).
  */
 export function shouldPersistPortState(): boolean {
   return (
@@ -188,10 +105,9 @@ export interface MaterializeOptions {
 }
 
 /**
- * Orchestration helper: runs the three materializers in a canonical order
- * with the ephemeral-template-skip guard. Use this from every CLI tool
- * that needs to materialize infrastructure for a stack — it keeps the
- * "committed `.env.example` is stable" invariant enforced in one place.
+ * Orchestration helper: materializes the env templates in the canonical
+ * order. docker-compose.yml is a static committed file — nothing here
+ * generates or rewrites it.
  */
 export async function materializeViaLayer(
   configDir: string,
@@ -206,7 +122,6 @@ export async function materializeViaLayer(
         yield* m.materializeTemplate(configDir, runtimeConfig);
       }
       yield* m.materializeTestInfra(configDir, runtimeConfig);
-      yield* m.materializeCompose(configDir, runtimeConfig);
     }).pipe(Effect.provide(InfraMaterializerLive)),
   );
 }

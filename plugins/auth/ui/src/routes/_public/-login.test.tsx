@@ -100,8 +100,18 @@ async function buildRouter(initialUrl: string, queryClient: QueryClient, authCli
     id: undefined,
   });
 
+  const deviceApprovalRoute = createRoute({
+    getParentRoute: () => root,
+    path: "/login/device",
+    component: () => <div>device approval</div>,
+  });
+
   const router = createRouter({
-    routeTree: root.addChildren([guardRoute.addChildren([dashboardRoute]), loginRoute]),
+    routeTree: root.addChildren([
+      guardRoute.addChildren([dashboardRoute]),
+      loginRoute,
+      deviceApprovalRoute,
+    ]),
     history: createMemoryHistory({ initialEntries: [initialUrl] }),
     context,
   });
@@ -115,6 +125,37 @@ describe("login redirect flow", () => {
     const authClient = createAuthClientMock([signedInSession]);
 
     const router = await buildRouter("/login?redirect=%2Fdashboard", queryClient, authClient);
+    await router.load();
+
+    expect(router.state.location.pathname).toBe("/dashboard");
+  });
+
+  it("returns a phone that signs in to device approval with its user code intact", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(sessionQueryKey, signedInSession);
+    const authClient = createAuthClientMock([signedInSession]);
+
+    const router = await buildRouter(
+      `/login?redirect=${encodeURIComponent("/login/device?user_code=ABCD2345")}`,
+      queryClient,
+      authClient,
+    );
+    await router.load();
+
+    expect(router.state.location.pathname).toBe("/login/device");
+    expect(router.state.location.search).toEqual({ user_code: "ABCD2345" });
+  });
+
+  it("still refuses to redirect a signed-in visitor back into the login page", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(sessionQueryKey, signedInSession);
+    const authClient = createAuthClientMock([signedInSession]);
+
+    const router = await buildRouter(
+      `/login?redirect=${encodeURIComponent("/login?redirect=/login")}`,
+      queryClient,
+      authClient,
+    );
     await router.load();
 
     expect(router.state.location.pathname).toBe("/dashboard");

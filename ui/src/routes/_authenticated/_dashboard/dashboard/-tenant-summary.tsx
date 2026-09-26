@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { useApiClient } from "@/app";
 import { Button, Card } from "@/components";
-import { InfoRow } from "@/components/ui/info-row";
+import { InfoRow } from "@/components/info-row";
 
 type ApiClient = ReturnType<typeof useApiClient>;
 type Tenant = Awaited<ReturnType<ApiClient["resolveTenant"]>>;

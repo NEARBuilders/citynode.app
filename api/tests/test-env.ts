@@ -10,6 +10,5 @@ if (process.env.TEST_DATABASE === "postgres") {
     loadEnvFile({ path: envPath, override: true, quiet: true });
   }
 } else {
-  delete process.env.API_DATABASE_URL;
-  process.env.API_DATABASE_URL = "pglite::memory:";
+  process.env.API_DATABASE_URL = process.env.API_TEST_DATABASE_URL ?? "pglite::memory:";
 }
