@@ -14,19 +14,21 @@ const bootstrap = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("./app", () => ({
-  getRuntimeConfig: () => bootstrap.config,
-  getCspNonce: () => "test-nonce",
+vi.mock("../../src/ui/api", () => ({
   createApiClient: vi.fn(),
+}));
+vi.mock("../../src/ui/auth", () => ({
   createAuthClient: vi.fn(),
 }));
-vi.mock("./router", () => {
+vi.mock("../../src/ui/runtime", () => ({
+  getCspNonce: () => "test-nonce",
+}));
+vi.mock("../../src/ui/router-client", () => {
   bootstrap.routerLoads++;
   return {
     createRouter: bootstrap.createRouter,
   };
 });
-vi.mock("./routeConfig.gen", () => bootstrap.coreRouteConfig);
 vi.mock("react-dom/client", () => ({
   createRoot: () => ({ render: bootstrap.render }),
   hydrateRoot: bootstrap.hydrateRoot,
@@ -42,7 +44,7 @@ vi.mock("@module-federation/enhanced/runtime", () => ({
   loadRemote: composeMocks.loadRemote,
   registerRemotes: composeMocks.registerRemotes,
 }));
-vi.mock("./compose", () => ({
+vi.mock("../../src/ui/manifest", () => ({
   constructTree: composeMocks.constructTree,
   ComposePayloadSchema: { parse: (payload: unknown) => payload },
   CORE_UI_PLUGIN_KEY: "ui",
@@ -102,25 +104,32 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
+const loadHydrate = () => import("../../src/ui/hydrate");
+
+const runHydrate = async (config: Record<string, unknown>) => {
+  const { hydrate } = await loadHydrate();
+  return hydrate({
+    config: config as never,
+    routeConfig: async () => bootstrap.coreRouteConfig,
+  });
+};
+
 describe("client bootstrap", () => {
   it("rejects missing config before loading the router and can retry", async () => {
     bootstrap.config.hostUrl = "";
-    const { hydrate } = await import("./hydrate");
-
-    await expect(hydrate()).rejects.toThrow("Missing hostUrl or rpcBase");
+    await expect(runHydrate(bootstrap.config)).rejects.toThrow("Missing hostUrl or rpcBase");
     expect(bootstrap.routerLoads).toBe(0);
     expect(bootstrap.createRouter).not.toHaveBeenCalled();
     expect(window.__EVERYTHING_DEV_HYDRATE_PROMISE__).toBeUndefined();
 
     bootstrap.config.hostUrl = "https://example.test";
-    await hydrate();
+    await runHydrate(bootstrap.config);
     expect(bootstrap.createRouter).toHaveBeenCalledOnce();
     expect(bootstrap.render).toHaveBeenCalledOnce();
   });
 
   it("shares concurrent bootstrap calls and preserves CSR rendering", async () => {
-    const { hydrate } = await import("./hydrate");
-    await Promise.all([hydrate(), hydrate()]);
+    await Promise.all([runHydrate(bootstrap.config), runHydrate(bootstrap.config)]);
     expect(bootstrap.createRouter).toHaveBeenCalledOnce();
     expect(bootstrap.render).toHaveBeenCalledOnce();
     expect(bootstrap.hydrateRoot).not.toHaveBeenCalled();
@@ -128,8 +137,7 @@ describe("client bootstrap", () => {
 
   it("client-renders instead of hydrating when a server-rendered page has no compose payload", async () => {
     document.documentElement.setAttribute("data-everything-ssr", "");
-    const { hydrate } = await import("./hydrate");
-    await hydrate();
+    await runHydrate(bootstrap.config);
     expect(bootstrap.hydrateRoot).not.toHaveBeenCalled();
     expect(bootstrap.render).toHaveBeenCalledOnce();
   });
@@ -147,8 +155,7 @@ describe("client bootstrap", () => {
       },
     );
 
-    const { hydrate } = await import("./hydrate");
-    await hydrate();
+    await runHydrate(bootstrap.config);
 
     expect(composeMocks.registerRemotes).toHaveBeenCalledWith([
       {
@@ -195,8 +202,7 @@ describe("client bootstrap", () => {
       },
     );
 
-    const { hydrate } = await import("./hydrate");
-    await hydrate();
+    await runHydrate(bootstrap.config);
 
     expect(bootstrap.createRouter).toHaveBeenCalledWith(
       expect.objectContaining({ routeTree: undefined }),
@@ -208,8 +214,7 @@ describe("client bootstrap", () => {
     composeMocks.loadRemote.mockResolvedValue({ routeConfigLoaders: {} });
     composeMocks.constructTree.mockResolvedValue({ ...composedTree(), digest: "stale-digest" });
 
-    const { hydrate } = await import("./hydrate");
-    await hydrate();
+    await runHydrate(bootstrap.config);
 
     expect(bootstrap.createRouter).toHaveBeenCalledWith(
       expect.objectContaining({ routeTree: undefined }),

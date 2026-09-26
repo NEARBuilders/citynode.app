@@ -15,6 +15,8 @@ export interface RouterContext<TSession = unknown> {
 export interface RouterContextWithApi<TApiClient = unknown, TSession = unknown>
   extends RouterContext<TSession> {
   apiClient?: TApiClient;
+  /** auth client — concrete apps narrow this to their bound AuthClient type. */
+  authClient?: unknown;
 }
 
 export interface CreateRouterOptions<TApiClient = unknown, TSession = unknown> {

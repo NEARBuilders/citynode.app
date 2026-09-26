@@ -246,6 +246,7 @@
         "@types/tar": "^7.0.0",
         "better-auth": "catalog:",
         "better-near-auth": "catalog:",
+        "jsdom": "^30.0.1",
         "tsdown": "^0.22.0",
         "typescript": "^7.0.2",
         "vite-tsconfig-paths": "^5.1.4",
