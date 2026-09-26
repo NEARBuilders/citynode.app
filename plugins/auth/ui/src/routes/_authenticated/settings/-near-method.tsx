@@ -7,7 +7,7 @@ import {
   WalletIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ListedNearAccount } from "better-near-auth";
+import { isDeterministicAccountId, type ListedNearAccount } from "better-near-auth";
 import { isPasskeyWalletAvailable, type PasskeyWalletNetwork } from "better-near-auth/client";
 import { sessionQueryKey, useAuthClient } from "everything-dev/ui/auth";
 import { useState } from "react";
@@ -31,12 +31,19 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { nearAccountsQueryKey, passkeyQueryKey } from "@/lib/query-keys";
 import { MethodHeader } from "./-method-header";
-import { passkeyQueryKey } from "./-passkeys-method";
 
-const nearAccountsQueryKey = ["near-accounts"] as const;
+type NearCallbacks = {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+};
 
-const PASSKEY_WALLET_ACCOUNT_PATTERN = /^0s[0-9a-f]{40}$/;
+function toPromise(action: (callbacks: NearCallbacks) => unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    void action({ onSuccess: resolve, onError: reject });
+  });
+}
 
 export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
   const auth = useAuthClient();
@@ -54,7 +61,8 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
   const passkeysQuery = useQuery({
     queryKey: passkeyQueryKey,
     queryFn: async () => {
-      const { data } = await auth.passkey.listUserPasskeys();
+      const { data, error } = await auth.passkey.listUserPasskeys();
+      if (error) throw new Error(error.message);
       return (data || []) as { id: string }[];
     },
     staleTime: 60 * 1000,
@@ -62,8 +70,8 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
 
   const accounts = accountsQuery.data ?? [];
   const canCreateFromPasskey =
-    passkeysQuery.data !== undefined &&
-    passkeysQuery.data.length > 0 &&
+    passkeysQuery.isSuccess &&
+    (passkeysQuery.data?.length ?? 0) > 0 &&
     isPasskeyWalletAvailable(networkId);
 
   const refresh = () => {
@@ -71,29 +79,24 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
     void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
     void queryClient.invalidateQueries({ queryKey: ["user-invitations"] });
   };
+  const onError = (err: Error) => toast.error(err.message);
 
   const linkNamedMutation = useMutation({
-    mutationFn: () =>
-      new Promise<void>((resolve, reject) => {
-        void auth.near.link({ onSuccess: () => resolve(), onError: reject });
-      }),
+    mutationFn: () => toPromise((callbacks) => auth.near.link(callbacks)),
     onSuccess: () => {
       toast.success("NEAR account linked");
       refresh();
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError,
   });
 
   const createFromPasskeyMutation = useMutation({
-    mutationFn: () =>
-      new Promise<void>((resolve, reject) => {
-        void auth.near.linkPasskeyWallet({ onSuccess: () => resolve(), onError: reject });
-      }),
+    mutationFn: () => toPromise((callbacks) => auth.near.linkPasskeyWallet(callbacks)),
     onSuccess: () => {
       toast.success("NEAR account created from your passkey");
       refresh();
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError,
   });
 
   const setPrimaryMutation = useMutation({
@@ -108,7 +111,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
       toast.success("Primary account updated");
       refresh();
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError,
   });
 
   const unlinkMutation = useMutation({
@@ -124,7 +127,7 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
       toast.success("NEAR account unlinked");
       refresh();
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError,
   });
 
   const linking = linkNamedMutation.isPending || createFromPasskeyMutation.isPending;
@@ -179,16 +182,19 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
           className="h-16 w-full rounded-2xl"
           data-testid="settings.near-accounts-loading"
         />
+      ) : accountsQuery.isError ? (
+        <p className="text-sm text-destructive" data-testid="settings.near-accounts-error">
+          Couldn't load your NEAR accounts.{" "}
+          <Button variant="link" size="sm" onClick={() => accountsQuery.refetch()}>
+            Retry
+          </Button>
+        </p>
       ) : accounts.length > 0 ? (
         <ItemGroup>
           {accounts.map((account) => (
             <Item key={account.id} variant="outline" size="sm" role="listitem">
               <ItemMedia variant="icon">
-                {PASSKEY_WALLET_ACCOUNT_PATTERN.test(account.accountId) ? (
-                  <FingerprintIcon />
-                ) : (
-                  <WalletIcon />
-                )}
+                {isDeterministicAccountId(account.accountId) ? <FingerprintIcon /> : <WalletIcon />}
               </ItemMedia>
               <ItemContent className="basis-0">
                 <ItemTitle className="max-w-full">
@@ -219,13 +225,15 @@ export function NearMethod({ networkId }: { networkId: PasskeyWalletNetwork }) {
                     <DotsThreeIcon />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => setPrimaryMutation.mutate(account)}
-                      disabled={setPrimaryMutation.isPending}
-                    >
-                      <StarIcon />
-                      Make primary
-                    </DropdownMenuItem>
+                    {!account.isPrimary && (
+                      <DropdownMenuItem
+                        onClick={() => setPrimaryMutation.mutate(account)}
+                        disabled={setPrimaryMutation.isPending}
+                      >
+                        <StarIcon />
+                        Make primary
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       variant="destructive"
                       onClick={() => setAccountToUnlink(account)}

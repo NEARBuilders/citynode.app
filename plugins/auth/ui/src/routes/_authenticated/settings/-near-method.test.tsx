@@ -131,6 +131,32 @@ describe("near method settings", () => {
     );
   });
 
+  it("does not offer the primary account a make-primary action", async () => {
+    harness.listAccounts.mockResolvedValue({
+      data: {
+        accounts: [account({ id: "na-1", isPrimary: true, isActive: true, isAvailable: false })],
+      },
+      error: null,
+    });
+    harness.listUserPasskeys.mockResolvedValue({ data: [{ id: "pk-1" }], error: null });
+
+    renderNearMethod();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Actions for alice.near" }));
+    expect(await screen.findByRole("menuitem", { name: "Unlink" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Make primary" })).toBeNull();
+  });
+
+  it("surfaces a load failure instead of the empty state", async () => {
+    harness.listAccounts.mockResolvedValue({ data: null, error: { message: "boom" } });
+    harness.listUserPasskeys.mockResolvedValue({ data: [{ id: "pk-1" }], error: null });
+
+    renderNearMethod();
+
+    expect(await screen.findByTestId("settings.near-accounts-error")).toBeTruthy();
+    expect(screen.queryByTestId("settings.near-accounts-empty")).toBeNull();
+  });
+
   it("unlinks an account after confirmation", async () => {
     harness.listAccounts.mockResolvedValue({
       data: { accounts: [account({ id: "na-1" })] },

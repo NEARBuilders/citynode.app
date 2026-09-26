@@ -1,7 +1,7 @@
 import { DeviceMobileIcon, FingerprintIcon, UserPlusIcon, WalletIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
-import { isPasskeyWalletAvailable, type PasskeyWalletNetwork } from "better-near-auth/client";
+import { isPasskeyWalletAvailable } from "better-near-auth/client";
 import {
   createAccountWithPasskey,
   isPasskeyAutofillAvailable,
@@ -19,6 +19,7 @@ import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useIsDesktop } from "@/lib/use-client";
+import { useNetworkId } from "@/lib/use-network-id";
 import { PairPanel } from "../-pair-panel";
 
 type SearchParams = {
@@ -84,9 +85,8 @@ function LoginPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const redirectTo = sanitizeRedirect(Route.useSearch().redirect);
-  const { runtimeConfig } = Route.useRouteContext();
   const banned = useRouterState({ select: (state) => state.location.hash === "banned" });
-  const networkId = (runtimeConfig?.networkId ?? "mainnet") as PasskeyWalletNetwork;
+  const networkId = useNetworkId();
   const isDesktop = useIsDesktop();
 
   const [view, setView] = useState<View>("sign-in");

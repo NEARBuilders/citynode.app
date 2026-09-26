@@ -32,9 +32,8 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import { passkeyQueryKey } from "@/lib/query-keys";
 import { MethodHeader } from "./-method-header";
-
-export const passkeyQueryKey = ["passkeys"] as const;
 
 export function PasskeysMethod() {
   const auth = useAuthClient();
