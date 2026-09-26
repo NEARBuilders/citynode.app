@@ -1,10 +1,12 @@
 import type { InferClientOutputs } from "@orpc/client";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import type { ApiClient } from "@/app";
+import { SectionHeader } from "@/components/layout/section-header";
 import { StakePoolCard } from "@/components/stake-pool-card";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { nodeQueryKeys } from "@/lib/queries/nodes";
 
 type Node = InferClientOutputs<ApiClient>["getNodeSummary"]["node"];
@@ -13,7 +15,6 @@ type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][n
 export function NodeStakeSection({
   node,
   children,
-  gateway,
   validators,
   sourceNodeId,
   apiClient,
@@ -41,79 +42,81 @@ export function NodeStakeSection({
     },
   });
 
+  const target = hasOwnValidator
+    ? node
+    : childrenWithValidators.length === 0
+      ? source?.sourceNode
+      : undefined;
+  const scope =
+    source?.inherited && source.sourceNode
+      ? `Stake inherited from ${source.sourceNode.name}.`
+      : hasOwnValidator || (source && !source.inherited)
+        ? "Pools across this node and its descendants."
+        : null;
+
   return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold text-foreground">Stake</h2>
-      {validators.length === 0 ? (
-        <p className="text-sm text-muted-foreground">This node doesn&apos;t run a validator yet.</p>
-      ) : (
+    <section className="flex flex-col gap-6" data-testid="node-stake">
+      <SectionHeader
+        title="Stake"
+        description={
+          validators.length === 0
+            ? "This node doesn't run a validator yet."
+            : hasOwnValidator
+              ? `Back ${node.name} by staking NEAR to its validator.`
+              : childrenWithValidators.length > 0
+                ? `${node.name} doesn't run its own validator. Stake to a community that does.`
+                : scope
+        }
+        action={target && <StakeLink node={target} />}
+      />
+      {validators.length > 0 && (
         <>
-          {hasOwnValidator ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {node.name} runs its own validator pool.
-              </p>
-              <StakeLink node={node} gateway={gateway} />
-            </div>
-          ) : childrenWithValidators.length > 0 ? (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {node.name} doesn&apos;t run its own validator — stake to a city that does.
-              </p>
-              <div>
-                {childrenWithValidators.map((child) => (
-                  <a
-                    key={child.id}
-                    href={`https://${child.slug}.${gateway}/stake?nodeId=${encodeURIComponent(child.id)}`}
-                    className="group flex items-center gap-4 border-b border-border px-2 py-4 last:border-0 transition-colors hover:bg-muted/50"
+          {childrenWithValidators.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {childrenWithValidators.map((child) => (
+                <li key={child.id}>
+                  <Item
+                    variant="outline"
+                    size="sm"
+                    render={<Link to="/stake" search={{ nodeId: child.id }} />}
                   >
-                    <span className="capitalize text-base font-semibold text-foreground group-hover:underline">
-                      {child.name}
-                    </span>
-                    <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          ) : (
-            source?.sourceNode && <StakeLink node={source.sourceNode} gateway={gateway} />
+                    <ItemContent>
+                      <ItemTitle>
+                        <span className="capitalize">{child.name}</span>
+                      </ItemTitle>
+                    </ItemContent>
+                    <ItemActions>
+                      <ArrowRightIcon className="text-muted-foreground" />
+                    </ItemActions>
+                  </Item>
+                </li>
+              ))}
+            </ul>
           )}
-          {source?.inherited && source.sourceNode ? (
-            <Card className="gap-1 p-4">
-              <p className="text-sm">Stake inherited from {source.sourceNode.name}.</p>
-              <p className="text-xs text-muted-foreground">
-                Available pools are supplied by ancestor nodes.
-              </p>
-            </Card>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {hasOwnValidator || (source && !source.inherited)
-                ? "Pools across this node and its descendants."
-                : "Available staking pools."}
-            </p>
+          {scope && (hasOwnValidator || childrenWithValidators.length > 0) && (
+            <p className="text-sm text-muted-foreground">{scope}</p>
           )}
-          {validators.map((validator) => (
-            <StakePoolCard key={validator.id} validator={validator} />
-          ))}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {validators.map((validator) => (
+              <StakePoolCard key={validator.id} validator={validator} />
+            ))}
+          </div>
         </>
       )}
     </section>
   );
 }
 
-function StakeLink({
-  node,
-  gateway,
-}: {
-  node: Pick<Node, "id" | "name" | "slug">;
-  gateway: string;
-}) {
+function StakeLink({ node }: { node: Pick<Node, "id" | "name"> }) {
   return (
-    <Button asChild>
-      <a href={`https://${node.slug}.${gateway}/stake?nodeId=${encodeURIComponent(node.id)}`}>
-        Stake to {node.name}
-        <ArrowRight />
-      </a>
+    <Button
+      variant="outline"
+      nativeButton={false}
+      data-testid="node-stake-link"
+      render={<Link to="/stake" search={{ nodeId: node.id }} />}
+    >
+      Stake to {node.name}
+      <ArrowRightIcon data-icon="inline-end" />
     </Button>
   );
 }

@@ -81,3 +81,74 @@ export function resolveOrgSlug(
   const org = organizations.find((candidate) => candidate.id === orgId);
   return typeof org?.slug === "string" && org.slug ? org.slug : null;
 }
+
+interface FilterableTenant {
+  id: string;
+  name: string;
+  accountId: string;
+  status: string;
+}
+
+export function filterTenants<T extends FilterableTenant>(
+  tenants: readonly T[],
+  {
+    status,
+    query,
+    slugByTenantId,
+  }: { status: string; query: string; slugByTenantId?: ReadonlyMap<string, string> },
+): T[] {
+  const needle = query.trim().toLowerCase();
+  return tenants.filter((tenant) => {
+    if (status !== "all") {
+      const matchesStatus =
+        status === "pending"
+          ? tenant.status === "pending" || tenant.status === "pending_deletion"
+          : tenant.status === status;
+      if (!matchesStatus) return false;
+    }
+    if (!needle) return true;
+    const slug = slugByTenantId?.get(tenant.id) ?? "";
+    return [tenant.name, tenant.accountId, slug].some((value) =>
+      value.toLowerCase().includes(needle),
+    );
+  });
+}
+
+export const tenantWizardStepIds = ["organization", "dao", "details", "review"] as const;
+
+export type TenantWizardStepId = (typeof tenantWizardStepIds)[number];
+export type TenantWizardStepStatus = "complete" | "current" | "upcoming";
+
+export function resolveTenantWizardSteps(done: {
+  organization: boolean;
+  dao: boolean;
+  details: boolean;
+}) {
+  const complete: Record<TenantWizardStepId, boolean> = { ...done, review: false };
+  const current = tenantWizardStepIds.find((id) => !complete[id]) ?? "review";
+  const status = (id: TenantWizardStepId): TenantWizardStepStatus =>
+    id === current ? "current" : complete[id] ? "complete" : "upcoming";
+  return { current, position: tenantWizardStepIds.indexOf(current) + 1, status };
+}
+
+type DeployProgress = "pending" | "running" | "success" | "failed";
+type DeployStepStatus = TenantWizardStepStatus | "failed";
+
+export function resolveTenantDeploySteps({
+  create,
+  publish,
+  verified,
+}: {
+  create: DeployProgress;
+  publish: DeployProgress;
+  verified: boolean;
+}): { create: DeployStepStatus; publish: DeployStepStatus; live: DeployStepStatus } {
+  const createStatus: DeployStepStatus =
+    create === "success" ? "complete" : create === "failed" ? "failed" : "current";
+  if (createStatus !== "complete") {
+    return { create: createStatus, publish: "upcoming", live: "upcoming" };
+  }
+  if (publish === "failed") return { create: "complete", publish: "failed", live: "upcoming" };
+  if (publish !== "success") return { create: "complete", publish: "current", live: "upcoming" };
+  return { create: "complete", publish: "complete", live: verified ? "complete" : "current" };
+}

@@ -1,6 +1,18 @@
-import { Check, X } from "lucide-react";
-import type { ChangeEvent } from "react";
-import { Button, Card, Label, Textarea } from "@/components";
+import { CheckIcon } from "@phosphor-icons/react";
+import { type ChangeEvent, useState } from "react";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Textarea,
+} from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 
 interface ProposalReviewActionsProps {
@@ -28,59 +40,85 @@ export function ProposalReviewActions({
   onApprove,
   onReject,
 }: ProposalReviewActionsProps) {
+  const [rejecting, setRejecting] = useState(false);
+  if (!isPending) return null;
+
   return (
-    <>
-      {isPending && isNodeProposal && (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-foreground">Tenant DAO</h2>
-            <p className="text-sm text-muted-foreground">
-              Connect {proposalDaoAccountId ?? "the proposed DAO"} through Trezu. Approval creates
-              the tenant records and submits its bos.config.json publish proposal to Sputnik DAO.
-            </p>
-          </div>
-          <ConnectDao onVerified={onDaoVerified} />
+    <div className="flex flex-col gap-6" data-testid="admin-proposal-decision">
+      <h2 className="text-xl font-semibold">Decision</h2>
+
+      {isNodeProposal && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Connect{" "}
+            <span className="font-mono break-all text-foreground">
+              {proposalDaoAccountId ?? "the proposed DAO"}
+            </span>{" "}
+            to approve.
+          </p>
+          <ConnectDao purpose="proposal-review" variant="plain" onVerified={onDaoVerified} />
         </div>
       )}
 
-      {isPending ? (
-        <Card className="space-y-4 p-6">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-foreground">Review action</h2>
-            <p className="text-sm text-muted-foreground">
-              Approve to publish this thing, or add required notes before rejecting it.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rejection-reason">Review notes</Label>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <Button
+            onClick={onApprove}
+            disabled={isReviewing || !daoIsVerified}
+            data-testid="admin-proposal-approve"
+          >
+            <CheckIcon />
+            {isReviewing ? "Approving…" : "Approve"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setRejecting(true)}
+            disabled={isReviewing}
+            data-testid="admin-proposal-reject"
+          >
+            Reject
+          </Button>
+        </div>
+        {!daoIsVerified && (
+          <p className="text-sm text-muted-foreground">Approve unlocks once the DAO is verified.</p>
+        )}
+      </div>
+
+      <Dialog open={rejecting} onOpenChange={setRejecting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject this proposal?</DialogTitle>
+            <DialogDescription>Your reason is saved with the proposal.</DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="rejection-reason">Reason</FieldLabel>
             <Textarea
               id="rejection-reason"
               value={rejectionReason}
               onChange={onRejectionReasonChange}
-              placeholder="Required when rejecting"
+              placeholder="What needs to change"
               rows={4}
             />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={onApprove} disabled={isReviewing || !daoIsVerified}>
-              <Check />
-              {isReviewing ? "reviewing..." : "approve"}
+            <FieldDescription>Required.</FieldDescription>
+          </Field>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejecting(false)} disabled={isReviewing}>
+              Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={onReject}
+              onClick={() => {
+                setRejecting(false);
+                onReject();
+              }}
               disabled={!rejectionReason.trim() || isReviewing}
+              data-testid="admin-proposal-reject-confirm"
             >
-              <X />
-              reject
+              Reject proposal
             </Button>
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-6 text-sm text-muted-foreground">
-          This proposal has already been reviewed.
-        </Card>
-      )}
-    </>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

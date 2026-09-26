@@ -167,7 +167,7 @@ export function GeographicMap({
           Map isn’t loading. Use the list instead.
         </p>
       )}
-      <div ref={container} className="relative z-0 h-[350px] w-full sm:h-[440px] lg:h-[640px]" />
+      <div ref={container} className="relative z-0 h-87.5 w-full sm:h-110 lg:h-160" />
     </section>
   );
 }

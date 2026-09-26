@@ -1,9 +1,9 @@
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { buildTenantUrl } from "everything-dev/ui/tenant";
-import { CalendarDays, ExternalLink, FileCheck2, Network, PanelTop } from "lucide-react";
-import { getActiveRuntime } from "@/app";
-import { Badge, Button, EmptyState, PageContainer, PageHeader } from "@/components";
-import { cn } from "@/lib/utils";
+import { NetworkIcon } from "@phosphor-icons/react";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Button, EmptyState, PageContainer } from "@/components";
+import { pageTitle } from "@/lib/page-title";
+import { nodeQueryKeys } from "@/lib/queries/nodes";
+import { CommunityHeader, communityAuthContextQueryOptions } from "./node/-community-header";
 import { hasNodeProposalReviewPermission } from "./node/-node-access";
 import { getNodeEmptyStateContent } from "./node/-node-empty-state";
 
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         summary: null,
         stakingSourceNode: null,
         canReview: false,
+        canManage: false,
         emptyReason: "no-org" as const,
       };
     }
@@ -38,6 +39,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         summary: null,
         stakingSourceNode: null,
         canReview: false,
+        canManage: false,
         emptyReason: "no-tenant" as const,
       };
     }
@@ -54,6 +56,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
         summary: null,
         stakingSourceNode: null,
         canReview: false,
+        canManage: false,
         emptyReason: "no-node" as const,
       };
     }
@@ -67,6 +70,13 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
           });
 
     const canReview = hasNodeProposalReviewPermission(context.auth.user?.role);
+    const authContext = await context.queryClient
+      .ensureQueryData(communityAuthContextQueryOptions(context.apiClient, activeOrganizationId))
+      .catch(() => null);
+    context.queryClient.setQueryData(nodeQueryKeys.tenant(tenant.id), nodes);
+    context.queryClient.setQueryData(nodeQueryKeys.byId(selectedNode.id), selectedNode);
+    const orgRole = authContext?.organization?.member?.role;
+    const canManage = canReview || orgRole === "owner" || orgRole === "admin";
 
     return {
       tenant,
@@ -75,24 +85,23 @@ export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node"
       summary,
       stakingSourceNode,
       canReview,
+      canManage,
       emptyReason: null,
     };
   },
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
-      { title: "My Node | app" },
-      { name: "description", content: "Manage your organization's City Node." },
+      { title: pageTitle("My community", match.context.runtimeConfig) },
+      { name: "description", content: "Run your community." },
     ],
   }),
   component: NodeDashboardLayout,
 });
 
 function NodeDashboardLayout() {
-  const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const context = Route.useRouteContext();
-  const { runtimeConfig, nodes, selectedNode, summary, emptyReason } = context;
-  const gateway = getActiveRuntime(runtimeConfig)?.gatewayId;
+  const { selectedNode, summary, emptyReason } = context;
 
   if (!selectedNode || !summary) {
     const emptyState = getNodeEmptyStateContent(
@@ -100,14 +109,14 @@ function NodeDashboardLayout() {
       context.auth.user?.role === "admin",
     );
     return (
-      <PageContainer variant="wide">
+      <PageContainer>
         <EmptyState
-          icon={Network}
-          title="No node available"
+          icon={NetworkIcon}
+          title={emptyState.title}
           description={emptyState.description}
           action={
-            <Button asChild>
-              <Link to={emptyState.actionTo}>{emptyState.actionLabel}</Link>
+            <Button nativeButton={false} render={<Link to={emptyState.actionTo} />}>
+              {emptyState.actionLabel}
             </Button>
           }
         />
@@ -115,95 +124,17 @@ function NodeDashboardLayout() {
     );
   }
 
-  const gatewayUrl = gateway ? buildTenantUrl(selectedNode.slug, gateway) : null;
-  const isSummary = pathname === "/dashboard/node" || pathname === "/dashboard/node/";
+  const active = pathname.startsWith("/dashboard/node/proposals") ? "proposals" : "overview";
 
   return (
     <PageContainer variant="wide">
-      <div className="space-y-8">
-        <PageHeader
-          icon={Network}
-          label="My Node"
-          title={selectedNode.name}
-          subtitle={selectedNode.slug}
-          actions={
-            <>
-              {nodes.length > 1 && (
-                <label className="sr-only" htmlFor="managed-node">
-                  Managed node
-                </label>
-              )}
-              {nodes.length > 1 && (
-                <select
-                  id="managed-node"
-                  value={selectedNode.id}
-                  onChange={(event) =>
-                    navigate({
-                      to: "/dashboard/node",
-                      search: { nodeId: event.target.value },
-                    })
-                  }
-                  className="h-9 rounded-[8px] border-2 border-border bg-card px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {nodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {gatewayUrl && (
-                <Button asChild variant="outline" size="sm">
-                  <a href={gatewayUrl} target="_blank" rel="noopener noreferrer">
-                    {selectedNode.slug}.{gateway}
-                    <ExternalLink />
-                  </a>
-                </Button>
-              )}
-            </>
-          }
-        />
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{selectedNode.kind}</Badge>
-          <span className="font-mono text-xs text-muted-foreground">{selectedNode.id}</span>
-        </div>
-
-        <nav className="flex flex-wrap gap-2">
-          <Button asChild>
-            <Link to="/nodes/$nodeId/content" params={{ nodeId: selectedNode.id }}>
-              <CalendarDays />
-              Events & community profile
-            </Link>
-          </Button>
-          <Link
-            to="/dashboard/node"
-            search={{ nodeId: selectedNode.id }}
-            className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-[10px] border-2 border-border-strong px-3.5 text-sm font-medium shadow-sm transition-all hover:shadow-md",
-              isSummary ? "bg-foreground text-background" : "bg-card text-foreground",
-            )}
-          >
-            <PanelTop className="h-3.5 w-3.5" />
-            overview
-          </Link>
-          <Link
-            to="/dashboard/node/proposals"
-            search={{ nodeId: selectedNode.id }}
-            className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-[10px] border-2 border-border-strong px-3.5 text-sm font-medium shadow-sm transition-all hover:shadow-md",
-              pathname.startsWith("/dashboard/node/proposals")
-                ? "bg-foreground text-background"
-                : "bg-card text-foreground",
-            )}
-          >
-            <FileCheck2 className="h-3.5 w-3.5" />
-            proposals
-          </Link>
-        </nav>
-
-        <Outlet />
-      </div>
+      <CommunityHeader
+        headerTestId="dashboard-node.heading"
+        nodeId={selectedNode.id}
+        node={selectedNode}
+        active={active}
+      />
+      <Outlet />
     </PageContainer>
   );
 }

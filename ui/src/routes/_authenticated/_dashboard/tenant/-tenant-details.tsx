@@ -1,18 +1,32 @@
-import { buildRegistryConfigUrl } from "everything-dev/fastkv";
-import { Pencil } from "lucide-react";
-import { Button, Card, CardContent, InfoRow, Input, SectionHeader } from "@/components";
+import { ArrowRightIcon } from "@phosphor-icons/react";
+import { Link } from "@tanstack/react-router";
+import { Badge, Button, Input, LocalDate, SectionHeader } from "@/components";
+import { SettingsRow } from "./-settings-row";
 import type { TenantRecord } from "./-tenant-types";
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  pending: "Pending",
+  suspended: "Suspended",
+  pending_deletion: "Pending deletion",
+};
+
+const STATUS_BADGE = {
+  active: "success",
+  suspended: "warning",
+  pending_deletion: "destructive",
+} as const;
 
 export function TenantDetails({
   tenant,
   hostname,
-  gatewayId,
+  orgSlug,
   isOwner,
   editor,
 }: {
   tenant: TenantRecord;
   hostname: string | null;
-  gatewayId: string;
+  orgSlug: string | null;
   isOwner: boolean;
   editor: {
     editing: boolean;
@@ -24,97 +38,94 @@ export function TenantDetails({
     onNameChange: (name: string) => void;
   };
 }) {
-  const isDaoOwned = tenant.ownerKind === "dao";
-  const bosUrl = `bos://${tenant.accountId}/${gatewayId}`;
-  const fastKvUrl = buildRegistryConfigUrl(tenant.accountId, gatewayId);
   return (
-    <section className="space-y-3">
-      <SectionHeader
-        title="Details"
-        action={
-          isOwner && !editor.editing ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                editor.onEdit();
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              edit
-            </Button>
-          ) : undefined
-        }
-      />
-      <Card>
-        <CardContent className="p-6 space-y-4">
+    <section className="flex flex-col gap-2">
+      <SectionHeader title="General" sectionTestId="tenant.section.general" />
+      <div className="flex flex-col">
+        <SettingsRow
+          label="Name"
+          action={
+            isOwner && !editor.editing ? (
+              <Button variant="ghost" size="sm" onClick={editor.onEdit}>
+                Rename
+              </Button>
+            ) : undefined
+          }
+        >
           {editor.editing ? (
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 editor.onSave();
               }}
-              className="space-y-4"
+              className="flex max-w-md flex-wrap gap-2"
             >
-              <InfoRow
-                label="name"
-                value={
-                  <Input
-                    value={editor.name}
-                    onChange={(e) => editor.onNameChange(e.target.value)}
-                    className="max-w-xs"
-                  />
-                }
+              <Input
+                id="tenant-edit-name"
+                aria-label="Community name"
+                value={editor.name}
+                autoFocus
+                onChange={(event) => editor.onNameChange(event.target.value)}
+                className="min-w-0 flex-1"
               />
-              <div className="flex gap-2 pt-1">
-                <Button type="submit" size="sm" disabled={editor.isPending}>
-                  save
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={editor.onCancel}>
-                  cancel
-                </Button>
-              </div>
+              <Button type="submit" disabled={editor.isPending || !editor.name.trim()}>
+                {editor.isPending ? "Saving…" : "Save"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={editor.onCancel}>
+                Cancel
+              </Button>
             </form>
           ) : (
-            <>
-              <InfoRow label="name" value={tenant.name} />
-              <InfoRow label="hostname" value={hostname ?? "—"} mono />
-              <InfoRow label="account" value={tenant.accountId} mono />
-              <InfoRow label="owner kind" value={isDaoOwned ? "dao" : "platform"} />
-              <InfoRow
-                label="registry"
-                value={
-                  bosUrl && fastKvUrl ? (
-                    <span className="flex flex-wrap items-center gap-2">
-                      <code className="font-mono text-xs">{bosUrl}</code>
-                      <a
-                        href={fastKvUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs underline text-muted-foreground hover:text-foreground"
-                      >
-                        view published config on FastKV
-                      </a>
-                    </span>
-                  ) : (
-                    "—"
-                  )
-                }
-              />
-              <InfoRow label="org id" value={tenant.orgId} mono />
-              <InfoRow label="status" value={tenant.status} />
-              <InfoRow
-                label="created"
-                value={tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}
-              />
-              <InfoRow
-                label="updated"
-                value={tenant.updatedAt ? new Date(tenant.updatedAt).toLocaleString() : "—"}
-              />
-            </>
+            tenant.name
           )}
-        </CardContent>
-      </Card>
+        </SettingsRow>
+        <SettingsRow label="Status">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Badge
+              variant={STATUS_BADGE[tenant.status as keyof typeof STATUS_BADGE] ?? "secondary"}
+              data-testid="tenant.status"
+            >
+              {STATUS_LABEL[tenant.status] ?? tenant.status}
+            </Badge>
+            <Badge variant="outline">{tenant.ownerKind === "dao" ? "DAO-owned" : "Platform"}</Badge>
+          </span>
+        </SettingsRow>
+        <SettingsRow label="Address">
+          <span className="font-mono break-all">{hostname ?? "Not bound yet"}</span>
+        </SettingsRow>
+        <SettingsRow label="Account">
+          <span className="font-mono break-all">{tenant.accountId}</span>
+        </SettingsRow>
+        <SettingsRow
+          label="Organization"
+          description="Members, roles and invitations."
+          action={
+            orgSlug ? (
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link to="/orgs/$slug" params={{ slug: orgSlug }} />}
+                data-testid="tenant.open-organization"
+              >
+                Manage
+                <ArrowRightIcon />
+              </Button>
+            ) : undefined
+          }
+        >
+          <span className="font-mono break-all">{orgSlug ? `@${orgSlug}` : tenant.orgId}</span>
+        </SettingsRow>
+        <SettingsRow label="Created">
+          <LocalDate value={tenant.createdAt} fallback="—" />
+          {tenant.updatedAt ? (
+            <span className="text-muted-foreground">
+              {" "}
+              · updated <LocalDate value={tenant.updatedAt} format="relative" />
+            </span>
+          ) : null}
+        </SettingsRow>
+      </div>
     </section>
   );
 }

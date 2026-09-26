@@ -28,6 +28,10 @@ vi.mock("everything-dev/ui/auth", () => ({
   }),
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: (props: Record<string, unknown>) => <a {...props} />,
+}));
+
 vi.mock("sonner", () => ({
   toast: { success: harness.success, error: harness.error },
 }));
@@ -61,7 +65,7 @@ describe("profile settings", () => {
 
     const nameInput = await screen.findByPlaceholderText("Your display name");
     fireEvent.change(nameInput, { target: { value: "New name" } });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(harness.updateUser).toHaveBeenCalledWith({ name: "New name" }));
     await waitFor(() => expect(queryClient.getQueryData(["session"])).toEqual(freshSession));

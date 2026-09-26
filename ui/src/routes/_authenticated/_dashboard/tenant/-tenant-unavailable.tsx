@@ -1,18 +1,32 @@
-import { Card, PageContainer } from "@/components";
+import { BankIcon, WarningIcon } from "@phosphor-icons/react";
+import { Link } from "@tanstack/react-router";
+import { Button, EmptyState, PageContainer } from "@/components";
+
 export function TenantUnavailable({ gatewayId }: { gatewayId?: string }) {
   return (
     <PageContainer variant="wide">
       {!gatewayId ? (
-        <Card className="p-6 space-y-2">
-          <h2 className="text-lg font-semibold text-foreground">Gateway not configured</h2>
-          <p className="text-sm text-muted-foreground">
-            The active runtime does not declare a domain, so this page cannot resolve a tenant
-            address. Set <code className="font-mono">domain</code> in <code>bos.config.json</code>{" "}
-            and rebuild the host. Until then, view and edit operations will not run.
-          </p>
-        </Card>
+        <EmptyState
+          icon={WarningIcon}
+          title="Gateway not configured"
+          description="Set domain in bos.config.json and rebuild the host to load community settings."
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/dashboard" />}>
+              Back home
+            </Button>
+          }
+        />
       ) : (
-        <div className="text-muted-foreground text-sm py-12">Tenant not found.</div>
+        <EmptyState
+          icon={BankIcon}
+          title="Community not found"
+          description="It may have been deleted, or you don't have access."
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/dashboard" />}>
+              Back home
+            </Button>
+          }
+        />
       )}
     </PageContainer>
   );

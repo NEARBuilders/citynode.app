@@ -1,40 +1,19 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type ApiClient, useApiClient } from "@/app";
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  Label,
-  Textarea,
-} from "@/components";
+import { Button, Field, FieldLabel, Input, Textarea } from "@/components";
+import { FieldGroup } from "@/components/ui/field";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { parseNodeMetadata } from "./-node-management";
 
 type Node = Awaited<ReturnType<ApiClient["getNodeSummary"]>>["node"];
 
-export function NodeMetadataEditor({ node }: { node: Node }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Pencil /> edit metadata
-      </Button>
-      {open && <MetadataForm node={node} onClose={() => setOpen(false)} />}
-    </Dialog>
-  );
-}
-
-function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
+export function NodeMetadataForm({ node }: { node: Node }) {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [name, setName] = useState(node.name);
   const [description, setDescription] = useState(
     typeof node.metadata.description === "string" ? node.metadata.description : "",
@@ -52,76 +31,72 @@ function MetadataForm({ node, onClose }: { node: Node; onClose: () => void }) {
       }),
     onSuccess: async () => {
       await invalidateNodeQueries(queryClient);
-      toast.success("Node metadata updated");
-      onClose();
+      toast.success("Community updated");
+      await navigate({ to: "/admin/nodes/$nodeId", params: { nodeId: node.id }, search: {} });
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
   return (
-    <DialogContent className="max-h-[90dvh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>Edit node metadata</DialogTitle>
-        <DialogDescription>
-          Update the node name, description, and additional JSON fields.
-        </DialogDescription>
-      </DialogHeader>
-      <form
-        className="space-y-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (name.trim()) saveMutation.mutate();
-        }}
-      >
-        <div className="space-y-2">
-          <Label htmlFor="node-name">Name</Label>
+    <form
+      className="flex flex-col gap-8"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (name.trim()) saveMutation.mutate();
+      }}
+    >
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="node-name">Name</FieldLabel>
           <Input
             id="node-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="node-description">Description</Label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="node-description">Description</FieldLabel>
           <Textarea
             id="node-description"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             rows={3}
           />
-          <p className="text-xs text-muted-foreground">Stored in metadata.description.</p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="node-metadata">Additional metadata (JSON)</Label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="node-metadata">Extra metadata (JSON)</FieldLabel>
           <Textarea
             id="node-metadata"
-            className="font-mono text-sm"
             value={metadata}
             onChange={(event) => setMetadata(event.target.value)}
-            rows={7}
+            rows={10}
             spellCheck={false}
+            className="font-mono"
           />
-        </div>
-        {saveMutation.isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {saveMutation.error.message}
-          </p>
-        )}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={saveMutation.isPending}
-          >
-            cancel
-          </Button>
-          <Button type="submit" disabled={!name.trim() || saveMutation.isPending}>
-            {saveMutation.isPending ? "saving..." : "save changes"}
-          </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
+        </Field>
+      </FieldGroup>
+      {saveMutation.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {saveMutation.error.message}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          data-testid="admin-node-edit-save"
+          disabled={!name.trim() || saveMutation.isPending}
+        >
+          {saveMutation.isPending ? "Saving…" : "Save changes"}
+        </Button>
+        <Button
+          variant="ghost"
+          nativeButton={false}
+          render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: node.id }} search={{}} />}
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
