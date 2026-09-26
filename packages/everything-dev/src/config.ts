@@ -169,6 +169,10 @@ export async function loadLocalConfig(options?: {
   };
 }
 
+export function defaultConfigEnv(): BosEnv {
+  return process.env.NODE_ENV === "production" ? "production" : "development";
+}
+
 export async function loadResolvedConfig(options?: {
   cwd?: string;
   path?: string;
@@ -182,7 +186,7 @@ export async function loadResolvedConfig(options?: {
   }
 
   const baseDir = dirname(configPath);
-  const env = options?.env ?? "development";
+  const env = options?.env ?? defaultConfigEnv();
   const runtimeEnv: BosEnv = env === "staging" ? "production" : env;
 
   try {

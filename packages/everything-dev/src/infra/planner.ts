@@ -67,6 +67,13 @@ interface AllocateServicesResult {
   };
 }
 
+export interface ServiceSources {
+  host?: "local" | "remote";
+  api?: "local" | "remote";
+  auth?: "local" | "remote";
+  ui?: "local" | "remote";
+}
+
 const PLUGIN_START_OFFSET = 10;
 const BLOCK_STEP = 100;
 
@@ -78,6 +85,7 @@ function allocateServices(
   >,
   configDir: string,
   auth?: AuthSlotShape,
+  sources?: ServiceSources,
 ): Effect.Effect<AllocateServicesResult, InfraError, PortAllocator> {
   return Effect.gen(function* () {
     const wKey = workspaceKey(configDir);
@@ -106,10 +114,20 @@ function allocateServices(
       }
     };
 
+    // Remote-source services spawn nothing locally (ADR 0009 start stack:
+    // remotes load over MF from their published origins) — no port is
+    // allocated for them. The host is the exception: even when loaded as a
+    // remote module, runServer binds its own port.
     addEntry("host", cliPorts.host, undefined, base);
-    addEntry("api", cliPorts.api, persisted?.api, base + 1);
-    addEntry("auth", cliPorts.auth, persisted?.auth, base + 2);
-    addEntry("ui", cliPorts.ui, persisted?.ui, base + 3);
+    if (sources?.api !== "remote") {
+      addEntry("api", cliPorts.api, persisted?.api, base + 1);
+    }
+    if (sources?.auth !== "remote") {
+      addEntry("auth", cliPorts.auth, persisted?.auth, base + 2);
+    }
+    if (sources?.ui !== "remote") {
+      addEntry("ui", cliPorts.ui, persisted?.ui, base + 3);
+    }
 
     const pluginKeys = Object.keys(plugins).sort();
     const isAuthMirrorFor = (
@@ -120,12 +138,13 @@ function allocateServices(
     let pluginSlot = 0;
     for (const pluginId of pluginKeys) {
       const pluginCfg = plugins[pluginId];
+      const pluginIsLocal = pluginCfg?.source === "local";
       const slotBase = pluginStartPinned ? pluginStartPreferred : base + PLUGIN_START_OFFSET;
       // The auth mirror's backend is owned by the `auth` app slot — no api
       // port. Its ui surface is still real: without a port the runtime config
       // advertises an empty ui.url and the browser can never load the remote
       // (the /login page never renders).
-      if (!isAuthMirrorFor(pluginId, pluginCfg)) {
+      if (!isAuthMirrorFor(pluginId, pluginCfg) && pluginIsLocal) {
         addEntry(
           `plugin:${pluginId}`,
           cliPorts.plugins?.[pluginId]?.api,
@@ -462,7 +481,12 @@ export function planInfra(input: InfraInput): Effect.Effect<InfraPlan, InfraErro
       ports: svcPorts,
       claims,
       devPortsState,
-    } = yield* allocateServices(cliPorts, plugins, input.configDir, input.bosConfig.auth);
+    } = yield* allocateServices(cliPorts, plugins, input.configDir, input.bosConfig.auth, {
+      host: input.bosConfig.host?.source,
+      api: input.bosConfig.api?.source,
+      auth: input.bosConfig.auth?.source,
+      ui: input.bosConfig.ui?.source,
+    });
 
     const {
       dbs,

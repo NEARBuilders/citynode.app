@@ -744,6 +744,13 @@ export default createPlugin({
                 failed:
                   "No configuration found. Provide --account and --gateway flags, or create a local bos.config.json.",
               }),
+            InfraError: (error) => Effect.succeed({ failed: `${error.phase}: ${error.message}` }),
+            DevStepError: (error) =>
+              Effect.succeed({
+                failed: `${error.phase} failed: ${
+                  error.cause instanceof Error ? error.cause.message : String(error.cause)
+                }`,
+              }),
           }),
         ),
       );

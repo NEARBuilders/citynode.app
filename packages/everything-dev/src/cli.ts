@@ -2,6 +2,7 @@ import { watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import * as p from "@clack/prompts";
+import { installBundleFetchFromEnv } from "./bundle-fs-resolve";
 import { findCommandDescriptor } from "./cli/catalog";
 import { resolveFrameworkPackage } from "./cli/framework-version";
 import { printHelp } from "./cli/help";
@@ -174,6 +175,7 @@ async function main() {
   const invocationArgs = args.length > 0 ? args : ["dev"];
   const command = invocationArgs[0] ?? "dev";
   const configPath = findConfigPath();
+  installBundleFetchFromEnv({ configPath });
 
   const commandMatch = findCommandDescriptor(invocationArgs);
   if (!commandMatch) {
