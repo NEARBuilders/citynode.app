@@ -6,7 +6,7 @@ import type { AuthVariables } from "../lib/auth";
 
 type HonoEnv = { Variables: AuthVariables };
 
-const MIME_TYPES: Record<string, string> = {
+export const MIME_TYPES: Record<string, string> = {
   ".js": "text/javascript",
   ".mjs": "text/javascript",
   ".cjs": "text/javascript",
@@ -37,7 +37,23 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 /** Entrypoints are fixed-name files a redeploy replaces — they must revalidate. */
-const ENTRYPOINT_PATTERN = /^(remoteEntry|remoteEntry\.server|mf-manifest|index|manifest\.gen)\./;
+export const ENTRYPOINT_PATTERN =
+  /^(remoteEntry|remoteEntry\.server|mf-manifest|index|manifest\.gen)\./;
+
+export function bundleContentType(name: string, originType?: string | null): string {
+  return (
+    MIME_TYPES[path.extname(name).toLowerCase()] ??
+    (originType && originType !== "application/octet-stream"
+      ? originType
+      : "application/octet-stream")
+  );
+}
+
+/** content-hashed chunks are immutable; fixed-name entrypoints must revalidate */
+export function bundleCacheControl(name: string): string {
+  const entrypoint = ENTRYPOINT_PATTERN.test(name) || !/\.[a-f0-9]{8,}\./.test(name);
+  return entrypoint ? "public, max-age=0, must-revalidate" : "public, max-age=31536000, immutable";
+}
 
 /**
  * FS-backed bundle serving (plan 043): the runtime image stages its own
@@ -67,17 +83,10 @@ export function createBundleFsHandler(bundleDir: string | undefined) {
     try {
       const bytes = await readFile(filePath);
       const name = path.basename(filePath);
-      const contentType =
-        MIME_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
-      // content-hashed chunks are immutable; fixed-name entrypoints must
-      // revalidate or a redeploy never reaches returning clients
-      const entrypoint = ENTRYPOINT_PATTERN.test(name) || !/\.[a-f0-9]{8,}\./.test(name);
       return new Response(new Uint8Array(bytes), {
         headers: {
-          "content-type": contentType,
-          "cache-control": entrypoint
-            ? "public, max-age=0, must-revalidate"
-            : "public, max-age=31536000, immutable",
+          "content-type": bundleContentType(name),
+          "cache-control": bundleCacheControl(name),
           etag: `"${createHash("sha256").update(bytes).digest("hex").slice(0, 32)}"`,
         },
       });
