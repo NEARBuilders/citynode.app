@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { useIsDesktop } from "@/lib/use-client";
 import { PairPanel } from "../-pair-panel";
 
 type SearchParams = {
@@ -86,6 +87,7 @@ function LoginPage() {
   const { runtimeConfig } = Route.useRouteContext();
   const banned = useRouterState({ select: (state) => state.location.hash === "banned" });
   const networkId = (runtimeConfig?.networkId ?? "mainnet") as PasskeyWalletNetwork;
+  const isDesktop = useIsDesktop();
 
   const [view, setView] = useState<View>("sign-in");
   const [pending, setPending] = useState<"passkey" | "near" | "create" | null>(null);
@@ -334,25 +336,28 @@ function LoginPage() {
             className="text-center text-sm text-muted-foreground"
             data-testid="login.no-passkey-hint"
           >
-            No passkey on this device? Use your phone or a NEAR wallet.
+            No passkey on this device?{" "}
+            {isDesktop ? "Use your phone or a NEAR wallet." : "Use a NEAR wallet."}
           </p>
         )}
       </div>
       <FieldSeparator>or</FieldSeparator>
       <div className="flex flex-col gap-3">
         {nearButton}
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          className="w-full"
-          onClick={() => setView("phone")}
-          disabled={pending !== null}
-          data-testid="login.device-button"
-        >
-          <DeviceMobileIcon data-icon="inline-start" />
-          Sign in with your phone
-        </Button>
+        {isDesktop && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            className="w-full"
+            onClick={() => setView("phone")}
+            disabled={pending !== null}
+            data-testid="login.device-button"
+          >
+            <DeviceMobileIcon data-icon="inline-start" />
+            Sign in with your phone
+          </Button>
+        )}
       </div>
     </AuthPanel>
   );

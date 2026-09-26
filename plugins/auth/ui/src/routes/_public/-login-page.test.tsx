@@ -59,8 +59,11 @@ function renderLogin(initialEntry = "/login?redirect=%2Forgs") {
   return router;
 }
 
+const originalMatchMedia = window.matchMedia;
+
 afterEach(() => {
   cleanup();
+  window.matchMedia = originalMatchMedia;
   vi.clearAllMocks();
 });
 
@@ -123,6 +126,20 @@ describe("login page", () => {
     fireEvent.click(screen.getByTestId("login.create-account-button"));
 
     expect(await screen.findByTestId("login.unsupported-authenticator")).toBeTruthy();
+    expect(screen.getByTestId("near.signin-button")).toBeTruthy();
+  });
+
+  it("hides the phone sign-in option on mobile", async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    renderLogin();
+
+    await screen.findByTestId("login.heading");
+    expect(screen.queryByTestId("login.device-button")).toBeNull();
     expect(screen.getByTestId("near.signin-button")).toBeTruthy();
   });
 });

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import type { PasskeyWalletNetwork } from "better-near-auth/client";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { SectionHeader } from "@/components/layout/section-header";
-import { useNearAccount } from "@/lib/use-near-account";
 import { EmailMethod } from "./-email-method";
 import { NearMethod } from "./-near-method";
 import { PasskeysMethod } from "./-passkeys-method";
@@ -14,8 +14,9 @@ export const Route = createFileRoute("/_authenticated/settings/auth-methods")({
 function AuthMethodsSettings() {
   const auth = useAuthClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
+  const { runtimeConfig } = Route.useRouteContext();
   const user = session?.user;
-  const nearAccountId = useNearAccount();
+  const networkId = (runtimeConfig?.networkId ?? "mainnet") as PasskeyWalletNetwork;
 
   if (!user) return null;
 
@@ -27,7 +28,7 @@ function AuthMethodsSettings() {
         sectionTestId="settings.auth-methods-heading"
       />
       <PasskeysMethod />
-      <NearMethod nearAccountId={nearAccountId} />
+      <NearMethod networkId={networkId} />
       {user.email && !user.isAnonymous && <EmailMethod email={user.email} />}
     </div>
   );
