@@ -1,36 +1,36 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
-import { Effect } from "effect";
+import { isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
-import {
-  SANDBOX_LEASES_VERSION,
-  SandboxError,
-  type SandboxLease,
-  type SandboxLeaseFile,
-} from "./types";
 
-const LeaseSchema = z.object({
+export const SANDBOX_LEASES_VERSION = 1;
+
+export interface SandboxTenant {
+  readonly account: string;
+  readonly gateway: string;
+}
+
+export const LeaseSchema = z.object({
   account: z.string(),
   gateway: z.string(),
   slug: z.string(),
   url: z.string(),
-  proxyUrlAlias: z.string().optional(),
   hostPort: z.number(),
-  pgPort: z.number(),
+  stage: z.string(),
   image: z.string(),
-  imageDigest: z.string().nullable(),
-  containers: z.array(z.string()),
-  network: z.string(),
   createdAt: z.string(),
-  lastUsedAt: z.string(),
 });
+export type SandboxLease = z.infer<typeof LeaseSchema>;
 
 const LeaseFileSchema = z.object({
   version: z.number(),
   leases: z.array(LeaseSchema),
 });
 
+/**
+ * Gateway handoff: the lease file the host's BindingResolver overlays when
+ * `BOS_SANDBOX=1`. The alchemy sandbox stack rewrites it on every deploy.
+ */
 export function sandboxLeasesPath(configDir?: string): string {
   const override = process.env.BOS_SANDBOX_LEASES;
   if (override) {
@@ -52,39 +52,13 @@ export function readLeases(path: string): readonly SandboxLease[] {
   }
 }
 
-export function writeLeases(
-  path: string,
-  leases: readonly SandboxLease[],
-): Effect.Effect<void, SandboxError> {
-  return Effect.try({
-    try: () => {
-      mkdirSync(dirname(path), { recursive: true });
-      const file: SandboxLeaseFile = { version: SANDBOX_LEASES_VERSION, leases };
-      writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
-    },
-    catch: (cause) =>
-      new SandboxError({ reason: `failed to write ${path}`, phase: "lease-store", cause }),
-  });
+export function writeLeases(path: string, leases: readonly SandboxLease[]): void {
+  mkdirSync(resolve(path, ".."), { recursive: true });
+  writeFileSync(path, `${JSON.stringify({ version: SANDBOX_LEASES_VERSION, leases }, null, 2)}\n`);
 }
 
 export const leaseKey = (tenant: { account: string; gateway: string }): string =>
   `${tenant.account}/${tenant.gateway}`;
-
-export function upsertLease(
-  leases: readonly SandboxLease[],
-  lease: SandboxLease,
-): readonly SandboxLease[] {
-  const key = leaseKey(lease);
-  return [...leases.filter((l) => leaseKey(l) !== key), lease];
-}
-
-export function removeLease(
-  leases: readonly SandboxLease[],
-  tenant: { account: string; gateway: string },
-): readonly SandboxLease[] {
-  const key = leaseKey(tenant);
-  return leases.filter((l) => leaseKey(l) !== key);
-}
 
 export function defaultSlug(account: string): string {
   return (
@@ -95,7 +69,7 @@ export function defaultSlug(account: string): string {
   );
 }
 
-export function sanitizeContainerPart(value: string): string {
+export function sanitizeDockerName(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "-")

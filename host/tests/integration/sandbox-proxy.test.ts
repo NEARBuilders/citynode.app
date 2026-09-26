@@ -62,7 +62,7 @@ function leaseRecord(url: string, slug = "t") {
     slug,
     url,
     hostPort: 0,
-    pgPort: 0,
+    stage: "sandbox-t",
     image: "citynode-platform:spike",
     imageDigest: null,
     containers: [],

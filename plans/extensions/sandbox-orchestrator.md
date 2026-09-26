@@ -1,129 +1,144 @@
-# Sandbox orchestrator + gateway — spike design
+# Sandbox orchestrator + gateway — spike design (alchemy lease model)
 
 Plan: `advisor-plans/032-sandbox-orchestrator-spike.md` (spike only, `BOS_SANDBOX=1` gated)
-Status: spike in progress — branch `spike/sandbox-orchestrator`
+Status: prototype landed on `spike/sandbox-orchestrator`; live tenant-render e2e blocked on an upstream platform boot bug (below)
 Author context: locked operator decisions of 2026-09-18 + ADR 0011 (image-native artifacts)
 
-## Amendment to plan 032 (operator-approved, 2026-09-26)
+## Amendments (operator-approved)
 
-Plan 032's drift check required `ResourceProvisioner` (plan 031) to exist.
-Plan 031 was never executed, which trips the plan's own STOP condition. The
-operator chose the **reduced spike**: the provisioner seam is substituted by
-spike-local env injection for the local docker machine provider, while the
-lease/machine model keeps 031's binding shape
-(`{ secretName, url }` via `bindingEnv`) so plan 031 can slot in later
-without rework. The *storage* half of the 031 dependency dissolved under
-ADR 0011: a sandbox host stages and serves its own bundle namespace
-same-origin — no platform storage credentials exist to inject.
+1. **2026-09-26, reduced spike**: plan 032's drift check required `ResourceProvisioner`
+   (plan 031, never executed) and tripped its own STOP condition. The operator chose a
+   reduced spike: the provisioner seam is substituted by env injection, keeping 031's
+   `bindingEnv { secretName, url }` shape so plan 031 can slot in later. The storage half
+   of the dependency dissolved under ADR 0011 (a sandbox host stages and serves its own
+   `/bundles/*` namespace — no platform storage credentials exist to inject).
+2. **2026-09-26, alchemy lease model**: the hand-rolled orchestrator
+   (`Context.Service` + acquireRelease + docker execFile provider + idle-TTL sweeper,
+   ~840 lines) is replaced by an **alchemy Stack** (~90 lines): stages are leases, the
+   Docker provider is the machine provider, alchemy's state store is the lease record,
+   `deploy`/`destroy` are acquire/release. Machine provider choices become a stack-level
+   resource swap instead of a bespoke provider interface.
 
-Sandbox DB (operator decision): a throwaway docker Postgres container per
-sandbox host (closest analog to the production Neon-branch sandbox stage),
-isolated from dev `api_db`.
+## Lease model (stages are leases)
 
-## Lease model
+`packages/everything-dev/src/sandbox/stack.ts` — one `Alchemy.Stack("bos-sandbox", …)`:
 
-`SandboxOrchestrator` is a `Context.Service` in `everything-dev/sandbox`
-(`src/sandbox/orchestrator.ts`):
+- `alchemy deploy --stage sandbox-<slug>` → **acquire**: one state file + one set of
+  physical container names per tenant stage; prop changes are replacements
+  (delete-first), so republish/re-acquire is a plain re-deploy (the throwaway pg rotates
+  with it — acceptable for sandbox-stage data).
+- `alchemy destroy --stage sandbox-<slug>` → **release**. Teardown convergence is
+  covered by the gated integration test.
+- Tenant parameters ride the environment (set by `bos sandbox start`):
+  `BOS_SANDBOX_ACCOUNT` / `BOS_SANDBOX_GATEWAY` (required), `BOS_SANDBOX_IMAGE`
+  (default `citynode-platform:spike`), `BOS_SANDBOX_CONFIG_DIR` (generates + mounts the
+  tenant boot config), `BOS_SANDBOX_SHARED_NETWORK` (joins the host container to a
+  pre-existing network so a dockerized shared host can proxy by container DNS name).
+- Idle-TTL is **not** implemented in the spike (the CLI-side sweeper was dropped):
+  production design note — a scheduled `destroy` of expired stages (cron/event job), or
+  an in-host reaper once the orchestrator moves in-process.
 
-- `acquireLease(tenant: { account, gateway }) -> SandboxLease` — an
-  `Effect.acquireRelease` resource. The release finalizer stops the
-  machine(s). While the CLI process lives, an idle-TTL sweeper stops the
-  lease when `lastUsedAt` ages past `ttlMs`; an explicit `stop()` (or
-  process exit) releases deterministically.
-- Replacement on republish (crash/replace): container names are
-  deterministic (`sandbox-pg-<account>-<gateway>`,
-  `sandbox-host-<account>-<gateway>`); an existing container with the same
-  name is removed before spawn, so a re-run is an idempotent replace.
-- Lease state persists to `.bos/sandboxes.json` (same file the host's
-  BindingResolver overlays when `BOS_SANDBOX=1`) — the handoff record
-  between the orchestrator process and the gateway.
+## Machine model
 
-## Machine model (spike provider: local docker)
+Per lease, the stack declares three resources through the **Docker provider** (driven by
+the active docker CLI context — no daemon client, no credentials of its own):
 
-Per lease, two containers:
+1. `Docker.Network("lease")` — the lease network; pg gets the `sandbox-pg` DNS alias.
+2. `Docker.RemoteImage` (`postgres:17-alpine`, pinned, `alwaysPull: false`) +
+   `Docker.Container` — the throwaway tenant DB (`POSTGRES_*` env, `pg_isready`
+   healthcheck, random per-deploy password). The stack auto-migrates on boot;
+   plugins isolate by `plugin_<id>` schema as usual.
+3. `Docker.Container("host")` — the **platform image** (built from the committed root
+   Dockerfile; same image Railway deploys), booted with **env only**:
+   `BOS_ACCOUNT` (tenant account), `BOS_GATEWAY`, a random per-deploy
+   `BETTER_AUTH_SECRET`, `DATABASE_URL`/`API_DATABASE_URL`/`AUTH_DATABASE_URL` → the
+   throwaway pg. The tenant boot config (generated by
+   `sandbox/tenant-config.ts` via `prepareLocalProductionConfig` — same fixed port plan
+   + same-origin `/bundles/<base-account>/<base-gateway>/…` URLs as the deploy image's
+   baked config, ADR 0011) is bind-mounted over the baked `config-ssr.json`. **No
+   platform storage credentials** — ADR 0011 makes that structurally true.
 
-1. **Throwaway Postgres** — `postgres:17-alpine`, random free host port,
-   creds `sandbox/sandbox` db `sandbox`. Its URL rides the env handoff as
-   `DATABASE_URL` (the `bindingEnv` shape 031 will formalize; plugins get
-   schema isolation via `plugin_<pluginId>` search_path as usual, and the
-   stack auto-migrates on boot).
-2. **Platform image container** — the committed root `Dockerfile` image
-   (digest recorded in the lease), running `bos start` with **env only**:
-   `BOS_ACCOUNT` (tenant account), `BOS_GATEWAY` (tenant gateway), a
-   per-sandbox random `BETTER_AUTH_SECRET`, `DATABASE_URL`, `PORT`,
-   `BOS_BUNDLE_DIR`. **No platform storage credentials** — ADR 0011 makes
-   this structurally true (the image serves its own staged dists).
+Publishes ports with `external: 0` (engine-assigned, read back via `docker port`) —
+no hand-rolled port probing. `Docker.Image` (memoized Dockerfile build, diff =
+imageId) is the later step for building + pushing the platform image to a registry for
+cloud runtimes.
 
-Health gate = the existing `/health` (`status: "ready"`), polled with
-bounded retries. Spike additionally supports `--config-path` boot
-(mounted scratch tenant config) so the local e2e can run without a
-FastKV publish; production uses the FastKV publish path (`bos publish`).
+## Gateway (unchanged from the first prototype)
 
-Machine provider is an interface (`SandboxMachineProvider`) so unit tests
-run against a fake; the docker implementation is the only spike provider
-(alchemy machines vs railway API remains an open production decision).
+- `TenantBinding` gains optional `hostMode: "shared" | "sandbox"` + `sandboxUrl`.
+  Production source of truth (post-spike): the tenant's `stage` + binding columns served
+  by `GET /tenants/bindings`. Spike source: the lease file (`.bos/sandboxes.json`,
+  rewritten by `bos sandbox start` after each deploy) overlaid by the host's
+  BindingResolver **only when `BOS_SANDBOX=1`** — no DB schema changes in the spike.
+- `host/src/middleware/sandbox-proxy.ts`: when the flag is on and the hostname resolves
+  to a sandbox binding, the **whole request** (SSR pages, assets, `/api/*`, `/bundles/*`)
+  proxies wholesale to `sandboxUrl`. Registered in `program.ts` right after the security
+  middlewares. Base-host requests and shared-host tenant bindings pass through untouched.
+- Extends-chain + integrity verification run identically inside the sandbox host (a full
+  production boot); the spike adds no verification bypasses.
 
-## Gateway
+## Findings
 
-- `TenantBinding` gains optional `hostMode: "shared" | "sandbox"` and
-  `sandboxUrl`. Production source of truth (post-spike): the tenant's
-  `stage` + binding columns served by `GET /tenants/bindings`. Spike
-  source: the lease file (`.bos/sandboxes.json`) overlay applied by the
-  host's BindingResolver **only when `BOS_SANDBOX=1`** — no DB schema
-  changes in the spike.
-- New middleware `host/src/middleware/sandbox-proxy.ts`: when the flag is
-  on and the request hostname resolves to a sandbox binding, the **whole
-  request** (SSR pages, static assets, `/api/*`, `/bundles/*`) proxies
-  wholesale to `sandboxUrl` via the existing `proxyRequest` helper.
-  Registered in `program.ts` right after the security middlewares —
-  before static-asset/API/SSR handlers. Base-host requests and
-  shared-host tenant bindings pass through untouched.
-- Extends-chain + integrity verification runs identically inside the
-  sandbox host (it is a full `bos start` boot); the spike adds no
-  verification bypasses.
+- **Live tenant-render e2e blocked by an upstream platform boot bug** (not a sandbox
+  bug): the deploy image's `container-entrypoint.mjs` serves the staged dist servers on
+  4101-4113, then `bos start --port 4100` runs `planInfra` → the port-block allocation
+  (plan 036's atomic block + drift semantics) sees 4101-4113 occupied and drifts the
+  block; the "HOST (remote)" child then never serves `/health` on the published 4100
+  within the entrypoint's 180s deadline → `exit(1)` → restart loop → the published port
+  answers nothing. Reproduced three ways locally (entrypoint boot, CLI-driven boot,
+  manual start inside the container). **The same symptoms are live in production**
+  (citynode.app accepts connections, never responds) — this is an operator-urgent,
+  separate hotfix: either the entrypoint passes explicit non-conflicting ports, or
+  start-mode skips dev port allocation entirely (nothing spawns on the allocated
+  api/auth/ui/plugin ports when all sources are remote). Sandbox lease lifecycle is
+  unaffected — the gated deploy/destroy test passes against the same image.
+- **Logical-ID collision**: two resources sharing a logical ID (`RemoteImage("pg")` +
+  `Container("pg")`) silently clobber each other's state entry — the container was
+  never planned. Resources need unique logical IDs per stack.
+- **Alchemy healthcheck `cmd`**: beta.76 joins array-form cmds with spaces, turning
+  `["CMD-SHELL", "…"]` into a broken `/bin/sh` line. Use plain string form
+  (`"pg_isready …"`).
+- **Version pinning**: alchemy `2.0.0-beta.76` is the newest beta whose peers match the
+  repo's Effect `4.0.0-rc.112` pin (its `@effect/*` deps range from `rc.112`); beta.79
+  requires `rc.115+` (`Config.String` etc. — crashes at import). Catalog-pinned, with
+  `@effect/platform-bun`/`@effect/platform-node` at `rc.112` and overrides pinning
+  `@effect/platform`/`@effect/platform-node-shared` to `rc.112` (a floating
+  `^4.0.0-rc.112` pulled rc.117 which needs `effect/ByteSize`). Bump all of these
+  together with the Effect catalog pin.
+- The earlier hand-rolled provider's fiber stall is moot — that code path was deleted;
+  alchemy's provider handles lifecycle (create/start/inspect/remove) correctly.
 
-## Measured findings (fill in from the e2e)
+## Production path (post-spike)
 
-- cold start (container start → `/health` ready): **not yet measured — e2e
-  blocked** (see below)
-- idle teardown behavior + re-acquisition cold start: TBD
-- in-flight request drain on teardown (ticket 10): TBD
-- failure modes hit:
-  - **Known issue (e2e blocker)**: the first live `bos sandbox start
-    --account sandbox-demo.near --gateway citynode.app --shared-network …
-    --detach` hung past 300s *after* the throwaway Postgres container was
-    up and mapped (port 54283) but *before* tenant boot-config generation
-    (no `mkdtemp` dir), host-container spawn, and lease-file write. No
-    error/cleanup ran (onError did not fire — the fiber stalled, it did
-    not fail). Probes: `docker run` of the platform image with the same
-    shape is instant (0.7s); every provider exec is bounded at 30s; the
-    unit suite proves the health-retry loop terminates on failure. The
-    stall is therefore inside the orchestrator fiber between the pg spawn
-    resume and config generation — next step is an instrumented
-    step-by-step repro (timestamps around findFreePort/ensureNetwork/
-    spawn/buildTenantBootConfig) before trusting the lease model on the
-    docker provider. The fake-provider unit tests all pass, so the lease
-    semantics themselves are covered; this isolates the defect to the
-    docker exec/Effect boundary.
+- Same stack definition, swapping the Docker resources for a cloud container runtime —
+  **Fly Machines or ECS** consuming the pushed platform image ref (Docker.Image +
+  build-and-push). **Not Cloudflare Workers** — the platform image is a Node/Bun
+  container. The gateway handoff becomes the tenants API (`stage: "sandbox"` + sandbox
+  URL on the binding record); the orchestrator moves in-host for auto re-acquisition.
+- The deploy image's boot bug (above) must be fixed first — it is production-blocking
+  independent of sandboxing.
 
 ## Out of scope (unchanged)
 
-Billing/quotas, multi-region, per-sandbox observability, DNS automation
-(spike uses `<slug>.localhost`; production DNS path is tenants.md custom
-domains), machine provider choice, ticket-10 resolution (measured, not
-solved).
+Billing/quotas, multi-region, per-sandbox observability, DNS automation (spike uses
+`<slug>.localhost` / container DNS; production path is tenants.md custom domains),
+idle-TTL enforcement (scheduled destroy note above), ticket-10 resolution (drain
+measurements pending the boot fix).
 
 ## Runbook
 
 ```sh
-docker build -t citynode-platform:spike .          # platform image (digest recorded)
+docker build -t citynode-platform:spike .            # platform image (or BOS_SANDBOX_IMAGE to override)
+
 BOS_SANDBOX=1 bos sandbox start --account <tenant>.near --gateway citynode.app
-# → spawns pg + host containers, waits for /health, writes .bos/sandboxes.json
-# → tenant renders at http://<slug>.localhost:<hostPort> via the shared host's proxy
+#   → alchemy deploy --stage sandbox-<slug> (network + pg + host), docker port,
+#     writes .bos/sandboxes.json, waits for /health
 BOS_SANDBOX=1 bos sandbox list
 BOS_SANDBOX=1 bos sandbox stop --account <tenant>.near --gateway citynode.app
+#   → alchemy destroy --stage sandbox-<slug> + lease-file cleanup
+
+bunx vitest run tests/integration/sandbox-stack.test.ts   # gated: docker + platform image
 ```
 
-Flag-off invariant: without `BOS_SANDBOX=1`, `bos dev`/`bos start`, the
-BindingResolver, and every middleware behave byte-identically to main
-(golden tests).
+Flag-off invariant: without `BOS_SANDBOX=1`, `bos dev`/`bos start`, the BindingResolver,
+and every middleware behave byte-identically to main (golden tests).

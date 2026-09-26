@@ -66,7 +66,10 @@
       "@rsbuild/core": "2.2.8",
       "@rsbuild/plugin-react": "2.1.0",
       "@better-auth/core": "1.6.25",
-      "@modelcontextprotocol/server": "2.0.0-beta.5"
+      "@modelcontextprotocol/server": "2.0.0-beta.5",
+      "alchemy": "2.0.0-beta.76",
+      "@effect/platform-bun": "4.0.0-rc.112",
+      "@effect/platform-node": "4.0.0-rc.112"
     }
   },
   "scripts": {
@@ -175,5 +178,9 @@
   },
   "patchedDependencies": {
     "@fastnear/near-connect@0.14.1": "patches/@fastnear%2Fnear-connect@0.14.1.patch"
+  },
+  "overrides": {
+    "@effect/platform-node-shared": "4.0.0-rc.112",
+    "@effect/platform": "4.0.0-rc.112"
   }
 }

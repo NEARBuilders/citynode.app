@@ -73,7 +73,7 @@ function writeLeaseFile(dir: string, slug: string, url: string): string {
           slug,
           url,
           hostPort: 40123,
-          pgPort: 40124,
+          stage: "sandbox-t",
           image: "citynode-platform:spike",
           imageDigest: null,
           containers: [],
