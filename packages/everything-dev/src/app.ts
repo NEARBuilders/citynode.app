@@ -237,8 +237,9 @@ export const PortAllocatorLive: Layer.Layer<PortAllocator> = Layer.sync(PortAllo
 // acquireBlockPort validates and acquires a whole port block atomically: every
 // entry is probed before any is yielded; on any conflict the entire block
 // steps (base += step) and retries. Pinned entries (explicit CLI flags) are
-// absolute — if one is occupied the allocation fails loudly instead of
-// silently drifting a port the user named.
+// absolute — an actual listener on one fails loudly instead of silently
+// drifting a port the user named; a registry claim without a listener is
+// stale (PID reuse across container restarts) and never wedges allocation.
 function acquireBlockPort(
   request: PortBlockRequest,
   usedPorts: Set<number>,
@@ -263,34 +264,43 @@ function acquireBlockPort(
         port: entry.pinned ? entry.preferred : entry.preferred + shift,
       }));
 
-      const claimConflicts = candidates
+      // Pinned entries are absolute (ADR 0012): an actual listener on one
+      // fails loudly instead of drifting a port the user named. Verified
+      // against the real socket every iteration — a registry claim without
+      // a listener is stale (PID reuse across container restarts) and must
+      // never wedge a pinned allocation.
+      let pinnedHeldByListener: (typeof candidates)[number] | undefined;
+      for (const candidate of candidates.filter((c) => c.pinned)) {
+        const bindable = yield* probePortBindable(candidate.port);
+        if (!bindable) {
+          pinnedHeldByListener = candidate;
+          break;
+        }
+        usedPorts.delete(candidate.port);
+      }
+      if (pinnedHeldByListener) {
+        return yield* fail(
+          `explicitly-requested port ${pinnedHeldByListener.port} (${pinnedHeldByListener.key}) is occupied by a listener`,
+        );
+      }
+
+      const unpinned = candidates.filter((c) => !c.pinned);
+      const claimConflicts = unpinned
         .filter((c) => usedPorts.has(c.port))
         .map((c) => ({ key: c.key, port: c.port, claimed: true }));
       if (shift === 0) {
         firstConflicts = claimConflicts;
       }
-      const pinnedBusy = candidates.find((c) => c.pinned && usedPorts.has(c.port));
-      if (pinnedBusy) {
-        return yield* fail(
-          `explicitly-requested port ${pinnedBusy.port} (${pinnedBusy.key}) is occupied`,
-        );
-      }
 
       if (claimConflicts.length === 0) {
         const results = yield* Effect.forEach(
-          candidates,
+          unpinned,
           (c) => probePortBindable(c.port).pipe(Effect.map((free) => ({ ...c, free }))),
           { concurrency: "unbounded" },
         );
         const busy = results.filter((r) => !r.free);
         if (shift === 0) {
           firstConflicts = busy.map((b) => ({ key: b.key, port: b.port, claimed: false }));
-        }
-        const pinnedProbeBusy = busy.find((b) => b.pinned);
-        if (pinnedProbeBusy) {
-          return yield* fail(
-            `explicitly-requested port ${pinnedProbeBusy.port} (${pinnedProbeBusy.key}) is occupied`,
-          );
         }
         if (busy.length === 0) {
           for (const candidate of candidates) usedPorts.add(candidate.port);

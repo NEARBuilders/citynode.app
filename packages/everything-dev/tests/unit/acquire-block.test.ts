@@ -101,6 +101,33 @@ describe("PortAllocator.acquireBlock", () => {
     expect(String(error?.cause)).toContain("explicitly-requested");
   });
 
+  it("reclaims a pinned port blocked only by a stale claim (PID reuse)", async () => {
+    writeFileSync(
+      registryPath,
+      JSON.stringify([
+        {
+          pid: process.pid,
+          configDir: tempDir,
+          role: "standalone",
+          ports: { host: 5300 },
+          startedAt: Date.now(),
+          processStart: "proc:999999999",
+          description: "reused generation",
+        },
+      ]),
+    );
+
+    const allocation = await runAllocate({
+      base: 5300,
+      entries: [
+        { key: "host", preferred: 5300, pinned: true },
+        { key: "api", preferred: 5301, pinned: false },
+      ],
+    });
+    expect(allocation.base).toBe(5300);
+    expect(allocation.ports.host).toBe(5300);
+  });
+
   it("skips blocks claimed by live sibling sessions via the registry", async () => {
     registerStandalone({
       pid: process.pid,

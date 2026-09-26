@@ -1,7 +1,7 @@
 # ADR 0012: The dev stack is one Effect Scope — ports and processes are scoped, leased resources
 
 Date: 2026-09-23
-Status: Accepted
+Status: Accepted (amended 2026-09-26 — claim identity + start-stack allocation)
 
 ## Context
 
@@ -33,3 +33,37 @@ URL derivation is *not* the problem: the port informs the URL (`BASE_URL`/`CORS_
 - `lsof` becomes a dev-machine dependency for ownership reporting (absent `lsof`: allocation still works via bind-probe, reporting degrades to "unknown owner").
 - The TUI (quiet-dev-session tickets 02/03) renders the lease table: one block per session, with ownership annotations available.
 - Child-process spawn becomes a scoped resource (`Effect.acquireRelease` around the existing `ProcessHandle`); the session finalizers remain the single teardown path, and the orphan watch stays.
+
+## Amendment (2026-09-26): claim identity, listener authority, start-stack allocation
+
+The deployment runtime (ADR 0009 amendment) exposed two holes in decisions 4–5
+when a container restarts (`docker restart` preserves the writable layer and
+therefore the registry at `~/.cache/everything-dev/pids.json`):
+
+1. **Claims record the process generation.** Container PID spaces are tiny, so
+   a dead session's recorded PID is near-certainly reused by an unrelated
+   process after a restart — `process.kill(pid, 0)` succeeds and a stale claim
+   looks live. Registry entries now capture `processStart` at registration
+   (`processStartTime`: `/proc/<pid>/stat` starttime tick on Linux,
+   `ps -o lstart=` elsewhere); a claim whose recorded generation no longer
+   matches the live process is pruned (ADR 0012 §5's adopt-or-kill could
+   misfire on exactly this). Entries written before this field exist keep the
+   old alive-pid gate (legacy tolerance).
+2. **A listener is the authority for a pinned port.** Decision 4's
+   "explicitly-passed flags fail loudly" now verifies an actual socket before
+   failing: a pinned port blocked only by a pruned-away (stale) claim is
+   reclaimed and the allocation proceeds; a real listener fails the
+   allocation with the holder identity in the error. Claims alone never wedge
+   a pinned port — that turned a healthcheck restart into a permanent 502
+   crash loop.
+3. **Remote-source services allocate no ports.** In the start stack every
+   remote except the host loads over MF from its published origin and spawns
+   nothing locally — allocating its block entry only created conflicts with
+   the entrypoint's own static servers. The host is the exception: even when
+   loaded as a remote module, `runServer` binds its own port, so its entry
+   (pinned by `--port`) is always allocated.
+4. **Healthcheck start-periods cover cold boot.** A Docker/Railway
+   `HEALTHCHECK` whose start-period is shorter than the entrypoint's own boot
+   deadline restarts a healthy-in-progress boot mid-startup — feeding the
+   same crash loop. Start-periods are now sized above the worst-case cold
+   boot (120s/180s), above the entrypoint's 180s deadline.
