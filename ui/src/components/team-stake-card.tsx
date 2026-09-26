@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useAuthClient } from "@/app";
 import { SectionHeader } from "@/components/layout/section-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +64,7 @@ export function TeamStakeCard({
   pending?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const authClient = useAuthClient();
   const authAccountId = useNearAccount();
   const connection = useDaoConnection();
   useDaoAutoRestore(authAccountId);
@@ -71,6 +73,7 @@ export function TeamStakeCard({
     stakePoolAccountQueryOptions({
       poolAccountId: target?.poolAccountId ?? "",
       stakerAccountId: target?.teamAccountId ?? "",
+      authClient,
       network: target?.network,
       protocol: target?.protocol,
     }),

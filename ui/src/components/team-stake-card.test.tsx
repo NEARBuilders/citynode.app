@@ -2,13 +2,14 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Near } from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamStakeCard } from "./team-stake-card";
 
 const target = {
   teamAccountId: "india.sputnik-dao.near",
   poolAccountId: "india.poolv1.near",
-  network: "mainnet",
+  network: "mainnet" as const,
   protocol: "near",
 };
 const clients: QueryClient[] = [];
@@ -18,6 +19,11 @@ const poolActionMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/use-near-account", () => ({
   useNearAccount: () => "itexpert120-contra.near",
+}));
+vi.mock("@/app", () => ({
+  useAuthClient: () => ({
+    near: { getNearClient: () => new Near({ network: "mainnet" }) },
+  }),
 }));
 
 vi.mock("@/lib/dao-connect", () => ({
@@ -44,6 +50,7 @@ afterEach(() => {
   cleanup();
   poolActionMocks.proposeTeamPoolAction.mockReset();
   for (const client of clients.splice(0)) client.clear();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -59,17 +66,13 @@ function renderCard(props: Partial<Parameters<typeof TeamStakeCard>[0]> = {}) {
 }
 
 function stubPool(account: Record<string, unknown>, total = "999000000000000000000000000") {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (_url: string, init: RequestInit) => {
-      const method = JSON.parse(String(init.body)).params.method_name;
-      const value =
-        method === "get_account" ? account : method === "get_total_staked_balance" ? total : null;
-      return Response.json({
-        result: { result: [...new TextEncoder().encode(JSON.stringify(value))] },
-      });
-    }),
-  );
+  return vi
+    .spyOn(Near.prototype, "view")
+    .mockImplementation((_contractId, method) =>
+      Promise.resolve(
+        method === "get_account" ? account : method === "get_total_staked_balance" ? total : null,
+      ),
+    );
 }
 
 describe("TeamStakeCard", () => {
@@ -97,10 +100,7 @@ describe("TeamStakeCard", () => {
   });
 
   it("keeps the amount unavailable when the pool account view fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(Response.json({ error: { message: "Unavailable" } })),
-    );
+    vi.spyOn(Near.prototype, "view").mockRejectedValue(new Error("Unavailable"));
     renderCard();
     await waitFor(() =>
       expect(screen.getByTestId("dashboard-node.team-stake-amount").textContent).toBe("—"),

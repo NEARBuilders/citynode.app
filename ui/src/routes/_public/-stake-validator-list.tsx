@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { useApiClient } from "@/app";
+import { type useApiClient, useAuthClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldContent, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -7,6 +7,7 @@ import {
   formatNearBalance,
   formatPoolFee,
   stakePoolStatsQueryOptions,
+  toNetwork,
 } from "@/lib/queries/stake-pool";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -55,10 +56,12 @@ export function StakeValidatorList({
 }
 
 function PoolSummary({ validator }: { validator: StakeValidator }) {
-  const network = validator.network || "mainnet";
+  const authClient = useAuthClient();
+  const network = toNetwork(validator.network || "mainnet");
   const stats = useQuery(
     stakePoolStatsQueryOptions({
       accountId: validator.accountId,
+      authClient,
       network,
       protocol: validator.protocol || "near",
     }),
