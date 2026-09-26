@@ -146,7 +146,7 @@ export interface SIWNClientActions {
     getNetwork: () => "mainnet" | "testnet";
     getSupportedNetworks: () => ("mainnet" | "testnet")[];
     getRecipient: (network?: "mainnet" | "testnet") => string;
-    getNearClient: () => NearType;
+    getNearClient: (network?: "mainnet" | "testnet") => NearType;
   };
   signIn: {
     near: (callbacks?: AuthCallbacks) => Promise<void>;
@@ -1054,13 +1054,18 @@ export const siwnClient = (config: SIWNClientConfig) => {
           getNetwork: () => activeNetwork.get(),
           getSupportedNetworks: () => getSupportedNetworks(),
           getRecipient: (network?: "mainnet" | "testnet") => getRecipient(network),
-          getNearClient: (): NearType => {
-            const net = activeNetwork.get();
-            const client = nearClients.get(net);
-            if (!client)
-              throw new Error(
-                `Wallet not initialized for ${net} — this operation requires a browser environment`,
-              );
+          getNearClient: (network?: "mainnet" | "testnet"): NearType => {
+            const net = network || activeNetwork.get();
+            // Public read-only view calls need no wallet: a network whose
+            // connector-bound client isn't initialized (or a caller on the
+            // other network) gets a wallet-less Near cached on demand —
+            // initClientForNetwork upgrades the slot to the connector-bound
+            // client when that network initializes.
+            let client = nearClients.get(net);
+            if (!client) {
+              client = new Near({ network: net });
+              nearClients.set(net, client);
+            }
             return client;
           },
         },

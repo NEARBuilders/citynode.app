@@ -1,23 +1,161 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TenantUiOverride } from "./dao-policy";
+import type { TenantUiOverride } from "../../src/ui/tenant";
 import {
   buildDraftFromResolvedConfig,
+  buildTenantUrl,
   computeSsrEntryIntegrity,
   computeSubresourceIntegrity,
   computeUiEntryIntegrity,
   diffDraft,
   draftUiOverride,
   emptyTenantConfigDraft,
+  gatewayForAccount,
+  isLocalHostname,
   normalizeBundleBaseUrl,
   resolveClientEntryUrl,
   resolveServerEntryUrl,
   tenantConfigDraftSchema,
+  tenantLabel,
   verifySsrIntegrity,
   verifyUiIntegrity,
-} from "./tenant-config-draft";
+} from "../../src/ui/tenant";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("tenantLabel", () => {
+  it("strips the gateway suffix from a full hostname", () => {
+    expect(tenantLabel("chicago.citynode.app", "citynode.app")).toBe("chicago");
+  });
+  it("strips the .localhost suffix", () => {
+    expect(tenantLabel("chicago.localhost")).toBe("chicago");
+  });
+  it("returns the bare label when no suffix matches", () => {
+    expect(tenantLabel("chicago")).toBe("chicago");
+  });
+  it("is case-insensitive", () => {
+    expect(tenantLabel("Chicago.CityNode.app", "citynode.app")).toBe("chicago");
+  });
+  it("trims trailing slashes", () => {
+    expect(tenantLabel("chicago.citynode.app/", "citynode.app")).toBe("chicago");
+  });
+  it("returns the bare label for unrecognized suffixes", () => {
+    expect(tenantLabel("chicago.example.com", "citynode.app")).toBe("chicago");
+  });
+});
+
+describe("isLocalHostname", () => {
+  it("matches localhost variants", () => {
+    expect(isLocalHostname("localhost")).toBe(true);
+    expect(isLocalHostname("127.0.0.1")).toBe(true);
+    expect(isLocalHostname("chicago.localhost")).toBe(true);
+  });
+  it("does not match production hostnames", () => {
+    expect(isLocalHostname("chicago.citynode.app")).toBe(false);
+  });
+});
+
+describe("buildTenantUrl", () => {
+  it("returns https in production", () => {
+    expect(
+      buildTenantUrl("chicago", "citynode.app", { currentHostname: "chicago.citynode.app" }),
+    ).toBe("https://chicago.citynode.app");
+  });
+  it("returns http over localhost, preserving the current port", () => {
+    expect(
+      buildTenantUrl("chicago", "citynode.app", {
+        currentHostname: "localhost",
+        currentPort: "3003",
+      }),
+    ).toBe("http://chicago.localhost:3003");
+  });
+  it("accepts a full hostname as input", () => {
+    expect(
+      buildTenantUrl("chicago.citynode.app", "citynode.app", {
+        currentHostname: "localhost",
+        currentPort: "3000",
+      }),
+    ).toBe("http://chicago.localhost:3000");
+  });
+  it("appends a path", () => {
+    expect(
+      buildTenantUrl("chicago", "citynode.app", {
+        currentHostname: "localhost",
+        currentPort: "3000",
+        path: "/stake",
+      }),
+    ).toBe("http://chicago.localhost:3000/stake");
+  });
+  it("returns null when the label is empty", () => {
+    expect(buildTenantUrl("", "citynode.app")).toBeNull();
+  });
+  it("returns null when the gateway id is empty in production", () => {
+    expect(
+      buildTenantUrl("chicago", "", { currentHostname: "chicago.example.com", path: "/" }),
+    ).toBeNull();
+  });
+});
+
+describe("gatewayForAccount", () => {
+  const mainnetConfig = {
+    networkId: "mainnet" as const,
+    runtime: {
+      accountId: "v1.citynode.near",
+      gatewayId: "citynode.app",
+      runtimeBasePath: "/",
+      title: null,
+      description: null,
+      hostUrl: null,
+    },
+  };
+  const testnetConfig = {
+    networkId: "testnet" as const,
+    runtime: {
+      accountId: "v1.citynode.testnet",
+      gatewayId: "testnet.citynode.app",
+      runtimeBasePath: "/",
+      title: null,
+      description: null,
+      hostUrl: null,
+    },
+  };
+
+  it("returns the runtime gateway when the account is on the runtime network", () => {
+    expect(gatewayForAccount("chicago.citynode.near", mainnetConfig)).toBe("citynode.app");
+    expect(gatewayForAccount("0s1234.testnet", testnetConfig)).toBe("testnet.citynode.app");
+  });
+  it("returns null when the account is on the other network", () => {
+    expect(gatewayForAccount("0s1234.testnet", mainnetConfig)).toBeNull();
+    expect(gatewayForAccount("chicago.citynode.near", testnetConfig)).toBeNull();
+  });
+  it("returns null when the runtime carries no gateway", () => {
+    expect(
+      gatewayForAccount("chicago.citynode.near", { networkId: "mainnet", runtime: undefined }),
+    ).toBeNull();
+  });
+  it("defaults to the browser runtime config", () => {
+    vi.stubGlobal("window", {
+      __RUNTIME_CONFIG__: {
+        env: "production",
+        account: "v1.citynode.near",
+        networkId: "mainnet",
+        assetsUrl: "/",
+        apiBase: "/api",
+        rpcBase: "/rpc",
+        runtime: {
+          accountId: "v1.citynode.near",
+          gatewayId: "citynode.app",
+          runtimeBasePath: "/",
+          title: null,
+          description: null,
+          hostUrl: null,
+        },
+      },
+    });
+    expect(gatewayForAccount("chicago.citynode.near")).toBe("citynode.app");
+    delete (window as Record<string, unknown>).__RUNTIME_CONFIG__;
+  });
 });
 
 describe("tenantConfigDraftSchema", () => {
