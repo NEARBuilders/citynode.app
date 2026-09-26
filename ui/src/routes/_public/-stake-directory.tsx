@@ -20,7 +20,8 @@ export function StakeDirectory({
   isLoading,
   nodes,
 }: {
-  gateway: string;
+  /** Gateway domain from the runtime config — null when misconfigured; nodes then show only their own hostname. */
+  gateway: string | null;
   isLoading: boolean;
   nodes: DirectoryNode[];
 }) {
@@ -61,7 +62,9 @@ export function StakeDirectory({
                 <span className="truncate capitalize">{node.name}</span>
               </ItemTitle>
               <ItemDescription>
-                <span className="block truncate">{node.hostname ?? `${node.slug}.${gateway}`}</span>
+                <span className="block truncate">
+                  {node.hostname ?? (gateway ? `${node.slug}.${gateway}` : null)}
+                </span>
               </ItemDescription>
             </ItemContent>
             <ItemActions>

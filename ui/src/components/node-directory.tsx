@@ -23,7 +23,8 @@ export interface NodeDirectoryNode {
 
 interface NodeDirectoryProps {
   nodes: NodeDirectoryNode[];
-  gateway: string;
+  /** Gateway domain from the runtime config — null when misconfigured; nodes then link only via their own hostname. */
+  gateway: string | null;
   validatorNodeIds?: ReadonlySet<string>;
   isLoading?: boolean;
   emptyMessage?: string;
@@ -69,8 +70,12 @@ export function NodeDirectory({
       )}
     >
       {nodes.map((node) => {
-        const hostname = node.hostname ?? `${node.slug}.${gateway}`;
-        const href = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
+        const hostname = node.hostname ?? (gateway ? `${node.slug}.${gateway}` : null);
+        const href = hostname
+          ? gateway
+            ? (buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`)
+            : `https://${hostname}/`
+          : null;
         const className = cn(
           "group flex min-h-16 items-center gap-4 outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
           grid
@@ -110,10 +115,12 @@ export function NodeDirectory({
               <Link to={linkTo} search={linkSearch?.(node) ?? {}} className={className}>
                 {content}
               </Link>
-            ) : (
+            ) : href ? (
               <a href={href} className={className}>
                 {content}
               </a>
+            ) : (
+              <div className={className}>{content}</div>
             )}
           </li>
         );

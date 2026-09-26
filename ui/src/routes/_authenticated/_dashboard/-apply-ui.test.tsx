@@ -21,6 +21,24 @@ type ApplyAuthClient = {
   organization: { list: ReturnType<typeof vi.fn> };
 };
 
+const TEST_RUNTIME_CONFIG = vi.hoisted(() => ({
+  env: "development",
+  account: "base.near",
+  networkId: "mainnet",
+  assetsUrl: "http://localhost/assets",
+  apiBase: "/api",
+  rpcBase: "/api/rpc",
+  hostUrl: "http://localhost",
+  runtime: {
+    accountId: "base.near",
+    gatewayId: "citynode.app",
+    runtimeBasePath: "/",
+    title: "City Nodes",
+    description: "",
+    hostUrl: "http://localhost",
+  },
+}));
+
 const harness = vi.hoisted(() => ({
   apiClient: null as ApplyApiClient | null,
   authClient: null as ApplyAuthClient | null,
@@ -34,7 +52,7 @@ const harness = vi.hoisted(() => ({
   initialRootNodes: [{ id: "country-1", name: "United States", kind: "country" }],
   routeContext: {
     auth: { activeOrganizationId: "org-1" as string | null },
-    runtimeConfig: {},
+    runtimeConfig: TEST_RUNTIME_CONFIG,
   },
   switchOrganization: { isError: false, mutate: vi.fn() },
   success: vi.fn(),
@@ -170,7 +188,7 @@ beforeEach(() => {
   harness.initialRootNodes = [{ id: "country-1", name: "United States", kind: "country" }];
   harness.routeContext = {
     auth: { activeOrganizationId: "org-1" },
-    runtimeConfig: {},
+    runtimeConfig: TEST_RUNTIME_CONFIG,
   };
   harness.switchOrganization = { isError: false, mutate: vi.fn() };
 });
@@ -271,7 +289,10 @@ describe("apply route submission", () => {
   });
 
   it("opens the organization step first when there is no active organization", async () => {
-    harness.routeContext = { auth: { activeOrganizationId: null }, runtimeConfig: {} };
+    harness.routeContext = {
+      auth: { activeOrganizationId: null },
+      runtimeConfig: TEST_RUNTIME_CONFIG,
+    };
     harness.authClient = {
       organization: { list: vi.fn().mockResolvedValue({ data: [], error: null }) },
     };

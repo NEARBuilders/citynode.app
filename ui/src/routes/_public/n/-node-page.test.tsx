@@ -133,7 +133,23 @@ async function showNode(url: string, signedIn = false, allowedAreas: string[] | 
   const context = {
     apiClient: createApiClient({ hostUrl: "http://localhost", rpcBase: "/api/rpc" }, new Headers()),
     queryClient,
-    runtimeConfig: undefined,
+    runtimeConfig: {
+      env: "development",
+      account: "base.near",
+      networkId: "mainnet",
+      assetsUrl: "http://localhost/assets",
+      apiBase: "/api",
+      rpcBase: "/api/rpc",
+      hostUrl: "http://localhost",
+      runtime: {
+        accountId: "base.near",
+        gatewayId: "citynode.app",
+        runtimeBasePath: "/",
+        title: "City Nodes",
+        description: "",
+        hostUrl: "http://localhost",
+      },
+    },
     authClient: createAuthClient({
       runtimeConfig: {
         hostUrl: "http://localhost",

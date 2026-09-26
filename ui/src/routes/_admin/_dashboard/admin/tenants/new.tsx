@@ -4,7 +4,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getActiveRuntime, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
+import { getAccount, getGatewayId, sessionQueryKey, useApiClient, useAuthClient } from "@/app";
 import { useStepper } from "@/components";
 import { disconnectDaoAccount, useDaoConnection } from "@/lib/dao-connect";
 import { pageTitle } from "@/lib/page-title";
@@ -58,7 +58,7 @@ function NewTenantPage() {
   const router = useRouter();
   const initialRootNodes = Route.useLoaderData();
   const { auth: adminAuth, runtimeConfig } = Route.useRouteContext();
-  const gatewayId = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gatewayId = getGatewayId(runtimeConfig);
   const baseAccount = getAccount(runtimeConfig);
   const activeNetwork = auth.useActiveNetwork() as NearNetworkId;
   const hasOrg = !!adminAuth.activeOrganizationId;
@@ -87,7 +87,10 @@ function NewTenantPage() {
 
   const formValues = useSelector(form.store, (state) => state.values);
   const { kind, slug, name, tenantName } = formValues;
-  const hostname = useMemo(() => (slug ? `${slug}.${gatewayId}` : ""), [slug, gatewayId]);
+  const hostname = useMemo(
+    () => (slug && gatewayId ? `${slug}.${gatewayId}` : ""),
+    [slug, gatewayId],
+  );
 
   const { data: queriedRootNodes } = useQuery({
     ...rootNodesQueryOptions(apiClient),
@@ -132,6 +135,11 @@ function NewTenantPage() {
 
   const submitMutation = useMutation({
     mutationFn: async (values: TenantWizardValues) => {
+      if (!gatewayId) {
+        throw new Error(
+          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
+        );
+      }
       const daoAccountId = daoConnection.daoAccountId;
       if (!daoAccountId) throw new Error("Connect a DAO account first");
 
@@ -156,6 +164,11 @@ function NewTenantPage() {
   const deployPublish = useMutation({
     mutationFn: async () => {
       if (!createdTenantId) throw new Error("Tenant not created yet");
+      if (!gatewayId) {
+        throw new Error(
+          "Runtime configuration is missing the gateway id — this deployment is misconfigured",
+        );
+      }
       const daoAccountId = daoConnection.daoAccountId;
       if (!daoAccountId) throw new Error("Disconnect detected — reconnect and retry");
 
@@ -182,6 +195,13 @@ function NewTenantPage() {
 
   async function recheckPublish() {
     if (!daoConnection.daoAccountId) return;
+    if (!gatewayId) {
+      setVerifyState("failed");
+      setVerifyMessage(
+        "Runtime configuration is missing the gateway id — this deployment is misconfigured",
+      );
+      return;
+    }
     setVerifyState("checking");
     setVerifyMessage(null);
     try {
@@ -282,6 +302,7 @@ function NewTenantPage() {
           daoAccountId: daoConnection.daoAccountId,
         },
         baseAccount,
+        gatewayId,
         submitPending: submitMutation.isPending,
         canSubmit: canSubmitDuringForm,
         blockedReason,

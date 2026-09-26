@@ -73,6 +73,15 @@ export function getActiveRuntime(config?: RuntimeConfigInput) {
   return readRuntimeConfig(config)?.runtime;
 }
 
+/**
+ * The gateway domain of the active runtime, or null when the runtime config
+ * is missing or mis-shapen. Callers surface the null (error state, disabled
+ * query, failed mutation) — never guess a default gateway.
+ */
+export function getGatewayId(config?: RuntimeConfigInput): string | null {
+  return readRuntimeConfig(config)?.runtime?.gatewayId ?? null;
+}
+
 export function getAccount(config?: RuntimeConfigInput): string {
   return readRuntimeConfig(config)?.account ?? "every.near";
 }

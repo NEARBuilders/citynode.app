@@ -9,7 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getActiveRuntime, useApiClient } from "@/app";
+import { getActiveRuntime, getGatewayId, useApiClient } from "@/app";
 import { Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,7 +58,7 @@ export const Route = createFileRoute("/_public/")({
 function LandingPage() {
   const { runtimeConfig } = Route.useLoaderData();
   const apiClient = useApiClient();
-  const gateway = getActiveRuntime(runtimeConfig)?.gatewayId ?? "citynode.app";
+  const gateway = getGatewayId(runtimeConfig);
 
   const { data: tenantApps = [], isLoading } = useQuery(tenantAppsQueryOptions(apiClient));
 
