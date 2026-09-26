@@ -24,11 +24,11 @@ import {
   readJsonFile,
   selectWorkspaceTargets,
 } from "./build";
-import { configInputToDescriptor, serializeAppDescriptorSource } from "./cli/app-config-form";
 import { buildCiInfraPlan, type CiInfraPlan } from "./cli/infra";
 import {
   buildInitPatterns,
   buildPluginRouteExclusions,
+  convertChildConfigToAppForm,
   copyFilteredFiles,
   detectGitRemoteUrl,
   fetchParentConfig,

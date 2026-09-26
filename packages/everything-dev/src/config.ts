@@ -5,7 +5,7 @@ import { sanitizeContainerName } from "every-plugin/ui/manifest/contract";
 import { fetchApiPluginManifest } from "./api-contract";
 import { manifestPluginsToNodes } from "./dag";
 import { resolveApp, toConfigInput } from "./descriptor/resolve";
-import type { AppDescriptor } from "./descriptor/schema";
+import { AppDescriptorSchema } from "./descriptor/schema";
 import { fetchBosConfigFromFastKv } from "./fastkv";
 import { fetchJsonOrNull } from "./http-client";
 import {
@@ -131,16 +131,19 @@ export function isAppDescriptorPath(configPath: string): boolean {
  */
 export async function loadAppDescriptorConfig(resolvedPath: string): Promise<BosConfigInput> {
   const mod = (await import(pathToFileURL(resolvedPath).href)) as Record<string, unknown>;
-  const descriptor = (mod.default ?? mod) as AppDescriptor;
+  if (!mod.default) {
+    throw new Error(`${resolvedPath} must default-export an App() descriptor`);
+  }
+  const descriptor = AppDescriptorSchema.parse(mod.default);
 
+  // Registry candidates: named exports that parse as App descriptors.
   const registry: Record<string, unknown> = {};
   for (const value of Object.values(mod)) {
-    if (isPlainObject(value) && typeof (value as { name?: unknown }).name === "string") {
-      registry[(value as { name: string }).name] = value;
-    }
+    const parsed = AppDescriptorSchema.safeParse(value);
+    if (parsed.success) registry[parsed.data.name] = parsed.data;
   }
 
-  const extendsRef = (descriptor as { extends?: unknown }).extends;
+  const extendsRef = descriptor.extends;
   const inRegistry = typeof extendsRef === "string" && registry[extendsRef] !== undefined;
   const importedParent = extendsRef !== undefined && typeof extendsRef !== "string";
 

@@ -2,14 +2,11 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  configInputToDescriptor,
-  serializeAppDescriptorSource,
-} from "../../src/cli/app-config-form";
 import { convertChildConfigToAppForm } from "../../src/cli/init";
 import { clearConfigCache, loadAppDescriptorConfig, loadResolvedConfig } from "../../src/config";
 import { App } from "../../src/descriptor/constructors";
-import { toConfigInput } from "../../src/descriptor/resolve";
+import { configInputToDescriptor, toConfigInput } from "../../src/descriptor/resolve";
+import { serializeAppDescriptorSource } from "../../src/descriptor/serialize";
 
 const fixtures = join(import.meta.dirname, "..", "fixtures", "bos-app-loader");
 
@@ -34,6 +31,25 @@ describe("bos.app.ts materialization (loadAppDescriptorConfig)", () => {
     });
     // the consumed extends key is dropped from the authoring output
     expect(input.extends).toBeUndefined();
+  });
+
+  it("rejects a file without a default export and ignores non-descriptor named exports", async () => {
+    const dir = join(tmpdir(), "bos-app-harden");
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    // no default export
+    writeFileSync(join(dir, "no-default.app.ts"), 'export const app = { name: "x" };\n');
+    await expect(loadAppDescriptorConfig(join(dir, "no-default.app.ts"))).rejects.toThrow(
+      "must default-export an App() descriptor",
+    );
+    // a named export that is not a descriptor must not enter the registry
+    writeFileSync(
+      join(dir, "mixed.app.ts"),
+      'export const helper = { name: "not-an-app", note: "just a helper object" };\n' +
+        'export default { name: "child.test", account: "child.near", domain: "child.near" };\n',
+    );
+    const input = await loadAppDescriptorConfig(join(dir, "mixed.app.ts"));
+    expect(input.account).toBe("child.near");
   });
 
   it("passes a registry-less bos://-style extends ref through for the JSON chain", async () => {

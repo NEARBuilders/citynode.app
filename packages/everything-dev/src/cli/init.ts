@@ -21,6 +21,7 @@ import {
 } from "../auth-types-gen";
 import { loadAppDescriptorConfig } from "../config";
 import type { OverrideSection } from "../contract";
+import { serializeAppDescriptorSource } from "../descriptor/serialize";
 import { fetchBosConfigFromFastKv } from "../fastkv";
 import { fetchResponse } from "../http-client";
 import {
@@ -30,7 +31,6 @@ import {
 import type { BosConfig, BosConfigInput } from "../types";
 import { saveBosConfig } from "../utils/save-config";
 import { computeSnapshotHash as computeHash } from "../utils/snapshot-hash";
-import { configInputToDescriptor, serializeAppDescriptorSource } from "./app-config-form";
 import { writeSnapshot } from "./snapshot";
 import { getExtendsRef, parseBosRef, readJsonFile } from "./utils/helpers";
 
@@ -483,7 +483,7 @@ export async function convertChildConfigToAppForm(destination: string): Promise<
   const config = JSON.parse(readFileSync(configPath, "utf-8")) as BosConfigInput;
   writeFileSync(
     join(destination, "bos.app.ts"),
-    serializeAppDescriptorSource(configInputToDescriptor(config)),
+    serializeAppDescriptorSource(config as BosConfigInput),
   );
   rmSync(configPath);
 }
@@ -746,10 +746,7 @@ export async function personalizeConfig(
       config.plugins = {};
     }
 
-    writeFileSync(
-      appConfigPath,
-      serializeAppDescriptorSource(configInputToDescriptor(config as BosConfigInput)),
-    );
+    writeFileSync(appConfigPath, serializeAppDescriptorSource(config as BosConfigInput));
     return;
   }
 
