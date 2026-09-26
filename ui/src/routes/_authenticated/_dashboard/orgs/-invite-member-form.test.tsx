@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { InvitationCard } from "./-invitation-card";
+import { InvitationRow } from "./-invitation-row";
 import { detectInviteIdentifier, InviteMemberForm } from "./-invite-member-form";
 
 const teams = [
@@ -16,6 +16,14 @@ function renderForm() {
 }
 
 afterEach(cleanup);
+
+async function pickOption(testId: string, label: string) {
+  fireEvent.click(screen.getByTestId(testId));
+  const option = await screen.findByRole("option", { name: label });
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
+  await waitFor(() => expect(screen.getByTestId(testId).textContent).toContain(label));
+}
 
 describe("InviteMemberForm team targeting", () => {
   it("detects email, named NEAR, and implicit NEAR identifiers", () => {
@@ -34,12 +42,14 @@ describe("InviteMemberForm team targeting", () => {
     expect(detectInviteIdentifier("not an identifier")).toBeNull();
   });
 
-  it("offers the organization's teams with no team selected by default", () => {
+  it("offers the organization's teams with no team selected by default", async () => {
     renderForm();
-    const picker = screen.getByTestId("invite-team-select") as HTMLSelectElement;
+    const picker = screen.getByTestId("invite-team-select");
 
-    expect(picker.value).toBe("");
-    expect(Array.from(picker.options).map((option) => option.textContent)).toEqual([
+    expect(picker.textContent).toContain("No team");
+    fireEvent.click(picker);
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
       "No team",
       "Finance",
       "Node Operator",
@@ -64,8 +74,8 @@ describe("InviteMemberForm team targeting", () => {
     const input = screen.getByTestId("invite-identifier-input") as HTMLInputElement;
 
     fireEvent.change(input, { target: { value: "ops@example.com" } });
-    fireEvent.change(screen.getByTestId("invite-role-select"), { target: { value: "admin" } });
-    fireEvent.change(screen.getByTestId("invite-team-select"), { target: { value: "team-ops" } });
+    await pickOption("invite-role-select", "Admin");
+    await pickOption("invite-team-select", "Node Operator");
     fireEvent.click(screen.getByTestId("invite-submit-button"));
 
     await waitFor(() =>
@@ -102,7 +112,7 @@ describe("InviteMemberForm team targeting", () => {
     fireEvent.change(screen.getByTestId("invite-identifier-input"), {
       target: { value: "operator.testnet" },
     });
-    fireEvent.change(screen.getByLabelText("NEAR network"), { target: { value: "testnet" } });
+    await pickOption("invite-network-select", "Testnet");
     expect(screen.getByTestId("invite-identifier-feedback").textContent).toContain("testnet");
     fireEvent.click(screen.getByTestId("invite-submit-button"));
     await waitFor(() =>
@@ -138,8 +148,8 @@ describe("InviteMemberForm team targeting", () => {
   });
 });
 
-describe("InvitationCard team targeting", () => {
-  it("labels the wallet network and requires reissue for legacy invitations", () => {
+describe("InvitationRow team targeting", () => {
+  it("labels the wallet network and requires reissue for legacy invitations", async () => {
     const invitation = {
       id: "wallet-invite",
       email: "wallet@near-wallet.invalid",
@@ -152,25 +162,27 @@ describe("InvitationCard team targeting", () => {
     const onResend = vi.fn();
     const onCancel = vi.fn();
     const { rerender } = render(
-      <InvitationCard invitation={invitation} onResend={onResend} onCancel={onCancel} />,
+      <InvitationRow invitation={invitation} onResend={onResend} onCancel={onCancel} />,
     );
     expect(screen.getByTestId("invitation-network-wallet-invite").textContent).toContain("testnet");
     rerender(
-      <InvitationCard
+      <InvitationRow
         invitation={{ ...invitation, nearNetwork: null }}
         onResend={onResend}
         onCancel={onCancel}
       />,
     );
     expect(screen.getByText(/cancel and reissue/i)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /resend/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for alice.near" }));
+    await screen.findByRole("menu");
+    expect(screen.queryByRole("menuitem", { name: /resend/i })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: /cancel invitation/i }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("shows the targeted team when present", () => {
     render(
-      <InvitationCard
+      <InvitationRow
         invitation={{
           id: "inv-1",
           email: "hire@example.com",

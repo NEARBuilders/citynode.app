@@ -1,4 +1,4 @@
-import { Building2 } from "lucide-react";
+import { BankIcon } from "@phosphor-icons/react";
 import type { Organization } from "@/app";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,15 +14,11 @@ export function OrgSwitcher({ organizations, activeOrgId }: OrgSwitcherProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground max-w-[180px]"
-        >
-          <Building2 className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate min-w-0">{activeOrg?.name ?? "workspace"}</span>
-        </Button>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="sm" className="hidden sm:flex max-w-45" />}
+      >
+        <BankIcon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate min-w-0">{activeOrg?.name ?? "workspace"}</span>
       </DropdownMenuTrigger>
       <OrgSwitcherMenuContent organizations={organizations} activeOrgId={activeOrgId} align="end" />
     </DropdownMenu>

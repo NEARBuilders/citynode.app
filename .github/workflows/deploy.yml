@@ -85,3 +85,12 @@ jobs:
             echo "mf check failed; retrying in 20s ($attempts attempt(s) left)…"
             sleep 20
           done
+
+      - name: Deploy smoke — remote runtime against the live deployment
+        timeout-minutes: 10
+        # ADR 0009 §4: published-config coverage lives in the Deploy workflow.
+        # Boots the real host program against the live production URLs from the
+        # deployed SHA's bos.config.json — SSR compose from the deployed ui,
+        # doc-asset proxy, api ping, root document contract. mf check has
+        # already gated the site being up and consistent above.
+        run: bun run --cwd host test:integration:remote

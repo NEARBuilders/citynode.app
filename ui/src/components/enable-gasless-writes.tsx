@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { formatAmount } from "near-kit";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { useAuthClient } from "@/app";
-import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useSessionGasKey } from "@/lib/use-gas-key";
 
 export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string | null }) {
@@ -31,14 +31,20 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
   if (!scopeQuery.data?.enabled) return null;
 
   if (state) {
+    const balance =
+      state.balance && /^\d+$/.test(state.balance)
+        ? formatAmount(BigInt(state.balance), { precision: 4, trimZeros: true })
+        : null;
     return (
-      <p data-testid="gasless-writes-status" className="text-xs text-muted-foreground">
-        Gasless writes enabled
-        {state.balance && /^\d+$/.test(state.balance)
-          ? ` — session gas key balance ${formatAmount(BigInt(state.balance), { precision: 4, trimZeros: true })}`
-          : ""}
-        .
-      </p>
+      <GaslessRow
+        description={
+          <span data-testid="gasless-writes-status">
+            On{balance ? ` · gas key balance ${balance}` : ""}
+          </span>
+        }
+      >
+        <Switch checked disabled aria-label="Gasless writes" />
+      </GaslessRow>
     );
   }
 
@@ -49,10 +55,15 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
 
   if (!walletSupported) {
     return (
-      <p data-testid="gasless-writes-unsupported" className="text-xs text-muted-foreground">
-        Your connected wallet doesn&apos;t support gas keys. Gasless writes need a wallet with
-        gas-key support (e.g. Meteor); publishing falls back to the relayer.
-      </p>
+      <GaslessRow
+        description={
+          <span data-testid="gasless-writes-unsupported">
+            Your wallet doesn&apos;t support gas keys, so publishing falls back to the relayer.
+          </span>
+        }
+      >
+        <Switch checked={false} disabled aria-label="Gasless writes" />
+      </GaslessRow>
     );
   }
 
@@ -78,20 +89,37 @@ export function EnableGaslessWrites({ nearAccountId }: { nearAccountId: string |
   };
 
   return (
-    <div className="space-y-1">
-      <Button
-        data-testid="enable-gasless-writes"
-        variant="secondary"
-        size="sm"
-        onClick={() => void enable()}
+    <GaslessRow
+      description={
+        enabling
+          ? "Approve the gas key in your wallet…"
+          : "The platform pays gas for your publishes. Your wallet approves once."
+      }
+    >
+      <Switch
+        checked={enabling}
         disabled={enabling}
-      >
-        {enabling ? "Enabling..." : "Enable gasless writes"}
-      </Button>
-      <p className="text-xs text-muted-foreground">
-        Adds a session gas key to your account scoped to platform writes; the platform funds its
-        gas.
-      </p>
+        onCheckedChange={(checked) => {
+          if (checked) void enable();
+        }}
+        aria-label="Enable gasless writes"
+        data-testid="enable-gasless-writes"
+      />
+    </GaslessRow>
+  );
+}
+
+function GaslessRow({ description, children }: { description: ReactNode; children: ReactNode }) {
+  return (
+    <div
+      className="flex items-center justify-between gap-6 border-b border-border py-4 last:border-b-0"
+      data-testid="gasless-writes-row"
+    >
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-sm font-medium text-foreground">Gasless writes</span>
+        <span className="text-sm text-muted-foreground">{description}</span>
+      </div>
+      {children}
     </div>
   );
 }

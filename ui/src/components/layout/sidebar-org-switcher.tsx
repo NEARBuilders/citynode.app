@@ -1,7 +1,9 @@
-import { Building2, ChevronsUpDown } from "lucide-react";
+import { CaretUpDownIcon } from "@phosphor-icons/react";
 import type { Organization } from "@/app";
+import { LogoMark } from "@/components/logo";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { OrgMark } from "./org-mark";
 import { OrgSwitcherMenuContent } from "./org-switcher-menu";
 
 interface SidebarOrgSwitcherProps {
@@ -21,28 +23,20 @@ export function SidebarOrgSwitcher({
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              data-testid="org-switcher"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg border-2 border-outset border-border-strong bg-card text-foreground shrink-0">
-                <Building2 className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{activeOrg?.name ?? appName}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {activeOrg ? "organization" : "workspace"}
-                </span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
-            </SidebarMenuButton>
+          <DropdownMenuTrigger render={<SidebarMenuButton size="lg" data-testid="org-switcher" />}>
+            {activeOrg ? <OrgMark name={activeOrg.name} /> : <LogoMark />}
+            <div className="grid flex-1 text-left leading-tight">
+              <span className="truncate text-sm font-semibold">{activeOrg?.name ?? appName}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {activeOrg ? "Organization" : "Choose an organization"}
+              </span>
+            </div>
+            <CaretUpDownIcon className="ml-auto size-4 text-muted-foreground" />
           </DropdownMenuTrigger>
           <OrgSwitcherMenuContent
             organizations={organizations}
             activeOrgId={activeOrgId}
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="w-(--anchor-width) min-w-60"
             align="start"
             side="bottom"
             sideOffset={4}
