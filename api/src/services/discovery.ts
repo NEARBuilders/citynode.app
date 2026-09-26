@@ -20,7 +20,7 @@ import type {
   DiscoveryMeasurement,
   DiscoveryProfile,
 } from "../discovery-contract";
-import type { AuthContext } from "../lib/auth";
+import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
 import { createLumaCalendars } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";

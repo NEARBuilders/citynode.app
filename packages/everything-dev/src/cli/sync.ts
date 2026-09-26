@@ -56,7 +56,6 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "api/plugin.dev.ts",
   "api/rspack.config.js",
   "api/tsconfig.json",
-  "api/src/lib/auth.ts",
   "api/src/lib/context.ts",
   "api/drizzle.config.ts",
   "api/src/db/index.ts",
@@ -70,7 +69,9 @@ type PackageJson = Record<string, unknown>;
 
 export function isFrameworkOwnedSyncFile(filePath: string): boolean {
   if (FRAMEWORK_OWNED_SYNC_FILES.has(filePath)) return true;
-  if (/^plugins\/[^/]+\/src\/lib\/(auth|context)\.ts$/.test(filePath)) return true;
+  // lib/auth.ts is NOT sync-owned since #207: the middleware factory lives in
+  // everything-dev/api (framework home); projects import it, they don't own a copy.
+  if (/^plugins\/[^/]+\/src\/lib\/context\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/src\/db\/(index|layer|migrate)\.ts$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/rspack\.config\.js$/.test(filePath)) return true;
   if (/^plugins\/[^/]+\/drizzle\.config\.ts$/.test(filePath)) return true;

@@ -5,7 +5,7 @@ import { createPlugin } from "every-plugin";
 import { z } from "zod";
 import { contract, type ProposalEventSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
-import type { AuthContext } from "./lib/auth";
+import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import { ProposalService, ProposalServiceLive } from "./services/proposals";
 
 type ProposalEvent = z.infer<typeof ProposalEventSchema>;

@@ -2,11 +2,12 @@ import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
 import { Context, Effect, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
+import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
 import { z } from "zod";
 import { contract, type EventOnboardingCodeSchema } from "./contract";
 import { DatabaseLive } from "./db/layer";
-import { createAuthMiddleware } from "./lib/auth";
+import type { AuthPluginContext as AuthContext } from "./lib/auth-types.gen";
 import { ContextSchema } from "./lib/context";
 import type { PluginsClient } from "./lib/plugins-types.gen";
 import { verifyDaoMembership } from "./services/dao";
@@ -272,7 +273,7 @@ export default createPlugin.withPlugins<PluginsClient>()({
 
   createRouter: (builder, plugins) => {
     const { requireAuth, requireAdmin, requireOrganization, requireOrgRole } =
-      createAuthMiddleware(builder);
+      createAuthMiddleware<AuthContext>(builder);
     const requireNodeOperations = createRequireTeamArea(builder)("node-operations");
 
     const router = {
