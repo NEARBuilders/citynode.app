@@ -57,7 +57,7 @@ function SettingsLayout() {
                 className="shrink-0 md:w-full md:justify-start"
               >
                 <Icon data-icon="inline-start" />
-                {tab.label}
+                <span className="flex-1 text-start">{tab.label}</span>
               </Button>
             );
           })}

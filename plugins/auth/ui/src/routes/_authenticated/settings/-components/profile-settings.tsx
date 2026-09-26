@@ -140,7 +140,10 @@ function AccountDetails({ user }: { user: ProfileUser }) {
     <section className="flex flex-col gap-4">
       <SectionHeader title="Account" />
       <div className="flex flex-col">
-        <InfoRow label="Email" value={user.email ?? "Not linked"} />
+        <InfoRow
+          label="Email"
+          value={user.email && !user.isAnonymous ? user.email : "Not linked"}
+        />
         <InfoRow
           label="Account type"
           value={
