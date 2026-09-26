@@ -158,6 +158,9 @@ describe("breadcrumbs", () => {
     expect(labels("/discover")).toEqual(["Curate"]);
     expect(labels("/dashboard/node/proposals")).toEqual(["My community", "Proposals"]);
     expect(labels("/nodes/abc/content")).toEqual(["My community", "Events & profile"]);
+    expect(
+      crumbsFor("/nodes/abc/content", { tab: "onboarding" }).map((crumb) => crumb.label),
+    ).toEqual(["My community", "Onboarding"]);
     expect(labels("/tenant/t1")).toEqual(["My community", "Community settings"]);
     expect(labels("/settings/api-keys")).toEqual(["Settings", "API keys"]);
     expect(labels("/admin/tenants/new")).toEqual(["Admin", "Tenants", "New tenant"]);

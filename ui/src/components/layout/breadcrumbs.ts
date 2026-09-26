@@ -6,6 +6,7 @@ export interface Crumb {
 export interface CrumbContext {
   appName?: string;
   orgName?: (slug: string) => string | undefined;
+  tab?: string;
 }
 
 const SETTINGS_SECTIONS: Record<string, string> = {
@@ -53,7 +54,16 @@ export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[]
       if (third === "proposals") return [MY_COMMUNITY, page("Proposals")];
       return [page(MY_COMMUNITY.label)];
     case "nodes":
-      return [MY_COMMUNITY, page("Events & profile")];
+      return [
+        MY_COMMUNITY,
+        page(
+          context.tab === "onboarding"
+            ? "Onboarding"
+            : context.tab === "profile"
+              ? "Profile"
+              : "Events & profile",
+        ),
+      ];
     case "tenant":
       return [MY_COMMUNITY, page("Community settings")];
     case "explore":
