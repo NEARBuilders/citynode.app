@@ -2,6 +2,13 @@
 
 Given TanStack Router requires the full route tree before `createRouter()` (no lazy route registration), and `getParentRoute` is type-level only (runtime hierarchy comes from `addChildren()`), what's the web plugin grafting strategy?
 
+> **Re-annotation (2026-09-26):** the grafting resolution below is historically
+> accurate but **superseded** — PR #134 exposed grafting as a structural
+> failure class, and ADR 0007/0008 replaced it with manifest composition
+> (host constructs the route tree from generated manifests). See
+> [plans/prototypes/manifest-compose/](../../prototypes/manifest-compose/).
+
+
 Key constraints from research:
 - Discussion #585/#646: `getParentRoute` is for TypeScript inference only; runtime uses `addChildren()` structure
 - Discussion #7564: a user with 13 MF remotes must `Promise.allSettled` ALL before `createRouter()`. Route trees cannot be added lazily after router creation.

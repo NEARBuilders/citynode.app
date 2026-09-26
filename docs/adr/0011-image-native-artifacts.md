@@ -1,7 +1,7 @@
 # ADR 0011: Image-native artifacts — the runtime image is the deployment, the namespace is the topology
 
 Date: 2026-09-24
-Status: Accepted (amended 2026-09-26 — outbound local-first)
+Status: Accepted (amended 2026-09-26 — outbound local-first; amended 2026-09-26 — foreign-namespace proxy + stale-if-error cache)
 
 ## Context
 
@@ -97,3 +97,17 @@ Consequences: a cold boot performs zero network round-trips through its own
 origin — gateway, DNS, and ingress hiccups can no longer wedge a boot.
 Foreign-namespace resilience for the child tier (proxy + stale-if-error
 cache) is a separate amendment (Phase C direction).
+
+## Amendment (2026-09-26): foreign-namespace bundle resilience — proxy + stale-if-error cache
+
+The child tier's "separate amendment" landed: the host's `/bundles/*` route
+(`host/src/routes/bundles-proxy.ts`) falls through to a proxy + stale-if-error
+disk cache for namespaces mapped from the runtime config's slot URLs — a
+base-origin outage now degrades to serving last-known-good bytes
+(`x-bundle-cache: stale`) instead of a hard 502. The CLI fetch adapter gains
+the same cache for boot-time outbound fetches
+(`packages/everything-dev/src/bundle-cache.ts`, one cache root, two
+entrances, `BOS_BUNDLE_CACHE_DIR`, default `.bos/bundle-cache` — deliberately
+separate from `BOS_BUNDLE_DIR`: cached bytes are a resilience artifact, never
+a deployment). Never enabled for plain dev sessions; cached bytes serve only
+when the origin fails, so normal operation keeps serving fresh.

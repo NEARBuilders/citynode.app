@@ -13,9 +13,44 @@ plans/
 ├── infra/            # infrastructure & migration plans
 ├── offline/          # offline support (SW caching + data sync queue)
 ├── v1-current/       # plans about the current v1 system
-├── prototypes/         # runnable prototype source code (4 prototypes)
-└── wayfinder/        # decision map + open question tickets for beta-v2
+├── prototypes/         # runnable prototype source code
+├── done/             # completed/superseded plans (mirrors advisor-plans/done/)
+└── wayfinder/        # decision maps + open question tickets
 ```
+
+## wayfinder — active maps
+
+Two wayfinder maps exist:
+
+1. **[beta-v2 map](./wayfinder/beta-v2-map.md)** — the original decision map
+   (registry & FastKV architecture, namespace model, caching, gateway and
+   platform services). Partially superseded — see its status banner
+   (ADR 0011 kills the CDN decisions; ADR 0017 redirects decision 12).
+2. **"Everything is a node"** (GitHub [citynode.app#233](https://github.com/NEARBuilders/citynode.app/issues/233))
+   — the active map: composable multi-depth tenancy (nodes, zones, Caddy
+   edge, zone-wide SSO). Its tickets (#234–#252) live on GitHub, not here;
+   local artifacts: root `CONTEXT.md` (City Node glossary),
+   `docs/adr/0013-passkeys-bound-to-gateway-origin.md`. Note:
+   `sandbox-orchestrator.md` lives on the `spike/sandbox-orchestrator`
+   branch and `docs/research/caddy-edge-mechanics.md` on
+   `research/caddy-edge-mechanics` — neither is on `main`.
+
+### beta-v2 ticket status
+
+| Ticket | Question | Status |
+|---|---|---|
+| [01-route-grafting.md](./wayfinder/tickets/01-route-grafting.md) | Web plugin grafting strategy | **RESOLVED** (superseded by ADR 0008) — proven by [beta-v2 prototype](./prototypes/beta-v2/) |
+| [02-typed-api-client.md](./wayfinder/tickets/02-typed-api-client.md) | Typed `apiClient` for MF remotes | **RESOLVED** — proven by [override prototype](./prototypes/beta-v2-override/) |
+| [03-plugin-type-deps.md](./wayfinder/tickets/03-plugin-type-deps.md) | Plugin-to-plugin type dependencies | Open |
+| [04-app-ts-evaluation.md](./wayfinder/tickets/04-app-ts-evaluation.md) | `app.ts` evaluation to deployable config | Open — narrowed (TOML premise dead; `bos.app.ts` operative per #226) |
+| [05-backwards-compat.md](./wayfinder/tickets/05-backwards-compat.md) | Host supports both `app.ts` and `bos.config.json` | Open |
+| [06-ssr-per-request.md](./wayfinder/tickets/06-ssr-per-request.md) | Per-request SSR route tree composition | **PARTIALLY RESOLVED** — SSR-by-exclusion proven; now also gates member subdomains |
+| [07-effect-idiomatic.md](./wayfinder/tickets/07-effect-idiomatic.md) | Effect.ts idiomatic `createPlugin` | **RESOLVED (direction)** — `@orpc/experimental-effect` shipped with oRPC v2 beta; sequenced first on the `v2` branch |
+| [08-extends-depth.md](./wayfinder/tickets/08-extends-depth.md) | Transitive `extends` chains | **RESOLVED** — multi-level, verified per hop, depth-capped at 5, publish-time flattening *(depth-cap claim flagged for re-verification 2026-09-26)* |
+| [09-stitching-order.md](./wayfinder/tickets/09-stitching-order.md) | Grafting vs UI-extends-UI sequencing | **RESOLVED** (superseded by ADR 0008) |
+| [10-hot-swap-lifecycle.md](./wayfinder/tickets/10-hot-swap-lifecycle.md) | OTA hot-swap lifecycle (in-flight requests, teardown, ESM disposal) | Open — prototype required |
+| [11-sandbox-db.md](./wayfinder/tickets/11-sandbox-db.md) | Sandbox database engine | **RESOLVED (direction)** — tiered PGlite (workshop) / managed Postgres (production); Neon-via-alchemy leg aspirational, re-derived by node-map #248 |
+| [12-build-tooling-absorption.md](./wayfinder/tickets/12-build-tooling-absorption.md) | Root `app.ts` / build-tooling absorption | Open — phase 1 executed (ADRs 0002–0004); phase 2 largely landed (#226; railway.toml slice remains, #118) |
 
 ## beta-v2 — the v2 platform architecture
 
@@ -36,64 +71,43 @@ is verifiable on-chain via FastKV.
 
 | Document | Covers | Status |
 |---|---|---|
-| ui route-grafting migration (never filed as a doc) | In-repo migration to grafting ui plugins — SSR corrections (session-forwarded, not exclusion), digest-cached composition, shell/nav mounts, `plugins.<id>.ui` schema extension, phases 1–3 | **DECIDED** — Phases 1–3 approved; supersedes route-level composition; see map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) |
-| [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) | UI-to-UI composition through `extends` — child UI inherits routes/components from parent UI via MF | **SUPERSEDED** — route-level composition rejected; see map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) and [ADR 0008](../docs/adr/0008-manifest-composition.md) |
-| [client-runtime-plugins.md](./extensions/client-runtime-plugins.md) | Browser-executed plugins — `runtime: "client"` field, wasm-git + OPFS storage, BunInBrowser proxy | Independent |
+| ui route-grafting migration (never filed as a doc) | In-repo migration to grafting ui plugins — SSR corrections (session-forwarded, not exclusion), digest-cached composition, shell/nav mounts, `plugins.<id>.ui` schema extension, phases 1–3 | **SUPERSEDED by ADR 0007/0008** — PR #134 exposed grafting as a structural failure class; manifest composition replaced it. Phases 1–3 of map issue [citynode.app#108](https://github.com/NEARBuilders/citynode.app/issues/108) must be re-scoped against the manifest model before any further work |
+| [client-runtime-plugins.md](./extensions/client-runtime-plugins.md) | Browser-executed plugins — `runtime: "client"` field, wasm-git + OPFS storage, BunInBrowser proxy | Independent (backlog, unimplemented) |
+
+*(ui-extends-ui-federation.md moved to [done/](./done/) — superseded by ADR 0008.)*
 
 ## infra — infrastructure & migration
 
 | Document | Covers | Status |
 |---|---|---|
-| [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning | Phases 1–3 DONE, Phase 4 PARTIAL |
-| [orpc-v2-effect-migration.md](./infra/orpc-v2-effect-migration.md) | oRPC V1→V2 upgrade + Effect integration — Layer-based `initialize`, `.effect()` handlers, `errorStatusMap` | **DONE** — merged to `main` (citynode.app#97 + #106), verified live in production including the MF shared-dep guardrails |
-| [effect-native-plugins.md](./infra/effect-native-plugins.md) | Effect-native plugins — `.effect()` handlers, Layer-returning `initialize`, nested router merging, `every-plugin` barrel removal | **DONE** — merged with citynode.app#97; deployed to production |
+| [toml-infra-alchemy.md](./infra/toml-infra-alchemy.md) | TOML config, per-plugin Postgres schema isolation, `[infra]` section, Alchemy database provisioning | **STALE** — see the status correction banner in the file: only Phase 2 (schema isolation) is on `main`; Phases 1/3/4 exist only on unmerged `upstream/feat/alchemy` |
+
+*(orpc-v2-effect-migration.md and effect-native-plugins.md moved to [done/](./done/) — shipped to production.)*
 
 ## offline — offline support
 
 | Document | Covers | Status |
 |---|---|---|
-| [shell-sw-caching.md](./offline/shell-sw-caching.md) | Layer 1: service worker for MF asset caching — offline shell rendering | Pairs with [data-sync-queue.md](./offline/data-sync-queue.md) |
-| [data-sync-queue.md](./offline/data-sync-queue.md) | Layer 2: offline request queue & replay via IndexedDB + Background Sync | Builds on [shell-sw-caching.md](./offline/shell-sw-caching.md) |
+| [shell-sw-caching.md](./offline/shell-sw-caching.md) | Layer 1: service worker for MF asset caching — offline shell rendering | **UNSCHEDULED** — zero implementation; blocker (host MF/shell settling, ADR 0007/0008) is gone |
+| [data-sync-queue.md](./offline/data-sync-queue.md) | Layer 2: offline request queue & replay via IndexedDB + Background Sync | **UNSCHEDULED** — builds on [shell-sw-caching.md](./offline/shell-sw-caching.md) |
 
 ## v1-current — plans about the current system
 
 | Document | Covers | Status |
 |---|---|---|
-| [tenant-feature-completeness.md](./v1-current/tenant-feature-completeness.md) | Tenant lifecycle hardening — edit/delete flows, soft-delete, status gating, auth consistency | Independent |
-| [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) | Per-plugin database boilerplate absorption — `everything-dev/db` runtime exports (`createDatabaseDriver`/`databaseLayer`/`runMigrations`), namespace-per-engine isolation, tiered migration timing (ticket #89) | DECIDED (amended 2026-09-15) — prototype at [prototypes/db-auth-absorption/](./prototypes/db-auth-absorption/), build plan 017 in [advisor-plans/](../advisor-plans/) |
+| [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) | Per-plugin database boilerplate absorption — `everything-dev/db` runtime exports (`createDatabaseDriver`/`databaseLayer`/`runMigrations`), namespace-per-engine isolation, tiered migration timing (ticket #89) | **MOSTLY DONE** — core landed in `packages/everything-dev/src/db/`; remainder: `databaseLayer` factory, sync-ownership exit, `plugins/*/db/layer.ts` shrink. See the 2026-09-26 note in the file |
+
+*(tenant-feature-completeness.md moved to [done/](./done/) — implemented and verified.)*
 
 ## prototypes — validated architecture
 
 | Prototype | Validates | Related docs |
 |---|---|---|
-| [beta-v2/](./prototypes/beta-v2/) | Web plugin grafting — `composeApp()` grafts MF remote route trees into host mount points | [ui.md](./beta-v2/ui.md) |
-| [beta-v2-override/](./prototypes/beta-v2-override/) | Tenant UI override composition — host composes base + tenant override remotes | [tenants.md](./beta-v2/tenants.md), [ui-extends-ui-federation.md](./extensions/ui-extends-ui-federation.md) |
-| [db-auth-absorption/](./prototypes/db-auth-absorption/) | Database absorption — plugin-id plumbing, slug semantics, schema isolation, migration idempotence, R-channel narrowing | [every-plugin-db-auth-absorption.md](./v1-current/every-plugin-db-auth-absorption.md) |
-| [manifest-compose/](./prototypes/manifest-compose/) | Manifest composition — route files → generated manifests → host-constructed route tree with host-attached gates; SSR streaming, per-route lazy over MF, tenant swap (supersedes grafting; ADR 0007/0008; build plan 033, rework plan 034) | [ADR 0007](../docs/adr/0007-runtime-composition-ssr.md), [ADR 0008](../docs/adr/0008-manifest-composition.md) |
+| [beta-v2/](./prototypes/beta-v2/) | Web plugin grafting — `composeApp()` grafts MF remote route trees into host mount points | [ui.md](./beta-v2/ui.md) — **historical**: grafting superseded by ADR 0008 |
+| [beta-v2-override/](./prototypes/beta-v2-override/) | Tenant UI override composition — host composes base + tenant override remotes | [tenants.md](./beta-v2/tenants.md) — config-swap composition retained by ADR 0008 |
+| [manifest-compose/](./prototypes/manifest-compose/) | Manifest composition — route files → generated manifests → host-constructed route tree with host-attached gates; SSR streaming, per-route lazy over MF, tenant swap (supersedes grafting; ADR 0007/0008; build plan 033, rework plan 034) | [ADR 0007](../docs/adr/0007-runtime-composition-ssr.md), [ADR 0008](../docs/adr/0008-manifest-composition.md) — **the live reference prototype** |
 
-## wayfinder — decision map for beta-v2
-
-| Document | Covers |
-|---|---|
-| [beta-v2-map.md](./wayfinder/beta-v2-map.md) | Decision map — registry & FastKV architecture, namespace model, caching layers, gateway services, platform services (decisions 11–17: deploy service, provider-as-alchemy-program, OTA runtime, sandboxes, upstream strategy) |
-| [tickets/](./wayfinder/tickets/) | 12 decision tickets (6 resolved, 1 partially resolved, 5 open) |
-
-### Ticket status
-
-| Ticket | Question | Status |
-|---|---|---|
-| [01-route-grafting.md](./wayfinder/tickets/01-route-grafting.md) | Web plugin grafting strategy | **RESOLVED** — proven by [beta-v2 prototype](./prototypes/beta-v2/) |
-| [02-typed-api-client.md](./wayfinder/tickets/02-typed-api-client.md) | Typed `apiClient` for MF remotes | **RESOLVED** — proven by [override prototype](./prototypes/beta-v2-override/) |
-| [03-plugin-type-deps.md](./wayfinder/tickets/03-plugin-type-deps.md) | Plugin-to-plugin type dependencies | Open |
-| [04-app-ts-evaluation.md](./wayfinder/tickets/04-app-ts-evaluation.md) | `app.ts` evaluation to deployable config | Open — sharpened by the deploy service (URL write-back may dissolve) |
-| [05-backwards-compat.md](./wayfinder/tickets/05-backwards-compat.md) | Host supports both `app.ts` and `bos.config.json` | Open |
-| [06-ssr-per-request.md](./wayfinder/tickets/06-ssr-per-request.md) | Per-request SSR route tree composition | **PARTIALLY RESOLVED** — SSR-by-exclusion proven; now also gates member subdomains |
-| [07-effect-idiomatic.md](./wayfinder/tickets/07-effect-idiomatic.md) | Effect.ts idiomatic `createPlugin` | **RESOLVED (direction)** — `@orpc/experimental-effect` shipped with oRPC v2 beta; sequenced first on the `v2` branch |
-| [08-extends-depth.md](./wayfinder/tickets/08-extends-depth.md) | Transitive `extends` chains | **RESOLVED** — multi-level, verified per hop, depth-capped at 5, publish-time flattening |
-| [09-stitching-order.md](./wayfinder/tickets/09-stitching-order.md) | Grafting vs UI-extends-UI sequencing | **RESOLVED** — grafting first (validated); inheritance is a layer on top, prototype-gated |
-| [10-hot-swap-lifecycle.md](./wayfinder/tickets/10-hot-swap-lifecycle.md) | OTA hot-swap lifecycle (in-flight requests, teardown, ESM disposal) | Open — prototype required |
-| [11-sandbox-db.md](./wayfinder/tickets/11-sandbox-db.md) | Sandbox database engine | **RESOLVED** — tiered PGlite (workshop) / Neon via alchemy (production) |
-| [12-build-tooling-absorption.md](./wayfinder/tickets/12-build-tooling-absorption.md) | Root `app.ts` / build-tooling absorption | Open — phase 1 executed (ADRs 0002–0004); phase 2 drafted in ADR 0005 |
+*(db-auth-absorption/ moved to [done/db-auth-absorption-prototype/](./done/) — absorbed into shipped code.)*
 
 ## Completed plans (removed)
 

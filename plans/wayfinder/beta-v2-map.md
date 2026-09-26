@@ -1,3 +1,15 @@
+> **Status banner (2026-09-26 audit):** this map remains the consulted
+> parent for the beta-v2 architecture, but three areas have moved on:
+> (1) decisions 9 & 11 (Zephyr CDN → R2/S3 deploy service) are superseded
+> by **ADR 0011 image-native artifacts** — no CDN provider, no uploads;
+> (2) decision 12 (gasless publish via NEP-366 delegates) is redirected by
+> **ADR 0017 session gas keys** (NEP-611 browser-signed writes); (3) the
+> tenancy/sandbox tier framing (decisions 14/15) is being re-derived in
+> node/zone vocabulary by the **"Everything is a node" wayfinder**
+> (citynode.app#233–#252), which consults this map. Also note
+> "web plugin grafting" below is superseded by ADR 0008 manifest
+> composition.
+
 ## Destination
 
 Validate that the beta-v2 architecture (`app.ts` composition, web plugin grafting, plugin-to-plugin type dependencies, backwards compat) is a sound, composable e2e design before committing to the 9-phase build. The deliverable is a ratified architecture — decisions locked, no unknown unknowns — ready to hand off for implementation.

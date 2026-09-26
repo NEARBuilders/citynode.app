@@ -87,6 +87,7 @@ import {
 
 export {
   getPasskeyWalletFactory,
+  isDeterministicAccountId,
   isPasskeyWalletAvailable,
   type PasskeyWalletNetwork,
   parseCosePublicKey,

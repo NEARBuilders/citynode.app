@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type SessionData, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { SectionHeader } from "@/components/layout/section-header";
-import { useNearAccount } from "@/lib/use-near-account";
+import { useNetworkId } from "@/lib/use-network-id";
 import { EmailMethod } from "./-email-method";
 import { NearMethod } from "./-near-method";
 import { PasskeysMethod } from "./-passkeys-method";
@@ -15,7 +15,7 @@ function AuthMethodsSettings() {
   const auth = useAuthClient();
   const { data: session } = useQuery<SessionData | null>(sessionQueryOptions(auth));
   const user = session?.user;
-  const nearAccountId = useNearAccount();
+  const networkId = useNetworkId();
 
   if (!user) return null;
 
@@ -27,7 +27,7 @@ function AuthMethodsSettings() {
         sectionTestId="settings.auth-methods-heading"
       />
       <PasskeysMethod />
-      <NearMethod nearAccountId={nearAccountId} />
+      <NearMethod networkId={networkId} />
       {user.email && !user.isAnonymous && <EmailMethod email={user.email} />}
     </div>
   );

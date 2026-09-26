@@ -74,7 +74,7 @@ addressing; the credential carries the scope; the DAO is the endgame ACL.**
   pre-check refuses when `session.credential.accountId !== account`.
 - `api/src/index.ts` `uploadBundles`: accepts session OR API key; pins uploads
   to `context.near?.primaryAccountId` when present; API-key-only uploads are
-  NOT account-pinned (ADR 0007 documented limitation, bounded by the 64 MB
+  NOT account-pinned (ADR 0015 documented limitation, bounded by the 64 MB
   ceiling + path allowlist + traversal guard).
 - `host/src/program.ts` merges `context.apiKey` into the Effect context as
   `{ id, name, permissions }` (AGENTS.md MCP section) — permissions are
@@ -105,7 +105,7 @@ addressing; the credential carries the scope; the DAO is the endgame ACL.**
 - `packages/everything-dev/src/publish.ts` (BOS_API_KEY fallback; pre-check evolution)
 - `packages/everything-dev/src/contract.ts` + `contract.meta.ts` (`bos key mint` command + metadata)
 - `packages/everything-dev/src/plugin.ts` (mint handler)
-- `docs/adr/0011-spreadability-identity-model.md` (create)
+- `docs/adr/0019-spreadability-identity-model.md` (create)
 - `AGENTS.md` (self-deploy section: borrowed-storage cold start + CI setup)
 - `.changeset/` scoped entries; this plan + README row
 
@@ -117,11 +117,11 @@ addressing; the credential carries the scope; the DAO is the endgame ACL.**
 
 ## Steps
 
-### Step 1: ADR 0011 — spreadability identity model
+### Step 1: ADR 0019 — spreadability identity model
 
-`docs/adr/0011-spreadability-identity-model.md`: the path/credential split
+`docs/adr/0019-spreadability-identity-model.md`: the path/credential split
 (decision 1), borrowed-storage cold start (2), sovereignty migration (3),
-DAO endgame (4). Cross-link 0007 (file transport) and the AGENTS.md
+DAO endgame (4). Cross-link 0015 (file transport) and the AGENTS.md
 self-deploy section. This ADR is the doc later plans cite.
 
 **Verify**: the ADR's claims about CORS/SRI/pinning match `program.ts`,
@@ -141,7 +141,7 @@ self-deploy section. This ADR is the doc later plans cite.
   unrestricted (bounded by the account-pin rule for sessions and the
   ceilings). Fail `FORBIDDEN` when the configured account is not listed.
 - Parse defensively (bad JSON metadata → treat as unrestricted, matching
-  ADR 0007's not-pinned-for-API-keys limitation); unit tests for the matrix:
+  ADR 0015's not-pinned-for-API-keys limitation); unit tests for the matrix:
   session+pin, api-key+capability-ok/missing, api-key+target-in/out,
   malformed metadata.
 
@@ -216,7 +216,7 @@ included in this plan's scope (the flip is operator-run, documented).
 
 ## Done criteria
 
-- [ ] ADR 0011 written; claims verified against live code
+- [ ] ADR 0019 written; claims verified against live code
 - [ ] Storage route enforces capability + target scope for API-key uploads; session flow unchanged
 - [ ] `bos key mint` mints a scoped key and prints CI-ready env
 - [ ] `BOS_API_KEY` fallback unblocks headless `bos publish --deploy --cdn platform`

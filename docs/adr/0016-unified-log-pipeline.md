@@ -1,4 +1,4 @@
-# ADR 0011: Unified log pipeline — stream broadcast with levels instead of pattern-only suppression
+# ADR 0016: Unified log pipeline — stream broadcast with levels instead of pattern-only suppression
 
 Date: 2026-09-23
 Status: Accepted

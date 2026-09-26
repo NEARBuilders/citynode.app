@@ -1,6 +1,6 @@
 # ADR 0009: Regression stacks run production mode against locally built artifacts
 
-Date: 2026-09-23 · Status: accepted · Supersedes: none
+Date: 2026-09-23 · Status: accepted (amended 2026-09-23 — Dockerfile fixture) · Supersedes: none
 
 ## Context
 

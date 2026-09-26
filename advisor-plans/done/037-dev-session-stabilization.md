@@ -63,7 +63,7 @@ All paths relative to `packages/everything-dev/src/`. Line numbers are post-tick
 **Out of scope**:
 - Port allocation, registry locking, `bos kill` escalation — owned by plan 036 (`advisor-plans/036-port-leases-and-scoped-stack.md`)
 - CORS/BASE_URL/env precedence, preflight, DB ports — owned by plan 038
-- Log pipeline classification logic (ADR 0011, landed) — only its consumers here
+- Log pipeline classification logic (ADR 0016, landed) — only its consumers here
 - The `l`-key semantics (export-and-quit is intentional; only the "l logs" hint wording may be adjusted to "l export+quit")
 
 ## Steps

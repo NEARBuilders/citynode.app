@@ -263,7 +263,7 @@ bun run deploy         # bos build --deploy — the deploy train (also runs on m
 ```
 `bun run build <targets>` quietly (re)builds the framework prerequisites (`every-plugin`, `everything-dev`, `better-near-auth` — staleness-checked, cheap no-ops when fresh) before any target, so targets always bundle fresh dists. Raw per-workspace builds (`cd ui && bun run build`) bypass the prerequisite train and are unsupported — use the train.
 
-Two resolution rules keep this safe (ADR 0013): **bundler-configuration code resolves from source** — `every-plugin/build/ui` and `every-plugin/build/rspack` (the generated plugin configs' factories) resolve `src` in every condition, so the config chain cannot go stale; **shipped code resolves from dist** — runtime subpaths (`everything-dev/ui/auth`, `db`, …) resolve built dists, whose freshness the prerequisite train guarantees.
+Two resolution rules keep this safe (ADR 0018): **bundler-configuration code resolves from source** — `every-plugin/build/ui` and `every-plugin/build/rspack` (the generated plugin configs' factories) resolve `src` in every condition, so the config chain cannot go stale; **shipped code resolves from dist** — runtime subpaths (`everything-dev/ui/auth`, `db`, …) resolve built dists, whose freshness the prerequisite train guarantees.
 
 **Dev overlays (`bos.dev.ts`):** authored config lives in `bos.app.ts` (published); dev-only overrides live in `bos.dev.ts` (optional, child-wins merged over the resolved config when the environment is development, **never published** — same role as `.env` vs `.env.example` at the config level). Each unit gets the pair; `plugin.dev.ts` is the legacy name being retired (see `.scratch/quiet-dev-session/issues/15` and `16`).
 
@@ -647,7 +647,7 @@ const appName = getActiveRuntime(runtimeConfig)?.title ?? getAccount(runtimeConf
 
 ### Gasless writes: session gas keys first, relayer fallback
 
-Two sponsorship models share the same funded account. The **Sponsor** is the ephemeral relayer account in its funding role; the **relayer** is the same account's NEP-366 role. See ADR 0012 (`docs/adr/0012-session-gas-keys.md`) and the "Gasless transactions" vocabulary in `CONTEXT.md`.
+Two sponsorship models share the same funded account. The **Sponsor** is the ephemeral relayer account in its funding role; the **relayer** is the same account's NEP-366 role. See ADR 0017 (`docs/adr/0017-session-gas-keys.md`) and the "Gasless transactions" vocabulary in `CONTEXT.md`.
 
 **Session Gas Keys (primary, NEP-611):** when the connected wallet advertises `features.gasKeys` (Meteor verified on testnet), the user opts in via the `EnableGaslessWrites` affordance; the wallet signs a one-time Bootstrap `AddKey` with `gasKeyInfo` that installs a `GasKeyFunctionCall` key scoped to the FastKV namespace's `__fastdata_kv` method on the user's account. The Sponsor funds it via `TransferToGasKey` (`POST /near/gas-key/fund`), which verifies the on-chain key scope and balance against the top-up threshold and enforces a per-user lifetime cap before signing. The browser signs platform writes locally (`authClient.near.sendWithGasKey`) on rotating nonce Lanes — no relayer on the hot path. Config: `sessionGasKey` block (dual-network) beside `relayer` in `bos.config.json → app.auth.variables.siwn`. Key material lives in browser IndexedDB per `network:account` — nothing server-side; a cleared cache re-Bootstraps a new key (old keys are recorded in `fundedGasKey` rows for later cleanup).
 
