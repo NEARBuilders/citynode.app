@@ -207,6 +207,15 @@
       "import": "./dist/ui/auth.mjs",
       "require": "./dist/ui/auth.cjs"
     },
+    "./ui/tenant": {
+      "development": {
+        "types": "./src/ui/tenant.ts",
+        "import": "./src/ui/tenant.ts"
+      },
+      "types": "./dist/ui/tenant.d.mts",
+      "import": "./dist/ui/tenant.mjs",
+      "require": "./dist/ui/tenant.cjs"
+    },
     "./ui/manifest": {
       "development": {
         "types": "./src/ui/manifest/index.ts",

@@ -1,11 +1,10 @@
 import type { TransactionBuilder } from "near-kit";
-import type { ApiClient, useAuthClient } from "@/app";
+import type { ApiClient, TenantUiOverride, useAuthClient } from "@/app";
 import {
   buildTenantPublishConfig,
   type SignAsDaoSpec,
   signAsDaoTransaction,
   type TenantPublishConfigInput,
-  type TenantUiOverride,
 } from "./dao-connect";
 import { trySendWithGasKey } from "./gas-key";
 

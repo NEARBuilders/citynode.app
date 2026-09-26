@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
+import { buildTenantUrl, getAccount, getActiveRuntime, useApiClient, useAuthClient } from "@/app";
 import {
   describeDaoError,
   isExplicitDaoMember,
@@ -11,7 +11,6 @@ import {
   verifyDaoAccount,
 } from "@/lib/dao-connect";
 import { generateSlug } from "@/lib/slug";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import { parseNodeProposalPayload } from "./-node-application";
 import {

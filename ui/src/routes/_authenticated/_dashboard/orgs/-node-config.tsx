@@ -12,7 +12,23 @@ import { Link } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useApiClient, useAuthClient } from "@/app";
+import {
+  buildDraftFromResolvedConfig,
+  buildTenantUrl,
+  computeSsrEntryIntegrity,
+  computeUiEntryIntegrity,
+  diffDraft,
+  draftUiOverride,
+  emptyTenantConfigDraft,
+  type IntegrityCheckResult,
+  normalizeBundleBaseUrl,
+  type TenantConfigDraft,
+  tenantConfigDraftSchema,
+  useApiClient,
+  useAuthClient,
+  verifySsrIntegrity,
+  verifyUiIntegrity,
+} from "@/app";
 import {
   Badge,
   Button,
@@ -42,22 +58,7 @@ import {
   fetchSputnikPolicy,
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
-import {
-  buildDraftFromResolvedConfig,
-  computeSsrEntryIntegrity,
-  computeUiEntryIntegrity,
-  diffDraft,
-  draftUiOverride,
-  emptyTenantConfigDraft,
-  type IntegrityCheckResult,
-  normalizeBundleBaseUrl,
-  type TenantConfigDraft,
-  tenantConfigDraftSchema,
-  verifySsrIntegrity,
-  verifyUiIntegrity,
-} from "@/lib/tenant-config-draft";
 import { publishTenantConfigForMode } from "@/lib/tenant-deploy";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 import { waitFor } from "../-poc-chain";
