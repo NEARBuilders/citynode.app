@@ -38,7 +38,6 @@ const FRAMEWORK_OWNED_SYNC_FILES = new Set([
   "railway.toml",
   "ui/package.json",
   "ui/postcss.config.mjs",
-  "ui/rsbuild.config.ts",
   "ui/tsconfig.json",
   "ui/src/app.ts",
   "ui/src/components/document-fallback.tsx",

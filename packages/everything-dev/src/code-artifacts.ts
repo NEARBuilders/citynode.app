@@ -21,11 +21,10 @@ interface UiManifestTarget {
 function uiManifestTargets(runtimeConfig: RuntimeConfig): UiManifestTarget[] {
   const targets: UiManifestTarget[] = [];
   const ui = runtimeConfig.ui;
-  if (
-    ui?.source === "local" &&
-    ui.localPath &&
-    existsSync(join(ui.localPath, "rsbuild.config.ts"))
-  ) {
+  // The core ui is always a manifest target when local — with no authored
+  // rsbuild.config.ts the build synthesizes one (ui-build runner), so the
+  // config's existence no longer gates manifest generation.
+  if (ui?.source === "local" && ui.localPath) {
     targets.push({
       workspaceRoot: ui.localPath,
       pluginName: CORE_UI_PLUGIN_KEY,

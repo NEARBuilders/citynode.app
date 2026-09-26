@@ -209,6 +209,7 @@
       "bin": {
         "everything-dev": "./dist/cli.mjs",
         "bos": "./dist/cli.mjs",
+        "bos-ui": "./dist/ui-build.mjs",
       },
       "dependencies": {
         "@clack/prompts": "^0.10.1",
