@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { Near } from "near-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AuthClient } from "@/app";
 import {
   formatNearBalance,
   formatPoolFee,
@@ -16,6 +17,26 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** The app's auth client owns the per-network near clients; the tests hand a
+ * lightweight stand-in whose getNearClient returns real (wallet-less) Near
+ * instances so the Near.prototype.view spy intercepts every call. */
+function fakeAuthClient(): AuthClient {
+  const clients = new Map<string, Near>();
+  return {
+    near: {
+      getNearClient: (network?: "mainnet" | "testnet") => {
+        const net = network ?? "mainnet";
+        let client = clients.get(net);
+        if (!client) {
+          client = new Near({ network: net });
+          clients.set(net, client);
+        }
+        return client;
+      },
+    },
+  } as unknown as AuthClient;
+}
+
 describe("stake pool queries", () => {
   it("fetches at most 50 standard pool accounts and sorts their bigint stakes descending", async () => {
     const accounts = Array.from({ length: 55 }, (_, i) => ({
@@ -25,7 +46,7 @@ describe("stake pool queries", () => {
     const view = vi.spyOn(Near.prototype, "view").mockResolvedValue(accounts);
     const client = new QueryClient();
     const holders = await client.fetchQuery(
-      stakePoolTopHoldersQueryOptions({ accountId: "pool.near", limit: 80 }),
+      stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient(), limit: 80 }),
     );
     expect(holders).toHaveLength(50);
     expect(holders[0]).toEqual({
@@ -38,7 +59,7 @@ describe("stake pool queries", () => {
   });
 
   it("isolates network and page-limit caches and disables unsupported pools", () => {
-    const options = { accountId: "pool.near", network: "mainnet" };
+    const options = { accountId: "pool.near", authClient: fakeAuthClient(), network: "mainnet" as const };
     expect(stakePoolStatsQueryOptions(options).queryKey).toEqual([
       "stake-pool",
       "pool.near",
@@ -61,7 +82,7 @@ describe("stake pool queries", () => {
       expect(makeOptions(options).staleTime).toBe(300_000);
       expect(makeOptions({ ...options, protocol: "ethereum" }).enabled).toBe(false);
       expect(makeOptions({ ...options, accountId: "" }).enabled).toBe(false);
-      expect(makeOptions({ ...options, network: "localnet" }).enabled).toBe(false);
+      expect(makeOptions({ ...options, network: "localnet" as never }).enabled).toBe(false);
     }
   });
 
@@ -90,14 +111,14 @@ describe("stake pool queries", () => {
     const view = vi.spyOn(Near.prototype, "view").mockRejectedValue(new Error("Unavailable"));
     const client = new QueryClient();
     await expect(
-      client.fetchQuery(stakePoolStatsQueryOptions({ accountId: "pool.near" })),
+      client.fetchQuery(stakePoolStatsQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() })),
     ).rejects.toThrow();
     await expect(
-      client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near" })),
+      client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() })),
     ).rejects.toThrow();
     view.mockResolvedValue([]);
     expect(
-      await client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near" })),
+      await client.fetchQuery(stakePoolTopHoldersQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient() })),
     ).toEqual([]);
     client.clear();
   });
@@ -115,7 +136,7 @@ describe("stake pool queries", () => {
       );
     const client = new QueryClient();
     const stats = await client.fetchQuery(
-      stakePoolStatsQueryOptions({ accountId: "pool.near", network: "mainnet" }),
+      stakePoolStatsQueryOptions({ accountId: "pool.near", authClient: fakeAuthClient(), network: "mainnet" }),
     );
     expect(stats).toEqual({
       totalStaked: 12345678900000000000000000000n,
@@ -219,6 +240,7 @@ describe("team stake pool account query", () => {
       stakePoolAccountQueryOptions({
         poolAccountId: "india.poolv1.near",
         stakerAccountId: "india.sputnik-dao.near",
+        authClient: fakeAuthClient(),
         network: "mainnet",
       }),
     );
@@ -236,7 +258,8 @@ describe("team stake pool account query", () => {
     const options = {
       poolAccountId: "india.poolv1.near",
       stakerAccountId: "india.sputnik-dao.near",
-      network: "mainnet",
+      authClient: fakeAuthClient(),
+      network: "mainnet" as const,
     };
     expect(stakePoolAccountQueryOptions(options).queryKey).toEqual([
       "stake-pool",
@@ -252,6 +275,6 @@ describe("team stake pool account query", () => {
     expect(stakePoolAccountQueryOptions({ ...options, protocol: "ethereum" }).enabled).toBe(false);
     expect(stakePoolAccountQueryOptions({ ...options, poolAccountId: "" }).enabled).toBe(false);
     expect(stakePoolAccountQueryOptions({ ...options, stakerAccountId: "" }).enabled).toBe(false);
-    expect(stakePoolAccountQueryOptions({ ...options, network: "localnet" }).enabled).toBe(false);
+    expect(stakePoolAccountQueryOptions({ ...options, network: "localnet" as never }).enabled).toBe(false);
   });
 });

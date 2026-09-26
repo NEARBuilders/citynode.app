@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Near } from "near-kit";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StakePoolCard } from "./stake-pool-card";
+
+vi.mock("@/app", () => ({
+  useAuthClient: () => ({
+    near: { getNearClient: () => new Near({ network: "mainnet" }) },
+  }),
+}));
 
 const validator: ComponentProps<typeof StakePoolCard>["validator"] = {
   id: "pool",

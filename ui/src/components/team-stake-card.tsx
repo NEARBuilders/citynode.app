@@ -15,6 +15,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthClient } from "@/app";
 import { describeDaoError, useDaoAutoRestore, useDaoConnection } from "@/lib/dao-connect";
 import {
   formatNearBalance,
@@ -59,6 +60,7 @@ export function TeamStakeCard({
   pending?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const authClient = useAuthClient();
   const authAccountId = useNearAccount();
   const connection = useDaoConnection();
   useDaoAutoRestore(authAccountId);
@@ -67,6 +69,7 @@ export function TeamStakeCard({
     stakePoolAccountQueryOptions({
       poolAccountId: target?.poolAccountId ?? "",
       stakerAccountId: target?.teamAccountId ?? "",
+      authClient,
       network: target?.network,
       protocol: target?.protocol,
     }),

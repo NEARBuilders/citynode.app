@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { ApiClient } from "@/app";
+import { useAuthClient } from "@/app";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +12,7 @@ import {
   formatPoolFee,
   stakePoolStatsQueryOptions,
   stakePoolTopHoldersQueryOptions,
+  toNetwork,
 } from "@/lib/queries/stake-pool";
 
 type Validator = InferClientOutputs<ApiClient>["getNodeSummary"]["validators"][number];
@@ -111,8 +113,14 @@ export function StakePoolCard({ validator }: { validator: Validator }) {
 }
 
 function NearPoolStats({ accountId, network }: { accountId: string; network: string }) {
-  const stats = useQuery(stakePoolStatsQueryOptions({ accountId, network }));
-  const holders = useQuery(stakePoolTopHoldersQueryOptions({ accountId, network }));
+  const authClient = useAuthClient();
+  const poolNetwork = toNetwork(network);
+  const stats = useQuery(
+    stakePoolStatsQueryOptions({ accountId, authClient, network: poolNetwork }),
+  );
+  const holders = useQuery(
+    stakePoolTopHoldersQueryOptions({ accountId, authClient, network: poolNetwork }),
+  );
   const statsData = stats.isError ? undefined : stats.data;
   const holdersData = holders.isError ? undefined : holders.data;
 

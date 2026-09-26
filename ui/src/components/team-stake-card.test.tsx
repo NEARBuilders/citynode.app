@@ -8,7 +8,7 @@ import { TeamStakeCard } from "./team-stake-card";
 const target = {
   teamAccountId: "india.sputnik-dao.near",
   poolAccountId: "india.poolv1.near",
-  network: "mainnet",
+  network: "mainnet" as const,
   protocol: "near",
 };
 const clients: QueryClient[] = [];
@@ -18,6 +18,11 @@ const poolActionMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/use-near-account", () => ({
   useNearAccount: () => "itexpert120-contra.near",
+}));
+vi.mock("@/app", () => ({
+  useAuthClient: () => ({
+    near: { getNearClient: () => new Near({ network: "mainnet" }) },
+  }),
 }));
 
 vi.mock("@/lib/dao-connect", () => ({
