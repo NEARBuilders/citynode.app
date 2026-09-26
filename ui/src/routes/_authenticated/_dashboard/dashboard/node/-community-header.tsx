@@ -1,7 +1,7 @@
 import { ArrowSquareOutIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
-import { buildTenantUrl, type ApiClient, getActiveRuntime, useApiClient } from "@/app";
+import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Button, PageHeader, Skeleton } from "@/components";
 import {
   Select,
