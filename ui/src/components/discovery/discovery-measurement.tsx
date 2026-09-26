@@ -1,6 +1,19 @@
+import { ChartBarIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { type ApiClient, useApiClient } from "@/app";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeader } from "@/components/layout/section-header";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Kind = "open" | "event" | "channel" | "share";
 export function useDiscoveryMeasurement(api: ApiClient, campaign = "") {
@@ -60,79 +73,92 @@ export function DiscoveryMetrics({ nodes = [] }: { nodes?: { nodeId: string; nam
     retry: false,
   });
   if (metrics.isPending)
-    return <p className="text-sm text-muted-foreground">Loading engagement…</p>;
-  if (metrics.isError) return <p role="alert">Unable to load engagement reports.</p>;
+    return (
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-7 w-40" />
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          {["a", "b", "c"].map((key) => (
+            <Skeleton key={key} className="h-16 w-full" />
+          ))}
+        </div>
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  if (metrics.isError)
+    return (
+      <EmptyState
+        icon={ChartBarIcon}
+        title="Couldn't load engagement"
+        description="Check your connection and try again."
+        action={
+          <Button variant="outline" onClick={() => metrics.refetch()}>
+            Try again
+          </Button>
+        }
+      />
+    );
+  const { visits, activatedVisits, rows } = metrics.data;
+  const stats = [
+    { label: "Visits", value: visits },
+    { label: "Visits with a link click", value: activatedVisits },
+    {
+      label: "Link click rate",
+      value: `${visits ? Math.round((100 * activatedVisits) / visits) : 0}%`,
+    },
+  ];
   return (
     <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">Engagement</h2>
-        <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-          Last 28 days
-        </span>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        {metrics.data.visits} visits · {metrics.data.activatedVisits} visits with a link click
-      </p>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          { label: "Visits", value: metrics.data.visits, note: "Times people opened Explore" },
-          {
-            label: "Visits with a link click",
-            value: metrics.data.activatedVisits,
-            note: "Someone opened an event or community link",
-          },
-          {
-            label: "Link click rate",
-            value: `${metrics.data.visits ? Math.round((100 * metrics.data.activatedVisits) / metrics.data.visits) : 0}%`,
-            note: "Visits where someone opened a link",
-          },
-        ].map(({ label, value, note }) => (
-          <div key={label} className="rounded-2xl border-2 border-border-strong bg-card p-5">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="my-3 text-3xl font-semibold tracking-tight">{value}</p>
-            <p className="text-xs text-muted-foreground">{note}</p>
+      <SectionHeader
+        title="Engagement"
+        description="Last 28 days. Counts link clicks, not attendance; editors and do-not-track visitors are skipped."
+      />
+      <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {stats.map(({ label, value }) => (
+          <div key={label} className="flex flex-col gap-1">
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd className="text-3xl font-semibold tabular-nums">{value}</dd>
           </div>
         ))}
-      </div>
-      <p className="text-sm text-muted-foreground">
-        These numbers count visits and clicks on event or community links. They don’t say whether
-        someone attended. Known editors aren’t counted, and we skip people who asked not to be
-        tracked.
-      </p>
-      <div className="overflow-x-auto rounded-2xl border-2 border-border-strong">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
-            <tr>
-              <th className="px-5 py-3 font-medium">Community</th>
-              <th className="px-5 py-3 font-medium">From</th>
-              <th className="px-5 py-3 font-medium">What they did</th>
-              <th className="px-5 py-3 font-medium">Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.data.rows.map((row) => (
-              <tr
-                className="border-b border-border last:border-0"
-                key={`${row.nodeId}:${row.campaign}:${row.kind}`}
-              >
-                <td className="px-5 py-3 font-medium">
-                  {nodes.find((node) => node.nodeId === row.nodeId)?.name ??
-                    (row.nodeId ? "Unavailable community" : "Network")}
-                </td>
-                <td className="px-5 py-3 text-muted-foreground">{row.campaign || "Explore"}</td>
-                <td className="px-5 py-3">{metricAction(row.kind)}</td>
-                <td className="px-5 py-3 tabular-nums">{row.count}</td>
-              </tr>
+      </dl>
+      <div className="overflow-hidden rounded-2xl border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Community</TableHead>
+              <TableHead className="hidden md:table-cell">From</TableHead>
+              <TableHead>What they did</TableHead>
+              <TableHead className="text-right">Count</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={`${row.nodeId}:${row.campaign}:${row.kind}`}>
+                <TableCell>
+                  <span className="font-medium">
+                    {nodes.find((node) => node.nodeId === row.nodeId)?.name ??
+                      (row.nodeId ? "Unavailable community" : "Network")}
+                  </span>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <span className="text-muted-foreground">{row.campaign || "Explore"}</span>
+                </TableCell>
+                <TableCell>{metricAction(row.kind)}</TableCell>
+                <TableCell className="text-right">
+                  <span className="tabular-nums">{row.count}</span>
+                </TableCell>
+              </TableRow>
             ))}
-            {!metrics.data.rows.length && (
-              <tr>
-                <td colSpan={4} className="p-10 text-center text-sm text-muted-foreground">
-                  No interest yet. Share Explore to see what people open.
-                </td>
-              </tr>
+            {!rows.length && (
+              <TableRow>
+                <TableCell colSpan={4} className="h-24 text-center">
+                  <span className="text-muted-foreground">
+                    No clicks yet. Share Explore to see what people open.
+                  </span>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </section>
   );

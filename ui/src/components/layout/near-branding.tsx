@@ -7,7 +7,7 @@ export function NearBranding() {
       href="https://nearbuilders.org"
       target="_blank"
       rel="noopener noreferrer"
-      className="relative block h-5 w-[84px] mx-auto"
+      className="relative block h-5 w-21 mx-auto"
     >
       <img
         src={builtOn}

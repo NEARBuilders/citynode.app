@@ -9,7 +9,7 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import { PageContainer, SectionHeader } from "@/components";
+import { PageContainer, Skeleton } from "@/components";
 import { ConnectDao } from "@/components/connect-dao";
 import { EnableGaslessWrites } from "@/components/enable-gasless-writes";
 import { tenantNodesQueryOptions } from "@/lib/queries/nodes";
@@ -20,12 +20,11 @@ import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
+import { CommunityHeader } from "../dashboard/node/-community-header";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
-import { TenantHeader } from "./-tenant-header";
 import { TenantLiveSite } from "./-tenant-live-site";
-import { TenantMembers } from "./-tenant-members";
 import {
   invalidatePersistedTenantQueries,
   publishPersistedTenantChange,
@@ -59,7 +58,7 @@ export function TenantDetailContent({
     return gatewayId;
   };
 
-  const { data: tenant } = useQuery({
+  const { data: tenant, isLoading: tenantLoading } = useQuery({
     ...tenantByKeyQueryOptions(apiClient, tenantId, gatewayId ?? ""),
     enabled: !!tenantId && !!gatewayId,
   });
@@ -68,7 +67,6 @@ export function TenantDetailContent({
     ...tenantNodesQueryOptions(apiClient, tenantId),
     enabled: !!tenantId,
   });
-  const nodeSlug = nodes[0]?.slug;
 
   const { data: bindings } = useQuery({
     ...tenantBindingsQueryOptions(apiClient, tenantId),
@@ -126,7 +124,7 @@ export function TenantDetailContent({
       toast.success(message);
     }
     if (refreshError) {
-      toast.warning(`${message}, but tenant data could not refresh.`);
+      toast.warning(`${message}, but the page could not refresh.`);
     }
     return { publicationError, refreshError };
   }
@@ -151,10 +149,10 @@ export function TenantDetailContent({
         : { updated, publicationError: null };
     },
     onSuccess: async ({ publicationError }) => {
-      await finishPersistedChange("Tenant updated", publicationError);
+      await finishPersistedChange("Community renamed", publicationError);
       setEditing(false);
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to update tenant"),
+    onError: (error: Error) => toast.error(error.message || "Failed to rename community"),
   });
 
   const suspendMutation = useMutation({
@@ -174,7 +172,7 @@ export function TenantDetailContent({
       );
     },
     onSuccess: async ({ publicationError }) => {
-      await finishPersistedChange("Tenant suspended", publicationError);
+      await finishPersistedChange("Community suspended", publicationError);
     },
   });
 
@@ -195,7 +193,7 @@ export function TenantDetailContent({
       );
     },
     onSuccess: async ({ publicationError }) => {
-      await finishPersistedChange("Tenant reactivated", publicationError);
+      await finishPersistedChange("Community reactivated", publicationError);
     },
   });
 
@@ -237,43 +235,36 @@ export function TenantDetailContent({
     },
     onSuccess: async ({ publicationError }) => {
       if (publicationError) {
-        await finishPersistedChange("Tenant deletion saved", publicationError);
+        await finishPersistedChange("Community deletion saved", publicationError);
         return;
       }
-      await finishPersistedChange("Tenant queued for deletion", null);
+      await finishPersistedChange("Community queued for deletion", null);
       setDeleteOpen(false);
       await router.navigate({ to: "/" });
     },
-    onError: (error: Error) => toast.error(error.message || "Failed to delete tenant"),
+    onError: (error: Error) => toast.error(error.message || "Failed to delete community"),
   });
 
+  const header = (
+    <CommunityHeader headerTestId="tenant.heading" nodeId={nodes[0]?.id} active="settings" />
+  );
+  if (tenantLoading && gatewayId) {
+    return (
+      <PageContainer variant="wide">
+        {header}
+        <Skeleton className="h-64 w-full max-w-5xl" />
+      </PageContainer>
+    );
+  }
   if (!tenant || !gatewayId) return <TenantUnavailable gatewayId={gatewayId} />;
   return (
     <PageContainer variant="wide">
-      <div className="space-y-8">
-        <TenantHeader
-          tenant={tenant}
-          hostname={hostname}
-          nodeSlug={nodeSlug}
-          isOwner={isOwner}
-          isAdmin={isAdmin}
-          suspend={suspendMutation}
-          reactivate={reactivateMutation}
-          deleting={deleteMutation.isPending}
-          onDelete={() => setDeleteOpen(true)}
-        />
-        {isDaoOwned && (
-          <section className="space-y-3">
-            <SectionHeader title="DAO connection" />
-            <ConnectDao />
-          </section>
-        )}
-        {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
-
+      {header}
+      <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
         <TenantDetails
           tenant={tenant}
           hostname={hostname}
-          gatewayId={gatewayId}
+          orgSlug={orgSlug}
           isOwner={isOwner}
           editor={{
             editing,
@@ -293,11 +284,21 @@ export function TenantDetailContent({
           hostname={hostname}
           gatewayId={gatewayId}
           republish={republishMutation}
-        />
+        >
+          {isDaoOwned && (
+            <div className="border-b border-border py-4 last:border-b-0">
+              <ConnectDao purpose="community-settings" variant="plain" />
+            </div>
+          )}
+          {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
+        </TenantLiveSite>
         <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
-        <TenantMembers orgSlug={orgSlug} />
         <TenantDangerZone
+          tenant={tenant}
           isOwner={isOwner}
+          isAdmin={isAdmin}
+          suspend={suspendMutation}
+          reactivate={reactivateMutation}
           open={deleteOpen}
           isPending={deleteMutation.isPending}
           onOpen={() => setDeleteOpen(true)}

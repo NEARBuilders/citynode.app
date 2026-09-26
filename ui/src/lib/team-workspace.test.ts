@@ -64,7 +64,14 @@ describe("resolveTeamWorkspace", () => {
       teams: [],
       activeTeam: null,
       allowedAreas: null,
+      canManageOrganization: false,
     });
+  });
+
+  it("lets organization owners and admins manage the organization", () => {
+    expect(resolveTeamWorkspace(context({ orgRole: "owner" })).canManageOrganization).toBe(true);
+    expect(resolveTeamWorkspace(context({ orgRole: "admin" })).canManageOrganization).toBe(true);
+    expect(resolveTeamWorkspace(context({})).canManageOrganization).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { ApiClient } from "@/app";
 import { proposalReviewQueryKeys } from "@/lib/queries/proposals";
+import { nodeProposalPayloadSchema } from "@/routes/_authenticated/_dashboard/-node-application";
 
 export { proposalReviewQueryKeys } from "@/lib/queries/proposals";
 
@@ -17,13 +18,40 @@ export function parseProposalReviewFilter(value: unknown): ProposalReviewFilter 
     : undefined;
 }
 
+export const PROPOSAL_REVIEW_FILTER_LABELS: Record<ProposalReviewFilter, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+  all: "All",
+};
+
 export function proposalReviewStatusVariant(
   status: "pending" | "approved" | "rejected" | "removed",
 ) {
   if (status === "rejected") return "destructive" as const;
-  if (status === "pending") return "secondary" as const;
+  if (status === "pending") return "warning" as const;
   if (status === "removed") return "outline" as const;
-  return "default" as const;
+  return "success" as const;
+}
+
+interface ProposalIdentity {
+  pluginId: string;
+  entityId: string;
+  payload: unknown;
+}
+
+export function proposalTitle({ pluginId, entityId, payload }: ProposalIdentity) {
+  if (pluginId === "node") {
+    const parsed = nodeProposalPayloadSchema.safeParse(payload);
+    if (parsed.success) return parsed.data.name;
+  }
+  return entityId;
+}
+
+export function proposalTypeLabel(pluginId: string) {
+  if (pluginId === "node") return "Community";
+  if (pluginId === "template") return "Thing";
+  return pluginId.charAt(0).toUpperCase() + pluginId.slice(1);
 }
 
 export function pendingProposalCountQueryOptions(apiClient: ApiClient) {
