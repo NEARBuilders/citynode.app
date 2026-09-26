@@ -88,7 +88,7 @@ export const discoveryNodeSchema = profileSchema.safeExtend({
   name: z.string(),
   slug: z.string(),
   parentId: z.string().nullable(),
-  kind: z.enum(["country", "state", "city"]),
+  kind: z.string().nullable(),
 });
 export const reportSchema = z.object({
   id: z.uuid(),

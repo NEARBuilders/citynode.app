@@ -47,7 +47,7 @@ export function tenantByKeyQueryOptions(
         .catch(() => null);
       if (binding) return findById(binding.tenantId);
       const node = await apiClient.resolveNodeBySlug({ slug: tenantKey });
-      return node ? findById(node.tenantId) : null;
+      return node?.tenantId ? findById(node.tenantId) : null;
     },
   });
 }

@@ -175,11 +175,19 @@ export default createPlugin.withPlugins<PluginsClient>()({
           data: { resource: "node", resourceId: nodeId },
         });
       }
+      if (!node.tenantId) {
+        if (context.user?.role !== "admin") {
+          throw new ORPCError("FORBIDDEN", {
+            message: "Standalone nodes' validators can only be managed by platform admins",
+          });
+        }
+        return node;
+      }
       const tenant = await services.tenants.resolveTenantById(node.tenantId);
       if (!tenant) {
         throw new ORPCError("NOT_FOUND", {
           message: "Tenant not found",
-          data: { resource: "tenant", resourceId: node.tenantId },
+          data: { resource: "node", resourceId: nodeId },
         });
       }
       if (
@@ -670,6 +678,36 @@ export default createPlugin.withPlugins<PluginsClient>()({
           });
         }),
 
+      spawnNode: builder.spawnNode
+        .use(requireAuth)
+        .use(requireOrganization)
+        .use(requireNodeOperations)
+        .handler(async ({ input, context }) => {
+          const services = Context.get(context["effect/context"], ApiServices);
+          if (input.tenantId) {
+            const tenant = await services.tenants.resolveTenantById(input.tenantId);
+            if (!tenant) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: input.tenantId },
+              });
+            }
+            if (tenant.orgId !== context.organization.activeOrganizationId) {
+              throw new ORPCError("FORBIDDEN", {
+                message: "This tenant does not belong to your organization",
+              });
+            }
+          }
+          return await services.nodes.spawn({
+            ...(input.kind !== undefined && { kind: input.kind }),
+            slug: input.slug,
+            name: input.name,
+            parentId: input.parentId ?? null,
+            ...(input.tenantId !== undefined ? { tenantId: input.tenantId } : {}),
+            ...(input.metadata !== undefined && { metadata: input.metadata }),
+          });
+        }),
+
       updateNode: builder.updateNode
         .use(requireAuth)
         .use(requireNodeOperations)
@@ -682,11 +720,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
               data: { resource: "node", resourceId: input.nodeId },
             });
           }
+          if (!node.tenantId) {
+            if (context.user.role !== "admin") {
+              throw new ORPCError("FORBIDDEN", {
+                message: "Standalone nodes can only be managed by platform admins",
+              });
+            }
+            return await services.nodes.update(input.nodeId, {
+              ...(input.kind !== undefined && { kind: input.kind }),
+              ...(input.slug !== undefined && { slug: input.slug }),
+              ...(input.name !== undefined && { name: input.name }),
+              ...(input.parentId !== undefined && { parentId: input.parentId }),
+              ...(input.metadata !== undefined && { metadata: input.metadata }),
+            });
+          }
           const tenant = await services.tenants.resolveTenantById(node.tenantId);
           if (!tenant) {
             throw new ORPCError("NOT_FOUND", {
               message: "Tenant not found",
-              data: { resource: "tenant", resourceId: node.tenantId },
+              data: { resource: "node", resourceId: node.tenantId },
             });
           }
           if (
@@ -720,17 +772,25 @@ export default createPlugin.withPlugins<PluginsClient>()({
               data: { resource: "node", resourceId: input.nodeId },
             });
           }
-          const tenant = await services.tenants.resolveTenantById(node.tenantId);
-          if (!tenant) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: node.tenantId },
-            });
-          }
-          if (tenant.orgId !== context.organization.activeOrganizationId) {
-            throw new ORPCError("FORBIDDEN", {
-              message: "This node does not belong to your organization",
-            });
+          if (!node.tenantId) {
+            if (context.user.role !== "admin") {
+              throw new ORPCError("FORBIDDEN", {
+                message: "Standalone nodes can only be managed by platform admins",
+              });
+            }
+          } else {
+            const tenant = await services.tenants.resolveTenantById(node.tenantId);
+            if (!tenant) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: node.tenantId },
+              });
+            }
+            if (tenant.orgId !== context.organization.activeOrganizationId) {
+              throw new ORPCError("FORBIDDEN", {
+                message: "This node does not belong to your organization",
+              });
+            }
           }
           const deleted = await services.nodes.delete(input.nodeId);
           if (!deleted) {

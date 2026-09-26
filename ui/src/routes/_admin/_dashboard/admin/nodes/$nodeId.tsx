@@ -96,7 +96,7 @@ function AdminNodeDetail() {
         description={
           parent ? (
             <>
-              {humanize(node.kind)} in{" "}
+              {node.kind ? humanize(node.kind) : "Node"} in{" "}
               <Link
                 to="/admin/nodes/$nodeId"
                 params={{ nodeId: parent.id }}
@@ -107,7 +107,7 @@ function AdminNodeDetail() {
               </Link>
             </>
           ) : (
-            humanize(node.kind)
+            node.kind && humanize(node.kind)
           )
         }
         actions={
@@ -155,13 +155,18 @@ function AdminNodeDetail() {
         {activeTab === "validators" && (
           <NodeValidators key={node.id} nodeId={node.id} validators={summary.validators} />
         )}
-        {activeTab === "domains" && (
-          <NodeBindings
-            key={node.tenantId}
-            tenantId={node.tenantId}
-            gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
-          />
-        )}
+        {activeTab === "domains" &&
+          (node.tenantId ? (
+            <NodeBindings
+              key={node.tenantId}
+              tenantId={node.tenantId}
+              gateway={getActiveRuntime(runtimeConfig)?.gatewayId ?? ""}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              This node is not attached to a tenant, so it has no domains.
+            </p>
+          ))}
         {activeTab === "profile" && <ProfileEditor nodeId={node.id} />}
       </div>
     </>
@@ -214,7 +219,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
                     <span className="min-w-0 truncate">{child.name}</span>
                   </ItemTitle>
                   <ItemDescription>
-                    {humanize(child.kind)} ·{" "}
+                    {child.kind ? humanize(child.kind) : "Node"} ·{" "}
                     <span className="font-mono break-all">{child.slug}</span>
                   </ItemDescription>
                 </ItemContent>
@@ -232,7 +237,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
         {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
         <div className="flex flex-col">
           <InfoRow label="Community ID" value={node.id} mono />
-          <InfoRow label="Site ID" value={node.tenantId} mono />
+          <InfoRow label="Site ID" value={node.tenantId ?? "None"} mono={!!node.tenantId} />
           <InfoRow label="Parent ID" value={node.parentId ?? "None"} mono={!!node.parentId} />
         </div>
         <RawJsonDisclosure value={node.metadata} label="metadata" />

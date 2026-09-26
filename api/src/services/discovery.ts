@@ -175,7 +175,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
           name: node.name,
           slug: node.slug,
           parentId: node.parentId,
-          kind: node.kind,
+          kind: node.metadata?.kind ?? null,
         };
       })
       .filter((p) => (!input.active || p.active) && (!input.upcoming || p.upcoming))

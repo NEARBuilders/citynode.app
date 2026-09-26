@@ -113,7 +113,12 @@ async function seedEventOnNodeWithoutOrganization() {
       .returning();
     const [node] = await driver.db
       .insert(nodes)
-      .values({ kind: "city", slug: "solo-city", name: "Solo city", tenantId: tenant!.id })
+      .values({
+        slug: "solo-city",
+        name: "Solo city",
+        tenantId: tenant!.id,
+        metadata: { kind: "city" },
+      })
       .returning();
     const event = { ...eventInput(node!.id), id: orphanEventId };
     await driver.db.insert(discoveryActivities).values({

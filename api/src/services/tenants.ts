@@ -6,7 +6,7 @@ import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
   domainBindings as domainBindingsTable,
-  type nodeKind,
+  type NodeMetadata,
   nodes as nodesTable,
   type tenantStatus,
   tenants as tenantsTable,
@@ -62,7 +62,7 @@ export interface TenantAppRecord {
   status: TenantStatus;
   ownerKind: TenantOwnerKind;
   hostname: string | null;
-  node: { slug: string; kind: (typeof nodeKind)["enumValues"][number]; name: string } | null;
+  node: { slug: string; kind: string | null; name: string } | null;
   createdAt: string;
 }
 
@@ -97,7 +97,7 @@ export interface CreateBindingInput {
 }
 
 export interface ApplyNodeProposalInput {
-  kind: (typeof nodeKind)["enumValues"][number];
+  kind: "country" | "state" | "city";
   name: string;
   slug: string;
   parentId: string | null;
@@ -247,7 +247,7 @@ export const TenantsLive = Layer.effect(
               createdAt: tenantsTable.createdAt,
               hostname: domainBindingsTable.hostname,
               nodeSlug: nodesTable.slug,
-              nodeKind: nodesTable.kind,
+              nodeMetadata: nodesTable.metadata,
               nodeName: nodesTable.name,
             })
             .from(tenantsTable)
@@ -273,8 +273,15 @@ export const TenantsLive = Layer.effect(
               ownerKind: (row.ownerKind ?? "platform") as TenantOwnerKind,
               hostname: row.hostname ?? null,
               node:
-                row.nodeSlug && row.nodeKind && row.nodeName
-                  ? { slug: row.nodeSlug, kind: row.nodeKind, name: row.nodeName }
+                row.nodeSlug && row.nodeName
+                  ? {
+                      slug: row.nodeSlug,
+                      kind:
+                        typeof (row.nodeMetadata as NodeMetadata | null)?.kind === "string"
+                          ? ((row.nodeMetadata as NodeMetadata).kind as string)
+                          : null,
+                      name: row.nodeName,
+                    }
                   : null,
               createdAt:
                 row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
@@ -664,10 +671,10 @@ export const TenantsLive = Layer.effect(
               });
             }
 
-            let parentKind: (typeof nodeKind)["enumValues"][number] | null = null;
+            let parentKind: string | null = null;
             if (input.parentId) {
               const [parent] = await tx
-                .select({ kind: nodesTable.kind })
+                .select({ metadata: nodesTable.metadata })
                 .from(nodesTable)
                 .where(eq(nodesTable.id, input.parentId))
                 .limit(1);
@@ -677,7 +684,8 @@ export const TenantsLive = Layer.effect(
                   data: { resource: "node", resourceId: input.parentId },
                 });
               }
-              parentKind = parent.kind;
+              const metadata = (parent.metadata ?? {}) as NodeMetadata;
+              parentKind = typeof metadata.kind === "string" ? metadata.kind : null;
             }
 
             const parentIsValid =
@@ -705,12 +713,14 @@ export const TenantsLive = Layer.effect(
             const [node] = await tx
               .insert(nodesTable)
               .values({
-                kind: input.kind,
                 slug: input.slug,
                 name: input.name,
                 parentId: input.parentId,
                 tenantId: tenant.id,
-                metadata: input.poolAccountId ? { poolAccountId: input.poolAccountId } : {},
+                metadata: {
+                  kind: input.kind,
+                  ...(input.poolAccountId ? { poolAccountId: input.poolAccountId } : {}),
+                },
               })
               .returning({ id: nodesTable.id });
             if (!node) {

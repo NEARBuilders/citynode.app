@@ -29,6 +29,13 @@
       "when": 1790287236894,
       "tag": "0003_flashy_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790456490495,
+      "tag": "0004_node-kind-generalization",
+      "breakpoints": true
     }
   ]
 }

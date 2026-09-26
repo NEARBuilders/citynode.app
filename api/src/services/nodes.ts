@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { DatabaseTag } from "../db/layer";
 import {
-  type nodeKind as nodeKindEnum,
+  type NodeMetadata,
   nodes as nodesTable,
   tenants as tenantsTable,
   type validatorRole as validatorRoleEnum,
@@ -11,27 +11,36 @@ import {
 } from "../db/schema";
 import { toOrpcError } from "../lib/errors";
 
-export type NodeKind = (typeof nodeKindEnum)["enumValues"][number];
+export type NodeKind = string;
 type ValidatorRole = (typeof validatorRoleEnum)["enumValues"][number];
 
 export interface NodeRecord {
   id: string;
-  kind: NodeKind;
+  kind: NodeKind | null;
   slug: string;
   name: string;
   parentId: string | null;
-  tenantId: string;
+  tenantId: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface NodeInput {
-  kind: NodeKind;
+  kind?: NodeKind;
   slug: string;
   name: string;
   parentId: string | null;
-  tenantId: string;
+  tenantId: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface NodeSpawnInput {
+  kind?: NodeKind;
+  slug: string;
+  name: string;
+  parentId: string | null;
+  tenantId?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -66,7 +75,7 @@ export interface SubtreeValidator {
 
 export interface SubtreeNode {
   id: string;
-  kind: NodeKind;
+  kind: NodeKind | null;
   slug: string;
   name: string;
   parentId: string | null;
@@ -74,6 +83,7 @@ export interface SubtreeNode {
 }
 
 export interface NodesService {
+  spawn(input: NodeSpawnInput): Promise<NodeRecord>;
   create(input: NodeInput): Promise<NodeRecord>;
   list(filter?: NodeListFilter): Promise<NodeRecord[]>;
   listSummaries(filter?: NodeListFilter): Promise<NodeListSummaryRecord[]>;
@@ -91,17 +101,28 @@ export class NodesTag extends Context.Service<NodesTag, NodesService>()("api/Nod
 type NodeRow = typeof nodesTable.$inferSelect;
 
 function toNodeRecord(row: NodeRow): NodeRecord {
+  const metadata = (row.metadata ?? {}) as NodeMetadata;
   return {
     id: row.id,
-    kind: row.kind,
+    kind: typeof metadata.kind === "string" ? metadata.kind : null,
     slug: row.slug,
     name: row.name,
     parentId: row.parentId,
     tenantId: row.tenantId,
-    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    metadata: metadata as Record<string, unknown>,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
+}
+
+function mergeKindMetadata(
+  kind: NodeKind | undefined,
+  metadata: Record<string, unknown> | undefined,
+): NodeMetadata {
+  return {
+    ...(kind !== undefined && { kind }),
+    ...(metadata ?? {}),
+  } as NodeMetadata;
 }
 
 const SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
@@ -121,25 +142,27 @@ export const NodesLive = Layer.effect(
     const db = yield* DatabaseTag;
 
     const service: NodesService = {
-      create: async (input) => {
+      spawn: async (input) => {
         try {
           validateSlug(input.slug);
 
-          const tenant = await db
-            .select({ id: tenantsTable.id })
-            .from(tenantsTable)
-            .where(eq(tenantsTable.id, input.tenantId))
-            .limit(1);
-          if (tenant.length === 0) {
-            throw new ORPCError("NOT_FOUND", {
-              message: "Tenant not found",
-              data: { resource: "tenant", resourceId: input.tenantId },
-            });
+          if (input.tenantId) {
+            const tenant = await db
+              .select({ id: tenantsTable.id })
+              .from(tenantsTable)
+              .where(eq(tenantsTable.id, input.tenantId))
+              .limit(1);
+            if (tenant.length === 0) {
+              throw new ORPCError("NOT_FOUND", {
+                message: "Tenant not found",
+                data: { resource: "tenant", resourceId: input.tenantId },
+              });
+            }
           }
 
           if (input.parentId !== null) {
             const parent = await db
-              .select({ id: nodesTable.id, parentId: nodesTable.parentId })
+              .select({ id: nodesTable.id })
               .from(nodesTable)
               .where(eq(nodesTable.id, input.parentId))
               .limit(1);
@@ -154,12 +177,11 @@ export const NodesLive = Layer.effect(
           const [row] = await db
             .insert(nodesTable)
             .values({
-              kind: input.kind,
               slug: input.slug,
               name: input.name,
               parentId: input.parentId,
-              tenantId: input.tenantId,
-              metadata: input.metadata ?? {},
+              tenantId: input.tenantId ?? null,
+              metadata: mergeKindMetadata(input.kind, input.metadata),
             })
             .returning();
 
@@ -175,11 +197,22 @@ export const NodesLive = Layer.effect(
         }
       },
 
+      create: async (input) => {
+        return service.spawn({
+          ...(input.kind !== undefined && { kind: input.kind }),
+          slug: input.slug,
+          name: input.name,
+          parentId: input.parentId,
+          tenantId: input.tenantId,
+          ...(input.metadata !== undefined && { metadata: input.metadata }),
+        });
+      },
+
       list: async (filter) => {
         try {
           const conditions = [];
           if (filter?.kind !== undefined) {
-            conditions.push(eq(nodesTable.kind, filter.kind));
+            conditions.push(sql`${nodesTable.metadata}->>'kind' = ${filter.kind}`);
           }
           if (filter?.tenantId !== undefined) {
             conditions.push(eq(nodesTable.tenantId, filter.tenantId));
@@ -258,11 +291,20 @@ export const NodesLive = Layer.effect(
         try {
           if (input.slug !== undefined) validateSlug(input.slug);
           const patch: Record<string, unknown> = { updatedAt: new Date() };
-          if (input.kind !== undefined) patch.kind = input.kind;
+          if (input.kind !== undefined || input.metadata !== undefined) {
+            const [current] = await db
+              .select({ metadata: nodesTable.metadata })
+              .from(nodesTable)
+              .where(eq(nodesTable.id, id))
+              .limit(1);
+            const existing = (current?.metadata ?? {}) as NodeMetadata;
+            const kind =
+              input.kind ?? (typeof existing.kind === "string" ? existing.kind : undefined);
+            patch.metadata = mergeKindMetadata(kind, input.metadata);
+          }
           if (input.slug !== undefined) patch.slug = input.slug;
           if (input.name !== undefined) patch.name = input.name;
           if (input.parentId !== undefined) patch.parentId = input.parentId;
-          if (input.metadata !== undefined) patch.metadata = input.metadata;
 
           return await db.transaction(async (tx) => {
             if (input.parentId !== undefined && input.parentId !== null) {
@@ -389,11 +431,11 @@ export const NodesLive = Layer.effect(
         try {
           const subtreeResult = await db.execute(sql`
             WITH RECURSIVE subtree AS (
-              SELECT id, kind, slug, name, parent_id, 0 AS depth, ARRAY[id] AS path
+              SELECT id, metadata->>'kind' AS kind, slug, name, parent_id, 0 AS depth, ARRAY[id] AS path
               FROM nodes
               WHERE id = ${nodeId}
               UNION ALL
-              SELECT n.id, n.kind, n.slug, n.name, n.parent_id, subtree.depth + 1,
+              SELECT n.id, n.metadata->>'kind', n.slug, n.name, n.parent_id, subtree.depth + 1,
                 subtree.path || n.id
               FROM nodes n
               INNER JOIN subtree ON n.parent_id = subtree.id
@@ -438,7 +480,7 @@ export const NodesLive = Layer.effect(
           return (
             rows as Array<{
               id: string;
-              kind: NodeKind;
+              kind: string | null;
               slug: string;
               name: string;
               parent_id: string | null;

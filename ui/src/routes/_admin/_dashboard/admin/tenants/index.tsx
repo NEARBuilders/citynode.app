@@ -71,7 +71,7 @@ function AdminTenants() {
   const slugByTenantId = useMemo(() => {
     const map = new Map<string, string>();
     for (const node of nodesQuery.data ?? []) {
-      if (!map.has(node.tenantId)) map.set(node.tenantId, node.slug);
+      if (node.tenantId && !map.has(node.tenantId)) map.set(node.tenantId, node.slug);
     }
     return map;
   }, [nodesQuery.data]);

@@ -19,9 +19,13 @@ export const tenantStatus = pgEnum("tenant_status", [
   "pending_deletion",
 ]);
 
-export const nodeKind = pgEnum("node_kind", ["country", "state", "city"]);
-
 export const validatorRole = pgEnum("validator_role", ["official", "community"]);
+
+export interface NodeMetadata {
+  kind?: string;
+  poolAccountId?: string;
+  [key: string]: unknown;
+}
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -43,14 +47,11 @@ export const nodes = pgTable(
   "nodes",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    kind: nodeKind("kind").notNull(),
     slug: text("slug").notNull(),
     name: text("name").notNull(),
     parentId: uuid("parent_id").references((): AnyPgColumn => nodes.id, { onDelete: "set null" }),
-    tenantId: uuid("tenant_id")
-      .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
-    metadata: jsonb("metadata").default({}).notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+    metadata: jsonb("metadata").$type<NodeMetadata>().default({}).notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
   },

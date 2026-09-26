@@ -193,12 +193,12 @@ describe("NodesService", () => {
         metadata: { population: 2_700_000, region: "midwest" },
       }),
     );
-    expect(node.metadata).toEqual({ population: 2_700_000, region: "midwest" });
+    expect(node.metadata).toEqual({ kind: "city", population: 2_700_000, region: "midwest" });
 
     const updated = await runService(layer, ({ nodes }) =>
       nodes.update(node.id, { metadata: { population: 2_800_000 } }),
     );
-    expect(updated.metadata).toEqual({ population: 2_800_000 });
+    expect(updated.metadata).toEqual({ kind: "city", population: 2_800_000 });
   });
 
   it("rejects an invalid slug", async () => {

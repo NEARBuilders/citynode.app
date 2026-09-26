@@ -15,11 +15,13 @@ const ErrorTestKindSchema = z.enum([
 
 export const TenantStatusSchema = z.enum(["active", "pending", "suspended", "pending_deletion"]);
 
-export const NodeKindSchema = z.enum(["country", "state", "city"]);
+export const GeoNodeKindSchema = z.enum(["country", "state", "city"]);
+
+export const NodeKindSchema = z.string().nullable();
 
 export const NodeProposalPayloadSchema = z
   .object({
-    kind: NodeKindSchema,
+    kind: GeoNodeKindSchema,
     name: z.string().trim().min(1),
     slug: z
       .string()
@@ -134,11 +136,11 @@ export const TenantAppSchema = z.object({
   node: z
     .object({
       slug: z.string(),
-      kind: NodeKindSchema,
+      kind: z.string().nullable(),
       name: z.string(),
     })
     .nullable()
-    .describe("Geographic node attached to this tenant, or null"),
+    .describe("Node attached to this tenant, or null"),
   createdAt: z.string(),
 });
 
@@ -160,7 +162,7 @@ export const NodeSchema = z.object({
   slug: z.string(),
   name: z.string(),
   parentId: z.string().nullable(),
-  tenantId: z.string(),
+  tenantId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -476,7 +478,7 @@ export const contract = oc.router({
     .route({ method: "GET", path: "/nodes" })
     .input(
       z.object({
-        kind: NodeKindSchema.optional(),
+        kind: z.string().optional(),
         parentId: z.string().nullable().optional(),
         tenantId: z.string().optional(),
       }),
@@ -492,7 +494,7 @@ export const contract = oc.router({
     .input(
       z.object({
         scope: z.enum(["roots", "all"]),
-        kind: NodeKindSchema.optional(),
+        kind: z.string().optional(),
       }),
     )
     .output(z.array(NodeListSummarySchema)),
@@ -506,11 +508,32 @@ export const contract = oc.router({
     .route({ method: "POST", path: "/nodes" })
     .input(
       z.object({
-        kind: NodeKindSchema,
+        kind: z.string().optional(),
         slug: z.string(),
         name: z.string(),
         parentId: z.string().nullable().optional(),
         tenantId: z.string(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .output(NodeSchema)
+    .errors({ UNAUTHORIZED, FORBIDDEN, BAD_REQUEST, NOT_FOUND }),
+
+  spawnNode: oc
+    .route({
+      method: "POST",
+      path: "/nodes/spawn",
+      summary: "Spawn a node of any kind under a parent",
+      description:
+        "Org-scoped — spawns a node with an optional kind label (geo kinds are legacy labels in metadata), optional tenant attachment, and no kind-validated parentage. parentId is the only hierarchy axis.",
+    })
+    .input(
+      z.object({
+        kind: z.string().optional(),
+        slug: z.string(),
+        name: z.string(),
+        parentId: z.string().nullable().optional(),
+        tenantId: z.string().optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
@@ -522,7 +545,7 @@ export const contract = oc.router({
     .input(
       z.object({
         nodeId: z.string(),
-        kind: NodeKindSchema.optional(),
+        kind: z.string().optional(),
         slug: z.string().optional(),
         name: z.string().optional(),
         parentId: z.string().nullable().optional(),

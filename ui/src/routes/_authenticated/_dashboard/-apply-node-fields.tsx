@@ -27,7 +27,7 @@ const kindLabels: Record<(typeof nodeApplicationKinds)[number], string> = {
   city: "City",
 };
 
-type NodeOption = { id: string; name: string; kind: string };
+type NodeOption = { id: string; name: string; kind: string | null };
 
 export function ApplyNodeFields({
   form,

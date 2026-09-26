@@ -128,7 +128,7 @@ function NodePage() {
   const events = profile?.events ?? [];
   const hostname = `${node.slug}.${gateway}`;
   const siteUrl = buildTenantUrl(hostname, gateway, { path: "/" }) ?? `https://${hostname}/`;
-  const kindLabel = KIND_LABELS[node.kind] ?? node.kind;
+  const kindLabel = node.kind ? (KIND_LABELS[node.kind] ?? node.kind) : "Community";
 
   return (
     <PageContainer variant="default">

@@ -6,7 +6,7 @@ const NODE_STALE_TIME = 30 * 1000;
 export type AdminNodeListScope = "roots" | "all";
 
 type NodeRecord = Awaited<ReturnType<ApiClient["listNodes"]>>[number];
-export type AdminNodeListKind = NodeRecord["kind"] | "all";
+export type AdminNodeListKind = NonNullable<NodeRecord["kind"]> | "all";
 
 export interface AdminNodeListRow {
   node: NodeRecord;
@@ -132,7 +132,7 @@ export function adminNodeListQueryOptions(
           ({ node, childrenCount, validatorCount }): AdminNodeListRow => ({
             node,
             parent: node.parentId ? parents.get(node.parentId) : undefined,
-            status: statuses.get(node.tenantId) ?? "unknown",
+            status: (node.tenantId ? statuses.get(node.tenantId) : "standalone") ?? "unknown",
             childrenCount,
             validatorCount,
           }),
