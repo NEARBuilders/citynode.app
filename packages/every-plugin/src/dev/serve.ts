@@ -5,10 +5,10 @@ import path from "node:path";
 import sirv from "sirv";
 import { ensureGeneratedRspackConfig } from "../build/rspack/generated-config";
 import { getPluginInfo, loadDevConfig } from "../build/rspack/utils";
+import { ensureGeneratedUiRsbuildConfig } from "../build/ui/generated-config";
 import { PLUGIN_ERROR_STATUS_MAP } from "../errors";
 import { purgeRemoteEntryCache, waitForRemoteEntryReady } from "../remote-entry";
 import { classifyPluginFailure } from "../runtime/errors";
-import { ensureGeneratedUiRsbuildConfig } from "../ui/generated-config";
 import { killChildEscalating, watchParentDeath } from "./watch-kill";
 
 const corsHeaders = {

@@ -263,7 +263,7 @@ bun run deploy         # bos build --deploy — the deploy train (also runs on m
 ```
 `bun run build <targets>` quietly (re)builds the framework prerequisites (`every-plugin`, `everything-dev`, `better-near-auth` — staleness-checked, cheap no-ops when fresh) before any target, so targets always bundle fresh dists. Raw per-workspace builds (`cd ui && bun run build`) bypass the prerequisite train and are unsupported — use the train.
 
-Two resolution rules keep this safe (ADR 0013): **bundler-configuration code resolves from source** — `every-plugin/ui/mf-build` and `every-plugin/build/rspack` (the generated plugin configs' factories) resolve `src` in every condition, so the config chain cannot go stale; **shipped code resolves from dist** — runtime subpaths (`everything-dev/ui/auth`, `db`, …) resolve built dists, whose freshness the prerequisite train guarantees.
+Two resolution rules keep this safe (ADR 0013): **bundler-configuration code resolves from source** — `every-plugin/build/ui` and `every-plugin/build/rspack` (the generated plugin configs' factories) resolve `src` in every condition, so the config chain cannot go stale; **shipped code resolves from dist** — runtime subpaths (`everything-dev/ui/auth`, `db`, …) resolve built dists, whose freshness the prerequisite train guarantees.
 
 **Dev overlays (`bos.dev.ts`):** authored config lives in `bos.app.ts` (published); dev-only overrides live in `bos.dev.ts` (optional, child-wins merged over the resolved config when the environment is development, **never published** — same role as `.env` vs `.env.example` at the config level). Each unit gets the pair; `plugin.dev.ts` is the legacy name being retired (see `.scratch/quiet-dev-session/issues/15` and `16`).
 

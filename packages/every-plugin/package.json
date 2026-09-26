@@ -161,18 +161,18 @@
       "import": "./dist/ui/manifest/contract.mjs",
       "require": "./dist/ui/manifest/contract.cjs"
     },
-    "./ui/mf-build": {
+    "./build/ui": {
       "bun": {
-        "types": "./src/ui/mf-build/index.ts",
-        "import": "./src/ui/mf-build/index.ts"
+        "types": "./src/build/ui/index.ts",
+        "import": "./src/build/ui/index.ts"
       },
       "development": {
-        "types": "./src/ui/mf-build/index.ts",
-        "import": "./src/ui/mf-build/index.ts"
+        "types": "./src/build/ui/index.ts",
+        "import": "./src/build/ui/index.ts"
       },
-      "types": "./dist/ui/mf-build/index.d.mts",
-      "import": "./dist/ui/mf-build/index.mjs",
-      "require": "./dist/ui/mf-build/index.cjs"
+      "types": "./dist/build/ui/index.d.mts",
+      "import": "./dist/build/ui/index.mjs",
+      "require": "./dist/build/ui/index.cjs"
     },
     "./dev-serve": {
       "bun": {

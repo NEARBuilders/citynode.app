@@ -1,4 +1,4 @@
-import { CORE_UI_DEPLOY_FIELDS } from "every-plugin/ui/mf-build";
+import { CORE_UI_DEPLOY_FIELDS } from "every-plugin/build/ui";
 import type { DeployResultEntry } from "./integrity";
 import { applyDeployResults } from "./integrity";
 

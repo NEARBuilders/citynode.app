@@ -78,6 +78,17 @@ function emitConfigWarning(message: string): void {
 
 const configPathCache = new Map<string, string | null>();
 
+/**
+ * Reads the local authored config without resolving the extends chain or
+ * touching the network — the build-surface factories (generated rsbuild
+ * configs) consume it for their APP_NAME/APP_ACCOUNT defines.
+ */
+export async function readAuthoredConfigInput(cwd?: string): Promise<BosConfigInput | null> {
+  const configPath = findConfigPath(cwd);
+  if (!configPath || configPath.startsWith("bos://")) return null;
+  return loadConfigFile(configPath, dirname(configPath));
+}
+
 export function findConfigPath(cwd?: string): string | null {
   const cacheKey = resolve(cwd ?? process.cwd());
   const cached = configPathCache.get(cacheKey);

@@ -19,7 +19,7 @@ export default defineConfig({
     "src/build/rspack/index.ts",
     "src/ui/manifest/index.ts",
     "src/ui/manifest/generator.ts",
-    "src/ui/mf-build/index.ts",
+    "src/build/ui/index.ts",
     "src/dev/serve.ts",
     "src/cli.ts",
   ],

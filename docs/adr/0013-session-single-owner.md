@@ -36,7 +36,7 @@ across two remotes owned pieces of one concern.
 
 2. **One runtime copy via the existing share list.** `everything-dev/ui/auth`
    joins `SHARE_MODULE_NAMES` semantics in the ui build factory
-   (`every-plugin/ui/mf-build`): the core ui is the provider, plugin uis are
+   (`every-plugin/build/ui`): the core ui is the provider, plugin uis are
    consumers (`import: false` — no bundled fallback copy), strict-version
    singleton like react/TanStack. This extends the ADR 0008 build contract,
    not a new mechanism. A mixed deploy (one remote rebuilt, the other stale)
@@ -72,7 +72,7 @@ across two remotes owned pieces of one concern.
 **Two resolution rules** (the structural exit from the staleness class):
 
 1. **Bundler-configuration code resolves from source under the workspace
-   runtime.** The config factories (`every-plugin/ui/mf-build`,
+   runtime.** The config factories (`every-plugin/build/ui`,
    `every-plugin/build/rspack`) resolve `src` via bun's always-on `"bun"`
    export condition (plus `"development"`) — bun is the workspace runtime, so
    config code only ever runs at build time from the working tree and a stale
@@ -82,7 +82,7 @@ across two remotes owned pieces of one concern.
    — resolve the immutable published dist: node refuses to type-strip .ts
    under node_modules, and npm artifacts cannot drift. The
    `everything-dev/ui/mf-build` re-export shim is deleted —
-   `ui/rsbuild.config.ts` imports `every-plugin/ui/mf-build` directly,
+   `ui/rsbuild.config.ts` imports `every-plugin/build/ui` directly,
    matching the generated plugin configs. This is the normalization the app
    descriptor (ADR 0005, plan 028) completes: unit-specific build data lives
    in the unit, machinery stays generic, and the config surfaces resolve
