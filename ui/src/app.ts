@@ -88,6 +88,29 @@ export function getAppName(config?: RuntimeConfigInput): string {
 import type { ApiClient } from "./lib/api";
 import type { AuthClient as AuthClientType } from "./lib/auth";
 
+export {
+  type BuildTenantUrlOptions,
+  buildDraftFromResolvedConfig,
+  buildTenantUrl,
+  computeSsrEntryIntegrity,
+  computeSubresourceIntegrity,
+  computeUiEntryIntegrity,
+  diffDraft,
+  draftUiOverride,
+  emptyTenantConfigDraft,
+  gatewayForAccount,
+  type IntegrityCheckResult,
+  isLocalHostname,
+  normalizeBundleBaseUrl,
+  resolveClientEntryUrl,
+  resolveServerEntryUrl,
+  type TenantConfigDraft,
+  type TenantUiOverride,
+  tenantConfigDraftSchema,
+  tenantLabel,
+  verifySsrIntegrity,
+  verifyUiIntegrity,
+} from "everything-dev/ui/tenant";
 export type { ApiClient } from "./lib/api";
 export { createApiClient, useApiClient, useOrpc } from "./lib/api";
 export type { AuthClient, AuthContext, Organization, Passkey, SessionData } from "./lib/auth";

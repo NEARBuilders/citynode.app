@@ -1,6 +1,8 @@
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import { callViewFunction } from "@/lib/near-rpc";
+import type { AuthClient } from "@/app";
+
+type Network = "mainnet" | "testnet";
 
 const balanceSchema = z.string().regex(/^\d+$/).transform(BigInt);
 const accountCountSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -13,7 +15,8 @@ const feeSchema = z
 
 interface PoolOptions {
   accountId: string;
-  network?: string;
+  authClient: AuthClient;
+  network?: Network;
   protocol?: string;
 }
 
@@ -38,6 +41,11 @@ export interface StakePoolValidator {
   isDefault: boolean;
 }
 
+/** Narrows an API-supplied network string to the supported pool networks. */
+export function toNetwork(value: string | null | undefined): Network | undefined {
+  return value === "mainnet" || value === "testnet" ? value : undefined;
+}
+
 export function resolveTeamStakeTarget(input: {
   daoAccountId?: string | null;
   tenantAccountId?: string | null;
@@ -54,7 +62,7 @@ export function resolveTeamStakeTarget(input: {
   return {
     teamAccountId,
     poolAccountId: pool.accountId,
-    network: pool.network || "mainnet",
+    network: toNetwork(pool.network) ?? "mainnet",
     protocol: pool.protocol || "near",
   };
 }
@@ -63,8 +71,29 @@ function canReadPool({ accountId, network = "mainnet", protocol = "near" }: Pool
   return !!accountId && protocol === "near" && (network === "mainnet" || network === "testnet");
 }
 
+/**
+ * Public read-only contract read through the app auth client's per-network
+ * near client. Resolves null on any failure (malformed result, transport
+ * error; timeouts follow the transport defaults) — the stake-pool views are
+ * advisory data, and the schema parsers reject null into a clean query
+ * error state.
+ */
+function callViewFunction(
+  authClient: AuthClient,
+  accountId: string,
+  methodName: string,
+  args: Record<string, unknown>,
+  network: Network = "mainnet",
+): Promise<unknown | null> {
+  return authClient.near
+    .getNearClient(network)
+    .view(accountId, methodName, args)
+    .then((result) => result ?? null)
+    .catch(() => null);
+}
+
 export function stakePoolStatsQueryOptions(options: PoolOptions) {
-  const { accountId, network = "mainnet" } = options;
+  const { accountId, authClient, network = "mainnet" } = options;
   return queryOptions({
     queryKey: stakePoolQueryKeys.stats(accountId, network),
     enabled: canReadPool(options),
@@ -72,9 +101,9 @@ export function stakePoolStatsQueryOptions(options: PoolOptions) {
     retry: false,
     queryFn: async () => {
       const [total, fee, count] = await Promise.all([
-        callViewFunction(accountId, "get_total_staked_balance", {}, network),
-        callViewFunction(accountId, "get_reward_fee_fraction", {}, network),
-        callViewFunction(accountId, "get_number_of_accounts", {}, network),
+        callViewFunction(authClient, accountId, "get_total_staked_balance", {}, network),
+        callViewFunction(authClient, accountId, "get_reward_fee_fraction", {}, network),
+        callViewFunction(authClient, accountId, "get_number_of_accounts", {}, network),
       ]);
       const { numerator, denominator } = feeSchema.parse(fee);
       return {
@@ -99,10 +128,11 @@ export interface StakePoolAccountView {
 export function stakePoolAccountQueryOptions(options: {
   poolAccountId: string;
   stakerAccountId: string;
-  network?: string;
+  authClient: AuthClient;
+  network?: Network;
   protocol?: string;
 }) {
-  const { poolAccountId, stakerAccountId, network = "mainnet" } = options;
+  const { poolAccountId, stakerAccountId, authClient, network = "mainnet" } = options;
   return queryOptions({
     queryKey: stakePoolQueryKeys.account(poolAccountId, network, stakerAccountId),
     enabled: canReadPool({ ...options, accountId: poolAccountId }) && !!stakerAccountId,
@@ -110,6 +140,7 @@ export function stakePoolAccountQueryOptions(options: {
     retry: false,
     queryFn: async () => {
       const raw = await callViewFunction(
+        authClient,
         poolAccountId,
         "get_account",
         { account_id: stakerAccountId },
@@ -135,7 +166,7 @@ export function stakePoolAccountQueryOptions(options: {
 }
 
 export function stakePoolTopHoldersQueryOptions(options: PoolOptions & { limit?: number }) {
-  const { accountId, network = "mainnet" } = options;
+  const { accountId, authClient, network = "mainnet" } = options;
   const requestedLimit = options.limit ?? 50;
   const limit = Number.isFinite(requestedLimit)
     ? Math.max(1, Math.min(50, Math.trunc(requestedLimit)))
@@ -147,6 +178,7 @@ export function stakePoolTopHoldersQueryOptions(options: PoolOptions & { limit?:
     retry: false,
     queryFn: async () => {
       const raw = await callViewFunction(
+        authClient,
         accountId,
         "get_accounts",
         { from_index: 0, limit },

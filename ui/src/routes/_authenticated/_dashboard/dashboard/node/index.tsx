@@ -7,7 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { getActiveRuntime, useApiClient } from "@/app";
+import { buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import {
   Badge,
   Button,
@@ -27,7 +27,6 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { resolveTeamStakeTarget } from "@/lib/queries/stake-pool";
-import { buildTenantUrl } from "@/lib/tenant-url";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/")({
   component: NodeOverview,

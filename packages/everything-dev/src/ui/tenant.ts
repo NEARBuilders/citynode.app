@@ -1,16 +1,111 @@
 /**
- * Pure helpers for the org node-config editor: a validated draft of the
- * fields a tenant may customize in its published bos.config.json, prefilled
- * from the currently published config, diffed against it, and an in-browser
- * sha384 preflight so a wrong UI bundle cannot brick the tenant site.
+ * Tenant helpers shared by every ui workspace.
+ *
+ * Two halves of the tenant surface live here:
+ * - origin construction (`buildTenantUrl`, `tenantLabel`, `gatewayForAccount`)
+ * - the pure helpers for the org node-config editor: a validated draft of the
+ *   fields a tenant may customize in its published bos.config.json, prefilled
+ *   from the currently published config, diffed against it, and an in-browser
+ *   sha384 preflight so a wrong UI bundle cannot brick the tenant site.
  */
 
-import {
-  UI_REMOTE_ENTRY_FILENAME,
-  UI_REMOTE_SERVER_ENTRY_FILENAME,
-} from "everything-dev/ui/manifest";
 import { z } from "zod";
-import type { TenantUiOverride } from "./dao-policy";
+import type { ClientRuntimeConfig } from "../types";
+import { UI_REMOTE_ENTRY_FILENAME, UI_REMOTE_SERVER_ENTRY_FILENAME } from "./manifest";
+import { getRuntimeConfig } from "./runtime";
+
+const LOCALHOST_SUFFIX = ".localhost";
+
+export function isLocalHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "[::1]" ||
+    normalized.endsWith(LOCALHOST_SUFFIX)
+  );
+}
+
+/** Strips a `<label>.<gatewayId>` hostname (or a bare label) down to its label. */
+export function tenantLabel(hostnameOrLabel: string, gatewayId?: string): string {
+  const normalized = hostnameOrLabel.trim().toLowerCase().replace(/\/+$/, "");
+  if (!normalized) return "";
+  const gateway = gatewayId?.trim().toLowerCase();
+  if (gateway && normalized.endsWith(`.${gateway}`)) {
+    return normalized.slice(0, -(gateway.length + 1));
+  }
+  if (normalized.endsWith(LOCALHOST_SUFFIX)) {
+    return normalized.slice(0, -LOCALHOST_SUFFIX.length);
+  }
+  return normalized.split(".")[0] ?? "";
+}
+
+export interface BuildTenantUrlOptions {
+  /** Current browser origin hostname. Defaults to `window.location.hostname`. */
+  currentHostname?: string;
+  /** Current browser origin port. Defaults to `window.location.port`. */
+  currentPort?: string;
+  /** Appended to the origin, e.g. `/stake`. */
+  path?: string;
+}
+
+/**
+ * Builds the absolute origin for a tenant, dev-aware.
+ *
+ * `buildTenantUrl("chicago", "citynode.app")`
+ *   -> `https://chicago.citynode.app` in production
+ *   -> `http://chicago.localhost:3000` when served from localhost
+ */
+export function buildTenantUrl(
+  hostnameOrLabel: string,
+  gatewayId: string,
+  options: BuildTenantUrlOptions = {},
+): string | null {
+  const label = tenantLabel(hostnameOrLabel, gatewayId);
+  if (!label) return null;
+
+  const path = options.path ?? "";
+  const currentHostname =
+    options.currentHostname ??
+    (typeof window === "undefined" ? undefined : window.location.hostname);
+
+  if (currentHostname && isLocalHostname(currentHostname)) {
+    const currentPort =
+      options.currentPort ?? (typeof window === "undefined" ? "" : window.location.port);
+    const port = currentPort ? `:${currentPort}` : "";
+    return `http://${label}${LOCALHOST_SUFFIX}${port}${path}`;
+  }
+
+  const gateway = gatewayId.trim().toLowerCase();
+  if (!gateway) return null;
+  return `https://${label}.${gateway}${path}`;
+}
+
+/**
+ * The gateway a slug should publish under for the given owner account,
+ * derived from the runtime config instead of hardcoded per-network domains.
+ *
+ * When the account lives on the same network as the runtime, the current
+ * runtime's gateway id is the answer. When the networks differ, the runtime
+ * config carries no gateway for that other network, so null is returned and
+ * the caller surfaces it rather than guessing a domain.
+ */
+export function gatewayForAccount(
+  accountId: string,
+  config: Pick<ClientRuntimeConfig, "networkId" | "runtime"> = getRuntimeConfig(),
+): string | null {
+  const gatewayId = config.runtime?.gatewayId;
+  if (!gatewayId) return null;
+  const testnetAccount = accountId.trim().toLowerCase().endsWith(".testnet");
+  return testnetAccount === (config.networkId === "testnet") ? gatewayId : null;
+}
+
+export interface TenantUiOverride {
+  production: string;
+  integrity: string;
+  ssr?: string;
+  ssrIntegrity?: string;
+}
 
 export const INTEGRITY_PATTERN = /^sha384-[A-Za-z0-9+/=]+$/;
 

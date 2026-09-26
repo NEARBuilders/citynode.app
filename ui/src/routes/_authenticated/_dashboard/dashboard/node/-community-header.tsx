@@ -1,7 +1,7 @@
 import { ArrowSquareOutIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
-import { type ApiClient, getActiveRuntime, useApiClient } from "@/app";
+import { type ApiClient, buildTenantUrl, getActiveRuntime, useApiClient } from "@/app";
 import { Button, PageHeader, Skeleton } from "@/components";
 import {
   Select,
@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { nodeByIdQueryOptions, tenantNodesQueryOptions } from "@/lib/queries/nodes";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { CommunityNav, type CommunityNavSection } from "./-community-nav";
 
 type CommunityNode = NonNullable<Awaited<ReturnType<ApiClient["getNode"]>>>;
