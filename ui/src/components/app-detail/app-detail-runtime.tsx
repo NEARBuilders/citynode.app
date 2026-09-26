@@ -1,4 +1,4 @@
-import { buildTenantUrl } from "@/lib/tenant-url";
+import { buildTenantUrl } from "everything-dev/ui/tenant";
 import { AppDetailSectionLabel } from "./app-detail-section-label";
 import { AppDetailStartCommand } from "./app-detail-start-command";
 import { BASE_RUNTIME, type RegistryAppDetail } from "./app-detail-types";

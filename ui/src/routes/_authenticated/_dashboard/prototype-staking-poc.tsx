@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
+import { buildTenantUrl } from "everything-dev/ui/tenant";
 import {
   AlertTriangle,
   ArrowDown,
@@ -59,7 +60,6 @@ import {
 } from "@/lib/dao-connect";
 import { generateSlug } from "@/lib/slug";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import { parseNodeProposalPayload, proposeNodeApplication } from "./-node-application";
 import {

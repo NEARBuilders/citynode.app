@@ -1,6 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { buildRegistryConfigUrl } from "everything-dev/fastkv";
+import {
+  buildDraftFromResolvedConfig,
+  buildTenantUrl,
+  computeSsrEntryIntegrity,
+  computeUiEntryIntegrity,
+  diffDraft,
+  draftUiOverride,
+  emptyTenantConfigDraft,
+  type IntegrityCheckResult,
+  normalizeBundleBaseUrl,
+  type TenantConfigDraft,
+  tenantConfigDraftSchema,
+  verifySsrIntegrity,
+  verifyUiIntegrity,
+} from "everything-dev/ui/tenant";
 import { ExternalLink, FlaskConical, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -33,22 +48,7 @@ import {
   fetchSputnikPolicy,
   findPendingProposalForPlan,
 } from "@/lib/sputnik-proposals";
-import {
-  buildDraftFromResolvedConfig,
-  computeSsrEntryIntegrity,
-  computeUiEntryIntegrity,
-  diffDraft,
-  draftUiOverride,
-  emptyTenantConfigDraft,
-  type IntegrityCheckResult,
-  normalizeBundleBaseUrl,
-  type TenantConfigDraft,
-  tenantConfigDraftSchema,
-  verifySsrIntegrity,
-  verifyUiIntegrity,
-} from "@/lib/tenant-config-draft";
 import { publishTenantConfigForMode } from "@/lib/tenant-deploy";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import { resolvePrimaryHostname } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
 import { waitFor } from "../-poc-chain";

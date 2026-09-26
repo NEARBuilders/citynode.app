@@ -1,7 +1,7 @@
+import { buildTenantUrl } from "everything-dev/ui/tenant";
 import { ExternalLink } from "lucide-react";
 import { Button, Card, SectionHeader } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
-import { buildTenantUrl } from "@/lib/tenant-url";
 import { useNearAccount } from "@/lib/use-near-account";
 import type { TenantAction, TenantRecord } from "./-tenant-types";
 
