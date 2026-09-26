@@ -58,7 +58,7 @@ function RelayerFundingNotice() {
       <ItemMedia variant="icon">
         <GasPumpIcon className="text-destructive" />
       </ItemMedia>
-      <ItemContent>
+      <ItemContent className="min-w-0">
         <ItemTitle>Relayer needs funding</ItemTitle>
         <ItemDescription>Gasless writes are paused until the relayer has NEAR.</ItemDescription>
       </ItemContent>

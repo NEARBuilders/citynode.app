@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/")({
     ]);
   },
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Tenants · Admin", match.context.runtimeConfig) }],
+    meta: [{ title: pageTitle("Sites · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminTenants,
 });
@@ -122,6 +122,8 @@ function AdminTenants() {
       {
         accessorKey: "createdAt",
         header: "Created",
+        meta: { className: "hidden lg:table-cell" },
+
         cell: ({ row }) => (
           <span className="text-muted-foreground">
             <LocalDate value={row.original.createdAt} fallback="—" />
@@ -137,8 +139,8 @@ function AdminTenants() {
   return (
     <>
       <PageHeader
-        title="Tenants"
-        description="Each tenant is a community deployment owned by a DAO."
+        title="Sites"
+        description="Each site is a community deployment owned by a DAO."
         actions={
           total > 0 ? (
             <Button
@@ -147,7 +149,7 @@ function AdminTenants() {
               data-testid="admin-tenants-create"
             >
               <PlusIcon />
-              Create tenant
+              New site
             </Button>
           ) : undefined
         }
@@ -157,25 +159,27 @@ function AdminTenants() {
       <section className="flex flex-col gap-6">
         {total > 0 && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Tabs
-              value={status}
-              onValueChange={(value) => {
-                const next = STATUS_FILTERS.find((filter) => filter === value);
-                if (next) setStatus(next);
-              }}
-            >
-              <TabsList className="max-w-full justify-start overflow-x-auto">
-                {STATUS_FILTERS.map((filter) => (
-                  <TabsTrigger
-                    key={filter}
-                    value={filter}
-                    data-testid={`admin-tenants-filter-${filter}`}
-                  >
-                    {STATUS_FILTER_LABELS[filter]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+              <Tabs
+                value={status}
+                onValueChange={(value) => {
+                  const next = STATUS_FILTERS.find((filter) => filter === value);
+                  if (next) setStatus(next);
+                }}
+              >
+                <TabsList>
+                  {STATUS_FILTERS.map((filter) => (
+                    <TabsTrigger
+                      key={filter}
+                      value={filter}
+                      data-testid={`admin-tenants-filter-${filter}`}
+                    >
+                      {STATUS_FILTER_LABELS[filter]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
             <InputGroup className="sm:ml-auto sm:max-w-xs">
               <InputGroupAddon>
                 <MagnifyingGlassIcon />
@@ -184,7 +188,7 @@ function AdminTenants() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search name, slug or DAO"
-                aria-label="Search tenants"
+                aria-label="Search sites"
                 data-testid="admin-tenants-search"
               />
             </InputGroup>
@@ -196,7 +200,7 @@ function AdminTenants() {
         ) : error ? (
           <EmptyState
             icon={BuildingsIcon}
-            title="Couldn't load tenants"
+            title="Couldn't load sites"
             description={error.message || "Something went wrong while loading tenants."}
             action={
               <Button
@@ -210,27 +214,27 @@ function AdminTenants() {
         ) : total === 0 ? (
           <EmptyState
             icon={BuildingsIcon}
-            title="No tenants yet"
+            title="No sites yet"
             description="Create the first community deployment."
             action={
               <Button nativeButton={false} render={<Link to="/admin/tenants/new" />}>
                 <PlusIcon />
-                Create tenant
+                New site
               </Button>
             }
           />
         ) : tenants.length === 0 ? (
           <EmptyState
             icon={BuildingsIcon}
-            title="No matching tenants"
+            title="No matching sites"
             description="Try another status or search."
           />
         ) : (
           <>
-            <div className="hidden sm:block" data-testid="admin-tenants-table">
+            <div className="hidden md:block" data-testid="admin-tenants-table">
               <DataTable columns={columns} data={tenants} />
             </div>
-            <ItemGroup className="sm:hidden" data-testid="admin-tenants-rows">
+            <ItemGroup className="md:hidden" data-testid="admin-tenants-rows">
               {tenants.map((tenant) => (
                 <Item
                   key={tenant.id}
@@ -243,9 +247,11 @@ function AdminTenants() {
                   }
                 >
                   <ItemContent className="min-w-0">
-                    <ItemTitle>{tenant.name}</ItemTitle>
+                    <ItemTitle className="max-w-full">
+                      <span className="min-w-0 truncate">{tenant.name}</span>
+                    </ItemTitle>
                     <ItemDescription>
-                      <span className="font-mono">{tenant.accountId}</span>
+                      <span className="font-mono break-all">{tenant.accountId}</span>
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>

@@ -16,12 +16,11 @@ export function ApplySubmitted({ proposalId, name }: { proposalId: string; name?
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold text-foreground">Application submitted</h1>
           <p className="text-base text-muted-foreground">
-            {name ? `${name} is` : "Your community is"} waiting for review. We&apos;ll show the
-            decision in Proposals.
+            {name ? `${name} is` : "Your community is"} waiting for an admin to review it.
           </p>
-          <p className="font-mono text-xs text-muted-foreground">{proposalId}</p>
+          <p className="font-mono text-xs break-all text-muted-foreground">{proposalId}</p>
         </div>
-        <div className="flex flex-wrap justify-center gap-3">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
           <Button
             nativeButton={false}
             render={<Link to="/dashboard/node/proposals" />}

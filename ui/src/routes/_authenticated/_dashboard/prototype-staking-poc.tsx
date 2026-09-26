@@ -248,7 +248,7 @@ function NodeLifecyclePocPage() {
             Next up: <span className="font-medium text-foreground">{upcoming.def.title}</span>,
             signed by {signerName(upcoming)}
             {upcoming.signerAccountId ? (
-              <span className="font-mono"> ({upcoming.signerAccountId})</span>
+              <span className="font-mono break-all"> ({upcoming.signerAccountId})</span>
             ) : null}
             {upcoming.blockedBy === "input" && upcoming.blockedReason
               ? ` — ${upcoming.blockedReason}`

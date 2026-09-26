@@ -1,21 +1,18 @@
 import {
   BankIcon,
   BuildingsIcon,
-  CalendarDotsIcon,
   ChartBarIcon,
   CoinsIcon,
   CompassIcon,
   CubeIcon,
-  GearSixIcon,
   HouseIcon,
   LightningIcon,
+  ListChecksIcon,
   NetworkIcon,
   PlusCircleIcon,
-  QrCodeIcon,
   ScrollIcon,
   ShieldIcon,
   SparkleIcon,
-  SquaresFourIcon,
   TreeStructureIcon,
   WrenchIcon,
 } from "@phosphor-icons/react";
@@ -50,74 +47,11 @@ export interface SidebarItem {
   order?: number;
 }
 
-export interface MyCommunityNav {
-  nodeId: string | null;
-  tenantId: string | null;
-}
-
 export interface NavContext {
   activeOrgSlug?: string | null;
-  community?: MyCommunityNav | null;
   canManageOrganization?: boolean;
   canCurate?: boolean;
   isAdmin?: boolean;
-}
-
-function myCommunityChildren(
-  community: MyCommunityNav | null | undefined,
-  canManage: boolean,
-): SidebarItem[] {
-  const nodeId = community?.nodeId ?? null;
-  const tenantId = community?.tenantId ?? null;
-  const contentPath = nodeId ? `/nodes/${nodeId}/content` : null;
-  return [
-    {
-      icon: SquaresFourIcon,
-      label: "Overview",
-      slug: "my-node-overview",
-      to: "/dashboard/node",
-      exact: true,
-      roleRequired: "member",
-    },
-    ...(contentPath
-      ? [
-          {
-            icon: CalendarDotsIcon,
-            label: "Events & profile",
-            slug: "my-node-content",
-            to: contentPath,
-            search: { tab: "events" },
-            roleRequired: "member" as const,
-          },
-          {
-            icon: QrCodeIcon,
-            label: "Onboarding",
-            slug: "my-node-onboarding",
-            to: contentPath,
-            search: { tab: "onboarding" },
-            roleRequired: "member" as const,
-          },
-        ]
-      : []),
-    {
-      icon: ScrollIcon,
-      label: "Proposals",
-      slug: "my-node-proposals",
-      to: "/dashboard/node/proposals",
-      roleRequired: "member",
-    },
-    ...(tenantId && canManage
-      ? [
-          {
-            icon: GearSixIcon,
-            label: "Community settings",
-            slug: "my-node-settings",
-            to: `/tenant/${tenantId}`,
-            roleRequired: "member" as const,
-          },
-        ]
-      : []),
-  ];
 }
 
 const ADMIN_CHILDREN: SidebarItem[] = [
@@ -131,7 +65,7 @@ const ADMIN_CHILDREN: SidebarItem[] = [
   },
   {
     icon: NetworkIcon,
-    label: "Nodes",
+    label: "Communities",
     slug: "admin-nodes",
     to: "/admin/nodes",
     roleRequired: "admin",
@@ -145,7 +79,7 @@ const ADMIN_CHILDREN: SidebarItem[] = [
   },
   {
     icon: TreeStructureIcon,
-    label: "Tenants",
+    label: "Sites",
     slug: "admin-tenants",
     to: "/admin/tenants",
     roleRequired: "admin",
@@ -167,7 +101,6 @@ const ADMIN_CHILDREN: SidebarItem[] = [
 ];
 
 export function buildNavItems(context: NavContext = {}): SidebarItem[] {
-  const canManage = Boolean(context.canManageOrganization || context.isAdmin);
   const orgPath = context.activeOrgSlug ? `/orgs/${context.activeOrgSlug}` : "/orgs";
   return [
     {
@@ -206,7 +139,6 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
       roleRequired: "member",
       area: "node-operations",
       section: "organization",
-      children: myCommunityChildren(context.community, canManage),
     },
     {
       icon: BuildingsIcon,
@@ -225,29 +157,12 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
       roleRequired: "member",
       area: "things",
       section: "organization",
-      children: [
-        {
-          icon: CubeIcon,
-          label: "All things",
-          slug: "things-all",
-          to: "/things",
-          exact: true,
-          roleRequired: "member",
-        },
-        {
-          icon: PlusCircleIcon,
-          label: "New thing",
-          slug: "things-new",
-          to: "/things/new",
-          roleRequired: "member",
-        },
-      ],
     },
     ...(context.canCurate || context.isAdmin
       ? [
           {
-            icon: SparkleIcon,
-            label: "Curate",
+            icon: ListChecksIcon,
+            label: "Directory",
             slug: "discover",
             to: "/discover",
             roleRequired: "member" as const,
@@ -376,7 +291,7 @@ export function appendPluginSidebarItems(
 
 export const SECTION_LABELS: Record<SidebarSection, string | null> = {
   main: null,
-  organization: "Your organization",
+  organization: "Workspace",
   manage: "Manage",
 };
 

@@ -1,6 +1,18 @@
+import { CopyIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { Button } from "@/components";
 import { InfoRow } from "@/components/info-row";
 import type { RelayerInfoData } from "@/lib/use-relayer";
 import { formatNearFigure, StatFigure, StatGrid } from "./-admin-ui";
+
+async function copyAccount(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success("Relayer account copied");
+  } catch {
+    toast.error("Couldn't copy the account");
+  }
+}
 
 export function RelayerStatusBody({
   info,
@@ -28,8 +40,24 @@ export function RelayerStatusBody({
       <div className="flex flex-col gap-3">
         {info.accountId ? (
           <>
-            <p className="text-base">Send NEAR to this account to turn on gasless writes.</p>
-            <p className="font-mono text-sm break-all">{info.accountId}</p>
+            <p className="text-base text-foreground">
+              Send NEAR to this account to turn on gasless writes.
+            </p>
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 font-mono text-sm break-all text-foreground">
+                {info.accountId}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Copy relayer account"
+                onClick={() => void copyAccount(info.accountId ?? "")}
+                data-testid="admin-relayer-copy-account"
+              >
+                <CopyIcon />
+              </Button>
+            </div>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">

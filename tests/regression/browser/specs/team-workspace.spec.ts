@@ -155,6 +155,7 @@ test.describe("team workspace", () => {
       await expect(page.getByTestId("workspace-active-team")).toBeVisible();
     };
     await addMember();
+    await page.getByTestId(`teams-tab-menu-${team.id}`).click();
     await page.getByTestId(`teams-tab-rename-${team.id}`).click();
     await page.getByTestId(`teams-tab-rename-input-${team.id}`).fill("Treasury");
     await page.getByTestId(`teams-tab-rename-save-${team.id}`).click();
@@ -167,6 +168,7 @@ test.describe("team workspace", () => {
     await expect(page.getByTestId("orgs-tab-teams")).toHaveAttribute("aria-selected", "true");
     await expect(page).toHaveURL(/[?&]tab=teams/);
     await addMember();
+    await page.getByTestId(`teams-tab-menu-${team.id}`).click();
     await page.getByTestId(`teams-tab-delete-${team.id}`).click();
     await page.getByTestId("confirm-dialog-confirm").click();
     await expect(page.getByTestId("workspace-active-team")).toHaveCount(0);

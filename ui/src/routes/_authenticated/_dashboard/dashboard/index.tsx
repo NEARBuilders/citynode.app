@@ -108,21 +108,21 @@ function Home() {
         title={firstName ? `Welcome back, ${firstName}` : "Home"}
         description="Pick up where you left off."
       />
-      <div className="grid gap-10 lg:grid-cols-3">
-        <div className="flex flex-col gap-10 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-12 lg:col-span-2">
           {pending.length > 0 && (
-            <section className="flex flex-col gap-4">
+            <section className="flex flex-col gap-6">
               <SectionHeader title="Invitations" />
               <InvitationSteps invitations={pending} />
             </section>
           )}
-          <section className="flex flex-col gap-4">
+          <section className="flex flex-col gap-6">
             <SectionHeader title="Next steps" />
             {loading ? (
               <div className="flex flex-col gap-3">
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full rounded-2xl" />
+                <Skeleton className="h-16 w-full rounded-2xl" />
+                <Skeleton className="h-16 w-full rounded-2xl" />
               </div>
             ) : (
               <NextStepsList
@@ -133,7 +133,7 @@ function Home() {
             )}
           </section>
         </div>
-        <aside className="flex flex-col gap-4">
+        <aside className="flex min-w-0 flex-col gap-6">
           {user ? (
             <IdentityCard
               user={user}
@@ -141,7 +141,7 @@ function Home() {
               passkeyCount={passkeys.data?.length ?? 0}
             />
           ) : (
-            <Skeleton className="h-56 w-full" />
+            <Skeleton className="h-56 w-full rounded-2xl" />
           )}
         </aside>
       </div>

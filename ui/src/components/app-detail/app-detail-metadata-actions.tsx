@@ -39,7 +39,7 @@ export function AppDetailMetadataActions({
 
       {delegatePayload && (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-muted-foreground">
               Signed delegate payload
             </span>

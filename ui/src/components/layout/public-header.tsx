@@ -40,7 +40,7 @@ export function PublicHeader({ focused = false, showSignIn = true }: PublicHeade
           to="/"
           aria-label="CityNode home"
           data-testid="public-header-home"
-          className="mr-6 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="mr-2 shrink-0 rounded-md sm:mr-6 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <Logo mark={false} size="lg" />
         </Link>
@@ -65,7 +65,7 @@ export function PublicHeader({ focused = false, showSignIn = true }: PublicHeade
             ))}
           </nav>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <ThemeToggle />
           {!focused && (
             <DropdownMenu>

@@ -137,8 +137,8 @@ function NodePage() {
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Badge variant="secondary">{kindLabel}</Badge>
           {profile?.location && (
-            <span className="flex items-center gap-1.5">
-              <MapPinIcon className="size-4" />
+            <span className="flex min-w-0 items-center gap-1.5">
+              <MapPinIcon className="size-4 shrink-0" />
               {profile.location}
             </span>
           )}
@@ -152,16 +152,18 @@ function NodePage() {
         </div>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex min-w-0 flex-col gap-3">
-            <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">{node.name}</h1>
+            <h1 className="text-3xl font-semibold wrap-anywhere text-foreground sm:text-4xl">
+              {node.name}
+            </h1>
             {profile?.summary ? (
               <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
                 {profile.summary}
               </p>
             ) : (
-              <p className="text-sm text-muted-foreground">{hostname}</p>
+              <p className="text-sm break-all text-muted-foreground">{hostname}</p>
             )}
           </div>
-          <div className="flex shrink-0 flex-wrap gap-3">
+          <div className="flex flex-col gap-3 sm:shrink-0 sm:flex-row">
             {validators.length > 0 && (
               <Button
                 nativeButton={false}
@@ -217,7 +219,7 @@ function NodePage() {
 
       <dl
         data-testid="node-page.stats"
-        className="grid grid-cols-3 gap-6 border-y border-border py-6"
+        className="grid grid-cols-3 gap-4 border-y border-border py-6 sm:gap-6"
       >
         <Stat label="Upcoming events" value={events.length} />
         <Stat
@@ -235,11 +237,9 @@ function NodePage() {
         {events.length > 0 ? (
           <EventList events={events} nodeId={node.id} />
         ) : (
-          <div className="flex items-center gap-4 rounded-2xl border border-dashed border-border p-6">
+          <div className="flex items-center gap-4 rounded-2xl bg-muted p-6">
             <CalendarBlankIcon className="size-6 shrink-0 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Nothing scheduled yet. Check back for the next gathering.
-            </p>
+            <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
           </div>
         )}
       </section>
@@ -275,7 +275,7 @@ function NodePage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col-reverse justify-end gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-3xl font-semibold tabular-nums text-foreground">{value}</dd>
     </div>
@@ -287,7 +287,7 @@ function NodeSkeleton() {
     <div className="flex flex-col gap-12">
       <header className="flex flex-col gap-4">
         <Skeleton className="h-5 w-20" />
-        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-10 w-64 max-w-full" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </header>
       <Skeleton className="h-20 w-full" />

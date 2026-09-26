@@ -21,7 +21,7 @@ export function RowMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" aria-label={label} disabled={disabled} />}
+        render={<Button variant="ghost" size="icon" aria-label={label} disabled={disabled} />}
         data-testid={testId}
       >
         <DotsThreeIcon weight="bold" />

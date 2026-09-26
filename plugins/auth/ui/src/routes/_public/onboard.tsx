@@ -116,7 +116,7 @@ function OnboardPage() {
               <span className="font-mono text-foreground" data-testid="onboard.gateway-origin">
                 {gatewayHost}
               </span>
-              , choose "Sign in with your phone" and scan the code with this phone.
+              , pick "Sign in with your phone" and scan the code.
             </ItemDescription>
           </ItemContent>
         </Item>

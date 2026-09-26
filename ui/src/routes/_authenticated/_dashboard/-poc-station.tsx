@@ -8,10 +8,10 @@ import {
   WarningIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Badge, Button, InfoPopover } from "@/components";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 import { approvalThreshold, describePlan, type SputnikProposal } from "./-poc-chain";
 import {
   type LensId,
@@ -217,7 +217,7 @@ export function StationPanel({
         <p className="text-sm text-muted-foreground">
           Signed by <span className="font-medium text-foreground">{signerName(station)}</span>
           {station.signerAccountId ? (
-            <span className="font-mono"> · {station.signerAccountId}</span>
+            <span className="font-mono break-all"> · {station.signerAccountId}</span>
           ) : null}
         </p>
       </div>

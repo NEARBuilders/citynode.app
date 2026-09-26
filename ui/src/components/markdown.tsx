@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -12,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 interface MarkdownProps {
   content: string;

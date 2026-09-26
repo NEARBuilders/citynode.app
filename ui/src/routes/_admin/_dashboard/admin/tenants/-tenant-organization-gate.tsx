@@ -29,7 +29,7 @@ export function TenantOrganizationGate({
       className="flex max-w-xl flex-col gap-6"
       data-testid="admin-tenant-org-gate"
     >
-      <p className="text-sm text-muted-foreground">Tenants belong to an organization.</p>
+      <p className="text-sm text-muted-foreground">Sites belong to an organization.</p>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="org-name">Organization name</FieldLabel>
@@ -62,7 +62,11 @@ export function TenantOrganizationGate({
           <FieldDescription>Lowercase letters, numbers and hyphens.</FieldDescription>
         </Field>
       </FieldGroup>
-      <Button type="submit" className="self-start" disabled={isPending || !orgName || !orgSlug}>
+      <Button
+        type="submit"
+        className="w-full sm:w-auto sm:self-start"
+        disabled={isPending || !orgName || !orgSlug}
+      >
         {isPending ? "Creating…" : "Create organization"}
       </Button>
     </form>

@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, CaretDownIcon, CaretRightIcon, DotsThreeIcon } from "@phosphor-icons/react";
 import { Link, type LinkProps } from "@tanstack/react-router";
+import { cn } from "cn";
 import { type ReactNode, useState } from "react";
 import { Button, Skeleton } from "@/components";
 import {
@@ -8,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
 export type StatusTone = "success" | "warning" | "destructive" | "secondary" | "outline";
 

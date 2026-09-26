@@ -71,7 +71,7 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
     <section className="flex flex-col gap-6">
       <SectionHeader
         title="Domains"
-        description="Shared by every node of this tenant. Changes take up to 30 seconds."
+        description="Shared by every community on this site; changes take up to 30 seconds."
         action={
           <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-domain">
             <PlusIcon /> Add domain
@@ -112,18 +112,22 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                   <GlobeIcon />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>
-                    <span className="truncate font-mono">{hostname}</span>
+                  <ItemTitle className="max-w-full">
+                    <span className="min-w-0 truncate font-mono">{hostname}</span>
                   </ItemTitle>
                   <ItemDescription>{isAlias ? "Platform alias" : "Custom domain"}</ItemDescription>
+                  {(binding.isPrimary || !isAlias) && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {binding.isPrimary && <Badge variant="secondary">Primary</Badge>}
+                      {!isAlias && (
+                        <Badge variant={binding.isVerified ? "success" : "warning"}>
+                          {binding.isVerified ? "Verified" : "Unverified"}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </ItemContent>
                 <ItemActions>
-                  {binding.isPrimary && <Badge variant="secondary">Primary</Badge>}
-                  {!isAlias && (
-                    <Badge variant={binding.isVerified ? "success" : "warning"}>
-                      {binding.isVerified ? "Verified" : "Unverified"}
-                    </Badge>
-                  )}
                   <RowMenu
                     label={`Actions for ${hostname}`}
                     actions={[
@@ -141,7 +145,7 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                     <p className="text-sm text-muted-foreground">
                       Add this TXT record at your DNS provider, then check.
                     </p>
-                    <dl className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm">
+                    <dl className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm text-foreground">
                       <dt className="text-muted-foreground">Type</dt>
                       <dd className="col-span-3 font-mono">TXT</dd>
                       <dt className="text-muted-foreground">Host</dt>
@@ -151,10 +155,10 @@ export function NodeBindings({ tenantId, gateway }: { tenantId: string; gateway:
                         everything-verify={binding.verificationToken}
                       </dd>
                     </dl>
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                       <Button
                         variant="outline"
-                        size="sm"
+                        className="w-full sm:w-auto"
                         disabled={mutation.isPending}
                         onClick={() => mutation.mutate({ binding, action: "verify" })}
                       >

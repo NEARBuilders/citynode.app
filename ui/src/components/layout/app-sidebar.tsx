@@ -18,6 +18,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { groupSidebarItems, isNavItemActive, navSlug, type SidebarItem } from "./nav-items";
 import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
@@ -46,6 +47,11 @@ export function AppSidebar({ items, appName, pathname }: AppSidebarProps) {
   const teams = workspace?.teams ?? [];
   const activeTeamId = workspace?.activeTeam?.id ?? null;
   const sections = groupSidebarItems(items);
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  useEffect(() => {
+    if (isMobile && pathname) setOpenMobile(false);
+  }, [isMobile, pathname, setOpenMobile]);
 
   return (
     <Sidebar collapsible="icon" variant="inset">

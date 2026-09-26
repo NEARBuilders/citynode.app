@@ -25,7 +25,7 @@ export function StakeNoValidator({ name, childNodes }: { name: string; childNode
                 size="sm"
                 render={<Link to="/stake" search={{ node: child.slug, nodeId: child.id }} />}
               >
-                <ItemContent>
+                <ItemContent className="min-w-0">
                   <ItemTitle>
                     <span className="capitalize">{child.name}</span>
                   </ItemTitle>

@@ -1,7 +1,7 @@
 import { CheckIcon, XIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Button } from "@/components";
-import { cn } from "@/lib/utils";
 import type { TenantWizardStepStatus } from "./-tenant-wizard";
 
 export function TenantStep({

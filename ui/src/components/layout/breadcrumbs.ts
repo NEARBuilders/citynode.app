@@ -17,9 +17,9 @@ const SETTINGS_SECTIONS: Record<string, string> = {
 };
 
 const ADMIN_SECTIONS: Record<string, { label: string; detail: string }> = {
-  nodes: { label: "Nodes", detail: "Node" },
+  nodes: { label: "Communities", detail: "Community" },
   proposals: { label: "Proposals", detail: "Proposal" },
-  tenants: { label: "Tenants", detail: "Tenant" },
+  tenants: { label: "Sites", detail: "Site" },
   relayer: { label: "Relayer", detail: "Relayer" },
   system: { label: "System", detail: "System" },
 };
@@ -44,16 +44,28 @@ function page(label: string): Crumb {
 
 export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
-  const [first, second, third] = segments;
+  const [first, second, third, fourth, fifth] = segments;
 
   if (segments.length === 0) return [page(context.appName ?? "CityNode")];
 
   switch (first) {
     case "dashboard":
       if (second !== "node") return [page(HOME.label)];
-      if (third === "proposals") return [MY_COMMUNITY, page("Proposals")];
+      if (third === "proposals") {
+        if (!fourth) return [MY_COMMUNITY, page("Proposals")];
+        return [
+          MY_COMMUNITY,
+          { label: "Proposals", to: "/dashboard/node/proposals" },
+          page("Proposal"),
+        ];
+      }
       return [page(MY_COMMUNITY.label)];
     case "nodes":
+      if (third === "events" && second) {
+        const events = { label: "Events & profile", to: `/nodes/${second}/content` };
+        if (fourth === "new") return [MY_COMMUNITY, events, page("New event")];
+        if (fifth === "edit") return [MY_COMMUNITY, events, page("Edit event")];
+      }
       return [
         MY_COMMUNITY,
         page(
@@ -77,7 +89,7 @@ export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[]
     case "apply":
       return [page("Start a community")];
     case "discover":
-      return [page("Curate")];
+      return [page("Directory")];
     case "orgs": {
       if (!second) return [page(ORGS.label)];
       if (second === "new") return [ORGS, page("New organization")];
@@ -95,6 +107,13 @@ export function crumbsFor(pathname: string, context: CrumbContext = {}): Crumb[]
       if (!section) return [page(ADMIN.label)];
       if (!third) return [ADMIN, page(section.label)];
       const sectionCrumb = { label: section.label, to: `/admin/${second}` };
+      if (fourth === "edit")
+        return [
+          ADMIN,
+          sectionCrumb,
+          { label: section.detail, to: `/admin/${second}/${third}` },
+          page(`Edit ${section.detail.toLowerCase()}`),
+        ];
       return [
         ADMIN,
         sectionCrumb,

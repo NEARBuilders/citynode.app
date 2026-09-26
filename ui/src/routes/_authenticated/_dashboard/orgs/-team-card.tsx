@@ -2,6 +2,7 @@ import { PencilSimpleIcon, TrashIcon, UserMinusIcon, UserPlusIcon } from "@phosp
 import { useState } from "react";
 import { Button, Card, CardContent, Input } from "@/components";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import {
   Select,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { FEATURE_AREA_LABELS, FEATURE_AREAS } from "@/lib/feature-areas";
 import { MemberAvatar, type MemberCardMember, memberDisplayName } from "./-member-card";
+import { RowMenu } from "./-row-menu";
 
 export interface TeamCardTeam {
   id: string;
@@ -118,31 +120,30 @@ export function TeamCard({
             </div>
           )}
           {canManage && !isRenaming && (
-            <div className="flex shrink-0 gap-1">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Rename ${team.name}`}
+            <RowMenu
+              label={`Actions for ${team.name}`}
+              disabled={isMutating}
+              testId={`teams-tab-menu-${team.id}`}
+            >
+              <DropdownMenuItem
                 onClick={() => {
                   setDraftName(team.name);
                   setIsRenaming(true);
                 }}
-                disabled={isMutating}
                 data-testid={`teams-tab-rename-${team.id}`}
               >
                 <PencilSimpleIcon />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Delete ${team.name}`}
+                Rename team
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
                 onClick={onDelete}
-                disabled={isMutating}
                 data-testid={`teams-tab-delete-${team.id}`}
               >
                 <TrashIcon />
-              </Button>
-            </div>
+                Delete team
+              </DropdownMenuItem>
+            </RowMenu>
           )}
         </div>
 

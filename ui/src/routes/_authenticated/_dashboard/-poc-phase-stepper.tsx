@@ -1,6 +1,6 @@
 import { CheckIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import { Button } from "@/components";
-import { cn } from "@/lib/utils";
 import type { PhaseId } from "./-poc-stations";
 import type { PhaseProgress } from "./-poc-walkthrough";
 

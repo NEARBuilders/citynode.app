@@ -74,7 +74,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/")({
       adminNodeListQueryOptions(context.apiClient, deps.scope, deps.kind),
     ),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Nodes · Admin", match.context.runtimeConfig) }],
+    meta: [{ title: pageTitle("Communities · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminNodes,
 });
@@ -121,6 +121,8 @@ function AdminNodes() {
         id: "parent",
         accessorFn: (row) => row.parent?.name ?? "",
         header: "Parent",
+        meta: { className: "hidden lg:table-cell" },
+
         cell: ({ row }) =>
           row.original.parent ? (
             <Link
@@ -151,6 +153,8 @@ function AdminNodes() {
       {
         accessorKey: "childrenCount",
         header: "Children",
+        meta: { className: "hidden lg:table-cell" },
+
         cell: ({ row }) => <span className="tabular-nums">{row.original.childrenCount}</span>,
       },
     ],
@@ -165,7 +169,7 @@ function AdminNodes() {
   return (
     <>
       <PageHeader
-        title="Nodes"
+        title="Communities"
         description="Countries, states and cities in the community tree."
         headerTestId="admin-nodes.heading"
       />
@@ -206,7 +210,11 @@ function AdminNodes() {
               });
             }}
           >
-            <SelectTrigger aria-label="Filter nodes by kind" data-testid="admin-nodes-kind">
+            <SelectTrigger
+              aria-label="Filter communities by kind"
+              className="w-full sm:w-auto"
+              data-testid="admin-nodes-kind"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -225,7 +233,7 @@ function AdminNodes() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search by name or slug"
-              aria-label="Search nodes"
+              aria-label="Search communities"
               data-testid="admin-nodes-search"
             />
           </InputGroup>
@@ -236,7 +244,7 @@ function AdminNodes() {
         ) : nodesQuery.isError ? (
           <EmptyState
             icon={TreeStructureIcon}
-            title="Couldn't load nodes"
+            title="Couldn't load communities"
             description={nodesQuery.error.message || "Something went wrong while loading nodes."}
             action={
               <Button variant="outline" onClick={() => nodesQuery.refetch()}>
@@ -247,15 +255,15 @@ function AdminNodes() {
         ) : !visibleNodes.length ? (
           <EmptyState
             icon={TreeStructureIcon}
-            title="No matching nodes"
-            description="Try all nodes, another kind or a different search."
+            title="No matching communities"
+            description="Try all communities, another kind or a different search."
           />
         ) : (
           <>
-            <div className="hidden sm:block" data-testid="admin-nodes-table">
+            <div className="hidden md:block" data-testid="admin-nodes-table">
               <DataTable columns={columns} data={visibleNodes} />
             </div>
-            <ItemGroup className="sm:hidden" data-testid="admin-nodes-rows">
+            <ItemGroup className="md:hidden" data-testid="admin-nodes-rows">
               {visibleNodes.map((row) => (
                 <Item
                   key={row.node.id}
@@ -263,7 +271,9 @@ function AdminNodes() {
                   render={<Link to="/admin/nodes/$nodeId" params={{ nodeId: row.node.id }} />}
                 >
                   <ItemContent className="min-w-0">
-                    <ItemTitle>{row.node.name}</ItemTitle>
+                    <ItemTitle className="max-w-full">
+                      <span className="min-w-0 truncate">{row.node.name}</span>
+                    </ItemTitle>
                     <ItemDescription>
                       {humanize(row.node.kind)}
                       {row.parent ? ` in ${row.parent.name}` : ""} · {row.validatorCount}{" "}

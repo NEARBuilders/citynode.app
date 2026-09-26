@@ -1,8 +1,21 @@
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import { Button, Input, LocalDate, SectionHeader } from "@/components";
+import { Badge, Button, Input, LocalDate, SectionHeader } from "@/components";
 import { SettingsRow } from "./-settings-row";
 import type { TenantRecord } from "./-tenant-types";
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  pending: "Pending",
+  suspended: "Suspended",
+  pending_deletion: "Pending deletion",
+};
+
+const STATUS_BADGE = {
+  active: "success",
+  suspended: "warning",
+  pending_deletion: "destructive",
+} as const;
 
 export function TenantDetails({
   tenant,
@@ -66,11 +79,22 @@ export function TenantDetails({
             tenant.name
           )}
         </SettingsRow>
+        <SettingsRow label="Status">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Badge
+              variant={STATUS_BADGE[tenant.status as keyof typeof STATUS_BADGE] ?? "secondary"}
+              data-testid="tenant.status"
+            >
+              {STATUS_LABEL[tenant.status] ?? tenant.status}
+            </Badge>
+            <Badge variant="outline">{tenant.ownerKind === "dao" ? "DAO-owned" : "Platform"}</Badge>
+          </span>
+        </SettingsRow>
         <SettingsRow label="Address">
-          <span className="font-mono">{hostname ?? "Not bound yet"}</span>
+          <span className="font-mono break-all">{hostname ?? "Not bound yet"}</span>
         </SettingsRow>
         <SettingsRow label="Account">
-          <span className="font-mono">{tenant.accountId}</span>
+          <span className="font-mono break-all">{tenant.accountId}</span>
         </SettingsRow>
         <SettingsRow
           label="Organization"
@@ -90,7 +114,7 @@ export function TenantDetails({
             ) : undefined
           }
         >
-          <span className="font-mono">{orgSlug ? `@${orgSlug}` : tenant.orgId}</span>
+          <span className="font-mono break-all">{orgSlug ? `@${orgSlug}` : tenant.orgId}</span>
         </SettingsRow>
         <SettingsRow label="Created">
           <LocalDate value={tenant.createdAt} fallback="—" />

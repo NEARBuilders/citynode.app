@@ -60,8 +60,8 @@ export function StakeNodeContent({
     );
   }
   return (
-    <div className="grid gap-8 lg:grid-cols-5">
-      <div className="flex flex-col gap-4 lg:col-span-3">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+      <div className="flex min-w-0 flex-col gap-4 lg:col-span-3">
         {isInherited && sourceNode && (
           <p className="text-sm text-muted-foreground" data-testid="stake.inherited">
             {node.name} uses the validator from{" "}
@@ -74,7 +74,9 @@ export function StakeNodeContent({
           onSelect={onSelectValidator}
         />
       </div>
-      <div className="flex flex-col gap-4 lg:col-span-2">{aside}</div>
+      <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-24 lg:col-span-2 lg:self-start">
+        {aside}
+      </div>
     </div>
   );
 }

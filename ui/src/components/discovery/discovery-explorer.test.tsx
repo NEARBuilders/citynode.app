@@ -55,17 +55,16 @@ function renderExplorer(search: DiscoverySearch) {
 }
 
 it("lists communities as cards that open the preview", async () => {
-  const navigate = renderExplorer({});
+  const navigate = renderExplorer({ view: "list" });
   const card = await screen.findByTestId(`discovery-node-${community.nodeId}`);
   expect(card.textContent).toContain("Chicago, IL");
   expect(screen.getByText("1 community")).toBeTruthy();
   fireEvent.click(card);
-  expect(navigate).toHaveBeenCalledWith({ node: community.nodeId });
+  expect(navigate).toHaveBeenCalledWith({ view: "list", node: community.nodeId });
 });
 
-it("switches to the map view through the search params", async () => {
+it("switches to the list view through the search params", async () => {
   const navigate = renderExplorer({ query: "chi" });
-  await screen.findByTestId(`discovery-node-${community.nodeId}`);
-  fireEvent.click(screen.getByTestId("explore-view-map"));
-  expect(navigate).toHaveBeenCalledWith({ query: "chi", view: "map" });
+  fireEvent.click(screen.getByTestId("explore-view-list"));
+  expect(navigate).toHaveBeenCalledWith({ query: "chi", view: "list" });
 });

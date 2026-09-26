@@ -28,12 +28,13 @@ export function ThingsLiveStreamPage() {
   const [events, setEvents] = useState<LiveThingEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const abort = new AbortController();
     setConnectionError(null);
 
-    (async () => {
+    void (async () => {
       try {
         const stream = await apiClient.template.subscribeThings({}, { signal: abort.signal });
         if (abort.signal.aborted) return;
@@ -53,7 +54,7 @@ export function ThingsLiveStreamPage() {
     })();
 
     return () => abort.abort();
-  }, [apiClient]);
+  }, [apiClient, attempt]);
 
   const clearEvents = useCallback(() => setEvents([]), []);
 
@@ -102,7 +103,19 @@ export function ThingsLiveStreamPage() {
           description={
             connectionError ?? (connected ? "New things appear here the moment they change." : "")
           }
-          action={connected || connectionError ? undefined : <Spinner />}
+          action={
+            connectionError ? (
+              <Button
+                variant="outline"
+                onClick={() => setAttempt((value) => value + 1)}
+                data-testid="things-live-reconnect"
+              >
+                Reconnect
+              </Button>
+            ) : connected ? undefined : (
+              <Spinner />
+            )
+          }
         />
       ) : (
         <ItemGroup data-testid="things-live-events">

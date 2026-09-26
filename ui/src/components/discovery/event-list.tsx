@@ -1,8 +1,8 @@
 import { ArrowUpRightIcon, CaretRightIcon, ClockIcon, MapPinIcon } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ApiClient } from "@/app";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export type PublicActivity = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryActivity"]>>>;
 

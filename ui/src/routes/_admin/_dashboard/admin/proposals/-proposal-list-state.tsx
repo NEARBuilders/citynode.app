@@ -77,10 +77,10 @@ export function ProposalListState({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="hidden sm:block" data-testid="admin-proposals-table">
+      <div className="hidden md:block" data-testid="admin-proposals-table">
         <DataTable columns={columns} data={proposals} />
       </div>
-      <ItemGroup className="sm:hidden" data-testid="admin-proposals-rows">
+      <ItemGroup className="md:hidden" data-testid="admin-proposals-rows">
         {proposals.map((proposal) => (
           <Item
             key={proposal.id}
@@ -94,7 +94,9 @@ export function ProposalListState({
             }
           >
             <ItemContent className="min-w-0">
-              <ItemTitle>{proposalTitle(proposal)}</ItemTitle>
+              <ItemTitle className="max-w-full">
+                <span className="min-w-0 truncate">{proposalTitle(proposal)}</span>
+              </ItemTitle>
               <ItemDescription>
                 {proposalTypeLabel(proposal.pluginId)} ·{" "}
                 <LocalDate value={proposal.createdAt} format="relative" />
@@ -112,7 +114,7 @@ export function ProposalListState({
       {hasNextPage && (
         <Button
           variant="outline"
-          className="self-center"
+          className="w-full sm:w-auto sm:self-center"
           onClick={onLoadMore}
           disabled={isFetchingNextPage}
         >

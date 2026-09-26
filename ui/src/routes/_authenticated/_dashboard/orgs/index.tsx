@@ -181,9 +181,11 @@ function OrganizationsList() {
                   <ItemMedia>
                     <OrgAvatar name={orgName || "?"} />
                   </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{orgName}</ItemTitle>
-                    <ItemDescription>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="max-w-full">
+                      <span className="min-w-0 truncate">{orgName}</span>
+                    </ItemTitle>
+                    <ItemDescription className="wrap-anywhere">
                       {roleLabel(invitation.role)} ·{" "}
                       {invitation.nearAccountId ? (
                         <WalletIcon className="inline size-3.5" />
@@ -194,10 +196,10 @@ function OrganizationsList() {
                       <LocalDate value={invitation.expiresAt} format="relative" />
                     </ItemDescription>
                   </ItemContent>
-                  <ItemActions>
+                  <ItemActions className="w-full sm:w-auto">
                     <Button
                       variant="ghost"
-                      size="sm"
+                      className="flex-1 sm:flex-none"
                       onClick={() => rejectMutation.mutate(invitation)}
                       disabled={invitationBusy}
                     >
@@ -206,7 +208,7 @@ function OrganizationsList() {
                         : "Decline"}
                     </Button>
                     <Button
-                      size="sm"
+                      className="flex-1 sm:flex-none"
                       onClick={() => acceptMutation.mutate(invitation)}
                       disabled={invitationBusy}
                     >

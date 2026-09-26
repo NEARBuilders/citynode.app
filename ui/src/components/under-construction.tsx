@@ -1,8 +1,8 @@
 import { ArrowSquareOutIcon, HammerIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import type { ClientRuntimeConfig } from "everything-dev/types";
 import { getRepository } from "@/app";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 interface UnderConstructionProps {
   label?: string;

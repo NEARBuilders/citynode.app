@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useApiClient } from "@/app";
 import { Button, EmptyState, PageContainer } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pageTitle } from "@/lib/page-title";
 import { invalidateThingAfterDelete, thingQueryKeys } from "./-thing-cache";
 import { ThingBackLink, ThingDetailsView } from "./-thing-details-view";
 import { optimisticUpvoteCount } from "./-thing-votes";
@@ -14,9 +15,9 @@ type UpvoteCount = Awaited<ReturnType<ApiClient["votes"]["getUpvoteCount"]>>;
 type UserVote = Awaited<ReturnType<ApiClient["votes"]["getUserVote"]>>;
 
 export const Route = createFileRoute("/_authenticated/_dashboard/things/$thingId")({
-  head: ({ params }) => ({
+  head: ({ params, match }) => ({
     meta: [
-      { title: `${params.thingId} | Things | everything.dev` },
+      { title: pageTitle(params.thingId, match.context.runtimeConfig) },
       { name: "description", content: `Detail view for thing ${params.thingId}.` },
     ],
   }),
@@ -150,7 +151,7 @@ function ThingDetailsPage() {
           <Skeleton className="h-9 w-24" />
           <Skeleton className="h-12 w-2/3" />
           <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full rounded-2xl" />
         </div>
       </PageContainer>
     );

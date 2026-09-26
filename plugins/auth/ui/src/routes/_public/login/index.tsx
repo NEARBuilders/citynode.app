@@ -186,7 +186,9 @@ function LoginPage() {
         ) : (
           <WalletIcon data-icon="inline-start" />
         )}
-        {detectedAccount ? `Continue as ${detectedAccount}` : "Continue with NEAR"}
+        <span className="min-w-0 truncate">
+          {detectedAccount ? `Continue as ${detectedAccount}` : "Continue with NEAR"}
+        </span>
       </Button>
       {detectedAccount && (
         <Button

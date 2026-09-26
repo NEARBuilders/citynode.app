@@ -40,7 +40,7 @@ export function AppDetailHeader({
       <Button
         variant="ghost"
         size="xs"
-        className="self-start"
+        className="max-w-full self-start"
         onClick={async () => {
           await navigator.clipboard.writeText(bosUri);
           setCopiedUri(true);
@@ -48,7 +48,7 @@ export function AppDetailHeader({
           setTimeout(() => setCopiedUri(false), 2000);
         }}
       >
-        <code className="font-mono text-xs">{bosUri}</code>
+        <code className="min-w-0 truncate font-mono text-xs">{bosUri}</code>
         {copiedUri ? (
           <CheckIcon size={11} className="shrink-0 text-success" />
         ) : (

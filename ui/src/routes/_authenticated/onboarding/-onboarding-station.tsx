@@ -1,7 +1,7 @@
 import { QrCodeIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import type { ApiClient } from "@/app";
 import { Avatar, AvatarFallback, LocalDate } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -97,7 +97,7 @@ export function OnboardingStation({
   const filled = maxUses > 0 ? Math.min(100, Math.round((usedCount / maxUses) * 100)) : 0;
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-10 px-6 pb-10 lg:flex-row lg:items-center lg:justify-center lg:gap-20 lg:px-12">
+    <div className="flex flex-1 flex-col items-center gap-10 px-4 pb-10 sm:px-6 lg:flex-row lg:items-center lg:justify-center lg:gap-20 lg:px-12">
       <div className="flex w-full max-w-xl flex-col items-center gap-4">
         <div className="w-full rounded-4xl bg-card p-4 ring-1 ring-border sm:p-6">
           {qrDataUrl ? (
@@ -111,10 +111,10 @@ export function OnboardingStation({
             <Skeleton className="aspect-square w-full" />
           )}
         </div>
-        <p className="flex items-center gap-2 text-lg text-muted-foreground">
-          <QrCodeIcon className="size-5" />
+        <p className="text-center text-base text-muted-foreground sm:text-lg">
+          <QrCodeIcon className="mr-2 inline size-5 align-text-bottom" />
           Scan with your phone camera, or open{" "}
-          <span className="font-mono text-foreground">{gatewayHost}/onboard</span>
+          <span className="font-mono break-all text-foreground">{gatewayHost}/onboard</span>
         </p>
       </div>
 
@@ -122,7 +122,7 @@ export function OnboardingStation({
         <div className="flex flex-col gap-3">
           <span className="text-lg font-medium text-muted-foreground">Scan to join</span>
           <h1
-            className="text-5xl font-semibold text-foreground sm:text-6xl"
+            className="text-4xl font-semibold wrap-anywhere text-foreground sm:text-6xl"
             data-testid="station.event-name"
           >
             {station.data.eventName}
@@ -131,11 +131,16 @@ export function OnboardingStation({
 
         <div className="flex flex-col gap-4">
           <p className="flex items-baseline gap-3" data-testid="station.joined-count">
-            <span className="text-8xl font-semibold tabular-nums text-foreground">{usedCount}</span>{" "}
+            <span className="text-7xl font-semibold tabular-nums text-foreground sm:text-8xl">
+              {usedCount}
+            </span>{" "}
             <span className="text-2xl text-muted-foreground">joined</span>
           </p>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-brand" style={{ width: `${filled}%` }} />
+            <div
+              className="h-full w-(--station-fill) rounded-full bg-brand"
+              style={{ "--station-fill": `${filled}%` } as CSSProperties}
+            />
           </div>
           <p className="text-sm text-muted-foreground" data-testid="station.capacity">
             {maxUses - usedCount > 0 ? `${maxUses - usedCount} spots left` : "Full"} ·{" "}

@@ -11,7 +11,10 @@ export function SectionHeader({ title, description, action, sectionTestId }: Sec
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="flex min-w-0 flex-col gap-1">
-        <h2 className="text-xl font-semibold text-foreground" data-testid={sectionTestId}>
+        <h2
+          className="text-xl font-semibold wrap-anywhere text-foreground"
+          data-testid={sectionTestId}
+        >
           {title}
         </h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

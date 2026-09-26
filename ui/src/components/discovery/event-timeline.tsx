@@ -1,7 +1,7 @@
 import { MapPinIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type EventDateGroup, eventStartTime, type TimelineEvent } from "@/lib/event-timeline";
-import { cn } from "@/lib/utils";
 
 type TimelineItem = TimelineEvent & {
   id: string;
@@ -111,19 +111,19 @@ export function EventTimeline<T extends TimelineItem>({
                   )}
                   <h4
                     className={cn(
-                      "text-base font-semibold leading-snug break-words",
+                      "text-base font-semibold leading-snug wrap-anywhere",
                       cancelled && "line-through",
                     )}
                   >
                     {event.title}
                   </h4>
                   {event.source && (
-                    <p className="text-sm text-muted-foreground">By {event.source}</p>
+                    <p className="text-sm wrap-anywhere text-muted-foreground">By {event.source}</p>
                   )}
                   {event.venue && (
                     <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <MapPinIcon className="size-3.5 shrink-0" />
-                      <span className="truncate">{event.venue}</span>
+                      <span className="min-w-0 truncate">{event.venue}</span>
                     </p>
                   )}
                   <div className="mt-1 flex flex-wrap gap-1.5">{badges(event)}</div>

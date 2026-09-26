@@ -9,8 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 
 export interface CreatedApiKey {
   id: string;
@@ -49,29 +47,27 @@ export function ApiKeyRevealDialog({
         <DialogHeader>
           <DialogTitle>Copy your new key</DialogTitle>
           <DialogDescription>
-            This is the only time you'll see {apiKey?.name ? `"${apiKey.name}"` : "this key"} in
-            full. Store it somewhere safe.
+            You won't see {apiKey?.name ? `"${apiKey.name}"` : "this key"} in full again. Store it
+            somewhere safe.
           </DialogDescription>
         </DialogHeader>
-        <Field>
-          <FieldLabel htmlFor="api-key-secret" className="sr-only">
-            API key
-          </FieldLabel>
-          <div className="flex gap-2">
-            <Input
-              id="api-key-secret"
-              readOnly
-              value={apiKey?.key ?? ""}
-              className="flex-1 font-mono"
-              onFocus={(e) => e.target.select()}
-              data-testid="api-keys.secret"
-            />
-            <Button variant="outline" onClick={() => void handleCopy()}>
-              <CopyIcon data-icon="inline-start" />
-              Copy
-            </Button>
-          </div>
-        </Field>
+        <div className="flex flex-col gap-3">
+          <code
+            className="block rounded-2xl bg-muted p-4 font-mono text-sm break-all text-foreground select-all"
+            data-testid="api-keys.secret"
+          >
+            {apiKey?.key ?? ""}
+          </code>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => void handleCopy()}
+            data-testid="api-keys.copy-button"
+          >
+            <CopyIcon data-icon="inline-start" />
+            Copy key
+          </Button>
+        </div>
         <DialogFooter>
           <Button onClick={onDismiss} data-testid="api-keys.reveal-done">
             Done

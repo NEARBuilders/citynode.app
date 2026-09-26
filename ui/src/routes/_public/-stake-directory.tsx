@@ -25,7 +25,7 @@ export function StakeDirectory({
 }) {
   if (isLoading) {
     return (
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {["a", "b", "c", "d"].map((key) => (
           <Skeleton key={key} className="h-20 w-full rounded-2xl" />
         ))}
@@ -47,7 +47,7 @@ export function StakeDirectory({
     );
   }
   return (
-    <ul className="grid gap-3 sm:grid-cols-2" data-testid="stake.directory">
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="stake.directory">
       {nodes.map((node) => (
         <li key={node.id}>
           <Item
@@ -56,8 +56,8 @@ export function StakeDirectory({
             render={<Link to="/stake" search={{ node: node.slug }} />}
           >
             <ItemContent className="min-w-0">
-              <ItemTitle>
-                <span className="capitalize">{node.name}</span>
+              <ItemTitle className="max-w-full">
+                <span className="truncate capitalize">{node.name}</span>
               </ItemTitle>
               <ItemDescription>
                 <span className="block truncate">{node.hostname ?? `${node.slug}.${gateway}`}</span>

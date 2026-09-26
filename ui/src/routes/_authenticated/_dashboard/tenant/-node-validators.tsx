@@ -130,11 +130,11 @@ function PoolOwnerBadge({ poolAccountId, network }: { poolAccountId: string; net
 
   return (
     <span
-      className="inline-flex items-center gap-1 text-sm text-muted-foreground"
+      className="inline-flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground"
       title="verified via owner_id() on-chain"
     >
-      <ShieldCheckIcon className="h-3 w-3 text-success" />
-      Owned by <span className="font-mono">{owner}</span>
+      <ShieldCheckIcon className="size-3.5 shrink-0 text-success" />
+      Owned by <span className="font-mono break-all">{owner}</span>
     </span>
   );
 }
@@ -224,7 +224,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
                     />
                   </ItemDescription>
                 </ItemContent>
-                <ItemActions>
+                <ItemActions className="flex-wrap">
                   {canManage ? (
                     <>
                       <ValidatorRoleSelect
@@ -295,6 +295,7 @@ function NodeSection({ nodeId, canManage }: { nodeId: string; canManage: boolean
             <Button
               type="submit"
               variant="outline"
+              className="flex-1 sm:flex-none"
               disabled={createMutation.isPending || !newAccountId.trim()}
             >
               <PlusIcon />
@@ -379,7 +380,9 @@ export function TenantNodeValidators({ tenantId, canManage }: TenantNodeValidato
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-medium text-foreground">{node.name}</h3>
                 <Badge variant="outline">{node.kind}</Badge>
-                <span className="font-mono text-sm text-muted-foreground">{node.slug}</span>
+                <span className="font-mono text-sm break-all text-muted-foreground">
+                  {node.slug}
+                </span>
                 {canManage && (
                   <Button
                     variant="ghost"

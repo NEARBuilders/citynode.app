@@ -110,13 +110,12 @@ export function OnboardingTab({
   }
 
   return (
-    <TabsContent value="onboard" className="flex flex-col gap-8 pt-6">
+    <TabsContent value="onboard" className="flex flex-col gap-6 pt-6">
       <SectionHeader
         title="Onboarding stations"
         description={
           <span data-testid="onboard.start-from-event">
-            Start a station from an event in My community. People who scan it join this
-            organization.
+            Start one from an event in My community; people who scan it join.
           </span>
         }
         action={
@@ -158,10 +157,10 @@ export function OnboardingTab({
               >
                 {activeStatus.joined.map((entry) => (
                   <li key={entry.userId} className="flex items-center justify-between gap-3 py-2.5">
-                    <span className="truncate text-sm text-foreground">
+                    <span className="min-w-0 truncate text-sm text-foreground">
                       {entry.userName ?? "New member"}
                     </span>
-                    <span className="truncate font-mono text-xs text-muted-foreground">
+                    <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
                       {entry.accountId ?? ""}
                     </span>
                   </li>
@@ -213,16 +212,16 @@ export function OnboardingTab({
                     <QrCodeIcon />
                   </ItemMedia>
                   <ItemContent className="min-w-0">
-                    <ItemTitle>
+                    <ItemTitle className="max-w-full">
                       <Button
                         type="button"
                         variant="link"
-                        size="xs"
-                        className="min-w-0 justify-start"
+                        size="sm"
+                        className="min-w-0 max-w-full justify-start"
                         onClick={() => setSelectedCodeId(code.id)}
                         data-testid={`onboard.code-${code.id}`}
                       >
-                        <span className="truncate">{code.eventName}</span>
+                        <span className="min-w-0 truncate">{code.eventName}</span>
                       </Button>
                     </ItemTitle>
                   </ItemContent>

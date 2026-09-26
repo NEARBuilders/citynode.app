@@ -4,6 +4,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export type CommunitySection = "overview" | "content" | "onboarding" | "proposals";
 
+export type CommunityNavSection = CommunitySection | "settings";
+
 export function CommunityNav({
   active,
   nodeId,
@@ -12,14 +14,14 @@ export function CommunityNav({
   replace = false,
   testIds = {},
 }: {
-  active: CommunitySection;
+  active: CommunityNavSection;
   nodeId: string;
   tenantId?: string | null;
   canManage?: boolean;
   replace?: boolean;
-  testIds?: Partial<Record<CommunitySection | "settings", string>>;
+  testIds?: Partial<Record<CommunityNavSection, string>>;
 }) {
-  const items: { value: CommunitySection | "settings"; label: string; link: ReactElement }[] = [
+  const items: { value: CommunityNavSection; label: string; link: ReactElement }[] = [
     {
       value: "overview",
       label: "Overview",

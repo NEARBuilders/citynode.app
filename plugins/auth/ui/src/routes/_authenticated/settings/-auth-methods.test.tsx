@@ -66,7 +66,8 @@ describe("passkey settings", () => {
     expect(await screen.findByText("Work laptop")).toBeTruthy();
     expect(harness.listPasskeys.mock.calls.length).toBeGreaterThan(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove Phone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Phone" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove passkey" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
 
     await waitFor(() => expect(harness.deletePasskey).toHaveBeenCalledWith({ id: "passkey-1" }));

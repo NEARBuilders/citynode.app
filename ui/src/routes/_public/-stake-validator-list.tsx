@@ -37,7 +37,7 @@ export function StakeValidatorList({
             <Field orientation="horizontal" data-testid={`stake.pool-${validator.accountId}`}>
               <FieldContent className="min-w-0">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="truncate font-mono text-sm font-medium text-foreground">
+                  <span className="max-w-full min-w-0 truncate font-mono text-sm font-medium text-foreground">
                     {validator.accountId}
                   </span>
                   {validator.isDefault && <Badge variant="success">Recommended</Badge>}

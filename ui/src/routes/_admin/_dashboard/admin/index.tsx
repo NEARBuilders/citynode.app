@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ComponentType, ReactNode } from "react";
 import { getAccount, useApiClient } from "@/app";
 import { Badge, Button, EmptyState, LocalDate, PageHeader, SectionHeader } from "@/components";
@@ -75,12 +76,12 @@ function AdminOverview() {
           testId="admin.stat.pending-proposals"
         />
         <StatFigure
-          label="Nodes"
+          label="Communities"
           value={nodesQuery.data?.length ?? "—"}
           testId="admin.stat.nodes"
         />
         <StatFigure
-          label="Tenants"
+          label="Sites"
           value={tenantsQuery.data?.length ?? "—"}
           testId="admin.stat.tenants"
         />
@@ -142,7 +143,9 @@ function AdminOverview() {
                   <GavelIcon />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>{proposalTitle(proposal)}</ItemTitle>
+                  <ItemTitle className="max-w-full">
+                    <span className="min-w-0 truncate">{proposalTitle(proposal)}</span>
+                  </ItemTitle>
                   <ItemDescription>
                     {proposalTypeLabel(proposal.pluginId)} · submitted{" "}
                     <LocalDate value={proposal.createdAt} format="relative" />
@@ -164,7 +167,7 @@ function AdminOverview() {
           <ManageRow
             to="/admin/nodes"
             icon={TreeStructureIcon}
-            title="Nodes"
+            title="Communities"
             testId="admin.heading.nodes"
             description="The community tree, validators and domains"
           />
@@ -179,7 +182,7 @@ function AdminOverview() {
           <ManageRow
             to="/admin/tenants"
             icon={BuildingsIcon}
-            title="Tenants"
+            title="Sites"
             testId="admin.heading.tenants"
             description="Deployments and their DAOs"
           />
@@ -211,7 +214,7 @@ function AdminOverview() {
         <SectionHeader title="This runtime" />
         <div className="flex flex-col">
           <ContextRow label="Platform account" value={platformAccount} mono />
-          {tenant && <ContextRow label="Tenant" value={tenant.name} />}
+          {tenant && <ContextRow label="Site" value={tenant.name} />}
           {tenant && (
             <ContextRow
               label="Organization"
@@ -267,8 +270,10 @@ function ManageRow({
         <Icon />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <ItemTitle>
-          <h3 data-testid={testId}>{title}</h3>
+        <ItemTitle className="flex-wrap">
+          <h3 className="min-w-0 truncate" data-testid={testId}>
+            {title}
+          </h3>
           {badge}
         </ItemTitle>
         <ItemDescription>{description}</ItemDescription>
@@ -291,7 +296,7 @@ function ContextRow({ label, value, mono }: { label: string; value: ReactNode; m
         {label}
       </span>
       <span
-        className={`break-all text-sm text-foreground sm:text-right ${mono ? "font-mono" : ""}`}
+        className={cn("text-sm break-all text-foreground sm:text-right", mono && "font-mono")}
         data-testid={`admin.stat.${slug}.value`}
       >
         {value}

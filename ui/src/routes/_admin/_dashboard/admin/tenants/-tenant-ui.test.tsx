@@ -17,7 +17,7 @@ vi.mock("@/components/connect-dao", () => ({
 afterEach(cleanup);
 
 const createSteps = (publishState: Step["state"]): Step[] => [
-  { id: "create", label: "Create tenant + node + binding", state: "success", blocking: true },
+  { id: "create", label: "Create site, community and domain", state: "success", blocking: true },
   { id: "publish", label: "Publish config as DAO", state: publishState, blocking: false },
 ];
 

@@ -228,8 +228,8 @@ export function TenantDetailsFields({
                   className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
                   data-testid="admin-tenant-hostname"
                 >
-                  <GlobeIcon className="size-4" />
-                  <span className="font-mono">{hostname || "—"}</span>
+                  <GlobeIcon className="size-4 shrink-0" />
+                  <span className="min-w-0 font-mono break-all">{hostname || "—"}</span>
                   {preflight?.hostname.available === true && (
                     <Badge variant="success">Available</Badge>
                   )}
@@ -248,7 +248,7 @@ export function TenantDetailsFields({
             const errors = field.state.meta.isTouched ? field.state.meta.errors : [];
             return (
               <Field data-invalid={errors.length > 0 || undefined}>
-                <FieldLabel htmlFor="tenant-name">Tenant name</FieldLabel>
+                <FieldLabel htmlFor="tenant-name">Site name</FieldLabel>
                 <Input
                   id="tenant-name"
                   name={field.name}
@@ -273,7 +273,7 @@ export function TenantDetailsFields({
 
       <Button
         type="button"
-        className="self-start"
+        className="w-full sm:w-auto sm:self-start"
         disabled={!canContinue}
         onClick={onContinue}
         data-testid="admin-tenant-details-continue"
@@ -313,27 +313,26 @@ export function TenantReview({
           label="Community"
           value={`${summary.name} · ${humanize(summary.kind)}${summary.parentName ? ` in ${summary.parentName}` : ""}`}
         />
-        <InfoRow label="Tenant" value={summary.tenantName} />
+        <InfoRow label="Site" value={summary.tenantName} />
         <InfoRow label="Address" value={summary.hostname} mono />
         <InfoRow label="Owning DAO" value={summary.daoAccountId ?? "—"} mono />
         <InfoRow label="Extends" value={`bos://${baseAccount}/citynode.app`} mono />
       </div>
       <p className="text-sm text-muted-foreground">
-        Creates the tenant, its node and primary domain. Next you'll publish its settings through
-        the DAO.
+        Creates the tenant, its node and domain; you'll publish its settings through the DAO next.
       </p>
       {blockedReason && (
         <p role="alert" className="text-sm text-destructive">
           {blockedReason}
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <Button
           type="submit"
           disabled={submitPending || !canSubmit}
           data-testid="admin-tenant-create"
         >
-          {submitPending ? "Creating…" : "Create tenant"}
+          {submitPending ? "Creating…" : "Create site"}
         </Button>
         <Button variant="ghost" nativeButton={false} render={<Link to="/admin/tenants" />}>
           Cancel

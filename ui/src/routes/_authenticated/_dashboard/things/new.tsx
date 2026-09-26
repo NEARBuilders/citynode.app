@@ -102,7 +102,7 @@ function CreateThingPage() {
               autoComplete="off"
               data-testid="things-new-id"
             />
-            <FieldDescription>Unique identifier, for example community-garden.</FieldDescription>
+            <FieldDescription>Must be unique.</FieldDescription>
           </Field>
 
           <Field data-invalid={!payload.ok || undefined}>
@@ -155,7 +155,7 @@ function CreateThingPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
             type="submit"
             disabled={submitMutation.isPending || !thingId.trim() || !payload.ok}

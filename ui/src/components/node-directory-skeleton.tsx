@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { Skeleton } from "./ui/skeleton";
 
 export function NodeDirectorySkeleton({ layout = "list" }: { layout?: "list" | "grid" }) {

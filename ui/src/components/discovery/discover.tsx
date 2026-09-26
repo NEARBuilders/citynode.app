@@ -84,16 +84,29 @@ export function Discover() {
   });
   if (studio.isPending)
     return (
-      <div className="flex flex-col gap-6">
-        <Skeleton className="h-12 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-5 w-full max-w-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          {["a", "b", "c", "d"].map((key) => (
+            <Skeleton key={key} className="h-16 w-full" />
+          ))}
+        </div>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-10 w-full max-w-md" />
+          {["a", "b", "c"].map((key) => (
+            <Skeleton key={key} className="h-16 w-full" />
+          ))}
+        </div>
       </div>
     );
   if (studio.isError)
     return (
       <EmptyState
         icon={ShieldCheckIcon}
-        title="Curate is for curators"
+        title="Directory is for curators"
         description="Ask a site admin for curator access. To edit your own community, use My community."
         action={
           <>
@@ -123,7 +136,7 @@ export function Discover() {
     <div className="flex flex-col gap-10">
       <PageHeader
         headerTestId="curate.heading"
-        title="Curate"
+        title="Directory"
         description="Feature good communities and keep Explore accurate."
         actions={
           <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
@@ -161,7 +174,7 @@ export function Discover() {
           </TabsList>
         </div>
         <TabsContent value="communities" className="flex flex-col gap-4 pt-6">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <InputGroup className="w-full sm:max-w-xs">
               <InputGroupAddon>
                 <MagnifyingGlassIcon />
@@ -178,7 +191,7 @@ export function Discover() {
               value={filter}
               onValueChange={(value) => setFilter(value ?? "all")}
             >
-              <SelectTrigger aria-label="Community filter">
+              <SelectTrigger aria-label="Community filter" className="w-full sm:w-auto">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -201,8 +214,8 @@ export function Discover() {
               {rows.map((node) => (
                 <Item key={node.nodeId} variant="outline" size="sm">
                   <ItemContent>
-                    <ItemTitle>
-                      {node.name}
+                    <ItemTitle className="flex-wrap">
+                      <span className="min-w-0 truncate">{node.name}</span>
                       {node.featured && (
                         <Badge variant="success">
                           <SparkleIcon />
@@ -347,7 +360,7 @@ function CommunitySheetBody({ node, isAdmin }: { node: StudioNode; isAdmin: bool
             )}
           </div>
           {node.featured && (
-            <p className="flex items-center gap-2 text-sm">
+            <p className="flex flex-wrap items-center gap-2 text-sm">
               <Badge variant="success">
                 <SparkleIcon />
                 Featured
@@ -422,7 +435,7 @@ export function DiscoveryHistory({ nodeId }: { nodeId: string }) {
       <ul className="flex flex-col divide-y divide-border text-sm">
         {history.data.slice(0, 8).map((entry) => (
           <li key={entry.id} className="flex items-center justify-between gap-3 py-2">
-            <span>{historyLabel(entry.action)}</span>
+            <span className="min-w-0">{historyLabel(entry.action)}</span>
             <span className="shrink-0 text-muted-foreground">
               <LocalDate value={entry.recordedAt} format="relative" />
             </span>

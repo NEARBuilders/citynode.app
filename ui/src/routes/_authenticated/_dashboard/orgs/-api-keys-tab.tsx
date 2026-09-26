@@ -80,7 +80,7 @@ export function ApiKeysTab({
                 <ItemContent className="min-w-0">
                   <ItemTitle className="break-all">{key.name ?? "Unnamed key"}</ItemTitle>
                   <ItemDescription>
-                    <span className="font-mono">
+                    <span className="font-mono break-all">
                       {key.prefix ?? "api_"}…{key.start ?? ""}
                     </span>{" "}
                     · created <LocalDate value={key.createdAt} />

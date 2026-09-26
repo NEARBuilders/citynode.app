@@ -1,4 +1,4 @@
-import { FingerprintIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { DotsThreeIcon, FingerprintIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Passkey, useAuthClient } from "everything-dev/ui/auth";
 import { type FormEvent, useState } from "react";
@@ -14,6 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +31,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MethodHeader } from "./-method-header";
 
 const passkeyQueryKey = ["passkeys"] as const;
@@ -32,7 +39,7 @@ const passkeyQueryKey = ["passkeys"] as const;
 export function PasskeysMethod() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const { data: passkeys = [] } = useQuery({
+  const { data: passkeys = [], isPending } = useQuery({
     queryKey: passkeyQueryKey,
     queryFn: async () => {
       const { data } = await auth.passkey.listUserPasskeys();
@@ -88,7 +95,6 @@ export function PasskeysMethod() {
         action={
           <Button
             variant="outline"
-            size="sm"
             onClick={() => setAdding(true)}
             data-testid="settings.add-passkey-button"
           >
@@ -97,15 +103,19 @@ export function PasskeysMethod() {
           </Button>
         }
       />
-      {passkeys.length > 0 ? (
+      {isPending ? (
+        <Skeleton className="h-16 w-full rounded-2xl" data-testid="settings.passkeys-loading" />
+      ) : passkeys.length > 0 ? (
         <ItemGroup>
           {passkeys.map((passkey) => (
             <Item key={passkey.id} variant="outline" size="sm" role="listitem">
               <ItemMedia variant="icon">
                 <FingerprintIcon />
               </ItemMedia>
-              <ItemContent>
-                <ItemTitle>{passkey.name || "Passkey"}</ItemTitle>
+              <ItemContent className="basis-0">
+                <ItemTitle className="max-w-full">
+                  <span className="min-w-0 truncate">{passkey.name || "Passkey"}</span>
+                </ItemTitle>
                 {passkey.createdAt && (
                   <ItemDescription>
                     Added <LocalDate value={passkey.createdAt} />
@@ -113,22 +123,37 @@ export function PasskeysMethod() {
                 )}
               </ItemContent>
               <ItemActions>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setPasskeyToDelete(passkey)}
-                  disabled={removePasskeyMutation.isPending}
-                  aria-label={`Remove ${passkey.name || "passkey"}`}
-                >
-                  <TrashIcon />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={removePasskeyMutation.isPending}
+                        aria-label={`Actions for ${passkey.name || "passkey"}`}
+                        data-testid={`settings.passkey-menu-${passkey.id}`}
+                      />
+                    }
+                  >
+                    <DotsThreeIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setPasskeyToDelete(passkey)}
+                    >
+                      <TrashIcon />
+                      Remove passkey
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </ItemActions>
             </Item>
           ))}
         </ItemGroup>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="settings.passkeys-empty">
-          No passkeys yet.
+          No passkeys yet. Add one to sign in with your fingerprint or face.
         </p>
       )}
 

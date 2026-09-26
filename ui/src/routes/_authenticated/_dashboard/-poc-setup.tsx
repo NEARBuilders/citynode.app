@@ -241,7 +241,7 @@ export function PocTreasuryConnection({ lc }: { lc: PocLifecycle }) {
     <div className="flex flex-wrap items-center justify-between gap-3" data-testid="poc-treasury">
       <span className="min-w-0 text-sm text-muted-foreground">
         Trezu connected as{" "}
-        <span className="font-mono text-foreground">{connection.daoAccountId}</span>
+        <span className="font-mono break-all text-foreground">{connection.daoAccountId}</span>
       </span>
       <Button
         variant="ghost"

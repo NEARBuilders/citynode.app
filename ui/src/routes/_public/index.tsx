@@ -8,7 +8,7 @@ import {
   UsersThreeIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
 import { Button, EmptyState, NodeDirectory, SectionHeader } from "@/components";
 import { PageContainer } from "@/components/layout/page-container";
@@ -36,6 +36,11 @@ const STEPS = [
 ];
 
 export const Route = createFileRoute("/_public/")({
+  beforeLoad: ({ context }) => {
+    if (context.session?.user && !context.session.user.banned) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   loader: async ({ context }) => {
     await context.queryClient.prefetchQuery(tenantAppsQueryOptions(context.apiClient));
     return { runtimeConfig: context.runtimeConfig };
@@ -88,12 +93,12 @@ function LandingPage() {
           <MapPinAreaIcon className="size-4" />
           Local communities on NEAR
         </p>
-        <h1 className="text-5xl font-semibold text-foreground sm:text-6xl">
+        <h1 className="text-5xl font-semibold text-balance text-foreground sm:text-6xl">
           Your city, on the network.
         </h1>
         <p className="max-w-xl text-lg text-muted-foreground">
-          Each CityNode is a local community that runs its own NEAR validator. Find yours, meet the
-          people behind it, and stake to keep it online.
+          Local communities that each run a NEAR validator. Find yours, meet the people, and stake
+          to keep it online.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button
@@ -115,7 +120,7 @@ function LandingPage() {
         </div>
         <dl
           data-testid="landing-stats"
-          className="mt-6 grid grid-cols-3 gap-6 border-t border-border pt-8"
+          className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-6 sm:mt-6 sm:gap-6 sm:pt-8"
         >
           <Stat label="Communities" value={counts.communities} loading={isLoading} />
           <Stat label="Cities" value={counts.cities} loading={isLoading} />
@@ -126,7 +131,7 @@ function LandingPage() {
       <section className="flex flex-col gap-6" data-testid="landing-directory">
         <SectionHeader
           title="Communities"
-          description="Open one to see its events, sub-communities and staking pools."
+          description="Events, local communities and staking pools."
           action={
             communities.length > 0 ? (
               <Button
@@ -163,7 +168,7 @@ function LandingPage() {
         />
       </section>
 
-      <section className="flex flex-col gap-8">
+      <section className="flex flex-col gap-6">
         <SectionHeader title="How it works" />
         <ol className="grid gap-8 sm:grid-cols-3">
           {STEPS.map((step, index) => (
@@ -181,14 +186,14 @@ function LandingPage() {
         </ol>
       </section>
 
-      <section className="flex flex-col items-start gap-4 border-t border-border pt-12 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
+      <section className="flex flex-col gap-6 border-t border-border pt-12 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
           <h2 className="text-xl font-semibold text-foreground">No node in your city yet?</h2>
           <p className="text-sm text-muted-foreground">
-            Organize one. Your organization proposes it and the network reviews it.
+            Your organization proposes it and the network reviews it.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <Button variant="outline" nativeButton={false} render={<Link to="/apply" />}>
             Start a community
           </Button>
@@ -215,7 +220,7 @@ function LandingPage() {
 
 function Stat({ label, value, loading }: { label: string; value: number; loading: boolean }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col-reverse justify-end gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
         {loading ? <Skeleton className="h-9 w-12" /> : value}

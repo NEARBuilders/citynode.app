@@ -41,6 +41,11 @@ function renderTab(props: Partial<Parameters<typeof TeamsTab>[0]> = {}) {
   return handlers;
 }
 
+async function openTeamMenu() {
+  fireEvent.click(screen.getByTestId("teams-tab-menu-team-ops"));
+  await screen.findByRole("menu");
+}
+
 afterEach(cleanup);
 
 describe("TeamsTab", () => {
@@ -48,7 +53,7 @@ describe("TeamsTab", () => {
     renderTab({ canManage: false });
 
     expect(screen.queryByTestId("teams-tab-create-input")).toBeNull();
-    expect(screen.queryByTestId("teams-tab-delete-team-ops")).toBeNull();
+    expect(screen.queryByTestId("teams-tab-menu-team-ops")).toBeNull();
     expect(screen.queryByTestId("teams-tab-add-member-team-ops")).toBeNull();
     expect(screen.queryByTestId("teams-tab-remove-member-team-ops-u-ops")).toBeNull();
     expect(
@@ -83,9 +88,10 @@ describe("TeamsTab", () => {
     expect(onAreasChange).toHaveBeenLastCalledWith("team-ops", []);
   });
 
-  it("renames and deletes a team", () => {
+  it("renames and deletes a team from its menu", async () => {
     const { onRename, onDelete } = renderTab();
 
+    await openTeamMenu();
     fireEvent.click(screen.getByTestId("teams-tab-rename-team-ops"));
     fireEvent.change(screen.getByTestId("teams-tab-rename-input-team-ops"), {
       target: { value: "Operators" },
@@ -93,6 +99,7 @@ describe("TeamsTab", () => {
     fireEvent.click(screen.getByTestId("teams-tab-rename-save-team-ops"));
     expect(onRename).toHaveBeenCalledWith("team-ops", "Operators");
 
+    await openTeamMenu();
     fireEvent.click(screen.getByTestId("teams-tab-delete-team-ops"));
     expect(onDelete).toHaveBeenCalledWith("team-ops");
   });
@@ -144,7 +151,7 @@ describe("TeamsTab", () => {
     expect(screen.getByTestId("teams-tab-add-member-team-ops").hasAttribute("data-disabled")).toBe(
       true,
     );
-    expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByTestId("teams-tab-menu-team-ops") as HTMLButtonElement).disabled).toBe(
       false,
     );
     expect(
@@ -172,7 +179,7 @@ describe("TeamsTab", () => {
     expect(within(card).queryByText("No members in this team")).toBeNull();
     fireEvent.click(within(card).getByTestId("teams-tab-retry-members-team-ops"));
     expect(onRetryMembers).toHaveBeenCalledWith("team-ops");
-    expect((screen.getByTestId("teams-tab-rename-team-ops") as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByTestId("teams-tab-menu-team-ops") as HTMLButtonElement).disabled).toBe(
       false,
     );
   });

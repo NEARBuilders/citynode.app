@@ -1,6 +1,7 @@
 import { KeyIcon, ShieldCheckIcon, UserCircleIcon, UserIcon } from "@phosphor-icons/react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { sessionQueryOptions } from "everything-dev/ui/auth";
+import { useEffect, useRef } from "react";
 import { PageContainer, PageHeader } from "@/components";
 import { Button } from "@/components/ui/button";
 import "../../styles.css";
@@ -34,6 +35,11 @@ function SettingsLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const activeTab =
     tabs.find((t) => pathname === t.to || pathname.startsWith(`${t.to}/`))?.value ?? "profile";
+  const activeRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    if (activeTab) activeRef.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeTab]);
 
   return (
     <PageContainer>
@@ -41,7 +47,7 @@ function SettingsLayout() {
       <div className="flex flex-col gap-8 md:flex-row md:gap-12">
         <nav
           aria-label="Settings"
-          className="-mx-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:px-0"
+          className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:-mx-8 sm:px-8 md:mx-0 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:px-0"
         >
           {tabs.map((tab) => {
             const active = tab.value === activeTab;
@@ -51,7 +57,7 @@ function SettingsLayout() {
                 key={tab.value}
                 variant={active ? "secondary" : "ghost"}
                 nativeButton={false}
-                render={<Link to={tab.to} />}
+                render={<Link to={tab.to} ref={active ? activeRef : undefined} />}
                 aria-current={active ? "page" : undefined}
                 data-testid={`settings-tab-${tab.value}`}
                 className="shrink-0 md:w-full md:justify-start"

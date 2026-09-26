@@ -46,7 +46,7 @@ export function InvitationSteps({ invitations }: { invitations: HomeInvitation[]
           <ItemMedia variant="icon">
             <EnvelopeSimpleIcon />
           </ItemMedia>
-          <ItemContent>
+          <ItemContent className="min-w-0">
             <ItemTitle>
               Join {invitation.organizationName ?? invitation.organizationSlug ?? "an organization"}
             </ItemTitle>
@@ -55,9 +55,9 @@ export function InvitationSteps({ invitations }: { invitations: HomeInvitation[]
               <LocalDate value={invitation.expiresAt} format="relative" />
             </ItemDescription>
           </ItemContent>
-          <ItemActions>
+          <ItemActions className="w-full sm:w-auto">
             <Button
-              size="sm"
+              className="flex-1 sm:flex-none"
               variant="ghost"
               disabled={busy}
               data-testid={`home-invitation-decline-${invitation.id}`}
@@ -66,7 +66,7 @@ export function InvitationSteps({ invitations }: { invitations: HomeInvitation[]
               Decline
             </Button>
             <Button
-              size="sm"
+              className="flex-1 sm:flex-none"
               variant={index === 0 ? "default" : "outline"}
               disabled={busy}
               data-testid={`home-invitation-accept-${invitation.id}`}

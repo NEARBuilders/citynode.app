@@ -270,8 +270,8 @@ export function EventOnboardingPanel({
                   <EventDate value={event.startsAt} />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>
-                    {event.title}
+                  <ItemTitle className="flex-wrap">
+                    <span className="min-w-0 truncate">{event.title}</span>
                     {event.status === "draft" && <Badge variant="secondary">Draft</Badge>}
                   </ItemTitle>
                   <ItemDescription>

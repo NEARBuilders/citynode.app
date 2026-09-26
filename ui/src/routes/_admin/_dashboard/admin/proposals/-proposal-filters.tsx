@@ -14,22 +14,28 @@ export function ProposalReviewFilters({
   onChange: (value: ProposalReviewFilter) => void;
 }) {
   return (
-    <Tabs
-      value={value}
-      onValueChange={(nextValue) => {
-        if (PROPOSAL_REVIEW_FILTERS.includes(nextValue as ProposalReviewFilter)) {
-          onChange(nextValue as ProposalReviewFilter);
-        }
-      }}
-    >
-      <TabsList className="max-w-full justify-start overflow-x-auto">
-        {PROPOSAL_REVIEW_FILTERS.map((filter) => (
-          <TabsTrigger key={filter} value={filter} data-testid={`admin-proposals-filter-${filter}`}>
-            {PROPOSAL_REVIEW_FILTER_LABELS[filter]}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </Tabs>
+    <div className="-mx-4 max-w-full overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <Tabs
+        value={value}
+        onValueChange={(nextValue) => {
+          if (PROPOSAL_REVIEW_FILTERS.includes(nextValue as ProposalReviewFilter)) {
+            onChange(nextValue as ProposalReviewFilter);
+          }
+        }}
+      >
+        <TabsList>
+          {PROPOSAL_REVIEW_FILTERS.map((filter) => (
+            <TabsTrigger
+              key={filter}
+              value={filter}
+              data-testid={`admin-proposals-filter-${filter}`}
+            >
+              {PROPOSAL_REVIEW_FILTER_LABELS[filter]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+    </div>
   );
 }
 

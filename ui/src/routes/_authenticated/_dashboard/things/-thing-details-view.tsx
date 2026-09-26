@@ -74,13 +74,14 @@ export function ThingDetailsView({
       <div className="flex flex-col gap-4">
         <ThingBackLink canGoBack={canGoBack} onBack={onBack} />
         <PageHeader
-          title={<span className="block truncate font-mono">{thingId}</span>}
+          title={<span className="block font-mono break-all">{thingId}</span>}
           headerTestId="thing.heading"
           actions={
             thing ? (
               <Button
                 type="button"
                 variant={hasUpvote ? "default" : "outline"}
+                className="w-full sm:w-auto"
                 aria-pressed={hasUpvote}
                 onClick={() => onVote(!hasUpvote)}
                 disabled={isVoteLoading || isVotePending}

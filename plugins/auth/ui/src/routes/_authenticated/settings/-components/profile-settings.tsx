@@ -52,10 +52,10 @@ export function ProfileSettings() {
                 Add a passkey or NEAR wallet so you can sign in again.
               </ItemDescription>
             </ItemContent>
-            <ItemActions>
+            <ItemActions className="w-full sm:w-auto">
               <Button
                 variant="outline"
-                size="sm"
+                className="w-full sm:w-auto"
                 nativeButton={false}
                 render={<Link to="/settings/auth-methods" />}
               >
@@ -137,7 +137,7 @@ function AccountDetails({ user }: { user: ProfileUser }) {
   };
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-6">
       <SectionHeader title="Account" />
       <div className="flex flex-col">
         <InfoRow
@@ -158,11 +158,11 @@ function AccountDetails({ user }: { user: ProfileUser }) {
           label="User ID"
           mono
           value={
-            <span className="inline-flex items-center gap-2">
-              <span className="text-muted-foreground">{user.id}</span>
+            <span className="inline-flex max-w-full items-center gap-2">
+              <span className="min-w-0 text-muted-foreground">{user.id}</span>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 onClick={() => void copyId()}
                 aria-label="Copy user ID"
               >

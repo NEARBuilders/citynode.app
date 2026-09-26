@@ -43,7 +43,7 @@ describe("API key dialogs", () => {
       />,
     );
 
-    expect(screen.getByTestId("api-keys.secret")).toHaveProperty("value", "edk_secret_value");
+    expect(screen.getByTestId("api-keys.secret").textContent).toBe("edk_secret_value");
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(onDismiss).toHaveBeenCalledOnce();
   });

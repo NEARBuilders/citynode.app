@@ -40,6 +40,8 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
     {
       accessorKey: "pluginId",
       header: "Type",
+      meta: { className: "hidden lg:table-cell" },
+
       cell: ({ row }) => (
         <span className="text-muted-foreground">{proposalTypeLabel(row.original.pluginId)}</span>
       ),
@@ -47,6 +49,8 @@ export function createProposalColumns(): DataTableColumnDef<Proposal>[] {
     {
       accessorKey: "createdBy",
       header: "Submitted by",
+      meta: { className: "hidden lg:table-cell" },
+
       cell: ({ row }) => (
         <span className="block max-w-44 truncate font-mono text-xs text-muted-foreground">
           {row.original.createdBy}

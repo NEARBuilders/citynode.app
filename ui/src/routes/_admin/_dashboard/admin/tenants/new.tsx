@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/tenants/new")({
       queryClient: context.queryClient,
     }),
   head: ({ match }) => ({
-    title: pageTitle("Create tenant · Admin", match.context.runtimeConfig),
+    title: pageTitle("New site · Admin", match.context.runtimeConfig),
     meta: [{ name: "description", content: "Create a new tenant, node, and domain binding." }],
   }),
   component: NewTenantPage,
@@ -79,7 +79,7 @@ function NewTenantPage() {
   const [detailsConfirmed, setDetailsConfirmed] = useState(false);
 
   const stepper = useStepper([
-    { id: "create", label: "Create tenant + node + binding", blocking: true },
+    { id: "create", label: "Create site, community and domain", blocking: true },
     { id: "publish", label: "Publish config as DAO", blocking: false },
   ]);
 

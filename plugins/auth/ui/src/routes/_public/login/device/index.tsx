@@ -101,7 +101,7 @@ function DeviceVerifyPage() {
       {user_code ? (
         <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
           <span
-            className="font-mono text-3xl font-semibold tracking-widest text-foreground"
+            className="font-mono text-3xl font-semibold tracking-widest break-all text-foreground"
             data-testid="device.verified-code"
           >
             {user_code}

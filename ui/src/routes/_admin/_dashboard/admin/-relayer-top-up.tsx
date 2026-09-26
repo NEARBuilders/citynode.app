@@ -1,5 +1,5 @@
 import { WalletIcon } from "@phosphor-icons/react";
-import { Button, Field, FieldLabel } from "@/components";
+import { Button, Field, FieldLabel, SectionHeader } from "@/components";
 import { FieldDescription } from "@/components/ui/field";
 import {
   InputGroup,
@@ -31,12 +31,12 @@ export function RelayerTopUp({
 }) {
   return (
     <section className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Add funds</h2>
+      <SectionHeader title="Add funds" />
 
       {!nearAccountId ? (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <p className="text-sm text-muted-foreground">Connect a NEAR wallet to send funds.</p>
-          <Button type="button" variant="outline" onClick={onConnect}>
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={onConnect}>
             <WalletIcon />
             Connect wallet
           </Button>
@@ -61,16 +61,17 @@ export function RelayerTopUp({
               </InputGroupAddon>
             </InputGroup>
             <FieldDescription>
-              From <span className="font-mono">{nearAccountId}</span>
+              From <span className="font-mono break-all">{nearAccountId}</span>
             </FieldDescription>
           </Field>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
             {PRESETS.map((preset) => (
               <Button
                 key={preset}
                 type="button"
-                variant={amount === preset ? "secondary" : "ghost"}
+                variant={amount === preset ? "secondary" : "outline"}
                 size="sm"
+                aria-pressed={amount === preset}
                 onClick={() => onPreset(preset)}
                 disabled={sending}
               >
@@ -80,7 +81,7 @@ export function RelayerTopUp({
           </div>
           <Button
             type="button"
-            className="self-start"
+            className="w-full sm:w-auto sm:self-start"
             onClick={onFund}
             disabled={sending || parsedAmount === null}
           >

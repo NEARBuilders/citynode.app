@@ -98,8 +98,8 @@ export function TeamStakeCard({
         description={
           target ? (
             <>
-              <span className="font-mono">{target.teamAccountId}</span> in{" "}
-              <span className="font-mono">{target.poolAccountId}</span>
+              <span className="font-mono break-all">{target.teamAccountId}</span> in{" "}
+              <span className="font-mono break-all">{target.poolAccountId}</span>
             </>
           ) : undefined
         }
@@ -122,7 +122,7 @@ export function TeamStakeCard({
           <span className="text-sm text-muted-foreground">{balanceLabel}</span>
           <div
             data-testid="dashboard-node.team-stake-amount"
-            className="text-4xl font-semibold tabular-nums text-foreground"
+            className="text-3xl font-semibold tabular-nums wrap-anywhere text-foreground sm:text-4xl"
           >
             {loading ? (
               <Skeleton aria-label="Loading team stake" className="h-10 w-40" />

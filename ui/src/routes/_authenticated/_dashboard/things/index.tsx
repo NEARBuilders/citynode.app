@@ -97,9 +97,9 @@ function ThingsIndexPage() {
       {isLoading ? (
         <div className="flex flex-col gap-3">
           <Skeleton className="h-11 w-full max-w-sm" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
         </div>
       ) : error ? (
         <EmptyState
@@ -134,7 +134,7 @@ function ThingsIndexPage() {
                 data-testid="things-search"
               />
             </InputGroup>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-muted-foreground tabular-nums">
               {visibleThings.length === things.length
                 ? `${things.length} ${things.length === 1 ? "thing" : "things"}`
                 : `${visibleThings.length} of ${things.length}`}
@@ -142,9 +142,16 @@ function ThingsIndexPage() {
           </div>
 
           {visibleThings.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No things match “{query.trim()}”.
-            </p>
+            <EmptyState
+              icon={MagnifyingGlassIcon}
+              title="No matches"
+              description={`Nothing matches “${query.trim()}”.`}
+              action={
+                <Button variant="outline" onClick={() => setQuery("")}>
+                  Clear search
+                </Button>
+              }
+            />
           ) : (
             <ItemGroup data-testid="things-list">
               {visibleThings.map((thing) => (

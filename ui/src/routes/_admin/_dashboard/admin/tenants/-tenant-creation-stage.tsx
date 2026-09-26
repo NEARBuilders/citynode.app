@@ -39,9 +39,9 @@ export function TenantCreationStage({
   return (
     <>
       <PageHeader
-        label={<BackLink to="/admin/tenants">Tenants</BackLink>}
-        title="Create tenant"
-        description="A tenant, its first node and a primary domain, owned by a DAO."
+        label={<BackLink to="/admin/tenants">Sites</BackLink>}
+        title="New site"
+        description="A site, its first community and a primary domain, owned by a DAO."
         headerTestId="admin-tenant-new.heading"
       />
 
@@ -52,7 +52,7 @@ export function TenantCreationStage({
           </ItemMedia>
           <ItemContent>
             <ItemTitle>Switch to mainnet</ItemTitle>
-            <ItemDescription>DAO tenants can only be created on mainnet.</ItemDescription>
+            <ItemDescription>DAO sites can only be created on mainnet.</ItemDescription>
           </ItemContent>
         </Item>
       )}

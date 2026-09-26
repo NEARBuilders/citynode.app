@@ -29,13 +29,17 @@ export function PageHeader({
       )}
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex min-w-0 flex-col gap-3">
-          <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">{title}</h1>
-          {subtitle && <div className="font-mono text-sm text-muted-foreground">{subtitle}</div>}
+          <h1 className="text-3xl font-semibold wrap-anywhere text-foreground sm:text-4xl">
+            {title}
+          </h1>
+          {subtitle && (
+            <div className="font-mono text-sm break-all text-muted-foreground">{subtitle}</div>
+          )}
           {description && (
             <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">{description}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-3">{actions}</div>}
+        {actions && <div className="flex flex-wrap gap-3 sm:shrink-0">{actions}</div>}
       </div>
     </header>
   );

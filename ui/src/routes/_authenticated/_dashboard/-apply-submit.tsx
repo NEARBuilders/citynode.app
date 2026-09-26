@@ -9,12 +9,14 @@ export function ApplySubmit({
   isSubmitting: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Button type="submit" disabled={!canSubmit} data-testid="apply.submit">
-        {isSubmitting && <Spinner />}
-        {isSubmitting ? "Submitting…" : "Submit for review"}
-      </Button>
-      <p className="text-sm text-muted-foreground">An admin reviews every new community.</p>
-    </div>
+    <Button
+      type="submit"
+      className="w-full sm:w-auto sm:self-start"
+      disabled={!canSubmit}
+      data-testid="apply.submit"
+    >
+      {isSubmitting && <Spinner />}
+      {isSubmitting ? "Submitting…" : "Submit for review"}
+    </Button>
   );
 }

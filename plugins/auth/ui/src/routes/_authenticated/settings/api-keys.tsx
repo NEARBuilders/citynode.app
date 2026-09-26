@@ -1,4 +1,11 @@
-import { CopyIcon, DotsThreeIcon, KeyIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import {
+  CopyIcon,
+  DotsThreeIcon,
+  KeyIcon,
+  PlusIcon,
+  TrashIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
@@ -25,6 +32,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiKeyCreateDialog, type ApiKeyFormValues } from "./-api-key-create-dialog";
 import { ApiKeyRevealDialog, type CreatedApiKey } from "./-api-key-reveal-dialog";
 
@@ -160,8 +168,10 @@ function ApiKeysSettings() {
               <ItemMedia variant="icon">
                 <KeyIcon />
               </ItemMedia>
-              <ItemContent>
-                <ItemTitle>{key.name ?? "Unnamed key"}</ItemTitle>
+              <ItemContent className="basis-0">
+                <ItemTitle className="max-w-full">
+                  <span className="min-w-0 truncate">{key.name ?? "Unnamed key"}</span>
+                </ItemTitle>
                 <ItemDescription>
                   <span className="font-mono">
                     {key.prefix ?? "api_"}…{key.start ?? ""}
@@ -182,7 +192,7 @@ function ApiKeysSettings() {
                     render={
                       <Button
                         variant="ghost"
-                        size="icon-sm"
+                        size="icon"
                         aria-label={`Actions for ${key.name ?? "API key"}`}
                         data-testid={`api-keys.menu-${key.id}`}
                       />
@@ -208,7 +218,27 @@ function ApiKeysSettings() {
             </Item>
           ))}
         </ItemGroup>
-      ) : apiKeysQuery.isPending ? null : (
+      ) : apiKeysQuery.isPending ? (
+        <div className="flex flex-col gap-4" data-testid="api-keys.loading">
+          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
+        </div>
+      ) : apiKeysQuery.isError ? (
+        <EmptyState
+          icon={WarningCircleIcon}
+          title="Couldn't load your API keys"
+          description="Check your connection and try again."
+          action={
+            <Button
+              variant="outline"
+              onClick={() => void apiKeysQuery.refetch()}
+              data-testid="api-keys.retry-button"
+            >
+              Try again
+            </Button>
+          }
+        />
+      ) : (
         <EmptyState
           icon={KeyIcon}
           title="No API keys yet"

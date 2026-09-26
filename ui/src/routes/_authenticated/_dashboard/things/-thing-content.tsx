@@ -21,7 +21,7 @@ export function ThingContent({
 
   return (
     <>
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-6">
         <SectionHeader title="Payload" />
         <pre
           className="overflow-x-auto rounded-2xl bg-muted p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap break-all text-foreground"
@@ -46,7 +46,7 @@ export function ThingContent({
       </section>
 
       {isAdmin && (
-        <section className="flex flex-col gap-4" data-testid="thing-danger-zone">
+        <section className="flex flex-col gap-6" data-testid="thing-danger-zone">
           <SectionHeader title="Danger zone" />
           <div className="flex flex-col gap-4 rounded-2xl border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
@@ -57,7 +57,7 @@ export function ThingContent({
             </div>
             <Button
               variant="destructive"
-              className="self-start sm:self-auto"
+              className="w-full sm:w-auto"
               onClick={() => setConfirmOpen(true)}
               disabled={isDeletePending}
             >

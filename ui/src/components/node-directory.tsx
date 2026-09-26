@@ -5,9 +5,9 @@ import {
   MapTrifoldIcon,
 } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { buildTenantUrl } from "@/lib/tenant-url";
-import { cn } from "@/lib/utils";
 import { NodeDirectorySkeleton } from "./node-directory-skeleton";
 import { Badge } from "./ui/badge";
 
@@ -93,7 +93,9 @@ export function NodeDirectory({
             </div>
             <span className="flex shrink-0 items-center gap-2">
               {validatorNodeIds?.has(node.id) && <Badge variant="success">Validator</Badge>}
-              <Badge variant="secondary">{KIND_LABELS[node.kind] ?? node.kind}</Badge>
+              <Badge variant="secondary" className="hidden sm:inline-flex">
+                {KIND_LABELS[node.kind] ?? node.kind}
+              </Badge>
               <CaretRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </span>
           </>

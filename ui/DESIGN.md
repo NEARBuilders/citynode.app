@@ -98,7 +98,7 @@ and JSON.
 
 ## Glossary (use exactly)
 
-Home (`/dashboard`) · Explore (`/explore`) · Curate (`/discover`) · My community
+Home (`/dashboard`) · Explore (`/explore`) · Directory (`/discover`) · My community
 (`/dashboard/node`) · Events & profile (`/nodes/$id/content`) · Proposals · Community
 settings (`/tenant/$id`) · Organizations · Stake · Start a community (`/apply`) · Settings.
 

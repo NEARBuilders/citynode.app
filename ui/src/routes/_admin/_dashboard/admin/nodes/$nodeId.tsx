@@ -1,4 +1,4 @@
-import { CaretRightIcon, TreeStructureIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, PencilIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getActiveRuntime, useApiClient } from "@/app";
@@ -28,7 +28,6 @@ import { adminNodeDetailQueryOptions } from "@/lib/queries/nodes";
 import { BackLink, humanize, RawJsonDisclosure, StatFigure, StatGrid } from "../-admin-ui";
 import { NodeBindings } from "./-node-bindings";
 import { NODE_DETAIL_TABS, type NodeDetailTab, parseNodeDetailTab } from "./-node-management";
-import { NodeMetadataEditor } from "./-node-metadata-editor";
 import { NodeValidators } from "./-node-validators";
 
 type ApiClient = ReturnType<typeof useApiClient>;
@@ -46,7 +45,7 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/nodes/$nodeId")({
     tab: parseNodeDetailTab(search.tab),
   }),
   head: ({ match }) => ({
-    meta: [{ title: pageTitle("Node · Admin", match.context.runtimeConfig) }],
+    meta: [{ title: pageTitle("Community · Admin", match.context.runtimeConfig) }],
   }),
   component: AdminNodeDetail,
 });
@@ -74,7 +73,7 @@ function AdminNodeDetail() {
     return (
       <EmptyState
         icon={TreeStructureIcon}
-        title="Couldn't load this node"
+        title="Couldn't load this community"
         description={nodeQuery.error?.message || "The requested node could not be loaded."}
         action={
           <Button variant="outline" nativeButton={false} render={<Link to="/admin/nodes" />}>
@@ -91,7 +90,7 @@ function AdminNodeDetail() {
   return (
     <>
       <PageHeader
-        label={<BackLink to="/admin/nodes">Nodes</BackLink>}
+        label={<BackLink to="/admin/nodes">Communities</BackLink>}
         title={node.name}
         subtitle={node.slug}
         description={
@@ -111,33 +110,44 @@ function AdminNodeDetail() {
             humanize(node.kind)
           )
         }
-        actions={<NodeMetadataEditor key={node.id} node={node} />}
+        actions={
+          <Button
+            variant="outline"
+            nativeButton={false}
+            data-testid="admin-node-edit"
+            render={<Link to="/admin/nodes/$nodeId/edit" params={{ nodeId: node.id }} />}
+          >
+            <PencilIcon /> Edit details
+          </Button>
+        }
         headerTestId="admin-node.heading"
       />
 
       <StatGrid>
         <StatFigure label="Direct children" value={summary.childrenCount} />
-        <StatFigure label="Nodes below" value={summary.subtreeNodeCount} />
+        <StatFigure label="Communities below" value={summary.subtreeNodeCount} />
         <StatFigure label="Validators" value={summary.validators.length} />
         <StatFigure label="Validators below" value={summary.subtreeValidatorCount} />
       </StatGrid>
 
-      <div className="flex flex-col gap-8">
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => {
-            const next = parseNodeDetailTab(value);
-            navigate({ search: { tab: next === "overview" ? undefined : next } });
-          }}
-        >
-          <TabsList className="max-w-full justify-start overflow-x-auto">
-            {NODE_DETAIL_TABS.map((value) => (
-              <TabsTrigger key={value} value={value} data-testid={`admin-node-tab-${value}`}>
-                {TAB_LABELS[value]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-col gap-6">
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              const next = parseNodeDetailTab(value);
+              navigate({ search: { tab: next === "overview" ? undefined : next } });
+            }}
+          >
+            <TabsList variant="line">
+              {NODE_DETAIL_TABS.map((value) => (
+                <TabsTrigger key={value} value={value} data-testid={`admin-node-tab-${value}`}>
+                  {TAB_LABELS[value]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
 
         {activeTab === "overview" && (
           <NodeOverview summary={summary} sourceName={sourceNode?.name} />
@@ -187,7 +197,7 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
       <section className="flex flex-col gap-6">
         <SectionHeader title="Children" />
         {summary.children.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No nodes below this one.</p>
+          <p className="text-sm text-muted-foreground">No communities below this one.</p>
         ) : (
           <ItemGroup>
             {summary.children.map((child) => (
@@ -200,9 +210,12 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
                 }
               >
                 <ItemContent className="min-w-0">
-                  <ItemTitle>{child.name}</ItemTitle>
+                  <ItemTitle className="max-w-full">
+                    <span className="min-w-0 truncate">{child.name}</span>
+                  </ItemTitle>
                   <ItemDescription>
-                    {humanize(child.kind)} · <span className="font-mono">{child.slug}</span>
+                    {humanize(child.kind)} ·{" "}
+                    <span className="font-mono break-all">{child.slug}</span>
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
@@ -218,8 +231,8 @@ function NodeOverview({ summary, sourceName }: { summary: NodeSummary; sourceNam
         <SectionHeader title="Details" />
         {description && <p className="max-w-2xl text-base text-foreground">{description}</p>}
         <div className="flex flex-col">
-          <InfoRow label="Node ID" value={node.id} mono />
-          <InfoRow label="Tenant ID" value={node.tenantId} mono />
+          <InfoRow label="Community ID" value={node.id} mono />
+          <InfoRow label="Site ID" value={node.tenantId} mono />
           <InfoRow label="Parent ID" value={node.parentId ?? "None"} mono={!!node.parentId} />
         </div>
         <RawJsonDisclosure value={node.metadata} label="metadata" />

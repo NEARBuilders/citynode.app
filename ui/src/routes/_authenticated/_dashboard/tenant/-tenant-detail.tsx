@@ -20,10 +20,10 @@ import {
   resolveOrgSlug,
   resolvePrimaryHostname,
 } from "../../../_admin/_dashboard/admin/tenants/-tenant-wizard";
+import { CommunityHeader } from "../dashboard/node/-community-header";
 import { TenantNodeValidators } from "./-node-validators";
 import { TenantDangerZone } from "./-tenant-danger-zone";
 import { TenantDetails } from "./-tenant-details";
-import { TenantHeader } from "./-tenant-header";
 import { TenantLiveSite } from "./-tenant-live-site";
 import {
   invalidatePersistedTenantQueries,
@@ -67,7 +67,6 @@ export function TenantDetailContent({
     ...tenantNodesQueryOptions(apiClient, tenantId),
     enabled: !!tenantId,
   });
-  const nodeSlug = nodes[0]?.slug;
 
   const { data: bindings } = useQuery({
     ...tenantBindingsQueryOptions(apiClient, tenantId),
@@ -246,65 +245,67 @@ export function TenantDetailContent({
     onError: (error: Error) => toast.error(error.message || "Failed to delete community"),
   });
 
+  const header = (
+    <CommunityHeader headerTestId="tenant.heading" nodeId={nodes[0]?.id} active="settings" />
+  );
   if (tenantLoading && gatewayId) {
     return (
-      <PageContainer variant="default">
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="h-10 w-72" />
-        </div>
-        <Skeleton className="h-64 w-full" />
+      <PageContainer variant="wide">
+        {header}
+        <Skeleton className="h-64 w-full max-w-5xl" />
       </PageContainer>
     );
   }
   if (!tenant || !gatewayId) return <TenantUnavailable gatewayId={gatewayId} />;
   return (
-    <PageContainer variant="default">
-      <TenantHeader tenant={tenant} hostname={hostname} gatewayId={gatewayId} nodeSlug={nodeSlug} />
-      <TenantDetails
-        tenant={tenant}
-        hostname={hostname}
-        orgSlug={orgSlug}
-        isOwner={isOwner}
-        editor={{
-          editing,
-          name,
-          isPending: updateMutation.isPending,
-          onEdit: () => {
-            setName(tenant.name);
-            setEditing(true);
-          },
-          onCancel: () => setEditing(false),
-          onSave: () => updateMutation.mutate(),
-          onNameChange: setName,
-        }}
-      />
-      <TenantLiveSite
-        tenant={tenant}
-        hostname={hostname}
-        gatewayId={gatewayId}
-        republish={republishMutation}
-      >
-        {isDaoOwned && (
-          <div className="border-b border-border py-4 last:border-b-0">
-            <ConnectDao purpose="community-settings" variant="plain" />
-          </div>
-        )}
-        {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
-      </TenantLiveSite>
-      <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
-      <TenantDangerZone
-        tenant={tenant}
-        isOwner={isOwner}
-        isAdmin={isAdmin}
-        suspend={suspendMutation}
-        reactivate={reactivateMutation}
-        open={deleteOpen}
-        isPending={deleteMutation.isPending}
-        onOpen={() => setDeleteOpen(true)}
-        onOpenChange={setDeleteOpen}
-        onConfirm={() => deleteMutation.mutate()}
-      />
+    <PageContainer variant="wide">
+      {header}
+      <div className="flex w-full max-w-5xl flex-col gap-10 sm:gap-12">
+        <TenantDetails
+          tenant={tenant}
+          hostname={hostname}
+          orgSlug={orgSlug}
+          isOwner={isOwner}
+          editor={{
+            editing,
+            name,
+            isPending: updateMutation.isPending,
+            onEdit: () => {
+              setName(tenant.name);
+              setEditing(true);
+            },
+            onCancel: () => setEditing(false),
+            onSave: () => updateMutation.mutate(),
+            onNameChange: setName,
+          }}
+        />
+        <TenantLiveSite
+          tenant={tenant}
+          hostname={hostname}
+          gatewayId={gatewayId}
+          republish={republishMutation}
+        >
+          {isDaoOwned && (
+            <div className="border-b border-border py-4 last:border-b-0">
+              <ConnectDao purpose="community-settings" variant="plain" />
+            </div>
+          )}
+          {!isDaoOwned && isOwner && <EnableGaslessWrites nearAccountId={nearAccountId} />}
+        </TenantLiveSite>
+        <TenantNodeValidators tenantId={tenant.id} canManage={isAdmin} />
+        <TenantDangerZone
+          tenant={tenant}
+          isOwner={isOwner}
+          isAdmin={isAdmin}
+          suspend={suspendMutation}
+          reactivate={reactivateMutation}
+          open={deleteOpen}
+          isPending={deleteMutation.isPending}
+          onOpen={() => setDeleteOpen(true)}
+          onOpenChange={setDeleteOpen}
+          onConfirm={() => deleteMutation.mutate()}
+        />
+      </div>
     </PageContainer>
   );
 }

@@ -23,12 +23,12 @@ export function AppDetailConfig({ app }: { app: RegistryAppDetail }) {
     <section className="space-y-2">
       <AppDetailSectionLabel>FastKV config</AppDetailSectionLabel>
       <div className="rounded-lg border border-border overflow-hidden">
-        <div className="bg-muted/30 px-3.5 py-2 border-b border-border flex items-center justify-between">
+        <div className="bg-muted/30 px-3.5 py-2 border-b border-border flex items-center justify-between gap-3">
           <a
             href={app.canonicalConfigUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors underline"
+            className="min-w-0 truncate text-xs font-mono text-muted-foreground hover:text-foreground transition-colors underline"
           >
             {app.canonicalKey}
           </a>

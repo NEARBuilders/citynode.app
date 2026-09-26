@@ -1,8 +1,8 @@
 import { ArrowSquareOutIcon, InfoIcon } from "@phosphor-icons/react";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 
 export interface InfoPopoverLink {
   label: string;

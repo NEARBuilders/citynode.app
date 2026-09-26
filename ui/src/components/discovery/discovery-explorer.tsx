@@ -86,7 +86,7 @@ export function DiscoveryExplorer({
   const lastNode = useRef<string | undefined>(undefined);
   if (search.node) lastNode.current = search.node;
   const nodeId = search.node ?? lastNode.current;
-  const view = search.view ?? "list";
+  const view = search.view ?? "map";
   const list = useQuery({
     queryKey: ["discovery", search.query, search.region, search.active, search.upcoming],
     queryFn: () =>
@@ -134,18 +134,40 @@ export function DiscoveryExplorer({
         description="Find a community near you and see what's coming up."
       />
       <div className="flex flex-col gap-3">
-        <InputGroup>
-          <InputGroupAddon>
-            <MagnifyingGlassIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            id="discovery-search"
-            aria-label="Search communities"
-            value={search.query ?? ""}
-            onChange={(e) => navigate({ ...search, query: e.target.value || undefined })}
-            placeholder="Search a community or city"
-          />
-        </InputGroup>
+        <div className="flex items-center gap-2">
+          <InputGroup className="min-w-0 flex-1">
+            <InputGroupAddon>
+              <MagnifyingGlassIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              id="discovery-search"
+              aria-label="Search communities"
+              value={search.query ?? ""}
+              onChange={(e) => navigate({ ...search, query: e.target.value || undefined })}
+              placeholder="Search a community or city"
+            />
+          </InputGroup>
+          <ToggleGroup
+            variant="outline"
+            spacing={0}
+            className="shrink-0"
+            aria-label="View"
+            value={[view]}
+            onValueChange={(value) => {
+              const next = value[0] as "list" | "map" | undefined;
+              if (next) navigate({ ...search, view: next === "map" ? undefined : next });
+            }}
+          >
+            <ToggleGroupItem value="list" aria-label="List view" data-testid="explore-view-list">
+              <ListBulletsIcon />
+              <span className="hidden sm:inline">List</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem value="map" aria-label="Map view" data-testid="explore-view-map">
+              <MapTrifoldIcon />
+              <span className="hidden sm:inline">Map</span>
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select
             items={regionItems}
@@ -154,7 +176,11 @@ export function DiscoveryExplorer({
               navigate({ ...search, region: value && value !== ALL_REGIONS ? value : undefined })
             }
           >
-            <SelectTrigger id="discovery-region" aria-label="Region" className="max-w-48">
+            <SelectTrigger
+              id="discovery-region"
+              aria-label="Region"
+              className="w-full sm:w-auto sm:max-w-48"
+            >
               <GlobeIcon />
               <SelectValue />
             </SelectTrigger>
@@ -181,26 +207,6 @@ export function DiscoveryExplorer({
               {label}
             </Toggle>
           ))}
-          <ToggleGroup
-            variant="outline"
-            spacing={0}
-            className="ml-auto"
-            aria-label="View"
-            value={[view]}
-            onValueChange={(value) => {
-              const next = value[0] as "list" | "map" | undefined;
-              if (next) navigate({ ...search, view: next === "list" ? undefined : next });
-            }}
-          >
-            <ToggleGroupItem value="list" aria-label="List view" data-testid="explore-view-list">
-              <ListBulletsIcon />
-              List
-            </ToggleGroupItem>
-            <ToggleGroupItem value="map" aria-label="Map view" data-testid="explore-view-map">
-              <MapTrifoldIcon />
-              Map
-            </ToggleGroupItem>
-          </ToggleGroup>
         </div>
       </div>
 
@@ -299,7 +305,7 @@ export function DiscoveryExplorer({
       >
         <SheetContent
           side={mobile ? "bottom" : "right"}
-          className="max-h-screen w-full overflow-y-auto sm:max-w-lg"
+          className="max-h-dvh w-full overflow-y-auto sm:max-w-lg"
           finalFocus={() => {
             const restore = origin.current;
             const id = lastNode.current;
@@ -313,8 +319,8 @@ export function DiscoveryExplorer({
           <SheetHeader className="gap-2 px-6 pt-8 pr-16 pb-2">
             <SheetTitle>{selected?.name ?? "Community"}</SheetTitle>
             <SheetDescription>
-              <span className="flex items-center gap-1.5">
-                <MapPinIcon className="size-4" />
+              <span className="flex min-w-0 items-center gap-1.5">
+                <MapPinIcon className="size-4 shrink-0" />
                 {selected?.location || "Location not provided"}
                 {selected?.region ? ` · ${selected.region}` : ""}
               </span>

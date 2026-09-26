@@ -68,13 +68,15 @@ export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
   const Icon = rejected ? XCircleIcon : CheckCircleIcon;
   return (
     <div className="flex flex-col gap-4" data-testid="admin-proposal-outcome">
-      <h2 className="text-xl font-semibold">Decision</h2>
+      <h2 className="text-xl font-semibold text-foreground">Decision</h2>
       <div className="flex items-center gap-3">
         <Icon
           weight="fill"
           className={rejected ? "size-6 text-destructive" : "size-6 text-success"}
         />
-        <span className="text-lg font-medium">{humanize(proposal.reviewStatus)}</span>
+        <span className="text-lg font-medium text-foreground">
+          {humanize(proposal.reviewStatus)}
+        </span>
       </div>
       {proposal.rejectionReason && (
         <p className="text-sm whitespace-pre-wrap text-muted-foreground">
@@ -87,7 +89,9 @@ export function ProposalOutcome({ proposal }: { proposal: Proposal }) {
       {proposal.applyError && (
         <div className="flex items-start gap-2 text-sm text-destructive" role="alert">
           <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
-          <span>Couldn't finish applying: {proposal.applyError}</span>
+          <span className="min-w-0 wrap-anywhere">
+            Couldn't finish applying: {proposal.applyError}
+          </span>
         </div>
       )}
     </div>

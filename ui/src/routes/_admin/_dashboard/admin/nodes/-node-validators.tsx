@@ -81,7 +81,7 @@ export function NodeValidators({
     <section className="flex flex-col gap-6">
       <SectionHeader
         title="Validators"
-        description="Staking pools attached to this node."
+        description="Staking pools attached to this community."
         action={
           <Button size="sm" onClick={() => setAdding(true)} data-testid="admin-node-add-validator">
             <PlusIcon /> Add validator
@@ -92,7 +92,7 @@ export function NodeValidators({
         <EmptyState
           icon={ShieldCheckIcon}
           title="No validators yet"
-          description="Add a staking pool so people can stake with this node."
+          description="Add a staking pool so people can stake with this community."
           className="py-10"
         />
       ) : (
@@ -103,8 +103,8 @@ export function NodeValidators({
                 <ShieldCheckIcon />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemTitle>
-                  <span className="truncate font-mono">{validator.accountId}</span>
+                <ItemTitle className="max-w-full">
+                  <span className="min-w-0 truncate font-mono">{validator.accountId}</span>
                 </ItemTitle>
                 <ItemDescription>
                   {humanize(validator.role)} · {validator.network} · {validator.protocol}
@@ -189,7 +189,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
     <DialogContent className="max-h-11/12 overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Add validator</DialogTitle>
-        <DialogDescription>Attach a staking pool to this node.</DialogDescription>
+        <DialogDescription>Attach a staking pool to this community.</DialogDescription>
       </DialogHeader>
       <form
         className="flex flex-col gap-6"
@@ -264,7 +264,7 @@ function AddValidatorForm({ nodeId, onClose }: { nodeId: string; onClose: () => 
               checked={isDefault}
               onCheckedChange={(checked) => setIsDefault(checked === true)}
             />
-            <FieldLabel htmlFor="validator-default">Make this the node's default</FieldLabel>
+            <FieldLabel htmlFor="validator-default">Make this the community's default</FieldLabel>
           </Field>
         </FieldGroup>
         {mutation.isError && (

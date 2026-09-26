@@ -8,16 +8,15 @@ import {
   MapPinIcon,
   QrCodeIcon,
 } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useState } from "react";
-import { toast } from "sonner";
-import { type ApiClient, useApiClient } from "@/app";
+import { useApiClient } from "@/app";
 import { EmptyState } from "@/components/empty-state";
 import { LocalDate } from "@/components/local-date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -32,15 +31,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
   Item,
   ItemActions,
   ItemContent,
@@ -48,65 +38,20 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { useClientValue } from "@/hooks";
 import { buildEventTimeline } from "@/lib/event-timeline";
-import { cn } from "@/lib/utils";
+import { type Activity, activitiesQueryOptions } from "./activity-form";
 import { useStartOnboarding } from "./event-onboarding";
 import { EventTimeline } from "./event-timeline";
 import { LumaImport } from "./luma-import";
 import { ReportContent } from "./report-content";
 
-type Activity = Awaited<ReturnType<ApiClient["saveDiscoveryActivity"]>>;
-type Draft = Parameters<ApiClient["saveDiscoveryActivity"]>[0];
-function blank(nodeId: string, kind: "event" | "social"): Draft {
-  return {
-    ownerNodeId: nodeId,
-    nodeIds: [nodeId],
-    kind,
-    title: "",
-    summary: "",
-    url: "",
-    source: "",
-    publishedAt: new Date().toISOString(),
-    startsAt: null,
-    endsAt: null,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    venue: "",
-    status: "draft",
-  };
-}
 export function ActivityEditor({ nodeId }: { nodeId: string }) {
   const api = useApiClient();
-  const client = useQueryClient();
-  const [draft, setDraft] = useState<Draft | null>(null);
   const [lumaOpen, setLumaOpen] = useState(false);
-  const list = useQuery({
-    queryKey: ["discovery-activities", nodeId],
-    queryFn: () => api.listDiscoveryActivities({ nodeId }),
-    retry: false,
-    refetchInterval: 30_000,
-  });
-  const nodes = useQuery({
-    queryKey: ["discovery-editor-nodes"],
-    queryFn: () => api.listNodes({}),
-  });
+  const list = useQuery({ ...activitiesQueryOptions(api, nodeId), refetchInterval: 30_000 });
   const luma = useQuery({
     queryKey: ["discovery-luma-calendars", nodeId],
     queryFn: () => api.listDiscoveryLumaCalendars({ nodeId }),
@@ -119,21 +64,18 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     "UTC",
   );
   const startOnboarding = useStartOnboarding();
-  const save = useMutation({
-    mutationFn: (input: Draft) => api.saveDiscoveryActivity(input),
-    onSuccess: (saved) => {
-      setDraft(null);
-      toast.success(saved.status === "published" ? "Published on Explore" : "Saved");
-      return client.invalidateQueries({
-        predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
-      });
-    },
-  });
   if (list.isError)
     return (
-      <p role="alert" className="text-sm text-muted-foreground">
-        Couldn't load events and updates. Try again in a moment.
-      </p>
+      <EmptyState
+        icon={CalendarDotsIcon}
+        title="Couldn't load events"
+        description="Check your connection and try again."
+        action={
+          <Button variant="outline" onClick={() => list.refetch()}>
+            Try again
+          </Button>
+        }
+      />
     );
   const events = list.data?.filter((a) => a.kind === "event") ?? [];
   const posts = list.data?.filter((a) => a.kind !== "event") ?? [];
@@ -141,10 +83,6 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
     events.length > 0
       ? buildEventTimeline(events, { now: new Date(), timeZone: viewerTimeZone })
       : null;
-  const openDraft = (next: Draft) => {
-    save.reset();
-    setDraft(next);
-  };
   const rowActions = (a: Activity) => (
     <div className="flex items-center gap-1">
       {a.luma ? (
@@ -165,7 +103,13 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           variant="ghost"
           size="sm"
           aria-label={`Edit ${a.title}`}
-          onClick={() => openDraft(a)}
+          nativeButton={false}
+          render={
+            <Link
+              to="/nodes/$nodeId/events/$activityId/edit"
+              params={{ nodeId, activityId: a.id }}
+            />
+          }
         >
           Edit
         </Button>
@@ -191,24 +135,29 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
       )}
     </div>
   );
-  const imported = list.data?.find((activity) => activity.id === draft?.id)?.luma;
-  const update = (key: keyof Draft, value: string | null) =>
-    setDraft((d) => (d ? { ...d, [key]: value } : d));
   const connection = luma.data?.connection;
   return (
     <section className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <Button
             data-testid="discovery-new-event"
-            onClick={() => openDraft(blank(nodeId, "event"))}
+            nativeButton={false}
+            render={<Link to="/nodes/$nodeId/events/new" params={{ nodeId }} />}
           >
             <CalendarDotsIcon /> Add event
           </Button>
           <Button
             data-testid="discovery-new-social"
             variant="outline"
-            onClick={() => openDraft(blank(nodeId, "social"))}
+            nativeButton={false}
+            render={
+              <Link
+                to="/nodes/$nodeId/events/new"
+                params={{ nodeId }}
+                search={{ kind: "social" }}
+              />
+            }
           >
             <ChatCircleIcon /> Share a post
           </Button>
@@ -216,15 +165,25 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
         <Button
           variant="ghost"
           size="sm"
+          className="max-w-full self-start sm:self-auto"
           data-testid="activity-editor.luma-open"
           onClick={() => setLumaOpen(true)}
         >
           <ArrowsClockwiseIcon />
-          {connection ? `Luma · ${connection.calendarName}` : "Import from Luma"}
+          <span className="truncate">
+            {connection ? `Luma · ${connection.calendarName}` : "Import from Luma"}
+          </span>
           {connection?.error && <Badge variant="destructive">Sync failed</Badge>}
         </Button>
       </div>
-      {list.isPending && <Skeleton className="h-40 w-full" />}
+      {list.isPending && (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-10 w-48" />
+          {["a", "b", "c"].map((key) => (
+            <Skeleton key={key} className="h-20 w-full" />
+          ))}
+        </div>
+      )}
       {list.data?.length === 0 && (
         <EmptyState
           icon={CalendarDotsIcon}
@@ -237,16 +196,18 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           value={when}
           onValueChange={(value) => setWhen(value === "past" ? "past" : "upcoming")}
         >
-          <TabsList variant="line">
-            <TabsTrigger value="upcoming" data-testid="activity-editor.tab-upcoming">
-              Upcoming
-              <Badge variant="secondary">{timeline.upcomingCount}</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="past" data-testid="activity-editor.tab-past">
-              Past
-              <Badge variant="secondary">{timeline.pastCount}</Badge>
-            </TabsTrigger>
-          </TabsList>
+          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <TabsList variant="line">
+              <TabsTrigger value="upcoming" data-testid="activity-editor.tab-upcoming">
+                Upcoming
+                <Badge variant="secondary">{timeline.upcomingCount}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="past" data-testid="activity-editor.tab-past">
+                Past
+                <Badge variant="secondary">{timeline.pastCount}</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </div>
           {(["upcoming", "past"] as const).map((tab) => (
             <TabsContent key={tab} value={tab} className="pt-6">
               {timeline[tab].length === 0 ? (
@@ -277,8 +238,8 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
             {posts.map((a) => (
               <Item key={a.id} variant="outline" size="sm">
                 <ItemContent>
-                  <ItemTitle>
-                    {a.title}
+                  <ItemTitle className="flex-wrap">
+                    <span className="min-w-0 truncate">{a.title}</span>
                     <Badge variant={statusVariant(a)}>{statusLabel(a)}</Badge>
                   </ItemTitle>
                   <ItemDescription>
@@ -302,236 +263,6 @@ export function ActivityEditor({ nodeId }: { nodeId: string }) {
           <LumaImport nodeId={nodeId} />
         </DialogContent>
       </Dialog>
-      <Sheet
-        open={!!draft}
-        onOpenChange={(open) => {
-          if (!open) setDraft(null);
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
-        >
-          <SheetHeader className="px-6 pt-8 pr-16">
-            <SheetTitle>
-              {draft?.id ? "Edit" : "New"} {draft?.kind === "event" ? "event" : "post"}
-            </SheetTitle>
-            <SheetDescription>
-              {imported ? (
-                <>
-                  Synced from Luma <LocalDate value={imported.syncedAt} format="relative" />. Edit
-                  details on Luma.
-                  {!imported.available && " This event is no longer public there."}
-                </>
-              ) : draft?.kind === "event" ? (
-                "When, where, and how to join."
-              ) : (
-                "Link to a post and add a short note."
-              )}
-            </SheetDescription>
-          </SheetHeader>
-          {draft && (
-            <form
-              className="flex flex-col gap-8 px-6 pb-8"
-              onSubmit={(e) => {
-                e.preventDefault();
-                save.mutate(draft);
-              }}
-            >
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="activity-title">Title</FieldLabel>
-                  <Input
-                    id="activity-title"
-                    readOnly={Boolean(imported)}
-                    required
-                    maxLength={160}
-                    value={draft.title}
-                    onChange={(e) => update("title", e.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="activity-summary">Summary</FieldLabel>
-                  <Textarea
-                    readOnly={Boolean(imported)}
-                    id="activity-summary"
-                    maxLength={2000}
-                    value={draft.summary}
-                    onChange={(e) => update("summary", e.target.value)}
-                  />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="activity-url">Link</FieldLabel>
-                    <Input
-                      id="activity-url"
-                      readOnly={Boolean(imported)}
-                      required
-                      type="url"
-                      maxLength={2000}
-                      placeholder="https://"
-                      value={draft.url}
-                      onChange={(e) => update("url", e.target.value)}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="activity-source">Organizer</FieldLabel>
-                    <Input
-                      id="activity-source"
-                      readOnly={Boolean(imported)}
-                      required
-                      maxLength={160}
-                      value={draft.source}
-                      onChange={(e) => update("source", e.target.value)}
-                    />
-                  </Field>
-                </div>
-              </FieldGroup>
-              {draft.kind === "event" ? (
-                <FieldSet>
-                  <FieldLegend>When and where</FieldLegend>
-                  <FieldGroup>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {(
-                        [
-                          ["startsAt", "Starts"],
-                          ["endsAt", "Ends"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <Field key={key}>
-                          <FieldLabel htmlFor={`activity-${key}`}>{label}</FieldLabel>
-                          <Input
-                            id={`activity-${key}`}
-                            readOnly={Boolean(imported)}
-                            type="datetime-local"
-                            required
-                            value={localTime(draft[key])}
-                            onChange={(e) =>
-                              update(
-                                key,
-                                e.target.value ? new Date(e.target.value).toISOString() : null,
-                              )
-                            }
-                          />
-                        </Field>
-                      ))}
-                    </div>
-                    <Field>
-                      <FieldLabel htmlFor="activity-timezone">Event timezone</FieldLabel>
-                      <Input
-                        readOnly={Boolean(imported)}
-                        id="activity-timezone"
-                        required
-                        value={draft.timezone}
-                        onChange={(e) => update("timezone", e.target.value)}
-                      />
-                      <FieldDescription>
-                        Enter times in your own timezone; visitors see them in this one.
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="activity-venue">Venue or meeting link</FieldLabel>
-                      <Input
-                        readOnly={Boolean(imported)}
-                        id="activity-venue"
-                        required
-                        value={draft.venue}
-                        onChange={(e) => update("venue", e.target.value)}
-                      />
-                    </Field>
-                  </FieldGroup>
-                </FieldSet>
-              ) : (
-                <Field>
-                  <FieldLabel htmlFor="activity-published">Posted on</FieldLabel>
-                  <Input
-                    readOnly={Boolean(imported)}
-                    id="activity-published"
-                    type="datetime-local"
-                    required
-                    value={localTime(draft.publishedAt)}
-                    onChange={(e) =>
-                      update(
-                        "publishedAt",
-                        e.target.value ? new Date(e.target.value).toISOString() : "",
-                      )
-                    }
-                  />
-                </Field>
-              )}
-              {draft.kind === "event" && (nodes.data?.length ?? 0) > 1 && (
-                <FieldSet>
-                  <FieldLegend variant="label">Also show in</FieldLegend>
-                  <FieldGroup>
-                    {nodes.data
-                      ?.filter((n) => n.id !== nodeId)
-                      .map((n) => (
-                        <Field orientation="horizontal" key={n.id}>
-                          <Checkbox
-                            id={`activity-node-${n.id}`}
-                            checked={draft.nodeIds.includes(n.id)}
-                            onCheckedChange={(checked) =>
-                              setDraft({
-                                ...draft,
-                                nodeIds: checked
-                                  ? [...draft.nodeIds, n.id]
-                                  : draft.nodeIds.filter((id) => id !== n.id),
-                              })
-                            }
-                          />
-                          <FieldLabel htmlFor={`activity-node-${n.id}`}>{n.name}</FieldLabel>
-                        </Field>
-                      ))}
-                  </FieldGroup>
-                </FieldSet>
-              )}
-              <Field>
-                <FieldLabel htmlFor="activity-status">Visibility</FieldLabel>
-                <Select
-                  items={[
-                    { label: "Draft", value: "draft" },
-                    { label: "Published on Explore", value: "published" },
-                    { label: "Cancelled", value: "cancelled" },
-                  ]}
-                  value={draft.status}
-                  onValueChange={(value) => {
-                    if (value === "draft" || value === "published" || value === "cancelled")
-                      setDraft({ ...draft, status: value });
-                  }}
-                >
-                  <SelectTrigger id="activity-status" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="published" disabled={imported?.available === false}>
-                      Published on Explore
-                    </SelectItem>
-                    {draft.kind === "event" && (
-                      <SelectItem value="cancelled" disabled={imported?.available === false}>
-                        Cancelled
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </Field>
-              {save.isError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {save.error.message}
-                </p>
-              )}
-              <div className="flex gap-3">
-                <Button data-testid="discovery-activity-save" disabled={save.isPending}>
-                  {save.isPending ? "Saving…" : "Save"}
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          )}
-        </SheetContent>
-      </Sheet>
     </section>
   );
 }
@@ -544,11 +275,6 @@ function statusLabel(activity: Activity) {
   if (activity.status === "draft") return "Draft";
   if (activity.status === "cancelled") return "Cancelled";
   return "Published";
-}
-function localTime(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 function eventDateKey(activity: Activity) {
   if (!activity.startsAt) return "undated";
@@ -659,7 +385,7 @@ export function ActivityCard({
     <article className="flex flex-col gap-4">
       <div className={cn("flex items-center gap-4 px-4 py-3.5", cancelled && "opacity-60")}>
         <div className="min-w-0 flex-1">
-          <h3 className={cn("font-medium leading-snug", cancelled && "line-through")}>
+          <h3 className={cn("font-medium leading-snug wrap-anywhere", cancelled && "line-through")}>
             <Link
               data-testid={`discovery-activity-detail-${activity.id}`}
               to="/activity/$activityId"
@@ -679,7 +405,7 @@ export function ActivityCard({
           {activity.kind === "event" && activity.venue && (
             <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
               <MapPinIcon className="size-3.5 shrink-0" />
-              {activity.venue}
+              <span className="min-w-0 wrap-anywhere">{activity.venue}</span>
             </p>
           )}
           {activity.kind === "social" && (

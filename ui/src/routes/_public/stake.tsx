@@ -164,9 +164,9 @@ function StakePage() {
         <PageHeader
           headerTestId="stake.heading"
           title="Stake"
-          description="Back a community by staking NEAR to its validator. Your NEAR stays yours."
+          description="Back a community by staking NEAR to its validator."
         />
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-6">
           <SectionHeader title="Pick a community" />
           <StakeDirectory nodes={directoryNodes} gateway={gateway} isLoading={directoryLoading} />
         </section>
@@ -182,7 +182,7 @@ function StakePage() {
           <Button
             variant="ghost"
             size="sm"
-            className="self-start"
+            className="-ml-3 self-start"
             nativeButton={false}
             data-testid="stake.back"
             render={<Link to="/stake" />}

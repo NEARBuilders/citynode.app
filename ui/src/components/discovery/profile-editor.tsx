@@ -48,7 +48,13 @@ export function ProfileEditor({
     queryFn: () => api.getDiscoveryProfile({ nodeId }),
     retry: false,
   });
-  if (query.isPending) return <Skeleton className="h-64 w-full" />;
+  if (query.isPending)
+    return (
+      <div className="flex flex-col gap-8">
+        <Skeleton className="h-11 w-48" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
   if (query.isError)
     return (
       <EmptyState
@@ -228,8 +234,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
         <FieldLegend>Where people can join</FieldLegend>
         <FieldGroup>
           {profile.channels.map((channel, index) => (
-            <div key={index} className="flex items-end gap-2">
-              <Field className="w-36 shrink-0">
+            <div key={index} className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
+              <Field className="w-full sm:w-36 sm:shrink-0">
                 <FieldLabel htmlFor={`channel-label-${index}`}>Name</FieldLabel>
                 <Input
                   id={`channel-label-${index}`}

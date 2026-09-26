@@ -27,21 +27,13 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { NODE_PLUGIN_ID, nodeProposalsQueryOptions } from "./-node-proposals-query";
 import {
   applyStatusLabel,
   proposalTitle,
   reviewStatusBadge,
   sortProposals,
 } from "./-proposal-summary";
-
-const NODE_PLUGIN_ID = "api";
 
 export const Route = createFileRoute("/_authenticated/_dashboard/dashboard/node/proposals/")({
   component: NodeProposals,
@@ -52,21 +44,10 @@ function NodeProposals() {
   const queryClient = useQueryClient();
   const { selectedNode, canReview } = Route.useRouteContext();
   const nodeId = selectedNode?.id ?? "";
-  const queryKey = ["node-proposals", nodeId] as const;
-  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const { queryKey } = nodeProposalsQueryOptions(apiClient, nodeId);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const proposalsQuery = useQuery({
-    queryKey,
-    queryFn: () =>
-      apiClient.proposals.getProposals({
-        pluginId: NODE_PLUGIN_ID,
-        entityId: nodeId,
-        limit: 100,
-      }),
-    enabled: !!nodeId,
-    staleTime: 30 * 1000,
-  });
+  const proposalsQuery = useQuery(nodeProposalsQueryOptions(apiClient, nodeId));
 
   const reviewMutation = useMutation({
     mutationFn: async ({
@@ -101,7 +82,6 @@ function NodeProposals() {
   if (!selectedNode) return null;
 
   const proposals = sortProposals(proposalsQuery.data?.data ?? []);
-  const details = proposals.find((proposal) => proposal.id === detailsId) ?? null;
   const rejecting = proposals.find((proposal) => proposal.id === rejectingId) ?? null;
   let primaryUsed = false;
 
@@ -109,7 +89,7 @@ function NodeProposals() {
     <section className="flex flex-col gap-6">
       <SectionHeader
         title="Changes"
-        description="Proposed changes to this community and where they stand."
+        description="Proposed changes to this community."
         action={
           <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/apply" />}>
             Propose a sub-community
@@ -119,8 +99,8 @@ function NodeProposals() {
 
       {proposalsQuery.isLoading ? (
         <div className="flex flex-col gap-3">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
         </div>
       ) : proposalsQuery.isError ? (
         <p role="alert" className="text-sm text-destructive">
@@ -149,19 +129,33 @@ function NodeProposals() {
                 variant="outline"
                 data-testid={`dashboard-node.proposal-${proposal.id}`}
               >
-                <ItemContent>
-                  <ItemTitle>
-                    {proposalTitle(proposal.payload, "Proposal")}
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="max-w-full">
+                    <span className="truncate">{proposalTitle(proposal.payload, "Proposal")}</span>
+                  </ItemTitle>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={badge.variant}>{badge.label}</Badge>
                     {applied && <Badge variant="outline">{applied}</Badge>}
-                  </ItemTitle>
+                  </div>
                   <ItemDescription>
                     Submitted <LocalDate value={proposal.createdAt} format="relative" />
                     {proposal.rejectionReason ? ` · ${proposal.rejectionReason}` : ""}
                   </ItemDescription>
                 </ItemContent>
-                <ItemActions>
-                  <Button size="sm" variant="ghost" onClick={() => setDetailsId(proposal.id)}>
+                <ItemActions className="w-full justify-end sm:w-auto">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    nativeButton={false}
+                    data-testid={`dashboard-node.proposal-details-${proposal.id}`}
+                    render={
+                      <Link
+                        to="/dashboard/node/proposals/$proposalId"
+                        params={{ proposalId: proposal.id }}
+                        search={{ nodeId }}
+                      />
+                    }
+                  >
                     Details
                   </Button>
                   {reviewable && (
@@ -222,32 +216,6 @@ function NodeProposals() {
             reviewMutation.mutate({ action: "reject", expectedUpdatedAt: rejecting.updatedAt });
         }}
       />
-
-      <Sheet
-        open={!!details}
-        onOpenChange={(open) => {
-          if (!open) setDetailsId(null);
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-lg"
-        >
-          <SheetHeader className="px-6 pt-8 pr-16">
-            <SheetTitle>
-              {details ? proposalTitle(details.payload, "Proposal") : "Proposal"}
-            </SheetTitle>
-            <SheetDescription>
-              Submitted {details && <LocalDate value={details.createdAt} format="datetime" />}
-            </SheetDescription>
-          </SheetHeader>
-          {details && (
-            <pre className="mx-6 mb-8 overflow-auto rounded-xl bg-muted p-4 font-mono text-xs">
-              {JSON.stringify(details.payload, null, 2)}
-            </pre>
-          )}
-        </SheetContent>
-      </Sheet>
     </section>
   );
 }

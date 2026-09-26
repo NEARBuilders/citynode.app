@@ -79,16 +79,18 @@ function AccountProfileLayout() {
             className="h-32 w-full rounded-3xl bg-muted object-cover sm:h-44"
           />
         ) : null}
-        <div className="flex items-center gap-5">
-          <Avatar className="size-20">
+        <div className="flex min-w-0 items-center gap-4 sm:gap-5">
+          <Avatar className="size-16 shrink-0 sm:size-20">
             {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
             <AvatarFallback>{initials || <UserIcon className="size-8" />}</AvatarFallback>
           </Avatar>
           <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="text-2xl font-semibold break-all text-foreground sm:text-3xl">
+            <h1 className="text-2xl font-semibold wrap-anywhere text-foreground sm:text-3xl">
               {displayName}
             </h1>
-            {profile?.name && <p className="truncate text-sm text-muted-foreground">{accountId}</p>}
+            {profile?.name && (
+              <p className="truncate font-mono text-sm text-muted-foreground">{accountId}</p>
+            )}
           </div>
         </div>
         {profile?.description && (
@@ -117,7 +119,7 @@ function AccountProfileLayout() {
       {!isPending && !hasProfile && (
         <section
           data-testid="account.no-profile"
-          className="flex flex-col items-start gap-4 rounded-3xl border border-dashed border-border p-6 sm:p-8"
+          className="flex flex-col items-start gap-4 rounded-3xl bg-muted p-6 sm:p-8"
         >
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-medium text-foreground">No profile yet</h2>
@@ -125,7 +127,7 @@ function AccountProfileLayout() {
               This account hasn’t set up a NEAR profile.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
               <CompassIcon />
               Explore communities

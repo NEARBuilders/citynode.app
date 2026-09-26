@@ -1,5 +1,5 @@
 import type { RelayHistoryResponseT } from "better-near-auth";
-import { Badge, LocalDate } from "@/components";
+import { Badge, LocalDate, SectionHeader } from "@/components";
 import {
   Item,
   ItemActions,
@@ -25,12 +25,12 @@ export function RelayerHistory({
 }) {
   return (
     <section className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Recent relays</h2>
+      <SectionHeader title="Recent relays" />
       {isLoading ? (
         <ListSkeleton rows={3} />
       ) : !history?.transactions.length ? (
         <p className="text-sm text-muted-foreground">
-          No relayed transactions yet. Tenant and app metadata writes appear here.
+          No relays yet. Tenant and app metadata writes show up here.
         </p>
       ) : (
         <ItemGroup data-testid="admin-relayer-history">
@@ -41,7 +41,7 @@ export function RelayerHistory({
                   <span className="font-mono">{tx.txHash.slice(0, 12)}…</span>
                 </ItemTitle>
                 <ItemDescription>
-                  <span className="font-mono">{tx.senderId}</span> ·{" "}
+                  <span className="font-mono break-all">{tx.senderId}</span> ·{" "}
                   <LocalDate value={tx.createdAt} format="relative" />
                 </ItemDescription>
               </ItemContent>

@@ -145,7 +145,7 @@ function DeviceApprovePage() {
         <div className="flex flex-col items-center gap-2 rounded-3xl bg-muted px-6 py-8">
           <span className="text-sm text-muted-foreground">Check it matches your other screen</span>
           <span
-            className="font-mono text-3xl font-semibold tracking-widest text-foreground"
+            className="font-mono text-3xl font-semibold tracking-widest break-all text-foreground"
             data-testid="device.approve-code"
           >
             {user_code}
@@ -177,7 +177,7 @@ function DeviceApprovePage() {
           </p>
           {configAccount && signedInAccountId && signedInAccountId !== configAccount && (
             <p
-              className="text-sm text-warning-muted-foreground"
+              className="text-sm wrap-anywhere text-warning-muted-foreground"
               data-testid="device.account-mismatch"
             >
               You're signed in as {signedInAccountId}, not {configAccount}. The key will be added to{" "}

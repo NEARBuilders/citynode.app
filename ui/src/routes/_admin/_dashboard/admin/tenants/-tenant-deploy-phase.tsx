@@ -57,7 +57,7 @@ export function TenantDeployPhase({
         <TenantStep
           id="deploy-create"
           number={1}
-          title="Create tenant, node and domain"
+          title="Create site, community and domain"
           status={status.create}
           summary="Records created"
         >
@@ -80,7 +80,7 @@ export function TenantDeployPhase({
               <>
                 <ConnectDao purpose="tenant-deploy" />
                 <Button
-                  className="self-start"
+                  className="w-full sm:w-auto sm:self-start"
                   onClick={onSubmitPublish}
                   disabled={publishPending || !daoAccountId}
                   data-testid="admin-tenant-publish"
@@ -102,7 +102,11 @@ export function TenantDeployPhase({
                     {publishStep.error}
                   </p>
                 )}
-                <Button variant="outline" className="self-start" onClick={onResetPublish}>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto sm:self-start"
+                  onClick={onResetPublish}
+                >
                   Retry publish
                 </Button>
               </>
@@ -121,8 +125,8 @@ export function TenantDeployPhase({
           <div className="flex max-w-xl flex-col gap-4">
             <p className="text-sm text-muted-foreground">
               Sign in to trezu.app as{" "}
-              <span className="font-mono text-foreground">{daoAccountId}</span> to approve, or wait
-              for the council. Then check again.
+              <span className="font-mono break-all text-foreground">{daoAccountId}</span> to
+              approve, or wait for the council, then check again.
             </p>
             {verifyMessage && verifyState !== "verified" && (
               <p
@@ -132,7 +136,7 @@ export function TenantDeployPhase({
                 {verifyMessage}
               </p>
             )}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Button
                 onClick={onRecheck}
                 disabled={verifyState === "checking"}
@@ -150,10 +154,14 @@ export function TenantDeployPhase({
 
       {live && tenantLink && (
         <div className="flex flex-col gap-4" data-testid="admin-tenant-live">
-          <p className="text-base">
-            Tenant deployed at <span className="font-mono">{hostname}</span>
+          <p className="text-base text-foreground">
+            Tenant deployed at <span className="font-mono break-all">{hostname}</span>
           </p>
-          <Button className="self-start" nativeButton={false} render={tenantLink}>
+          <Button
+            className="w-full sm:w-auto sm:self-start"
+            nativeButton={false}
+            render={tenantLink}
+          >
             Open community settings
             <ArrowRightIcon />
           </Button>
@@ -161,7 +169,12 @@ export function TenantDeployPhase({
       )}
 
       {!live && tenantLink && status.create === "complete" && (
-        <Button variant="ghost" className="self-start" nativeButton={false} render={tenantLink}>
+        <Button
+          variant="ghost"
+          className="w-full sm:w-auto sm:self-start"
+          nativeButton={false}
+          render={tenantLink}
+        >
           Finish later in community settings
         </Button>
       )}

@@ -111,7 +111,7 @@ function NodeOverview() {
         />
       </dl>
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-6">
         <SectionHeader
           title="Coming up"
           action={
@@ -130,7 +130,7 @@ function NodeOverview() {
           <p className="text-sm text-muted-foreground">
             {activities.isError
               ? "Events are managed by this community's owners."
-              : "Nothing scheduled. Add an event so people can find you on Explore."}
+              : "Nothing scheduled. Add an event to show up on Explore."}
           </p>
         ) : (
           <ItemGroup>
@@ -139,7 +139,7 @@ function NodeOverview() {
                 <ItemMedia>
                   <EventDate value={event.startsAt} />
                 </ItemMedia>
-                <ItemContent>
+                <ItemContent className="min-w-0">
                   <ItemTitle>
                     {event.title}
                     {event.status === "draft" && <Badge variant="secondary">Draft</Badge>}
@@ -169,7 +169,7 @@ function NodeOverview() {
 
       <TeamStakeCard target={teamStake} pending={daoQuery.isLoading} />
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-6">
         <SectionHeader
           title="Validators"
           description={
@@ -192,7 +192,7 @@ function NodeOverview() {
       </section>
 
       {summary.children.length > 0 && (
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-6">
           <SectionHeader title="Sub-communities" />
           <ItemGroup>
             {summary.children.map((child) => {
@@ -202,7 +202,7 @@ function NodeOverview() {
                   <ItemMedia variant="icon">
                     <TreeStructureIcon />
                   </ItemMedia>
-                  <ItemContent>
+                  <ItemContent className="min-w-0">
                     <ItemTitle>{child.name}</ItemTitle>
                     <ItemDescription>
                       <span className="capitalize">{child.kind}</span>

@@ -8,10 +8,10 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useApiClient } from "@/app";
 import { Badge, Button, EmptyState } from "@/components";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { useDiscoveryMeasurement } from "./discovery-measurement";
 import { activityDateTile, activityTimeRange, DateTile } from "./event-list";
 import { ReportContent } from "./report-content";
@@ -111,7 +111,7 @@ export function ActivityDetail({
     <article className="flex flex-col gap-10">
       {back}
       <header className="flex flex-col gap-6">
-        <div className="flex items-start gap-5">
+        <div className="flex items-start gap-4 sm:gap-5">
           <DateTile activity={data} size="lg" />
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -120,7 +120,7 @@ export function ActivityDetail({
             </div>
             <h1
               className={cn(
-                "text-3xl font-semibold text-foreground sm:text-4xl",
+                "text-3xl font-semibold wrap-anywhere text-foreground sm:text-4xl",
                 cancelled && "line-through",
               )}
             >
@@ -143,7 +143,7 @@ export function ActivityDetail({
             <div className="flex items-center gap-3">
               <dt className="sr-only">Venue</dt>
               <MapPinIcon className="size-5 shrink-0 text-muted-foreground" />
-              <dd>{data.venue}</dd>
+              <dd className="min-w-0 wrap-anywhere">{data.venue}</dd>
             </div>
           )}
         </dl>

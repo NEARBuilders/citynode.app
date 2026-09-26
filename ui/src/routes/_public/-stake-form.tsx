@@ -68,13 +68,14 @@ export function StakeForm({
               <InputGroupText>NEAR</InputGroupText>
             </InputGroupAddon>
           </InputGroup>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {QUICK_AMOUNTS.map((value) => (
               <Button
                 key={value}
                 type="button"
-                size="xs"
-                variant={amount === value ? "secondary" : "ghost"}
+                size="sm"
+                variant={amount === value ? "secondary" : "outline"}
+                aria-pressed={amount === value}
                 onClick={() => onAmountChange(value)}
               >
                 {value}
@@ -100,7 +101,7 @@ export function StakeForm({
         />
 
         <p className="text-sm text-muted-foreground">
-          Your NEAR stays yours. You can unstake anytime; it unlocks after about two days.
+          Unstake anytime. It unlocks after about two days.
         </p>
       </CardContent>
     </Card>
@@ -132,8 +133,9 @@ function StakeAction({
 }) {
   if (signInRedirect !== null) {
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col gap-3">
         <Button
+          size="lg"
           nativeButton={false}
           data-testid="stake.sign-in"
           render={
@@ -149,19 +151,25 @@ function StakeAction({
 
   if (!nearAccountId) {
     return (
-      <div className="flex flex-col items-start gap-3">
-        <p className="text-sm text-muted-foreground">Connect a NEAR wallet to stake.</p>
-        <Button onClick={onConnect} disabled={connectingWallet} data-testid="stake.connect-wallet">
+      <div className="flex flex-col gap-3">
+        <Button
+          size="lg"
+          onClick={onConnect}
+          disabled={connectingWallet}
+          data-testid="stake.connect-wallet"
+        >
           {connectingWallet ? <Spinner /> : <WalletIcon data-icon="inline-start" />}
           {connectingWallet ? "Connecting…" : "Connect wallet"}
         </Button>
+        <p className="text-sm text-muted-foreground">Connect a NEAR wallet to stake.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="flex flex-col gap-3">
       <Button
+        size="lg"
         data-testid="stake.submit"
         onClick={() => {
           if (!parsedYocto) return;

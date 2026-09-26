@@ -20,7 +20,7 @@ export function RelayerStatus({
   return (
     <section className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-2 text-xl font-semibold">Status</h2>
+        <h2 className="mr-2 text-xl font-semibold text-foreground">Status</h2>
         {!isLoading && (
           <Badge variant={status.variant} data-testid="admin-relayer-status">
             {status.label}

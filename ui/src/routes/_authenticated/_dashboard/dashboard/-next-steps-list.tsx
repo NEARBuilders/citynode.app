@@ -1,5 +1,6 @@
 import {
   BuildingsIcon,
+  CaretRightIcon,
   CoinsIcon,
   CompassIcon,
   FingerprintIcon,
@@ -60,6 +61,44 @@ function stepLink(step: NextStep, tenantId: string | null): ReactElement {
   }
 }
 
+function FeaturedStep({ step, tenantId }: { step: NextStep; tenantId: string | null }) {
+  const StepIcon = STEP_ICONS[step.id];
+  return (
+    <Item variant="muted" data-testid={`home-step-${step.id}`}>
+      <ItemMedia variant="icon">
+        <StepIcon />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>{step.title}</ItemTitle>
+        <ItemDescription>{step.description}</ItemDescription>
+      </ItemContent>
+      <ItemActions className="w-full sm:w-auto">
+        <Button className="w-full sm:w-auto" nativeButton={false} render={stepLink(step, tenantId)}>
+          {step.actionLabel}
+        </Button>
+      </ItemActions>
+    </Item>
+  );
+}
+
+function StepRow({ step, tenantId }: { step: NextStep; tenantId: string | null }) {
+  const StepIcon = STEP_ICONS[step.id];
+  return (
+    <Item variant="outline" render={stepLink(step, tenantId)} data-testid={`home-step-${step.id}`}>
+      <ItemMedia variant="icon">
+        <StepIcon />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>{step.title}</ItemTitle>
+        <ItemDescription>{step.description}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <CaretRightIcon className="size-4 text-muted-foreground" />
+      </ItemActions>
+    </Item>
+  );
+}
+
 export function NextStepsList({
   steps,
   tenantId,
@@ -69,33 +108,15 @@ export function NextStepsList({
   tenantId: string | null;
   primary: boolean;
 }) {
+  const [first, ...rest] = steps;
+  const featured = primary && first ? first : null;
+  const rows = featured ? rest : steps;
   return (
     <ItemGroup data-testid="home-next-steps">
-      {steps.map((step, index) => {
-        const StepIcon = STEP_ICONS[step.id];
-        const isPrimary = primary && index === 0;
-        return (
-          <Item key={step.id} variant="outline" data-testid={`home-step-${step.id}`}>
-            <ItemMedia variant="icon">
-              <StepIcon />
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle>{step.title}</ItemTitle>
-              <ItemDescription>{step.description}</ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <Button
-                size="sm"
-                variant={isPrimary ? "default" : "outline"}
-                nativeButton={false}
-                render={stepLink(step, tenantId)}
-              >
-                {step.actionLabel}
-              </Button>
-            </ItemActions>
-          </Item>
-        );
-      })}
+      {featured && <FeaturedStep step={featured} tenantId={tenantId} />}
+      {rows.map((step) => (
+        <StepRow key={step.id} step={step} tenantId={tenantId} />
+      ))}
     </ItemGroup>
   );
 }

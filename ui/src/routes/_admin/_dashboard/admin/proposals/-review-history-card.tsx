@@ -11,9 +11,11 @@ export function ReviewHistoryCard({ entry }: { entry: ReviewHistoryEntry }) {
   return (
     <Item variant="outline" size="sm">
       <ItemContent className="min-w-0">
-        <ItemTitle>{entry.actorLabel || entry.actor}</ItemTitle>
+        <ItemTitle className="max-w-full">
+          <span className="min-w-0 truncate">{entry.actorLabel || entry.actor}</span>
+        </ItemTitle>
         <ItemDescription>
-          <span className="font-mono">{entry.entityId}</span> ·{" "}
+          <span className="font-mono break-all">{entry.entityId}</span> ·{" "}
           <LocalDate value={entry.createdAt} format="relative" />
         </ItemDescription>
       </ItemContent>

@@ -103,12 +103,14 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
             </ItemMedia>
             <ItemContent>
               <ItemTitle>Password</ItemTitle>
-              <ItemDescription>Used when you sign in with {user.email}.</ItemDescription>
+              <ItemDescription className="wrap-anywhere">
+                Used when you sign in with {user.email}.
+              </ItemDescription>
             </ItemContent>
-            <ItemActions>
+            <ItemActions className="w-full sm:w-auto">
               <Button
                 variant="outline"
-                size="sm"
+                className="w-full sm:w-auto"
                 onClick={() => setChangingPassword(true)}
                 data-testid="settings.change-password-button"
               >
@@ -125,10 +127,10 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
             <ItemTitle>Other devices</ItemTitle>
             <ItemDescription>Sign out everywhere except this device.</ItemDescription>
           </ItemContent>
-          <ItemActions>
+          <ItemActions className="w-full sm:w-auto">
             <Button
               variant="outline"
-              size="sm"
+              className="w-full sm:w-auto"
               onClick={() => setConfirmRevoke(true)}
               disabled={revokeSessionsMutation.isPending}
               data-testid="settings.revoke-sessions-button"
@@ -145,10 +147,10 @@ export function SecurityTab({ user }: { user: { email?: string; isAnonymous?: bo
             <ItemTitle>This device</ItemTitle>
             <ItemDescription>Sign out and return to the home page.</ItemDescription>
           </ItemContent>
-          <ItemActions>
+          <ItemActions className="w-full sm:w-auto">
             <Button
               variant="ghost"
-              size="sm"
+              className="w-full sm:w-auto"
               onClick={() => signOutMutation.mutate()}
               disabled={signOutMutation.isPending}
               data-testid="settings.signout-button"

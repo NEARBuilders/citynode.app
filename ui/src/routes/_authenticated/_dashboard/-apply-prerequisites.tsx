@@ -44,7 +44,12 @@ export function ApplyOrganizationStep({
         <p className="text-sm text-muted-foreground">
           Communities belong to an organization. Create one first.
         </p>
-        <Button nativeButton={false} render={<Link to="/orgs" />} data-testid="apply.create-org">
+        <Button
+          className="w-full sm:w-auto"
+          nativeButton={false}
+          render={<Link to="/orgs" />}
+          data-testid="apply.create-org"
+        >
           Create organization
           <ArrowRightIcon data-icon="inline-end" />
         </Button>
@@ -53,7 +58,7 @@ export function ApplyOrganizationStep({
   }
   return (
     <div className="flex flex-col gap-4">
-      <Field className="max-w-sm">
+      <Field className="sm:max-w-sm">
         <FieldLabel htmlFor="apply-organization">Apply as</FieldLabel>
         <Select
           items={organizations.map((organization) => ({
@@ -78,7 +83,7 @@ export function ApplyOrganizationStep({
           </SelectContent>
         </Select>
       </Field>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         {displayedOrgId && (
           <Button type="button" onClick={onContinue} disabled={switching}>
             Continue
@@ -99,6 +104,7 @@ export function ApplyNearStep() {
         Link the NEAR account you&apos;re applying with.
       </p>
       <Button
+        className="w-full sm:w-auto"
         nativeButton={false}
         render={<Link to={pluginPath("/settings/auth-methods")} />}
         data-testid="apply.link-near"
@@ -125,7 +131,12 @@ export function ApplyDaoStep({
         <ConnectDao onVerified={onDaoVerified} purpose="apply" variant="plain" />
       </div>
       {verified && (
-        <Button type="button" onClick={onContinue} data-testid="apply.dao-continue">
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={onContinue}
+          data-testid="apply.dao-continue"
+        >
           Continue
         </Button>
       )}

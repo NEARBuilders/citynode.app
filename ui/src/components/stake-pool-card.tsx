@@ -237,7 +237,7 @@ function HolderList({
           >
             {holder.accountId}
           </a>
-          <span className="tabular-nums text-muted-foreground">
+          <span className="shrink-0 tabular-nums text-muted-foreground">
             {formatNearBalance(holder.stakedBalance)}
           </span>
         </li>

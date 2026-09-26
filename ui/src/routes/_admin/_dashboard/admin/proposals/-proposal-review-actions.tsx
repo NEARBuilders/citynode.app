@@ -51,7 +51,7 @@ export function ProposalReviewActions({
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
             Connect{" "}
-            <span className="font-mono text-foreground">
+            <span className="font-mono break-all text-foreground">
               {proposalDaoAccountId ?? "the proposed DAO"}
             </span>{" "}
             to approve.
@@ -61,7 +61,7 @@ export function ProposalReviewActions({
       )}
 
       <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Button
             onClick={onApprove}
             disabled={isReviewing || !daoIsVerified}

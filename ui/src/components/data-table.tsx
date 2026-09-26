@@ -39,7 +39,12 @@ const dataTableFeatures = tableFeatures({
   rowPaginationFeature,
   sortedRowModel: createSortedRowModel(),
   paginatedRowModel: createPaginatedRowModel(),
+  columnMeta: {} as DataTableColumnMeta,
 });
+
+export interface DataTableColumnMeta {
+  className?: string;
+}
 
 export type DataTableColumnDef<TData extends RowData> = ColumnDef<typeof dataTableFeatures, TData>;
 
@@ -64,15 +69,15 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
   });
 
   return (
-    <div>
-      <div className="rounded-md border border-border">
+    <div className="flex min-w-0 flex-col">
+      <div className="min-w-0 overflow-hidden rounded-md border border-border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className={header.column.columnDef.meta?.className}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(header.column.columnDef.header, header.getContext())}
@@ -87,7 +92,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id}>
                   {row.getAllCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className={cell.column.columnDef.meta?.className}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -108,7 +113,7 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
           Showing {table.getRowModel().rows.length} of {table.getPrePaginatedRowModel().rows.length}{" "}
           row(s).
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <p className="text-sm font-medium">Rows per page</p>
           <Select
             value={`${table.state.pagination.pageSize}`}
@@ -128,11 +133,11 @@ export function DataTable<TData extends RowData>({ columns, data }: DataTablePro
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="flex w-25 items-center justify-center text-sm font-medium">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center text-sm font-medium sm:w-25 sm:justify-center">
             Page {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon-sm"

@@ -34,7 +34,7 @@ export function InvitationsTab({
   const canInvite = canManageMembers && !isPersonal;
 
   return (
-    <TabsContent value="invitations" className="flex flex-col gap-10 pt-6">
+    <TabsContent value="invitations" className="flex flex-col gap-12 pt-6">
       {canInvite && (
         <section className="flex flex-col gap-4">
           <SectionHeader title="Invite people" />

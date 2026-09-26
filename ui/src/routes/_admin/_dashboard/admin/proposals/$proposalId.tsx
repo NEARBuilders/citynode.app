@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getAccount, getActiveRuntime, useApiClient } from "@/app";
 import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from "@/components";
 import { useDaoConnection } from "@/lib/dao-connect";
+import { pageTitle } from "@/lib/page-title";
 import { invalidateNodeQueries } from "@/lib/queries/nodes";
 import { invalidateTenantQueries } from "@/lib/queries/tenants";
 import { publishDaoTenantConfig } from "@/lib/tenant-deploy";
@@ -36,8 +37,8 @@ export const Route = createFileRoute("/_admin/_dashboard/admin/proposals/$propos
     pluginId: typeof search.pluginId === "string" ? search.pluginId : undefined,
     entityId: typeof search.entityId === "string" ? search.entityId : undefined,
   }),
-  head: ({ params }) => ({
-    meta: [{ title: `${params.proposalId} | Proposals | app` }],
+  head: ({ match }) => ({
+    meta: [{ title: pageTitle("Proposal · Admin", match.context.runtimeConfig) }],
   }),
   component: ProposalDetailPage,
 });
@@ -208,7 +209,7 @@ function ProposalDetailPage() {
         </div>
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-5 sm:p-6">
               {isPending ? (
                 <ProposalReviewActions
                   isPending={isPending}

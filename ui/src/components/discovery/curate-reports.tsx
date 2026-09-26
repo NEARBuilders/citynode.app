@@ -69,8 +69,8 @@ export function CurateReports({ studio }: { studio: Studio }) {
             {open.map((report, index) => (
               <Item key={report.id} variant="outline" data-testid={`curate-report-${report.id}`}>
                 <ItemContent>
-                  <ItemTitle>
-                    {targetName(report)}
+                  <ItemTitle className="flex-wrap">
+                    <span className="min-w-0 truncate">{targetName(report)}</span>
                     <Badge variant="outline">
                       {report.kind === "profile" ? "Community page" : "Event or post"}
                     </Badge>

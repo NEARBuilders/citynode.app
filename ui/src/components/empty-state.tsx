@@ -1,5 +1,5 @@
+import { cn } from "cn";
 import type { ComponentType, ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
 interface EmptyStateProps {
   icon?: ComponentType<{ size?: number; className?: string }>;

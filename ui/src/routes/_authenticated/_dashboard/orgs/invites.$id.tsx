@@ -108,14 +108,16 @@ function AcceptInvitation() {
           <AvatarFallback>{orgName.charAt(0).toUpperCase()}</AvatarFallback>
         </Avatar>
         <div className="flex flex-col gap-3">
-          <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">Join {orgName}</h1>
+          <h1 className="text-3xl font-semibold wrap-anywhere text-foreground sm:text-4xl">
+            Join {orgName}
+          </h1>
           <p className="text-base text-muted-foreground">
             You're invited as {roleLabel(invitation.role).toLowerCase()}
             {invitation.teamId ? " on one of its teams" : ""}.
           </p>
         </div>
         {isPending ? (
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
             <Button
               size="lg"
               onClick={() => acceptMutation.mutate(invitation)}
@@ -137,7 +139,7 @@ function AcceptInvitation() {
         ) : (
           <Badge variant="outline">This invitation is {invitation.status}</Badge>
         )}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm wrap-anywhere text-muted-foreground">
           For {invitation.nearAccountId ?? invitation.email}
           {invitation.nearAccountId && invitation.nearNetwork
             ? ` on ${invitation.nearNetwork}`

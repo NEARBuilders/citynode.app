@@ -9,7 +9,12 @@ export function TenantUnavailable({ gatewayId }: { gatewayId?: string }) {
         <EmptyState
           icon={WarningIcon}
           title="Gateway not configured"
-          description="The runtime declares no domain, so community settings can't load. Set domain in bos.config.json and rebuild the host."
+          description="Set domain in bos.config.json and rebuild the host to load community settings."
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/dashboard" />}>
+              Back home
+            </Button>
+          }
         />
       ) : (
         <EmptyState

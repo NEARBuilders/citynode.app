@@ -55,7 +55,7 @@ export function OrganizationOverview({
         title={org.name}
         description={
           <span className="text-base">
-            <span className="font-mono">@{org.slug}</span> · {memberCount} member
+            <span className="font-mono break-all">@{org.slug}</span> · {memberCount} member
             {memberCount === 1 ? "" : "s"}
             {org.createdAt ? (
               <>

@@ -31,11 +31,17 @@ export function AuthPanel({
             </div>
           )}
           {eyebrow && <div className="text-sm font-medium text-muted-foreground">{eyebrow}</div>}
-          <h1 className="text-3xl font-semibold text-foreground" data-testid={titleTestId}>
+          <h1
+            className="text-3xl font-semibold wrap-anywhere text-foreground"
+            data-testid={titleTestId}
+          >
             {title}
           </h1>
           {description && (
-            <p className="text-base text-muted-foreground" data-testid={descriptionTestId}>
+            <p
+              className="text-base wrap-break-word text-muted-foreground"
+              data-testid={descriptionTestId}
+            >
               {description}
             </p>
           )}

@@ -436,10 +436,10 @@ export function NodeConfigTab({
                   href={tenantUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 underline underline-offset-2"
+                  className="inline-flex max-w-full items-center gap-1 underline underline-offset-2"
                   data-testid="orgs-node-config-open-tenant"
                 >
-                  {tenantUrl.replace(/^https?:\/\//, "")}
+                  <span className="min-w-0 break-all">{tenantUrl.replace(/^https?:\/\//, "")}</span>
                   <ArrowSquareOutIcon className="size-3.5 shrink-0" />
                 </a>
               ) : (

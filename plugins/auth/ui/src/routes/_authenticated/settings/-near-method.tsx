@@ -56,13 +56,13 @@ export function NearMethod({ nearAccountId }: { nearAccountId: string | null }) 
             )}
           </ItemDescription>
         </ItemContent>
-        <ItemActions>
+        <ItemActions className={nearAccountId ? undefined : "w-full sm:w-auto"}>
           {nearAccountId ? (
             <Badge variant="success">Linked</Badge>
           ) : (
             <Button
               variant="outline"
-              size="sm"
+              className="w-full sm:w-auto"
               onClick={() => linkNearMutation.mutate()}
               disabled={linkNearMutation.isPending}
               data-testid="settings.connect-near-button"

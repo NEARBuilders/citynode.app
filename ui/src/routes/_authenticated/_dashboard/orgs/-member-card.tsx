@@ -66,12 +66,12 @@ export function MemberRow({
         <MemberAvatar member={member} fallback={member.userId} />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <ItemTitle>
-          {name}
-          {isSelf && <span className="text-muted-foreground">(you)</span>}
+        <ItemTitle className="max-w-full">
+          <span className="min-w-0 truncate">{name}</span>
+          {isSelf && <span className="shrink-0 text-muted-foreground">(you)</span>}
         </ItemTitle>
         <ItemDescription>
-          <span className="font-mono">{secondary}</span>
+          <span className="font-mono break-all">{secondary}</span>
         </ItemDescription>
       </ItemContent>
       <ItemActions>
@@ -86,7 +86,7 @@ export function MemberRow({
             </DropdownMenuItem>
           </RowMenu>
         ) : (
-          <span className="size-9" aria-hidden />
+          <span className="size-11" aria-hidden />
         )}
       </ItemActions>
     </Item>
